@@ -5223,6 +5223,7 @@ dependencies = [
  "hyperchad_renderer_html",
  "hyperchad_router",
  "log",
+ "mime_guess",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "serde",

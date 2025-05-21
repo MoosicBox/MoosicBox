@@ -26,6 +26,7 @@ switchy_fs              = { workspace = true, optional = true, features = ["toki
 flume      = { workspace = true }
 http       = { workspace = true }
 log        = { workspace = true }
+mime_guess = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 thiserror  = { workspace = true }
@@ -37,7 +38,12 @@ fail-on-warnings = []
 
 debug = []
 
-assets = ["dep:switchy_async", "dep:switchy_fs", "hyperchad_renderer/assets"]
+assets = [
+    "dep:mime_guess",
+    "dep:switchy_async",
+    "dep:switchy_fs",
+    "hyperchad_renderer/assets",
+]
 
 _json = ["dep:serde_json"]
 

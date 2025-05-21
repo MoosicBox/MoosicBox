@@ -59,8 +59,11 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
     /// # Panics
     ///
     /// * Shouldn't
+    #[allow(clippy::too_many_lines)]
     pub async fn process(&self, req: &RouteRequest) -> Result<Response<Vec<u8>>, Error> {
         static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+
+        log::debug!("process: req={req:?}");
 
         #[cfg(feature = "actions")]
         {
@@ -82,6 +85,12 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
             use switchy_async::io::AsyncReadExt as _;
 
+            pub fn content_type_from_path(path: &Path) -> String {
+                mime_guess::from_path(path)
+                    .first_or_octet_stream()
+                    .to_string()
+            }
+
             for StaticAssetRoute { route, target } in &self.static_asset_routes {
                 let route_path = match target {
                     AssetPathTarget::File(..) | AssetPathTarget::FileContents(..) => {
@@ -100,15 +109,8 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 
                 match target {
                     AssetPathTarget::FileContents(target) => {
-                        let extension = PathBuf::from_str(route.as_str())
-                            .unwrap()
-                            .extension()
-                            .and_then(|x| x.to_str().map(str::to_lowercase));
-
-                        let content_type = match extension.as_deref() {
-                            Some("js" | "mjs" | "cjs") => "text/javascript;charset=UTF-8",
-                            _ => "application/octet-stream",
-                        };
+                        let content_type =
+                            content_type_from_path(&PathBuf::from_str(route).unwrap());
 
                         let response = Response::builder()
                             .status(200)
@@ -124,6 +126,13 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                             target.clone()
                         };
 
+                        let content_type = content_type_from_path(&target);
+
+                        log::debug!(
+                            "Serving asset target={} is_directory={is_directory} content_type={content_type}",
+                            target.display()
+                        );
+
                         let mut file = switchy_fs::unsync::OpenOptions::new()
                             .read(true)
                             .open(target)
@@ -134,7 +143,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 
                         let response = Response::builder()
                             .status(200)
-                            .header("Content-Type", "text/html")
+                            .header("Content-Type", content_type)
                             .body(buf)?;
 
                         return Ok::<_, Error>(response);
