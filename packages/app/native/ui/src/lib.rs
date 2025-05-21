@@ -116,6 +116,22 @@ impl std::fmt::Display for Action {
     }
 }
 
+impl TryFrom<String> for Action {
+    type Error = serde_json::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        serde_json::from_str(&value)
+    }
+}
+
+impl TryFrom<&String> for Action {
+    type Error = serde_json::Error;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        serde_json::from_str(value)
+    }
+}
+
 impl<'a> TryFrom<&'a str> for Action {
     type Error = serde_json::Error;
 
