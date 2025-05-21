@@ -125,6 +125,12 @@ impl From<&str> for RoutePath {
     }
 }
 
+impl From<&String> for RoutePath {
+    fn from(value: &String) -> Self {
+        Self::Literal(value.to_owned())
+    }
+}
+
 impl From<&[&str; 1]> for RoutePath {
     fn from(value: &[&str; 1]) -> Self {
         Self::Literals(value.iter().map(ToString::to_string).collect())
