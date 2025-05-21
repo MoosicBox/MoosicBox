@@ -4,7 +4,6 @@
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use bytes::Bytes;
 use http::Response;
 use hyperchad_renderer::{Content, HtmlTagRenderer, PartialView, View};
 use hyperchad_renderer_html::html::container_element_to_html;
@@ -55,7 +54,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
     /// # Panics
     ///
     /// * Shouldn't
-    pub async fn process(&self, req: &RouteRequest) -> Result<Response<Bytes>, Error> {
+    pub async fn process(&self, req: &RouteRequest) -> Result<Response<Vec<u8>>, Error> {
         static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
 
         #[cfg(feature = "actions")]
@@ -64,7 +63,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 
             if route.matches(&req.path) {
                 let Some(tx) = &self.action_tx else {
-                    return Ok(Response::builder().status(204).body(Bytes::new())?);
+                    return Ok(Response::builder().status(204).body(vec![])?);
                 };
 
                 return actions::handle_action(tx, req);
@@ -107,7 +106,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                         let response = Response::builder()
                             .status(200)
                             .header("Content-Type", content_type)
-                            .body(target.clone())?;
+                            .body(target.to_vec())?;
 
                         return Ok::<_, Error>(response);
                     }
@@ -129,7 +128,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                         let response = Response::builder()
                             .status(200)
                             .header("Content-Type", "text/html")
-                            .body(buf.into())?;
+                            .body(buf)?;
 
                         return Ok::<_, Error>(response);
                     }
@@ -163,14 +162,14 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                 return Ok(Response::builder()
                     .status(200)
                     .header("Content-Type", "application/json")
-                    .body(bytes.into())?);
+                    .body(bytes)?);
             }
         };
 
         Ok(Response::builder()
             .status(200)
             .header("Content-Type", "text/html")
-            .body(html.into_bytes().into())?)
+            .body(html.into_bytes())?)
     }
 }
 

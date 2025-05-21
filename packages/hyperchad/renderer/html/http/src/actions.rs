@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use http::Response;
 use hyperchad_renderer::transformer::actions::logic::Value;
 use hyperchad_router::RouteRequest;
@@ -17,9 +16,9 @@ pub struct ActionPayload {
 pub fn handle_action(
     tx: &flume::Sender<(String, Option<Value>)>,
     req: &RouteRequest,
-) -> Result<Response<Bytes>, Error> {
+) -> Result<Response<Vec<u8>>, Error> {
     let Some(body) = req.body.clone() else {
-        return Ok(Response::builder().status(400).body(Bytes::new())?);
+        return Ok(Response::builder().status(400).body(vec![])?);
     };
 
     let action: ActionPayload = serde_json::from_slice(&body)?;
@@ -28,5 +27,5 @@ pub fn handle_action(
     tx.send((serde_json::to_string(&action.action).unwrap(), action.value))
         .unwrap();
 
-    Ok(Response::builder().status(204).body(Bytes::new())?)
+    Ok(Response::builder().status(204).body(vec![])?)
 }

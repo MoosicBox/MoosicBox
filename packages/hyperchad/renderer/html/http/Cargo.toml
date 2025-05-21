@@ -22,7 +22,6 @@ moosicbox_env_utils     = { workspace = true }
 switchy_async           = { workspace = true, optional = true, features = ["tokio"] }
 switchy_fs              = { workspace = true, optional = true, features = ["tokio"] }
 
-bytes      = { workspace = true }
 flume      = { workspace = true }
 http       = { workspace = true }
 log        = { workspace = true }
