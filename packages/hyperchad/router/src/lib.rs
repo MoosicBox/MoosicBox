@@ -77,6 +77,30 @@ impl RouteRequest {
     }
 }
 
+impl From<Navigation> for RouteRequest {
+    fn from(value: Navigation) -> Self {
+        Self {
+            path: value.0,
+            query: BTreeMap::new(),
+            info: RequestInfo { client: value.1 },
+            body: None,
+        }
+    }
+}
+
+impl From<&Navigation> for RouteRequest {
+    fn from(value: &Navigation) -> Self {
+        Self {
+            path: value.0.to_string(),
+            query: BTreeMap::new(),
+            info: RequestInfo {
+                client: value.1.clone(),
+            },
+            body: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RoutePath {
     Literal(String),
@@ -233,6 +257,18 @@ impl Default for Router {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Navigation(String, Arc<ClientInfo>);
+
+impl From<RouteRequest> for Navigation {
+    fn from(value: RouteRequest) -> Self {
+        Self(value.path, value.info.client)
+    }
+}
+
+impl From<&RouteRequest> for Navigation {
+    fn from(value: &RouteRequest) -> Self {
+        Self(value.path.to_string(), value.info.client.clone())
+    }
+}
 
 impl From<&str> for Navigation {
     fn from(value: &str) -> Self {
