@@ -99,7 +99,7 @@ unsafe            = ["hyperchad/unsafe"]
 
 benchmark = ["hyperchad/benchmark"]
 
-assets        = ["hyperchad/renderer-html-assets"]
+assets        = ["hyperchad/renderer-assets"]
 static-routes = ["hyperchad/router-static-routes"]
 
 dev = ["assets", "static-routes"]

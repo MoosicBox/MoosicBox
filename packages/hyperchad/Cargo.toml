@@ -65,7 +65,12 @@ color = ["dep:hyperchad_color"]
 js-bundler = ["dep:hyperchad_js_bundler"]
 
 renderer = ["dep:hyperchad_renderer"]
-renderer-assets = ["hyperchad_app?/assets", "hyperchad_renderer/assets"]
+renderer-assets = [
+    "hyperchad_app?/assets",
+    "hyperchad_renderer/assets",
+    "hyperchad_renderer_html?/assets",
+    "hyperchad_renderer_html_http?/assets",
+]
 renderer-benchmark = ["hyperchad_renderer/benchmark"]
 renderer-canvas = ["hyperchad_renderer/canvas"]
 renderer-json = ["hyperchad_app?/json", "hyperchad_renderer/json"]
@@ -131,10 +136,6 @@ renderer-html = [
 renderer-html-actions = [
     "hyperchad_app?/actions",
     "hyperchad_renderer_html?/actions",
-]
-renderer-html-assets = [
-    "hyperchad_app?/assets",
-    "hyperchad_renderer_html?/assets",
 ]
 renderer-html-extend = ["hyperchad_renderer_html?/extend"]
 renderer-html-json = ["hyperchad_app?/json", "hyperchad_renderer_html?/json"]
