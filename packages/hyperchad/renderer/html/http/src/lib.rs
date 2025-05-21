@@ -31,7 +31,7 @@ pub enum Error {
     SerdeJson(#[from] serde_json::Error),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct HttpApp<R: HtmlTagRenderer + Sync> {
     pub renderer: R,
     pub router: Router,
