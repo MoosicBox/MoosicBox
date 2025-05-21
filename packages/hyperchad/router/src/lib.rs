@@ -117,6 +117,22 @@ impl RoutePath {
             Self::LiteralPrefix(route_path) => path.starts_with(route_path),
         }
     }
+
+    #[must_use]
+    pub fn strip_match<'a>(&'a self, path: &'a str) -> Option<&'a str> {
+        const EMPTY: &str = "";
+
+        match self {
+            Self::Literal(..) | Self::Literals(..) => {
+                if self.matches(path) {
+                    Some(EMPTY)
+                } else {
+                    None
+                }
+            }
+            Self::LiteralPrefix(route_path) => path.strip_prefix(route_path),
+        }
+    }
 }
 
 impl From<&str> for RoutePath {
