@@ -38,7 +38,7 @@ pub mod lambda;
 #[cfg(feature = "extend")]
 pub mod extend;
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct DefaultHtmlTagRenderer {
     pub responsive_triggers: HashMap<String, ResponsiveTrigger>,
 }

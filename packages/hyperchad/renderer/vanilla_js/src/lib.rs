@@ -22,7 +22,7 @@ use hyperchad_transformer::{
 };
 use maud::{DOCTYPE, PreEscaped, html};
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct VanillaJsTagRenderer {
     default: DefaultHtmlTagRenderer,
 }
