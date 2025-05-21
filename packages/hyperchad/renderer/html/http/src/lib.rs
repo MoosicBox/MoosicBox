@@ -7,7 +7,7 @@ use std::{collections::HashMap, sync::LazyLock};
 use http::Response;
 use hyperchad_renderer::{Content, HtmlTagRenderer, PartialView, View};
 use hyperchad_renderer_html::html::container_element_to_html;
-use hyperchad_router::{RoutePath, RouteRequest, Router};
+use hyperchad_router::{RouteRequest, Router};
 
 pub use http;
 
@@ -59,7 +59,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 
         #[cfg(feature = "actions")]
         {
-            let route = RoutePath::from("/$action");
+            let route = hyperchad_router::RoutePath::from("/$action");
 
             if route.matches(&req.path) {
                 let Some(tx) = &self.action_tx else {
@@ -80,9 +80,11 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             for StaticAssetRoute { route, target } in &self.static_asset_routes {
                 let route_path = match target {
                     AssetPathTarget::File(..) | AssetPathTarget::FileContents(..) => {
-                        RoutePath::from(route)
+                        hyperchad_router::RoutePath::from(route)
                     }
-                    AssetPathTarget::Directory(..) => RoutePath::LiteralPrefix(format!("{route}/")),
+                    AssetPathTarget::Directory(..) => {
+                        hyperchad_router::RoutePath::LiteralPrefix(format!("{route}/"))
+                    }
                 };
 
                 if !route_path.matches(&req.path) {
