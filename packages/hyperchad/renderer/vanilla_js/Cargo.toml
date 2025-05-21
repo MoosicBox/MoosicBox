@@ -51,6 +51,7 @@ all-plugins = [
     "plugin-nav",
     "plugin-routing",
     "plugin-sse",
+    "plugin-tauri-event",
 ]
 
 _actions = []
@@ -73,9 +74,10 @@ plugin-actions-mouse-down = ["_actions"]
 plugin-actions-mouse-over = ["_actions"]
 plugin-actions-resize = ["_actions"]
 
-plugin-canvas    = []
-plugin-event     = []
-plugin-idiomorph = []
-plugin-nav       = []
-plugin-routing   = []
-plugin-sse       = []
+plugin-canvas      = []
+plugin-event       = []
+plugin-idiomorph   = []
+plugin-nav         = []
+plugin-routing     = []
+plugin-sse         = []
+plugin-tauri-event = []

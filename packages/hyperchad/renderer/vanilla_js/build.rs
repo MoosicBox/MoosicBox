@@ -38,6 +38,8 @@ fn main() {
         "nav",
         #[cfg(feature = "plugin-sse")]
         "sse",
+        #[cfg(feature = "plugin-tauri-event")]
+        "tauri-event",
         #[cfg(feature = "plugin-routing")]
         "routing",
         #[cfg(feature = "plugin-event")]

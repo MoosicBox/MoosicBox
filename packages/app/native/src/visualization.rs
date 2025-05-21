@@ -6,7 +6,7 @@ use std::{
 };
 
 use hyperchad::renderer::{
-    Color, Renderer as _,
+    Color,
     canvas::{self, CanvasAction, Pos},
 };
 use moosicbox_music_models::{ApiSource, id::Id};
@@ -19,21 +19,30 @@ static INTERVAL_PERIOD: LazyLock<RwLock<Option<Duration>>> =
     LazyLock::new(|| RwLock::new(Some(Duration::from_millis(16))));
 static DIMENSIONS: LazyLock<RwLock<(f32, f32)>> = LazyLock::new(|| RwLock::new((0.0, 0.0)));
 
+/// # Panics
+///
+/// * If the `DIMENSIONS` is poisoned
 pub fn get_dimensions() -> (f32, f32) {
     *DIMENSIONS.read().unwrap()
 }
 
-#[allow(unused)]
+/// # Panics
+///
+/// * If the `DIMENSIONS` is poisoned
 pub fn set_dimensions(width: f32, height: f32) {
     *DIMENSIONS.write().unwrap() = (width, height);
 }
 
-#[allow(unused)]
+/// # Panics
+///
+/// * If the `INTERVAL_PERIOD` is poisoned
 pub fn set_interval_period(period: Duration) {
     *INTERVAL_PERIOD.write().unwrap() = Some(period);
 }
 
-#[allow(unused)]
+/// # Panics
+///
+/// * If the `INTERVAL_PERIOD` is poisoned
 pub fn disable_interval() {
     *INTERVAL_PERIOD.write().unwrap() = None;
 }
@@ -317,6 +326,9 @@ async fn tick_visualization() {
     update_visualization(visualization_width, visualization_height, current_track).await;
 }
 
+/// # Panics
+///
+/// * If the `CURRENT_TRACK` is poisoned
 pub async fn check_visualization_update() {
     let session = STATE.get_current_session_ref().await;
     if let Some(session) = session {

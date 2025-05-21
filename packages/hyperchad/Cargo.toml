@@ -52,11 +52,15 @@ all = [
     "transformer-models",
 ]
 
-serde = ["actions-serde", "transformer-models-serde"]
+serde = ["actions-serde", "renderer-serde", "transformer-models-serde"]
 
 app = ["dep:hyperchad_app"]
 
-actions       = ["dep:hyperchad_actions", "hyperchad_app?/actions"]
+actions = [
+    "dep:hyperchad_actions",
+    "hyperchad_app?/actions",
+    "hyperchad_renderer_html_http?/actions",
+]
 actions-logic = ["hyperchad_actions?/logic", "hyperchad_app?/logic"]
 actions-serde = ["hyperchad_actions?/serde"]
 
@@ -88,6 +92,7 @@ renderer-profiling-tracy = [
     "hyperchad_app?/profiling-tracy",
     "hyperchad_renderer?/profiling-tracy",
 ]
+renderer-serde = ["hyperchad_renderer?/serde"]
 
 renderer-egui = ["dep:hyperchad_renderer_egui", "hyperchad_app?/egui"]
 renderer-egui-debug = ["hyperchad_app?/debug", "hyperchad_renderer_egui?/debug"]
@@ -224,6 +229,10 @@ renderer-vanilla-js-plugin-routing = [
 renderer-vanilla-js-plugin-sse = [
     "hyperchad_app?/plugin-sse",
     "hyperchad_renderer_vanilla_js?/plugin-sse",
+]
+renderer-vanilla-js-plugin-tauri-event = [
+    "hyperchad_app?/plugin-tauri-event",
+    "hyperchad_renderer_vanilla_js?/plugin-tauri-event",
 ]
 renderer-vanilla-js-script = ["hyperchad_renderer_vanilla_js?/script"]
 

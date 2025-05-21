@@ -52,6 +52,8 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
     bytes.extend(b"idiomorph;");
     #[cfg(feature = "plugin-sse")]
     bytes.extend(b"sse;");
+    #[cfg(feature = "plugin-tauri-event")]
+    bytes.extend(b"tauri-event;");
     #[cfg(feature = "plugin-routing")]
     bytes.extend(b"routing;");
     #[cfg(feature = "plugin-event")]

@@ -357,6 +357,7 @@ pub mod html {
                 let req = RouteRequest {
                     path: path_str.to_string(),
                     query: std::collections::BTreeMap::new(),
+                    headers: std::collections::BTreeMap::new(),
                     info: RequestInfo {
                         client: std::sync::Arc::new(ClientInfo {
                             os: ClientOs {

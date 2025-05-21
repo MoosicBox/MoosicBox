@@ -63,6 +63,10 @@ static STATE_LOCK: OnceLock<moosicbox_app_state::AppState> = OnceLock::new();
 static STATE: LazyLock<moosicbox_app_state::AppState> =
     LazyLock::new(|| STATE_LOCK.get().unwrap().clone());
 
+#[cfg(feature = "moosicbox-app-native")]
+static HTTP_APP: OnceLock<hyperchad::renderer_html_http::HttpApp<native_app::Renderer>> =
+    OnceLock::new();
+
 #[cfg(feature = "bundled")]
 static THREADS: LazyLock<usize> =
     LazyLock::new(|| moosicbox_env_utils::default_env_usize("MAX_THREADS", 64).unwrap_or(64));
@@ -652,6 +656,52 @@ fn init_log() {
     LOG_LAYER.set(layer).expect("Failed to set LOG_LAYER");
 }
 
+#[cfg(feature = "moosicbox-app-native")]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HttpRequest {
+    pub method: String,
+    pub path: String,
+    pub query: std::collections::BTreeMap<String, String>,
+    pub headers: std::collections::BTreeMap<String, String>,
+    pub body: Option<Vec<u8>>,
+}
+
+#[cfg(feature = "moosicbox-app-native")]
+async fn handle_http_request(
+    request: HttpRequest,
+) -> Result<http::Response<Vec<u8>>, TauriPlayerError> {
+    use std::sync::Arc;
+
+    use hyperchad::router::{DEFAULT_CLIENT_INFO, RequestInfo, RouteRequest};
+
+    log::debug!("handle_http_request: request={request:?}");
+
+    let app = HTTP_APP
+        .get()
+        .ok_or_else(|| TauriPlayerError::Unknown("HttpApp not initialized".to_string()))?;
+
+    if request.path.as_str() == "/$sse" {
+        return http::Response::builder()
+            .status(204)
+            .body(vec![])
+            .map_err(|e| TauriPlayerError::Unknown(e.to_string()));
+    }
+
+    let req = RouteRequest {
+        path: request.path,
+        query: request.query,
+        headers: request.headers,
+        info: RequestInfo {
+            client: DEFAULT_CLIENT_INFO.clone(),
+        },
+        body: request.body.map(|x| Arc::new(x.into())),
+    };
+
+    app.process(&req)
+        .await
+        .map_err(|e| TauriPlayerError::Unknown(e.to_string()))
+}
+
 /// # Panics
 ///
 /// * If the `UPnP` listener fails to initialize
@@ -707,6 +757,59 @@ pub fn run() {
         );
     }
 
+    #[cfg(feature = "moosicbox-app-native")]
+    {
+        app_builder = app_builder.register_asynchronous_uri_scheme_protocol(
+            "tauri",
+            move |_app, request, responder| {
+                log::debug!("handle_tauri_request: request={request:?}");
+
+                let path = request.uri().path().to_string();
+                let method = request.method().to_string();
+                let headers = request
+                    .headers()
+                    .iter()
+                    .map(|(name, value)| {
+                        (
+                            name.to_string(),
+                            value.to_str().unwrap_or_default().to_string(),
+                        )
+                    })
+                    .collect();
+
+                let query = request
+                    .uri()
+                    .query()
+                    .map(qstring::QString::from)
+                    .unwrap_or_default();
+
+                let query = std::collections::BTreeMap::from_iter(query.into_pairs());
+
+                let body = request.into_body();
+                let body = if body.is_empty() { None } else { Some(body) };
+                let http_request = HttpRequest {
+                    method,
+                    path,
+                    query,
+                    headers,
+                    body,
+                };
+
+                tauri::async_runtime::spawn(async move {
+                    let response = match handle_http_request(http_request).await {
+                        Ok(response) => response,
+                        Err(e) => http::response::Response::builder()
+                            .status(500)
+                            .body(format!("Error: {e}").into_bytes())
+                            .unwrap(),
+                    };
+
+                    responder.respond(response);
+                });
+            },
+        );
+    }
+
     app_builder = app_builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
@@ -716,8 +819,95 @@ pub fn run() {
 
             moosicbox_config::set_root_dir(get_data_dir().unwrap());
 
+            let state = moosicbox_app_state::AppState::new()
+                .with_on_before_handle_playback_update_listener(propagate_state_to_plugin)
+                .with_on_after_update_playlist_listener(update_player_plugin_playlist)
+                .with_on_before_handle_ws_message_listener(handle_before_ws_message)
+                .with_on_after_handle_ws_message_listener(handle_after_ws_message)
+                .with_on_before_set_state_listener(update_log_layer);
+
+            #[cfg(feature = "moosicbox-app-native")]
+            let state = moosicbox_app_native::init_app_state(state);
+
+            STATE_LOCK.set(state).unwrap();
+
             let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) =
                 tauri::async_runtime::handle();
+
+            #[cfg(feature = "moosicbox-app-native")]
+            {
+                use hyperchad::{
+                    color::Color, renderer_html_http::HttpApp,
+                    renderer_vanilla_js::VanillaJsTagRenderer,
+                };
+                use moosicbox_app_native::RENDERER;
+                use moosicbox_app_native_ui::Action;
+
+                moosicbox_app_native::STATE_LOCK.set(STATE.clone()).unwrap();
+
+                let router = moosicbox_app_native::init();
+
+                let (action_tx, action_rx) = flume::unbounded();
+
+                let tag_renderer = VanillaJsTagRenderer::default();
+                let renderer = native_app::Renderer::new(tag_renderer, app.handle().clone());
+
+                moosicbox_assert::assert_or_panic!(
+                    RENDERER.set(Box::new(renderer.clone())).is_ok(),
+                    "Already set RENDERER"
+                );
+
+                let mut app = HttpApp::new(renderer, router)
+                    .with_title("MoosicBox")
+                    .with_description("A music app for cows")
+                    .with_background(Color::from_hex("#181a1b"))
+                    .with_action_tx(action_tx);
+
+                tokio_handle.spawn(async move {
+                    while let Ok((action, value)) = action_rx.recv_async().await {
+                        log::debug!("Received action: action={action} value={value:?}");
+                        match Action::try_from(action) {
+                            Ok(action) => {
+                                moosicbox_app_native::actions::handle_action(action, value).await?;
+                            }
+                            Err(e) => {
+                                log::error!("Failed to handle action: {e:?}");
+                            }
+                        }
+                    }
+                    Ok::<_, AppStateError>(())
+                });
+
+                for asset in moosicbox_app_native::assets::ASSETS.iter().cloned() {
+                    log::debug!("adding static asset route: {asset:?}");
+                    app.static_asset_routes.push(asset);
+                }
+
+                HTTP_APP.set(app).unwrap();
+
+                tokio_handle.spawn(async move {
+                    STATE
+                        .set_state(moosicbox_app_state::UpdateAppState {
+                            connection_id: Some("123".into()),
+                            connection_name: Some("Test Tauri".into()),
+                            api_url: Some(
+                                std::env::var("MOOSICBOX_HOST")
+                                    .as_deref()
+                                    .unwrap_or("http://localhost:8016")
+                                    .to_string(),
+                            ),
+                            client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
+                            signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
+                            api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),
+                            profile: Some(moosicbox_app_native::PROFILE.to_string()),
+                            playback_target: None,
+                            current_session_id: None,
+                        })
+                        .await?;
+
+                    Ok::<_, moosicbox_app_state::AppStateError>(())
+                });
+            }
 
             #[cfg(feature = "client")]
             {
@@ -769,23 +959,6 @@ pub fn run() {
             let (mdns_handle, join_mdns_service) = mdns::spawn_mdns_scanner();
             *MDNS_HANDLE.lock().unwrap() = Some(mdns_handle);
             *JOIN_MDNS_SERVICE.lock().unwrap() = Some(join_mdns_service);
-
-            moosicbox_config::set_root_dir(get_data_dir().unwrap());
-
-            tokio_handle.block_on(async {
-                STATE_LOCK
-                    .set(
-                        moosicbox_app_state::AppState::new()
-                            .with_on_before_handle_playback_update_listener(
-                                propagate_state_to_plugin,
-                            )
-                            .with_on_after_update_playlist_listener(update_player_plugin_playlist)
-                            .with_on_before_handle_ws_message_listener(handle_before_ws_message)
-                            .with_on_after_handle_ws_message_listener(handle_after_ws_message)
-                            .with_on_before_set_state_listener(update_log_layer),
-                    )
-                    .unwrap();
-            });
 
             #[cfg(target_os = "android")]
             {
@@ -922,6 +1095,255 @@ pub fn run() {
         let handle = JOIN_MDNS_SERVICE.lock().unwrap().take();
         if let Err(e) = tauri::async_runtime::block_on(handle.unwrap()) {
             log::error!("Failed to join mdns service: {e:?}");
+        }
+    }
+}
+
+#[cfg(feature = "moosicbox-app-native")]
+mod native_app {
+    use std::{
+        collections::HashMap,
+        sync::{Arc, LazyLock, Mutex},
+    };
+
+    use async_trait::async_trait;
+    use hyperchad::{
+        renderer::{Color, Handle, HtmlTagRenderer, PartialView, ToRenderRunner, View},
+        renderer_html::html::container_element_to_html,
+        renderer_vanilla_js::VanillaJsTagRenderer,
+        transformer::{Container, ResponsiveTrigger},
+    };
+    use tauri::Emitter as _;
+
+    static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+
+    #[derive(Debug, Clone)]
+    pub struct Renderer {
+        tag_renderer: Arc<Mutex<VanillaJsTagRenderer>>,
+        app_handle: tauri::AppHandle,
+    }
+
+    impl Renderer {
+        pub fn new(tag_renderer: VanillaJsTagRenderer, app_handle: tauri::AppHandle) -> Self {
+            Self {
+                tag_renderer: Arc::new(Mutex::new(tag_renderer)),
+                app_handle,
+            }
+        }
+    }
+
+    impl HtmlTagRenderer for Renderer {
+        fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+            self.tag_renderer
+                .lock()
+                .unwrap()
+                .add_responsive_trigger(name, trigger);
+        }
+
+        fn element_attrs_to_html(
+            &self,
+            f: &mut dyn std::io::Write,
+            container: &Container,
+            is_flex_child: bool,
+        ) -> Result<(), std::io::Error> {
+            self.tag_renderer
+                .lock()
+                .unwrap()
+                .element_attrs_to_html(f, container, is_flex_child)
+        }
+
+        fn reactive_conditions_to_css(
+            &self,
+            f: &mut dyn std::io::Write,
+            container: &Container,
+        ) -> Result<(), std::io::Error> {
+            self.tag_renderer
+                .lock()
+                .unwrap()
+                .reactive_conditions_to_css(f, container)
+        }
+
+        fn partial_html(
+            &self,
+            headers: &std::collections::HashMap<String, String>,
+            container: &Container,
+            content: String,
+            viewport: Option<&str>,
+            background: Option<Color>,
+        ) -> String {
+            self.tag_renderer
+                .lock()
+                .unwrap()
+                .partial_html(headers, container, content, viewport, background)
+        }
+
+        fn root_html(
+            &self,
+            headers: &std::collections::HashMap<String, String>,
+            container: &Container,
+            content: String,
+            viewport: Option<&str>,
+            background: Option<Color>,
+            title: Option<&str>,
+            description: Option<&str>,
+        ) -> String {
+            self.tag_renderer.lock().unwrap().root_html(
+                headers,
+                container,
+                content,
+                viewport,
+                background,
+                title,
+                description,
+            )
+        }
+    }
+
+    struct RenderRunnner;
+
+    impl hyperchad::renderer::RenderRunner for RenderRunnner {
+        fn run(&mut self) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            Ok(())
+        }
+    }
+
+    impl ToRenderRunner for Renderer {
+        /// # Errors
+        ///
+        /// * If failed to convert the value to a `RenderRunner`
+        fn to_runner(
+            self,
+            _handle: Handle,
+        ) -> Result<Box<dyn hyperchad::renderer::RenderRunner>, Box<dyn std::error::Error + Send>>
+        {
+            Ok(Box::new(RenderRunnner))
+        }
+    }
+
+    #[derive(Debug, Clone, serde::Serialize)]
+    struct EventData {
+        id: Option<String>,
+        event: String,
+        data: String,
+    }
+
+    #[async_trait]
+    impl hyperchad::renderer::Renderer for Renderer {
+        async fn init(
+            &mut self,
+            _width: f32,
+            _height: f32,
+            _x: Option<i32>,
+            _y: Option<i32>,
+            _background: Option<Color>,
+            _title: Option<&str>,
+            _description: Option<&str>,
+            _viewport: Option<&str>,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            Ok(())
+        }
+
+        fn add_responsive_trigger(&mut self, name: String, trigger: ResponsiveTrigger) {
+            self.tag_renderer
+                .lock()
+                .unwrap()
+                .add_responsive_trigger(name, trigger);
+        }
+
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation fails to emit the event.
+        async fn emit_event(
+            &self,
+            event_name: String,
+            event_value: Option<String>,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            log::trace!("emit_event");
+            let event_value = EventData {
+                id: None,
+                event: "event".to_string(),
+                data: format!("{event_name}:{}", event_value.unwrap_or_default()),
+            };
+            self.app_handle
+                .emit("sse-event", event_value)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+
+            Ok(())
+        }
+
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation fails to render the view.
+        async fn render(
+            &self,
+            view: View,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            log::trace!("render");
+            let container = view.immediate;
+            let tag_renderer = self.tag_renderer.lock().unwrap();
+            let content = container_element_to_html(&container, &*tag_renderer)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+            let content = tag_renderer.partial_html(&HEADERS, &container, content, None, None);
+            drop(tag_renderer);
+
+            let event_value = EventData {
+                id: None,
+                event: "view".to_string(),
+                data: content,
+            };
+            self.app_handle
+                .emit("sse-event", event_value)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+
+            Ok(())
+        }
+
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation fails to render the partial elements.
+        async fn render_partial(
+            &self,
+            partial: PartialView,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            log::trace!("render_partial");
+            let container = partial.container;
+            let tag_renderer = self.tag_renderer.lock().unwrap();
+            let content = container_element_to_html(&container, &*tag_renderer)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+            let content = tag_renderer.partial_html(&HEADERS, &container, content, None, None);
+            drop(tag_renderer);
+
+            let event_value = EventData {
+                id: Some(partial.target),
+                event: "partial_view".to_string(),
+                data: content,
+            };
+            self.app_handle
+                .emit("sse-event", event_value)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+
+            Ok(())
+        }
+
+        /// # Errors
+        ///
+        /// Will error if `Renderer` implementation fails to render the canvas update.
+        async fn render_canvas(
+            &self,
+            update: hyperchad::renderer::canvas::CanvasUpdate,
+        ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+            log::trace!("render_canvas");
+            let event_value = EventData {
+                id: Some(update.target.to_string()),
+                event: "canvas_update".to_string(),
+                data: serde_json::to_string(&update)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?,
+            };
+            self.app_handle
+                .emit("sse-event", event_value)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+
+            Ok(())
         }
     }
 }

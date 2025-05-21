@@ -55,6 +55,7 @@ pub struct RequestInfo {
 pub struct RouteRequest {
     pub path: String,
     pub query: BTreeMap<String, String>,
+    pub headers: BTreeMap<String, String>,
     pub info: RequestInfo,
     pub body: Option<Arc<Bytes>>,
 }
@@ -71,6 +72,7 @@ impl RouteRequest {
         Self {
             path: path.to_owned(),
             query: QString::from(query).into_iter().collect(),
+            headers: BTreeMap::new(),
             info,
             body: None,
         }
@@ -82,6 +84,7 @@ impl From<Navigation> for RouteRequest {
         Self {
             path: value.0,
             query: BTreeMap::new(),
+            headers: BTreeMap::new(),
             info: RequestInfo { client: value.1 },
             body: None,
         }
@@ -90,14 +93,7 @@ impl From<Navigation> for RouteRequest {
 
 impl From<&Navigation> for RouteRequest {
     fn from(value: &Navigation) -> Self {
-        Self {
-            path: value.0.to_string(),
-            query: BTreeMap::new(),
-            info: RequestInfo {
-                client: value.1.clone(),
-            },
-            body: None,
-        }
+        value.clone().into()
     }
 }
 

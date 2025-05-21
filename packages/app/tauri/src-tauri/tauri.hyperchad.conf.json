@@ -1,9 +1,9 @@
 {
     "build": {
-        "beforeDevCommand": "cargo run -p moosicbox_app_native --no-default-features --features vanilla-js,actix,all-formats,all-sources,dev serve",
-        "beforeBuildCommand": "cargo run -p moosicbox_app_native --no-default-features --features vanilla-js,all-formats,all-sources,static-routes,assets gen",
-        "devUrl": "http://localhost:8343",
-        "frontendDist": "../../native/gen"
+        "beforeDevCommand": "cargo run -p moosicbox_app_native --no-default-features --features vanilla-js,all-formats,all-sources,static-routes,assets,tauri gen --output ./hyperchad_gen",
+        "beforeBuildCommand": "cargo run -p moosicbox_app_native --no-default-features --features vanilla-js,all-formats,all-sources,static-routes,assets,tauri gen --output ./hyperchad_gen",
+        "devUrl": null,
+        "frontendDist": "../hyperchad_gen"
     },
     "identifier": "com.moosicbox",
     "productName": "MoosicBox",
@@ -20,7 +20,7 @@
         ]
     },
     "app": {
-        "withGlobalTauri": false,
+        "withGlobalTauri": true,
         "windows": [
             {
                 "fullscreen": false,
@@ -40,7 +40,8 @@
                     "https://*",
                     "http://*",
                     "wss://*",
-                    "ws://*"
+                    "ws://*",
+                    "tauri://*"
                 ],
                 "enable": true
             }

@@ -165,15 +165,25 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             }) => {
                 let content = container_element_to_html(&view, &self.renderer)?;
 
-                self.renderer.root_html(
-                    &HEADERS,
-                    &view,
-                    content,
-                    self.viewport.as_deref(),
-                    self.background,
-                    self.title.as_deref(),
-                    self.description.as_deref(),
-                )
+                if req.headers.contains_key("hx-request") {
+                    self.renderer.partial_html(
+                        &HEADERS,
+                        &view,
+                        content,
+                        self.viewport.as_deref(),
+                        self.background,
+                    )
+                } else {
+                    self.renderer.root_html(
+                        &HEADERS,
+                        &view,
+                        content,
+                        self.viewport.as_deref(),
+                        self.background,
+                        self.title.as_deref(),
+                        self.description.as_deref(),
+                    )
+                }
             }
             Content::PartialView(PartialView {
                 container: view, ..

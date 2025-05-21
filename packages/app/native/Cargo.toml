@@ -45,6 +45,7 @@ hyperchad = { workspace = true, features = [
     "renderer-canvas",
     "renderer-maud",
     "router",
+    "transformer",
 ] }
 moosicbox_app_native_ui = { workspace = true }
 moosicbox_app_state = { workspace = true }
@@ -100,13 +101,17 @@ fail-on-warnings = []
 console-subscriber = ["dep:console-subscriber"]
 
 _calculated_canvas = ["_canvas"]
-_canvas            = []
+_canvas = []
+_sse = [
+    "hyperchad/renderer-html-sse",
+    "hyperchad/renderer-vanilla-js-plugin-sse",
+]
 
 egui = ["_calculated_canvas", "hyperchad/renderer-egui"]
 egui-glow = ["egui", "hyperchad/renderer-egui-glow"]
 egui-wgpu = ["egui", "hyperchad/renderer-egui-wgpu"]
 fltk = ["_calculated_canvas", "hyperchad/renderer-fltk"]
-html = ["_canvas", "hyperchad/renderer-html", "hyperchad/renderer-html-sse"]
+html = ["_canvas", "hyperchad/renderer-html"]
 vanilla-js = [
     "_canvas",
     "html",
@@ -117,11 +122,10 @@ vanilla-js = [
     "hyperchad/renderer-vanilla-js-plugin-idiomorph",
     "hyperchad/renderer-vanilla-js-plugin-nav",
     "hyperchad/renderer-vanilla-js-plugin-routing",
-    "hyperchad/renderer-vanilla-js-plugin-sse",
 ]
 
-actix  = ["hyperchad/renderer-html-actix"]
-lambda = ["hyperchad/renderer-html-lambda"]
+actix  = ["_sse", "hyperchad/renderer-html-actix"]
+lambda = ["_sse", "hyperchad/renderer-html-lambda"]
 
 wayland = ["hyperchad/wayland"]
 x11     = ["hyperchad/x11"]
@@ -189,3 +193,5 @@ assets        = ["hyperchad/renderer-assets"]
 static-routes = ["hyperchad/router-static-routes"]
 
 dev = ["assets", "static-routes"]
+
+tauri = ["hyperchad/renderer-vanilla-js-plugin-tauri-event"]
