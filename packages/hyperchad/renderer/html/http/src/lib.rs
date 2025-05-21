@@ -80,7 +80,10 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 
         #[cfg(feature = "assets")]
         {
-            use std::{path::PathBuf, str::FromStr as _};
+            use std::{
+                path::{Path, PathBuf},
+                str::FromStr as _,
+            };
 
             use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
             use switchy_async::io::AsyncReadExt as _;
@@ -101,9 +104,11 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                     }
                 };
 
-                if !route_path.matches(&req.path) {
+                log::debug!("Checking route {route_path:?} for {req:?}");
+                let Some(path_match) = route_path.strip_match(&req.path) else {
                     continue;
-                }
+                };
+                log::debug!("Matched route {route_path:?} for {req:?}");
 
                 let is_directory = matches!(target, AssetPathTarget::Directory(..));
 
@@ -121,7 +126,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                     }
                     AssetPathTarget::File(target) | AssetPathTarget::Directory(target) => {
                         let target = if is_directory {
-                            target.join(req.path.clone())
+                            target.join(path_match)
                         } else {
                             target.clone()
                         };
