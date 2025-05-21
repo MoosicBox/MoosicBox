@@ -448,7 +448,8 @@ pub mod html {
                 }
 
                 for route in self.static_asset_routes() {
-                    let assets_output = output_path.join(&route.route);
+                    let route_path = route.route.strip_prefix('/').unwrap_or(&route.route);
+                    let assets_output = output_path.join(route_path);
                     log::debug!("generate: asset {}", assets_output.display());
                     std::fs::create_dir_all(assets_output.parent().unwrap())
                         .expect("Failed to create dirs");

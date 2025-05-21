@@ -177,7 +177,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                             AssetPathTarget::File(target) => {
                                 let target = target.clone();
                                 app = app.route(
-                                    &format!("/{route}"),
+                                    route,
                                     web::get().to(move |req: HttpRequest| {
                                         let target = target.clone();
                                         async move {
@@ -205,7 +205,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                                 };
 
                                 app = app.route(
-                                    &format!("/{route}"),
+                                    route,
                                     web::get().to(move || {
                                         let target = target.clone();
                                         async move {
@@ -221,7 +221,7 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                             AssetPathTarget::Directory(target) => {
                                 let target = target.clone();
                                 app = app.route(
-                                    &format!("/{route}/{{path:.*}}"),
+                                    &format!("{route}/{{path:.*}}"),
                                     web::get().to(
                                         move |req: HttpRequest, path: web::Path<String>| {
                                             let target = target.clone();
