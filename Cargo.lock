@@ -5227,6 +5227,7 @@ dependencies = [
  "moosicbox_env_utils",
  "serde",
  "serde_json",
+ "switchy_async",
  "switchy_fs",
  "thiserror 2.0.12",
 ]

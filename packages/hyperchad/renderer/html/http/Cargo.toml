@@ -19,7 +19,8 @@ hyperchad_renderer_html = { workspace = true }
 hyperchad_router        = { workspace = true }
 moosicbox_assert        = { workspace = true }
 moosicbox_env_utils     = { workspace = true }
-switchy_fs              = { workspace = true, features = ["tokio"] }
+switchy_async           = { workspace = true, optional = true, features = ["tokio"] }
+switchy_fs              = { workspace = true, optional = true, features = ["tokio"] }
 
 bytes      = { workspace = true }
 flume      = { workspace = true }
@@ -36,7 +37,7 @@ fail-on-warnings = []
 
 debug = []
 
-assets = ["hyperchad_renderer/assets"]
+assets = ["dep:switchy_async", "dep:switchy_fs", "hyperchad_renderer/assets"]
 
 _json = ["dep:serde_json"]
 

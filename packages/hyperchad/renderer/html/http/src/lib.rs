@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::HashMap, io::Read, sync::LazyLock};
+use std::{collections::HashMap, sync::LazyLock};
 
 use bytes::Bytes;
 use http::Response;
@@ -73,10 +73,10 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 
         #[cfg(feature = "assets")]
         {
-            use std::path::PathBuf;
-            use std::str::FromStr as _;
+            use std::{path::PathBuf, str::FromStr as _};
 
             use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
+            use switchy_async::io::AsyncReadExt as _;
 
             for StaticAssetRoute { route, target } in &self.static_asset_routes {
                 let route_path = match target {
@@ -124,7 +124,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                             .await?;
 
                         let mut buf = vec![];
-                        file.read_to_end(&mut buf)?;
+                        file.read_to_end(&mut buf).await?;
 
                         let response = Response::builder()
                             .status(200)
