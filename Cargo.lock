@@ -5028,6 +5028,7 @@ dependencies = [
  "hyperchad_renderer_fltk",
  "hyperchad_renderer_html",
  "hyperchad_renderer_html_actix",
+ "hyperchad_renderer_html_http",
  "hyperchad_renderer_html_lambda",
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
@@ -5209,6 +5210,25 @@ dependencies = [
  "moosicbox_middleware",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "hyperchad_renderer_html_http"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "flume",
+ "http 1.3.1",
+ "hyperchad_renderer",
+ "hyperchad_renderer_html",
+ "hyperchad_router",
+ "log",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "serde",
+ "serde_json",
+ "switchy_fs",
+ "thiserror 2.0.12",
 ]
 
 [[package]]

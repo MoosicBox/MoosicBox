@@ -1,0 +1,42 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "HyperChad HTML HTTP renderer package"
+edition     = "2024"
+keywords    = ["gui", "html", "render", "renderer", "web"]
+license     = "MPL-2.0"
+name        = "hyperchad_renderer_html_http"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+hyperchad_renderer      = { workspace = true, features = ["canvas"] }
+hyperchad_renderer_html = { workspace = true }
+hyperchad_router        = { workspace = true }
+moosicbox_assert        = { workspace = true }
+moosicbox_env_utils     = { workspace = true }
+switchy_fs              = { workspace = true, features = ["tokio"] }
+
+bytes      = { workspace = true }
+flume      = { workspace = true }
+http       = { workspace = true }
+log        = { workspace = true }
+serde      = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+thiserror  = { workspace = true }
+
+[features]
+default = ["actions", "assets", "debug", "json"]
+
+fail-on-warnings = []
+
+debug = []
+
+assets = ["hyperchad_renderer/assets"]
+
+actions = ["dep:serde", "dep:serde_json", "hyperchad_renderer/logic"]
+json    = []

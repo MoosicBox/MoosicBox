@@ -20,6 +20,8 @@ pub use hyperchad_renderer_fltk as renderer_fltk;
 pub use hyperchad_renderer_html as renderer_html;
 #[cfg(feature = "renderer-html-actix")]
 pub use hyperchad_renderer_html_actix as renderer_html_actix;
+#[cfg(feature = "renderer-html-http")]
+pub use hyperchad_renderer_html_http as renderer_html_http;
 #[cfg(feature = "renderer-html-lambda")]
 pub use hyperchad_renderer_html_lambda as renderer_html_lambda;
 #[cfg(feature = "renderer-vanilla-js")]
