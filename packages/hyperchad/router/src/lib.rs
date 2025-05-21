@@ -266,13 +266,26 @@ pub struct Navigation(String, Arc<ClientInfo>);
 
 impl From<RouteRequest> for Navigation {
     fn from(value: RouteRequest) -> Self {
-        Self(value.path, value.info.client)
+        let mut query = String::new();
+
+        for (key, value) in &value.query {
+            if query.is_empty() {
+                query.push('?');
+            } else {
+                query.push('&');
+            }
+            query.push_str(key);
+            query.push('=');
+            query.push_str(value);
+        }
+
+        Self(format!("{}{query}", value.path), value.info.client)
     }
 }
 
 impl From<&RouteRequest> for Navigation {
     fn from(value: &RouteRequest) -> Self {
-        Self(value.path.to_string(), value.info.client.clone())
+        value.clone().into()
     }
 }
 
