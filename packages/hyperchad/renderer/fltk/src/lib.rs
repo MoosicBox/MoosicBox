@@ -40,6 +40,7 @@ use hyperchad_transformer::{
     },
     models::{LayoutDirection, LayoutOverflow, LayoutPosition},
 };
+use moosicbox_app_native_image::get_asset_arc_bytes;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -943,11 +944,11 @@ impl FltkRenderer {
                 }
 
                 if let Some(source) = source {
-                    if let Some(bytes) = moosicbox_app_native_image::get_image(source) {
+                    if let Some(file) = moosicbox_app_native_image::Asset::get(source) {
                         if let Err(e) = event_sender.send(AppEvent::RegisterImage {
                             viewport: viewport.deref().clone(),
                             source: ImageSource::Bytes {
-                                bytes,
+                                bytes: get_asset_arc_bytes(file),
                                 source: source.to_owned(),
                             },
                             width: container.width.as_ref().map(|_| width.unwrap()),

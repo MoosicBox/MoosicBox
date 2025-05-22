@@ -2,31 +2,24 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock, RwLock},
-};
+use std::{borrow::Cow, sync::Arc};
 
 use bytes::Bytes;
+use rust_embed::{Embed, EmbeddedFile};
 
-pub static BYTES: LazyLock<RwLock<HashMap<String, Arc<Bytes>>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+#[derive(Embed)]
+#[folder = "$CARGO_MANIFEST_DIR/../public/"]
+#[prefix = "/public/"]
+pub struct Asset;
 
-#[macro_export]
-macro_rules! image {
-    ($working_dir:expr, $path:expr $(,)?) => {{
-        let bytes = include_bytes!(concat!($working_dir, $path));
-        moosicbox_app_native_image::BYTES.write().unwrap().insert(
-            ($path).to_owned(),
-            std::sync::Arc::new(bytes.to_vec().into()),
-        );
-        $path
-    }};
+fn cow_to_arc_bytes(cow: Cow<'_, [u8]>) -> Arc<Bytes> {
+    Arc::new(match cow {
+        Cow::Owned(vec) => Bytes::from(vec),
+        Cow::Borrowed(slice) => Bytes::copy_from_slice(slice),
+    })
 }
 
-/// # Panics
-///
-/// * If the `BYTES` `RwLock` is poisoned
-pub fn get_image(path: &str) -> Option<Arc<Bytes>> {
-    BYTES.read().unwrap().get(path).cloned()
+#[must_use]
+pub fn get_asset_arc_bytes(asset: EmbeddedFile) -> Arc<Bytes> {
+    cow_to_arc_bytes(asset.data)
 }

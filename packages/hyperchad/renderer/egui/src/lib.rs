@@ -895,12 +895,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 AppEvent::LoadImage { source } => {
                     let images = self.images.clone();
                     let ctx = self.ctx.clone();
-                    if let Some(bytes) = moosicbox_app_native_image::get_image(&source) {
+                    if let Some(file) = moosicbox_app_native_image::Asset::get(&source) {
                         log::trace!("loading image {source}");
                         images
                             .write()
                             .unwrap()
-                            .insert(source, AppImage::Bytes(bytes.to_vec().into()));
+                            .insert(source, AppImage::Bytes(file.data.to_vec().into()));
 
                         if let Some(ctx) = &*ctx.read().unwrap() {
                             ctx.request_repaint();

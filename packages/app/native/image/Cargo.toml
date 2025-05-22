@@ -12,6 +12,10 @@ version     = "0.1.1"
 
 [dependencies]
 bytes = { workspace = true }
+rust-embed = { workspace = true, features = [
+    "debug-embed",
+    "interpolate-folder-path",
+] }
 
 [features]
 default = []

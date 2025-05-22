@@ -863,14 +863,30 @@ pub fn run() {
                     .with_background(Color::from_hex("#181a1b"))
                     .with_action_tx(action_tx)
                     .with_static_asset_route_handler(|req| {
+                        log::debug!("static_asset_route_handler (favicon): path={}", req.path);
+                        if req.path == "/favicon.ico" {
+                            let path = "/public/favicon.ico";
+                            moosicbox_app_native_image::Asset::get(path).map(|x| {
+                                log::debug!(
+                                    "static_asset_route_handler (favicon): found image at path={path}"
+                                );
+                                hyperchad::renderer::assets::AssetPathTarget::FileContents(
+                                    x.data.to_vec().into(),
+                                )
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .with_static_asset_route_handler(|req| {
                         log::debug!("static_asset_route_handler: path={}", req.path);
-                        moosicbox_app_native_image::get_image(&req.path).map(|x| {
+                        moosicbox_app_native_image::Asset::get(&req.path).map(|x| {
                             log::debug!(
                                 "static_asset_route_handler: found image at path={}",
                                 req.path
                             );
                             hyperchad::renderer::assets::AssetPathTarget::FileContents(
-                                x.to_vec().into(),
+                                x.data.to_vec().into(),
                             )
                         })
                     });

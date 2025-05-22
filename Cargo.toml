@@ -414,6 +414,7 @@ roxmltree = "0.20"
 rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
+rust-embed = "8.7.2"
 rust_decimal = { version = "1.37.1", default-features = false }
 rust_decimal_macros = { version = "1.37.1", default-features = false }
 rustls = "0.23"

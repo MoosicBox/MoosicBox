@@ -13,14 +13,9 @@ use maud::{Markup, html};
 
 #[macro_export]
 macro_rules! public_img {
-    ($path:expr $(,)?) => {{
-        #[cfg(feature = "bundled_images")]
-        {
-            moosicbox_app_native_image::image!("../..", concat!("/public/img/", $path))
-        }
-        #[cfg(not(feature = "bundled_images"))]
+    ($path:expr $(,)?) => {
         concat!("/public/img/", $path)
-    }};
+    };
 }
 
 #[macro_export]

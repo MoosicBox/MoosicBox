@@ -17,7 +17,6 @@ hyperchad = { workspace = true, features = [
     "serde",
     "transformer-models",
 ] }
-moosicbox_app_native_image = { workspace = true }
 moosicbox_audio_zone_models = { workspace = true }
 moosicbox_date_utils = { workspace = true, features = ["chrono"] }
 moosicbox_menu_models = { workspace = true, features = ["api"] }

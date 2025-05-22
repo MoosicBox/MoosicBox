@@ -836,6 +836,7 @@ pub fn albums(state: &State, filtered_sources: &[TrackApiSource], sort: AlbumSor
     page(state, &albums_page_content(filtered_sources, sort))
 }
 
+#[must_use]
 pub fn load_albums(
     size: u16,
     sort: AlbumSort,
