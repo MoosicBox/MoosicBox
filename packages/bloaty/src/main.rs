@@ -38,7 +38,7 @@ struct Args {
     report_file: Option<String>,
 
     #[arg(long, value_parser = ["text", "json", "jsonl", "all"], default_value = "all", value_name = "FORMAT")]
-    output_format: String,
+    output_format: Vec<String>,
 }
 
 struct ReportFiles {
@@ -80,6 +80,12 @@ fn parse_args() -> Args {
         .flat_map(|x| x.split(',').map(ToString::to_string).collect::<Vec<_>>())
         .collect();
 
+    args.output_format = args
+        .output_format
+        .into_iter()
+        .flat_map(|x| x.split(',').map(ToString::to_string).collect::<Vec<_>>())
+        .collect();
+
     args
 }
 
@@ -106,13 +112,18 @@ fn setup_report_files(args: &Args) -> Result<AnalysisContext> {
         .clone()
         .map_or_else(|| format!("bloaty_report_{timestamp}"), |path| path);
 
-    let mut text_report_file = if args.output_format == "text" || args.output_format == "all" {
+    let should_output_text = args.output_format.contains(&"text".to_string())
+        || args.output_format.contains(&"all".to_string());
+    let should_output_jsonl = args.output_format.contains(&"jsonl".to_string())
+        || args.output_format.contains(&"all".to_string());
+
+    let mut text_report_file = if should_output_text {
         Some(fs::File::create(format!("{base_filename}.txt"))?)
     } else {
         None
     };
 
-    let jsonl_report_file = if args.output_format == "jsonl" || args.output_format == "all" {
+    let jsonl_report_file = if should_output_jsonl {
         Some(fs::File::create(format!("{base_filename}.jsonl"))?)
     } else {
         None
@@ -456,7 +467,9 @@ fn analyze_package(
 }
 
 fn write_final_json_report(ctx: &AnalysisContext, args: &Args) -> Result<()> {
-    if args.output_format == "json" || args.output_format == "all" {
+    let should_output_json = args.output_format.contains(&"json".to_string())
+        || args.output_format.contains(&"all".to_string());
+    if should_output_json {
         let mut json_file = fs::File::create(format!("{}.json", ctx.base_filename))?;
         writeln!(
             json_file,

@@ -27,33 +27,91 @@ This will analyze all workspace members and generate reports in all supported fo
 
 ### Command Line Options
 
-- `-p, --package <PACKAGE>`: Specify packages to analyze (comma-separated)
-- `--skip-packages <SKIP_PACKAGES>`: Packages to skip (comma-separated)
-- `--skip-features <SKIP_FEATURES>`: Features to skip (comma-separated)
-- `-t, --tool <TOOL>`: Tools to use (comma-separated, options: bloat, llvm-lines, size)
+All list arguments (packages, skip-packages, skip-features, tool, output-format) support both comma-separated lists and multiple arguments.
+
+- `-p, --package <PACKAGE>`: Specify packages to analyze
+  ```bash
+  # Using comma-separated list
+  --package pkg1,pkg2,pkg3
+  # Using multiple arguments
+  --package pkg1 --package pkg2 --package pkg3
+  ```
+
+- `--skip-packages <SKIP_PACKAGES>`: Packages to skip
+  ```bash
+  # Using comma-separated list
+  --skip-packages pkg1,pkg2
+  # Using multiple arguments
+  --skip-packages pkg1 --skip-packages pkg2
+  ```
+
+- `--skip-features <SKIP_FEATURES>`: Features to skip
+  ```bash
+  # Using comma-separated list
+  --skip-features test,bench,dev
+  # Using multiple arguments
+  --skip-features test --skip-features bench
+  ```
+
+- `-t, --tool <TOOL>`: Tools to use (options: bloat, llvm-lines, size)
+  ```bash
+  # Using comma-separated list
+  --tool bloat,size
+  # Using multiple arguments
+  --tool bloat --tool size
+  ```
+
 - `--report-file <REPORT_FILE>`: Custom report file name (without extension)
+
 - `--output-format <FORMAT>`: Output format (text, json, jsonl, all)
+  ```bash
+  # Using comma-separated list
+  --output-format text,json
+  # Using multiple arguments
+  --output-format text --output-format json
+  # Using 'all' for all formats
+  --output-format all
+  ```
 
 ### Examples
 
 Analyze specific packages:
 ```bash
+# Using comma-separated list
 cargo run --bin bloaty -- -p package1,package2
+
+# Using multiple arguments
+cargo run --bin bloaty -- -p package1 -p package2
 ```
 
 Skip certain features:
 ```bash
-cargo run --bin bloaty -- --skip-features test,bench
+# Using comma-separated list
+cargo run --bin bloaty -- --skip-features test,bench,dev
+
+# Using multiple arguments
+cargo run --bin bloaty -- --skip-features test --skip-features bench
 ```
 
 Use specific tools:
 ```bash
+# Using comma-separated list
 cargo run --bin bloaty -- -t bloat,size
+
+# Using multiple arguments
+cargo run --bin bloaty -- -t bloat -t size
 ```
 
-Generate only JSON output:
+Generate specific output formats:
 ```bash
-cargo run --bin bloaty -- --output-format json
+# Using comma-separated list
+cargo run --bin bloaty -- --output-format text,json
+
+# Using multiple arguments
+cargo run --bin bloaty -- --output-format text --output-format json
+
+# Generate all formats
+cargo run --bin bloaty -- --output-format all
 ```
 
 Custom report file:
@@ -103,7 +161,3 @@ Make sure these tools are installed before running bloaty:
 ```bash
 cargo install cargo-bloat cargo-llvm-lines cargo-size
 ```
-
-## License
-
-This project is licensed under the same terms as the Rust project.
