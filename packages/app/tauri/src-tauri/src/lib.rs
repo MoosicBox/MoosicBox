@@ -857,25 +857,39 @@ pub fn run() {
                     "Already set RENDERER"
                 );
 
-                let mut app = HttpApp::new(renderer, router)
+                let app = HttpApp::new(renderer, router)
                     .with_title("MoosicBox")
                     .with_description("A music app for cows")
                     .with_background(Color::from_hex("#181a1b"))
                     .with_action_tx(action_tx)
                     .with_static_asset_route_handler(|req| {
-                        log::debug!("static_asset_route_handler (favicon): path={}", req.path);
-                        if req.path == "/favicon.ico" {
-                            let path = "/public/favicon.ico";
-                            moosicbox_app_native_image::Asset::get(path).map(|x| {
+                        static SCRIPT_PATH: LazyLock<String> = LazyLock::new(|| format!(
+                            "/js/{}",
+                            hyperchad::renderer_vanilla_js::SCRIPT_NAME_HASHED.as_str()
+                        ));
+                        log::debug!("static_asset_route_handler: path={}", req.path);
+                        let script_path = SCRIPT_PATH.as_str();
+                        match req.path.as_str() {
+                            "/favicon.ico" => {
+                                let favicon_path = "/public/favicon.ico";
+                                moosicbox_app_native_image::Asset::get(favicon_path).map(|x| {
+                                    log::debug!(
+                                        "static_asset_route_handler (favicon): found image at favicon_path={favicon_path}"
+                                    );
+                                    hyperchad::renderer::assets::AssetPathTarget::FileContents(
+                                        x.data.to_vec().into(),
+                                    )
+                                })
+                            }
+                            _ if req.path == script_path => {
                                 log::debug!(
-                                    "static_asset_route_handler (favicon): found image at path={path}"
+                                    "static_asset_route_handler (script): found for script_path={script_path}"
                                 );
-                                hyperchad::renderer::assets::AssetPathTarget::FileContents(
-                                    x.data.to_vec().into(),
-                                )
-                            })
-                        } else {
-                            None
+                                Some(hyperchad::renderer::assets::AssetPathTarget::FileContents(
+                                    hyperchad::renderer_vanilla_js::SCRIPT.as_bytes().into(),
+                                ))
+                            }
+                            _ => None,
                         }
                     })
                     .with_static_asset_route_handler(|req| {
@@ -905,11 +919,6 @@ pub fn run() {
                     }
                     Ok::<_, AppStateError>(())
                 });
-
-                for asset in moosicbox_app_native::assets::ASSETS.iter().cloned() {
-                    log::debug!("adding static asset route: {asset:?}");
-                    app.static_asset_routes.push(asset);
-                }
 
                 HTTP_APP.set(app).unwrap();
 
