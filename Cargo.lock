@@ -1732,6 +1732,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bloaty"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bytesize",
+ "cargo_metadata",
+ "clap 4.5.38",
+ "glob",
+]
+
+[[package]]
 name = "block"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

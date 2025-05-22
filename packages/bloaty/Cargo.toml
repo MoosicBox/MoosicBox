@@ -1,0 +1,29 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "Bloaty package"
+edition     = "2024"
+keywords    = ["bloaty", "util", "utilities", "utils"]
+license     = "MPL-2.0"
+name        = "bloaty"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.0.1"
+
+[package.metadata.workspaces]
+independent = true
+
+[[bin]]
+name              = "bloaty"
+path              = "src/main.rs"
+required-features = []
+
+[dependencies]
+anyhow         = { workspace = true }
+bytesize       = { workspace = true }
+cargo_metadata = { workspace = true }
+clap           = { workspace = true, features = ["derive"] }
+glob           = { workspace = true }
+
+[features]
+fail-on-warnings = []

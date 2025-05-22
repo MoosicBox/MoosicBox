@@ -27,6 +27,7 @@ members = [
     "packages/audio_zone",
     "packages/audio_zone/models",
     "packages/auth",
+    "packages/bloaty",
     "packages/channel_utils",
     "packages/clippier",
     "packages/config",
@@ -292,6 +293,7 @@ btparse = "0.2.0"
 bumpalo = "3.17.0"
 bytes = "1.10.1"
 bytesize = "2.0.1"
+cargo_metadata = "0.19.2"
 chrono = { version = "0.4.41", default-features = false, features = [
     "clock",
     "serde",
@@ -331,6 +333,7 @@ futures-util = { version = "0.3.31", default-features = false, features = [
     "std",
 ] }
 getrandom = "0.3.3"
+glob = "0.3.2"
 hex = "0.4.3"
 home = "0.5.11"
 hostname = "0.4.1"
