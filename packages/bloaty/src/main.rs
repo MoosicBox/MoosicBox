@@ -7,9 +7,12 @@ use bytesize::ByteSize;
 use cargo_metadata::{MetadataCommand, TargetKind, camino::Utf8Path};
 use clap::Parser;
 use glob::glob;
+use serde_json::json;
 use std::{
     fs,
+    io::Write,
     process::{Command, Stdio},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 #[derive(Parser)]
@@ -30,6 +33,12 @@ struct Args {
 
     #[arg(short, long, value_parser = ["bloat", "llvm-lines", "size"], default_values = &["bloat", "size"], value_name = "TOOL")]
     tool: Vec<String>,
+
+    #[arg(long, value_name = "REPORT_FILE")]
+    report_file: Option<String>,
+
+    #[arg(long, value_parser = ["text", "json", "both"], default_value = "both", value_name = "FORMAT")]
+    output_format: String,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -75,6 +84,29 @@ fn main() -> Result<()> {
         std::process::exit(1);
     }
 
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+
+    let base_filename = args
+        .report_file
+        .clone()
+        .map_or_else(|| format!("bloaty_report_{timestamp}"), |path| path);
+
+    let mut text_report_file = if args.output_format == "text" || args.output_format == "both" {
+        Some(fs::File::create(format!("{base_filename}.txt"))?)
+    } else {
+        None
+    };
+
+    if let Some(report) = &mut text_report_file {
+        writeln!(report, "Bloaty Analysis Report")?;
+        writeln!(report, "===================\n")?;
+    }
+
+    let mut json_report = json!({
+        "timestamp": timestamp,
+        "packages": []
+    });
+
     let metadata = MetadataCommand::new().no_deps().exec()?;
 
     for pkg in metadata
@@ -89,6 +121,15 @@ fn main() -> Result<()> {
         }
 
         println!("\n=== Analyzing package: {} ===", pkg.name);
+        if let Some(report) = &mut text_report_file {
+            writeln!(report, "\nPackage: {}", pkg.name)?;
+            writeln!(report, "===================")?;
+        }
+
+        let mut package_json = json!({
+            "name": pkg.name,
+            "targets": []
+        });
 
         let available_features: Vec<String> = pkg.features.keys().cloned().collect();
 
@@ -135,6 +176,17 @@ fn main() -> Result<()> {
         if !rlib_targets.is_empty() {
             for target in rlib_targets {
                 println!("\nrlib target: {}", target.name);
+                if let Some(report) = &mut text_report_file {
+                    writeln!(report, "\nTarget: {}", target.name)?;
+                    writeln!(report, "-------------------")?;
+                }
+
+                let mut target_json = json!({
+                    "name": target.name,
+                    "base_size": 0,
+                    "features": []
+                });
+
                 let base_size = build_and_measure_rlib(
                     &pkg.manifest_path,
                     &metadata.target_directory,
@@ -142,6 +194,11 @@ fn main() -> Result<()> {
                     None,
                 )?;
                 println!("  base: {}", ByteSize(base_size));
+                if let Some(report) = &mut text_report_file {
+                    writeln!(report, "Base size: {}", ByteSize(base_size))?;
+                }
+
+                target_json["base_size"] = json!(base_size);
 
                 for feat in &available_features {
                     if args.skip_features.contains(feat) {
@@ -166,9 +223,43 @@ fn main() -> Result<()> {
                         sign,
                         ByteSize(diff.unsigned_abs()),
                     );
+
+                    if let Some(report) = &mut text_report_file {
+                        writeln!(
+                            report,
+                            "Feature: {:<15} | Size: {} | Diff: {}{}",
+                            feat,
+                            ByteSize(size),
+                            sign,
+                            ByteSize(diff.unsigned_abs())
+                        )?;
+                    }
+
+                    target_json["features"].as_array_mut().unwrap().push(json!({
+                        "name": feat,
+                        "size": size,
+                        "diff": diff,
+                        "diff_formatted": format!("{}{}", sign, ByteSize(diff.unsigned_abs())),
+                        "size_formatted": ByteSize(size).to_string()
+                    }));
                 }
+
+                package_json["targets"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(target_json);
             }
         }
+
+        json_report["packages"]
+            .as_array_mut()
+            .unwrap()
+            .push(package_json);
+    }
+
+    if args.output_format == "json" || args.output_format == "both" {
+        let mut json_file = fs::File::create(format!("{base_filename}.json"))?;
+        writeln!(json_file, "{}", serde_json::to_string_pretty(&json_report)?)?;
     }
 
     Ok(())
