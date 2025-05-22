@@ -37,11 +37,11 @@ struct Args {
     #[arg(long, value_name = "REPORT_FILE")]
     report_file: Option<String>,
 
-    #[arg(long, value_parser = ["text", "json", "both"], default_value = "both", value_name = "FORMAT")]
+    #[arg(long, value_parser = ["text", "json", "jsonl", "all"], default_value = "all", value_name = "FORMAT")]
     output_format: String,
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<()> {
     let mut args = Args::parse();
 
@@ -91,8 +91,14 @@ fn main() -> Result<()> {
         .clone()
         .map_or_else(|| format!("bloaty_report_{timestamp}"), |path| path);
 
-    let mut text_report_file = if args.output_format == "text" || args.output_format == "both" {
+    let mut text_report_file = if args.output_format == "text" || args.output_format == "all" {
         Some(fs::File::create(format!("{base_filename}.txt"))?)
+    } else {
+        None
+    };
+
+    let mut jsonl_report_file = if args.output_format == "jsonl" || args.output_format == "all" {
+        Some(fs::File::create(format!("{base_filename}.jsonl"))?)
     } else {
         None
     };
@@ -124,6 +130,18 @@ fn main() -> Result<()> {
         if let Some(report) = &mut text_report_file {
             writeln!(report, "\nPackage: {}", pkg.name)?;
             writeln!(report, "===================")?;
+        }
+
+        if let Some(report) = &mut jsonl_report_file {
+            writeln!(
+                report,
+                "{}",
+                serde_json::to_string(&json!({
+                    "type": "package_start",
+                    "name": pkg.name,
+                    "timestamp": timestamp
+                }))?
+            )?;
         }
 
         let mut package_json = json!({
@@ -181,6 +199,19 @@ fn main() -> Result<()> {
                     writeln!(report, "-------------------")?;
                 }
 
+                if let Some(report) = &mut jsonl_report_file {
+                    writeln!(
+                        report,
+                        "{}",
+                        serde_json::to_string(&json!({
+                            "type": "target_start",
+                            "package": pkg.name,
+                            "target": target.name,
+                            "timestamp": timestamp
+                        }))?
+                    )?;
+                }
+
                 let mut target_json = json!({
                     "name": target.name,
                     "base_size": 0,
@@ -196,6 +227,21 @@ fn main() -> Result<()> {
                 println!("  base: {}", ByteSize(base_size));
                 if let Some(report) = &mut text_report_file {
                     writeln!(report, "Base size: {}", ByteSize(base_size))?;
+                }
+
+                if let Some(report) = &mut jsonl_report_file {
+                    writeln!(
+                        report,
+                        "{}",
+                        serde_json::to_string(&json!({
+                            "type": "base_size",
+                            "package": pkg.name,
+                            "target": target.name,
+                            "size": base_size,
+                            "size_formatted": ByteSize(base_size).to_string(),
+                            "timestamp": timestamp
+                        }))?
+                    )?;
                 }
 
                 target_json["base_size"] = json!(base_size);
@@ -235,6 +281,24 @@ fn main() -> Result<()> {
                         )?;
                     }
 
+                    if let Some(report) = &mut jsonl_report_file {
+                        writeln!(
+                            report,
+                            "{}",
+                            serde_json::to_string(&json!({
+                                "type": "feature",
+                                "package": pkg.name,
+                                "target": target.name,
+                                "feature": feat,
+                                "size": size,
+                                "diff": diff,
+                                "diff_formatted": format!("{}{}", sign, ByteSize(diff.unsigned_abs())),
+                                "size_formatted": ByteSize(size).to_string(),
+                                "timestamp": timestamp
+                            }))?
+                        )?;
+                    }
+
                     target_json["features"].as_array_mut().unwrap().push(json!({
                         "name": feat,
                         "size": size,
@@ -244,11 +308,36 @@ fn main() -> Result<()> {
                     }));
                 }
 
+                if let Some(report) = &mut jsonl_report_file {
+                    writeln!(
+                        report,
+                        "{}",
+                        serde_json::to_string(&json!({
+                            "type": "target_end",
+                            "package": pkg.name,
+                            "target": target.name,
+                            "timestamp": timestamp
+                        }))?
+                    )?;
+                }
+
                 package_json["targets"]
                     .as_array_mut()
                     .unwrap()
                     .push(target_json);
             }
+        }
+
+        if let Some(report) = &mut jsonl_report_file {
+            writeln!(
+                report,
+                "{}",
+                serde_json::to_string(&json!({
+                    "type": "package_end",
+                    "name": pkg.name,
+                    "timestamp": timestamp
+                }))?
+            )?;
         }
 
         json_report["packages"]
@@ -257,7 +346,7 @@ fn main() -> Result<()> {
             .push(package_json);
     }
 
-    if args.output_format == "json" || args.output_format == "both" {
+    if args.output_format == "json" || args.output_format == "all" {
         let mut json_file = fs::File::create(format!("{base_filename}.json"))?;
         writeln!(json_file, "{}", serde_json::to_string_pretty(&json_report)?)?;
     }
