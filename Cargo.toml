@@ -438,16 +438,16 @@ sqlx-postgres = { version = "0.8.6", default-features = false, features = [
 static_init = "1.0.4"
 strum = "0.27.1"
 strum_macros = "0.27.1"
-swc_bundler = "18.0.0"
-swc_common = { version = "10.0.0", features = ["tty-emitter"] }
-swc_ecma_ast = "10.0.0"
-swc_ecma_codegen = "12.0.0"
-swc_ecma_loader = { version = "10.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "19.0.0"
-swc_ecma_parser = "13.0.0"
-swc_ecma_transforms_base = "14.0.0"
-swc_ecma_transforms_typescript = "16.0.0"
-swc_ecma_visit = "10.0.0"
+swc_bundler = "19.0.0"
+swc_common = { version = "11.0.0", features = ["tty-emitter"] }
+swc_ecma_ast = "11.0.0"
+swc_ecma_codegen = "13.0.0"
+swc_ecma_loader = { version = "11.0.0", features = ["cache", "node"] }
+swc_ecma_minifier = "20.0.0"
+swc_ecma_parser = "14.0.0"
+swc_ecma_transforms_base = "15.0.1"
+swc_ecma_transforms_typescript = "17.0.0"
+swc_ecma_visit = "11.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.101"
 syntect = "5.2.0"
