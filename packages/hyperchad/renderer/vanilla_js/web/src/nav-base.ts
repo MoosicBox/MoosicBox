@@ -26,7 +26,11 @@ export function handleLinkClick(event: MouseEvent, href: string | null) {
     return true;
 }
 
-export function handleLinkHover(event: MouseEvent, href: string | null, initiateFetch: (url: string) => Promise<string | void>) {
+export function handleLinkHover(
+    event: MouseEvent,
+    href: string | null,
+    initiateFetch: (url: string) => Promise<string | void>,
+) {
     if (!href || href[0] !== '/') return; // Only handle links for this site
     const link = (event.target as HTMLElement).closest('a');
     if (!link) return;
@@ -39,7 +43,10 @@ export function handleLinkHover(event: MouseEvent, href: string | null, initiate
     }
 }
 
-export function setupLinkHandlers(initiateFetch: (url: string) => Promise<string | void>, navigate: (url: string) => void) {
+export function setupLinkHandlers(
+    initiateFetch: (url: string) => Promise<string | void>,
+    navigate: (url: string) => void,
+) {
     onAttr('href', ({ element, attr }) => {
         if (attr[0] !== '/') return; // Only handle links for this site
         if (!isSelfTarget(element.getAttribute('target'))) return; // Don't handle for new tab
@@ -58,4 +65,4 @@ export function setupLinkHandlers(initiateFetch: (url: string) => Promise<string
             navigate(attr);
         };
     });
-} 
+}

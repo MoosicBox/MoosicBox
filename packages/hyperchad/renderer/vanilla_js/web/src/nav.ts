@@ -1,4 +1,9 @@
-import { cache, pending, handleNavigation, setupLinkHandlers } from './nav-base';
+import {
+    cache,
+    pending,
+    handleNavigation,
+    setupLinkHandlers,
+} from './nav-base';
 
 async function initiateFetchDocument(url: string): Promise<string | void> {
     try {
