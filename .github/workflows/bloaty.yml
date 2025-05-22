@@ -1,0 +1,107 @@
+name: Bloaty
+
+on:
+    push:
+        branches: ['master']
+        paths:
+            - packages/**
+            - '**/*.toml'
+            - '**/Cargo.lock'
+            - .github/workflows/bloaty.yml
+            - '!packages/marketing_site/*.ts'
+            - '!packages/marketing_site/*.json'
+            - '!packages/marketing_site/pnpm-lock.yaml'
+            - '!packages/marketing_site/*.mjs'
+            - '!packages/marketing_site/*.js'
+            - '!packages/marketing_site/*.md'
+            - '!packages/marketing_site/.prettierignore'
+            - '!packages/marketing_site/hyperchad/**'
+            - '!packages/marketing_site/infra/**'
+            - '!packages/hyperchad/renderer/vanilla_js/web/**'
+            - '!**/*.nix'
+            - '!**/Dockerfile'
+            - '!**/*.Dockerfile'
+            - '!**/*.dockerignore'
+    workflow_dispatch:
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    bloaty:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: llvm-tools-preview
+
+            - name: Install cargo-bloat
+              run: |
+                  cargo install cargo-bloat
+
+            - name: Install cargo-binutils
+              run: |
+                  cargo install cargo-binutils
+
+            - name: Get dependencies
+              id: dependencies
+              run: |
+                  DEPENDENCIES="$(cargo run -p clippier dependencies . --os ubuntu)"
+                  echo "Using dependencies:"
+                  echo "$DEPENDENCIES"
+                  echo 'dependencies<<EOF' >> $GITHUB_OUTPUT
+                  echo "$DEPENDENCIES" >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+            - name: Get environment
+              id: environment
+              run: |
+                  ENVIRONMENT="$(cargo run -p clippier environment . --os ubuntu -o json | jq -cr 'join(" ")')"
+                  echo "Using environment:"
+                  echo "$ENVIRONMENT"
+                  echo 'environment<<EOF' >> $GITHUB_OUTPUT
+                  echo "$ENVIRONMENT" >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+            - name: Get ci_steps
+              id: ci_steps
+              run: |
+                  CI_STEPS="$(cargo run -p clippier ci-steps . --os ubuntu -o json | jq -cr 'join(" ")')"
+                  echo "Using ci_steps:"
+                  echo "$CI_STEPS"
+                  echo 'ci_steps<<EOF' >> $GITHUB_OUTPUT
+                  echo "$CI_STEPS" >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+            - name: Setup cmake
+              uses: jwlawson/actions-setup-cmake@v2
+              with:
+                  cmake-version: '3.x'
+
+            - name: Setup CI
+              if: ${{ steps.ci_steps.outputs.ci_steps }}
+              run: ${{ steps.ci_steps.outputs.ci_steps }}
+
+            - name: Install dependencies
+              if: ${{ steps.dependencies.outputs.dependencies }}
+              shell: bash
+              run: ${{ steps.dependencies.outputs.dependencies }}
+
+            - name: Run bloaty
+              run: |
+                  ${{ steps.environment.outputs.environment }} cargo run -p bloaty -- \
+                        --skip-features fail-on-warnings,default \
+                        --output-format all \
+                        --report-file report
+
+            - name: Upload reports
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: reports
+                  path: report.*
+                  if-no-files-found: warn
+                  retention-days: 90
