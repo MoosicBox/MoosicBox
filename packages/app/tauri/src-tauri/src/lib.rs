@@ -873,36 +873,27 @@ pub fn run() {
                             "/favicon.ico" => {
                                 let favicon_path = "/public/favicon.ico";
                                 moosicbox_app_native_image::Asset::get(favicon_path).map(|x| {
-                                    log::debug!(
-                                        "static_asset_route_handler (favicon): found image at favicon_path={favicon_path}"
-                                    );
+                                    log::debug!("static_asset_route_handler (favicon): found image at favicon_path={favicon_path}");
                                     hyperchad::renderer::assets::AssetPathTarget::FileContents(
                                         x.data.to_vec().into(),
                                     )
                                 })
                             }
                             _ if req.path == script_path => {
-                                log::debug!(
-                                    "static_asset_route_handler (script): found for script_path={script_path}"
-                                );
+                                log::debug!("static_asset_route_handler (script): found for script_path={script_path}");
                                 Some(hyperchad::renderer::assets::AssetPathTarget::FileContents(
                                     hyperchad::renderer_vanilla_js::SCRIPT.as_bytes().into(),
                                 ))
                             }
-                            _ => None,
+                            path =>  {
+                                moosicbox_app_native_image::Asset::get(path).map(|x| {
+                                    log::debug!("static_asset_route_handler: found image at path={path}");
+                                    hyperchad::renderer::assets::AssetPathTarget::FileContents(
+                                        x.data.to_vec().into(),
+                                    )
+                                })
+                            }
                         }
-                    })
-                    .with_static_asset_route_handler(|req| {
-                        log::debug!("static_asset_route_handler: path={}", req.path);
-                        moosicbox_app_native_image::Asset::get(&req.path).map(|x| {
-                            log::debug!(
-                                "static_asset_route_handler: found image at path={}",
-                                req.path
-                            );
-                            hyperchad::renderer::assets::AssetPathTarget::FileContents(
-                                x.data.to_vec().into(),
-                            )
-                        })
                     });
 
                 tokio_handle.spawn(async move {
