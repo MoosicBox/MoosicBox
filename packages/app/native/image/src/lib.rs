@@ -14,8 +14,8 @@ pub static BYTES: LazyLock<RwLock<HashMap<String, Arc<Bytes>>>> =
 
 #[macro_export]
 macro_rules! image {
-    ($path:expr $(,)?) => {{
-        let bytes = include_bytes!($path);
+    ($working_dir:expr, $path:expr $(,)?) => {{
+        let bytes = include_bytes!(concat!($working_dir, $path));
         moosicbox_app_native_image::BYTES.write().unwrap().insert(
             ($path).to_owned(),
             std::sync::Arc::new(bytes.to_vec().into()),

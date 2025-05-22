@@ -861,7 +861,19 @@ pub fn run() {
                     .with_title("MoosicBox")
                     .with_description("A music app for cows")
                     .with_background(Color::from_hex("#181a1b"))
-                    .with_action_tx(action_tx);
+                    .with_action_tx(action_tx)
+                    .with_static_asset_route_handler(|req| {
+                        log::debug!("static_asset_route_handler: path={}", req.path);
+                        moosicbox_app_native_image::get_image(&req.path).map(|x| {
+                            log::debug!(
+                                "static_asset_route_handler: found image at path={}",
+                                req.path
+                            );
+                            hyperchad::renderer::assets::AssetPathTarget::FileContents(
+                                x.to_vec().into(),
+                            )
+                        })
+                    });
 
                 tokio_handle.spawn(async move {
                     while let Ok((action, value)) = action_rx.recv_async().await {

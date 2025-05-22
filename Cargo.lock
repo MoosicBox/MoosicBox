@@ -6791,6 +6791,7 @@ dependencies = [
  "log",
  "moosicbox_app_client",
  "moosicbox_app_native",
+ "moosicbox_app_native_image",
  "moosicbox_app_native_ui",
  "moosicbox_app_state",
  "moosicbox_app_tauri_bundled",

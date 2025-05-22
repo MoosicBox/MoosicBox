@@ -32,7 +32,7 @@ pub enum Error {
     SerdeJson(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HttpApp<R: HtmlTagRenderer + Sync> {
     pub renderer: R,
     pub router: Router,
@@ -45,10 +45,41 @@ pub struct HttpApp<R: HtmlTagRenderer + Sync> {
     >,
     #[cfg(feature = "assets")]
     pub static_asset_routes: Vec<hyperchad_renderer::assets::StaticAssetRoute>,
+    #[cfg(feature = "assets")]
+    #[allow(clippy::type_complexity)]
+    pub static_asset_route_handlers: Vec<
+        std::sync::Arc<
+            Box<
+                dyn Fn(&RouteRequest) -> Option<hyperchad_renderer::assets::AssetPathTarget>
+                    + Send
+                    + Sync,
+            >,
+        >,
+    >,
     background: Option<Color>,
     title: Option<String>,
     description: Option<String>,
     viewport: Option<String>,
+}
+
+impl<R: HtmlTagRenderer + Sync> std::fmt::Debug for HttpApp<R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut dbg = f.debug_struct("HttpApp");
+
+        dbg.field("router", &self.router)
+            .field("background", &self.background)
+            .field("title", &self.title)
+            .field("description", &self.description)
+            .field("viewport", &self.viewport);
+
+        #[cfg(feature = "actions")]
+        dbg.field("action_tx", &self.action_tx);
+
+        #[cfg(feature = "assets")]
+        dbg.field("static_asset_routes", &self.static_asset_routes);
+
+        dbg.finish_non_exhaustive()
+    }
 }
 
 impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
@@ -88,41 +119,30 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             use hyperchad_renderer::assets::{AssetPathTarget, StaticAssetRoute};
             use switchy_async::io::AsyncReadExt as _;
 
-            pub fn content_type_from_path(path: &Path) -> String {
+            fn content_type_from_path(path: &Path) -> String {
                 mime_guess::from_path(path)
                     .first_or_octet_stream()
                     .to_string()
             }
 
-            for StaticAssetRoute { route, target } in &self.static_asset_routes {
-                let route_path = match target {
-                    AssetPathTarget::File(..) | AssetPathTarget::FileContents(..) => {
-                        hyperchad_router::RoutePath::from(route)
-                    }
-                    AssetPathTarget::Directory(..) => {
-                        hyperchad_router::RoutePath::LiteralPrefix(format!("{route}/"))
-                    }
-                };
-
-                log::debug!("Checking route {route_path:?} for {req:?}");
-                let Some(path_match) = route_path.strip_match(&req.path) else {
-                    continue;
-                };
-                log::debug!("Matched route {route_path:?} for {req:?}");
-
+            async fn asset_to_response(
+                path: &str,
+                target: &AssetPathTarget,
+                path_match: &str,
+            ) -> Result<Response<Vec<u8>>, Error> {
                 let is_directory = matches!(target, AssetPathTarget::Directory(..));
 
                 match target {
                     AssetPathTarget::FileContents(target) => {
                         let content_type =
-                            content_type_from_path(&PathBuf::from_str(route).unwrap());
+                            content_type_from_path(&PathBuf::from_str(path).unwrap());
 
                         let response = Response::builder()
                             .status(200)
                             .header("Content-Type", content_type)
                             .body(target.to_vec())?;
 
-                        return Ok::<_, Error>(response);
+                        Ok::<_, Error>(response)
                     }
                     AssetPathTarget::File(target) | AssetPathTarget::Directory(target) => {
                         let target = if is_directory {
@@ -151,9 +171,36 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                             .header("Content-Type", content_type)
                             .body(buf)?;
 
-                        return Ok::<_, Error>(response);
+                        Ok::<_, Error>(response)
                     }
                 }
+            }
+
+            for handler in &self.static_asset_route_handlers {
+                let Some(target) = handler(req) else {
+                    continue;
+                };
+
+                return asset_to_response(&req.path, &target, "").await;
+            }
+
+            for StaticAssetRoute { route, target } in &self.static_asset_routes {
+                let route_path = match target {
+                    AssetPathTarget::File(..) | AssetPathTarget::FileContents(..) => {
+                        hyperchad_router::RoutePath::from(route)
+                    }
+                    AssetPathTarget::Directory(..) => {
+                        hyperchad_router::RoutePath::LiteralPrefix(format!("{route}/"))
+                    }
+                };
+
+                log::debug!("Checking route {route_path:?} for {req:?}");
+                let Some(path_match) = route_path.strip_match(&req.path) else {
+                    continue;
+                };
+                log::debug!("Matched route {route_path:?} for {req:?}");
+
+                return asset_to_response(route, target, path_match).await;
             }
         }
 
@@ -225,6 +272,8 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             action_tx: None,
             #[cfg(feature = "assets")]
             static_asset_routes: vec![],
+            #[cfg(feature = "assets")]
+            static_asset_route_handlers: vec![],
             background: None,
             title: None,
             description: None,
@@ -266,6 +315,20 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
         )>,
     ) -> Self {
         self.action_tx = Some(tx);
+        self
+    }
+
+    #[cfg(feature = "assets")]
+    #[must_use]
+    pub fn with_static_asset_route_handler(
+        mut self,
+        handler: impl Fn(&RouteRequest) -> Option<hyperchad_renderer::assets::AssetPathTarget>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Self {
+        self.static_asset_route_handlers
+            .push(std::sync::Arc::new(Box::new(handler)));
         self
     }
 

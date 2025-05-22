@@ -79,6 +79,7 @@ moosicbox_app_native = { workspace = true, optional = true, features = [
     "tauri",
     "vanilla-js",
 ] }
+moosicbox_app_native_image = { workspace = true, optional = true }
 moosicbox_app_native_ui = { workspace = true, optional = true }
 qstring = { workspace = true, optional = true }
 
@@ -165,6 +166,7 @@ moosicbox-app-native = [
     "dep:http",
     "dep:hyperchad",
     "dep:moosicbox_app_native",
+    "dep:moosicbox_app_native_image",
     "dep:moosicbox_app_native_ui",
     "dep:qstring",
 ]
