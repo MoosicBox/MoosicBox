@@ -7222,6 +7222,7 @@ dependencies = [
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "switchy_database",
+ "switchy_fs",
  "test-log",
  "thiserror 2.0.12",
  "tokio",

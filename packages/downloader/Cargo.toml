@@ -25,6 +25,7 @@ moosicbox_remote_library = { workspace = true }
 moosicbox_scan           = { workspace = true, features = ["local"] }
 moosicbox_task           = { workspace = true }
 switchy_database         = { workspace = true }
+switchy_fs               = { workspace = true, features = ["tokio"] }
 
 # API Dependencies
 actix-web      = { workspace = true, optional = true }

@@ -386,9 +386,27 @@ pub async fn download_tasks_endpoint(
 
     for task in &mut tasks {
         if task.state == ApiDownloadTaskState::Started {
+            let queue = DOWNLOAD_QUEUE.read().await;
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            task.speed
-                .replace(DOWNLOAD_QUEUE.read().await.speed().unwrap_or(0.0) as u64);
+            task.speed.replace(queue.speed().unwrap_or(0.0) as u64);
+            if let Some(current_task) = queue.current_task().await {
+                let file = switchy_fs::unsync::OpenOptions::new()
+                    .read(true)
+                    .open(current_task.file_path)
+                    .await
+                    .map_err(ErrorInternalServerError)?;
+                let bytes = file
+                    .metadata()
+                    .await
+                    .map_err(ErrorInternalServerError)?
+                    .len();
+                task.bytes = bytes;
+
+                #[allow(clippy::cast_precision_loss)]
+                if let Some(total_bytes) = task.total_bytes {
+                    task.progress = 100.0_f64.min((bytes as f64 / total_bytes as f64) * 100.0);
+                }
+            }
         }
     }
 
