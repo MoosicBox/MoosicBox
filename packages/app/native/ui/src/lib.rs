@@ -33,15 +33,15 @@ use play_queue::play_queue;
 use serde::{Deserialize, Serialize};
 use state::State;
 
-pub static VIZ_HEIGHT: u16 = 35;
-pub static VIZ_PADDING: u16 = 5;
-pub static FOOTER_BORDER_SIZE: u16 = 3;
-pub static FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE;
-pub static FOOTER_ICON_SIZE: u16 = 25;
-pub static CURRENT_ALBUM_SIZE: u16 = 70;
+pub const VIZ_HEIGHT: u16 = 35;
+pub const VIZ_PADDING: u16 = 5;
+pub const FOOTER_BORDER_SIZE: u16 = 3;
+pub const FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE;
+pub const FOOTER_ICON_SIZE: u16 = 25;
+pub const CURRENT_ALBUM_SIZE: u16 = 70;
 
-pub static DARK_BACKGROUND: &str = "#080a0b";
-pub static BACKGROUND: &str = "#181a1b";
+pub const DARK_BACKGROUND: &str = "#080a0b";
+pub const BACKGROUND: &str = "#181a1b";
 
 pub static MOOSICBOX_HOST: LazyLock<String> = LazyLock::new(|| {
     std::env::var("MOOSICBOX_HOST").unwrap_or_else(|_| "http://localhost:8016".to_string())
