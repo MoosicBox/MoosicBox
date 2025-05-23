@@ -662,6 +662,8 @@ fn write_final_json_report(ctx: &AnalysisContext, args: &Args) -> Result<()> {
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<()> {
+    pretty_env_logger::init();
+
     let args = parse_args();
     check_tools_availability(&args.tool);
     let mut ctx = setup_report_files(&args)?;
