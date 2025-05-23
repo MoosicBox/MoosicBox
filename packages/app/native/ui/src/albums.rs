@@ -19,7 +19,7 @@ use moosicbox_music_models::{
 use moosicbox_paging::Page;
 
 use crate::{
-    Action,
+    Action, DARK_BACKGROUND, MOOSICBOX_HOST,
     artists::artist_page_url,
     formatting::{
         AlbumVersionQualityFormat as _, TimeFormat as _, display_album_version_qualities,
@@ -685,7 +685,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
     let size: u16 = 200;
 
     html! {
-        div sx-background="#080a0b" {
+        div sx-background=(DARK_BACKGROUND) {
             div sx-padding-x=(30) sx-padding-y=(15) {
                 div sx-dir="row" sx-align-items=(AlignItems::Center) {
                     h1 { "Albums" }
@@ -715,7 +715,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             sx-position="absolute"
                             sx-top="100%"
                             sx-visibility="hidden"
-                            sx-background="#080a0b"
+                            sx-background=(DARK_BACKGROUND)
                             sx-border-radius=(5)
                             sx-dir="row"
                             fx-click-outside=(

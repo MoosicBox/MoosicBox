@@ -40,6 +40,9 @@ pub static FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORD
 pub static FOOTER_ICON_SIZE: u16 = 25;
 pub static CURRENT_ALBUM_SIZE: u16 = 70;
 
+pub static DARK_BACKGROUND: &str = "#080a0b";
+pub static BACKGROUND: &str = "#181a1b";
+
 pub static MOOSICBOX_HOST: LazyLock<String> = LazyLock::new(|| {
     std::env::var("MOOSICBOX_HOST").unwrap_or_else(|_| "http://localhost:8016".to_string())
 });
@@ -149,7 +152,7 @@ impl<'a> TryFrom<&'a str> for Action {
 #[must_use]
 pub fn sidebar_navigation() -> Markup {
     html! {
-        aside sx-width="calc(max(240, min(280, 15%)))" sx-background="#080a0b" {
+        aside sx-width="calc(max(240, min(280, 15%)))" sx-background=(DARK_BACKGROUND) {
             div class="navigation-bar" sx-padding=(20) {
                 @let size = 36;
                 div class="navigation-bar-header" sx-dir="row" sx-align-items="center" sx-height=(size) {
@@ -243,7 +246,7 @@ pub fn player(state: &State) -> Markup {
                             sx-dir="row"
                             sx-justify-content="center"
                             sx-align-items="center"
-                            sx-background="#181a1b"
+                            sx-background=(BACKGROUND)
                             sx-border-radius="100%"
                             fx-click=(Action::PreviousTrack)
                         {
@@ -261,7 +264,7 @@ pub fn player(state: &State) -> Markup {
                             sx-dir="row"
                             sx-justify-content="center"
                             sx-align-items="center"
-                            sx-background="#181a1b"
+                            sx-background=(BACKGROUND)
                             sx-border-radius="100%"
                             fx-click=(Action::NextTrack)
                         {
@@ -373,7 +376,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
             sx-align-items="center"
             sx-justify-content="center"
             sx-border-radius=(30)
-            sx-background="#181a1b"
+            sx-background=(BACKGROUND)
             sx-cursor="pointer"
             fx-mouse-down=(
                 hyperchad::actions::logic::Arithmetic::group(
@@ -441,7 +444,7 @@ fn player_play_button(playing: bool) -> Markup {
             sx-dir="row"
             sx-justify-content="center"
             sx-align-items="center"
-            sx-background="#181a1b"
+            sx-background=(BACKGROUND)
             sx-border-radius="100%"
             fx-click=(Action::TogglePlayback)
         {
@@ -586,7 +589,7 @@ pub fn session_updated(
 #[must_use]
 pub fn footer(state: &State) -> Markup {
     html! {
-        footer sx-height=(FOOTER_HEIGHT) sx-background="#080a0b" {
+        footer sx-height=(FOOTER_HEIGHT) sx-background=(DARK_BACKGROUND) {
             (player(state))
         }
     }
@@ -689,7 +692,7 @@ pub fn modal(id: &str, header: &Markup, content: &Markup) -> Markup {
         {
             div
                 sx-flex=(1)
-                sx-background="#080a0b"
+                sx-background=(DARK_BACKGROUND)
                 sx-margin-x="calc(20vw)"
                 sx-min-height="calc(min(90vh, 300))"
                 sx-max-height="90vh"
@@ -703,7 +706,7 @@ pub fn modal(id: &str, header: &Markup, content: &Markup) -> Markup {
             {
                 div
                     sx-dir="row"
-                    sx-background="#080a0b"
+                    sx-background=(DARK_BACKGROUND)
                     sx-padding-x=(30)
                     sx-padding-top=(20)
                     sx-border-top-radius=(15)
