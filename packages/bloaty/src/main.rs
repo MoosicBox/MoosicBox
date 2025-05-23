@@ -273,7 +273,7 @@ fn write_jsonl_feature(
                 "feature": feature,
                 "size": size,
                 "diff": diff,
-                "diff_formatted": format!("{}{}", sign, ByteSize(diff.unsigned_abs())),
+                "diff_formatted": format!("{sign}{}", ByteSize(diff.unsigned_abs())),
                 "size_formatted": ByteSize(size).to_string(),
                 "timestamp": ctx.timestamp
             }))?
@@ -435,8 +435,7 @@ fn analyze_target(
         let diff = size as i64 - base_size as i64;
 
         println!(
-            "  feature {:<15} rlib: {} ({}{})",
-            feat,
+            "  feature {feat:<15} rlib: {} ({}{})",
             ByteSize(size),
             if diff >= 0 { '+' } else { '-' },
             ByteSize(diff.unsigned_abs()),
