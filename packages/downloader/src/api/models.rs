@@ -105,6 +105,12 @@ pub enum ApiDownloadTaskState {
     Error,
 }
 
+impl std::fmt::Display for ApiDownloadTaskState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_ref().to_lowercase().as_str())
+    }
+}
+
 impl ToValueType<ApiDownloadTaskState> for &serde_json::Value {
     fn to_value_type(self) -> Result<ApiDownloadTaskState, ParseError> {
         ApiDownloadTaskState::from_str(
