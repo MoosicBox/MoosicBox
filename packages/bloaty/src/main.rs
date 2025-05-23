@@ -41,7 +41,7 @@ struct Args {
     #[arg(long, value_name = "SKIP_FEATURE_PATTERN")]
     skip_feature_pattern: Option<String>,
 
-    #[arg(short, long, value_parser = ["bloat", "llvm-lines", "size"], default_values = &["bloat", "size"], value_name = "TOOL")]
+    #[arg(short, long, value_parser = ["bloat", "llvm-lines", "size"], value_name = "TOOL")]
     tool: Vec<String>,
 
     #[arg(long, value_name = "REPORT_FILE")]
