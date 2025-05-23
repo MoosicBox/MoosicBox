@@ -8,17 +8,15 @@ mod simulator;
 #[cfg(feature = "actix")]
 use actix_web::{HttpRequest, Responder, get, web};
 #[cfg(feature = "actix")]
-pub use actix_web_opentelemetry::RequestTracing;
+use actix_web_opentelemetry::RequestMetrics;
 #[cfg(feature = "actix")]
-use actix_web_opentelemetry::{RequestMetrics, RequestMetricsBuilder};
+pub use actix_web_opentelemetry::RequestTracing;
 #[cfg(feature = "actix")]
 use futures_util::future::LocalBoxFuture;
 use moosicbox_logging::free_log_client::DynLayer;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::ExporterBuildError;
 use opentelemetry_sdk::Resource;
-#[cfg(feature = "actix")]
-use opentelemetry_sdk::metrics::{MeterProviderBuilder, MetricError, SdkMeterProvider};
 
 /// # Errors
 ///
@@ -110,59 +108,16 @@ impl crate::HttpMetricsHandler for StubHttpMetricsHandler {
 ///
 /// * If the Prometheus exporter fails to build
 #[cfg(feature = "actix")]
-pub fn get_http_metrics_handler() -> Result<Box<dyn HttpMetricsHandler>, MetricError> {
+#[must_use]
+pub fn get_http_metrics_handler() -> Box<dyn HttpMetricsHandler> {
     #[cfg(feature = "simulator")]
     {
-        Ok(Box::new(simulator::SimulatorHttpMetricsHandler))
+        Box::new(simulator::SimulatorHttpMetricsHandler)
     }
 
     #[cfg(not(feature = "simulator"))]
     {
-        Ok(Box::new(StubHttpMetricsHandler))
-    }
-}
-
-#[derive(Debug)]
-#[cfg(feature = "actix")]
-struct Otel {
-    #[allow(unused)]
-    pub meter_provider: SdkMeterProvider,
-    #[allow(unused)]
-    pub request_metrics: RequestMetrics,
-}
-
-#[cfg(feature = "actix")]
-#[allow(dead_code)]
-impl Otel {
-    /// # Errors
-    ///
-    /// * If the Prometheus exporter fails to build
-    pub fn new() -> Result<Self, MetricError> {
-        let registry = prometheus::Registry::default();
-
-        #[cfg(feature = "actix")]
-        let prometheus_registry = registry;
-        #[cfg(not(feature = "actix"))]
-        let prometheus_registry = registry;
-
-        let prometheus_exporter = opentelemetry_prometheus::exporter()
-            .with_registry(prometheus_registry)
-            .build()?;
-
-        let meter_provider = MeterProviderBuilder::default()
-            .with_reader(prometheus_exporter)
-            .build();
-
-        #[cfg(feature = "actix")]
-        let request_metrics = RequestMetricsBuilder::new()
-            .with_meter_provider(meter_provider.clone())
-            .build();
-
-        Ok(Self {
-            meter_provider,
-            #[cfg(feature = "actix")]
-            request_metrics,
-        })
+        Box::new(StubHttpMetricsHandler)
     }
 }
 

@@ -18,18 +18,16 @@ moosicbox_assert    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging   = { workspace = true, features = ["free_log"] }
 
-actix-web                = { workspace = true, optional = true }
-actix-web-opentelemetry  = { workspace = true, optional = true }
-futures-util             = { workspace = true, optional = true }
-log                      = { workspace = true }
-opentelemetry            = { workspace = true }
-opentelemetry-otlp       = { workspace = true, features = ["grpc-tonic"] }
-opentelemetry-prometheus = { workspace = true }
-opentelemetry_sdk        = { workspace = true }
-prometheus               = { workspace = true }
-tracing                  = { workspace = true }
-tracing-opentelemetry    = { workspace = true }
-tracing-subscriber       = { workspace = true, optional = true }
+actix-web               = { workspace = true, optional = true }
+actix-web-opentelemetry = { workspace = true, optional = true }
+futures-util            = { workspace = true, optional = true }
+log                     = { workspace = true }
+opentelemetry           = { workspace = true }
+opentelemetry-otlp      = { workspace = true, features = ["grpc-tonic"] }
+opentelemetry_sdk       = { workspace = true }
+tracing                 = { workspace = true }
+tracing-opentelemetry   = { workspace = true }
+tracing-subscriber      = { workspace = true, optional = true }
 
 [features]
 default = ["actix", "simulator"]

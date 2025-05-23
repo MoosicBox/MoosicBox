@@ -49,9 +49,7 @@ fn main() -> std::io::Result<()> {
             .expect("Failed to initialize FreeLog");
 
         #[cfg(feature = "telemetry")]
-        let request_metrics = std::sync::Arc::new(
-            switchy_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
-        );
+        let request_metrics = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());
 
         moosicbox_server::run(
             AppType::Server,
