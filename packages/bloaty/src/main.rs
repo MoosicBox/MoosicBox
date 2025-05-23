@@ -381,29 +381,49 @@ fn analyze_target(
     let mut target_json = json!({
         "name": target.name,
         "base_size": 0,
+        "base_binary_size": 0,
         "features": []
     });
 
     write_text_target_header(ctx, &target.name)?;
     write_jsonl_target_start(ctx, &pkg.name, &target.name)?;
 
+    // Build and measure base rlib
     let base_size = build_and_measure_rlib(
         &pkg.manifest_path,
         &metadata.target_directory,
         &pkg.name,
         None,
     )?;
-    println!("  base: {}", ByteSize(base_size));
+    println!("  base rlib: {}", ByteSize(base_size));
     write_text_base_size(ctx, base_size)?;
     write_jsonl_base_size(ctx, &pkg.name, &target.name, base_size)?;
 
+    // Build and measure base binary if it's a binary target
+    let base_binary_size = if target.kind.iter().any(|k| k == &TargetKind::Bin) {
+        let size = build_and_measure_binary(
+            &pkg.manifest_path,
+            &metadata.target_directory,
+            &target.name,
+            None,
+        )?;
+        println!("  base binary: {}", ByteSize(size));
+        write_text_base_binary_size(ctx, size)?;
+        write_jsonl_base_binary_size(ctx, &pkg.name, &target.name, size)?;
+        size
+    } else {
+        0
+    };
+
     target_json["base_size"] = json!(base_size);
+    target_json["base_binary_size"] = json!(base_binary_size);
 
     for feat in available_features {
         if should_skip_feature(feat, args)? {
             continue;
         }
 
+        // Build and measure rlib with feature
         let size = build_and_measure_rlib(
             &pkg.manifest_path,
             &metadata.target_directory,
@@ -415,7 +435,7 @@ fn analyze_target(
         let diff = size as i64 - base_size as i64;
 
         println!(
-            "  feature {:<15}: {} ({}{})",
+            "  feature {:<15} rlib: {} ({}{})",
             feat,
             ByteSize(size),
             if diff >= 0 { '+' } else { '-' },
@@ -425,17 +445,125 @@ fn analyze_target(
         write_text_feature(ctx, feat, size, diff)?;
         write_jsonl_feature(ctx, &pkg.name, &target.name, feat, size, diff)?;
 
+        // Build and measure binary with feature if it's a binary target
+        let binary_size = if target.kind.iter().any(|k| k == &TargetKind::Bin) {
+            let size = build_and_measure_binary(
+                &pkg.manifest_path,
+                &metadata.target_directory,
+                &target.name,
+                Some(feat),
+            )?;
+            #[allow(clippy::cast_possible_wrap)]
+            let binary_diff = size as i64 - base_binary_size as i64;
+            println!(
+                "  feature {:<15} binary: {} ({}{})",
+                feat,
+                ByteSize(size),
+                if binary_diff >= 0 { '+' } else { '-' },
+                ByteSize(binary_diff.unsigned_abs()),
+            );
+            write_text_binary_feature(ctx, feat, size, binary_diff)?;
+            write_jsonl_binary_feature(ctx, &pkg.name, &target.name, feat, size, binary_diff)?;
+            size
+        } else {
+            0
+        };
+
+        #[allow(clippy::cast_possible_wrap)]
         target_json["features"].as_array_mut().unwrap().push(json!({
             "name": feat,
             "size": size,
             "diff": diff,
             "diff_formatted": format!("{}{}", if diff >= 0 { '+' } else { '-' }, ByteSize(diff.unsigned_abs())),
-            "size_formatted": ByteSize(size).to_string()
+            "size_formatted": ByteSize(size).to_string(),
+            "binary_size": binary_size,
+            "binary_diff": binary_size as i64 - base_binary_size as i64,
+            "binary_diff_formatted": format!("{}{}", if binary_size >= base_binary_size { '+' } else { '-' }, ByteSize((binary_size as i64 - base_binary_size as i64).unsigned_abs())),
+            "binary_size_formatted": ByteSize(binary_size).to_string()
         }));
     }
 
     write_jsonl_target_end(ctx, &pkg.name, &target.name)?;
     Ok(target_json)
+}
+
+fn write_text_base_binary_size(ctx: &mut AnalysisContext, base_size: u64) -> Result<()> {
+    if let Some(report) = &mut ctx.report_files.text {
+        writeln!(report, "Base binary size: {}", ByteSize(base_size))?;
+    }
+    Ok(())
+}
+
+fn write_text_binary_feature(
+    ctx: &mut AnalysisContext,
+    feature: &str,
+    size: u64,
+    diff: i64,
+) -> Result<()> {
+    if let Some(report) = &mut ctx.report_files.text {
+        let sign = if diff >= 0 { '+' } else { '-' };
+        writeln!(
+            report,
+            "Feature: {:<15} | Binary Size: {} | Binary Diff: {}{}",
+            feature,
+            ByteSize(size),
+            sign,
+            ByteSize(diff.unsigned_abs())
+        )?;
+    }
+    Ok(())
+}
+
+fn write_jsonl_base_binary_size(
+    ctx: &mut AnalysisContext,
+    package_name: &str,
+    target_name: &str,
+    base_size: u64,
+) -> Result<()> {
+    if let Some(report) = &mut ctx.report_files.jsonl {
+        writeln!(
+            report,
+            "{}",
+            serde_json::to_string(&json!({
+                "type": "base_binary_size",
+                "package": package_name,
+                "target": target_name,
+                "size": base_size,
+                "size_formatted": ByteSize(base_size).to_string(),
+                "timestamp": ctx.timestamp
+            }))?
+        )?;
+    }
+    Ok(())
+}
+
+fn write_jsonl_binary_feature(
+    ctx: &mut AnalysisContext,
+    package_name: &str,
+    target_name: &str,
+    feature: &str,
+    size: u64,
+    diff: i64,
+) -> Result<()> {
+    if let Some(report) = &mut ctx.report_files.jsonl {
+        let sign = if diff >= 0 { '+' } else { '-' };
+        writeln!(
+            report,
+            "{}",
+            serde_json::to_string(&json!({
+                "type": "binary_feature",
+                "package": package_name,
+                "target": target_name,
+                "feature": feature,
+                "size": size,
+                "diff": diff,
+                "diff_formatted": format!("{}{}", sign, ByteSize(diff.unsigned_abs())),
+                "size_formatted": ByteSize(size).to_string(),
+                "timestamp": ctx.timestamp
+            }))?
+        )?;
+    }
+    Ok(())
 }
 
 fn analyze_package(
@@ -589,6 +717,38 @@ fn build_and_measure_rlib(
         }
     }
     Err(anyhow::anyhow!("rlib for {} not found", crate_name))
+}
+
+fn build_and_measure_binary(
+    manifest: &Utf8Path,
+    target_dir: &Utf8Path,
+    binary_name: &str,
+    feat: Option<&String>,
+) -> Result<u64> {
+    let _ = Command::new("cargo")
+        .current_dir(manifest.parent().unwrap())
+        .arg("clean")
+        .arg("--release")
+        .status();
+
+    let mut cmd = Command::new("cargo");
+
+    cmd.current_dir(manifest.parent().unwrap())
+        .arg("build")
+        .arg("--release")
+        .arg("--no-default-features")
+        .arg("--bin")
+        .arg(binary_name);
+
+    if let Some(f) = feat {
+        cmd.arg("--features").arg(f);
+    }
+
+    println!("$ {cmd:?}\n");
+    cmd.status().context("building binary")?;
+
+    let binary_path = target_dir.join("release").join(binary_name);
+    Ok(fs::metadata(&binary_path)?.len())
 }
 
 fn tool_available(tool: &str) -> bool {

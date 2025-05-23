@@ -10,6 +10,8 @@ A tool for analyzing binary size and feature impact across Rust workspace member
 - Integration with cargo-bloat, cargo-llvm-lines, and cargo-size
 - Detailed reporting of size differences between features
 - Regex pattern matching for packages and features
+- Analysis of both library (rlib) and binary sizes
+- Tracking of statically linked dependencies
 
 ## Installation
 
@@ -165,7 +167,7 @@ cargo run --bin bloaty -- --report-file analysis
 ## Output Formats
 
 ### Text Format
-Human-readable format showing package, target, and feature sizes with differences.
+Human-readable format showing package, target, and feature sizes with differences. For binary targets, both library (rlib) and binary sizes are reported.
 
 Example:
 ```
@@ -174,14 +176,18 @@ Package: my_crate
 
 Target: my_target
 -------------------
-Base size: 1.2 MB
-Feature: default        | Size: 1.2 MB | Diff: +0 B
-Feature: extra          | Size: 1.5 MB | Diff: +300 KB
-Feature: minimal        | Size: 900 KB | Diff: -300 KB
+Base rlib size: 1.2 MB
+Base binary size: 2.5 MB
+Feature: default        | Rlib Size: 1.2 MB | Rlib Diff: +0 B
+Feature: default        | Binary Size: 2.5 MB | Binary Diff: +0 B
+Feature: extra          | Rlib Size: 1.5 MB | Rlib Diff: +300 KB
+Feature: extra          | Binary Size: 3.0 MB | Binary Diff: +500 KB
+Feature: minimal        | Rlib Size: 900 KB | Rlib Diff: -300 KB
+Feature: minimal        | Binary Size: 2.0 MB | Binary Diff: -500 KB
 ```
 
 ### JSON Format
-Complete analysis in a single JSON object, useful for programmatic processing.
+Complete analysis in a single JSON object, useful for programmatic processing. Includes both library and binary sizes for each feature.
 
 ### JSONL Format
 Line-delimited JSON format, with each line representing a single event in the analysis process. Useful for streaming and real-time processing.
@@ -191,7 +197,9 @@ Example:
 {"type":"package_start","name":"my_crate","timestamp":1234567890}
 {"type":"target_start","package":"my_crate","target":"my_target","timestamp":1234567890}
 {"type":"base_size","package":"my_crate","target":"my_target","size":1258291,"size_formatted":"1.2 MB","timestamp":1234567890}
+{"type":"base_binary_size","package":"my_crate","target":"my_target","size":2621440,"size_formatted":"2.5 MB","timestamp":1234567890}
 {"type":"feature","package":"my_crate","target":"my_target","feature":"default","size":1258291,"diff":0,"diff_formatted":"+0 B","size_formatted":"1.2 MB","timestamp":1234567890}
+{"type":"binary_feature","package":"my_crate","target":"my_target","feature":"default","size":2621440,"diff":0,"diff_formatted":"+0 B","size_formatted":"2.5 MB","timestamp":1234567890}
 ```
 
 ## Dependencies
