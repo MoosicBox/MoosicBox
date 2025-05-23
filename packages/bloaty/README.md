@@ -9,7 +9,7 @@ A tool for analyzing binary size and feature impact across Rust workspace member
 - Support for multiple output formats (text, JSON, JSONL)
 - Integration with cargo-bloat, cargo-llvm-lines, and cargo-size
 - Detailed reporting of size differences between features
-- Regex pattern matching for skipping features
+- Regex pattern matching for packages and features
 
 ## Installation
 
@@ -38,12 +38,28 @@ All list arguments (packages, skip-packages, skip-features, tool, output-format)
   --package pkg1 --package pkg2 --package pkg3
   ```
 
+- `--package-pattern <PACKAGE_PATTERN>`: Regex pattern for packages to analyze
+  ```bash
+  # Analyze all packages starting with 'core-'
+  --package-pattern "^core-.*"
+  # Analyze packages containing 'test' or 'bench'
+  --package-pattern ".*(test|bench).*"
+  ```
+
 - `--skip-packages <SKIP_PACKAGES>`: Packages to skip
   ```bash
   # Using comma-separated list
   --skip-packages pkg1,pkg2
   # Using multiple arguments
   --skip-packages pkg1 --skip-packages pkg2
+  ```
+
+- `--skip-package-pattern <SKIP_PACKAGE_PATTERN>`: Regex pattern for packages to skip
+  ```bash
+  # Skip all test packages
+  --skip-package-pattern ".*-test$"
+  # Skip packages starting with 'bench' or 'dev'
+  --skip-package-pattern "^(bench|dev).*"
   ```
 
 - `--skip-features <SKIP_FEATURES>`: Features to skip
@@ -86,11 +102,26 @@ All list arguments (packages, skip-packages, skip-features, tool, output-format)
 
 Analyze specific packages:
 ```bash
-# Using comma-separated list
+# Using exact package names
 cargo run --bin bloaty -- -p package1,package2
 
-# Using multiple arguments
-cargo run --bin bloaty -- -p package1 -p package2
+# Using package pattern
+cargo run --bin bloaty -- --package-pattern "^core-.*"
+
+# Combine both approaches
+cargo run --bin bloaty -- -p package1 --package-pattern "^core-.*"
+```
+
+Skip certain packages:
+```bash
+# Skip specific packages
+cargo run --bin bloaty -- --skip-packages pkg1,pkg2
+
+# Skip packages matching a pattern
+cargo run --bin bloaty -- --skip-package-pattern ".*-test$"
+
+# Combine both approaches
+cargo run --bin bloaty -- --skip-packages pkg1 --skip-package-pattern ".*-test$"
 ```
 
 Skip certain features:

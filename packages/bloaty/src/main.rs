@@ -26,8 +26,14 @@ struct Args {
     #[arg(short, long, value_name = "PACKAGE")]
     package: Vec<String>,
 
+    #[arg(long, value_name = "PACKAGE_PATTERN")]
+    package_pattern: Option<String>,
+
     #[arg(long, value_name = "SKIP_PACKAGES")]
     skip_packages: Vec<String>,
+
+    #[arg(long, value_name = "SKIP_PACKAGE_PATTERN")]
+    skip_package_pattern: Option<String>,
 
     #[arg(long, value_name = "SKIP_FEATURES")]
     skip_features: Vec<String>,
@@ -334,6 +340,36 @@ fn should_skip_feature(feature: &str, args: &Args) -> Result<bool> {
     Ok(false)
 }
 
+fn should_analyze_package(pkg_name: &str, args: &Args) -> Result<bool> {
+    // If specific packages are specified, check if this package is in the list
+    if !args.package.is_empty() && !args.package.contains(&pkg_name.to_string()) {
+        return Ok(false);
+    }
+
+    // Check package pattern if specified
+    if let Some(pattern) = &args.package_pattern {
+        let re = Regex::new(pattern).context(format!("invalid package pattern: {pattern}"))?;
+        if !re.is_match(pkg_name) {
+            return Ok(false);
+        }
+    }
+
+    // Check skip packages list
+    if args.skip_packages.contains(&pkg_name.to_string()) {
+        return Ok(false);
+    }
+
+    // Check skip package pattern if specified
+    if let Some(pattern) = &args.skip_package_pattern {
+        let re = Regex::new(pattern).context(format!("invalid skip package pattern: {pattern}"))?;
+        if re.is_match(pkg_name) {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
 fn analyze_target(
     ctx: &mut AnalysisContext,
     pkg: &cargo_metadata::Package,
@@ -408,9 +444,7 @@ fn analyze_package(
     args: &Args,
     metadata: &cargo_metadata::Metadata,
 ) -> Result<()> {
-    if !args.package.is_empty() && !args.package.contains(&pkg.name)
-        || args.skip_packages.contains(&pkg.name)
-    {
+    if !should_analyze_package(&pkg.name, args)? {
         return Ok(());
     }
 
