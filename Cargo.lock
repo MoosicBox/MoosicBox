@@ -1740,6 +1740,7 @@ dependencies = [
  "cargo_metadata",
  "clap 4.5.38",
  "glob",
+ "regex",
  "serde_json",
 ]
 

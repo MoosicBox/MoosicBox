@@ -9,6 +9,7 @@ A tool for analyzing binary size and feature impact across Rust workspace member
 - Support for multiple output formats (text, JSON, JSONL)
 - Integration with cargo-bloat, cargo-llvm-lines, and cargo-size
 - Detailed reporting of size differences between features
+- Regex pattern matching for skipping features
 
 ## Installation
 
@@ -53,6 +54,14 @@ All list arguments (packages, skip-packages, skip-features, tool, output-format)
   --skip-features test --skip-features bench
   ```
 
+- `--skip-feature-pattern <SKIP_FEATURE_PATTERN>`: Regex pattern for features to skip
+  ```bash
+  # Skip all test-related features
+  --skip-feature-pattern "test.*"
+  # Skip features starting with 'bench' or 'dev'
+  --skip-feature-pattern "^(bench|dev).*"
+  ```
+
 - `-t, --tool <TOOL>`: Tools to use (options: bloat, llvm-lines, size)
   ```bash
   # Using comma-separated list
@@ -86,11 +95,14 @@ cargo run --bin bloaty -- -p package1 -p package2
 
 Skip certain features:
 ```bash
-# Using comma-separated list
+# Skip specific features
 cargo run --bin bloaty -- --skip-features test,bench,dev
 
-# Using multiple arguments
-cargo run --bin bloaty -- --skip-features test --skip-features bench
+# Skip features matching a pattern
+cargo run --bin bloaty -- --skip-feature-pattern "test.*"
+
+# Combine both approaches
+cargo run --bin bloaty -- --skip-features test,bench --skip-feature-pattern "dev.*"
 ```
 
 Use specific tools:
@@ -156,6 +168,7 @@ Example:
 - cargo-bloat
 - cargo-llvm-lines
 - cargo-size
+- regex
 
 Make sure these tools are installed before running bloaty:
 ```bash

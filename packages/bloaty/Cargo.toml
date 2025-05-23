@@ -24,6 +24,7 @@ bytesize       = { workspace = true }
 cargo_metadata = { workspace = true }
 clap           = { workspace = true, features = ["derive"] }
 glob           = { workspace = true }
+regex          = { workspace = true }
 serde_json     = { workspace = true }
 
 [features]

@@ -7,6 +7,7 @@ use bytesize::ByteSize;
 use cargo_metadata::{MetadataCommand, TargetKind, camino::Utf8Path};
 use clap::Parser;
 use glob::glob;
+use regex::Regex;
 use serde_json::json;
 use std::{
     fs,
@@ -30,6 +31,9 @@ struct Args {
 
     #[arg(long, value_name = "SKIP_FEATURES")]
     skip_features: Vec<String>,
+
+    #[arg(long, value_name = "SKIP_FEATURE_PATTERN")]
+    skip_feature_pattern: Option<String>,
 
     #[arg(short, long, value_parser = ["bloat", "llvm-lines", "size"], default_values = &["bloat", "size"], value_name = "TOOL")]
     tool: Vec<String>,
@@ -315,6 +319,21 @@ fn write_text_feature(
     Ok(())
 }
 
+fn should_skip_feature(feature: &str, args: &Args) -> Result<bool> {
+    if args.skip_features.contains(&feature.to_string()) {
+        return Ok(true);
+    }
+
+    if let Some(pattern) = &args.skip_feature_pattern {
+        let re = Regex::new(pattern).context(format!("invalid regex pattern: {pattern}"))?;
+        if re.is_match(feature) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 fn analyze_target(
     ctx: &mut AnalysisContext,
     pkg: &cargo_metadata::Package,
@@ -345,7 +364,7 @@ fn analyze_target(
     target_json["base_size"] = json!(base_size);
 
     for feat in available_features {
-        if args.skip_features.contains(feat) {
+        if should_skip_feature(feat, args)? {
             continue;
         }
 
