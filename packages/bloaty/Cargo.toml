@@ -19,7 +19,7 @@ path              = "src/main.rs"
 required-features = []
 
 [dependencies]
-anyhow            = { workspace = true }
+anyhow            = { workspace = true, features = ["backtrace"] }
 bytesize          = { workspace = true }
 cargo_metadata    = { workspace = true }
 clap              = { workspace = true, features = ["derive"] }
