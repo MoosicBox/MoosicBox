@@ -52,9 +52,7 @@ pub async fn run_basic<T>(
     on_startup: impl FnOnce(ServerHandle) -> T + Send,
 ) -> std::io::Result<T> {
     #[cfg(feature = "telemetry")]
-    let request_metrics = std::sync::Arc::new(
-        switchy_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
-    );
+    let request_metrics = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());
 
     run(
         app_type,

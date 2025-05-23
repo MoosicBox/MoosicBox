@@ -37,9 +37,7 @@ pub fn start(sim: &mut impl Sim, service_port: Option<u16>) {
     let host = default_env("BIND_ADDR", "0.0.0.0");
     let actix_workers = Some(rng().gen_range(1..=64_usize));
     #[cfg(feature = "telemetry")]
-    let metrics_handler = std::sync::Arc::new(
-        switchy_telemetry::get_http_metrics_handler().expect("Failed to init telemetry"),
-    );
+    let metrics_handler = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());
     let addr = format!("{host}:{service_port}");
 
     sim.host(HOST, move || {

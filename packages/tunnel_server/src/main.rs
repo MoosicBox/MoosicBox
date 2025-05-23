@@ -60,9 +60,7 @@ fn main() -> Result<(), std::io::Error> {
             .expect("Failed to initialize FreeLog");
 
         #[cfg(feature = "telemetry")]
-        let metrics_handler = std::sync::Arc::new(
-            switchy_telemetry::get_http_metrics_handler().map_err(std::io::Error::other)?,
-        );
+        let metrics_handler = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());
 
         db::init().await.expect("Failed to init postgres DB");
 
