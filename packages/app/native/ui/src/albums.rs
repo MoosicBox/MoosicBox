@@ -40,11 +40,7 @@ pub fn album_cover_url(
     if contains_cover {
         format!(
             "{}/files/albums/{}/{width}x{height}?moosicboxProfile=master&source={}",
-            std::env::var("MOOSICBOX_HOST")
-                .as_deref()
-                .unwrap_or("http://localhost:8016"),
-            album_id,
-            source,
+            *MOOSICBOX_HOST, album_id, source,
         )
     } else {
         public_img!("album.svg").to_string()

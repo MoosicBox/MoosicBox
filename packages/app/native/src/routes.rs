@@ -16,7 +16,7 @@ use moosicbox_music_models::{
 use moosicbox_paging::Page;
 use moosicbox_session_models::ApiSession;
 
-use crate::{PROFILE, STATE, convert_state};
+use crate::{MOOSICBOX_HOST, PROFILE, STATE, convert_state};
 
 static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
@@ -88,9 +88,7 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
     let response = CLIENT
         .get(&format!(
             "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
-            std::env::var("MOOSICBOX_HOST")
-                .as_deref()
-                .unwrap_or("http://localhost:8016"),
+            *MOOSICBOX_HOST,
             if filtered_sources.is_empty() {
                 String::new()
             } else {
@@ -167,9 +165,7 @@ pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
     let response = CLIENT
         .get(&format!(
             "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
-            std::env::var("MOOSICBOX_HOST")
-                .as_deref()
-                .unwrap_or("http://localhost:8016"),
+            *MOOSICBOX_HOST,
             if filtered_sources.is_empty() {
                 String::new()
             } else {
@@ -231,9 +227,7 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
     let size = size.parse::<u16>()?;
     let url = format!(
         "{}/menu/albums?moosicboxProfile={PROFILE}&artistId={artist_id}&source={source}&albumType={album_type}",
-        std::env::var("MOOSICBOX_HOST")
-            .as_deref()
-            .unwrap_or("http://localhost:8016")
+        *MOOSICBOX_HOST
     );
     let response = CLIENT.get(&url).send().await?;
 
@@ -259,9 +253,7 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
 pub async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
     let url = format!(
         "{}/audio-zone/with-session?moosicboxProfile={PROFILE}",
-        std::env::var("MOOSICBOX_HOST")
-            .as_deref()
-            .unwrap_or("http://localhost:8016")
+        *MOOSICBOX_HOST
     );
     let response = CLIENT.get(&url).send().await?;
 
@@ -285,9 +277,7 @@ pub async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
 pub async fn playback_sessions_route(_req: RouteRequest) -> Result<View, RouteError> {
     let url = format!(
         "{}/session/sessions?moosicboxProfile={PROFILE}",
-        std::env::var("MOOSICBOX_HOST")
-            .as_deref()
-            .unwrap_or("http://localhost:8016")
+        *MOOSICBOX_HOST
     );
     let response = CLIENT.get(&url).send().await?;
 
@@ -417,9 +407,7 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
         let response = CLIENT
             .get(&format!(
                 "{}/menu/artist?moosicboxProfile={PROFILE}&artistId={artist_id}{}",
-                std::env::var("MOOSICBOX_HOST")
-                    .as_deref()
-                    .unwrap_or("http://localhost:8016"),
+                *MOOSICBOX_HOST,
                 source.map_or_else(String::new, |x| format!("&source={x}")),
             ))
             .send()
@@ -445,9 +433,7 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
         let response = CLIENT
             .get(&format!(
                 "{}/menu/artists?moosicboxProfile={PROFILE}&offset=0&limit=2000",
-                std::env::var("MOOSICBOX_HOST")
-                    .as_deref()
-                    .unwrap_or("http://localhost:8016")
+                *MOOSICBOX_HOST
             ))
             .send()
             .await?;

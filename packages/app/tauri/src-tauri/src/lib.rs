@@ -918,12 +918,7 @@ pub fn run() {
                         .set_state(moosicbox_app_state::UpdateAppState {
                             connection_id: Some("123".into()),
                             connection_name: Some("Test Tauri".into()),
-                            api_url: Some(
-                                std::env::var("MOOSICBOX_HOST")
-                                    .as_deref()
-                                    .unwrap_or("http://localhost:8016")
-                                    .to_string(),
-                            ),
+                            api_url: Some(moosicbox_app_native::MOOSICBOX_HOST.to_string(),),
                             client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
                             signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
                             api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),

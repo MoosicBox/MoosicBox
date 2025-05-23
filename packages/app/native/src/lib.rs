@@ -19,6 +19,8 @@ mod routes;
 #[cfg(feature = "_canvas")]
 pub mod visualization;
 
+pub use moosicbox_app_native_ui::MOOSICBOX_HOST;
+
 pub static ROUTER: OnceLock<Router> = OnceLock::new();
 pub static RENDERER: OnceLock<Box<dyn Renderer>> = OnceLock::new();
 
@@ -95,8 +97,7 @@ pub fn init() -> Router {
             api_source,
             Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
                 RemoteLibraryMusicApi::new(
-                    std::env::var("MOOSICBOX_HOST")
-                        .unwrap_or_else(|_| "http://localhost:8016".to_string()),
+                    MOOSICBOX_HOST.to_string(),
                     api_source,
                     PROFILE.to_string(),
                 ),

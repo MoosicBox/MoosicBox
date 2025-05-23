@@ -12,6 +12,8 @@ pub mod playback_sessions;
 pub mod settings;
 pub mod state;
 
+use std::sync::LazyLock;
+
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
 use hyperchad::{
@@ -37,6 +39,10 @@ pub static FOOTER_BORDER_SIZE: u16 = 3;
 pub static FOOTER_HEIGHT: u16 = 100 + VIZ_HEIGHT + VIZ_PADDING * 2 + FOOTER_BORDER_SIZE;
 pub static FOOTER_ICON_SIZE: u16 = 25;
 pub static CURRENT_ALBUM_SIZE: u16 = 70;
+
+pub static MOOSICBOX_HOST: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("MOOSICBOX_HOST").unwrap_or_else(|_| "http://localhost:8016".to_string())
+});
 
 #[macro_export]
 macro_rules! public_img {

@@ -9,6 +9,7 @@ use moosicbox_music_models::{
 };
 
 use crate::{
+    MOOSICBOX_HOST,
     formatting::{AlbumTypeFormat as _, ApiSourceFormat},
     page, pre_escaped, public_img,
     state::State,
@@ -23,10 +24,7 @@ fn artist_cover_url(artist: &ApiArtist, width: u16, height: u16) -> String {
     if artist.contains_cover {
         format!(
             "{}/files/artists/{}/{width}x{height}?moosicboxProfile=master",
-            std::env::var("MOOSICBOX_HOST")
-                .as_deref()
-                .unwrap_or("http://localhost:8016"),
-            artist.artist_id
+            *MOOSICBOX_HOST, artist.artist_id
         )
     } else {
         public_img!("album.svg").to_string()
