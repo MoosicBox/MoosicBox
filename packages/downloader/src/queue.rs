@@ -93,6 +93,10 @@ impl DownloadQueueState {
         self.tasks
             .retain(|x| !(task.file_path == x.file_path && task.item == x.item));
     }
+
+    pub fn current_task(&self) -> Option<&DownloadTask> {
+        self.tasks.first()
+    }
 }
 
 #[derive(Clone)]
@@ -186,6 +190,10 @@ impl DownloadQueue {
     pub const fn with_scan(mut self, scan: bool) -> Self {
         self.scan = scan;
         self
+    }
+
+    pub async fn current_task(&self) -> Option<DownloadTask> {
+        self.state.read().await.current_task().cloned()
     }
 
     #[must_use]
