@@ -26,92 +26,121 @@ macro_rules! path_to_str {
     }};
 }
 
-pub struct File {
-    pub(crate) data: Arc<Mutex<BytesMut>>,
-    pub(crate) position: u64,
-    pub(crate) write: bool,
+macro_rules! impl_file_sync {
+    ($file:ident $(,)?) => {
+        impl std::io::Read for $file {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                if buf.is_empty() {
+                    return Ok(0);
+                }
+
+                let binding = self.data.lock().unwrap();
+
+                let len = binding.len();
+                let pos = usize::try_from(self.position).unwrap();
+
+                let remaining = len - pos;
+                let read_count = std::cmp::min(remaining, buf.len());
+
+                if read_count == 0 {
+                    return Ok(0);
+                }
+
+                let data = &binding[pos..(pos + read_count)];
+                buf[..read_count].copy_from_slice(data);
+
+                self.position += read_count as u64;
+
+                drop(binding);
+
+                Ok(read_count)
+            }
+        }
+
+        impl std::io::Write for $file {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                use bytes::BufMut as _;
+
+                if !self.write {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "File not opened in write mode",
+                    ));
+                }
+                let mut binding = self.data.lock().unwrap();
+
+                binding.put(buf);
+
+                drop(binding);
+
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        impl std::io::Seek for $file {
+            fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+                self.position = match pos {
+                    std::io::SeekFrom::Start(x) => x,
+                    std::io::SeekFrom::End(x) => {
+                        u64::try_from(i64::try_from(self.data.lock().unwrap().len()).unwrap() - x)
+                            .unwrap()
+                    }
+                    std::io::SeekFrom::Current(x) => {
+                        u64::try_from(i64::try_from(self.position).unwrap() + x).unwrap()
+                    }
+                };
+
+                Ok(self.position)
+            }
+        }
+    };
 }
 
 #[cfg(feature = "sync")]
 pub mod sync {
     use std::{
-        path::Path,
+        path::{Path, PathBuf},
         sync::{Arc, Mutex},
     };
 
-    use bytes::{BufMut as _, BytesMut};
+    use bytes::BytesMut;
 
-    use crate::sync::{File, OpenOptions};
+    use crate::sync::OpenOptions;
 
     use super::FILES;
 
-    impl std::io::Read for File {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            if buf.is_empty() {
-                return Ok(0);
+    pub struct File {
+        pub(crate) path: PathBuf,
+        pub(crate) data: Arc<Mutex<BytesMut>>,
+        pub(crate) position: u64,
+        pub(crate) write: bool,
+    }
+
+    impl File {
+        /// # Errors
+        ///
+        /// * If underlying `std::fs::metadata` fails
+        pub fn metadata(&self) -> std::io::Result<std::fs::Metadata> {
+            std::fs::metadata(&self.path)
+        }
+
+        #[cfg(feature = "async")]
+        #[must_use]
+        pub fn into_async(self) -> crate::unsync::File {
+            crate::unsync::File {
+                path: self.path,
+                data: self.data,
+                position: self.position,
+                write: self.write,
             }
-
-            let binding = self.data.lock().unwrap();
-
-            let len = binding.len();
-            let pos = usize::try_from(self.position).unwrap();
-
-            let remaining = len - pos;
-            let read_count = std::cmp::min(remaining, buf.len());
-
-            if read_count == 0 {
-                return Ok(0);
-            }
-
-            let data = &binding[pos..(pos + read_count)];
-            buf[..read_count].copy_from_slice(data);
-
-            self.position += read_count as u64;
-
-            drop(binding);
-
-            Ok(read_count)
         }
     }
 
-    impl std::io::Write for File {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            if !self.write {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::PermissionDenied,
-                    "File not opened in write mode",
-                ));
-            }
-            let mut binding = self.data.lock().unwrap();
-
-            binding.put(buf);
-
-            drop(binding);
-
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl std::io::Seek for File {
-        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-            self.position = match pos {
-                std::io::SeekFrom::Start(x) => x,
-                std::io::SeekFrom::End(x) => {
-                    u64::try_from(i64::try_from(self.data.lock().unwrap().len()).unwrap() - x)
-                        .unwrap()
-                }
-                std::io::SeekFrom::Current(x) => {
-                    u64::try_from(i64::try_from(self.position).unwrap() + x).unwrap()
-                }
-            };
-
-            Ok(self.position)
-        }
-    }
+    impl_file_sync!(File);
 
     impl OpenOptions {
         /// # Errors
@@ -147,6 +176,7 @@ pub mod sync {
             }
 
             Ok(File {
+                path: path.as_ref().to_path_buf(),
                 data,
                 position: 0,
                 write: self.write,
@@ -247,11 +277,45 @@ pub mod sync {
 
 #[cfg(feature = "async")]
 pub mod unsync {
-    use std::{path::Path, task::Poll};
+    use std::{
+        path::{Path, PathBuf},
+        sync::{Arc, Mutex},
+        task::Poll,
+    };
+
+    use bytes::BytesMut;
 
     use crate::unsync::OpenOptions;
 
-    use super::File;
+    pub struct File {
+        pub(crate) path: PathBuf,
+        pub(crate) data: Arc<Mutex<BytesMut>>,
+        pub(crate) position: u64,
+        pub(crate) write: bool,
+    }
+
+    impl File {
+        /// # Errors
+        ///
+        /// * If underlying `std::fs::metadata` fails
+        #[allow(clippy::unused_async)]
+        pub async fn metadata(&self) -> std::io::Result<std::fs::Metadata> {
+            std::fs::metadata(&self.path)
+        }
+
+        #[cfg(feature = "sync")]
+        #[must_use]
+        pub fn into_sync(self) -> crate::sync::File {
+            crate::sync::File {
+                path: self.path,
+                data: self.data,
+                position: self.position,
+                write: self.write,
+            }
+        }
+    }
+
+    impl_file_sync!(File);
 
     impl tokio::io::AsyncRead for File {
         fn poll_read(
@@ -333,7 +397,7 @@ pub mod unsync {
         /// * If the `FILES` `RwLock` fails to read.
         #[allow(clippy::unused_async)]
         pub async fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
-            self.into_sync().open(path)
+            Ok(self.into_sync().open(path)?.into_async())
         }
     }
 

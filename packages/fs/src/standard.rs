@@ -1,10 +1,10 @@
-pub use std::fs::File;
-
 #[cfg(feature = "sync")]
 pub mod sync {
     use std::path::Path;
 
     use crate::sync::OpenOptions;
+
+    pub use std::fs::File;
 
     /// # Errors
     ///
@@ -47,7 +47,7 @@ pub mod sync {
         /// # Errors
         ///
         /// * If and IO error occurs
-        pub fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<super::File> {
+        pub fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
             let options: std::fs::OpenOptions = self.into();
 
             options.open(path)

@@ -1,10 +1,10 @@
-pub use tokio::fs::File;
-
 #[cfg(feature = "async")]
 pub mod unsync {
     use std::path::Path;
 
     use crate::unsync::OpenOptions;
+
+    pub use tokio::fs::File;
 
     /// # Errors
     ///
@@ -47,10 +47,7 @@ pub mod unsync {
         /// # Errors
         ///
         /// * If and IO error occurs
-        pub async fn open(
-            self,
-            path: impl AsRef<::std::path::Path>,
-        ) -> ::std::io::Result<super::File> {
+        pub async fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
             let options: tokio::fs::OpenOptions = self.into();
 
             options.open(path).await
