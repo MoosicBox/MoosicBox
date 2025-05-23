@@ -94,6 +94,7 @@ jobs:
               run: |
                   ${{ steps.environment.outputs.environment }} cargo run -p bloaty -- \
                         --skip-features fail-on-warnings,default \
+                        --skip-feature-pattern '_.+' \
                         --output-format all \
                         --report-file report
 
