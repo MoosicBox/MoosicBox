@@ -101,6 +101,26 @@ impl From<ApiSource> for DownloadApiSource {
     }
 }
 
+impl From<&DownloadApiSource> for ApiSource {
+    fn from(value: &DownloadApiSource) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<DownloadApiSource> for ApiSource {
+    fn from(value: DownloadApiSource) -> Self {
+        match value {
+            DownloadApiSource::MoosicBox(..) => Self::Library,
+            #[cfg(feature = "qobuz")]
+            DownloadApiSource::Qobuz => Self::Qobuz,
+            #[cfg(feature = "tidal")]
+            DownloadApiSource::Tidal => Self::Tidal,
+            #[cfg(feature = "yt")]
+            DownloadApiSource::Yt => Self::Yt,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum DownloadError {
     #[error(transparent)]
