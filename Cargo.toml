@@ -445,11 +445,11 @@ strum_macros = "0.27.1"
 swc_bundler = "19.0.0"
 swc_common = { version = "11.0.0", features = ["tty-emitter"] }
 swc_ecma_ast = "11.0.0"
-swc_ecma_codegen = "13.0.0"
+swc_ecma_codegen = "13.1.0"
 swc_ecma_loader = { version = "11.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "20.0.0"
+swc_ecma_minifier = "20.0.1"
 swc_ecma_parser = "14.0.0"
-swc_ecma_transforms_base = "15.0.1"
+swc_ecma_transforms_base = "15.1.0"
 swc_ecma_transforms_typescript = "17.0.0"
 swc_ecma_visit = "11.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
@@ -488,7 +488,7 @@ utoipa-rapidoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-redoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.1", features = ["actix-web"] }
-uuid = { version = "1.16.0", features = ["v4"] }
+uuid = { version = "1.17.0", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.0"
 whoami = "1.6.0"
