@@ -9241,8 +9241,6 @@ dependencies = [
  "futures-util",
  "glob",
  "opentelemetry 0.29.1",
- "percent-encoding",
- "rand 0.9.1",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
@@ -14760,14 +14758,13 @@ dependencies = [
 
 [[package]]
 name = "tracing-opentelemetry"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd8e764bd6f5813fd8bebc3117875190c5b0415be8f7f8059bffb6ecd979c444"
+version = "0.31.0"
+source = "git+https://github.com/BSteffaniak/tracing-opentelemetry?branch=upgrade-otel-to-0.30#6cd59e7ef41287235e3282bc29cbc24b05b70c69"
 dependencies = [
  "js-sys",
  "once_cell",
- "opentelemetry 0.29.1",
- "opentelemetry_sdk 0.29.0",
+ "opentelemetry 0.30.0",
+ "opentelemetry_sdk 0.30.0",
  "smallvec",
  "tracing",
  "tracing-core",
