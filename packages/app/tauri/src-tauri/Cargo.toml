@@ -84,12 +84,7 @@ moosicbox_app_native_ui = { workspace = true, optional = true }
 qstring = { workspace = true, optional = true }
 
 [features]
-default = [
-    "all-sources",
-    "all-supported-os-formats",
-    "cpal",
-    "moosicbox-app-native",
-]
+default = ["all-formats", "all-sources", "cpal", "moosicbox-app-native"]
 
 fail-on-warnings = []
 
@@ -98,31 +93,34 @@ fail-on-warnings = []
 custom-protocol = ["tauri/custom-protocol"]
 
 android = []
-desktop = ["all-os-encoders", "moosicbox_app_tauri_bundled?/tunnel"]
-
-all-encoders    = ["all-os-encoders", "mp3"]
-all-os-encoders = ["aac", "flac"]
+desktop = ["all-os-decoders", "moosicbox_app_tauri_bundled?/tunnel"]
 
 bundled = ["all-sources", "dep:moosicbox_app_tauri_bundled"]
 client  = ["dep:moosicbox_app_client"]
 
-all-supported-formats    = ["all-supported-os-formats", "mp3"]
-all-supported-os-formats = ["aac", "flac"]
+all-decoders    = ["all-os-decoders", "decoder-mp3"]
+all-os-decoders = ["decoder-aac", "decoder-flac"]
 
-# Encoders
-aac = [
-    "moosicbox_app_native?/aac",
-    "moosicbox_app_tauri_bundled?/aac",
+decoder-aac  = ["moosicbox_app_native?/decoder-aac"]
+decoder-flac = ["moosicbox_app_native?/decoder-flac"]
+decoder-mp3  = ["moosicbox_app_native?/decoder-mp3"]
+
+all-formats    = ["all-os-formats", "format-mp3"]
+all-os-formats = ["format-aac", "format-flac"]
+
+format-aac = [
+    "moosicbox_app_native?/format-aac",
+    "moosicbox_app_tauri_bundled?/format-aac",
     "moosicbox_music_models/aac",
 ]
-flac = [
-    "moosicbox_app_native?/flac",
-    "moosicbox_app_tauri_bundled?/flac",
+format-flac = [
+    "moosicbox_app_native?/format-flac",
+    "moosicbox_app_tauri_bundled?/format-flac",
     "moosicbox_music_models/flac",
 ]
-mp3 = [
-    "moosicbox_app_native?/mp3",
-    "moosicbox_app_tauri_bundled?/mp3",
+format-mp3 = [
+    "moosicbox_app_native?/format-mp3",
+    "moosicbox_app_tauri_bundled?/format-mp3",
     "moosicbox_music_models/mp3",
 ]
 

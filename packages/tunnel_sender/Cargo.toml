@@ -54,36 +54,43 @@ tokio-tungstenite = { workspace = true }
 tokio-util        = { workspace = true }
 
 [features]
-default = ["aac", "all-sources", "base64", "flac", "mp3", "opus"]
+default = ["all-encoders", "all-sources", "base64"]
 
 fail-on-warnings = []
 
 base64 = ["dep:base64", "moosicbox_tunnel/base64"]
 
-aac = [
+all-encoders    = ["all-os-encoders", "encoder-mp3"]
+all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]
+
+encoder-aac = [
+    "format-aac",
     "moosicbox_audio_output/aac",
-    "moosicbox_files/aac",
-    "moosicbox_music_models/aac",
-    "moosicbox_ws/aac",
+    "moosicbox_files/encoder-aac",
 ]
-flac = [
+encoder-flac = [
+    "format-flac",
     "moosicbox_audio_output/flac",
-    "moosicbox_files/flac",
-    "moosicbox_music_models/flac",
-    "moosicbox_ws/flac",
+    "moosicbox_files/encoder-flac",
 ]
-mp3 = [
+encoder-mp3 = [
+    "format-mp3",
     "moosicbox_audio_output/mp3",
-    "moosicbox_files/mp3",
-    "moosicbox_music_models/mp3",
-    "moosicbox_ws/mp3",
+    "moosicbox_files/encoder-mp3",
 ]
-opus = [
+encoder-opus = [
+    "format-opus",
     "moosicbox_audio_output/opus",
-    "moosicbox_files/opus",
-    "moosicbox_music_models/opus",
-    "moosicbox_ws/opus",
+    "moosicbox_files/encoder-opus",
 ]
+
+all-formats    = ["all-os-formats", "format-mp3"]
+all-os-formats = ["format-aac", "format-flac", "format-opus"]
+
+format-aac  = ["moosicbox_music_models/aac", "moosicbox_ws/aac"]
+format-flac = ["moosicbox_music_models/flac", "moosicbox_ws/flac"]
+format-mp3  = ["moosicbox_music_models/mp3", "moosicbox_ws/mp3"]
+format-opus = ["moosicbox_music_models/opus", "moosicbox_ws/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 

@@ -1232,143 +1232,161 @@ impl TunnelSender {
             .and_then(|x| moosicbox_music_api::profiles::PROFILES.get(x));
 
         match path.to_lowercase().as_str() {
-            "files/track" => {
-                match method {
-                    Method::Get => {
-                        let query = serde_json::from_value::<GetTrackQuery>(query)
-                            .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
+            "files/track" => match method {
+                Method::Get => {
+                    let query = serde_json::from_value::<GetTrackQuery>(query)
+                        .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
 
-                        let ranges = headers
-                            .and_then(|headers| {
-                                headers
-                                    .get("range")
-                                    .map(|range| range.as_str().unwrap().to_string())
+                    let ranges = headers
+                        .and_then(|headers| {
+                            headers
+                                .get("range")
+                                .map(|range| range.as_str().unwrap().to_string())
+                        })
+                        .map(|range| {
+                            range.strip_prefix("bytes=").map(ToString::to_string).ok_or(
+                                TunnelRequestError::BadRequest(format!(
+                                    "Invalid bytes range '{range:?}'"
+                                )),
+                            )
+                        })
+                        .transpose()?
+                        .map(|range| {
+                            parse_ranges(&range).map_err(|e| {
+                                TunnelRequestError::BadRequest(format!(
+                                    "Invalid bytes range ({e:?})"
+                                ))
                             })
-                            .map(|range| {
-                                range.strip_prefix("bytes=").map(ToString::to_string).ok_or(
-                                    TunnelRequestError::BadRequest(format!(
-                                        "Invalid bytes range '{range:?}'"
-                                    )),
-                                )
-                            })
-                            .transpose()?
-                            .map(|range| {
-                                parse_ranges(&range).map_err(|e| {
-                                    TunnelRequestError::BadRequest(format!(
-                                        "Invalid bytes range ({e:?})"
-                                    ))
-                                })
-                            })
-                            .transpose()?;
+                        })
+                        .transpose()?;
 
-                        let mut response_headers = HashMap::new();
-                        response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
+                    let mut response_headers = HashMap::new();
+                    response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
-                        match get_track_id_source(
-                            music_apis.ok_or(TunnelRequestError::MissingProfile)?,
-                            &query.track_id.into(),
-                            query.source.unwrap_or(ApiSource::Library),
-                            query.quality,
-                        )
-                        .await
-                        {
-                            Ok(TrackSource::LocalFilePath { path, .. }) => {
-                                static CONTENT_TYPE: &str = "content-type";
-                                let content_type = audio_format_to_content_type(
-                                    &query.format.unwrap_or(AudioFormat::Source),
-                                );
-                                if let Some(content_type) = content_type {
-                                    response_headers.insert(CONTENT_TYPE.to_string(), content_type);
+                    match get_track_id_source(
+                        music_apis.ok_or(TunnelRequestError::MissingProfile)?,
+                        &query.track_id.into(),
+                        query.source.unwrap_or(ApiSource::Library),
+                        query.quality,
+                    )
+                    .await
+                    {
+                        Ok(TrackSource::LocalFilePath { path, .. }) => {
+                            static CONTENT_TYPE: &str = "content-type";
+                            let content_type = audio_format_to_content_type(
+                                &query.format.unwrap_or(AudioFormat::Source),
+                            );
+                            if let Some(content_type) = content_type {
+                                response_headers.insert(CONTENT_TYPE.to_string(), content_type);
+                            }
+                            match query.format {
+                                #[cfg(feature = "format-aac")]
+                                Some(AudioFormat::Aac) => {
+                                    #[cfg(feature = "encoder-aac")]
+                                    self.send_stream(
+                                        request_id,
+                                        200,
+                                        &response_headers,
+                                        ranges,
+                                        moosicbox_audio_output::encoder::aac::encode_aac_stream(
+                                            &path,
+                                        ),
+                                        encoding,
+                                    )
+                                    .await?;
+                                    #[cfg(not(feature = "encoder-aac"))]
+                                    panic!("No encoder-aac feature");
                                 }
-                                match query.format {
-                                    #[cfg(feature = "aac")]
-                                    Some(AudioFormat::Aac) => {
-                                        self.send_stream(
-                                            request_id,
-                                            200,
-                                            &response_headers,
-                                            ranges,
-                                            moosicbox_audio_output::encoder::aac::encode_aac_stream(
-                                                &path,
-                                            ),
-                                            encoding,
-                                        )
-                                        .await?;
-                                    }
-                                    #[cfg(feature = "mp3")]
-                                    Some(AudioFormat::Mp3) => {
-                                        self.send_stream(
-                                            request_id,
-                                            200,
-                                            &response_headers,
-                                            ranges,
-                                            moosicbox_audio_output::encoder::mp3::encode_mp3_stream(
-                                                &path,
-                                            ),
-                                            encoding,
-                                        )
-                                        .await?;
-                                    }
-                                    #[cfg(feature = "opus")]
-                                    Some(AudioFormat::Opus) => {
-                                        self.send_stream(request_id, 200, &response_headers, ranges,
+                                #[cfg(feature = "format-mp3")]
+                                Some(AudioFormat::Mp3) => {
+                                    #[cfg(feature = "encoder-mp3")]
+                                    self.send_stream(
+                                        request_id,
+                                        200,
+                                        &response_headers,
+                                        ranges,
+                                        moosicbox_audio_output::encoder::mp3::encode_mp3_stream(
+                                            &path,
+                                        ),
+                                        encoding,
+                                    )
+                                    .await?;
+                                    #[cfg(not(feature = "encoder-mp3"))]
+                                    panic!("No encoder-mp3 feature");
+                                }
+                                #[cfg(feature = "format-opus")]
+                                Some(AudioFormat::Opus) => {
+                                    #[cfg(feature = "encoder-opus")]
+                                    self.send_stream(
+                                        request_id,
+                                        200,
+                                        &response_headers,
+                                        ranges,
                                         moosicbox_audio_output::encoder::opus::encode_opus_stream(
                                             &path,
                                         ),
                                         encoding,
-                                    ).await?;
-                                    }
-                                    _ => {
-                                        self.send(
-                                            request_id,
-                                            200,
-                                            &response_headers,
-                                            File::open(path)?,
-                                            encoding,
-                                        )?;
-                                    }
+                                    )
+                                    .await?;
+                                    #[cfg(not(feature = "encoder-opus"))]
+                                    panic!("No encoder-opus feature");
+                                }
+                                _ => {
+                                    self.send(
+                                        request_id,
+                                        200,
+                                        &response_headers,
+                                        File::open(path)?,
+                                        encoding,
+                                    )?;
                                 }
                             }
-                            Ok(TrackSource::RemoteUrl { url, .. }) => {
-                                let writer = ByteWriter::default();
-                                let stream = writer.stream();
+                        }
+                        Ok(TrackSource::RemoteUrl { url, .. }) => {
+                            let writer = ByteWriter::default();
+                            let stream = writer.stream();
 
-                                let get_handler = move || {
-                                    #[allow(unused_mut)]
-                                    let mut audio_output_handler = AudioDecodeHandler::new();
+                            let get_handler = move || {
+                                #[allow(unused_mut)]
+                                let mut audio_output_handler = AudioDecodeHandler::new();
 
-                                    let format = match query.format {
-                                        #[cfg(feature = "aac")]
-                                        None | Some(AudioFormat::Source) => AudioFormat::Aac,
-                                        #[cfg(all(not(feature = "aac"), feature = "mp3"))]
-                                        None | Some(AudioFormat::Source) => AudioFormat::Mp3,
-                                        #[cfg(all(
-                                            not(feature = "aac"),
-                                            not(feature = "mp3"),
-                                            feature = "opus"
-                                        ))]
-                                        None | Some(AudioFormat::Source) => AudioFormat::Opus,
-                                        #[cfg(all(
-                                            not(feature = "aac"),
-                                            not(feature = "mp3"),
-                                            not(feature = "opus")
-                                        ))]
-                                        None | Some(AudioFormat::Source) => {
-                                            panic!("Audio format is unsupported for Tidal")
-                                        }
-                                        #[cfg(feature = "flac")]
-                                        Some(AudioFormat::Flac) => {
-                                            panic!("FLAC audio format is unsupported for Tidal")
-                                        }
-                                        #[allow(unreachable_patterns)]
-                                        Some(format) => format,
-                                    };
+                                let format = match query.format {
+                                    #[cfg(feature = "format-aac")]
+                                    None | Some(AudioFormat::Source) => AudioFormat::Aac,
+                                    #[cfg(all(
+                                        not(feature = "format-aac"),
+                                        feature = "format-mp3"
+                                    ))]
+                                    None | Some(AudioFormat::Source) => AudioFormat::Mp3,
+                                    #[cfg(all(
+                                        not(feature = "format-aac"),
+                                        not(feature = "format-mp3"),
+                                        feature = "format-opus"
+                                    ))]
+                                    None | Some(AudioFormat::Source) => AudioFormat::Opus,
+                                    #[cfg(all(
+                                        not(feature = "format-aac"),
+                                        not(feature = "format-mp3"),
+                                        not(feature = "format-opus")
+                                    ))]
+                                    None | Some(AudioFormat::Source) => {
+                                        panic!("Audio format is unsupported for Tidal")
+                                    }
+                                    #[cfg(feature = "format-flac")]
+                                    Some(AudioFormat::Flac) => {
+                                        panic!("FLAC audio format is unsupported for Tidal")
+                                    }
+                                    #[allow(unreachable_patterns)]
+                                    Some(format) => format,
+                                };
 
-                                    log::debug!("Sending audio stream with format: {format:?}");
+                                log::debug!("Sending audio stream with format: {format:?}");
 
-                                    match format {
-                                        #[cfg(feature = "aac")]
-                                        AudioFormat::Aac => {
+                                match format {
+                                    #[cfg(feature = "format-aac")]
+                                    AudioFormat::Aac => {
+                                        #[cfg(feature = "encoder-aac")]
+                                        {
                                             use moosicbox_audio_output::encoder::aac::AacEncoder;
                                             log::debug!("Using AAC encoder for output");
                                             audio_output_handler = audio_output_handler
@@ -1379,8 +1397,13 @@ impl TunnelSender {
                                                     ))
                                                 }));
                                         }
-                                        #[cfg(feature = "mp3")]
-                                        AudioFormat::Mp3 => {
+                                        #[cfg(not(feature = "encoder-aac"))]
+                                        panic!("No encoder-aac feature");
+                                    }
+                                    #[cfg(feature = "format-mp3")]
+                                    AudioFormat::Mp3 => {
+                                        #[cfg(feature = "encoder-mp3")]
+                                        {
                                             use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
                                             log::debug!("Using MP3 encoder for output");
                                             audio_output_handler = audio_output_handler
@@ -1391,8 +1414,13 @@ impl TunnelSender {
                                                     ))
                                                 }));
                                         }
-                                        #[cfg(feature = "opus")]
-                                        AudioFormat::Opus => {
+                                        #[cfg(not(feature = "encoder-mp3"))]
+                                        panic!("No encoder-mp3 feature");
+                                    }
+                                    #[cfg(feature = "format-opus")]
+                                    AudioFormat::Opus => {
+                                        #[cfg(feature = "encoder-opus")]
+                                        {
                                             use moosicbox_audio_output::encoder::opus::OpusEncoder;
                                             log::debug!("Using OPUS encoder for output");
                                             audio_output_handler = audio_output_handler
@@ -1403,78 +1431,80 @@ impl TunnelSender {
                                                     ))
                                                 }));
                                         }
-                                        _ => {}
+                                        #[cfg(not(feature = "encoder-opus"))]
+                                        panic!("No encoder-opus feature");
                                     }
-
-                                    Ok(audio_output_handler)
-                                };
-
-                                log::debug!("Creating RemoteByteStream with url={url}");
-                                let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
-                                    url,
-                                    None,
-                                    true,
-                                    #[cfg(feature = "flac")]
-                                    query
-                                        .format
-                                        .is_some_and(|format| format == AudioFormat::Flac),
-                                    #[cfg(not(feature = "flac"))]
-                                    false,
-                                    CancellationToken::new(),
-                                )
-                                .into();
-
-                                if let Err(err) = play_media_source_async(
-                                    MediaSourceStream::new(
-                                        Box::new(source),
-                                        MediaSourceStreamOptions::default(),
-                                    ),
-                                    &Hint::new(),
-                                    get_handler,
-                                    true,
-                                    true,
-                                    None,
-                                    None,
-                                )
-                                .await
-                                {
-                                    log::error!("Failed to encode to {:?}: {err:?}", query.format);
+                                    _ => {}
                                 }
 
-                                self.send_stream(
-                                    request_id,
-                                    200,
-                                    &response_headers,
-                                    ranges,
-                                    stream,
-                                    encoding,
-                                )
-                                .await?;
-                            }
-                            Err(err) => {
-                                log::error!("Failed to get track source: {err:?}");
-                            }
-                        }
+                                Ok(audio_output_handler)
+                            };
 
-                        Ok(())
+                            log::debug!("Creating RemoteByteStream with url={url}");
+                            let source: RemoteByteStreamMediaSource = RemoteByteStream::new(
+                                url,
+                                None,
+                                true,
+                                #[cfg(feature = "format-flac")]
+                                query
+                                    .format
+                                    .is_some_and(|format| format == AudioFormat::Flac),
+                                #[cfg(not(feature = "format-flac"))]
+                                false,
+                                CancellationToken::new(),
+                            )
+                            .into();
+
+                            if let Err(err) = play_media_source_async(
+                                MediaSourceStream::new(
+                                    Box::new(source),
+                                    MediaSourceStreamOptions::default(),
+                                ),
+                                &Hint::new(),
+                                get_handler,
+                                true,
+                                true,
+                                None,
+                                None,
+                            )
+                            .await
+                            {
+                                log::error!("Failed to encode to {:?}: {err:?}", query.format);
+                            }
+
+                            self.send_stream(
+                                request_id,
+                                200,
+                                &response_headers,
+                                ranges,
+                                stream,
+                                encoding,
+                            )
+                            .await?;
+                        }
+                        Err(err) => {
+                            log::error!("Failed to get track source: {err:?}");
+                        }
                     }
-                    Method::Head => {
-                        self.proxy_localhost_request(
-                            service_port,
-                            request_id,
-                            method,
-                            path,
-                            query,
-                            payload,
-                            headers,
-                            profile,
-                            encoding,
-                        )
-                        .await
-                    }
-                    _ => Err(TunnelRequestError::UnsupportedMethod),
+
+                    Ok(())
                 }
-            }
+                Method::Head => {
+                    self.proxy_localhost_request(
+                        service_port,
+                        request_id,
+                        method,
+                        path,
+                        query,
+                        payload,
+                        headers,
+                        profile,
+                        encoding,
+                    )
+                    .await
+                }
+                _ => Err(TunnelRequestError::UnsupportedMethod),
+            },
             "files/track/info" => match method {
                 Method::Get => {
                     let query = serde_json::from_value::<GetTrackInfoQuery>(query)

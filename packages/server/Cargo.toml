@@ -166,56 +166,108 @@ pulseaudio-standard = ["moosicbox_player?/pulseaudio-standard"]
 
 static-token-auth = ["dep:qstring"]
 
-all-formats    = ["all-os-formats", "mp3"]
-all-os-formats = ["aac", "flac", "opus"]
+all-encoders    = ["all-os-encoders", "encoder-mp3"]
+all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]
 
-aac = [
-    "moosicbox_downloader?/aac",
-    "moosicbox_files/aac",
-    "moosicbox_library?/aac",
-    "moosicbox_library?/aac",
+encoder-aac = [
+    "format-aac",
+    "moosicbox_files/encoder-aac",
+    "moosicbox_library?/encoder-aac",
+    "moosicbox_player?/encoder-aac",
+    "moosicbox_tunnel_sender?/encoder-aac",
+]
+encoder-flac = [
+    "format-flac",
+    "moosicbox_files/encoder-flac",
+    "moosicbox_library?/encoder-flac",
+    "moosicbox_player?/encoder-flac",
+    "moosicbox_tunnel_sender?/encoder-flac",
+]
+encoder-mp3 = [
+    "format-mp3",
+    "moosicbox_files/encoder-mp3",
+    "moosicbox_library?/encoder-mp3",
+    "moosicbox_player?/encoder-mp3",
+    "moosicbox_tunnel_sender?/encoder-mp3",
+]
+encoder-opus = [
+    "format-opus",
+    "moosicbox_files/encoder-opus",
+    "moosicbox_library?/encoder-opus",
+    "moosicbox_player?/encoder-opus",
+    "moosicbox_tunnel_sender?/encoder-opus",
+]
+
+all-decoders    = ["all-os-decoders", "decoder-mp3"]
+all-os-decoders = ["decoder-aac", "decoder-flac", "decoder-opus"]
+
+decoder-aac = [
+    "format-aac",
+    "moosicbox_downloader?/decoder-aac",
+    "moosicbox_files/decoder-aac",
+    "moosicbox_player?/decoder-aac",
+]
+decoder-flac = [
+    "format-flac",
+    "moosicbox_downloader?/decoder-aac",
+    "moosicbox_files/decoder-flac",
+    "moosicbox_player?/decoder-flac",
+]
+decoder-mp3 = [
+    "format-mp3",
+    "moosicbox_downloader?/decoder-aac",
+    "moosicbox_files/decoder-mp3",
+    "moosicbox_player?/decoder-mp3",
+]
+decoder-opus = [
+    "format-opus",
+    "moosicbox_downloader?/decoder-aac",
+    "moosicbox_files/decoder-opus",
+    "moosicbox_player?/decoder-opus",
+]
+
+all-formats    = ["all-os-formats", "format-mp3"]
+all-os-formats = ["format-aac", "format-flac", "format-opus"]
+
+format-aac = [
+    "moosicbox_downloader?/format-aac",
+    "moosicbox_files/format-aac",
+    "moosicbox_library?/format-aac",
     "moosicbox_music_models/aac",
-    "moosicbox_player?/aac",
+    "moosicbox_player?/format-aac",
     "moosicbox_scan?/aac",
     "moosicbox_session/aac",
-    "moosicbox_session/aac",
-    "moosicbox_tunnel_sender?/aac",
+    "moosicbox_tunnel_sender?/format-aac",
 ]
-flac = [
-    "moosicbox_downloader?/flac",
-    "moosicbox_files/flac",
-    "moosicbox_library?/flac",
-    "moosicbox_library?/flac",
+format-flac = [
+    "moosicbox_downloader?/format-flac",
+    "moosicbox_files/format-flac",
+    "moosicbox_library?/format-flac",
     "moosicbox_music_models/flac",
-    "moosicbox_player?/flac",
+    "moosicbox_player?/format-flac",
     "moosicbox_scan?/flac",
     "moosicbox_session/flac",
-    "moosicbox_session/flac",
-    "moosicbox_tunnel_sender?/flac",
+    "moosicbox_tunnel_sender?/format-flac",
 ]
-mp3 = [
-    "moosicbox_downloader?/mp3",
-    "moosicbox_files/mp3",
-    "moosicbox_library?/mp3",
-    "moosicbox_library?/mp3",
+format-mp3 = [
+    "moosicbox_downloader?/format-mp3",
+    "moosicbox_files/format-mp3",
+    "moosicbox_library?/format-mp3",
     "moosicbox_music_models/mp3",
-    "moosicbox_player?/mp3",
+    "moosicbox_player?/format-mp3",
     "moosicbox_scan?/mp3",
     "moosicbox_session/mp3",
-    "moosicbox_session/mp3",
-    "moosicbox_tunnel_sender?/mp3",
+    "moosicbox_tunnel_sender?/format-mp3",
 ]
-opus = [
-    "moosicbox_downloader?/opus",
-    "moosicbox_files/opus",
-    "moosicbox_library?/opus",
-    "moosicbox_library?/opus",
+format-opus = [
+    "moosicbox_downloader?/format-opus",
+    "moosicbox_files/format-opus",
+    "moosicbox_library?/format-opus",
     "moosicbox_music_models/opus",
-    "moosicbox_player?/opus",
+    "moosicbox_player?/format-opus",
     "moosicbox_scan?/opus",
     "moosicbox_session/opus",
-    "moosicbox_session/opus",
-    "moosicbox_tunnel_sender?/opus",
+    "moosicbox_tunnel_sender?/format-opus",
 ]
 
 postgres = [

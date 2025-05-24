@@ -41,24 +41,23 @@ fail-on-warnings = []
 all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]
 
-# Encoders
 aac = [
-    "moosicbox_downloader/aac",
+    "moosicbox_downloader/format-aac",
     "moosicbox_music_models/aac",
     "moosicbox_session_models/aac",
 ]
 flac = [
-    "moosicbox_downloader/flac",
+    "moosicbox_downloader/format-flac",
     "moosicbox_music_models/flac",
     "moosicbox_session_models/flac",
 ]
 mp3 = [
-    "moosicbox_downloader/mp3",
+    "moosicbox_downloader/format-mp3",
     "moosicbox_music_models/mp3",
     "moosicbox_session_models/mp3",
 ]
 opus = [
-    "moosicbox_downloader/opus",
+    "moosicbox_downloader/format-opus",
     "moosicbox_music_models/opus",
     "moosicbox_session_models/opus",
 ]

@@ -55,13 +55,13 @@ pub fn track_source_to_content_type(source: &TrackSource) -> Option<String> {
 #[allow(clippy::missing_const_for_fn)]
 pub fn audio_format_to_content_type(format: &AudioFormat) -> Option<String> {
     match format {
-        #[cfg(feature = "aac")]
+        #[cfg(feature = "format-aac")]
         AudioFormat::Aac => Some("audio/m4a".into()),
-        #[cfg(feature = "flac")]
+        #[cfg(feature = "format-flac")]
         AudioFormat::Flac => Some("audio/flac".into()),
-        #[cfg(feature = "mp3")]
+        #[cfg(feature = "format-mp3")]
         AudioFormat::Mp3 => Some("audio/mp3".into()),
-        #[cfg(feature = "opus")]
+        #[cfg(feature = "format-opus")]
         AudioFormat::Opus => Some("audio/opus".into()),
         AudioFormat::Source => None,
     }
@@ -264,7 +264,7 @@ pub async fn get_track_bytes(
     log::debug!("get_track_bytes: Got track from api: track={track:?}");
 
     let format = match format {
-        #[cfg(feature = "flac")]
+        #[cfg(feature = "format-flac")]
         AudioFormat::Flac => {
             if track.format != Some(AudioFormat::Flac) {
                 return Err(GetTrackBytesError::UnsupportedFormat);
@@ -291,6 +291,10 @@ pub enum GetSilenceBytesError {
 ///
 /// * If failed to encode the audio bytes
 /// * If the `ApiSource` is invalid
+///
+/// # Panics
+///
+/// * If an encoder feature is not enabled for the `AudioFormat`
 pub fn get_silence_bytes(
     format: AudioFormat,
     duration: u64,
@@ -301,6 +305,7 @@ pub fn get_silence_bytes(
     #[allow(unused)]
     let stream = writer.stream();
 
+    #[allow(unused)]
     let spec = SignalSpec {
         rate: 44_100,
         channels: Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
@@ -308,33 +313,67 @@ pub fn get_silence_bytes(
     #[allow(unused)]
     let duration: u64 = u64::from(spec.rate) * duration;
 
+    #[allow(unreachable_code)]
     moosicbox_task::spawn_blocking("get_silence_bytes: encode", move || {
         #[allow(unused)]
         let mut encoder: Box<dyn AudioWrite> = match format {
-            #[cfg(feature = "aac")]
+            #[cfg(feature = "format-aac")]
             AudioFormat::Aac => {
-                use moosicbox_audio_output::encoder::aac::AacEncoder;
-                Box::new(AacEncoder::with_writer(writer).open(spec, duration))
+                #[cfg(feature = "encoder-aac")]
+                {
+                    Box::new(
+                        moosicbox_audio_output::encoder::aac::AacEncoder::with_writer(writer)
+                            .open(spec, duration),
+                    )
+                }
+                #[cfg(not(feature = "encoder-aac"))]
+                panic!("No encoder-aac feature");
             }
-            #[cfg(feature = "flac")]
+            #[cfg(feature = "format-flac")]
             AudioFormat::Flac => {
-                use moosicbox_audio_output::encoder::flac::FlacEncoder;
-                Box::new(FlacEncoder::with_writer(writer).open(spec, duration))
+                #[cfg(feature = "encoder-flac")]
+                {
+                    Box::new(
+                        moosicbox_audio_output::encoder::flac::FlacEncoder::with_writer(writer)
+                            .open(spec, duration),
+                    )
+                }
+                #[cfg(not(feature = "encoder-flac"))]
+                panic!("No encoder-aac feature");
             }
-            #[cfg(feature = "mp3")]
+            #[cfg(feature = "format-mp3")]
             AudioFormat::Mp3 => {
-                use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
-                Box::new(Mp3Encoder::with_writer(writer).open(spec, duration))
+                #[cfg(feature = "encoder-mp3")]
+                {
+                    Box::new(
+                        moosicbox_audio_output::encoder::mp3::Mp3Encoder::with_writer(writer)
+                            .open(spec, duration),
+                    )
+                }
+                #[cfg(not(feature = "encoder-mp3"))]
+                panic!("No encoder-mp3 feature");
             }
-            #[cfg(feature = "opus")]
+            #[cfg(feature = "format-opus")]
             AudioFormat::Opus => {
-                use moosicbox_audio_output::encoder::opus::OpusEncoder;
-                Box::new(OpusEncoder::with_writer(writer).open(spec, duration))
+                #[cfg(feature = "encoder-opus")]
+                {
+                    Box::new(
+                        moosicbox_audio_output::encoder::opus::OpusEncoder::with_writer(writer)
+                            .open(spec, duration),
+                    )
+                }
+                #[cfg(not(feature = "encoder-opus"))]
+                panic!("No encoder-opus feature");
             }
             AudioFormat::Source => return Err::<(), _>(GetSilenceBytesError::InvalidSource),
         };
 
-        #[cfg(any(feature = "aac", feature = "flac", feature = "mp3", feature = "opus"))]
+        #[cfg(any(
+            feature = "format-aac",
+            feature = "format-flac",
+            feature = "format-mp3",
+            feature = "format-opus"
+        ))]
         {
             let mut buffer = AudioBuffer::<f32>::new(duration, spec);
             buffer.render_silence(None);
@@ -362,6 +401,10 @@ pub fn get_silence_bytes(
 /// * If an IO error occurs
 /// * If a database error occurs
 /// * If the `ApiSource` is invalid
+///
+/// # Panics
+///
+/// * If an encoder feature is not enabled for the `AudioFormat`
 #[allow(clippy::too_many_lines)]
 pub async fn get_audio_bytes(
     source: TrackSource,
@@ -397,53 +440,69 @@ pub async fn get_audio_bytes(
                     let get_handler = move || {
                         #[allow(unreachable_code)]
                         Ok(match format {
-                            #[cfg(feature = "aac")]
+                            #[cfg(feature = "format-aac")]
                             AudioFormat::Aac => {
-                                use moosicbox_audio_output::encoder::aac::AacEncoder;
-                                moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
-                                    Box::new(move |spec, duration| {
-                                        Ok(Box::new(
-                                            AacEncoder::with_writer(writer.clone())
-                                                .open(spec, duration),
-                                        ))
-                                    }),
-                                )
+                                #[cfg(feature = "encoder-aac")]
+                                {
+                                    moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
+                                        Box::new(move |spec, duration| {
+                                            Ok(Box::new(
+                                                moosicbox_audio_output::encoder::aac::AacEncoder::with_writer(writer.clone())
+                                                    .open(spec, duration),
+                                            ))
+                                        }),
+                                    )
+                                }
+                                #[cfg(not(feature = "encoder-aac"))]
+                                panic!("No encoder-aac feature");
                             }
-                            #[cfg(feature = "flac")]
+                            #[cfg(feature = "format-flac")]
                             AudioFormat::Flac => {
-                                use moosicbox_audio_output::encoder::flac::FlacEncoder;
-                                moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
-                                    Box::new(move |spec, duration| {
-                                        Ok(Box::new(
-                                            FlacEncoder::with_writer(writer.clone())
-                                                .open(spec, duration),
-                                        ))
-                                    }),
-                                )
+                                #[cfg(feature = "encoder-flac")]
+                                {
+                                    moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
+                                        Box::new(move |spec, duration| {
+                                            Ok(Box::new(
+                                                moosicbox_audio_output::encoder::flac::FlacEncoder::with_writer(writer.clone())
+                                                    .open(spec, duration),
+                                            ))
+                                        }),
+                                    )
+                                }
+                                #[cfg(not(feature = "encoder-flac"))]
+                                panic!("No encoder-flac feature");
                             }
-                            #[cfg(feature = "mp3")]
+                            #[cfg(feature = "format-mp3")]
                             AudioFormat::Mp3 => {
-                                use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
-                                moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
-                                    Box::new(move |spec, duration| {
-                                        Ok(Box::new(
-                                            Mp3Encoder::with_writer(writer.clone())
-                                                .open(spec, duration),
-                                        ))
-                                    }),
-                                )
+                                #[cfg(feature = "encoder-mp3")]
+                                {
+                                    moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
+                                        Box::new(move |spec, duration| {
+                                            Ok(Box::new(
+                                                moosicbox_audio_output::encoder::mp3::Mp3Encoder::with_writer(writer.clone())
+                                                    .open(spec, duration),
+                                            ))
+                                        }),
+                                    )
+                                }
+                                #[cfg(not(feature = "encoder-mp3"))]
+                                panic!("No encoder-mp3 feature");
                             }
-                            #[cfg(feature = "opus")]
+                            #[cfg(feature = "format-opus")]
                             AudioFormat::Opus => {
-                                use moosicbox_audio_output::encoder::opus::OpusEncoder;
-                                moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
-                                    Box::new(move |spec, duration| {
-                                        Ok(Box::new(
-                                            OpusEncoder::with_writer(writer.clone())
-                                                .open(spec, duration),
-                                        ))
-                                    }),
-                                )
+                                #[cfg(feature = "encoder-opus")]
+                                {
+                                    moosicbox_audio_decoder::AudioDecodeHandler::new().with_output(
+                                        Box::new(move |spec, duration| {
+                                            Ok(Box::new(
+                                                moosicbox_audio_output::encoder::opus::OpusEncoder::with_writer(writer.clone())
+                                                    .open(spec, duration),
+                                            ))
+                                        }),
+                                    )
+                                }
+                                #[cfg(not(feature = "encoder-opus"))]
+                                panic!("No encoder-opus feature");
                             }
                             AudioFormat::Source => {
                                 return Err(moosicbox_audio_decoder::DecodeError::InvalidSource)
@@ -475,11 +534,11 @@ pub async fn get_audio_bytes(
                                 url.to_string(),
                                 size,
                                 true,
-                                #[cfg(feature = "flac")]
+                                #[cfg(feature = "format-flac")]
                                 {
                                     format == AudioFormat::Flac
                                 },
-                                #[cfg(not(feature = "flac"))]
+                                #[cfg(not(feature = "format-flac"))]
                                 false,
                                 CancellationToken::new(),
                             )

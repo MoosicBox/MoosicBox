@@ -190,9 +190,9 @@ pub struct GetSilenceQuery {
 #[route("/silence", method = "GET", method = "HEAD")]
 #[allow(clippy::future_not_send)]
 pub async fn get_silence_endpoint(query: web::Query<GetSilenceQuery>) -> Result<HttpResponse> {
-    #[cfg(feature = "aac")]
+    #[cfg(feature = "format-aac")]
     let default = AudioFormat::Aac;
-    #[cfg(not(feature = "aac"))]
+    #[cfg(not(feature = "format-aac"))]
     let default = AudioFormat::Source;
     let format = query.format.unwrap_or(default);
     let content_type = audio_format_to_content_type(&format).unwrap();
@@ -345,14 +345,14 @@ pub async fn track_endpoint(
     } else {
         match &source {
             TrackSource::RemoteUrl { .. } => {
-                #[cfg(feature = "flac")]
+                #[cfg(feature = "format-flac")]
                 {
                     response.insert_header((
                         actix_web::http::header::CONTENT_TYPE,
                         audio_format_to_content_type(&AudioFormat::Flac).unwrap(),
                     ));
                 }
-                #[cfg(not(feature = "flac"))]
+                #[cfg(not(feature = "format-flac"))]
                 {
                     moosicbox_assert::die_or_warn!(
                         "No valid CONTENT_TYPE available for audio format {format:?}"

@@ -34,16 +34,7 @@ serde_json = { workspace = true }
 thiserror  = { workspace = true }
 
 [features]
-default = [
-    "aac",
-    "all-sources",
-    "api",
-    "events",
-    "flac",
-    "mp3",
-    "openapi",
-    "opus",
-]
+default = ["all-formats", "all-sources", "api", "events", "openapi"]
 
 fail-on-warnings = []
 
@@ -64,10 +55,13 @@ openapi = [
 
 events = ["dep:moosicbox_task", "dep:tokio"]
 
-aac  = ["moosicbox_library/aac"]
-flac = ["moosicbox_library/flac"]
-mp3  = ["moosicbox_library/mp3"]
-opus = ["moosicbox_library/opus"]
+all-formats    = ["all-os-formats", "mp3"]
+all-os-formats = ["aac", "flac", "opus"]
+
+aac  = ["moosicbox_library/format-aac"]
+flac = ["moosicbox_library/format-flac"]
+mp3  = ["moosicbox_library/format-mp3"]
+opus = ["moosicbox_library/format-opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 

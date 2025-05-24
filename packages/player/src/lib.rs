@@ -1411,45 +1411,65 @@ async fn track_to_playable_file(
         let mut signal_chain = SignalChain::new();
 
         match quality.format {
-            #[cfg(feature = "aac")]
+            #[cfg(feature = "format-aac")]
             AudioFormat::Aac => {
-                use moosicbox_audio_output::encoder::aac::AacEncoder;
-                log::debug!("Encoding playback with AacEncoder");
-                let mut hint = Hint::new();
-                hint.with_extension("m4a");
-                signal_chain = signal_chain
-                    .add_encoder_step(|| Box::new(AacEncoder::new()))
-                    .with_hint(hint);
+                #[cfg(feature = "encoder-aac")]
+                {
+                    use moosicbox_audio_output::encoder::aac::AacEncoder;
+                    log::debug!("Encoding playback with AacEncoder");
+                    let mut hint = Hint::new();
+                    hint.with_extension("m4a");
+                    signal_chain = signal_chain
+                        .add_encoder_step(|| Box::new(AacEncoder::new()))
+                        .with_hint(hint);
+                }
+                #[cfg(not(feature = "encoder-aac"))]
+                panic!("No encoder-aac feature");
             }
-            #[cfg(feature = "flac")]
+            #[cfg(feature = "format-flac")]
             AudioFormat::Flac => {
-                use moosicbox_audio_output::encoder::flac::FlacEncoder;
-                log::debug!("Encoding playback with FlacEncoder");
-                let mut hint = Hint::new();
-                hint.with_extension("flac");
-                signal_chain = signal_chain
-                    .add_encoder_step(|| Box::new(FlacEncoder::new()))
-                    .with_hint(hint);
+                #[cfg(feature = "encoder-flac")]
+                {
+                    use moosicbox_audio_output::encoder::flac::FlacEncoder;
+                    log::debug!("Encoding playback with FlacEncoder");
+                    let mut hint = Hint::new();
+                    hint.with_extension("flac");
+                    signal_chain = signal_chain
+                        .add_encoder_step(|| Box::new(FlacEncoder::new()))
+                        .with_hint(hint);
+                }
+                #[cfg(not(feature = "encoder-flac"))]
+                panic!("No encoder-flac feature");
             }
-            #[cfg(feature = "mp3")]
+            #[cfg(feature = "format-mp3")]
             AudioFormat::Mp3 => {
-                use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
-                log::debug!("Encoding playback with Mp3Encoder");
-                let mut hint = Hint::new();
-                hint.with_extension("mp3");
-                signal_chain = signal_chain
-                    .add_encoder_step(|| Box::new(Mp3Encoder::new()))
-                    .with_hint(hint);
+                #[cfg(feature = "encoder-mp3")]
+                {
+                    use moosicbox_audio_output::encoder::mp3::Mp3Encoder;
+                    log::debug!("Encoding playback with Mp3Encoder");
+                    let mut hint = Hint::new();
+                    hint.with_extension("mp3");
+                    signal_chain = signal_chain
+                        .add_encoder_step(|| Box::new(Mp3Encoder::new()))
+                        .with_hint(hint);
+                }
+                #[cfg(not(feature = "encoder-mp3"))]
+                panic!("No encoder-mp3 feature");
             }
-            #[cfg(feature = "opus")]
+            #[cfg(feature = "format-opus")]
             AudioFormat::Opus => {
-                use moosicbox_audio_output::encoder::opus::OpusEncoder;
-                log::debug!("Encoding playback with OpusEncoder");
-                let mut hint = Hint::new();
-                hint.with_extension("opus");
-                signal_chain = signal_chain
-                    .add_encoder_step(|| Box::new(OpusEncoder::new()))
-                    .with_hint(hint);
+                #[cfg(feature = "encoder-opus")]
+                {
+                    use moosicbox_audio_output::encoder::opus::OpusEncoder;
+                    log::debug!("Encoding playback with OpusEncoder");
+                    let mut hint = Hint::new();
+                    hint.with_extension("opus");
+                    signal_chain = signal_chain
+                        .add_encoder_step(|| Box::new(OpusEncoder::new()))
+                        .with_hint(hint);
+                }
+                #[cfg(not(feature = "encoder-opus"))]
+                panic!("No encoder-opus feature");
             }
             #[allow(unreachable_patterns)]
             _ => {
@@ -1541,11 +1561,11 @@ async fn track_id_to_playable_stream(
         url,
         size,
         true,
-        #[cfg(feature = "flac")]
+        #[cfg(feature = "format-flac")]
         {
             quality.format == moosicbox_music_models::AudioFormat::Flac
         },
-        #[cfg(not(feature = "flac"))]
+        #[cfg(not(feature = "format-flac"))]
         false,
         abort,
     )

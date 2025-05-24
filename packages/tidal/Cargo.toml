@@ -16,7 +16,7 @@ ignored = ["strum"]
 [dependencies]
 moosicbox_assert = { workspace = true }
 moosicbox_date_utils = { workspace = true, features = ["chrono"] }
-moosicbox_files = { workspace = true, features = ["flac", "tidal"] }
+moosicbox_files = { workspace = true, features = ["format-flac", "tidal"] }
 moosicbox_json_utils = { workspace = true, features = [
     "database",
     "serde_json",
