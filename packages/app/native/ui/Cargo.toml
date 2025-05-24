@@ -19,11 +19,13 @@ hyperchad = { workspace = true, features = [
 ] }
 moosicbox_audio_zone_models = { workspace = true }
 moosicbox_date_utils = { workspace = true, features = ["chrono"] }
+moosicbox_downloader = { workspace = true, features = ["api"] }
 moosicbox_menu_models = { workspace = true, features = ["api"] }
 moosicbox_music_models = { workspace = true, features = ["api"] }
 moosicbox_paging = { workspace = true }
 moosicbox_session_models = { workspace = true }
 
+bytesize            = { workspace = true }
 log                 = { workspace = true }
 maud                = { workspace = true }
 rust_decimal        = { workspace = true }
@@ -40,27 +42,46 @@ all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]
 
 # Encoders
-aac  = ["moosicbox_music_models/aac", "moosicbox_session_models/aac"]
-flac = ["moosicbox_music_models/flac", "moosicbox_session_models/flac"]
-mp3  = ["moosicbox_music_models/mp3", "moosicbox_session_models/mp3"]
-opus = ["moosicbox_music_models/opus", "moosicbox_session_models/opus"]
+aac = [
+    "moosicbox_downloader/aac",
+    "moosicbox_music_models/aac",
+    "moosicbox_session_models/aac",
+]
+flac = [
+    "moosicbox_downloader/flac",
+    "moosicbox_music_models/flac",
+    "moosicbox_session_models/flac",
+]
+mp3 = [
+    "moosicbox_downloader/mp3",
+    "moosicbox_music_models/mp3",
+    "moosicbox_session_models/mp3",
+]
+opus = [
+    "moosicbox_downloader/opus",
+    "moosicbox_music_models/opus",
+    "moosicbox_session_models/opus",
+]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
     "flac",
+    "moosicbox_downloader/qobuz",
     "moosicbox_menu_models/qobuz",
     "moosicbox_music_models/qobuz",
     "moosicbox_session_models/qobuz",
 ]
 tidal = [
     "flac",
+    "moosicbox_downloader/tidal",
     "moosicbox_menu_models/tidal",
     "moosicbox_music_models/tidal",
     "moosicbox_session_models/tidal",
 ]
 yt = [
     "flac",
+    "moosicbox_downloader/yt",
     "moosicbox_menu_models/yt",
     "moosicbox_music_models/yt",
     "moosicbox_session_models/yt",

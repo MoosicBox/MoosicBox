@@ -113,8 +113,8 @@ pub fn init() -> Router {
         .with_static_route(&["/", "/home"], |_| async {
             moosicbox_app_native_ui::home(&convert_state(&STATE).await)
         })
-        .with_static_route("/downloads", |_| async {
-            moosicbox_app_native_ui::downloads(&convert_state(&STATE).await)
+        .with_route_result("/downloads", |req| async {
+            routes::downloads_route(req).await
         })
         .with_static_route("/settings", |_| async {
             moosicbox_app_native_ui::settings::settings(&convert_state(&STATE).await)

@@ -6,6 +6,7 @@ use hyperchad::{
     transformer::html::ParseError,
 };
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
+use moosicbox_downloader::api::models::ApiDownloadTask;
 use moosicbox_music_api::{
     AlbumError, MusicApisError, SourceToMusicApi as _, TracksError, profiles::PROFILES,
 };
@@ -452,4 +453,45 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
             .into_string()
             .try_into()?
     })
+}
+
+pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError> {
+    let offset = req
+        .query
+        .get("offset")
+        .map(|x| x.parse::<u32>())
+        .transpose()?
+        .unwrap_or(0);
+    let limit = req
+        .query
+        .get("limit")
+        .map(|x| x.parse::<u32>())
+        .transpose()?
+        .unwrap_or(30);
+
+    let response = CLIENT
+        .get(&format!(
+            "{}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}",
+            *MOOSICBOX_HOST
+        ))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    let tasks: Page<ApiDownloadTask> = response.json().await?;
+
+    log::trace!("downloads_route: tasks={tasks:?}");
+
+    moosicbox_app_native_ui::downloads::downloads(&convert_state(&STATE).await, &tasks)
+        .into_string()
+        .try_into()
+        .map_err(|e| {
+            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+            RouteError::ParseMarkup
+        })
 }

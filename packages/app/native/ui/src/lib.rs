@@ -6,6 +6,7 @@
 pub mod albums;
 pub mod artists;
 pub mod audio_zones;
+pub mod downloads;
 pub mod formatting;
 pub mod play_queue;
 pub mod playback_sessions;

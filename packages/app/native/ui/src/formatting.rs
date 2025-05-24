@@ -205,3 +205,8 @@ pub fn format_date(date: &NaiveDateTime, format: &str) -> String {
     // January 08, 2025
     date.format(format).to_string()
 }
+
+#[must_use]
+pub fn format_size(size: u64) -> String {
+    bytesize::ByteSize::b(size).to_string()
+}
