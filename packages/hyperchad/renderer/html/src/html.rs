@@ -171,6 +171,7 @@ pub fn element_style_to_html(
 
     match &container.element {
         Element::Image { fit, .. } => {
+            write_css_attr!(b"vertical-align", b"top");
             if let Some(fit) = fit {
                 write_css_attr!(
                     b"object-fit",
