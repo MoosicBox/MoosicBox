@@ -124,30 +124,25 @@ export function displayApiSource(source: ApiSource) {
 }
 
 export function displayDownloadApiSource(source: Api.DownloadApiSource) {
-    switch (source) {
-        case 'TIDAL':
-            return 'Tidal';
-        case 'QOBUZ':
-            return 'Qobuz';
-        case 'YT':
-            return 'YouTube Music';
-        default:
-            if (typeof source === 'object' && 'MOOSIC_BOX' in source) {
-                return 'MoosicBox';
-            }
-            if (
-                typeof source === 'object' &&
-                'source' in source &&
-                'url' in source
-            ) {
-                return 'MoosicBox';
-            }
-
-            source satisfies never;
-            throw new Error(
-                `Invalid DownloadApiSource: ${JSON.stringify(source)}`,
-            );
+    if (typeof source === 'object' && 'MOOSIC_BOX' in source) {
+        return 'MoosicBox';
     }
+    if (typeof source === 'object' && 'source' in source) {
+        switch (source.source) {
+            case 'TIDAL':
+                return 'Tidal';
+            case 'QOBUZ':
+                return 'Qobuz';
+            case 'YT':
+                return 'YouTube Music';
+        }
+    }
+    if (typeof source === 'object' && 'source' in source && 'url' in source) {
+        return 'MoosicBox';
+    }
+
+    source satisfies never;
+    throw new Error(`Invalid DownloadApiSource: ${JSON.stringify(source)}`);
 }
 
 export function downloadTaskStateClassName(state: Api.DownloadTaskState) {

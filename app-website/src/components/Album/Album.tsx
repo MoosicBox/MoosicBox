@@ -183,12 +183,15 @@ export function albumRoute(
             if (typeof apiSource === 'object' && 'MOOSIC_BOX' in apiSource) {
                 return '/';
             }
-            if (
-                typeof apiSource === 'object' &&
-                'source' in apiSource &&
-                'url' in apiSource
-            ) {
-                return '/';
+            if (typeof apiSource === 'object' && 'source' in apiSource) {
+                switch (apiSource.source) {
+                    case 'TIDAL':
+                        return `/albums?tidalAlbumId=${album.albumId}`;
+                    case 'QOBUZ':
+                        return `/albums?qobuzAlbumId=${album.albumId}`;
+                    case 'YT':
+                        return `/albums?ytAlbumId=${album.albumId}`;
+                }
             }
 
             apiSource satisfies never;

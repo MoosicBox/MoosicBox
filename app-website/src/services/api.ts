@@ -432,9 +432,7 @@ export namespace Api {
 
     export type DownloadApiSource =
         | { MOOSIC_BOX: string }
-        | 'TIDAL'
-        | 'QOBUZ'
-        | 'YT';
+        | { source: 'TIDAL' | 'QOBUZ' | 'YT' };
 
     export interface DownloadTask {
         id: number;
@@ -815,7 +813,7 @@ export interface ApiType {
             albumId?: string | number;
             albumIds?: (string | number)[];
         },
-        source: Api.DownloadApiSource,
+        source: ApiSource | Api.DownloadApiSource,
         connection?: Connection | undefined,
         signal?: AbortSignal | null,
     ): Promise<void>;
@@ -895,12 +893,22 @@ function getAlbumArtwork(
 ): string {
     if (!album) return '/img/album.svg';
 
-    const apiSource = album.apiSource;
+    const apiSource = album.apiSource as ApiSource | Api.DownloadApiSource;
     const query = new QueryParams({
-        source: apiSource,
         artistId: album.artistId?.toString(),
         moosicboxProfile: $connection()?.profile,
     });
+
+    if (typeof apiSource === 'object') {
+        if ('source' in apiSource) {
+            query.set('source', apiSource.source);
+        } else {
+            query.set('source', 'MOOSIC_BOX');
+            query.set('url', apiSource.MOOSIC_BOX);
+        }
+    } else {
+        query.set('source', apiSource);
+    }
 
     switch (apiSource) {
         case 'LIBRARY':
@@ -936,7 +944,45 @@ function getAlbumArtwork(
             break;
 
         default:
-            apiSource satisfies never;
+            if (typeof apiSource === 'object') {
+                if ('source' in apiSource) {
+                    switch (apiSource.source) {
+                        case 'TIDAL':
+                            if (album.containsCover) {
+                                return Api.getPath(
+                                    `files/albums/${album.albumId}/${width}x${height}?${query}`,
+                                );
+                            }
+                            break;
+                        case 'QOBUZ':
+                            if (album.containsCover) {
+                                return Api.getPath(
+                                    `files/albums/${album.albumId}/${width}x${height}?${query}`,
+                                );
+                            }
+                            break;
+                        case 'YT':
+                            if (album.containsCover) {
+                                return Api.getPath(
+                                    `files/albums/${album.albumId}/${width}x${height}?${query}`,
+                                );
+                            }
+                            break;
+                        default:
+                            apiSource.source satisfies never;
+                    }
+                } else {
+                    if (album.containsCover) {
+                        return Api.getPath(
+                            `files/albums/${album.albumId}/${width}x${height}?${query}`,
+                        );
+                    } else {
+                        return '/img/album.svg';
+                    }
+                }
+            } else {
+                apiSource satisfies never;
+            }
     }
 
     return '/img/album.svg';
@@ -1805,7 +1851,7 @@ async function download(
         albumId?: string | number;
         albumIds?: (string | number)[];
     },
-    source: Api.DownloadApiSource,
+    source: ApiSource | Api.DownloadApiSource,
     connection?: Connection | undefined,
     signal?: AbortSignal | null,
 ): Promise<void> {
@@ -1821,24 +1867,39 @@ async function download(
     });
 
     switch (source) {
+        case 'LIBRARY':
         case 'TIDAL':
-            query.set('source', source);
-            break;
         case 'YT':
-            query.set('source', source);
-            break;
         case 'QOBUZ':
             query.set('source', source);
             break;
         default:
-            if (typeof source === 'object' && 'MOOSIC_BOX' in source) {
-                query.set('source', 'MOOSIC_BOX');
-                query.set('url', source.MOOSIC_BOX);
-                break;
+            if (typeof source === 'object') {
+                if ('MOOSIC_BOX' in source) {
+                    query.set('source', 'MOOSIC_BOX');
+                    query.set('url', source.MOOSIC_BOX);
+                    break;
+                }
+                if ('source' in source) {
+                    switch (source.source) {
+                        case 'TIDAL':
+                            query.set('source', 'Tidal');
+                            break;
+                        case 'QOBUZ':
+                            query.set('source', 'Qobuz');
+                            break;
+                        case 'YT':
+                            query.set('source', 'YouTube Music');
+                            break;
+                    }
+                }
+                if ('source' in source && 'url' in source) {
+                    query.set('source', 'MoosicBox');
+                }
+            } else {
+                source satisfies never;
+                throw new Error(`Invalid source: ${source}`);
             }
-
-            source satisfies never;
-            throw new Error(`Invalid source: ${source}`);
     }
 
     return await requestJson(`${con.apiUrl}/downloader/download?${query}`, {

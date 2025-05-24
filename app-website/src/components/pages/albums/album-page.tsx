@@ -345,7 +345,7 @@ export default function albumPage(props: {
         }
     }
 
-    async function downloadAlbum(source: Api.DownloadApiSource) {
+    async function downloadAlbum(source: ApiSource | Api.DownloadApiSource) {
         console.debug('Downloading album from source:', source);
         switch (source) {
             case 'QOBUZ':
@@ -735,7 +735,7 @@ export default function albumPage(props: {
                                                                 trackId:
                                                                     track.trackId,
                                                             },
-                                                            track.apiSource as Api.DownloadApiSource,
+                                                            track.apiSource,
                                                         );
                                                     }}
                                                 >
