@@ -9051,9 +9051,9 @@ checksum = "b4ce411919553d3f9fa53a0880544cda985a112117a0444d5ff1e870a893d6ea"
 
 [[package]]
 name = "onig"
-version = "6.5.0"
+version = "6.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5faac19e14f732357e1669ce9c76af9736277529b364252130cbb0c497e5468c"
+checksum = "336b9c63443aceef14bea841b899035ae3abe89b7c486aaf4c5bd8aafedac3f0"
 dependencies = [
  "bitflags 2.9.1",
  "libc",
@@ -9063,9 +9063,9 @@ dependencies = [
 
 [[package]]
 name = "onig_sys"
-version = "69.9.0"
+version = "69.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8de8d8a70e5e342c19e17c5abb012fd603f12bc91a5fef557d9654311851eb7a"
+checksum = "c7f86c6eef3d6df15f23bcfb6af487cbd2fed4e5581d58d5bf1f5f8b7f6727dc"
 dependencies = [
  "cc",
  "pkg-config",
@@ -12825,9 +12825,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "20.0.1"
+version = "20.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "879d5f44a9d7480710dadbcd33e8b8d436132f92d668999061d52b5f211a6d3b"
+checksum = "af5c316fc69a4629ebadd02323a449b0cf1a3a95bda5868309397e8852d43dea"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -12994,9 +12994,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_usage_analyzer"
-version = "16.0.0"
+version = "16.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b1f2dccff9c6cde3f72a86babcc34b1213e0cef8c6e2f1a1da75eca7f5bbe73"
+checksum = "f4061a34574b9431c94c21519948ad4421d7b28479a1a78bb94b878c67d9fac9"
 dependencies = [
  "bitflags 2.9.1",
  "indexmap 2.9.0",
