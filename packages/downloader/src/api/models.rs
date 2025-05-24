@@ -134,6 +134,19 @@ impl From<DownloadTaskState> for ApiDownloadTaskState {
     }
 }
 
+impl From<ApiDownloadTaskState> for DownloadTaskState {
+    fn from(value: ApiDownloadTaskState) -> Self {
+        match value {
+            ApiDownloadTaskState::Pending => Self::Pending,
+            ApiDownloadTaskState::Paused => Self::Paused,
+            ApiDownloadTaskState::Cancelled => Self::Cancelled,
+            ApiDownloadTaskState::Started => Self::Started,
+            ApiDownloadTaskState::Finished => Self::Finished,
+            ApiDownloadTaskState::Error => Self::Error,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]

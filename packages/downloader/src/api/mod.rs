@@ -327,6 +327,7 @@ pub async fn delete_download_endpoint(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetDownloadTasks {
+    state: Option<String>,
     offset: Option<u32>,
     limit: Option<u32>,
 }
@@ -339,6 +340,7 @@ pub struct GetDownloadTasks {
         description = "Get a list of the current and historical download tasks",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+            ("state" = Option<String>, Query, description = "The download task state to filter by"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -358,18 +360,34 @@ pub async fn download_tasks_endpoint(
 ) -> Result<Json<Page<ApiDownloadTask>>> {
     let offset = query.offset.unwrap_or(0);
     let limit = query.limit.unwrap_or(30);
+    let states = query
+        .state
+        .as_ref()
+        .map(|x| {
+            x.split(',')
+                .map(ApiDownloadTaskState::from_str)
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()
+        .map_err(ErrorBadRequest)?
+        .map(|x| {
+            x.into_iter()
+                .map(DownloadTaskState::from)
+                .collect::<Vec<_>>()
+        });
+
     let tasks = get_download_tasks(&db)
         .await
-        .map_err(ErrorInternalServerError)?;
-    let (mut current, mut history): (Vec<_>, Vec<_>) =
-        tasks.into_iter().partition(|task| match task.state {
-            DownloadTaskState::Pending | DownloadTaskState::Paused | DownloadTaskState::Started => {
-                true
-            }
-            DownloadTaskState::Cancelled
-            | DownloadTaskState::Finished
-            | DownloadTaskState::Error => false,
-        });
+        .map_err(ErrorInternalServerError)?
+        .into_iter()
+        .filter(|task| states.as_ref().is_none_or(|x| x.contains(&task.state)));
+
+    let (mut current, mut history): (Vec<_>, Vec<_>) = tasks.partition(|task| match task.state {
+        DownloadTaskState::Pending | DownloadTaskState::Paused | DownloadTaskState::Started => true,
+        DownloadTaskState::Cancelled | DownloadTaskState::Finished | DownloadTaskState::Error => {
+            false
+        }
+    });
 
     current.sort_by(|a, b| a.id.cmp(&b.id));
     history.sort_by(|a, b| b.id.cmp(&a.id));
