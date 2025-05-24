@@ -20,7 +20,7 @@ const jsFiles = ['**/*.js', '**/*.jsx', '**/*.cjs', '**/*.mjs'];
 
 export default [
     {
-        ignores: ['.sst'],
+        ignores: ['.sst', '.astro'],
     },
     ...compat.extends(
         'eslint:recommended',
