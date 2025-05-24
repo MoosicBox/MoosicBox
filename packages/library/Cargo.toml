@@ -49,7 +49,7 @@ thiserror       = { workspace = true }
 tokio           = { workspace = true, features = ["macros", "rt", "tracing"] }
 
 [features]
-default = ["all-formats", "all-sources", "api", "openapi"]
+default = ["all-encoders", "all-sources", "api", "openapi"]
 
 fail-on-warnings = []
 
@@ -60,38 +60,58 @@ openapi = [
     "moosicbox_search/openapi",
 ]
 
-all-formats    = ["all-os-formats", "mp3"]
-all-os-formats = ["aac", "flac", "opus"]
+all-encoders    = ["all-os-encoders", "encoder-mp3"]
+all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]
 
-aac = [
+encoder-aac = [
     "dep:moosicbox_audio_output",
     "dep:moosicbox_stream_utils",
+    "format-aac",
     "moosicbox_audio_output/aac",
-    "moosicbox_files/aac",
+    "moosicbox_files/encoder-aac",
+]
+encoder-flac = [
+    "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
+    "format-flac",
+    "moosicbox_audio_output/flac",
+    "moosicbox_files/encoder-flac",
+]
+encoder-mp3 = [
+    "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
+    "format-mp3",
+    "moosicbox_audio_output/mp3",
+    "moosicbox_files/encoder-mp3",
+]
+encoder-opus = [
+    "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
+    "format-opus",
+    "moosicbox_audio_output/opus",
+    "moosicbox_files/encoder-opus",
+]
+
+all-formats    = ["all-os-formats", "format-mp3"]
+all-os-formats = ["format-aac", "format-flac", "format-opus"]
+
+format-aac = [
+    "moosicbox_files/format-aac",
     "moosicbox_library_models/aac",
     "moosicbox_music_models/aac",
 ]
-flac = [
-    "dep:moosicbox_audio_output",
-    "dep:moosicbox_stream_utils",
-    "moosicbox_audio_output/flac",
-    "moosicbox_files/flac",
+format-flac = [
+    "moosicbox_files/format-flac",
     "moosicbox_library_models/flac",
     "moosicbox_music_models/flac",
 ]
-mp3 = [
-    "dep:moosicbox_audio_output",
-    "dep:moosicbox_stream_utils",
-    "moosicbox_audio_output/mp3",
-    "moosicbox_files/mp3",
+format-mp3 = [
+    "moosicbox_files/format-mp3",
     "moosicbox_library_models/mp3",
     "moosicbox_music_models/mp3",
 ]
-opus = [
-    "dep:moosicbox_audio_output",
-    "dep:moosicbox_stream_utils",
-    "moosicbox_audio_output/opus",
-    "moosicbox_files/opus",
+format-opus = [
+    "moosicbox_files/format-opus",
     "moosicbox_library_models/opus",
     "moosicbox_music_models/opus",
 ]

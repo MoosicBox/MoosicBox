@@ -233,12 +233,12 @@ ENV RUST_LOG=info,moosicbox=debug,moosicbox_middleware::api_logger=trace
 RUN echo 'Acquire::http::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy && \
   echo 'Acquire::ftp::Timeout "10";' >>/etc/apt/apt.conf.d/httpproxy
 RUN apt-get update && apt-get -y install libasound2-dev cmake
-RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,flac,static-token-auth,all-apis
+RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,format-flac,static-token-auth,all-apis
 
 COPY packages packages
 
 RUN rm target/release/deps/moosicbox*
-RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,flac,static-token-auth,all-apis
+RUN cargo build --package moosicbox_server --release --no-default-features --features=cpal,format-flac,static-token-auth,all-apis
 
 # Final
 FROM debian:bookworm-slim

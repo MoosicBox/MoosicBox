@@ -86,7 +86,7 @@ thiserror          = { workspace = true }
 
 [features]
 default = [
-    "all-formats",
+    "all-decoders",
     "all-sources",
     "console-subscriber",
     "dev",
@@ -145,31 +145,39 @@ unsafe              = ["hyperchad/unsafe"]
 
 benchmark = ["hyperchad/benchmark"]
 
-all-formats    = ["all-os-formats", "mp3"]
-all-os-formats = ["aac", "flac", "opus"]
+all-decoders    = ["all-os-decoders", "decoder-mp3"]
+all-os-decoders = ["decoder-aac", "decoder-flac", "decoder-opus"]
 
-aac = [
+decoder-aac  = ["format-aac", "moosicbox_downloader/decoder-aac"]
+decoder-flac = ["format-flac", "moosicbox_downloader/decoder-flac"]
+decoder-mp3  = ["format-mp3", "moosicbox_downloader/decoder-mp3"]
+decoder-opus = ["format-opus", "moosicbox_downloader/decoder-opus"]
+
+all-formats    = ["all-os-formats", "format-mp3"]
+all-os-formats = ["format-aac", "format-flac", "format-opus"]
+
+format-aac = [
     "moosicbox_app_native_ui/aac",
     "moosicbox_app_state/aac",
-    "moosicbox_downloader/aac",
+    "moosicbox_downloader/format-aac",
     "moosicbox_music_models/aac",
 ]
-flac = [
+format-flac = [
     "moosicbox_app_native_ui/flac",
     "moosicbox_app_state/flac",
-    "moosicbox_downloader/flac",
+    "moosicbox_downloader/format-flac",
     "moosicbox_music_models/flac",
 ]
-mp3 = [
+format-mp3 = [
     "moosicbox_app_native_ui/mp3",
     "moosicbox_app_state/mp3",
-    "moosicbox_downloader/mp3",
+    "moosicbox_downloader/format-mp3",
     "moosicbox_music_models/mp3",
 ]
-opus = [
+format-opus = [
     "moosicbox_app_native_ui/opus",
     "moosicbox_app_state/opus",
-    "moosicbox_downloader/opus",
+    "moosicbox_downloader/format-opus",
     "moosicbox_music_models/opus",
 ]
 

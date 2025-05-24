@@ -1442,7 +1442,7 @@ impl MusicApi for LibraryMusicApi {
 
         let bytes = match source {
             TrackSource::LocalFilePath { path, .. } => match &quality.format {
-                #[cfg(feature = "aac")]
+                #[cfg(feature = "encoder-aac")]
                 AudioFormat::Aac => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
                     moosicbox_audio_output::encoder::aac::encode_aac_spawn(path, writer.clone())
@@ -1450,13 +1450,13 @@ impl MusicApi for LibraryMusicApi {
                         .map_err(|e| TrackError::Other(Box::new(e)))?;
                     writer.bytes_written()
                 }
-                #[cfg(feature = "flac")]
+                #[cfg(feature = "encoder-flac")]
                 AudioFormat::Flac => {
                     return Err(TrackError::Other(Box::new(
                         TrackSizeError::UnsupportedFormat(quality.format),
                     )));
                 }
-                #[cfg(feature = "mp3")]
+                #[cfg(feature = "encoder-mp3")]
                 AudioFormat::Mp3 => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
                     moosicbox_audio_output::encoder::mp3::encode_mp3_spawn(path, writer.clone())
@@ -1464,7 +1464,7 @@ impl MusicApi for LibraryMusicApi {
                         .map_err(|e| TrackError::Other(Box::new(e)))?;
                     writer.bytes_written()
                 }
-                #[cfg(feature = "opus")]
+                #[cfg(feature = "encoder-opus")]
                 AudioFormat::Opus => {
                     let writer = moosicbox_stream_utils::ByteWriter::default();
                     moosicbox_audio_output::encoder::opus::encode_opus_spawn(path, writer.clone())

@@ -38,7 +38,7 @@ default = ["aac", "flac", "mp3", "opus"]
 
 fail-on-warnings = []
 
-aac  = ["moosicbox_files/aac"]
-flac = ["moosicbox_files/flac"]
-mp3  = ["moosicbox_files/mp3"]
-opus = ["moosicbox_files/opus"]
+aac  = ["moosicbox_files/encoder-aac"]
+flac = ["moosicbox_files/encoder-flac"]
+mp3  = ["moosicbox_files/encoder-mp3"]
+opus = ["moosicbox_files/encoder-opus"]
