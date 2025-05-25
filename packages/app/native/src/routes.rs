@@ -5,6 +5,7 @@ use hyperchad::{
     router::{Container, RouteRequest},
     transformer::html::ParseError,
 };
+use moosicbox_app_native_ui::downloads::DownloadTab;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_downloader::api::models::ApiDownloadTask;
 use moosicbox_music_api::{
@@ -468,10 +469,16 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
         .map(|x| x.parse::<u32>())
         .transpose()?
         .unwrap_or(30);
-    let active_tab = req.query.get("tab").map_or("current", String::as_str);
+    let active_tab = req
+        .query
+        .get("tab")
+        .map(String::as_str)
+        .map(DownloadTab::from_str)
+        .transpose()?
+        .unwrap_or(DownloadTab::Current);
 
     let tasks_response = match active_tab {
-        "current" => {
+        DownloadTab::Current => {
             CLIENT
                 .get(&format!(
                     "{}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}&state=PENDING,PAUSED,STARTED",
@@ -480,7 +487,7 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
                 .send()
                 .await?
         }
-        "history" => {
+        DownloadTab::History => {
             CLIENT
                 .get(&format!(
                     "{}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}&state=CANCELLED,FINISHED,ERROR",
@@ -489,7 +496,6 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
                 .send()
                 .await?
         }
-        _ => return Err(RouteError::RouteFailed("Invalid tab".into()))
     };
 
     if !tasks_response.status().is_success() {

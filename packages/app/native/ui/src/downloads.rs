@@ -3,6 +3,7 @@
 use hyperchad::transformer_models::{AlignItems, Cursor};
 use maud::{Markup, html};
 use moosicbox_downloader::api::models::{ApiDownloadItem, ApiDownloadTask, ApiDownloadTaskState};
+use strum::{AsRefStr, EnumString};
 
 use crate::{
     DARK_BACKGROUND,
@@ -12,6 +13,19 @@ use crate::{
     page,
     state::State,
 };
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, EnumString, AsRefStr)]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+pub enum DownloadTab {
+    Current,
+    History,
+}
+
+impl std::fmt::Display for DownloadTab {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_ref())
+    }
+}
 
 fn download_task_progress(task: &ApiDownloadTask) -> Markup {
     html! {
@@ -143,7 +157,7 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
 }
 
 #[must_use]
-pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: &str) -> Markup {
+pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: DownloadTab) -> Markup {
     html! {
         div
             sx-padding-x=(30)
@@ -157,8 +171,8 @@ pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: &str) -> Ma
         div sx-padding-x=(30) sx-padding-y=(5) {
             div sx-dir="row" sx-gap=(5) {
                 a
-                    href="/downloads?tab=current"
-                    sx-background=(if active_tab == "current" { "#333" } else { "#282828" })
+                    href={"/downloads?tab="(DownloadTab::Current)}
+                    sx-background=(if active_tab == DownloadTab::Current { "#333" } else { "#282828" })
                     sx-padding=(10)
                     sx-cursor=(Cursor::Pointer)
                     sx-border-top-radius=(10)
@@ -166,8 +180,8 @@ pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: &str) -> Ma
                     "Current Tasks"
                 }
                 a
-                    href="/downloads?tab=history"
-                    sx-background=(if active_tab == "history" { "#333" } else { "#282828" })
+                    href={"/downloads?tab="(DownloadTab::History)}
+                    sx-background=(if active_tab == DownloadTab::History { "#333" } else { "#282828" })
                     sx-padding=(10)
                     sx-cursor=(Cursor::Pointer)
                     sx-border-top-radius=(10)
@@ -196,6 +210,6 @@ pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: &str) -> Ma
 }
 
 #[must_use]
-pub fn downloads(state: &State, tasks: &[ApiDownloadTask], active_tab: &str) -> Markup {
+pub fn downloads(state: &State, tasks: &[ApiDownloadTask], active_tab: DownloadTab) -> Markup {
     page(state, &downloads_page_content(tasks, active_tab))
 }
