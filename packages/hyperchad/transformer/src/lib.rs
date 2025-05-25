@@ -1767,6 +1767,7 @@ impl Container {
             || self.justify_content.is_some()
             || self.align_items.is_some()
             || self.children.iter().any(|x| x.flex.is_some())
+            || self.column_gap.is_some()
     }
 
     pub fn visible_elements(&self) -> impl Iterator<Item = &Self> {
