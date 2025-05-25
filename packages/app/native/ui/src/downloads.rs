@@ -1,11 +1,15 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::transformer_models::AlignItems;
+use hyperchad::transformer_models::{AlignItems, Cursor};
 use maud::{Markup, html};
 use moosicbox_downloader::api::models::{ApiDownloadItem, ApiDownloadTask, ApiDownloadTaskState};
 
 use crate::{
-    DARK_BACKGROUND, albums::album_cover_url, formatting::format_size, page, state::State,
+    DARK_BACKGROUND,
+    albums::{album_cover_url, album_page_url},
+    formatting::format_size,
+    page,
+    state::State,
 };
 
 fn download_task_progress(task: &ApiDownloadTask) -> Markup {
@@ -27,25 +31,36 @@ fn download_task_progress(task: &ApiDownloadTask) -> Markup {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn download_task(task: &ApiDownloadTask) -> Markup {
     let id = task.id;
     let item = &task.item;
 
     html! {
-        div sx-dir="row" sx-align-items=(AlignItems::Center) {
+        div
+            sx-dir="row"
+            sx-gap=(20)
+            sx-background="#111"
+            sx-align-items=(AlignItems::Center)
+            sx-padding-x=(18)
+            sx-padding-y=(20)
+            sx-border-radius=(6)
+        {
             @let cover_width = 80;
             @let cover_height = 80;
             @match item {
                 ApiDownloadItem::Track { source, track_id, album_id, title, contains_cover, .. } => {
-                    div sx-padding=(10) {
-                        img
-                            src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
-                            sx-width=(cover_width)
-                            sx-height=(cover_height)
-                        {}
+                    div {
+                        a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
+                            img
+                                src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
+                                sx-width=(cover_width)
+                                sx-height=(cover_height)
+                            {}
+                        }
                     }
-                    div sx-padding=(10) {
-                        div sx-margin-y=(5) {
+                    div sx-gap=(5) {
+                        div {
                             "Track (" (track_id) ") - " (title) " - " (task.state.to_string()) " - " (source.as_ref())
                             @if task.state == ApiDownloadTaskState::Error {
                                 button hx-post=(format!("/retry-download?taskId={}", id)) {
@@ -53,10 +68,10 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                                 }
                             }
                         }
-                        div sx-margin-y=(5) {
+                        div {
                             (task.file_path)
                         }
-                        div sx-margin-y=(5) {
+                        div {
                             @if task.state == ApiDownloadTaskState::Started {
                                 (download_task_progress(task))
                             }
@@ -64,15 +79,15 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                     }
                 }
                 ApiDownloadItem::AlbumCover { source, album_id, title, contains_cover, .. } => {
-                    div sx-padding=(10) {
+                    div {
                         img
                             src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
                             sx-width=(cover_width)
                             sx-height=(cover_height)
                         {}
                     }
-                    div sx-padding=(10) {
-                        div sx-margin-y=(5) {
+                    div sx-gap=(5) {
+                        div {
                             "Album (" (album_id) ") cover - " (title) " - " (task.state.to_string())
                             @if task.state == ApiDownloadTaskState::Error {
                                 button hx-post=(format!("/retry-download?taskId={}", id)) {
@@ -80,10 +95,10 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                                 }
                             }
                         }
-                        div sx-margin-y=(5) {
+                        div {
                             (task.file_path)
                         }
-                        div sx-margin-y=(5) {
+                        div {
                             @if task.state == ApiDownloadTaskState::Started {
                                 (download_task_progress(task))
                             }
@@ -91,15 +106,15 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                     }
                 }
                 ApiDownloadItem::ArtistCover { source, artist_id, album_id, title, contains_cover, .. } => {
-                    div sx-padding=(10) {
+                    div {
                         img
                             src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
                             sx-width=(cover_width)
                             sx-height=(cover_height)
                         {}
                     }
-                    div sx-padding=(10) {
-                        div sx-margin-y=(5) {
+                    div sx-gap=(5) {
+                        div {
                             "Artist (" (artist_id) ") (album_id: " (album_id) ") cover - " (title) " - " (task.state.to_string())
                             @if task.state == ApiDownloadTaskState::Error {
                                 button hx-post=(format!("/retry-download?taskId={}", id)) {
@@ -107,10 +122,10 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                                 }
                             }
                         }
-                        div sx-margin-y=(5) {
+                        div {
                             (task.file_path)
                         }
-                        div sx-margin-y=(5) {
+                        div {
                             @if task.state == ApiDownloadTaskState::Started {
                                 (download_task_progress(task))
                             }
@@ -123,7 +138,7 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
 }
 
 #[must_use]
-pub fn downloads_page_content(tasks: &[ApiDownloadTask]) -> Markup {
+pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: &str) -> Markup {
     html! {
         div
             sx-padding-x=(30)
@@ -134,12 +149,41 @@ pub fn downloads_page_content(tasks: &[ApiDownloadTask]) -> Markup {
         {
             h1 { "Downloads" }
         }
-        div sx-padding-x=(30) sx-padding-y=(15) {
-            @if tasks.is_empty() {
-                "No download tasks"
-            } @else {
-                @for task in tasks {
-                    (download_task(task))
+        div sx-padding-x=(30) sx-padding-y=(5) {
+            div sx-dir="row" sx-gap=(5) {
+                a
+                    href="/downloads?tab=current"
+                    sx-background=(if active_tab == "current" { "#333" } else { "#282828" })
+                    sx-padding=(10)
+                    sx-cursor=(Cursor::Pointer)
+                    sx-border-top-radius=(10)
+                {
+                    "Current Tasks"
+                }
+                a
+                    href="/downloads?tab=history"
+                    sx-background=(if active_tab == "history" { "#333" } else { "#282828" })
+                    sx-padding=(10)
+                    sx-cursor=(Cursor::Pointer)
+                    sx-border-top-radius=(10)
+                {
+                    "History"
+                }
+            }
+            div
+                id="downloads-content"
+                sx-background="#333"
+                sx-gap=(10)
+                sx-padding=(10)
+                sx-border-radius=(10)
+                sx-border-top-left-radius=(0)
+            {
+                @if tasks.is_empty() {
+                    "No download tasks"
+                } @else {
+                    @for task in tasks {
+                        (download_task(task))
+                    }
                 }
             }
         }
@@ -147,6 +191,6 @@ pub fn downloads_page_content(tasks: &[ApiDownloadTask]) -> Markup {
 }
 
 #[must_use]
-pub fn downloads(state: &State, tasks: &[ApiDownloadTask]) -> Markup {
-    page(state, &downloads_page_content(tasks))
+pub fn downloads(state: &State, tasks: &[ApiDownloadTask], active_tab: &str) -> Markup {
+    page(state, &downloads_page_content(tasks, active_tab))
 }

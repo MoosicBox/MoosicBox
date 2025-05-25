@@ -468,26 +468,45 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
         .map(|x| x.parse::<u32>())
         .transpose()?
         .unwrap_or(30);
+    let active_tab = req.query.get("tab").map_or("current", String::as_str);
 
-    let response = CLIENT
-        .get(&format!(
-            "{}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}",
-            *MOOSICBOX_HOST
-        ))
-        .send()
-        .await?;
+    let tasks_response = match active_tab {
+        "current" => {
+            CLIENT
+                .get(&format!(
+                    "{}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}&state=PENDING,PAUSED,STARTED",
+                    *MOOSICBOX_HOST
+                ))
+                .send()
+                .await?
+        }
+        "history" => {
+            CLIENT
+                .get(&format!(
+                    "{}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}&state=CANCELLED,FINISHED,ERROR",
+                    *MOOSICBOX_HOST
+                ))
+                .send()
+                .await?
+        }
+        _ => return Err(RouteError::RouteFailed("Invalid tab".into()))
+    };
 
-    if !response.status().is_success() {
-        let message = format!("Error: {} {}", response.status(), response.text().await?);
+    if !tasks_response.status().is_success() {
+        let message = format!(
+            "Error: {} {}",
+            tasks_response.status(),
+            tasks_response.text().await?
+        );
         log::error!("{message}");
         return Err(RouteError::RouteFailed(message.into()));
     }
 
-    let tasks: Page<ApiDownloadTask> = response.json().await?;
+    let tasks: Page<ApiDownloadTask> = tasks_response.json().await?;
 
-    log::trace!("downloads_route: tasks={tasks:?}");
+    log::trace!("downloads_route: active_tab={active_tab} tasks={tasks:?}");
 
-    moosicbox_app_native_ui::downloads::downloads(&convert_state(&STATE).await, &tasks)
+    moosicbox_app_native_ui::downloads::downloads(&convert_state(&STATE).await, &tasks, active_tab)
         .into_string()
         .try_into()
         .map_err(|e| {
