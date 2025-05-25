@@ -39,8 +39,8 @@ pub fn album_cover_url(
 ) -> String {
     if contains_cover {
         format!(
-            "{}/files/albums/{}/{width}x{height}?moosicboxProfile=master&source={}",
-            *MOOSICBOX_HOST, album_id, source,
+            "{}/files/albums/{album_id}/{width}x{height}?moosicboxProfile=master&source={source}",
+            *MOOSICBOX_HOST
         )
     } else {
         public_img!("album.svg").to_string()

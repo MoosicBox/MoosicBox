@@ -20,11 +20,29 @@ pub fn artist_page_url(artist_id: &str) -> PreEscaped<String> {
     pre_escaped!("/artists?artistId={artist_id}")
 }
 
-fn artist_cover_url(artist: &ApiArtist, width: u16, height: u16) -> String {
-    if artist.contains_cover {
+#[must_use]
+pub fn artist_cover_url_from_artist(artist: &ApiArtist, width: u16, height: u16) -> String {
+    artist_cover_url(
+        &artist.artist_id,
+        artist.api_source,
+        artist.contains_cover,
+        width,
+        height,
+    )
+}
+
+#[must_use]
+pub fn artist_cover_url(
+    artist_id: &Id,
+    source: ApiSource,
+    contains_cover: bool,
+    width: u16,
+    height: u16,
+) -> String {
+    if contains_cover {
         format!(
-            "{}/files/artists/{}/{width}x{height}?moosicboxProfile=master",
-            *MOOSICBOX_HOST, artist.artist_id
+            "{}/files/artists/{artist_id}/{width}x{height}?moosicboxProfile=master&source={source}",
+            *MOOSICBOX_HOST
         )
     } else {
         public_img!("album.svg").to_string()
@@ -37,7 +55,7 @@ fn artist_cover_img(artist: &ApiArtist, size: u16) -> Markup {
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img loading=(ImageLoading::Lazy) src=(artist_cover_url(&artist, request_size, request_size)) sx-width=(size) sx-height=(size);
+        img loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(&artist, request_size, request_size)) sx-width=(size) sx-height=(size);
     }
 }
 
@@ -122,7 +140,7 @@ pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
             @for artist in artists {
                 a href=(artist_page_url(&artist.artist_id.to_string())) sx-width=(size) {
                     div sx-width=(size) {
-                        img loading=(ImageLoading::Lazy) src=(artist_cover_url(artist, request_size, request_size)) sx-width=(size) sx-height=(size);
+                        img loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(artist, request_size, request_size)) sx-width=(size) sx-height=(size);
                         (artist.title)
                     }
                 }

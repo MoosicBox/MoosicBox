@@ -7,6 +7,7 @@ use moosicbox_downloader::api::models::{ApiDownloadItem, ApiDownloadTask, ApiDow
 use crate::{
     DARK_BACKGROUND,
     albums::{album_cover_url, album_page_url},
+    artists::artist_cover_url,
     formatting::format_size,
     page,
     state::State,
@@ -80,11 +81,13 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                 }
                 ApiDownloadItem::AlbumCover { source, album_id, title, contains_cover, .. } => {
                     div {
-                        img
-                            src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
-                            sx-width=(cover_width)
-                            sx-height=(cover_height)
-                        {}
+                        a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
+                            img
+                                src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
+                                sx-width=(cover_width)
+                                sx-height=(cover_height)
+                            {}
+                        }
                     }
                     div sx-gap=(5) {
                         div {
@@ -107,11 +110,13 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                 }
                 ApiDownloadItem::ArtistCover { source, artist_id, album_id, title, contains_cover, .. } => {
                     div {
-                        img
-                            src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
-                            sx-width=(cover_width)
-                            sx-height=(cover_height)
-                        {}
+                        a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
+                            img
+                                src=(artist_cover_url(artist_id, source.into(), *contains_cover, cover_width, cover_height))
+                                sx-width=(cover_width)
+                                sx-height=(cover_height)
+                            {}
+                        }
                     }
                     div sx-gap=(5) {
                         div {
