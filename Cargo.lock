@@ -5049,6 +5049,7 @@ dependencies = [
  "hyperchad_renderer_html_lambda",
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
+ "hyperchad_state",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
 ]
@@ -5296,6 +5297,20 @@ dependencies = [
  "moosicbox_task",
  "os_info",
  "qstring",
+ "thiserror 2.0.12",
+ "tokio",
+]
+
+[[package]]
+name = "hyperchad_state"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "log",
+ "moosicbox_assert",
+ "serde",
+ "serde_json",
+ "switchy",
  "thiserror 2.0.12",
  "tokio",
 ]

@@ -27,6 +27,7 @@ hyperchad_renderer_html_http   = { workspace = true, optional = true }
 hyperchad_renderer_html_lambda = { workspace = true, optional = true }
 hyperchad_renderer_vanilla_js  = { workspace = true, optional = true }
 hyperchad_router               = { workspace = true, optional = true }
+hyperchad_state                = { workspace = true, optional = true }
 hyperchad_transformer          = { workspace = true, optional = true }
 hyperchad_transformer_models   = { workspace = true, optional = true }
 
@@ -48,6 +49,7 @@ all = [
     "renderer-html-lambda",
     "renderer-vanilla-js",
     "router",
+    "state",
     "transformer",
     "transformer-models",
 ]
@@ -55,6 +57,9 @@ all = [
 serde = ["actions-serde", "renderer-serde", "transformer-models-serde"]
 
 app = ["dep:hyperchad_app"]
+
+state        = ["dep:hyperchad_state"]
+state-sqlite = ["hyperchad_state?/persistence-sqlite", "state"]
 
 actions = [
     "dep:hyperchad_actions",

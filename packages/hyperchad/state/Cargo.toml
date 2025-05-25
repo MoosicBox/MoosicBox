@@ -1,0 +1,41 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "gui", "web-programming"]
+description = "HyperChad state management package"
+edition     = "2024"
+keywords    = ["hyperchad", "persistence", "state"]
+license     = "MPL-2.0"
+name        = "hyperchad_state"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+moosicbox_assert = { workspace = true }
+
+async-trait = { workspace = true }
+log         = { workspace = true }
+serde       = { workspace = true, features = ["derive"] }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+tokio       = { workspace = true, features = ["fs", "sync"] }
+
+switchy = { workspace = true, optional = true, features = [
+    "database-connection-sqlite-sqlx",
+    "database-schema",
+    "database-sqlite-sqlx",
+] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[features]
+default = ["persistence-ios", "persistence-sqlite"]
+
+fail-on-warnings = []
+
+persistence-ios    = []
+persistence-sqlite = ["dep:switchy"]

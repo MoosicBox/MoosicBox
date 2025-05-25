@@ -28,6 +28,8 @@ pub use hyperchad_renderer_html_lambda as renderer_html_lambda;
 pub use hyperchad_renderer_vanilla_js as renderer_vanilla_js;
 #[cfg(feature = "router")]
 pub use hyperchad_router as router;
+#[cfg(feature = "state")]
+pub use hyperchad_state as state;
 #[cfg(feature = "transformer")]
 pub use hyperchad_transformer as transformer;
 #[cfg(feature = "transformer-models")]

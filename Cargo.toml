@@ -55,6 +55,7 @@ members = [
     "packages/hyperchad/renderer/html/lambda",
     "packages/hyperchad/renderer/vanilla_js",
     "packages/hyperchad/router",
+    "packages/hyperchad/state",
     "packages/hyperchad/transformer",
     "packages/hyperchad/transformer/models",
     "packages/image",
@@ -252,6 +253,7 @@ hyperchad_renderer_html_http   = { version = "0.1.0", default-features = false, 
 hyperchad_renderer_html_lambda = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/html/lambda" }
 hyperchad_renderer_vanilla_js  = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/vanilla_js" }
 hyperchad_router               = { version = "0.1.0", default-features = false, path = "packages/hyperchad/router" }
+hyperchad_state                = { version = "0.1.0", default-features = false, path = "packages/hyperchad/state" }
 hyperchad_transformer          = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer" }
 hyperchad_transformer_models   = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer/models" }
 
