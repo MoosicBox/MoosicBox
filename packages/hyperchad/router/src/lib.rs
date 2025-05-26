@@ -36,6 +36,19 @@ pub type RouteFunc = Arc<
     >,
 >;
 
+#[cfg(feature = "serde")]
+#[derive(Debug, Error)]
+pub enum ParseError {
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
+    #[error(transparent)]
+    SerdeUrlEncoded(#[from] serde_urlencoded::de::Error),
+    #[error("Missing body")]
+    MissingBody,
+    #[error("Invalid Content-Type")]
+    InvalidContentType,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ClientOs {
     pub name: String,
@@ -81,6 +94,24 @@ impl RouteRequest {
     #[must_use]
     pub fn content_type(&self) -> Option<&str> {
         self.headers.get("content-type").map(String::as_str)
+    }
+
+    /// # Errors
+    ///
+    /// * If the `Content-Type` is not `application/json` or `application/x-www-form-urlencoded`
+    /// * If the body is missing
+    #[cfg(feature = "serde")]
+    pub fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
+        if let Some(body) = &self.body {
+            let content_type = self.content_type().unwrap_or("application/json");
+            match content_type {
+                "application/json" => Ok(serde_json::from_slice(body)?),
+                "application/x-www-form-urlencoded" => Ok(serde_urlencoded::from_bytes(body)?),
+                _ => Err(ParseError::InvalidContentType),
+            }
+        } else {
+            Err(ParseError::MissingBody)
+        }
     }
 }
 

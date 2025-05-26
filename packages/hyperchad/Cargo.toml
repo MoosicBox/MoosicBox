@@ -244,6 +244,7 @@ renderer-vanilla-js-script = ["hyperchad_renderer_vanilla_js?/script"]
 router = ["dep:hyperchad_router"]
 router-format = ["hyperchad_app?/format", "hyperchad_router?/format"]
 router-json = ["hyperchad_app?/json", "hyperchad_router?/json"]
+router-serde = ["hyperchad_router?/serde"]
 router-static-routes = [
     "hyperchad_app?/static-routes",
     "hyperchad_router?/static-routes",

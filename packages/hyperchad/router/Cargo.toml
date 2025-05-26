@@ -28,8 +28,12 @@ qstring   = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
+serde            = { workspace = true, optional = true, features = ["derive"] }
+serde_json       = { workspace = true, optional = true }
+serde_urlencoded = { workspace = true, optional = true }
+
 [features]
-default = ["format", "json", "static-routes"]
+default = ["format", "json", "serde", "static-routes"]
 
 fail-on-warnings = []
 
@@ -38,6 +42,7 @@ simd = ["hyperchad_transformer/simd"]
 format              = ["hyperchad_transformer/format"]
 syntax-highlighting = ["hyperchad_transformer/syntax-highlighting"]
 
-json = ["hyperchad_renderer/json"]
+json  = ["hyperchad_renderer/json"]
+serde = ["dep:serde", "dep:serde_json", "dep:serde_urlencoded"]
 
 static-routes = []
