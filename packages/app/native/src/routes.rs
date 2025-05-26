@@ -6,6 +6,7 @@ use hyperchad::{
     transformer::html::ParseError,
 };
 use moosicbox_app_native_ui::downloads::DownloadTab;
+use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_downloader::api::models::ApiDownloadTask;
 use moosicbox_music_api::{
@@ -45,6 +46,8 @@ pub enum RouteError {
     Album(#[from] AlbumError),
     #[error(transparent)]
     Tracks(#[from] TracksError),
+    #[error(transparent)]
+    AppState(#[from] AppStateError),
 }
 
 fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
@@ -519,4 +522,21 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
             moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
             RouteError::ParseMarkup
         })
+}
+
+pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError> {
+    let connections = STATE.get_connections().await?;
+    let current_connection = STATE.get_current_connection().await?;
+
+    moosicbox_app_native_ui::settings::settings(
+        &convert_state(&STATE).await,
+        &connections,
+        current_connection.as_ref(),
+    )
+    .into_string()
+    .try_into()
+    .map_err(|e| {
+        moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+        RouteError::ParseMarkup
+    })
 }

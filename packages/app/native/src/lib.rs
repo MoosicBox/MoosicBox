@@ -117,8 +117,8 @@ pub fn init() -> Router {
         .with_route_result("/downloads", |req| async {
             routes::downloads_route(req).await
         })
-        .with_static_route("/settings", |_| async {
-            moosicbox_app_native_ui::settings::settings(&convert_state(&STATE).await)
+        .with_route_result("/settings", |req| async {
+            routes::settings_route(req).await
         })
         .with_route_result("/audio-zones", |req| async {
             routes::audio_zones_route(req).await
