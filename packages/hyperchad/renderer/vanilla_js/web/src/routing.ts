@@ -43,12 +43,18 @@ async function handleHtmlResponse(
     handleResponse(element, await (await response).text());
 }
 
-function processRoute(element: HTMLElement): boolean {
-    const options: RequestInit = {
-        headers: {
-            'hx-request': 'true',
-        },
-    };
+/**
+ * This will mutate the options argument passed in
+ */
+export function processRoute(
+    element: HTMLElement,
+    options: RequestInit = {},
+): boolean {
+    const headers = new Headers(options.headers ?? {});
+    if (!headers.has('hx-request')) {
+        headers.set('hx-request', 'true');
+    }
+    options.headers = headers;
 
     for (const method of METHODS) {
         const route = element.getAttribute(`hx-${method}`);
