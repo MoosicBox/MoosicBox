@@ -1946,6 +1946,25 @@ impl Container {
     /// # Panics
     ///
     /// * If the `Container` is not properly attached to the tree
+    pub fn replace_str_id_children_with_elements(
+        &mut self,
+        replacement: Vec<Self>,
+        id: &str,
+    ) -> Option<Vec<Self>> {
+        let parent = self.find_element_by_str_id_mut(id)?;
+
+        let original = parent.children.drain(..).collect::<Vec<_>>();
+
+        for element in replacement {
+            parent.children.push(element);
+        }
+
+        Some(original)
+    }
+
+    /// # Panics
+    ///
+    /// * If the `Container` is not properly attached to the tree
     #[cfg(feature = "layout")]
     pub fn replace_id_children_with_elements_calc(
         &mut self,
@@ -1958,6 +1977,27 @@ impl Container {
         };
 
         self.replace_id_children_with_elements(replacement, id);
+
+        self.partial_calc(calculator, parent_id);
+
+        true
+    }
+
+    /// # Panics
+    ///
+    /// * If the `Container` is not properly attached to the tree
+    #[cfg(feature = "layout")]
+    pub fn replace_str_id_children_with_elements_calc(
+        &mut self,
+        calculator: &impl layout::Calc,
+        replacement: Vec<Self>,
+        id: &str,
+    ) -> bool {
+        let Some(parent_id) = self.find_element_by_str_id(id).map(|x| x.id) else {
+            return false;
+        };
+
+        self.replace_str_id_children_with_elements(replacement, id);
 
         self.partial_calc(calculator, parent_id);
 
