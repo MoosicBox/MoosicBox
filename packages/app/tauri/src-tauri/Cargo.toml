@@ -110,16 +110,19 @@ all-os-formats = ["format-aac", "format-flac"]
 
 format-aac = [
     "moosicbox_app_native?/format-aac",
+    "moosicbox_app_state/aac",
     "moosicbox_app_tauri_bundled?/format-aac",
     "moosicbox_music_models/aac",
 ]
 format-flac = [
     "moosicbox_app_native?/format-flac",
+    "moosicbox_app_state/flac",
     "moosicbox_app_tauri_bundled?/format-flac",
     "moosicbox_music_models/flac",
 ]
 format-mp3 = [
     "moosicbox_app_native?/format-mp3",
+    "moosicbox_app_state/mp3",
     "moosicbox_app_tauri_bundled?/format-mp3",
     "moosicbox_music_models/mp3",
 ]

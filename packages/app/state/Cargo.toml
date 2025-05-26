@@ -46,24 +46,27 @@ upnp = ["dep:switchy_upnp"]
 
 fail-on-warnings = []
 
-aac  = ["moosicbox_music_models/aac"]
-flac = ["moosicbox_music_models/flac"]
-mp3  = ["moosicbox_music_models/mp3"]
-opus = ["moosicbox_music_models/opus"]
+aac  = ["moosicbox_app_native_ui/aac", "moosicbox_music_models/aac"]
+flac = ["moosicbox_app_native_ui/flac", "moosicbox_music_models/flac"]
+mp3  = ["moosicbox_app_native_ui/mp3", "moosicbox_music_models/mp3"]
+opus = ["moosicbox_app_native_ui/opus", "moosicbox_music_models/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
 qobuz = [
+    "moosicbox_app_native_ui/qobuz",
     "moosicbox_music_models/qobuz",
     "moosicbox_player/qobuz",
     "moosicbox_session/qobuz",
 ]
 tidal = [
+    "moosicbox_app_native_ui/tidal",
     "moosicbox_music_models/tidal",
     "moosicbox_player/tidal",
     "moosicbox_session/tidal",
 ]
 yt = [
+    "moosicbox_app_native_ui/yt",
     "moosicbox_music_models/yt",
     "moosicbox_player/yt",
     "moosicbox_session/yt",
