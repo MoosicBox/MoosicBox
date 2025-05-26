@@ -15,7 +15,7 @@ pub trait StatePersistence: Send + Sync {
     /// Retrieve a value by key
     async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
         &self,
-        key: &str,
+        key: impl AsRef<str> + Send + Sync,
     ) -> Result<Option<T>, Error>;
 
     /// Remove a value by key

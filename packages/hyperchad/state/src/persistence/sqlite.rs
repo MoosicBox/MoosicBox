@@ -79,8 +79,10 @@ impl StatePersistence for SqlitePersistence {
 
     async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
         &self,
-        key: &str,
+        key: impl AsRef<str> + Send + Sync,
     ) -> Result<Option<T>, Error> {
+        let key = key.as_ref();
+
         let result = self
             .db
             .select("state")

@@ -42,8 +42,10 @@ impl<P: StatePersistence> StateStore<P> {
     /// * If the value cannot be deserialized
     pub async fn get<T: Serialize + DeserializeOwned + Send + Sync>(
         &self,
-        key: &str,
+        key: impl AsRef<str> + Send + Sync,
     ) -> Result<Option<T>, Error> {
+        let key = key.as_ref();
+
         if let Ok(cache) = self.cache.read() {
             if let Some(data) = cache.get(key) {
                 let data = serde_json::from_value(data.clone())?;
