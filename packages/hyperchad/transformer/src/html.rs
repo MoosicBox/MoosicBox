@@ -1044,6 +1044,48 @@ fn parse_element(
         iter_once!(OverrideItem::ColumnGap),
     )?;
 
+    let border = pmrv(tag, once("sx-border"), &mut overrides, parse_border, |x| {
+        std::iter::once(OverrideItem::BorderTop(x.clone())).chain(
+            std::iter::once(OverrideItem::BorderRight(x.clone())).chain(
+                std::iter::once(OverrideItem::BorderBottom(x.clone()))
+                    .chain(std::iter::once(OverrideItem::BorderLeft(x))),
+            ),
+        )
+    })?;
+
+    let border_top = pmrv(
+        tag,
+        once("sx-border-top"),
+        &mut overrides,
+        parse_border,
+        iter_once!(OverrideItem::BorderTop),
+    )?
+    .or_else(|| border.clone());
+    let border_right = pmrv(
+        tag,
+        once("sx-border-right"),
+        &mut overrides,
+        parse_border,
+        iter_once!(OverrideItem::BorderRight),
+    )?
+    .or_else(|| border.clone());
+    let border_bottom = pmrv(
+        tag,
+        once("sx-border-bottom"),
+        &mut overrides,
+        parse_border,
+        iter_once!(OverrideItem::BorderBottom),
+    )?
+    .or_else(|| border.clone());
+    let border_left = pmrv(
+        tag,
+        once("sx-border-left"),
+        &mut overrides,
+        parse_border,
+        iter_once!(OverrideItem::BorderLeft),
+    )?
+    .or_else(|| border.clone());
+
     #[allow(clippy::needless_update)]
     Ok(crate::Container {
         id: CURRENT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
@@ -1078,34 +1120,10 @@ fn parse_element(
             Color::try_from_hex,
             iter_once!(OverrideItem::Background),
         )?,
-        border_top: pmrv(
-            tag,
-            once("sx-border-top"),
-            &mut overrides,
-            parse_border,
-            iter_once!(OverrideItem::BorderTop),
-        )?,
-        border_right: pmrv(
-            tag,
-            once("sx-border-right"),
-            &mut overrides,
-            parse_border,
-            iter_once!(OverrideItem::BorderRight),
-        )?,
-        border_bottom: pmrv(
-            tag,
-            once("sx-border-bottom"),
-            &mut overrides,
-            parse_border,
-            iter_once!(OverrideItem::BorderBottom),
-        )?,
-        border_left: pmrv(
-            tag,
-            once("sx-border-left"),
-            &mut overrides,
-            parse_border,
-            iter_once!(OverrideItem::BorderLeft),
-        )?,
+        border_top,
+        border_right,
+        border_bottom,
+        border_left,
         border_top_left_radius,
         border_top_right_radius,
         border_bottom_left_radius,
