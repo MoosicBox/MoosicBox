@@ -27,10 +27,16 @@ impl<P: StatePersistence> StateStore<P> {
     /// # Errors
     ///
     /// * If the value cannot be serialized
-    pub async fn set<T: Serialize + Send + Sync>(&self, key: &str, value: &T) -> Result<(), Error> {
+    pub async fn set<T: Serialize + Send + Sync>(
+        &self,
+        key: impl Into<String> + Send + Sync,
+        value: &T,
+    ) -> Result<(), Error> {
+        let key = key.into();
+
         let serialized = serde_json::to_value(value)?;
         if let Ok(mut cache) = self.cache.write() {
-            cache.insert(key.to_string(), serialized.clone());
+            cache.insert(key.clone(), serialized.clone());
         }
         self.persistence.set(key, &serialized).await
     }

@@ -10,7 +10,11 @@ pub mod sqlite;
 #[async_trait]
 pub trait StatePersistence: Send + Sync {
     /// Store a value with the given key
-    async fn set<T: Serialize + Send + Sync>(&self, key: &str, value: &T) -> Result<(), Error>;
+    async fn set<T: Serialize + Send + Sync>(
+        &self,
+        key: impl Into<String> + Send + Sync,
+        value: &T,
+    ) -> Result<(), Error>;
 
     /// Retrieve a value by key
     async fn get<T: Serialize + DeserializeOwned + Send + Sync>(

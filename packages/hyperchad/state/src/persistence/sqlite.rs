@@ -64,7 +64,14 @@ impl SqlitePersistence {
 
 #[async_trait]
 impl StatePersistence for SqlitePersistence {
-    async fn set<T: Serialize + Send + Sync>(&self, key: &str, value: &T) -> Result<(), Error> {
+    async fn set<T: Serialize + Send + Sync>(
+        &self,
+        key: impl Into<String> + Send + Sync,
+        value: &T,
+    ) -> Result<(), Error> {
+        let key = key.into();
+        let key = key.as_str();
+
         self.db
             .upsert("state")
             .values(vec![
