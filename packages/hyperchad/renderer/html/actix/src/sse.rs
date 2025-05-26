@@ -125,7 +125,7 @@ pub async fn handle_sse<
             let app = app.clone();
             let data = data.clone();
             async move {
-                log::debug!("handle_sse: received renderer_event_rx event: event={event:?}");
+                log::debug!("handle_sse: received renderer_event_rx event");
                 Ok::<_, actix_web::Error>(match event {
                     RendererEvent::View(view) => {
                         log::debug!("handle_sse: SSE sending view={view:?}");
