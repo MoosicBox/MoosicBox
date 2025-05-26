@@ -1053,6 +1053,28 @@ fn parse_element(
         )
     })?;
 
+    let border_x = pmrv(
+        tag,
+        once("sx-border-x"),
+        &mut overrides,
+        parse_border,
+        |x| {
+            std::iter::once(OverrideItem::BorderRight(x.clone()))
+                .chain(std::iter::once(OverrideItem::BorderLeft(x)))
+        },
+    )?;
+
+    let border_y = pmrv(
+        tag,
+        once("sx-border-y"),
+        &mut overrides,
+        parse_border,
+        |x| {
+            std::iter::once(OverrideItem::BorderTop(x.clone()))
+                .chain(std::iter::once(OverrideItem::BorderBottom(x)))
+        },
+    )?;
+
     let border_top = pmrv(
         tag,
         once("sx-border-top"),
@@ -1060,7 +1082,7 @@ fn parse_element(
         parse_border,
         iter_once!(OverrideItem::BorderTop),
     )?
-    .or_else(|| border.clone());
+    .or_else(|| border_y.clone().or_else(|| border.clone()));
     let border_right = pmrv(
         tag,
         once("sx-border-right"),
@@ -1068,7 +1090,7 @@ fn parse_element(
         parse_border,
         iter_once!(OverrideItem::BorderRight),
     )?
-    .or_else(|| border.clone());
+    .or_else(|| border_x.clone().or_else(|| border.clone()));
     let border_bottom = pmrv(
         tag,
         once("sx-border-bottom"),
@@ -1076,7 +1098,7 @@ fn parse_element(
         parse_border,
         iter_once!(OverrideItem::BorderBottom),
     )?
-    .or_else(|| border.clone());
+    .or_else(|| border_y.clone().or_else(|| border.clone()));
     let border_left = pmrv(
         tag,
         once("sx-border-left"),
@@ -1084,7 +1106,7 @@ fn parse_element(
         parse_border,
         iter_once!(OverrideItem::BorderLeft),
     )?
-    .or_else(|| border.clone());
+    .or_else(|| border_x.clone().or_else(|| border.clone()));
 
     #[allow(clippy::needless_update)]
     Ok(crate::Container {
