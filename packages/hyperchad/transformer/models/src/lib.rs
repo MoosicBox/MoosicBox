@@ -158,6 +158,7 @@ pub enum SwapTarget {
     #[default]
     This,
     Children,
+    Id(String),
 }
 
 impl std::fmt::Display for SwapTarget {
@@ -165,6 +166,10 @@ impl std::fmt::Display for SwapTarget {
         match self {
             Self::This => f.write_str("self"),
             Self::Children => f.write_str("children"),
+            Self::Id(id) => {
+                f.write_str("#")?;
+                f.write_str(id)
+            }
         }
     }
 }

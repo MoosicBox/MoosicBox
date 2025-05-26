@@ -1061,6 +1061,15 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     log::warn!("Unable to find element with id {container_id}");
                 }
             }
+            SwapTarget::Id(id) => {
+                if page.replace_str_id_children_with_elements_calc(calculator, result.children, id)
+                {
+                    drop(binding);
+                    ctx.request_repaint();
+                } else {
+                    log::warn!("Unable to find element with id {container_id}");
+                }
+            }
         }
     }
 

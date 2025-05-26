@@ -174,7 +174,11 @@ fn parse_swap(value: &str) -> Result<SwapTarget, ParseAttrError> {
         "this" | "self" => SwapTarget::This,
         "children" => SwapTarget::Children,
         value => {
-            return Err(ParseAttrError::InvalidValue(value.to_string()));
+            if let Some(value) = value.strip_prefix('#') {
+                SwapTarget::Id(value.to_string())
+            } else {
+                return Err(ParseAttrError::InvalidValue(value.to_string()));
+            }
         }
     })
 }

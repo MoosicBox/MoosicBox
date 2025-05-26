@@ -101,7 +101,10 @@ impl Arbitrary for Visibility {
 
 impl Arbitrary for SwapTarget {
     fn arbitrary(g: &mut Gen) -> Self {
-        g.choose(&[Self::This, Self::Children]).unwrap().clone()
+        let id = Arbitrary::arbitrary(g);
+        g.choose(&[Self::This, Self::Children, Self::Id(id)])
+            .unwrap()
+            .clone()
     }
 }
 

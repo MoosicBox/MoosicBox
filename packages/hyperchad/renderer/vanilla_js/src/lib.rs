@@ -433,6 +433,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                         hyperchad_transformer::models::SwapTarget::Children => {
                             write_attr(f, b"hx-swap", b"innerHTML")?;
                         }
+                        hyperchad_transformer::models::SwapTarget::Id(id) => {
+                            write_attr(f, b"hx-swap", format!("#{id}").as_bytes())?;
+                        }
                     }
                     write_attr(f, b"hx-get", route.as_bytes())?;
                     if let Some(trigger) = trigger {
@@ -450,6 +453,9 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                         }
                         hyperchad_transformer::models::SwapTarget::Children => {
                             write_attr(f, b"hx-swap", b"innerHTML")?;
+                        }
+                        hyperchad_transformer::models::SwapTarget::Id(id) => {
+                            write_attr(f, b"hx-swap", format!("#{id}").as_bytes())?;
                         }
                     }
                     write_attr(f, b"hx-swap", b"outerHTML")?;
