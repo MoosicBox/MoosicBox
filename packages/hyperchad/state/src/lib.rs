@@ -5,7 +5,7 @@
 mod persistence;
 mod store;
 
-pub use persistence::sqlite;
+pub use persistence::*;
 pub use store::StateStore;
 
 #[derive(Debug, thiserror::Error)]
