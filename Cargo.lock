@@ -6875,6 +6875,7 @@ dependencies = [
  "moosicbox_app_state",
  "moosicbox_assert",
  "moosicbox_audio_zone_models",
+ "moosicbox_config",
  "moosicbox_downloader",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -6945,7 +6946,9 @@ dependencies = [
 name = "moosicbox_app_state"
 version = "0.1.1"
 dependencies = [
+ "hyperchad",
  "log",
+ "moosicbox_app_native_ui",
  "moosicbox_app_ws",
  "moosicbox_assert",
  "moosicbox_audio_output",
@@ -6962,6 +6965,7 @@ dependencies = [
  "moosicbox_ws",
  "serde",
  "serde_json",
+ "strum 0.27.1",
  "switchy_http",
  "switchy_upnp",
  "thiserror 2.0.12",

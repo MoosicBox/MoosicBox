@@ -51,6 +51,7 @@ moosicbox_app_native_ui = { workspace = true }
 moosicbox_app_state = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_audio_zone_models = { workspace = true }
+moosicbox_config = { workspace = true }
 moosicbox_downloader = { workspace = true, features = ["api"] }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }

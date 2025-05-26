@@ -817,6 +817,9 @@ pub fn run() {
         .setup(move |app| {
             APP.get_or_init(|| app.handle().clone());
 
+            let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) =
+                tauri::async_runtime::handle();
+
             moosicbox_config::set_root_dir(get_data_dir().unwrap());
 
             let state = moosicbox_app_state::AppState::new()
@@ -827,12 +830,9 @@ pub fn run() {
                 .with_on_before_set_state_listener(update_log_layer);
 
             #[cfg(feature = "moosicbox-app-native")]
-            let state = moosicbox_app_native::init_app_state(state);
+            let state = tokio_handle.block_on(async move { moosicbox_app_native::init_app_state(state).await }).unwrap();
 
             STATE_LOCK.set(state).unwrap();
-
-            let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) =
-                tauri::async_runtime::handle();
 
             #[cfg(feature = "moosicbox-app-native")]
             {

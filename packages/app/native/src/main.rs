@@ -95,9 +95,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         app = app.with_static_asset_route_result(asset).unwrap();
     }
 
-    STATE_LOCK
-        .set(init_app_state(moosicbox_app_state::AppState::new()))
+    let state = runtime
+        .block_on(async move { init_app_state(moosicbox_app_state::AppState::new()).await })
         .unwrap();
+
+    STATE_LOCK.set(state).unwrap();
 
     runtime.spawn(async move {
         while let Ok((action, value)) = action_rx.recv_async().await {

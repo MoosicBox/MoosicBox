@@ -9,6 +9,7 @@ use std::{
 
 use hyperchad::{renderer::Renderer, router::Router};
 use moosicbox_app_native_ui::state;
+use moosicbox_config::AppType;
 use moosicbox_music_api::{MusicApi, profiles::PROFILES};
 use moosicbox_music_models::ApiSource;
 use moosicbox_remote_library::RemoteLibraryMusicApi;
@@ -148,10 +149,25 @@ pub fn init() -> Router {
     router
 }
 
-pub fn init_app_state(state: moosicbox_app_state::AppState) -> moosicbox_app_state::AppState {
+/// # Errors
+///
+/// * If fails to initialize the persistence
+///
+/// # Panics
+///
+/// * If fails to get the persistence directory
+pub async fn init_app_state(
+    state: moosicbox_app_state::AppState,
+) -> Result<moosicbox_app_state::AppState, moosicbox_app_state::AppStateError> {
+    let persistence_db = moosicbox_config::get_profile_dir_path(AppType::App, PROFILE)
+        .map(|x| x.join("persistence.db"))
+        .unwrap();
+
     state
         .with_on_current_sessions_updated_listener(events::current_sessions_updated)
         .with_on_audio_zone_with_sessions_updated_listener(events::audio_zone_with_sessions_updated)
         .with_on_connections_updated_listener(events::connections_updated)
         .with_on_after_handle_playback_update_listener(events::handle_playback_update)
+        .with_persistence(persistence_db)
+        .await
 }

@@ -13,6 +13,8 @@ version     = "0.1.1"
 [dependencies]
 moosicbox_app_ws = { workspace = true }
 
+hyperchad                = { workspace = true, features = ["state-sqlite"] }
+moosicbox_app_native_ui  = { workspace = true }
 moosicbox_assert         = { workspace = true }
 moosicbox_audio_output   = { workspace = true }
 moosicbox_audio_zone     = { workspace = true }
@@ -32,6 +34,7 @@ switchy_upnp             = { workspace = true, optional = true, features = ["pla
 log        = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }
+strum      = { workspace = true }
 thiserror  = { workspace = true }
 tokio      = { workspace = true, features = ["macros"] }
 tokio-util = { workspace = true }

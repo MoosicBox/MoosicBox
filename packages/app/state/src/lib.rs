@@ -10,6 +10,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+use hyperchad::state::sqlite::SqlitePersistence;
 use moosicbox_app_ws::{ConnectWsError, WsHandle};
 use moosicbox_audio_output::{AudioOutputFactory, AudioOutputScannerError};
 use moosicbox_audio_zone::models::{ApiAudioZoneWithSession, ApiPlayer};
@@ -33,6 +34,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 
+mod persistence;
 pub mod ws;
 
 type ApiPlayersMap = (ApiPlayer, PlayerType, AudioOutputFactory);
@@ -142,6 +144,8 @@ pub enum AppStateError {
     ConnectWs(#[from] ConnectWsError),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
+    #[error(transparent)]
+    Persistence(#[from] hyperchad::state::Error),
 }
 
 impl AppStateError {
@@ -208,6 +212,7 @@ pub struct PlaybackTargetSessionPlayer {
 
 #[derive(Clone, Default)]
 pub struct AppState {
+    pub persistence: Arc<RwLock<Option<Arc<SqlitePersistence>>>>,
     pub api_url: Arc<RwLock<Option<String>>>,
     pub profile: Arc<RwLock<Option<String>>>,
     pub ws_url: Arc<RwLock<Option<String>>>,
