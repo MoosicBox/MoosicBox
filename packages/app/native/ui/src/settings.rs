@@ -2,16 +2,10 @@
 
 use hyperchad::transformer_models::{AlignItems, LayoutDirection, TextAlign};
 use maud::{Markup, html};
-use serde::{Deserialize, Serialize};
+use moosicbox_app_models::Connection;
 use strum::{AsRefStr, EnumString};
 
 use crate::{page, pre_escaped, state::State};
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Connection {
-    pub name: String,
-    pub api_url: String,
-}
 
 #[must_use]
 pub fn settings_page_content(connections: &[Connection], selected: Option<&Connection>) -> Markup {

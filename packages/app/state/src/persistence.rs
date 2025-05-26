@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use hyperchad::state::{StatePersistence as _, sqlite::SqlitePersistence};
-use moosicbox_app_native_ui::settings::Connection;
+use moosicbox_app_models::Connection;
 use strum::{AsRefStr, EnumString};
 
 use crate::{AppState, AppStateError};

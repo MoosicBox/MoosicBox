@@ -6863,6 +6863,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_app_models"
+version = "0.1.1"
+dependencies = [
+ "log",
+ "serde",
+]
+
+[[package]]
 name = "moosicbox_app_native"
 version = "0.1.1"
 dependencies = [
@@ -6928,6 +6936,7 @@ dependencies = [
  "hyperchad",
  "log",
  "maud",
+ "moosicbox_app_models",
  "moosicbox_audio_zone_models",
  "moosicbox_date_utils",
  "moosicbox_downloader",
@@ -6948,7 +6957,7 @@ version = "0.1.1"
 dependencies = [
  "hyperchad",
  "log",
- "moosicbox_app_native_ui",
+ "moosicbox_app_models",
  "moosicbox_app_ws",
  "moosicbox_assert",
  "moosicbox_audio_output",

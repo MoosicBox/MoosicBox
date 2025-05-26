@@ -1,0 +1,20 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools"]
+description = "MoosicBox App models package"
+edition     = "2024"
+keywords    = ["app", "models"]
+license     = "MPL-2.0"
+name        = "moosicbox_app_models"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.1"
+
+[dependencies]
+log   = { workspace = true }
+serde = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []
