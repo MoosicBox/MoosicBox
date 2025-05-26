@@ -47,5 +47,10 @@ assets = [
 
 _json = ["dep:serde_json"]
 
-actions = ["_json", "dep:serde", "hyperchad_renderer/logic"]
-json    = ["_json", "hyperchad_renderer/json"]
+actions = [
+    "_json",
+    "dep:serde",
+    "hyperchad_renderer/logic",
+    "hyperchad_router/serde",
+]
+json = ["_json", "hyperchad_renderer/json"]
