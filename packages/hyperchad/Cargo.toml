@@ -219,6 +219,10 @@ renderer-vanilla-js-plugin-event = [
     "hyperchad_app?/plugin-event",
     "hyperchad_renderer_vanilla_js?/plugin-event",
 ]
+renderer-vanilla-js-plugin-form = [
+    "hyperchad_app?/plugin-form",
+    "hyperchad_renderer_vanilla_js?/plugin-form",
+]
 renderer-vanilla-js-plugin-idiomorph = [
     "hyperchad_app?/plugin-idiomorph",
     "hyperchad_renderer_vanilla_js?/plugin-idiomorph",

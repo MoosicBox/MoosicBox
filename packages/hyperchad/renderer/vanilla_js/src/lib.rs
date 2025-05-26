@@ -60,6 +60,8 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
     bytes.extend(b"event;");
     #[cfg(feature = "plugin-canvas")]
     bytes.extend(b"canvas;");
+    #[cfg(feature = "plugin-form")]
+    bytes.extend(b"form;");
     #[cfg(feature = "plugin-actions-change")]
     bytes.extend(b"actions-change");
     #[cfg(feature = "plugin-actions-click")]
