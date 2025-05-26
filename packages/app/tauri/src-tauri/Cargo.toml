@@ -36,8 +36,7 @@ moosicbox_player       = { workspace = true, features = ["local"] }
 moosicbox_session      = { workspace = true }
 moosicbox_task         = { workspace = true }
 moosicbox_ws           = { workspace = true }
-switchy_mdns           = { workspace = true, features = ["scanner"] }
-switchy_upnp           = { workspace = true, features = ["player"] }
+switchy                = { workspace = true, features = ["mdns-scanner", "upnp-player"] }
 
 # Bundled Dependencies
 moosicbox_app_tauri_bundled = { workspace = true, optional = true }

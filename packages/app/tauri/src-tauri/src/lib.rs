@@ -21,7 +21,7 @@ use moosicbox_ws::models::{
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
-use switchy_mdns::scanner::service::Commander;
+use switchy::mdns::scanner::service::Commander;
 use tauri::{AppHandle, Emitter, Manager as _};
 use tauri_plugin_fs::FsExt as _;
 use thiserror::Error;
@@ -727,20 +727,21 @@ pub fn run() {
     #[allow(clippy::type_complexity)]
     static JOIN_MDNS_SERVICE: LazyLock<
         std::sync::Mutex<
-            Option<tokio::task::JoinHandle<Result<(), switchy_mdns::scanner::service::Error>>>,
+            Option<tokio::task::JoinHandle<Result<(), switchy::mdns::scanner::service::Error>>>,
         >,
     > = LazyLock::new(|| std::sync::Mutex::new(None));
 
     #[allow(clippy::type_complexity)]
     static JOIN_UPNP_SERVICE: LazyLock<
         std::sync::Mutex<
-            Option<tokio::task::JoinHandle<Result<(), switchy_upnp::listener::Error>>>,
+            Option<tokio::task::JoinHandle<Result<(), switchy::upnp::listener::Error>>>,
         >,
     > = LazyLock::new(|| std::sync::Mutex::new(None));
 
     #[allow(clippy::type_complexity)]
-    static MDNS_HANDLE: LazyLock<std::sync::Mutex<Option<switchy_mdns::scanner::service::Handle>>> =
-        LazyLock::new(|| std::sync::Mutex::new(None));
+    static MDNS_HANDLE: LazyLock<
+        std::sync::Mutex<Option<switchy::mdns::scanner::service::Handle>>,
+    > = LazyLock::new(|| std::sync::Mutex::new(None));
 
     #[cfg(not(feature = "tauri-logger"))]
     init_log();
@@ -970,7 +971,7 @@ pub fn run() {
             moosicbox_player::on_playback_event(crate::on_playback_event);
 
             let upnp_service =
-                switchy_upnp::listener::Service::new(switchy_upnp::listener::UpnpContext::new());
+                switchy::upnp::listener::Service::new(switchy::upnp::listener::UpnpContext::new());
 
             let upnp_service_handle = upnp_service.handle();
             *JOIN_UPNP_SERVICE.lock().unwrap() = Some(upnp_service.start_on(&tokio_handle));
