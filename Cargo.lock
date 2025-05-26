@@ -796,9 +796,9 @@ dependencies = [
 
 [[package]]
 name = "async-io"
-version = "2.4.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a2b323ccce0a1d90b449fd71f2a06ca7faa7c54c2751f06c9bd851fc061059"
+checksum = "1237c0ae75a0f3765f58910ff9cdd0a12eeb39ab2f4c7de23262f337f0aacbb3"
 dependencies = [
  "async-lock",
  "cfg-if 1.0.0",
@@ -807,7 +807,7 @@ dependencies = [
  "futures-lite",
  "parking",
  "polling",
- "rustix 0.38.44",
+ "rustix 1.0.7",
  "slab",
  "tracing",
  "windows-sys 0.59.0",
@@ -2894,9 +2894,9 @@ dependencies = [
 
 [[package]]
 name = "cursor-icon"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
+checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "daemonize"
@@ -4702,12 +4702,6 @@ name = "hermit-abi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
-
-[[package]]
-name = "hermit-abi"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 
 [[package]]
 name = "hermit-abi"
@@ -10005,15 +9999,15 @@ dependencies = [
 
 [[package]]
 name = "polling"
-version = "3.7.4"
+version = "3.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a604568c3202727d1507653cb121dbd627a58684eb09a820fd746bee38b4442f"
+checksum = "b53a684391ad002dd6a596ceb6c74fd004fdce75f4be2e3f615068abbea5fd50"
 dependencies = [
  "cfg-if 1.0.0",
  "concurrent-queue",
- "hermit-abi 0.4.0",
+ "hermit-abi 0.5.1",
  "pin-project-lite",
- "rustix 0.38.44",
+ "rustix 1.0.7",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -15240,7 +15234,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 [[package]]
 name = "utoipa"
 version = "5.3.1"
-source = "git+https://github.com/juhaku/utoipa#c2e9f4573e49b30b6064d5fc55a42688faf02150"
+source = "git+https://github.com/juhaku/utoipa#85952757ee50632be4b84e6580f16530397808d1"
 dependencies = [
  "indexmap 2.9.0",
  "serde",
@@ -15251,7 +15245,7 @@ dependencies = [
 [[package]]
 name = "utoipa-gen"
 version = "5.3.1"
-source = "git+https://github.com/juhaku/utoipa#c2e9f4573e49b30b6064d5fc55a42688faf02150"
+source = "git+https://github.com/juhaku/utoipa#85952757ee50632be4b84e6580f16530397808d1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -15262,7 +15256,7 @@ dependencies = [
 [[package]]
 name = "utoipa-rapidoc"
 version = "6.0.0"
-source = "git+https://github.com/juhaku/utoipa#c2e9f4573e49b30b6064d5fc55a42688faf02150"
+source = "git+https://github.com/juhaku/utoipa#85952757ee50632be4b84e6580f16530397808d1"
 dependencies = [
  "actix-web",
  "serde",
@@ -15273,7 +15267,7 @@ dependencies = [
 [[package]]
 name = "utoipa-redoc"
 version = "6.0.0"
-source = "git+https://github.com/juhaku/utoipa#c2e9f4573e49b30b6064d5fc55a42688faf02150"
+source = "git+https://github.com/juhaku/utoipa#85952757ee50632be4b84e6580f16530397808d1"
 dependencies = [
  "actix-web",
  "serde",
@@ -15284,7 +15278,7 @@ dependencies = [
 [[package]]
 name = "utoipa-scalar"
 version = "0.3.0"
-source = "git+https://github.com/juhaku/utoipa#c2e9f4573e49b30b6064d5fc55a42688faf02150"
+source = "git+https://github.com/juhaku/utoipa#85952757ee50632be4b84e6580f16530397808d1"
 dependencies = [
  "actix-web",
  "serde",
@@ -15294,8 +15288,8 @@ dependencies = [
 
 [[package]]
 name = "utoipa-swagger-ui"
-version = "9.0.1"
-source = "git+https://github.com/juhaku/utoipa#c2e9f4573e49b30b6064d5fc55a42688faf02150"
+version = "9.0.2"
+source = "git+https://github.com/juhaku/utoipa#85952757ee50632be4b84e6580f16530397808d1"
 dependencies = [
  "actix-web",
  "base64 0.22.1",
