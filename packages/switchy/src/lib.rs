@@ -12,10 +12,6 @@ pub use switchy_database as database;
 pub use switchy_database_connection as database_connection;
 #[cfg(feature = "fs")]
 pub use switchy_fs as fs;
-#[cfg(feature = "http")]
-pub use switchy_http as http;
-#[cfg(feature = "http-models")]
-pub use switchy_http_models as http_models;
 #[cfg(feature = "mdns")]
 pub use switchy_mdns as mdns;
 #[cfg(feature = "random")]
@@ -28,3 +24,11 @@ pub use switchy_telemetry as telemetry;
 pub use switchy_time as time;
 #[cfg(feature = "upnp")]
 pub use switchy_upnp as upnp;
+
+#[cfg(any(feature = "http", feature = "http-models"))]
+pub mod http {
+    #[cfg(feature = "http")]
+    pub use switchy_http::*;
+    #[cfg(feature = "http-models")]
+    pub use switchy_http_models as models;
+}
