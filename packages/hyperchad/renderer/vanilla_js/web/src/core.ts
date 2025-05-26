@@ -66,6 +66,18 @@ export function onAttr(attr: string, handler: Handler<'onAttr'>): void {
     array.push(handler);
 }
 
+export function onAttrValue(
+    attr: string,
+    value: string,
+    handler: Handler<'onAttr'>,
+): void {
+    onAttr(attr, ({ element, attr: attrValue }) => {
+        if (attrValue === value) {
+            handler({ element, attr: decodeHtml(attr) });
+        }
+    });
+}
+
 export type MessageHandler = (data: string, id?: string | undefined) => void;
 type MessageHandlers = { [type: string]: MessageHandler[] };
 
