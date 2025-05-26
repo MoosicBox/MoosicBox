@@ -11,7 +11,7 @@ pub mod reqwest;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};
 
-#[derive(Debug, Clone, Copy, EnumString, AsRefStr)]
+#[derive(Debug, Clone, Copy, EnumString, AsRefStr, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
