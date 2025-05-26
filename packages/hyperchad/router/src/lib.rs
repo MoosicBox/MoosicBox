@@ -77,6 +77,11 @@ impl RouteRequest {
             body: None,
         }
     }
+
+    #[must_use]
+    pub fn content_type(&self) -> Option<&str> {
+        self.headers.get("content-type").map(String::as_str)
+    }
 }
 
 impl From<Navigation> for RouteRequest {
