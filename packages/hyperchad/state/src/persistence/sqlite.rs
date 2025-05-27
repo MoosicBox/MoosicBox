@@ -111,13 +111,23 @@ impl StatePersistence for SqlitePersistence {
         Ok(serde_json::from_str(value_str)?)
     }
 
-    async fn remove(&self, key: &str) -> Result<(), Error> {
-        self.db
+    async fn take<T: DeserializeOwned + Send + Sync>(
+        &self,
+        key: impl AsRef<str> + Send + Sync,
+    ) -> Result<Option<T>, Error> {
+        let key = key.as_ref();
+
+        Ok(self
+            .db
             .delete("state")
             .where_eq("key", key)
             .execute(&*self.db)
-            .await?;
-        Ok(())
+            .await?
+            .into_iter()
+            .next()
+            .and_then(|x| x.get("value"))
+            .and_then(|x| x.as_str().map(|x| serde_json::from_str(x)))
+            .transpose()?)
     }
 
     async fn clear(&self) -> Result<(), Error> {

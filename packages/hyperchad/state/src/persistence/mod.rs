@@ -22,8 +22,21 @@ pub trait StatePersistence: Send + Sync {
         key: impl AsRef<str> + Send + Sync,
     ) -> Result<Option<T>, Error>;
 
-    /// Remove a value by key
-    async fn remove(&self, key: &str) -> Result<(), Error>;
+    /// Remove a value from the store
+    ///
+    /// # Errors
+    ///
+    /// * If the value cannot removed from the underlying `StatePersistence` implementation
+    async fn remove(&self, key: impl AsRef<str> + Send + Sync) -> Result<(), Error> {
+        self.take::<serde_json::Value>(key).await?;
+        Ok(())
+    }
+
+    /// Remove a value by key and return the value
+    async fn take<T: DeserializeOwned + Send + Sync>(
+        &self,
+        key: impl AsRef<str> + Send + Sync,
+    ) -> Result<Option<T>, Error>;
 
     /// Clear all stored values
     async fn clear(&self) -> Result<(), Error>;

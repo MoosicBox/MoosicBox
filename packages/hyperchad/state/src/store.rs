@@ -77,11 +77,30 @@ impl<P: StatePersistence> StateStore<P> {
     /// # Errors
     ///
     /// * If the value cannot removed from the underlying `StatePersistence` implementation
-    pub async fn remove(&self, key: &str) -> Result<(), Error> {
+    pub async fn remove(&self, key: impl AsRef<str> + Send + Sync) -> Result<(), Error> {
+        let key = key.as_ref();
+
         if let Ok(mut cache) = self.cache.write() {
             cache.remove(key);
         }
         self.persistence.remove(key).await
+    }
+
+    /// Remove a value from the store
+    ///
+    /// # Errors
+    ///
+    /// * If the value cannot removed from the underlying `StatePersistence` implementation
+    pub async fn take<T: DeserializeOwned + Send + Sync>(
+        &self,
+        key: impl AsRef<str> + Send + Sync,
+    ) -> Result<Option<T>, Error> {
+        let key = key.as_ref();
+
+        if let Ok(mut cache) = self.cache.write() {
+            cache.remove(key);
+        }
+        self.persistence.take(key).await
     }
 
     /// Clear all values from the store
