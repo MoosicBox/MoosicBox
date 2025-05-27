@@ -795,7 +795,7 @@ impl Router {
     ) -> Result<Option<Content>, NavigateError> {
         let req = navigation.into();
 
-        log::debug!("navigate: path={}", req.path);
+        log::debug!("navigate: method={} path={}", req.method, req.path);
 
         let handler = self.get_route_func(&req.path);
 
@@ -828,7 +828,7 @@ impl Router {
     ) -> Result<(), NavigateError> {
         let req = navigation.into();
 
-        log::debug!("navigate_send: path={}", req.path);
+        log::debug!("navigate_send: method={} path={}", req.method, req.path);
 
         let view = {
             let handler = self.get_route_func(&req.path);
