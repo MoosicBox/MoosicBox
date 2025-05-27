@@ -7,11 +7,13 @@ pub mod actix;
 #[cfg(feature = "reqwest")]
 pub mod reqwest;
 
+use std::str::FromStr;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};
 
-#[derive(Debug, Clone, Copy, EnumString, AsRefStr, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, AsRefStr, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
@@ -25,6 +27,34 @@ pub enum Method {
     Options,
     Connect,
     Trace,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub struct InvalidMethod;
+
+impl std::fmt::Display for InvalidMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Invalid HTTP method")
+    }
+}
+
+impl FromStr for Method {
+    type Err = InvalidMethod;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "GET" | "Get" | "get" => Self::Get,
+            "POST" | "Post" | "post" => Self::Post,
+            "PUT" | "Put" | "put" => Self::Put,
+            "PATCH" | "Patch" | "patch" => Self::Patch,
+            "DELETE" | "Delete" | "delete" => Self::Delete,
+            "HEAD" | "Head" | "head" => Self::Head,
+            "OPTIONS" | "Options" | "options" => Self::Options,
+            "CONNECT" | "Connect" | "connect" => Self::Connect,
+            "TRACE" | "Trace" | "trace" => Self::Trace,
+            _ => return Err(InvalidMethod),
+        })
+    }
 }
 
 impl std::fmt::Display for Method {
