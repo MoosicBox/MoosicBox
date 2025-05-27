@@ -365,6 +365,7 @@ moosicbox_audiotags = { version = "0.1.0" }
 moosicbox_lofty = { version = "0.1.0" }
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.2.1"
+multipart = { version = "0.18.0", default-features = false }
 mysql = { version = "26.0.0", features = [
     "default-rustls",
     "rustls-tls",

@@ -1923,6 +1923,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "387e80962b798815a2b5c4bcfdb6bf626fa922ffe9f74e373103b858738e9f31"
 
 [[package]]
+name = "buf_redux"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b953a6887648bb07a535631f2bc00fbdb2a2216f135552cb3f534ed136b9c07f"
+dependencies = [
+ "memchr",
+ "safemem",
+]
+
+[[package]]
 name = "built"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5079,7 +5089,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "serde_json",
- "switchy_async",
+ "switchy",
  "thiserror 2.0.12",
 ]
 
@@ -5186,6 +5196,7 @@ name = "hyperchad_renderer_html"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "flume",
  "html-escape",
  "hyperchad_renderer",
@@ -5198,7 +5209,9 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
+ "qstring",
  "serde_json",
+ "switchy",
  "thiserror 2.0.12",
  "uaparser",
 ]
@@ -5250,6 +5263,7 @@ name = "hyperchad_renderer_html_lambda"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "flate2",
  "hyperchad_renderer",
  "lambda_http",
@@ -5281,6 +5295,7 @@ dependencies = [
 name = "hyperchad_router"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "bytes",
  "flume",
  "futures",
@@ -5289,11 +5304,13 @@ dependencies = [
  "log",
  "moosicbox_assert",
  "moosicbox_task",
+ "multipart",
  "os_info",
  "qstring",
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "switchy",
  "thiserror 2.0.12",
  "tokio",
 ]
@@ -5566,7 +5583,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b77d01e822461baa8409e156015a1d91735549f0f2c17691bd2d996bef238f7f"
 dependencies = [
  "byteorder-lite",
- "quick-error",
+ "quick-error 2.0.1",
 ]
 
 [[package]]
@@ -6894,6 +6911,7 @@ dependencies = [
  "moosicbox_session_models",
  "moosicbox_task",
  "moosicbox_ws",
+ "serde",
  "serde_json",
  "strum 0.27.1",
  "switchy_async",
@@ -8245,6 +8263,24 @@ dependencies = [
  "serde",
  "thiserror 2.0.12",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "multipart"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00dec633863867f29cb39df64a397cdf4a6354708ddd7759f70c7fb51c5f9182"
+dependencies = [
+ "buf_redux",
+ "httparse",
+ "log",
+ "mime",
+ "mime_guess",
+ "quick-error 1.2.3",
+ "rand 0.8.5",
+ "safemem",
+ "tempfile",
+ "twoway",
 ]
 
 [[package]]
@@ -10455,6 +10491,12 @@ dependencies = [
 
 [[package]]
 name = "quick-error"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
+
+[[package]]
+name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
@@ -10782,7 +10824,7 @@ dependencies = [
  "avif-serialize",
  "imgref",
  "loop9",
- "quick-error",
+ "quick-error 2.0.1",
  "rav1e",
  "rayon",
  "rgb",
@@ -11448,6 +11490,12 @@ name = "ryu-js"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd29631678d6fb0903b69223673e122c32e9ae559d0960a38d574695ebc0ea15"
+
+[[package]]
+name = "safemem"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef703b7cb59335eae2eb93ceb664c0eb7ea6bf567079d843e09420219668e072"
 
 [[package]]
 name = "same-file"
@@ -14955,6 +15003,15 @@ dependencies = [
  "sha1",
  "thiserror 2.0.12",
  "utf-8",
+]
+
+[[package]]
+name = "twoway"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59b11b2b5241ba34be09c3cc85a36e56e48f9888862e19cedf23336d35316ed1"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
