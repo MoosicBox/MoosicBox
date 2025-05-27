@@ -78,6 +78,7 @@ impl StatePersistence for SqlitePersistence {
                 ("key", key),
                 ("value", serde_json::to_string(value)?.as_str()),
             ])
+            .where_eq("key", key)
             .unique(&["key"])
             .execute(&*self.db)
             .await?;
