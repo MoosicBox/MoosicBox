@@ -1,12 +1,15 @@
-import { onAttrValue } from './core';
+import { onElement } from './core';
 import { processRoute } from './routing';
 
-onAttrValue('type', 'submit', ({ element }) => {
+onElement(({ element }) => {
+    if (!(element instanceof HTMLFormElement)) return;
+
     element.addEventListener('submit', (e) => {
         e.preventDefault();
 
-        let form = element.closest('form');
         const formData = new FormData();
+
+        let form: HTMLFormElement | null = element;
 
         while (form) {
             const current = new FormData(form);
@@ -19,6 +22,10 @@ onAttrValue('type', 'submit', ({ element }) => {
             form = form.parentElement?.closest('form') ?? null;
         }
 
-        processRoute(element, { body: formData });
+        processRoute(element, {
+            body: formData,
+        });
+
+        return false;
     });
 });
