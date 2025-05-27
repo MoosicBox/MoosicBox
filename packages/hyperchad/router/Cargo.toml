@@ -30,7 +30,9 @@ thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 base64           = { workspace = true, optional = true }
-multipart        = { workspace = true, optional = true, features = ["server"] }
+hyper_old        = { package = "hyper", version = "=0.10", optional = true, default-features = false }
+mime_multipart   = { workspace = true }
+mime_old         = { package = "mime", version = "=0.2", optional = true, default-features = false }
 serde            = { workspace = true, optional = true, features = ["derive"] }
 serde_json       = { workspace = true, optional = true }
 serde_urlencoded = { workspace = true, optional = true }
@@ -48,6 +50,6 @@ syntax-highlighting = ["hyperchad_transformer/syntax-highlighting"]
 json  = ["hyperchad_renderer/json"]
 serde = ["dep:serde", "dep:serde_json", "dep:serde_urlencoded"]
 
-form = ["dep:base64", "dep:multipart", "serde"]
+form = ["dep:base64", "dep:hyper_old", "dep:mime_old", "serde"]
 
 static-routes = []

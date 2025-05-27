@@ -119,35 +119,87 @@ impl RouteRequest {
     pub fn parse_form<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, ParseError> {
         use std::io::{Cursor, Read as _};
 
-        use base64::{Engine as _, engine::general_purpose};
-        use multipart::server::Multipart;
+        use base64::engine::{Engine as _, general_purpose};
+        use hyper_old::header::{ContentDisposition, ContentType, DispositionParam, Headers};
+        use mime_multipart::{Node, read_multipart_body};
+        use mime_old::Mime;
         use serde_json::{Map, Value};
 
         fn parse_multipart_json_sync(body: &[u8], content_type: &str) -> Result<Value, ParseError> {
-            let boundary = content_type
-                .split(';')
-                .find_map(|s| s.trim().strip_prefix("boundary="))
-                .ok_or(ParseError::MissingBoundary)?;
+            fn process_nodes(
+                nodes: Vec<Node>,
+                obj: &mut Map<String, Value>,
+            ) -> Result<(), ParseError> {
+                for node in nodes {
+                    match node {
+                        Node::Part(part) => {
+                            let cd = part
+                                .headers
+                                .get::<ContentDisposition>()
+                                .ok_or(ParseError::InvalidContentDisposition)?;
+                            let field_name = cd
+                                .parameters
+                                .iter()
+                                .find_map(|param| {
+                                    if let DispositionParam::Ext(key, val) = param {
+                                        if key.eq_ignore_ascii_case("name") {
+                                            return Some(val.clone());
+                                        }
+                                    }
+                                    None
+                                })
+                                .ok_or(ParseError::InvalidContentDisposition)?;
+
+                            let text = String::from_utf8(part.body)?;
+                            obj.insert(field_name, Value::String(text));
+                        }
+
+                        Node::File(filepart) => {
+                            let cd = filepart
+                                .headers
+                                .get::<ContentDisposition>()
+                                .ok_or(ParseError::InvalidContentDisposition)?;
+                            let field_name = cd
+                                .parameters
+                                .iter()
+                                .find_map(|param| {
+                                    if let DispositionParam::Ext(key, val) = param {
+                                        if key.eq_ignore_ascii_case("name") {
+                                            return Some(val.clone());
+                                        }
+                                    }
+                                    None
+                                })
+                                .ok_or(ParseError::InvalidContentDisposition)?;
+
+                            let mut f = std::fs::File::open(&filepart.path)?;
+                            let mut data = Vec::new();
+                            f.read_to_end(&mut data)?;
+
+                            // base64‑encode
+                            let b64 = general_purpose::STANDARD.encode(&data);
+                            obj.insert(field_name, Value::String(b64));
+                        }
+
+                        Node::Multipart((_hdrs, subparts)) => {
+                            process_nodes(subparts, obj)?;
+                        }
+                    }
+                }
+                Ok(())
+            }
+
+            let mut headers = Headers::new();
+            let mime_type: Mime = content_type
+                .parse()
+                .map_err(|()| ParseError::InvalidContentType)?;
+            headers.set(ContentType(mime_type));
 
             let mut cursor = Cursor::new(body);
-
-            let mut multipart = Multipart::with_body(&mut cursor, boundary);
+            let parts: Vec<Node> = read_multipart_body(&mut cursor, &headers, false)?;
 
             let mut obj = Map::new();
-            while let Some(mut field) = multipart.read_entry()? {
-                let name = field.headers.name.to_string();
-                let mut data = Vec::new();
-                field.data.read_to_end(&mut data)?;
-
-                if field.headers.filename.is_some() {
-                    let b64 = general_purpose::STANDARD.encode(&data);
-                    obj.insert(name, Value::String(b64));
-                } else {
-                    // text → String
-                    let text = String::from_utf8(data)?;
-                    obj.insert(name, Value::String(text));
-                }
-            }
+            process_nodes(parts, &mut obj)?;
 
             Ok(Value::Object(obj))
         }
