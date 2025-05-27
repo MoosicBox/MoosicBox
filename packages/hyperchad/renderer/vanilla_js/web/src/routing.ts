@@ -40,7 +40,10 @@ async function handleHtmlResponse(
     element: HTMLElement,
     response: Promise<Response>,
 ): Promise<void> {
-    handleResponse(element, await (await response).text());
+    const resp = await response;
+    if (resp.status === 204) return;
+
+    handleResponse(element, await resp.text());
 }
 
 /**
