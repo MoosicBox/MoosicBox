@@ -172,6 +172,10 @@ pub async fn init_app_state(
         .map(|x| x.join("persistence.db"))
         .unwrap();
 
+    switchy::fs::unsync::create_dir_all(persistence_db.parent().unwrap())
+        .await
+        .unwrap();
+
     state
         .with_on_current_sessions_updated_listener(events::current_sessions_updated)
         .with_on_audio_zone_with_sessions_updated_listener(events::audio_zone_with_sessions_updated)

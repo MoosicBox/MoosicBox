@@ -74,6 +74,7 @@ switchy = { workspace = true, features = [
     "async-time",
     "async-tokio",
     "async-util",
+    "fs-tokio",
     "http-json",
     "http-reqwest",
     "time-std",
