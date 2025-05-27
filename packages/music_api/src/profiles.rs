@@ -36,6 +36,23 @@ impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
+    pub fn upsert(
+        &self,
+        profile: String,
+        music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
+    ) {
+        let mut profiles = self.profiles.write().unwrap();
+
+        if let Some(existing) = profiles.iter_mut().find(|(p, _)| p == &profile) {
+            existing.1 = MusicApis(music_apis);
+        } else {
+            profiles.push((profile, MusicApis(music_apis)));
+        }
+    }
+
+    /// # Panics
+    ///
+    /// Will panic if `RwLock` is poisoned
     pub fn remove(&self, profile: &str) {
         self.profiles.write().unwrap().retain(|(p, _)| p != profile);
     }
