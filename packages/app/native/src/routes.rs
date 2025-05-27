@@ -20,12 +20,12 @@ use moosicbox_music_models::{
 use moosicbox_paging::Page;
 use moosicbox_session_models::ApiSession;
 use serde::Deserialize;
-use switchy_http::models::Method;
+use switchy::http::models::Method;
 
 use crate::{MOOSICBOX_HOST, PROFILE, STATE, convert_state};
 
-static CLIENT: LazyLock<switchy_http::Client> =
-    LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<switchy::http::Client> =
+    LazyLock::new(|| switchy::http::Client::builder().build().unwrap());
 
 #[derive(Debug, thiserror::Error)]
 pub enum RouteError {
@@ -38,7 +38,7 @@ pub enum RouteError {
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
-    Reqwest(#[from] switchy_http::Error),
+    Reqwest(#[from] switchy::http::Error),
     #[error("Route failed: {0:?}")]
     RouteFailed(Box<dyn std::error::Error>),
     #[error(transparent)]

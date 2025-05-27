@@ -10,8 +10,7 @@ use hyperchad::renderer::{
     canvas::{self, CanvasAction, Pos},
 };
 use moosicbox_music_models::{ApiSource, id::Id};
-use switchy_async::util::CancellationToken;
-use switchy_async::{futures::FutureExt, task::JoinHandle};
+use switchy::unsync::{futures::FutureExt, task::JoinHandle, util::CancellationToken};
 
 use crate::STATE;
 
@@ -115,7 +114,7 @@ async fn visualization_updated(
 
     let cursor_half_width = cursor_width / 2.0;
     let step_1_second = visualization_width / duration;
-    let delta = switchy_time::now()
+    let delta = switchy::time::now()
         .duration_since(last_update)
         .unwrap()
         .as_secs_f32()
@@ -219,7 +218,7 @@ async fn update_visualization(
 ) {
     use std::{collections::HashMap, sync::Arc};
 
-    use switchy_async::sync::RwLock;
+    use switchy::unsync::sync::RwLock;
 
     static CURSOR_WIDTH: f32 = 2.0;
     static BAR_WIDTH: f32 = 1.0;
@@ -345,7 +344,7 @@ pub async fn check_visualization_update() {
                     api_source,
                     seek,
                     duration,
-                    time: switchy_time::now(),
+                    time: switchy::time::now(),
                 });
 
                 if let Some(interval_period) = { *INTERVAL_PERIOD.read().unwrap() } {
@@ -356,11 +355,11 @@ pub async fn check_visualization_update() {
                         let token = CancellationToken::new();
                         *cancel_interval = token.clone();
                         drop(cancel_interval);
-                        interval.replace(switchy_async::task::spawn(async move {
-                            let mut interval = switchy_async::time::interval(interval_period);
+                        interval.replace(switchy::unsync::task::spawn(async move {
+                            let mut interval = switchy::unsync::time::interval(interval_period);
 
                             while !token.is_cancelled() {
-                                switchy_async::select! {
+                                switchy::unsync::select! {
                                     _ = interval.tick() => {}
                                     () = token.cancelled().fuse() => {
                                         break;
