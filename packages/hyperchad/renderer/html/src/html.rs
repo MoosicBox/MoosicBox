@@ -926,11 +926,9 @@ pub fn element_to_html(
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
 
-            if let Some(r#type) = r#type {
-                f.write_all(b" type=\"")?;
-                f.write_all(r#type.as_bytes())?;
-                f.write_all(b"\"")?;
-            }
+            f.write_all(b" type=\"")?;
+            f.write_all(r#type.as_deref().map_or(b"button", str::as_bytes))?;
+            f.write_all(b"\"")?;
 
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
             f.write_all(b">")?;
