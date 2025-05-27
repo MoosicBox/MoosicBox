@@ -187,9 +187,15 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
 }
 
 async fn update_playlist_sessions() {
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return;
+    };
+
     let view = PartialView {
         target: PLAYBACK_SESSIONS_CONTENT_ID.to_string(),
         container: moosicbox_app_native_ui::playback_sessions::playback_sessions(
+            &connection.api_url,
             &STATE.current_sessions.read().await,
         )
         .try_into()

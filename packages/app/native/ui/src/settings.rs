@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::transformer_models::{AlignItems, LayoutDirection, TextAlign};
+use hyperchad::transformer_models::{AlignItems, JustifyContent, LayoutDirection, TextAlign};
 use maud::{Markup, html};
 use moosicbox_app_models::Connection;
 use strum::{AsRefStr, EnumString};
@@ -17,14 +17,20 @@ pub fn settings_page_content(
         div sx-padding=(20) sx-gap=(10) {
             section sx-align-items=(AlignItems::Start) {
                 div sx-align-items=(AlignItems::End) sx-gap=(10) {
-                    form hx-post="/settings/connection-name" {
+                    form
+                        hx-post="/settings/connection-name"
+                        sx-width="100%"
+                        sx-align-items=(AlignItems::End)
+                        sx-gap=(5)
+                    {
                         div { "Name: " input type="text" name="name" value=(connection_name); }
                         button
                             type="submit"
                             sx-border-radius=(5)
                             sx-background="#111"
                             sx-border="2, #222"
-                            sx-padding=(10)
+                            sx-padding-x=(10)
+                            sx-padding-y=(5)
                         {
                             "Save"
                         }
@@ -36,12 +42,18 @@ pub fn settings_page_content(
 
                     (connections_content(connections, selected))
 
-                    div sx-dir=(LayoutDirection::Row) sx-width="100%" sx-gap=(5) {
+                    div
+                        sx-dir=(LayoutDirection::Row)
+                        sx-justify-content=(JustifyContent::Center)
+                        sx-width="100%"
+                        sx-gap=(5)
+                    {
                         button
                             sx-border-radius=(5)
                             sx-background="#111"
                             sx-border="2, #222"
-                            sx-padding=(10)
+                            sx-padding-x=(10)
+                            sx-padding-y=(5)
                             hx-post="/settings/new-connection"
                             hx-swap="#settings-connections"
                         {
@@ -88,12 +100,17 @@ pub fn connections_content(
     current_connection: Option<&Connection>,
 ) -> Markup {
     html! {
-        div id="settings-connections" {
+        div id="settings-connections" sx-gap=(10) {
             @for connection in connections {
                 @let current_connection = current_connection.is_some_and(|x| x == connection);
                 @let connection_input = |input, placeholder| connection_input(connection, input, placeholder);
 
-                form hx-post="/settings/connections" hx-swap="#settings-connections" {
+                form
+                    hx-patch={(pre_escaped!("/settings/connections?name="))(connection.name)}
+                    hx-swap="#settings-connections"
+                    sx-width="100%"
+                    sx-gap=(5)
+                {
                     @if current_connection {
                         div { "(Selected)" }
                     }
@@ -101,24 +118,46 @@ pub fn connections_content(
                         div { "Name: " (connection_input(ConnectionInput::Name, Some("New connection"))) }
                         div { "API URL: " (connection_input(ConnectionInput::ApiUrl, None)) }
                     }
-                    button
-                        sx-border-radius=(5)
-                        sx-background="#111"
-                        sx-border="2, #222"
-                        sx-padding=(10)
-                        hx-delete={(pre_escaped!("/settings/connections?name="))(connection.name)}
-                        hx-swap="#settings-connections"
+                    div
+                        sx-dir=(LayoutDirection::Row)
+                        sx-justify-content=(JustifyContent::End)
+                        sx-gap=(5)
+                        sx-width="100%"
                     {
-                        "Delete"
-                    }
-                    button
-                        type="submit"
-                        sx-border-radius=(5)
-                        sx-background="#111"
-                        sx-border="2, #222"
-                        sx-padding=(10)
-                    {
-                        "Save"
+                        @if !current_connection {
+                            button
+                                sx-border-radius=(5)
+                                sx-background="#111"
+                                sx-border="2, #222"
+                                sx-padding-x=(10)
+                                sx-padding-y=(5)
+                                hx-post={(pre_escaped!("/settings/select-connection?name="))(connection.name)}
+                                hx-swap="#settings-connections"
+                            {
+                                "Select"
+                            }
+                        }
+                        button
+                            sx-border-radius=(5)
+                            sx-background="#111"
+                            sx-border="2, #222"
+                            sx-padding-x=(10)
+                            sx-padding-y=(5)
+                            hx-delete={(pre_escaped!("/settings/connections?name="))(connection.name)}
+                            hx-swap="#settings-connections"
+                        {
+                            "Delete"
+                        }
+                        button
+                            type="submit"
+                            sx-border-radius=(5)
+                            sx-background="#111"
+                            sx-border="2, #222"
+                            sx-padding-x=(10)
+                            sx-padding-y=(5)
+                        {
+                            "Save"
+                        }
                     }
                 }
             }

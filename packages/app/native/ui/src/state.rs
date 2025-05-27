@@ -1,5 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
+use moosicbox_app_models::Connection;
 use moosicbox_music_models::api::ApiTrack;
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +24,7 @@ pub struct PlayerState {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub struct State {
+    pub connection: Option<Connection>,
     pub player: PlayerState,
 }
 

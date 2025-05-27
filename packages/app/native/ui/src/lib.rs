@@ -13,8 +13,6 @@ pub mod playback_sessions;
 pub mod settings;
 pub mod state;
 
-use std::sync::LazyLock;
-
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
 use hyperchad::{
@@ -43,10 +41,6 @@ pub const CURRENT_ALBUM_SIZE: u16 = 70;
 
 pub const DARK_BACKGROUND: &str = "#080a0b";
 pub const BACKGROUND: &str = "#181a1b";
-
-pub static MOOSICBOX_HOST: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("MOOSICBOX_HOST").unwrap_or_else(|_| "http://localhost:8016".to_string())
-});
 
 #[macro_export]
 macro_rules! public_img {
@@ -471,12 +465,12 @@ fn player_play_button_from_state(state: &State) -> Markup {
     )
 }
 
-fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
+fn player_current_album(host: &str, track: &ApiTrack, size: u16) -> Markup {
     html! {
         div id="player-current-playing" sx-dir="row" sx-align-items="center" {
             div sx-width=(size) sx-padding-x=(20) sx-align-items="center" sx-justify-content="center" {
                 a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
-                    (album_cover_img_from_album(&track.into(), size))
+                    (album_cover_img_from_album(host, &track.into(), size))
                 }
             }
             div sx-justify-content="center" sx-gap=(3) {
@@ -495,11 +489,13 @@ fn player_current_album(track: &ApiTrack, size: u16) -> Markup {
 }
 
 fn player_current_album_from_state(state: &State, size: u16) -> Markup {
-    if let Some(playback) = &state.player.playback {
-        let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
+    if let Some(connection) = &state.connection {
+        if let Some(playback) = &state.player.playback {
+            let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
 
-        if let Some(track) = track {
-            return player_current_album(track, size);
+            if let Some(track) = track {
+                return player_current_album(&connection.api_url, track, size);
+            }
         }
     }
 
@@ -545,12 +541,14 @@ pub fn session_updated(
             .tracks
             .get(session.position.unwrap_or(0) as usize);
 
-        if let Some(track) = track {
-            log::debug!("session_updated: rendering current playing");
-            partials.push((
-                "player-current-playing".to_string(),
-                player_current_album(track, CURRENT_ALBUM_SIZE),
-            ));
+        if let Some(connection) = &state.connection {
+            if let Some(track) = track {
+                log::debug!("session_updated: rendering current playing");
+                partials.push((
+                    "player-current-playing".to_string(),
+                    player_current_album(&connection.api_url, track, CURRENT_ALBUM_SIZE),
+                ));
+            }
         }
 
         partials.push(("play-queue".to_string(), play_queue(state)));

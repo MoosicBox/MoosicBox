@@ -7,7 +7,7 @@ use moosicbox_session_models::ApiSession;
 use crate::PLAYBACK_SESSIONS_CONTENT_ID;
 
 #[must_use]
-pub fn playback_sessions(sessions: &[ApiSession]) -> Markup {
+pub fn playback_sessions(host: &str, sessions: &[ApiSession]) -> Markup {
     html! {
         div id=(PLAYBACK_SESSIONS_CONTENT_ID) {
             @for session in sessions {
@@ -32,7 +32,7 @@ pub fn playback_sessions(sessions: &[ApiSession]) -> Markup {
                                     sx-width=(icon_size)
                                     sx-height=(icon_size)
                                 {
-                                    (crate::albums::album_cover_img_from_track(track, icon_size))
+                                    (crate::albums::album_cover_img_from_track(host, track, icon_size))
                                 }
                                 (track.title)
                             }

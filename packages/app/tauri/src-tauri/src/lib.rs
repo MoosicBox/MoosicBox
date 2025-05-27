@@ -916,11 +916,17 @@ pub fn run() {
                 HTTP_APP.set(app).unwrap();
 
                 tokio_handle.spawn(async move {
+                    let api_url = STATE
+                        .get_current_connection()
+                        .await
+                        .unwrap()
+                        .map(|x| x.api_url);
+
                     STATE
                         .set_state(moosicbox_app_state::UpdateAppState {
                             connection_id: Some("123".into()),
                             connection_name: Some("Test Tauri".into()),
-                            api_url: Some(moosicbox_app_native::MOOSICBOX_HOST.to_string(),),
+                            api_url,
                             client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
                             signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
                             api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),

@@ -2,25 +2,17 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock, OnceLock},
-};
+use std::sync::{LazyLock, OnceLock};
 
 use hyperchad::{renderer::Renderer, router::Router};
 use moosicbox_app_native_ui::state;
 use moosicbox_config::AppType;
-use moosicbox_music_api::{MusicApi, profiles::PROFILES};
-use moosicbox_music_models::ApiSource;
-use moosicbox_remote_library::RemoteLibraryMusicApi;
 
 pub mod actions;
 mod events;
 mod routes;
 #[cfg(feature = "_canvas")]
 pub mod visualization;
-
-pub use moosicbox_app_native_ui::MOOSICBOX_HOST;
 
 pub static ROUTER: OnceLock<Router> = OnceLock::new();
 pub static RENDERER: OnceLock<Box<dyn Renderer>> = OnceLock::new();
@@ -71,6 +63,9 @@ pub mod assets {
     });
 }
 
+/// # Panics
+///
+/// * If the app persistence fails
 pub async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::State {
     let mut state = state::State::default();
 
@@ -87,28 +82,13 @@ pub async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::
     }
     drop(session);
 
+    state.connection = STATE.get_current_connection().await.unwrap();
+
     state
 }
 
 pub fn init() -> Router {
-    let mut apis_map: HashMap<ApiSource, Arc<Box<dyn MusicApi>>> = HashMap::new();
-
-    for api_source in ApiSource::all() {
-        apis_map.insert(
-            api_source,
-            Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
-                RemoteLibraryMusicApi::new(
-                    MOOSICBOX_HOST.to_string(),
-                    api_source,
-                    PROFILE.to_string(),
-                ),
-            ))),
-        );
-    }
-
     moosicbox_player::on_playback_event(events::on_playback_event);
-
-    PROFILES.add(PROFILE.to_string(), Arc::new(apis_map));
 
     let router = Router::new()
         .with_static_route(&["/", "/home"], |_| async {
@@ -125,6 +105,9 @@ pub fn init() -> Router {
         })
         .with_route_result("/settings/new-connection", |req| async {
             routes::settings_new_connection_route(req).await
+        })
+        .with_route_result("/settings/select-connection", |req| async {
+            routes::settings_select_connection_route(req).await
         })
         .with_no_content_result("/settings/connection-name", |req| async {
             routes::settings_connection_name_route(req).await

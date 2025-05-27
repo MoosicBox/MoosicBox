@@ -9,7 +9,11 @@ use moosicbox_music_models::api::ApiTrack;
 
 use crate::{public_img, state::State};
 
-fn render_play_queue_item(track: &ApiTrack, is_history: bool) -> Markup {
+fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> Markup {
+    let Some(connection) = &state.connection else {
+        return html! {};
+    };
+
     let album_page_url = crate::albums::album_page_url(
         &track.album_id.to_string(),
         false,
@@ -28,7 +32,7 @@ fn render_play_queue_item(track: &ApiTrack, is_history: bool) -> Markup {
             div {
                 @let icon_size = 50;
                 a href=(album_page_url) sx-width=(icon_size) sx-height=(icon_size) {
-                    (crate::albums::album_cover_img_from_track(track, icon_size))
+                    (crate::albums::album_cover_img_from_track(&connection.api_url, track, icon_size))
                 }
             }
             div flex=(1) {
@@ -106,7 +110,7 @@ pub fn play_queue(state: &State) -> Markup {
                     h1 sx-height=(30) { "Play queue" }
                     div sx-gap=(10) {
                         @for track in history {
-                            (render_play_queue_item(track, true))
+                            (render_play_queue_item(state, track, true))
                         }
                     }
                     @if let Some(track) = current {
@@ -125,13 +129,13 @@ pub fn play_queue(state: &State) -> Markup {
                                 (track.album)
                             }
                         }
-                        (render_play_queue_item(track, false))
+                        (render_play_queue_item(state, track, false))
                     }
                     @if future.peek().is_some() {
                         div { "Next up:" }
                     }
                     @for track in future {
-                        (render_play_queue_item(track, false))
+                        (render_play_queue_item(state, track, false))
                     }
                 }
             }

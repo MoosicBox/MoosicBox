@@ -19,7 +19,7 @@ use moosicbox_music_models::{
 use moosicbox_paging::Page;
 
 use crate::{
-    Action, DARK_BACKGROUND, MOOSICBOX_HOST,
+    Action, DARK_BACKGROUND,
     artists::artist_page_url,
     formatting::{
         AlbumVersionQualityFormat as _, TimeFormat as _, display_album_version_qualities,
@@ -31,6 +31,7 @@ use crate::{
 
 #[must_use]
 pub fn album_cover_url(
+    host: &str,
     album_id: &Id,
     source: ApiSource,
     contains_cover: bool,
@@ -39,8 +40,7 @@ pub fn album_cover_url(
 ) -> String {
     if contains_cover {
         format!(
-            "{}/files/albums/{album_id}/{width}x{height}?moosicboxProfile=master&source={source}",
-            *MOOSICBOX_HOST
+            "{host}/files/albums/{album_id}/{width}x{height}?moosicboxProfile=master&source={source}",
         )
     } else {
         public_img!("album.svg").to_string()
@@ -48,8 +48,9 @@ pub fn album_cover_url(
 }
 
 #[must_use]
-pub fn album_cover_url_from_album(album: &ApiAlbum, width: u16, height: u16) -> String {
+pub fn album_cover_url_from_album(host: &str, album: &ApiAlbum, width: u16, height: u16) -> String {
     album_cover_url(
+        host,
         &album.album_id,
         album.api_source,
         album.contains_cover,
@@ -59,8 +60,9 @@ pub fn album_cover_url_from_album(album: &ApiAlbum, width: u16, height: u16) -> 
 }
 
 #[must_use]
-pub fn album_cover_url_from_track(track: &ApiTrack, width: u16, height: u16) -> String {
+pub fn album_cover_url_from_track(host: &str, track: &ApiTrack, width: u16, height: u16) -> String {
     album_cover_url(
+        host,
         &track.album_id,
         track.api_source,
         track.contains_cover,
@@ -70,24 +72,24 @@ pub fn album_cover_url_from_track(track: &ApiTrack, width: u16, height: u16) -> 
 }
 
 #[must_use]
-pub fn album_cover_img_from_album(album: &ApiAlbum, size: u16) -> Markup {
+pub fn album_cover_img_from_album(host: &str, album: &ApiAlbum, size: u16) -> Markup {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img loading=(ImageLoading::Lazy) src=(PreEscaped(album_cover_url_from_album(album, request_size, request_size))) sx-width=(size) sx-height=(size);
+        img loading=(ImageLoading::Lazy) src=(PreEscaped(album_cover_url_from_album(host, album, request_size, request_size))) sx-width=(size) sx-height=(size);
     }
 }
 
 #[must_use]
-pub fn album_cover_img_from_track(track: &ApiTrack, size: u16) -> Markup {
+pub fn album_cover_img_from_track(host: &str, track: &ApiTrack, size: u16) -> Markup {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img loading=(ImageLoading::Lazy) src=(PreEscaped(album_cover_url_from_track(track, request_size, request_size))) sx-width=(size) sx-height=(size);
+        img loading=(ImageLoading::Lazy) src=(PreEscaped(album_cover_url_from_track(host, track, request_size, request_size))) sx-width=(size) sx-height=(size);
     }
 }
 
@@ -160,6 +162,10 @@ pub fn album_page_content(
         a.source == b.source && a.sample_rate == b.sample_rate && a.bit_depth == b.bit_depth
     }
 
+    let Some(connection) = &state.connection else {
+        return html! {};
+    };
+
     let selected_version = versions
         .iter()
         .find(|x| selected_version.is_some_and(|v| same_version(&(*x).into(), &v.into())))
@@ -170,7 +176,7 @@ pub fn album_page_content(
             div sx-dir="row" {
                 @let size = 200;
                 div sx-width=(size) sx-height=(size) sx-padding-right=(15) {
-                    (album_cover_img_from_album(&album, size))
+                    (album_cover_img_from_album(&connection.api_url, &album, size))
                 }
                 div {
                     h1 { (album.title) }
@@ -382,6 +388,7 @@ pub fn album(
 
 #[must_use]
 pub fn albums_list_start(
+    state: &State,
     albums: &Page<ApiAlbum>,
     filtered_sources: &[TrackApiSource],
     sort: AlbumSort,
@@ -390,6 +397,11 @@ pub fn albums_list_start(
 ) -> Markup {
     static MAX_PARALLEL_REQUESTS: u32 = 6;
     static MIN_PAGE_THRESHOLD: u32 = 30;
+
+    let Some(connection) = &state.connection else {
+        return html! {};
+    };
+
     let filtered_sources = filtered_sources_to_string(filtered_sources);
     let sort = sort.to_string();
     let limit = albums.limit();
@@ -481,19 +493,20 @@ pub fn albums_list_start(
     };
 
     html! {
-        (show_albums(albums.iter(), size))
+        (show_albums(&connection.api_url, albums.iter(), size))
         (remaining)
     }
 }
 
 #[must_use]
-pub fn albums_list(albums: &Page<ApiAlbum>, size: u16) -> Markup {
-    show_albums(albums.iter(), size)
+pub fn albums_list(host: &str, albums: &Page<ApiAlbum>, size: u16) -> Markup {
+    show_albums(host, albums.iter(), size)
 }
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn album_display(
+    host: &str,
     album: &ApiAlbum,
     size: u16,
     show_details: bool,
@@ -534,7 +547,7 @@ pub fn album_display(
                 sx-position="relative"
                 fx-hover=(ActionType::show_last_child())
             {
-                (album_cover_img_from_album(album, size))
+                (album_cover_img_from_album(host, album, size))
                 div
                     sx-width=(size)
                     sx-height=(size)
@@ -596,7 +609,7 @@ pub fn album_display(
             }
         }
     } else {
-        html! { (album_cover_img_from_album(album, size)) }
+        html! { (album_cover_img_from_album(host, album, size)) }
     };
 
     html! {
@@ -671,10 +684,14 @@ pub fn album_page_url(
     )
 }
 
-pub fn show_albums<'a>(albums: impl Iterator<Item = &'a ApiAlbum>, size: u16) -> Markup {
+pub fn show_albums<'a>(
+    host: &str,
+    albums: impl Iterator<Item = &'a ApiAlbum>,
+    size: u16,
+) -> Markup {
     html! {
         @for album in albums {
-            (album_display(album, size, true, true))
+            (album_display(host, album, size, true, true))
         }
     }
 }

@@ -47,7 +47,7 @@ fn download_task_progress(task: &ApiDownloadTask) -> Markup {
 }
 
 #[allow(clippy::too_many_lines)]
-fn download_task(task: &ApiDownloadTask) -> Markup {
+fn download_task(host: &str, task: &ApiDownloadTask) -> Markup {
     let id = task.id;
     let item = &task.item;
 
@@ -68,7 +68,7 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                     div {
                         a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
                             img
-                                src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
+                                src=(album_cover_url(host, album_id, source.into(), *contains_cover, cover_width, cover_height))
                                 sx-width=(cover_width)
                                 sx-height=(cover_height)
                             {}
@@ -97,7 +97,7 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                     div {
                         a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
                             img
-                                src=(album_cover_url(album_id, source.into(), *contains_cover, cover_width, cover_height))
+                                src=(album_cover_url(host, album_id, source.into(), *contains_cover, cover_width, cover_height))
                                 sx-width=(cover_width)
                                 sx-height=(cover_height)
                             {}
@@ -126,7 +126,7 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
                     div {
                         a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
                             img
-                                src=(artist_cover_url(artist_id, source.into(), *contains_cover, cover_width, cover_height))
+                                src=(artist_cover_url(host, artist_id, source.into(), *contains_cover, cover_width, cover_height))
                                 sx-width=(cover_width)
                                 sx-height=(cover_height)
                             {}
@@ -157,7 +157,11 @@ fn download_task(task: &ApiDownloadTask) -> Markup {
 }
 
 #[must_use]
-pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: DownloadTab) -> Markup {
+pub fn downloads_page_content(
+    host: &str,
+    tasks: &[ApiDownloadTask],
+    active_tab: DownloadTab,
+) -> Markup {
     html! {
         div
             sx-padding-x=(30)
@@ -201,7 +205,7 @@ pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: DownloadTab
                     "No download tasks"
                 } @else {
                     @for task in tasks {
-                        (download_task(task))
+                        (download_task(host, task))
                     }
                 }
             }
@@ -211,5 +215,12 @@ pub fn downloads_page_content(tasks: &[ApiDownloadTask], active_tab: DownloadTab
 
 #[must_use]
 pub fn downloads(state: &State, tasks: &[ApiDownloadTask], active_tab: DownloadTab) -> Markup {
-    page(state, &downloads_page_content(tasks, active_tab))
+    let Some(connection) = &state.connection else {
+        return html! {};
+    };
+
+    page(
+        state,
+        &downloads_page_content(&connection.api_url, tasks, active_tab),
+    )
 }

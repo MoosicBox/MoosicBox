@@ -7056,7 +7056,6 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_player",
- "moosicbox_remote_library",
  "moosicbox_session_models",
  "moosicbox_task",
  "moosicbox_ws",

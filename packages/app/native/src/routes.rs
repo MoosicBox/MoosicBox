@@ -22,7 +22,7 @@ use moosicbox_session_models::ApiSession;
 use serde::Deserialize;
 use switchy::http::models::Method;
 
-use crate::{MOOSICBOX_HOST, PROFILE, STATE, convert_state};
+use crate::{PROFILE, STATE, convert_state};
 
 static CLIENT: LazyLock<switchy::http::Client> =
     LazyLock::new(|| switchy::http::Client::builder().build().unwrap());
@@ -31,6 +31,8 @@ static CLIENT: LazyLock<switchy::http::Client> =
 pub enum RouteError {
     #[error("Missing query param: '{0}'")]
     MissingQueryParam(&'static str),
+    #[error("Missing connection")]
+    MissingConnection,
     #[error("Failed to parse markup")]
     ParseMarkup,
     #[error(transparent)]
@@ -93,10 +95,15 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
         .and_then(Result::ok)
         .unwrap_or(AlbumSort::NameAsc);
 
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
     let response = CLIENT
         .get(&format!(
-            "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
-            *MOOSICBOX_HOST,
+            "{host}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
             if filtered_sources.is_empty() {
                 String::new()
             } else {
@@ -125,6 +132,7 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
     log::trace!("albums_list_start_route: albums={albums:?}");
 
     moosicbox_app_native_ui::albums::albums_list_start(
+        &state,
         &albums,
         &filtered_sources,
         sort,
@@ -170,10 +178,15 @@ pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
         .and_then(Result::ok)
         .unwrap_or(AlbumSort::NameAsc);
 
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
     let response = CLIENT
         .get(&format!(
-            "{}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
-            *MOOSICBOX_HOST,
+            "{host}/menu/albums?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}{}&sort={sort}{}",
             if filtered_sources.is_empty() {
                 String::new()
             } else {
@@ -201,7 +214,7 @@ pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
 
     log::trace!("albums_list_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::albums::albums_list(&albums, size)
+    moosicbox_app_native_ui::albums::albums_list(host, &albums, size)
         .into_string()
         .try_into()
         .map_err(|e| {
@@ -233,9 +246,15 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
         return Err(RouteError::MissingQueryParam("size"));
     };
     let size = size.parse::<u16>()?;
+
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
     let url = format!(
-        "{}/menu/albums?moosicboxProfile={PROFILE}&artistId={artist_id}&source={source}&albumType={album_type}",
-        *MOOSICBOX_HOST
+        "{host}/menu/albums?moosicboxProfile={PROFILE}&artistId={artist_id}&source={source}&albumType={album_type}",
     );
     let response = CLIENT.get(&url).send().await?;
 
@@ -249,7 +268,7 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
 
     log::trace!("albums_list_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::artists::albums_list(&albums, source, album_type, size)
+    moosicbox_app_native_ui::artists::albums_list(host, &albums, source, album_type, size)
         .into_string()
         .try_into()
         .map_err(|e| {
@@ -259,10 +278,13 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
 }
 
 pub async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
-    let url = format!(
-        "{}/audio-zone/with-session?moosicboxProfile={PROFILE}",
-        *MOOSICBOX_HOST
-    );
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let url = format!("{host}/audio-zone/with-session?moosicboxProfile={PROFILE}",);
     let response = CLIENT.get(&url).send().await?;
 
     if !response.status().is_success() {
@@ -283,10 +305,13 @@ pub async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
 }
 
 pub async fn playback_sessions_route(_req: RouteRequest) -> Result<View, RouteError> {
-    let url = format!(
-        "{}/session/sessions?moosicboxProfile={PROFILE}",
-        *MOOSICBOX_HOST
-    );
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let url = format!("{host}/session/sessions?moosicboxProfile={PROFILE}",);
     let response = CLIENT.get(&url).send().await?;
 
     if !response.status().is_success() {
@@ -297,7 +322,7 @@ pub async fn playback_sessions_route(_req: RouteRequest) -> Result<View, RouteEr
 
     let sessions: Page<ApiSession> = response.json().await?;
 
-    moosicbox_app_native_ui::playback_sessions::playback_sessions(&sessions)
+    moosicbox_app_native_ui::playback_sessions::playback_sessions(host, &sessions)
         .into_string()
         .try_into()
         .map_err(|e| {
@@ -408,14 +433,19 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
 }
 
 pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
     Ok(if let Some(artist_id) = req.query.get("artistId") {
         let source: Option<ApiSource> =
             req.query.get("source").map(TryFrom::try_from).transpose()?;
 
         let response = CLIENT
             .get(&format!(
-                "{}/menu/artist?moosicboxProfile={PROFILE}&artistId={artist_id}{}",
-                *MOOSICBOX_HOST,
+                "{host}/menu/artist?moosicboxProfile={PROFILE}&artistId={artist_id}{}",
                 source.map_or_else(String::new, |x| format!("&source={x}")),
             ))
             .send()
@@ -440,8 +470,7 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
     } else {
         let response = CLIENT
             .get(&format!(
-                "{}/menu/artists?moosicboxProfile={PROFILE}&offset=0&limit=2000",
-                *MOOSICBOX_HOST
+                "{host}/menu/artists?moosicboxProfile={PROFILE}&offset=0&limit=2000",
             ))
             .send()
             .await?;
@@ -483,12 +512,17 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
         .transpose()?
         .unwrap_or(DownloadTab::Current);
 
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
     let tasks_response = match active_tab {
         DownloadTab::Current => {
             CLIENT
                 .get(&format!(
-                    "{}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}&state=PENDING,PAUSED,STARTED",
-                    *MOOSICBOX_HOST
+                    "{host}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}&state=PENDING,PAUSED,STARTED",
                 ))
                 .send()
                 .await?
@@ -496,8 +530,7 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
         DownloadTab::History => {
             CLIENT
                 .get(&format!(
-                    "{}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}&state=CANCELLED,FINISHED,ERROR",
-                    *MOOSICBOX_HOST
+                    "{host}/downloader/download-tasks?moosicboxProfile={PROFILE}&offset={offset}&limit={limit}&state=CANCELLED,FINISHED,ERROR",
                 ))
                 .send()
                 .await?
@@ -518,7 +551,7 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
 
     log::trace!("downloads_route: active_tab={active_tab} tasks={tasks:?}");
 
-    moosicbox_app_native_ui::downloads::downloads(&convert_state(&STATE).await, &tasks, active_tab)
+    moosicbox_app_native_ui::downloads::downloads(&state, &tasks, active_tab)
         .into_string()
         .try_into()
         .map_err(|e| {
@@ -565,39 +598,13 @@ pub async fn settings_connection_name_route(req: RouteRequest) -> Result<(), Rou
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
-struct NewConnection {
+struct ConnectionUpdate {
     name: String,
     api_url: String,
 }
 
 pub async fn settings_connections_route(req: RouteRequest) -> Result<View, RouteError> {
     match req.method {
-        Method::Post => {
-            let new_connection = req
-                .parse_form::<NewConnection>()
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-                .map_err(RouteError::RouteFailed)?;
-
-            let connections = STATE
-                .add_connection(Connection {
-                    name: new_connection.name,
-                    api_url: new_connection.api_url,
-                })
-                .await?;
-
-            let current_connection = STATE.get_current_connection().await?;
-
-            moosicbox_app_native_ui::settings::connections_content(
-                &connections,
-                current_connection.as_ref(),
-            )
-            .into_string()
-            .try_into()
-            .map_err(|e| {
-                moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-                RouteError::ParseMarkup
-            })
-        }
         Method::Delete => {
             let Some(name) = req.query.get("name") else {
                 return Err(RouteError::MissingQueryParam("name"));
@@ -618,8 +625,42 @@ pub async fn settings_connections_route(req: RouteRequest) -> Result<View, Route
                 RouteError::ParseMarkup
             })
         }
+        Method::Patch => {
+            let name = req
+                .query
+                .get("name")
+                .ok_or_else(|| RouteError::MissingQueryParam("name"))?;
+
+            let update = req
+                .parse_form::<ConnectionUpdate>()
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+                .map_err(RouteError::RouteFailed)?;
+
+            let connections = STATE
+                .update_connection(
+                    name,
+                    Connection {
+                        name: update.name,
+                        api_url: update.api_url,
+                    },
+                )
+                .await?;
+
+            let current_connection = STATE.get_current_connection().await?;
+
+            moosicbox_app_native_ui::settings::connections_content(
+                &connections,
+                current_connection.as_ref(),
+            )
+            .into_string()
+            .try_into()
+            .map_err(|e| {
+                moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+                RouteError::ParseMarkup
+            })
+        }
         Method::Get
-        | Method::Patch
+        | Method::Post
         | Method::Put
         | Method::Head
         | Method::Options
@@ -659,4 +700,28 @@ pub async fn settings_new_connection_route(_req: RouteRequest) -> Result<View, R
         moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
         RouteError::ParseMarkup
     })
+}
+
+pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View, RouteError> {
+    let Some(name) = req.query.get("name") else {
+        return Err(RouteError::MissingQueryParam("name"));
+    };
+
+    let connections = STATE.get_connections().await?;
+
+    let connection = connections
+        .iter()
+        .find(|x| &x.name == name)
+        .cloned()
+        .ok_or(RouteError::MissingConnection)?;
+
+    STATE.set_current_connection(connection.clone()).await?;
+
+    moosicbox_app_native_ui::settings::connections_content(&connections, Some(&connection))
+        .into_string()
+        .try_into()
+        .map_err(|e| {
+            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+            RouteError::ParseMarkup
+        })
 }

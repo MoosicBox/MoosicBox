@@ -12,7 +12,7 @@ use std::sync::Arc;
 use flume::SendError;
 use hyperchad::{actions::logic::Value, app::AppBuilder, renderer::Color};
 use moosicbox_app_native::{
-    MOOSICBOX_HOST, PROFILE, RENDERER, STATE, STATE_LOCK, actions::handle_action, init_app_state,
+    PROFILE, RENDERER, STATE, STATE_LOCK, actions::handle_action, init_app_state,
 };
 use moosicbox_app_native_ui::Action;
 use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
@@ -153,11 +153,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     runtime.spawn(async move {
+        let api_url = STATE
+            .get_current_connection()
+            .await
+            .unwrap()
+            .map(|x| x.api_url);
+
         STATE
             .set_state(moosicbox_app_state::UpdateAppState {
                 connection_id: Some("123".into()),
                 connection_name: Some("Test Egui".into()),
-                api_url: Some(MOOSICBOX_HOST.to_string()),
+                api_url,
                 client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
                 signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
                 api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),

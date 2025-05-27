@@ -9,7 +9,6 @@ use moosicbox_music_models::{
 };
 
 use crate::{
-    MOOSICBOX_HOST,
     formatting::{AlbumTypeFormat as _, ApiSourceFormat},
     page, pre_escaped, public_img,
     state::State,
@@ -21,8 +20,14 @@ pub fn artist_page_url(artist_id: &str) -> PreEscaped<String> {
 }
 
 #[must_use]
-pub fn artist_cover_url_from_artist(artist: &ApiArtist, width: u16, height: u16) -> String {
+pub fn artist_cover_url_from_artist(
+    host: &str,
+    artist: &ApiArtist,
+    width: u16,
+    height: u16,
+) -> String {
     artist_cover_url(
+        host,
         &artist.artist_id,
         artist.api_source,
         artist.contains_cover,
@@ -33,6 +38,7 @@ pub fn artist_cover_url_from_artist(artist: &ApiArtist, width: u16, height: u16)
 
 #[must_use]
 pub fn artist_cover_url(
+    host: &str,
     artist_id: &Id,
     source: ApiSource,
     contains_cover: bool,
@@ -41,26 +47,25 @@ pub fn artist_cover_url(
 ) -> String {
     if contains_cover {
         format!(
-            "{}/files/artists/{artist_id}/{width}x{height}?moosicboxProfile=master&source={source}",
-            *MOOSICBOX_HOST
+            "{host}/files/artists/{artist_id}/{width}x{height}?moosicboxProfile=master&source={source}",
         )
     } else {
         public_img!("album.svg").to_string()
     }
 }
 
-fn artist_cover_img(artist: &ApiArtist, size: u16) -> Markup {
+fn artist_cover_img(host: &str, artist: &ApiArtist, size: u16) -> Markup {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     html! {
-        img loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(&artist, request_size, request_size)) sx-width=(size) sx-height=(size);
+        img loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(host, &artist, request_size, request_size)) sx-width=(size) sx-height=(size);
     }
 }
 
 #[must_use]
-pub fn artist_page_content(artist: &ApiArtist) -> Markup {
+pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Markup {
     fn source_html(artist_id: &Id, source: ApiSource, album_type: AlbumType, size: u16) -> Markup {
         html! {
             div
@@ -70,6 +75,10 @@ pub fn artist_page_content(artist: &ApiArtist) -> Markup {
             {}
         }
     }
+
+    let Some(connection) = &state.connection else {
+        return html! {};
+    };
 
     let size = 200;
 
@@ -102,7 +111,7 @@ pub fn artist_page_content(artist: &ApiArtist) -> Markup {
             }
             div sx-dir="row" {
                 div sx-width=(size) sx-height=(size) sx-padding-right=(15) {
-                    (artist_cover_img(&artist, size))
+                    (artist_cover_img(&connection.api_url, &artist, size))
                 }
                 div {
                     h1 { (artist.title) }
@@ -117,11 +126,15 @@ pub fn artist_page_content(artist: &ApiArtist) -> Markup {
 
 #[must_use]
 pub fn artist(state: &State, artist: &ApiArtist) -> Markup {
-    page(state, &artist_page_content(artist))
+    page(state, &artist_page_content(state, artist))
 }
 
 #[must_use]
-pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
+pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Markup {
+    let Some(connection) = &state.connection else {
+        return html! {};
+    };
+
     let size: u16 = 200;
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
@@ -140,7 +153,12 @@ pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
             @for artist in artists {
                 a href=(artist_page_url(&artist.artist_id.to_string())) sx-width=(size) {
                     div sx-width=(size) {
-                        img loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(artist, request_size, request_size)) sx-width=(size) sx-height=(size);
+                        img
+                            loading=(ImageLoading::Lazy)
+                            src=(artist_cover_url_from_artist(&connection.api_url, artist, request_size, request_size))
+                            sx-width=(size)
+                            sx-height=(size);
+
                         (artist.title)
                     }
                 }
@@ -151,11 +169,12 @@ pub fn artists_page_content(artists: &[ApiArtist]) -> Markup {
 
 #[must_use]
 pub fn artists(state: &State, artists: &[ApiArtist]) -> Markup {
-    page(state, &artists_page_content(artists))
+    page(state, &artists_page_content(state, artists))
 }
 
 #[must_use]
 pub fn albums_list(
+    host: &str,
     albums: &[ApiAlbum],
     source: ApiSource,
     album_type: AlbumType,
@@ -184,7 +203,7 @@ pub fn albums_list(
                 sx-gap=(15)
                 sx-padding-y=(15)
             {
-                (crate::albums::show_albums(albums.iter(), size))
+                (crate::albums::show_albums(host, albums.iter(), size))
             }
         }
     }

@@ -62,7 +62,6 @@ moosicbox_music_api = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging = { workspace = true }
 moosicbox_player = { workspace = true }
-moosicbox_remote_library = { workspace = true }
 moosicbox_session_models = { workspace = true }
 moosicbox_task = { workspace = true }
 moosicbox_ws = { workspace = true }
