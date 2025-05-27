@@ -972,6 +972,21 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                 route,
                                 trigger,
                                 swap,
+                            }
+                            | Route::Put {
+                                route,
+                                trigger,
+                                swap,
+                            }
+                            | Route::Delete {
+                                route,
+                                trigger,
+                                swap,
+                            }
+                            | Route::Patch {
+                                route,
+                                trigger,
+                                swap,
                             } => {
                                 if trigger.as_deref() == Some("load") {
                                     let info = RequestInfo { client };

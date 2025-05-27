@@ -188,6 +188,21 @@ pub enum Route {
         trigger: Option<String>,
         swap: SwapTarget,
     },
+    Put {
+        route: String,
+        trigger: Option<String>,
+        swap: SwapTarget,
+    },
+    Delete {
+        route: String,
+        trigger: Option<String>,
+        swap: SwapTarget,
+    },
+    Patch {
+        route: String,
+        trigger: Option<String>,
+        swap: SwapTarget,
+    },
 }
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]

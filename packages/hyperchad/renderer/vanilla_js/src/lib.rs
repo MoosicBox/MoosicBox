@@ -424,28 +424,27 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
         if let Some(route) = &container.route {
             match route {
                 Route::Get {
-                    route,
+                    route: path,
                     trigger,
                     swap,
-                } => {
-                    match swap {
-                        hyperchad_transformer::models::SwapTarget::This => {
-                            write_attr(f, b"hx-swap", b"outerHTML")?;
-                        }
-                        hyperchad_transformer::models::SwapTarget::Children => {
-                            write_attr(f, b"hx-swap", b"innerHTML")?;
-                        }
-                        hyperchad_transformer::models::SwapTarget::Id(id) => {
-                            write_attr(f, b"hx-swap", format!("#{id}").as_bytes())?;
-                        }
-                    }
-                    write_attr(f, b"hx-get", route.as_bytes())?;
-                    if let Some(trigger) = trigger {
-                        write_attr(f, b"hx-trigger", trigger.as_bytes())?;
-                    }
                 }
-                Route::Post {
-                    route,
+                | Route::Post {
+                    route: path,
+                    trigger,
+                    swap,
+                }
+                | Route::Put {
+                    route: path,
+                    trigger,
+                    swap,
+                }
+                | Route::Delete {
+                    route: path,
+                    trigger,
+                    swap,
+                }
+                | Route::Patch {
+                    route: path,
                     trigger,
                     swap,
                 } => {
@@ -461,7 +460,23 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                         }
                     }
                     write_attr(f, b"hx-swap", b"outerHTML")?;
-                    write_attr(f, b"hx-post", route.as_bytes())?;
+                    match route {
+                        Route::Get { .. } => {
+                            write_attr(f, b"hx-get", path.as_bytes())?;
+                        }
+                        Route::Post { .. } => {
+                            write_attr(f, b"hx-post", path.as_bytes())?;
+                        }
+                        Route::Put { .. } => {
+                            write_attr(f, b"hx-put", path.as_bytes())?;
+                        }
+                        Route::Delete { .. } => {
+                            write_attr(f, b"hx-delete", path.as_bytes())?;
+                        }
+                        Route::Patch { .. } => {
+                            write_attr(f, b"hx-patch", path.as_bytes())?;
+                        }
+                    }
                     if let Some(trigger) = trigger {
                         write_attr(f, b"hx-trigger", trigger.as_bytes())?;
                     }

@@ -2365,6 +2365,33 @@ impl Container {
                     attrs.add_opt("hx-trigger", trigger.clone());
                     attrs.add("hx-swap", swap);
                 }
+                Route::Put {
+                    route,
+                    trigger,
+                    swap,
+                } => {
+                    attrs.add("hx-put", route);
+                    attrs.add_opt("hx-trigger", trigger.clone());
+                    attrs.add("hx-swap", swap);
+                }
+                Route::Delete {
+                    route,
+                    trigger,
+                    swap,
+                } => {
+                    attrs.add("hx-delete", route);
+                    attrs.add_opt("hx-trigger", trigger.clone());
+                    attrs.add("hx-swap", swap);
+                }
+                Route::Patch {
+                    route,
+                    trigger,
+                    swap,
+                } => {
+                    attrs.add("hx-patch", route);
+                    attrs.add_opt("hx-trigger", trigger.clone());
+                    attrs.add("hx-swap", swap);
+                }
             }
         }
 

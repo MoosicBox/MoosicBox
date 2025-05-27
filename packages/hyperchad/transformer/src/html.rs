@@ -202,6 +202,36 @@ fn get_route(tag: &HTMLTag) -> Result<Option<Route>, ParseAttrWrapperError> {
                     })
                 })
         })
+        .or_else(|| {
+            get_tag_attr_value_decoded(tag, "hx-put")
+                .as_deref()
+                .map(|x| {
+                    parse_put_route(x, tag).map_err(|e| ParseAttrWrapperError::Parse {
+                        name: "hx-put".to_string(),
+                        error: e,
+                    })
+                })
+        })
+        .or_else(|| {
+            get_tag_attr_value_decoded(tag, "hx-delete")
+                .as_deref()
+                .map(|x| {
+                    parse_delete_route(x, tag).map_err(|e| ParseAttrWrapperError::Parse {
+                        name: "hx-delete".to_string(),
+                        error: e,
+                    })
+                })
+        })
+        .or_else(|| {
+            get_tag_attr_value_decoded(tag, "hx-patch")
+                .as_deref()
+                .map(|x| {
+                    parse_patch_route(x, tag).map_err(|e| ParseAttrWrapperError::Parse {
+                        name: "hx-patch".to_string(),
+                        error: e,
+                    })
+                })
+        })
         .transpose()
 }
 
@@ -221,6 +251,45 @@ fn parse_get_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> 
 // TODO: Doesn't support reactive values
 fn parse_post_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> {
     Ok(Route::Post {
+        route: value.to_string(),
+        trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
+        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_swap)
+            .transpose()?
+            .unwrap_or_default(),
+    })
+}
+
+// TODO: Doesn't support reactive values
+fn parse_put_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> {
+    Ok(Route::Put {
+        route: value.to_string(),
+        trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
+        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_swap)
+            .transpose()?
+            .unwrap_or_default(),
+    })
+}
+
+// TODO: Doesn't support reactive values
+fn parse_delete_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> {
+    Ok(Route::Delete {
+        route: value.to_string(),
+        trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
+        swap: get_tag_attr_value_decoded(tag, "hx-swap")
+            .as_deref()
+            .map(parse_swap)
+            .transpose()?
+            .unwrap_or_default(),
+    })
+}
+
+// TODO: Doesn't support reactive values
+fn parse_patch_route(value: &str, tag: &HTMLTag) -> Result<Route, ParseAttrError> {
+    Ok(Route::Patch {
         route: value.to_string(),
         trigger: get_tag_attr_value_owned(tag, "hx-trigger"),
         swap: get_tag_attr_value_decoded(tag, "hx-swap")

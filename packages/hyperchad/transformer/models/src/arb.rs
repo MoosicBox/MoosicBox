@@ -110,13 +110,28 @@ impl Arbitrary for SwapTarget {
 
 impl Arbitrary for Route {
     fn arbitrary(g: &mut Gen) -> Self {
-        match *g.choose(&(0..=1).collect::<Vec<_>>()).unwrap() {
+        match *g.choose(&(0..=4).collect::<Vec<_>>()).unwrap() {
             0 => Self::Get {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
                 swap: SwapTarget::arbitrary(g),
             },
             1 => Self::Post {
+                route: XmlString::arbitrary(g).0,
+                trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
+                swap: SwapTarget::arbitrary(g),
+            },
+            2 => Self::Put {
+                route: XmlString::arbitrary(g).0,
+                trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
+                swap: SwapTarget::arbitrary(g),
+            },
+            3 => Self::Delete {
+                route: XmlString::arbitrary(g).0,
+                trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
+                swap: SwapTarget::arbitrary(g),
+            },
+            4 => Self::Patch {
                 route: XmlString::arbitrary(g).0,
                 trigger: Option::arbitrary(g).map(|x: XmlString| x.0),
                 swap: SwapTarget::arbitrary(g),
