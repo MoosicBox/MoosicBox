@@ -127,7 +127,7 @@ impl RouteRequest {
     /// * If the `Content-Type` header is missing
     /// * If the form is missing
     #[cfg(feature = "form")]
-    pub fn parse_form<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, ParseError> {
+    pub fn parse_form<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
         use std::io::{Cursor, Read as _};
 
         use base64::engine::{Engine as _, general_purpose};
@@ -215,7 +215,7 @@ impl RouteRequest {
             Ok(Value::Object(obj))
         }
 
-        if let Some(form) = &self.body.take() {
+        if let Some(form) = &self.body {
             let value = parse_multipart_json_sync(
                 form,
                 self.content_type().ok_or(ParseError::InvalidContentType)?,
