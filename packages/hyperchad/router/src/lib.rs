@@ -526,10 +526,16 @@ impl From<(&str, RequestInfo)> for RouteRequest {
 
 impl From<(String, RequestInfo)> for RouteRequest {
     fn from(value: (String, RequestInfo)) -> Self {
+        let (path, query) = if let Some((path, query)) = value.0.split_once('?') {
+            (path.to_string(), query)
+        } else {
+            (value.0, "")
+        };
+
         Self {
-            path: value.0,
+            path,
             method: Method::Get,
-            query: BTreeMap::new(),
+            query: QString::from(query).into_iter().collect(),
             headers: BTreeMap::new(),
             info: value.1,
             body: None,
