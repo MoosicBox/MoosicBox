@@ -10,3 +10,9 @@ pub struct Connection {
     pub name: String,
     pub api_url: String,
 }
+
+impl AsRef<Self> for Connection {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
