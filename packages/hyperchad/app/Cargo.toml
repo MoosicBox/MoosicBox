@@ -26,7 +26,11 @@ hyperchad_renderer_vanilla_js = { workspace = true, optional = true, features = 
 hyperchad_router = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-switchy_async = { workspace = true, features = ["rt-multi-thread", "tokio"] }
+switchy = { workspace = true, features = [
+    "async-rt-multi-thread",
+    "async-tokio",
+    "http-models",
+] }
 
 async-trait = { workspace = true }
 clap        = { workspace = true }

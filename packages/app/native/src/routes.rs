@@ -18,6 +18,7 @@ use moosicbox_music_models::{
 };
 use moosicbox_paging::Page;
 use moosicbox_session_models::ApiSession;
+use serde::Deserialize;
 
 use crate::{MOOSICBOX_HOST, PROFILE, STATE, convert_state};
 
@@ -527,9 +528,11 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
 pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError> {
     let connections = STATE.get_connections().await?;
     let current_connection = STATE.get_current_connection().await?;
+    let connection_name = STATE.get_connection_name().await?.unwrap_or_default();
 
     moosicbox_app_native_ui::settings::settings(
         &convert_state(&STATE).await,
+        &connection_name,
         &connections,
         current_connection.as_ref(),
     )
@@ -539,4 +542,21 @@ pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError>
         moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
         RouteError::ParseMarkup
     })
+}
+
+#[derive(Deserialize)]
+struct ConnectionName {
+    name: String,
+}
+
+pub async fn settings_connection_name_route(mut req: RouteRequest) -> Result<(), RouteError> {
+    log::debug!("settings_connection_name_route: req={req:?}");
+    let ConnectionName { name } = req
+        .parse_form::<ConnectionName>()
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        .map_err(RouteError::RouteFailed)?;
+
+    STATE.update_connection_name(name).await?;
+
+    Ok(())
 }

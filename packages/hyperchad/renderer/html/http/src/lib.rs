@@ -204,7 +204,9 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
             }
         }
 
-        let content = self.router.navigate(req.clone()).await?;
+        let Some(content) = self.router.navigate(req.clone()).await? else {
+            return Ok(Response::builder().status(204).body(vec![])?);
+        };
 
         let html = match content {
             Content::View(View {

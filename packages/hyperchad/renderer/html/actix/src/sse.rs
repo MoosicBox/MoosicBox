@@ -1,4 +1,4 @@
-use std::io::Write as _;
+use std::{io::Write as _, sync::Arc};
 
 use actix_web::{
     HttpRequest, HttpResponse, Responder,
@@ -108,11 +108,12 @@ pub async fn handle_sse<
 >(
     req: HttpRequest,
     app: web::Data<ActixApp<T, R>>,
+    body: Option<web::Bytes>,
 ) -> impl Responder {
-    log::debug!("handle_sse: initializing sse connection");
+    log::debug!("handle_sse: initializing SSE connection");
     let data = app
         .processor
-        .prepare_request(req)
+        .prepare_request(req, body.map(Arc::new))
         .map_err(ErrorInternalServerError)?;
 
     let encoding = ContentEncoding::Identity;

@@ -977,6 +977,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     let info = RequestInfo { client };
                                     match router.navigate((&route, info)).await {
                                         Ok(content) => {
+                                            let Some(content) = content else { return };
                                             let Some(ctx) = ctx.read().unwrap().clone() else {
                                                 moosicbox_assert::die_or_panic!(
                                                     "Context was not set"

@@ -9,7 +9,7 @@ use clap::{Parser, Subcommand, arg, command};
 use hyperchad_renderer::{Color, RenderRunner, Renderer, ToRenderRunner};
 use hyperchad_router::{Navigation, RoutePath, Router};
 use moosicbox_env_utils::default_env_usize;
-use switchy_async::{futures::channel::oneshot, runtime::Handle};
+use switchy::unsync::{futures::channel::oneshot, runtime::Handle};
 
 pub mod renderer;
 
@@ -22,9 +22,9 @@ pub enum Error {
     #[error(transparent)]
     OtherSend(#[from] Box<dyn std::error::Error + Send>),
     #[error(transparent)]
-    Async(#[from] switchy_async::Error),
+    Async(#[from] switchy::unsync::Error),
     #[error(transparent)]
-    Join(#[from] switchy_async::task::JoinError),
+    Join(#[from] switchy::unsync::task::JoinError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -92,7 +92,7 @@ pub struct AppBuilder {
     viewport: Option<String>,
     width: Option<f32>,
     height: Option<f32>,
-    runtime_handle: Option<switchy_async::runtime::Handle>,
+    runtime_handle: Option<switchy::unsync::runtime::Handle>,
     #[cfg(feature = "logic")]
     action_handlers: Vec<Arc<ActionHandler>>,
     resize_listeners: Vec<Arc<ResizeListener>>,
@@ -350,10 +350,10 @@ impl AppBuilder {
         resize_tx
     }
 
-    fn runtime_handle(&self) -> switchy_async::runtime::Handle {
+    fn runtime_handle(&self) -> switchy::unsync::runtime::Handle {
         self.runtime_handle
             .clone()
-            .unwrap_or_else(switchy_async::runtime::Handle::current)
+            .unwrap_or_else(switchy::unsync::runtime::Handle::current)
     }
 
     #[cfg(feature = "assets")]
@@ -436,8 +436,8 @@ impl AppBuilder {
 pub struct App<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> {
     pub renderer: R,
     pub router: Router,
-    runtime: Option<switchy_async::runtime::Runtime>,
-    pub runtime_handle: Option<switchy_async::runtime::Handle>,
+    runtime: Option<switchy::unsync::runtime::Runtime>,
+    pub runtime_handle: Option<switchy::unsync::runtime::Handle>,
     x: Option<i32>,
     y: Option<i32>,
     background: Option<Color>,
@@ -499,7 +499,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         } else {
             let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
             log::debug!("Running with {threads} max blocking threads");
-            let runtime = switchy_async::runtime::Builder::new()
+            let runtime = switchy::unsync::runtime::Builder::new()
                 .max_blocking_threads(u16::try_from(threads).unwrap())
                 .build()?;
             let handle = runtime.handle().clone();

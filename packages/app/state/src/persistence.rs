@@ -9,8 +9,15 @@ use crate::{AppState, AppStateError};
 #[derive(Debug, Clone, Copy, EnumString, AsRefStr)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum PersistenceKey {
+    ConnectionName,
     Connection,
     Connections,
+}
+
+impl From<PersistenceKey> for String {
+    fn from(value: PersistenceKey) -> Self {
+        value.to_string()
+    }
 }
 
 impl std::fmt::Display for PersistenceKey {
@@ -82,5 +89,28 @@ impl AppState {
     pub async fn get_current_connection(&self) -> Result<Option<Connection>, AppStateError> {
         let persistence = self.persistence().await;
         Ok(persistence.get(PersistenceKey::Connection).await?)
+    }
+
+    /// # Errors
+    ///
+    /// * If the persistence fails
+    pub async fn get_connection_name(&self) -> Result<Option<String>, AppStateError> {
+        let persistence = self.persistence().await;
+        Ok(persistence.get(PersistenceKey::ConnectionName).await?)
+    }
+
+    /// # Errors
+    ///
+    /// * If the persistence fails
+    pub async fn update_connection_name(
+        &self,
+        name: impl Into<String>,
+    ) -> Result<(), AppStateError> {
+        let persistence = self.persistence().await;
+        let name = name.into();
+        persistence
+            .set(PersistenceKey::ConnectionName, &name)
+            .await?;
+        Ok(())
     }
 }
