@@ -147,6 +147,7 @@ impl Arbitrary for Element {
             7 => Self::Form,
             8 => Self::Span,
             9 => Self::Input {
+                name: Option::arbitrary(g).map(|x: XmlString| x.0),
                 input: Input::arbitrary(g),
             },
             10 => Self::Button,

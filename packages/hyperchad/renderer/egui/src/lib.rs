@@ -3292,7 +3292,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
 
         let response = match &element.element {
-            Element::Input { input } => Some(Self::render_input(
+            Element::Input { input, .. } => Some(Self::render_input(
                 element,
                 ui,
                 ctx,
