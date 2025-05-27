@@ -1756,7 +1756,7 @@ impl Container {
                 | Element::Span
                 | Element::Anchor { .. }
                 | Element::Input { .. }
-                | Element::Button
+                | Element::Button { .. }
                 | Element::Image { .. }
         ) && self.children.iter().all(Self::is_span)
     }
@@ -2127,7 +2127,9 @@ pub enum Element {
         input: Input,
         name: Option<String>,
     },
-    Button,
+    Button {
+        r#type: Option<String>,
+    },
     Image {
         source: Option<String>,
         alt: Option<String>,
@@ -2310,6 +2312,9 @@ impl Container {
             Element::Input { name, .. } => {
                 attrs.add_opt("name", name.as_ref());
             }
+            Element::Button { r#type } => {
+                attrs.add_opt("type", r#type.as_ref());
+            }
             Element::Div
             | Element::Raw { .. }
             | Element::Aside
@@ -2319,7 +2324,6 @@ impl Container {
             | Element::Section
             | Element::Form
             | Element::Span
-            | Element::Button
             | Element::Heading { .. }
             | Element::UnorderedList
             | Element::OrderedList
@@ -2872,7 +2876,7 @@ impl Container {
             Element::Input { input, .. } => {
                 input.display(f, self.attrs(with_debug_attrs))?;
             }
-            Element::Button => {
+            Element::Button { .. } => {
                 f.write_fmt(format_args!(
                     "<button{attrs}>",
                     attrs = self.attrs_to_string_pad_left(with_debug_attrs)
@@ -3190,7 +3194,7 @@ impl Element {
             | Self::Section
             | Self::Form
             | Self::Span
-            | Self::Button
+            | Self::Button { .. }
             | Self::Anchor { .. }
             | Self::Heading { .. }
             | Self::UnorderedList

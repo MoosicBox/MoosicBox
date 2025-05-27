@@ -1513,7 +1513,11 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 "span" => container.element = crate::Element::Span,
                 "section" => container.element = crate::Element::Section,
                 "form" => container.element = crate::Element::Form,
-                "button" => container.element = crate::Element::Button,
+                "button" => {
+                    container.element = crate::Element::Button {
+                        r#type: get_tag_attr_value_owned(tag, "type"),
+                    }
+                }
                 "img" => {
                     container.element = crate::Element::Image {
                         source: get_tag_attr_value_owned(tag, "src"),

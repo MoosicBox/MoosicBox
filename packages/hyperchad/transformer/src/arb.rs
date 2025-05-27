@@ -150,7 +150,9 @@ impl Arbitrary for Element {
                 name: Option::arbitrary(g).map(|x: XmlString| x.0),
                 input: Input::arbitrary(g),
             },
-            10 => Self::Button,
+            10 => Self::Button {
+                r#type: Option::arbitrary(g).map(|x: XmlString| x.0),
+            },
             11 => Self::Image {
                 source: Option::arbitrary(g).map(|x: XmlString| x.0),
                 alt: Option::arbitrary(g).map(|x: XmlString| x.0),

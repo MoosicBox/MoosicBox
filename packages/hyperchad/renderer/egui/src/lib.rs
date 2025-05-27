@@ -2671,7 +2671,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             });
 
             match element {
-                Element::Button => {
+                Element::Button { .. } => {
                     #[cfg(feature = "profiling")]
                     profiling::scope!("button side effects");
                     let response = response.clone();

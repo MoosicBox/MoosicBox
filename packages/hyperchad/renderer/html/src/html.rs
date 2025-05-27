@@ -195,7 +195,7 @@ pub fn element_style_to_html(
         | Element::Form
         | Element::Span
         | Element::Input { .. }
-        | Element::Button
+        | Element::Button { .. }
         | Element::Anchor { .. }
         | Element::Heading { .. }
         | Element::UnorderedList
@@ -713,7 +713,7 @@ pub fn element_classes_to_html(
 ) -> Result<(), std::io::Error> {
     let mut printed_start = false;
 
-    if container.element == Element::Button {
+    if matches!(container.element, Element::Button { .. }) {
         if !printed_start {
             printed_start = true;
             f.write_all(b" class=\"")?;
@@ -921,6 +921,32 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
+        Element::Button { r#type } => {
+            const TAG_NAME: &[u8] = b"button";
+            f.write_all(b"<")?;
+            f.write_all(TAG_NAME)?;
+
+            if let Some(r#type) = r#type {
+                f.write_all(b" type=\"")?;
+                f.write_all(r#type.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+
+            tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
+            f.write_all(b">")?;
+
+            elements_to_html(
+                f,
+                &container.children,
+                tag_renderer,
+                container.is_flex_container(),
+            )?;
+
+            f.write_all(b"</")?;
+            f.write_all(TAG_NAME)?;
+            f.write_all(b">")?;
+            return Ok(());
+        }
         _ => {}
     }
 
@@ -933,7 +959,6 @@ pub fn element_to_html(
         Element::Section => Some("section"),
         Element::Form => Some("form"),
         Element::Span => Some("span"),
-        Element::Button => Some("button"),
         Element::UnorderedList => Some("ul"),
         Element::OrderedList => Some("ol"),
         Element::ListItem => Some("li"),
