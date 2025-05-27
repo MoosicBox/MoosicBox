@@ -14,6 +14,7 @@ use futures::Future;
 use hyperchad_renderer::Content;
 pub use hyperchad_transformer::{Container, Element};
 use qstring::QString;
+use switchy::http::models::Method;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -29,9 +30,11 @@ pub type RouteFunc = Arc<
     Box<
         dyn (Fn(
                 RouteRequest,
-            )
-                -> Pin<Box<dyn Future<Output = Result<Content, Box<dyn std::error::Error>>> + Send>>)
-            + Send
+            ) -> Pin<
+                Box<
+                    dyn Future<Output = Result<Option<Content>, Box<dyn std::error::Error>>> + Send,
+                >,
+            >) + Send
             + Sync,
     >,
 >;
@@ -56,6 +59,12 @@ pub enum ParseError {
     #[cfg(feature = "form")]
     #[error(transparent)]
     ParseUtf8(#[from] std::string::FromUtf8Error),
+    #[cfg(feature = "form")]
+    #[error(transparent)]
+    Multipart(#[from] mime_multipart::Error),
+    #[cfg(feature = "form")]
+    #[error("Invalid Content‑Disposition")]
+    InvalidContentDisposition,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -82,6 +91,7 @@ pub struct RequestInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteRequest {
     pub path: String,
+    pub method: Method,
     pub query: BTreeMap<String, String>,
     pub headers: BTreeMap<String, String>,
     pub info: RequestInfo,
@@ -99,6 +109,7 @@ impl RouteRequest {
 
         Self {
             path: path.to_owned(),
+            method: Method::Get,
             query: QString::from(query).into_iter().collect(),
             headers: BTreeMap::new(),
             info,
@@ -233,6 +244,7 @@ impl From<Navigation> for RouteRequest {
     fn from(value: Navigation) -> Self {
         Self {
             path: value.0,
+            method: Method::Get,
             query: BTreeMap::new(),
             headers: BTreeMap::new(),
             info: RequestInfo { client: value.1 },
@@ -445,6 +457,92 @@ impl From<RouteRequest> for Navigation {
     }
 }
 
+impl From<&str> for RouteRequest {
+    fn from(value: &str) -> Self {
+        value.to_string().into()
+    }
+}
+
+impl From<String> for RouteRequest {
+    fn from(value: String) -> Self {
+        Self {
+            path: value,
+            method: Method::Get,
+            query: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            info: RequestInfo::default(),
+            body: None,
+        }
+    }
+}
+
+impl From<&String> for RouteRequest {
+    fn from(value: &String) -> Self {
+        value.to_string().into()
+    }
+}
+
+impl From<(&str, ClientInfo)> for RouteRequest {
+    fn from(value: (&str, ClientInfo)) -> Self {
+        (value.0.to_string(), Arc::new(value.1)).into()
+    }
+}
+
+impl From<(String, ClientInfo)> for RouteRequest {
+    fn from(value: (String, ClientInfo)) -> Self {
+        (value.0, Arc::new(value.1)).into()
+    }
+}
+
+impl From<(&String, ClientInfo)> for RouteRequest {
+    fn from(value: (&String, ClientInfo)) -> Self {
+        (value.0.to_string(), Arc::new(value.1)).into()
+    }
+}
+
+impl From<(&str, Arc<ClientInfo>)> for RouteRequest {
+    fn from(value: (&str, Arc<ClientInfo>)) -> Self {
+        (value.0.to_string(), value.1).into()
+    }
+}
+
+impl From<(String, Arc<ClientInfo>)> for RouteRequest {
+    fn from(value: (String, Arc<ClientInfo>)) -> Self {
+        (value.0, RequestInfo { client: value.1 }).into()
+    }
+}
+
+impl From<(&String, Arc<ClientInfo>)> for RouteRequest {
+    fn from(value: (&String, Arc<ClientInfo>)) -> Self {
+        (value.0.to_string(), value.1).into()
+    }
+}
+
+impl From<(&str, RequestInfo)> for RouteRequest {
+    fn from(value: (&str, RequestInfo)) -> Self {
+        (value.0.to_string(), value.1).into()
+    }
+}
+
+impl From<(String, RequestInfo)> for RouteRequest {
+    fn from(value: (String, RequestInfo)) -> Self {
+        Self {
+            path: value.0,
+            method: Method::Get,
+            query: BTreeMap::new(),
+            headers: BTreeMap::new(),
+            info: value.1,
+            body: None,
+        }
+    }
+}
+
+impl From<(&String, RequestInfo)> for RouteRequest {
+    fn from(value: (&String, RequestInfo)) -> Self {
+        (value.0.to_string(), value.1).into()
+    }
+}
+
 impl From<&RouteRequest> for Navigation {
     fn from(value: &RouteRequest) -> Self {
         value.clone().into()
@@ -542,7 +640,8 @@ impl Router {
     /// Will panic if routes `RwLock` is poisoned.
     #[must_use]
     pub fn with_route_result<
-        Response: TryInto<Content>,
+        C: TryInto<Content>,
+        Response: Into<Option<C>>,
         F: Future<Output = Result<Response, BoxE>> + Send + 'static,
         BoxE: Into<Box<dyn std::error::Error>>,
     >(
@@ -551,7 +650,7 @@ impl Router {
         handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
     ) -> Self
     where
-        Response::Error: Into<Box<dyn std::error::Error>>,
+        C::Error: Into<Box<dyn std::error::Error>>,
     {
         self.routes
             .write()
@@ -563,10 +662,29 @@ impl Router {
     /// # Panics
     ///
     /// Will panic if routes `RwLock` is poisoned.
+    #[must_use]
+    pub fn with_no_content_result<
+        F: Future<Output = Result<(), BoxE>> + Send + 'static,
+        BoxE: Into<Box<dyn std::error::Error>>,
+    >(
+        self,
+        route: impl Into<RoutePath>,
+        handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
+    ) -> Self {
+        self.with_route_result::<Content, Option<Content>, _, _>(route, move |req: RouteRequest| {
+            let fut = handler(req);
+            async move { fut.await.map(|()| None::<Content>).map_err(Into::into) }
+        })
+    }
+
+    /// # Panics
+    ///
+    /// Will panic if routes `RwLock` is poisoned.
     #[allow(clippy::needless_pass_by_value)]
     #[must_use]
     pub fn with_static_route_result<
-        Response: TryInto<Content>,
+        C: TryInto<Content>,
+        Response: Into<Option<C>>,
         F: Future<Output = Result<Response, BoxE>> + Send + 'static,
         BoxE: Into<Box<dyn std::error::Error>>,
     >(
@@ -575,7 +693,7 @@ impl Router {
         #[allow(unused_variables)] handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
     ) -> Self
     where
-        Response::Error: Into<Box<dyn std::error::Error>>,
+        C::Error: Into<Box<dyn std::error::Error>>,
     {
         #[cfg(feature = "static-routes")]
         self.static_routes
@@ -589,13 +707,17 @@ impl Router {
     ///
     /// Will panic if routes `RwLock` is poisoned.
     #[must_use]
-    pub fn with_route<Response: TryInto<Content>, F: Future<Output = Response> + Send + 'static>(
+    pub fn with_route<
+        C: TryInto<Content>,
+        Response: Into<Option<C>>,
+        F: Future<Output = Response> + Send + 'static,
+    >(
         self,
         route: impl Into<RoutePath>,
         handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
     ) -> Self
     where
-        Response::Error: std::error::Error + 'static,
+        C::Error: std::error::Error + 'static,
     {
         self.routes
             .write()
@@ -610,7 +732,8 @@ impl Router {
     #[allow(clippy::needless_pass_by_value)]
     #[must_use]
     pub fn with_static_route<
-        Response: TryInto<Content>,
+        C: TryInto<Content>,
+        Response: Into<Option<C>>,
         F: Future<Output = Response> + Send + 'static,
     >(
         self,
@@ -618,7 +741,7 @@ impl Router {
         #[allow(unused_variables)] handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
     ) -> Self
     where
-        Response::Error: std::error::Error + 'static,
+        C::Error: std::error::Error + 'static,
     {
         #[cfg(feature = "static-routes")]
         self.static_routes
@@ -662,18 +785,12 @@ impl Router {
     /// Will panic if routes `RwLock` is poisoned.
     pub async fn navigate(
         &self,
-        navigation: impl Into<Navigation>,
-    ) -> Result<Content, NavigateError> {
-        let navigation = navigation.into();
-        let path = navigation.0;
-        let client_info = navigation.1;
-        let request_info = RequestInfo {
-            client: client_info,
-        };
+        navigation: impl Into<RouteRequest>,
+    ) -> Result<Option<Content>, NavigateError> {
+        let req = navigation.into();
 
-        log::debug!("navigate: path={path}");
+        log::debug!("navigate: path={}", req.path);
 
-        let req = RouteRequest::from_path(&path, request_info);
         let handler = self.get_route_func(&req.path);
 
         Ok(if let Some(handler) = handler {
@@ -687,7 +804,7 @@ impl Router {
                 }
             }
         } else {
-            log::warn!("Invalid navigation path={path:?}");
+            log::warn!("Invalid navigation path={}", req.path);
             return Err(NavigateError::InvalidPath);
         })
     }
@@ -701,19 +818,13 @@ impl Router {
     /// Will panic if routes `RwLock` is poisoned.
     pub async fn navigate_send(
         &self,
-        navigation: impl Into<Navigation>,
+        navigation: impl Into<RouteRequest>,
     ) -> Result<(), NavigateError> {
-        let navigation = navigation.into();
-        let path = navigation.0;
-        let client_info = navigation.1;
-        let request_info = RequestInfo {
-            client: client_info,
-        };
+        let req = navigation.into();
 
-        log::debug!("navigate_send: path={path}");
+        log::debug!("navigate_send: path={}", req.path);
 
         let view = {
-            let req = RouteRequest::from_path(&path, request_info);
             let handler = self.get_route_func(&req.path);
 
             if let Some(handler) = handler {
@@ -727,15 +838,17 @@ impl Router {
                     }
                 }
             } else {
-                log::warn!("Invalid navigation path={path:?}");
+                log::warn!("Invalid navigation path={}", req.path);
                 return Err(NavigateError::InvalidPath);
             }
         };
 
-        self.sender.send(view).map_err(|e| {
-            log::error!("Failed to send: {e:?}");
-            NavigateError::Sender
-        })?;
+        if let Some(view) = view {
+            self.sender.send(view).map_err(|e| {
+                log::error!("Failed to send: {e:?}");
+                NavigateError::Sender
+            })?;
+        }
 
         Ok(())
     }
@@ -746,7 +859,7 @@ impl Router {
     #[must_use]
     pub fn navigate_spawn(
         &self,
-        navigation: impl Into<Navigation>,
+        navigation: impl Into<RouteRequest>,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
         let navigation = navigation.into();
 
@@ -762,7 +875,7 @@ impl Router {
     pub fn navigate_spawn_on(
         &self,
         handle: &tokio::runtime::Handle,
-        navigation: impl Into<Navigation>,
+        navigation: impl Into<RouteRequest>,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
         let navigation = navigation.into();
 
@@ -783,18 +896,26 @@ impl Router {
     }
 }
 
-fn gen_route_func<Response: TryInto<Content>, F: Future<Output = Response> + Send + 'static>(
+fn gen_route_func<
+    C: TryInto<Content>,
+    Response: Into<Option<C>>,
+    F: Future<Output = Response> + Send + 'static,
+>(
     handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
 ) -> RouteFunc
 where
-    Response::Error: std::error::Error + 'static,
+    C::Error: std::error::Error + 'static,
 {
     Arc::new(Box::new(move |req| {
         Box::pin({
             let handler = handler.clone();
             async move {
-                let resp: Result<Content, Box<dyn std::error::Error>> =
-                    handler(req).await.try_into().map_err(|e| {
+                let resp: Result<Option<Content>, Box<dyn std::error::Error>> = handler(req)
+                    .await
+                    .into()
+                    .map(TryInto::try_into)
+                    .transpose()
+                    .map_err(|e| {
                         log::error!("Failed to handle route: {e:?}");
                         Box::new(e) as Box<dyn std::error::Error>
                     });
@@ -805,14 +926,15 @@ where
 }
 
 fn gen_route_func_result<
-    Response: TryInto<Content>,
+    C: TryInto<Content>,
+    Response: Into<Option<C>>,
     F: Future<Output = Result<Response, BoxE>> + Send + 'static,
     BoxE: Into<Box<dyn std::error::Error>>,
 >(
     handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
 ) -> RouteFunc
 where
-    Response::Error: Into<Box<dyn std::error::Error>>,
+    C::Error: Into<Box<dyn std::error::Error>>,
 {
     Arc::new(Box::new(move |req| {
         Box::pin({
@@ -821,8 +943,11 @@ where
                 let resp: Result<Response, Box<dyn std::error::Error>> =
                     handler(req).await.map_err(Into::into);
                 match resp.map(|x| {
-                    let x: Result<Content, Box<dyn std::error::Error>> =
-                        x.try_into().map_err(Into::into);
+                    let x: Result<Option<Content>, Box<dyn std::error::Error>> = x
+                        .into()
+                        .map(TryInto::try_into)
+                        .transpose()
+                        .map_err(Into::into);
                     x
                 }) {
                     Ok(x) => match x {

@@ -356,6 +356,7 @@ pub mod html {
 
                 let req = RouteRequest {
                     path: path_str.to_string(),
+                    method: switchy::http::models::Method::Get,
                     query: std::collections::BTreeMap::new(),
                     headers: std::collections::BTreeMap::new(),
                     info: RequestInfo {
@@ -370,6 +371,9 @@ pub mod html {
 
                 match handler(req).await {
                     Ok(content) => {
+                        let Some(content) = content else {
+                            continue;
+                        };
                         let output_path = output_path.join(format!("{path_str}.html"));
                         std::fs::create_dir_all(output_path.parent().unwrap())?;
 

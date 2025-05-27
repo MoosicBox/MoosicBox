@@ -19,6 +19,7 @@ moosicbox_assert    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 
 async-trait    = { workspace = true }
+bytes          = { workspace = true }
 flate2         = { workspace = true }
 lambda_http    = { workspace = true }
 lambda_runtime = { workspace = true }

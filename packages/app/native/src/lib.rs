@@ -120,6 +120,9 @@ pub fn init() -> Router {
         .with_route_result("/settings", |req| async {
             routes::settings_route(req).await
         })
+        .with_no_content_result("/settings/connection-name", |req| async {
+            routes::settings_connection_name_route(req).await
+        })
         .with_route_result("/audio-zones", |req| async {
             routes::audio_zones_route(req).await
         })

@@ -8,21 +8,26 @@ use strum::{AsRefStr, EnumString};
 use crate::{page, pre_escaped, state::State};
 
 #[must_use]
-pub fn settings_page_content(connections: &[Connection], selected: Option<&Connection>) -> Markup {
+pub fn settings_page_content(
+    connection_name: &str,
+    connections: &[Connection],
+    selected: Option<&Connection>,
+) -> Markup {
     html! {
         div sx-padding=(20) sx-gap=(10) {
             section sx-align-items=(AlignItems::Start) {
                 div sx-align-items=(AlignItems::End) sx-gap=(10) {
-                    div {
-                        "Name: " input type="text" value="";
-                    }
-                    button
-                        sx-border-radius=(5)
-                        sx-background="#111"
-                        sx-border="2, #222"
-                        sx-padding=(10)
-                    {
-                        "Save"
+                    form hx-post="/settings/connection-name" {
+                        div { "Name: " input type="text" name="name" value=(connection_name); }
+                        button
+                            type="submit"
+                            sx-border-radius=(5)
+                            sx-background="#111"
+                            sx-border="2, #222"
+                            sx-padding=(10)
+                        {
+                            "Save"
+                        }
                     }
 
                     div sx-width="100%" sx-text-align=(TextAlign::Start) {
@@ -82,7 +87,7 @@ fn connections_content(connections: &[Connection], selected: Option<&Connection>
                 @let selected = selected.is_some_and(|x| x == connection);
                 @let connection_input = |input, placeholder| connection_input(connection, input, placeholder);
 
-                form {
+                form hx-post="/settings/connections" {
                     @if selected {
                         div { "(Selected)" }
                     }
@@ -106,7 +111,6 @@ fn connections_content(connections: &[Connection], selected: Option<&Connection>
                         sx-background="#111"
                         sx-border="2, #222"
                         sx-padding=(10)
-                        hx-post="/settings/connections"
                     {
                         "Save"
                     }
@@ -146,8 +150,12 @@ fn connection_input(
 #[must_use]
 pub fn settings(
     state: &State,
+    connection_name: &str,
     connections: &[Connection],
     selected: Option<&Connection>,
 ) -> Markup {
-    page(state, &settings_page_content(connections, selected))
+    page(
+        state,
+        &settings_page_content(connection_name, connections, selected),
+    )
 }

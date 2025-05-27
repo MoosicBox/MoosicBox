@@ -22,12 +22,15 @@ hyperchad_transformer          = { workspace = true, features = ["html"] }
 moosicbox_assert               = { workspace = true }
 moosicbox_env_utils            = { workspace = true }
 moosicbox_logging              = { workspace = true, features = ["macros"] }
+switchy                        = { workspace = true, features = ["http-models"] }
 
 async-trait = { workspace = true }
+bytes       = { workspace = true }
 flume       = { workspace = true }
 html-escape = { workspace = true }
 log         = { workspace = true }
 maud        = { workspace = true }
+qstring     = { workspace = true }
 serde_json  = { workspace = true, optional = true }
 thiserror   = { workspace = true, optional = true }
 uaparser    = { workspace = true }

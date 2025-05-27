@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use actix_cors::Cors;
 pub use actix_web::http::header::HeaderMap;
@@ -13,6 +13,7 @@ use actix_web::{
     web::{self, Data},
 };
 use async_trait::async_trait;
+use bytes::Bytes;
 use flume::Receiver;
 use hyperchad_renderer::{Content, Handle, RenderRunner, RendererEvent, ToRenderRunner};
 use moosicbox_env_utils::default_env_u16;
@@ -30,7 +31,11 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
     /// # Errors
     ///
     /// * If the request fails to prepare
-    fn prepare_request(&self, req: HttpRequest) -> Result<T, actix_web::Error>;
+    fn prepare_request(
+        &self,
+        req: HttpRequest,
+        body: Option<Arc<Bytes>>,
+    ) -> Result<T, actix_web::Error>;
 
     async fn to_response(&self, data: T) -> Result<HttpResponse, actix_web::Error>;
 
@@ -255,8 +260,10 @@ impl<T: Send + Sync + Clone + 'static, R: ActixResponseProcessor<T> + Send + Syn
                     web::resource("/$action").route(web::post().to(actions::handle_action::<T, R>)),
                 );
 
-                let catchall = move |req: HttpRequest, app: web::Data<ActixApp<T, R>>| async move {
-                    let data = app.processor.prepare_request(req)?;
+                let catchall = move |req: HttpRequest,
+                                     app: web::Data<ActixApp<T, R>>,
+                                     body: Option<web::Bytes>| async move {
+                    let data = app.processor.prepare_request(req, body.map(Arc::new))?;
                     app.processor.to_response(data).await
                 };
 

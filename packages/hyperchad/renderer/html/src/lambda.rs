@@ -1,13 +1,16 @@
 use std::{
     collections::HashMap,
+    str::FromStr as _,
     sync::{Arc, LazyLock},
 };
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use hyperchad_renderer::{Color, HtmlTagRenderer, PartialView, View};
-use hyperchad_router::{ClientInfo, ClientOs, Navigation, RequestInfo, Router};
+use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, RouteRequest, Router};
 use hyperchad_transformer::ResponsiveTrigger;
 use lambda_http::{Request, RequestExt as _, http::header::USER_AGENT};
+use switchy::http::models::Method;
 use uaparser::{Parser as _, UserAgentParser};
 
 use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
@@ -141,14 +144,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
 #[derive(Clone)]
 pub struct PreparedRequest {
     full: bool,
-    path: String,
-    info: RequestInfo,
-}
-
-impl From<PreparedRequest> for Navigation {
-    fn from(value: PreparedRequest) -> Self {
-        Self::from((value.path, value.info.client))
-    }
+    req: RouteRequest,
 }
 
 #[async_trait]
@@ -156,20 +152,33 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     hyperchad_renderer_html_lambda::LambdaResponseProcessor<PreparedRequest>
     for HtmlLambdaResponseProcessor<T>
 {
-    fn prepare_request(&self, req: Request) -> Result<PreparedRequest, lambda_runtime::Error> {
+    fn prepare_request(
+        &self,
+        req: Request,
+        body: Option<Arc<Bytes>>,
+    ) -> Result<PreparedRequest, lambda_runtime::Error> {
         static UA_PARSER: LazyLock<UserAgentParser> = LazyLock::new(|| {
             UserAgentParser::from_bytes(include_bytes!("../ua-regexes.yaml"))
                 .expect("Parser creation failed")
         });
 
-        let query_string = req.query_string_parameters().to_query_string();
-        let query_string = if query_string.is_empty() {
-            String::new()
-        } else {
-            format!("?{query_string}")
-        };
+        let query =
+            qstring::QString::from(req.query_string_parameters().to_query_string().as_str())
+                .into_iter()
+                .collect();
 
-        let path = format!("{}{}", req.raw_http_path(), query_string);
+        let headers = req
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.to_string(),
+                    value.to_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect();
+
+        let path = req.raw_http_path().to_string();
 
         let os_name =
             if let Some(Ok(user_agent)) = req.headers().get(USER_AGENT).map(|x| x.to_str()) {
@@ -182,23 +191,36 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
 
         Ok(PreparedRequest {
             full: req.headers().get("hx-request").is_none(),
-            path,
-            info: RequestInfo {
-                client: Arc::new(ClientInfo {
-                    os: ClientOs { name: os_name },
-                }),
+            req: RouteRequest {
+                path,
+                method: Method::from_str(req.method().as_str()).map_err(Box::new)?,
+                query,
+                headers,
+                body,
+                info: RequestInfo {
+                    client: Arc::new(ClientInfo {
+                        os: ClientOs { name: os_name },
+                    }),
+                },
             },
         })
     }
 
-    async fn to_response(&self, req: PreparedRequest) -> Result<Content, lambda_runtime::Error> {
+    async fn to_response(
+        &self,
+        req: PreparedRequest,
+    ) -> Result<Option<Content>, lambda_runtime::Error> {
         let content = self
             .router
-            .navigate(req.clone())
+            .navigate(req.req.clone())
             .await
             .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 
-        self.to_body(content, req).await
+        if let Some(content) = content {
+            Ok(Some(self.to_body(content, req).await?))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn to_body(

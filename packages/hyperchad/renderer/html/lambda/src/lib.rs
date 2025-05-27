@@ -2,9 +2,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{io::Write, marker::PhantomData};
+use std::{io::Write, marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use flate2::{Compression, write::GzEncoder};
 use hyperchad_renderer::{Handle, RenderRunner, ToRenderRunner};
 use lambda_http::{
@@ -27,9 +28,13 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
     /// # Errors
     ///
     /// * If the request fails to prepare
-    fn prepare_request(&self, req: Request) -> Result<T, lambda_runtime::Error>;
+    fn prepare_request(
+        &self,
+        req: Request,
+        body: Option<Arc<Bytes>>,
+    ) -> Result<T, lambda_runtime::Error>;
 
-    async fn to_response(&self, data: T) -> Result<Content, lambda_runtime::Error>;
+    async fn to_response(&self, data: T) -> Result<Option<Content>, lambda_runtime::Error>;
 
     async fn to_body(
         &self,
@@ -91,10 +96,17 @@ impl<
         log::debug!("run: starting");
 
         let app = self.app.clone();
-        let func = service_fn(move |event| {
+        let func = service_fn(move |event: Request| {
             let app = app.clone();
             async move {
-                let data = app.processor.prepare_request(event)?;
+                let body: &[u8] = event.body().as_ref();
+                let body = Bytes::copy_from_slice(body);
+                let body = if body.is_empty() {
+                    None
+                } else {
+                    Some(Arc::new(body))
+                };
+                let data = app.processor.prepare_request(event, body)?;
                 let content = app.processor.to_response(data).await?;
 
                 let mut response = Response::builder()
@@ -104,15 +116,16 @@ impl<
                 let mut gz = GzEncoder::new(vec![], Compression::default());
 
                 response = match content {
-                    Content::Html(x) => {
+                    Some(Content::Html(x)) => {
                         gz.write_all(x.as_bytes())?;
                         response.header(CONTENT_TYPE, "text/html")
                     }
                     #[cfg(feature = "json")]
-                    Content::Json(x) => {
+                    Some(Content::Json(x)) => {
                         gz.write_all(serde_json::to_string(&x)?.as_bytes())?;
                         response.header(CONTENT_TYPE, "application/json")
                     }
+                    None => response,
                 };
 
                 let gzip = gz.finish()?;

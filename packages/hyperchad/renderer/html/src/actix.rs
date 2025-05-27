@@ -1,17 +1,20 @@
 use std::{
     collections::HashMap,
+    str::FromStr as _,
     sync::{Arc, LazyLock},
 };
 
 use actix_web::{HttpResponse, http::header::ContentType};
 use async_trait::async_trait;
+use bytes::Bytes;
 use flume::Receiver;
 use hyperchad_renderer::{Color, Content, HtmlTagRenderer, PartialView, RendererEvent, View};
 use hyperchad_renderer_html_actix::actix_web::{
     error::ErrorInternalServerError, http::header::USER_AGENT,
 };
-use hyperchad_router::{ClientInfo, ClientOs, Navigation, RequestInfo, Router};
+use hyperchad_router::{ClientInfo, ClientOs, RequestInfo, RouteRequest, Router};
 use hyperchad_transformer::ResponsiveTrigger;
+use switchy::http::models::Method;
 use uaparser::{Parser as _, UserAgentParser};
 
 use crate::{HtmlApp, HtmlRenderer, html::container_element_to_html};
@@ -143,14 +146,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
 #[derive(Clone)]
 pub struct PreparedRequest {
     full: bool,
-    path: String,
-    info: RequestInfo,
-}
-
-impl From<PreparedRequest> for Navigation {
-    fn from(value: PreparedRequest) -> Self {
-        Self::from((value.path, value.info.client))
-    }
+    req: RouteRequest,
 }
 
 #[async_trait]
@@ -161,20 +157,29 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     fn prepare_request(
         &self,
         req: actix_web::HttpRequest,
+        body: Option<Arc<Bytes>>,
     ) -> Result<PreparedRequest, actix_web::Error> {
         static UA_PARSER: LazyLock<UserAgentParser> = LazyLock::new(|| {
             UserAgentParser::from_bytes(include_bytes!("../ua-regexes.yaml"))
                 .expect("Parser creation failed")
         });
 
-        let query_string = req.query_string();
-        let query_string = if query_string.is_empty() {
-            String::new()
-        } else {
-            format!("?{query_string}")
-        };
+        let query = qstring::QString::from(req.query_string())
+            .into_iter()
+            .collect();
 
-        let path = format!("{}{}", req.path(), query_string);
+        let headers = req
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.to_string(),
+                    value.to_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect();
+
+        let path = req.path().to_string();
 
         let os_name =
             if let Some(Ok(user_agent)) = req.headers().get(USER_AGENT).map(|x| x.to_str()) {
@@ -187,11 +192,18 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
 
         Ok(PreparedRequest {
             full: req.path() != "/$sse" && req.headers().get("hx-request").is_none(),
-            path,
-            info: RequestInfo {
-                client: Arc::new(ClientInfo {
-                    os: ClientOs { name: os_name },
-                }),
+            req: RouteRequest {
+                path,
+                method: Method::from_str(req.method().as_str())
+                    .map_err(ErrorInternalServerError)?,
+                query,
+                headers,
+                body,
+                info: RequestInfo {
+                    client: Arc::new(ClientInfo {
+                        os: ClientOs { name: os_name },
+                    }),
+                },
             },
         })
     }
@@ -199,25 +211,28 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     async fn to_response(&self, req: PreparedRequest) -> Result<HttpResponse, actix_web::Error> {
         let content = self
             .router
-            .navigate(req.clone())
+            .navigate(req.req.clone())
             .await
             .map_err(ErrorInternalServerError)?;
 
-        match &content {
-            hyperchad_renderer::Content::View(..)
-            | hyperchad_renderer::Content::PartialView(..) => {
-                let body = self.to_body(content, req).await?;
-                Ok(HttpResponse::Ok()
-                    .content_type(ContentType::html())
-                    .body(body))
-            }
-            #[cfg(feature = "json")]
-            hyperchad_renderer::Content::Json(..) => {
-                let body = self.to_body(content, req).await?;
-                Ok(HttpResponse::Ok()
-                    .content_type(ContentType::json())
-                    .body(body))
-            }
+        match content {
+            Some(content) => match content {
+                hyperchad_renderer::Content::View(..)
+                | hyperchad_renderer::Content::PartialView(..) => {
+                    let body = self.to_body(content, req).await?;
+                    Ok(HttpResponse::Ok()
+                        .content_type(ContentType::html())
+                        .body(body))
+                }
+                #[cfg(feature = "json")]
+                hyperchad_renderer::Content::Json(..) => {
+                    let body = self.to_body(content, req).await?;
+                    Ok(HttpResponse::Ok()
+                        .content_type(ContentType::json())
+                        .body(body))
+                }
+            },
+            None => Ok(HttpResponse::NoContent().finish()),
         }
     }
 

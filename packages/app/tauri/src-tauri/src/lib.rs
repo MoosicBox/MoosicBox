@@ -670,7 +670,7 @@ pub struct HttpRequest {
 async fn handle_http_request(
     request: HttpRequest,
 ) -> Result<http::Response<Vec<u8>>, TauriPlayerError> {
-    use std::sync::Arc;
+    use std::{str::FromStr as _, sync::Arc};
 
     use hyperchad::router::{DEFAULT_CLIENT_INFO, RequestInfo, RouteRequest};
 
@@ -689,6 +689,7 @@ async fn handle_http_request(
 
     let req = RouteRequest {
         path: request.path,
+        method: switchy::http::models::Method::from_str(request.method.as_str()).unwrap(),
         query: request.query,
         headers: request.headers,
         info: RequestInfo {
