@@ -40,6 +40,8 @@ pub fn settings_page_content(
                             sx-background="#111"
                             sx-border="2, #222"
                             sx-padding=(10)
+                            hx-post="/settings/new-connection"
+                            hx-swap="#settings-connections"
                         {
                             "New Connection"
                         }
@@ -80,15 +82,19 @@ pub fn settings_page_content(
     }
 }
 
-fn connections_content(connections: &[Connection], selected: Option<&Connection>) -> Markup {
+#[must_use]
+pub fn connections_content(
+    connections: &[Connection],
+    current_connection: Option<&Connection>,
+) -> Markup {
     html! {
         div id="settings-connections" {
             @for connection in connections {
-                @let selected = selected.is_some_and(|x| x == connection);
+                @let current_connection = current_connection.is_some_and(|x| x == connection);
                 @let connection_input = |input, placeholder| connection_input(connection, input, placeholder);
 
-                form hx-post="/settings/connections" {
-                    @if selected {
+                form hx-post="/settings/connections" hx-swap="#settings-connections" {
+                    @if current_connection {
                         div { "(Selected)" }
                     }
                     div sx-text-align=(TextAlign::End) {
@@ -100,8 +106,8 @@ fn connections_content(connections: &[Connection], selected: Option<&Connection>
                         sx-background="#111"
                         sx-border="2, #222"
                         sx-padding=(10)
-                        hx-target="settings-connections"
-                        hx-delete=(pre_escaped!("/settings/connections?name={}", connection.name))
+                        hx-delete={(pre_escaped!("/settings/connections?name="))(connection.name)}
+                        hx-swap="#settings-connections"
                     {
                         "Delete"
                     }
@@ -121,7 +127,7 @@ fn connections_content(connections: &[Connection], selected: Option<&Connection>
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, EnumString, AsRefStr)]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "kebab-case")]
 pub enum ConnectionInput {
     Name,
     ApiUrl,

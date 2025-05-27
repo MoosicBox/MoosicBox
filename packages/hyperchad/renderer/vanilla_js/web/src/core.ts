@@ -5,6 +5,8 @@ export const EVENT = {
     swapStyle: 'SWAP_STYLE',
 } as const;
 
+export const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+
 export type EventPayloads = {
     domLoad: {
         initial: boolean;

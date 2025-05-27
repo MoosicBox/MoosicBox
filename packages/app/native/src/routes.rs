@@ -5,6 +5,7 @@ use hyperchad::{
     router::{Container, RouteRequest},
     transformer::html::ParseError,
 };
+use moosicbox_app_models::Connection;
 use moosicbox_app_native_ui::downloads::DownloadTab;
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
@@ -19,6 +20,7 @@ use moosicbox_music_models::{
 use moosicbox_paging::Page;
 use moosicbox_session_models::ApiSession;
 use serde::Deserialize;
+use switchy_http::models::Method;
 
 use crate::{MOOSICBOX_HOST, PROFILE, STATE, convert_state};
 
@@ -549,7 +551,7 @@ struct ConnectionName {
     name: String,
 }
 
-pub async fn settings_connection_name_route(mut req: RouteRequest) -> Result<(), RouteError> {
+pub async fn settings_connection_name_route(req: RouteRequest) -> Result<(), RouteError> {
     log::debug!("settings_connection_name_route: req={req:?}");
     let ConnectionName { name } = req
         .parse_form::<ConnectionName>()
@@ -559,4 +561,102 @@ pub async fn settings_connection_name_route(mut req: RouteRequest) -> Result<(),
     STATE.update_connection_name(name).await?;
 
     Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct NewConnection {
+    name: String,
+    api_url: String,
+}
+
+pub async fn settings_connections_route(req: RouteRequest) -> Result<View, RouteError> {
+    match req.method {
+        Method::Post => {
+            let new_connection = req
+                .parse_form::<NewConnection>()
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+                .map_err(RouteError::RouteFailed)?;
+
+            let connections = STATE
+                .add_connection(Connection {
+                    name: new_connection.name,
+                    api_url: new_connection.api_url,
+                })
+                .await?;
+
+            let current_connection = STATE.get_current_connection().await?;
+
+            moosicbox_app_native_ui::settings::connections_content(
+                &connections,
+                current_connection.as_ref(),
+            )
+            .into_string()
+            .try_into()
+            .map_err(|e| {
+                moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+                RouteError::ParseMarkup
+            })
+        }
+        Method::Delete => {
+            let Some(name) = req.query.get("name") else {
+                return Err(RouteError::MissingQueryParam("name"));
+            };
+
+            let connections = STATE.delete_connection(name).await?;
+
+            let current_connection = STATE.get_current_connection().await?;
+
+            moosicbox_app_native_ui::settings::connections_content(
+                &connections,
+                current_connection.as_ref(),
+            )
+            .into_string()
+            .try_into()
+            .map_err(|e| {
+                moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+                RouteError::ParseMarkup
+            })
+        }
+        Method::Get
+        | Method::Patch
+        | Method::Put
+        | Method::Head
+        | Method::Options
+        | Method::Trace
+        | Method::Connect => {
+            unreachable!()
+        }
+    }
+}
+
+pub async fn settings_new_connection_route(_req: RouteRequest) -> Result<View, RouteError> {
+    let connections = STATE.get_connections().await?;
+    let mut name = "New connection".to_string();
+    let mut i = 2;
+
+    while connections.iter().any(|x| x.name == name) {
+        name = format!("New connection {i}");
+        i += 1;
+    }
+
+    let connections = STATE
+        .add_connection(Connection {
+            name,
+            api_url: String::new(),
+        })
+        .await?;
+
+    let current_connection = STATE.get_current_connection().await?;
+
+    moosicbox_app_native_ui::settings::connections_content(
+        &connections,
+        current_connection.as_ref(),
+    )
+    .into_string()
+    .try_into()
+    .map_err(|e| {
+        moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+        RouteError::ParseMarkup
+    })
 }

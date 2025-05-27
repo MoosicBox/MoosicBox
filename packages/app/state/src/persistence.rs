@@ -113,4 +113,40 @@ impl AppState {
             .await?;
         Ok(())
     }
+
+    /// # Errors
+    ///
+    /// * If the persistence fails
+    pub async fn add_connection(
+        &self,
+        connection: impl Into<Connection>,
+    ) -> Result<Vec<Connection>, AppStateError> {
+        let persistence = self.persistence().await;
+        let connection = connection.into();
+        let mut connections: Vec<Connection> = persistence
+            .get(PersistenceKey::Connections)
+            .await?
+            .unwrap_or_default();
+        connections.push(connection);
+        persistence
+            .set(PersistenceKey::Connections, &connections)
+            .await?;
+        Ok(connections)
+    }
+
+    /// # Errors
+    ///
+    /// * If the persistence fails
+    pub async fn delete_connection(&self, name: &str) -> Result<Vec<Connection>, AppStateError> {
+        let persistence = self.persistence().await;
+        let mut connections: Vec<Connection> = persistence
+            .get(PersistenceKey::Connections)
+            .await?
+            .unwrap_or_default();
+        connections.retain(|x| x.name != name);
+        persistence
+            .set(PersistenceKey::Connections, &connections)
+            .await?;
+        Ok(connections)
+    }
 }

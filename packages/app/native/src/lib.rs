@@ -120,6 +120,12 @@ pub fn init() -> Router {
         .with_route_result("/settings", |req| async {
             routes::settings_route(req).await
         })
+        .with_route_result("/settings/connections", |req| async {
+            routes::settings_connections_route(req).await
+        })
+        .with_route_result("/settings/new-connection", |req| async {
+            routes::settings_new_connection_route(req).await
+        })
         .with_no_content_result("/settings/connection-name", |req| async {
             routes::settings_connection_name_route(req).await
         })

@@ -1,4 +1,4 @@
-import { onAttr, splitHtml, triggerHandlers } from './core';
+import { methods, onAttr, onElement, splitHtml, triggerHandlers } from './core';
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] as const;
 
@@ -74,4 +74,38 @@ onAttr('hx-trigger', ({ element, attr }) => {
     if (attr === 'load') {
         return processRoute(element);
     }
+});
+
+onElement(({ element }) => {
+    if (!(element instanceof HTMLButtonElement)) return;
+
+    let route: string | undefined = undefined;
+    let method: string | undefined = undefined;
+
+    for (const m of methods) {
+        const r = element.getAttribute(`hx-${m}`);
+        if (r) {
+            route = r;
+            method = m;
+            break;
+        }
+    }
+
+    if (!route) return;
+
+    element.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        handleHtmlResponse(
+            element,
+            fetch(route, {
+                method,
+                headers: {
+                    'hx-request': 'true',
+                },
+            }),
+        );
+
+        return false;
+    });
 });
