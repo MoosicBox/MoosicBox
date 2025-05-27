@@ -34,6 +34,8 @@ pub fn settings_page_content(
                         h2 { "Connections" }
                     }
 
+                    (connections_content(connections, selected))
+
                     div sx-dir=(LayoutDirection::Row) sx-width="100%" sx-gap=(5) {
                         button
                             sx-border-radius=(5)
@@ -46,8 +48,6 @@ pub fn settings_page_content(
                             "New Connection"
                         }
                     }
-
-                    (connections_content(connections, selected))
                 }
             }
 
