@@ -28,6 +28,9 @@ export type EventPayloads = {
         element: HTMLElement;
         attr: string;
     };
+    onElement: {
+        element: HTMLElement;
+    };
 };
 
 export type EventType = keyof typeof EVENT;
@@ -51,8 +54,14 @@ export function on<T extends EventType>(event: T, handler: Handler<T>): void {
     array.push(handler);
 }
 
-type AttrHandlers = { [attr: string]: Handler<'onAttr'>[] };
+type ElementHandler = Handler<'onElement'>;
+const elementHandlers: ElementHandler[] = [];
 
+export function onElement(handler: ElementHandler): void {
+    elementHandlers.push(handler);
+}
+
+type AttrHandlers = { [attr: string]: Handler<'onAttr'>[] };
 const attrHandlers: AttrHandlers = {} as AttrHandlers;
 
 export function onAttr(attr: string, handler: Handler<'onAttr'>): void {
@@ -164,7 +173,7 @@ export function decodeHtml(html: string) {
     return txt.value;
 }
 
-export function processElement(element: HTMLElement) {
+onElement(({ element }) => {
     for (const key in attrHandlers) {
         const attr = element.getAttribute(key);
 
@@ -174,6 +183,11 @@ export function processElement(element: HTMLElement) {
             handler({ element, attr: decodeHtml(attr) }),
         );
     }
+});
+
+export function processElement(element: HTMLElement) {
+    elementHandlers.forEach((handler) => handler({ element }));
+
     for (const child of element.children) {
         processElement(child as HTMLElement);
     }
