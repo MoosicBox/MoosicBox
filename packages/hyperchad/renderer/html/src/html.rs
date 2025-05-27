@@ -870,7 +870,7 @@ pub fn element_to_html(
             f.write_all(b">")?;
             return Ok(());
         }
-        Element::Input { input } => {
+        Element::Input { name, input } => {
             const TAG_NAME: &[u8] = b"input";
             f.write_all(b"<")?;
             f.write_all(TAG_NAME)?;
@@ -908,6 +908,13 @@ pub fn element_to_html(
                     }
                 }
             }
+
+            if let Some(name) = name {
+                f.write_all(b" name=\"")?;
+                f.write_all(name.as_bytes())?;
+                f.write_all(b"\"")?;
+            }
+
             tag_renderer.element_attrs_to_html(f, container, is_flex_child)?;
             f.write_all(b"></")?;
             f.write_all(TAG_NAME)?;

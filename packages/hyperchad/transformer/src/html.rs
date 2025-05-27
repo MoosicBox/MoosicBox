@@ -1406,6 +1406,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                 "input" => match get_tag_attr_value_lower(tag, "type").as_deref() {
                     Some("checkbox") => {
                         container.element = crate::Element::Input {
+                            name: get_tag_attr_value_owned(tag, "name"),
                             input: crate::Input::Checkbox {
                                 checked: get_tag_attr_value_lower(tag, "checked")
                                     .as_deref()
@@ -1415,6 +1416,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                     }
                     Some("text") => {
                         container.element = crate::Element::Input {
+                            name: get_tag_attr_value_owned(tag, "name"),
                             input: crate::Input::Text {
                                 value: get_tag_attr_value_owned(tag, "value"),
                                 placeholder: get_tag_attr_value_owned(tag, "placeholder"),
@@ -1423,6 +1425,7 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                     }
                     Some("password") => {
                         container.element = crate::Element::Input {
+                            name: get_tag_attr_value_owned(tag, "name"),
                             input: crate::Input::Password {
                                 value: get_tag_attr_value_owned(tag, "value"),
                                 placeholder: get_tag_attr_value_owned(tag, "placeholder"),

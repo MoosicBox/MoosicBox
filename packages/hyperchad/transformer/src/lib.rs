@@ -2125,6 +2125,7 @@ pub enum Element {
     Span,
     Input {
         input: Input,
+        name: Option<String>,
     },
     Button,
     Image {
@@ -2306,6 +2307,9 @@ impl Container {
             Element::Anchor { target, .. } => {
                 attrs.add_opt("target", target.as_ref());
             }
+            Element::Input { name, .. } => {
+                attrs.add_opt("name", name.as_ref());
+            }
             Element::Div
             | Element::Raw { .. }
             | Element::Aside
@@ -2315,7 +2319,6 @@ impl Container {
             | Element::Section
             | Element::Form
             | Element::Span
-            | Element::Input { .. }
             | Element::Button
             | Element::Heading { .. }
             | Element::UnorderedList
