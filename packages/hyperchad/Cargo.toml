@@ -246,6 +246,7 @@ renderer-vanilla-js-plugin-tauri-event = [
 renderer-vanilla-js-script = ["hyperchad_renderer_vanilla_js?/script"]
 
 router = ["dep:hyperchad_router"]
+router-form = ["hyperchad_router?/form"]
 router-format = ["hyperchad_app?/format", "hyperchad_router?/format"]
 router-json = ["hyperchad_app?/json", "hyperchad_router?/json"]
 router-serde = ["hyperchad_router?/serde"]

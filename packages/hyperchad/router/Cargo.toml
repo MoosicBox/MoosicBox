@@ -18,6 +18,7 @@ hyperchad_renderer    = { workspace = true }
 hyperchad_transformer = { workspace = true, features = ["html"] }
 moosicbox_assert      = { workspace = true }
 moosicbox_task        = { workspace = true }
+switchy               = { workspace = true, features = ["http-models"] }
 
 bytes     = { workspace = true }
 flume     = { workspace = true }
@@ -28,12 +29,14 @@ qstring   = { workspace = true }
 thiserror = { workspace = true }
 tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
+base64           = { workspace = true, optional = true }
+multipart        = { workspace = true, optional = true, features = ["server"] }
 serde            = { workspace = true, optional = true, features = ["derive"] }
 serde_json       = { workspace = true, optional = true }
 serde_urlencoded = { workspace = true, optional = true }
 
 [features]
-default = ["format", "json", "serde", "static-routes"]
+default = ["form", "format", "json", "serde", "static-routes"]
 
 fail-on-warnings = []
 
@@ -44,5 +47,7 @@ syntax-highlighting = ["hyperchad_transformer/syntax-highlighting"]
 
 json  = ["hyperchad_renderer/json"]
 serde = ["dep:serde", "dep:serde_json", "dep:serde_urlencoded"]
+
+form = ["dep:base64", "dep:multipart", "serde"]
 
 static-routes = []

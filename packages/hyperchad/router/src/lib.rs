@@ -47,6 +47,15 @@ pub enum ParseError {
     MissingBody,
     #[error("Invalid Content-Type")]
     InvalidContentType,
+    #[cfg(feature = "form")]
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+    #[cfg(feature = "form")]
+    #[error("Missing boundary")]
+    MissingBoundary,
+    #[cfg(feature = "form")]
+    #[error(transparent)]
+    ParseUtf8(#[from] std::string::FromUtf8Error),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -104,17 +113,64 @@ impl RouteRequest {
 
     /// # Errors
     ///
+    /// * If the `Content-Type` header is missing
+    /// * If the form is missing
+    #[cfg(feature = "form")]
+    pub fn parse_form<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, ParseError> {
+        use std::io::{Cursor, Read as _};
+
+        use base64::{Engine as _, engine::general_purpose};
+        use multipart::server::Multipart;
+        use serde_json::{Map, Value};
+
+        fn parse_multipart_json_sync(body: &[u8], content_type: &str) -> Result<Value, ParseError> {
+            let boundary = content_type
+                .split(';')
+                .find_map(|s| s.trim().strip_prefix("boundary="))
+                .ok_or(ParseError::MissingBoundary)?;
+
+            let mut cursor = Cursor::new(body);
+
+            let mut multipart = Multipart::with_body(&mut cursor, boundary);
+
+            let mut obj = Map::new();
+            while let Some(mut field) = multipart.read_entry()? {
+                let name = field.headers.name.to_string();
+                let mut data = Vec::new();
+                field.data.read_to_end(&mut data)?;
+
+                if field.headers.filename.is_some() {
+                    let b64 = general_purpose::STANDARD.encode(&data);
+                    obj.insert(name, Value::String(b64));
+                } else {
+                    // text → String
+                    let text = String::from_utf8(data)?;
+                    obj.insert(name, Value::String(text));
+                }
+            }
+
+            Ok(Value::Object(obj))
+        }
+
+        if let Some(form) = &self.body.take() {
+            let value = parse_multipart_json_sync(
+                form,
+                self.content_type().ok_or(ParseError::InvalidContentType)?,
+            )?;
+            Ok(serde_json::from_value(value)?)
+        } else {
+            Err(ParseError::MissingBody)
+        }
+    }
+
+    /// # Errors
+    ///
     /// * If the `Content-Type` is not `application/json` or `application/x-www-form-urlencoded`
     /// * If the body is missing
     #[cfg(feature = "serde")]
     pub fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T, ParseError> {
         if let Some(body) = &self.body {
-            let content_type = self.content_type().unwrap_or("application/json");
-            match content_type {
-                "application/json" => Ok(serde_json::from_slice(body)?),
-                "application/x-www-form-urlencoded" => Ok(serde_urlencoded::from_bytes(body)?),
-                _ => Err(ParseError::InvalidContentType),
-            }
+            Ok(serde_json::from_slice(body)?)
         } else {
             Err(ParseError::MissingBody)
         }
