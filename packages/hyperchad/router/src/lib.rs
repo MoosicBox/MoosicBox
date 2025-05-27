@@ -54,9 +54,15 @@ pub struct ClientOs {
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientInfo {
     pub os: ClientOs,
+}
+
+impl Default for ClientInfo {
+    fn default() -> Self {
+        DEFAULT_CLIENT_INFO.as_ref().clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
