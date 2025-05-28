@@ -103,3 +103,58 @@ provider "helm" {
     )
   }
 }
+
+# Get information about the Kubernetes node pool
+data "digitalocean_kubernetes_cluster" "cluster_info" {
+  name = local.cluster_name
+}
+
+# Create a firewall for the Kubernetes cluster
+resource "digitalocean_firewall" "kubernetes" {
+  name = "${local.cluster_name}-firewall"
+
+  # Allow HTTP traffic
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "80"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # Allow NodePort traffic
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "30000-32767"
+    source_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # Allow HTTPS traffic if using SSL
+  dynamic "inbound_rule" {
+    for_each = var.use_ssl ? [1] : []
+    content {
+      protocol         = "tcp"
+      port_range       = "443"
+      source_addresses = ["0.0.0.0/0", "::/0"]
+    }
+  }
+
+  # Allow all outbound traffic
+  outbound_rule {
+    protocol              = "tcp"
+    port_range           = "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "udp"
+    port_range           = "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "icmp"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # Tag the firewall with the cluster's default tag
+  tags = ["k8s:${data.digitalocean_kubernetes_cluster.cluster_info.id}"]
+}
