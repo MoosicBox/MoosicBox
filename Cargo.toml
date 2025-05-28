@@ -290,8 +290,8 @@ atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.7.0"
 aws-config = "1.6.3"
-aws-sdk-apigatewaymanagement = "1.70.0"
-aws-sdk-ssm = "1.78.0"
+aws-sdk-apigatewaymanagement = "1.71.0"
+aws-sdk-ssm = "1.79.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.17.0"
@@ -302,7 +302,7 @@ chrono = { version = "0.4.41", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.38", features = ["derive"] }
+clap = { version = "4.5.39", features = ["derive"] }
 color-backtrace = { version = "0.7.0", default-features = false, features = [
     "use-btparse-crate",
 ] }
@@ -414,7 +414,7 @@ ratatui = "0.29.0"
 rb = "0.4.1"
 rcgen = "0.13.2"
 regex = "1.11.1"
-reqwest = { version = "0.12.15", default-features = false, features = [
+reqwest = { version = "0.12.16", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
@@ -453,8 +453,8 @@ swc_common = { version = "11.0.0", features = ["tty-emitter"] }
 swc_ecma_ast = "11.0.0"
 swc_ecma_codegen = "13.1.0"
 swc_ecma_loader = { version = "11.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "20.0.2"
-swc_ecma_parser = "14.0.0"
+swc_ecma_minifier = "20.0.3"
+swc_ecma_parser = "14.0.1"
 swc_ecma_transforms_base = "15.1.0"
 swc_ecma_transforms_typescript = "17.0.0"
 swc_ecma_visit = "11.0.0"
