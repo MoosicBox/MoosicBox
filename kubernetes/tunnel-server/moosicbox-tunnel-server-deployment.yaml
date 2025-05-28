@@ -22,8 +22,10 @@ spec:
                 io.kompose.service: moosicbox-tunnel-server
                 run: moosicbox-tunnel-service
         spec:
+            imagePullSecrets:
+                - name: registry-moosicbox
             containers:
-                - image: registry.digitalocean.com/moosicbox/moosicbox-tunnel-server
+                - image: registry.digitalocean.com/moosicbox/tunnel-server:latest
                   imagePullPolicy: Always
                   name: moosicbox-tunnel-server
                   ports:

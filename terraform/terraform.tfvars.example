@@ -1,0 +1,17 @@
+stage                 = "dev"
+domain_name           = "moosicbox.com"
+use_ssl               = true
+extra_clusters        = ""
+
+# Cluster configuration
+cluster_name          = "moosicbox"
+region                = "nyc1"
+kubernetes_version    = "1.28"
+node_size             = "s-2vcpu-4gb"
+node_count            = 2
+
+# Sensitive values - replace these with your actual values
+do_token              = "your-digitalocean-token"
+aws_access_key_id     = "your-aws-access-key"
+aws_secret_access_key = "your-aws-secret-key"
+registry_endpoint     = "your-registry-endpoint"

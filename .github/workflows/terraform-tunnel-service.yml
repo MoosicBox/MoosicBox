@@ -1,0 +1,103 @@
+name: Terraform Tunnel Service
+
+on:
+    workflow_dispatch:
+        inputs:
+            stage:
+                description: 'Stage'
+                required: false
+                default: 'prod'
+            destroy:
+                description: 'Terraform Destroy'
+                required: false
+                default: 'false'
+            apply:
+                description: 'Terraform Apply'
+                required: false
+                default: 'true'
+            extra_clusters:
+                description: 'Extra Clusters'
+                required: false
+                default: ''
+            ssl:
+                description: 'SSL'
+                required: false
+                default: 'true'
+            force:
+                description: 'Force Apply'
+                required: false
+                default: 'false'
+
+env:
+    TF_WORKSPACE: ${{ github.event.inputs.stage }}
+    TF_LOG: DEBUG
+    TF_LOG_PATH: terraform.log
+
+jobs:
+    terraform:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: terraform
+                shell: bash
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install OpenTofu
+              run: |
+                  curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
+                  chmod +x install-opentofu.sh
+                  ./install-opentofu.sh --install-method deb
+                  rm install-opentofu.sh
+                  tofu --version
+
+            - name: Install doctl
+              uses: digitalocean/action-doctl@v2
+              with:
+                token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+            - name: OpenTofu Init
+              env:
+                  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+              run: |
+                  tofu init
+
+            - name: OpenTofu Plan
+              if: github.event.inputs.destroy != 'true'
+              env:
+                  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  TF_VAR_stage: ${{ github.event.inputs.stage }}
+                  TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  TF_VAR_registry_endpoint: ${{ secrets.REGISTRY_ENDPOINT }}
+                  TF_VAR_extra_clusters: ${{ github.event.inputs.extra_clusters }}
+                  TF_VAR_use_ssl: ${{ github.event.inputs.ssl }}
+              run: |
+                  tofu plan -no-color
+
+            - name: OpenTofu Apply
+              if: github.event.inputs.apply == 'true' && github.event.inputs.destroy != 'true'
+              env:
+                  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  TF_VAR_stage: ${{ github.event.inputs.stage }}
+                  TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  TF_VAR_registry_endpoint: ${{ secrets.REGISTRY_ENDPOINT }}
+                  TF_VAR_extra_clusters: ${{ github.event.inputs.extra_clusters }}
+                  TF_VAR_use_ssl: ${{ github.event.inputs.ssl }}
+              run: |
+                  tofu apply -auto-approve -no-color
+
+            - name: OpenTofu Destroy
+              if: github.event.inputs.destroy == 'true'
+              env:
+                  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  TF_VAR_stage: ${{ github.event.inputs.stage }}
+                  TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  TF_VAR_registry_endpoint: ${{ secrets.REGISTRY_ENDPOINT }}
+                  TF_VAR_extra_clusters: ${{ github.event.inputs.extra_clusters }}
+                  TF_VAR_use_ssl: ${{ github.event.inputs.ssl }}
+              run: |
+                  tofu destroy -auto-approve -no-color

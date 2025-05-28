@@ -26,24 +26,14 @@ spec:
                 io.kompose.network/moosicboxserver-default: "true"
                 io.kompose.service: moosicbox-tunnel-server-lb
         spec:
+            imagePullSecrets:
+                - name: registry-moosicbox
             containers:
-                - image: registry.digitalocean.com/moosicbox/moosicbox-tunnel-server-lb
-                  volumeMounts:
-                      - mountPath: "/etc/pingora/ssl"
-                        name: pingora-ssl
-                        readOnly: true
+                - image: registry.digitalocean.com/moosicbox/load-balancer:latest
                   imagePullPolicy: Always
                   name: moosicbox-tunnel-server-lb
                   ports:
-                      - containerPort: 8008
-                        hostPort: 443
-                        protocol: TCP
                       - containerPort: 8007
                         hostPort: 80
                         protocol: TCP
-
-            volumes:
-                - name: pingora-ssl
-                  secret:
-                      secretName: moosicbox-tunnel-server-cert
             restartPolicy: Always

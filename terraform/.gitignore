@@ -1,0 +1,50 @@
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Exclude all .tfvars files, which are likely to contain sensitive data
+*.tfvars
+*.tfvars.json
+
+# Ignore override files as they are usually used for local development
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Ignore lock files (optional, but recommended to include for collaboration)
+.terraform.lock.hcl
+
+# Ignore local kubeconfig files
+kubeconfig
+*kubeconfig*
+
+# Ignore local environment files
+.env
+.envrc
+
+# Ignore log files
+*.log
+terraform.log
+
+# Ignore any local certificates or keys
+*.pem
+*.key
+*.crt
+
+# Ignore any local backup files
+*.bak
+*~
+.*.swp
+.*.swo 
