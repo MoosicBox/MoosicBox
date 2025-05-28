@@ -66,9 +66,43 @@ resource "time_sleep" "wait_for_cert_manager" {
   create_duration = "120s"  # Increase to 2 minutes
 }
 
+# First, try to read the existing secret
+data "kubernetes_secret" "existing_registry_auth" {
+  metadata {
+    name = "registry-moosicbox"
+  }
+  depends_on = [local.active_cluster]
+}
+
+# Check for existing deployments using external data source
+data "external" "check_deployments" {
+  depends_on = [local.active_cluster]
+  
+  program = ["bash", "-c", <<-EOT
+    tunnel_exists=$(kubectl get deployment ${local.resource_names.tunnel_server} -o name 2>/dev/null || echo "")
+    lb_exists=$(kubectl get deployment ${local.resource_names.lb} -o name 2>/dev/null || echo "")
+    echo "{\"tunnel_exists\": \"$tunnel_exists\", \"lb_exists\": \"$lb_exists\"}"
+  EOT
+  ]
+}
+
+locals {
+  # Registry auth checks
+  registry_secret_exists = can(data.kubernetes_secret.existing_registry_auth.metadata[0].name)
+  registry_auth_name = local.registry_secret_exists ? data.kubernetes_secret.existing_registry_auth.metadata[0].name : kubernetes_secret.registry_auth[0].metadata[0].name
+  
+  # Use timestamp to create unique names for new deployments and services if existing ones are found
+  timestamp = formatdate("YYYYMMDDhhmmss", timestamp())
+  tunnel_server_name = "${local.resource_names.tunnel_server}-${local.timestamp}"
+  load_balancer_name = "${local.resource_names.lb}-${local.timestamp}"
+  tunnel_service_name = "${local.resource_names.tunnel_service}-${local.timestamp}"
+  load_balancer_service_name = "${local.resource_names.lb}-service-${local.timestamp}"
+  ingress_name = "${local.resource_names.ingress}-${local.timestamp}"
+}
+
 resource "kubernetes_deployment" "tunnel_server" {
   metadata {
-    name = local.resource_names.tunnel_server
+    name = local.tunnel_server_name
   }
 
   depends_on = [
@@ -95,7 +129,7 @@ resource "kubernetes_deployment" "tunnel_server" {
 
       spec {
         image_pull_secrets {
-          name = kubernetes_secret.registry_auth.metadata[0].name
+          name = local.registry_auth_name
         }
 
         container {
@@ -130,11 +164,12 @@ resource "kubernetes_deployment" "tunnel_server" {
 
 resource "kubernetes_service" "tunnel_server" {
   metadata {
-    name = local.resource_names.tunnel_service
+    name = local.tunnel_service_name
   }
 
   depends_on = [
-    local.active_cluster
+    local.active_cluster,
+    kubernetes_deployment.tunnel_server
   ]
 
   spec {
@@ -147,17 +182,11 @@ resource "kubernetes_service" "tunnel_server" {
       target_port = 8004
     }
   }
-
-  lifecycle {
-    replace_triggered_by = [
-      kubernetes_deployment.tunnel_server
-    ]
-  }
 }
 
 resource "kubernetes_deployment" "load_balancer" {
   metadata {
-    name = local.resource_names.lb
+    name = local.load_balancer_name
   }
 
   depends_on = [
@@ -184,7 +213,7 @@ resource "kubernetes_deployment" "load_balancer" {
 
       spec {
         image_pull_secrets {
-          name = kubernetes_secret.registry_auth.metadata[0].name
+          name = local.registry_auth_name
         }
 
         dynamic "volume" {
@@ -220,7 +249,6 @@ resource "kubernetes_deployment" "load_balancer" {
             for_each = var.use_ssl ? [80, 443] : [80]
             content {
               container_port = port.value
-              host_port     = port.value
             }
           }
         }
@@ -231,11 +259,12 @@ resource "kubernetes_deployment" "load_balancer" {
 
 resource "kubernetes_service" "load_balancer" {
   metadata {
-    name = local.resource_names.lb
+    name = local.load_balancer_service_name
   }
 
   depends_on = [
-    local.active_cluster
+    local.active_cluster,
+    kubernetes_deployment.load_balancer
   ]
 
   spec {
@@ -258,12 +287,6 @@ resource "kubernetes_service" "load_balancer" {
         target_port = port.value.port
       }
     }
-  }
-
-  lifecycle {
-    replace_triggered_by = [
-      kubernetes_deployment.load_balancer
-    ]
   }
 }
 
@@ -316,7 +339,7 @@ YAML
 
 resource "kubernetes_ingress_v1" "tunnel_server" {
   metadata {
-    name = local.resource_names.ingress
+    name = local.ingress_name
     annotations = var.use_ssl ? {
       "cert-manager.io/issuer" = local.resource_names.issuer
     } : {}
@@ -338,7 +361,7 @@ resource "kubernetes_ingress_v1" "tunnel_server" {
           path_type = "Prefix"
           backend {
             service {
-              name = kubernetes_service.load_balancer.metadata[0].name
+              name = local.load_balancer_service_name
               port {
                 number = 80
               }
@@ -358,19 +381,12 @@ resource "kubernetes_ingress_v1" "tunnel_server" {
   }
 }
 
-# Create Docker registry secret
+# Only create if it doesn't exist
 resource "kubernetes_secret" "registry_auth" {
+  count = local.registry_secret_exists ? 0 : 1
   metadata {
-    name = "registry-${local.registry_name}"
-
-    labels = {
-      "cluster-name" = local.cluster_name
-    }
+    name = "registry-moosicbox"
   }
-
-  depends_on = [
-    local.active_cluster
-  ]
 
   type = "kubernetes.io/dockerconfigjson"
 
@@ -383,4 +399,6 @@ resource "kubernetes_secret" "registry_auth" {
       }
     })
   }
+
+  depends_on = [local.active_cluster]
 }

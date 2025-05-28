@@ -78,3 +78,9 @@ variable "extra_clusters" {
   type        = string
   default     = ""
 }
+
+variable "create_firewall" {
+  description = "Whether to create a DigitalOcean firewall (requires additional permissions)"
+  type        = bool
+  default     = false
+}

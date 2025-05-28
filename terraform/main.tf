@@ -37,12 +37,14 @@ provider "digitalocean" {
 
 # Try to fetch existing cluster
 data "digitalocean_kubernetes_cluster" "existing" {
-  count = try(data.digitalocean_kubernetes_cluster.existing[0].id, "") != "" ? 1 : 0
   name = local.cluster_name
 }
 
 locals {
-  cluster_exists = length(data.digitalocean_kubernetes_cluster.existing) > 0
+  # Check if cluster exists by seeing if the data source succeeds
+  cluster_exists = can(data.digitalocean_kubernetes_cluster.existing.id)
+  # Use existing cluster if available, otherwise use the newly created one
+  active_cluster = local.cluster_exists ? data.digitalocean_kubernetes_cluster.existing : (length(digitalocean_kubernetes_cluster.cluster) > 0 ? digitalocean_kubernetes_cluster.cluster[0] : null)
 }
 
 # Create a new Kubernetes cluster only if it doesn't exist
@@ -61,11 +63,6 @@ resource "digitalocean_kubernetes_cluster" "cluster" {
       environment = var.stage
     }
   }
-}
-
-locals {
-  # Use existing cluster if available, otherwise use the newly created one
-  active_cluster = local.cluster_exists ? data.digitalocean_kubernetes_cluster.existing[0] : digitalocean_kubernetes_cluster.cluster[0]
 }
 
 # Write kubeconfig locally for kubectl provider
@@ -107,10 +104,15 @@ provider "helm" {
 # Get information about the Kubernetes node pool
 data "digitalocean_kubernetes_cluster" "cluster_info" {
   name = local.cluster_name
+  depends_on = [
+    digitalocean_kubernetes_cluster.cluster,
+    data.digitalocean_kubernetes_cluster.existing
+  ]
 }
 
 # Create a firewall for the Kubernetes cluster
 resource "digitalocean_firewall" "kubernetes" {
+  count = var.create_firewall ? 1 : 0
   name = "${local.cluster_name}-firewall"
 
   # Allow HTTP traffic
