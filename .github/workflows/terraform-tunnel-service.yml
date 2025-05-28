@@ -1,0 +1,97 @@
+name: Terraform Tunnel Service
+
+on:
+    workflow_dispatch:
+        inputs:
+            stage:
+                description: 'Stage'
+                required: false
+                default: 'prod'
+            destroy:
+                description: 'Terraform Destroy'
+                required: false
+                default: 'false'
+            apply:
+                description: 'Terraform Apply'
+                required: false
+                default: 'true'
+            extra_clusters:
+                description: 'Extra Clusters'
+                required: false
+                default: ''
+            ssl:
+                description: 'SSL'
+                required: false
+                default: 'true'
+            force:
+                description: 'Force Apply'
+                required: false
+                default: 'false'
+
+env:
+    TF_WORKSPACE: ${{ github.event.inputs.stage }}
+
+jobs:
+    terraform:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: terraform
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install OpenTofu
+              run: |
+                  curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh -o install-opentofu.sh
+                  chmod +x install-opentofu.sh
+                  ./install-opentofu.sh --install-method deb
+                  rm install-opentofu.sh
+                  tofu --version
+
+            - name: OpenTofu Init
+              run: tofu init
+              env:
+                  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+            - name: OpenTofu Plan
+              if: github.event.inputs.destroy != 'true'
+              run: tofu plan
+              env:
+                  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  TF_VAR_stage: ${{ github.event.inputs.stage }}
+                  TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  TF_VAR_registry_endpoint: ${{ secrets.REGISTRY_ENDPOINT }}
+                  TF_VAR_registry_username: ${{ secrets.REGISTRY_USERNAME }}
+                  TF_VAR_registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+                  TF_VAR_extra_clusters: ${{ github.event.inputs.extra_clusters }}
+                  TF_VAR_use_ssl: ${{ github.event.inputs.ssl }}
+
+            - name: OpenTofu Apply
+              if: github.event.inputs.apply == 'true' && github.event.inputs.destroy != 'true'
+              run: tofu apply -auto-approve
+              env:
+                  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  TF_VAR_stage: ${{ github.event.inputs.stage }}
+                  TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  TF_VAR_registry_endpoint: ${{ secrets.REGISTRY_ENDPOINT }}
+                  TF_VAR_registry_username: ${{ secrets.REGISTRY_USERNAME }}
+                  TF_VAR_registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+                  TF_VAR_extra_clusters: ${{ github.event.inputs.extra_clusters }}
+                  TF_VAR_use_ssl: ${{ github.event.inputs.ssl }}
+
+            - name: OpenTofu Destroy
+              if: github.event.inputs.destroy == 'true'
+              run: tofu destroy -auto-approve
+              env:
+                  TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+                  TF_VAR_stage: ${{ github.event.inputs.stage }}
+                  TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  TF_VAR_registry_endpoint: ${{ secrets.REGISTRY_ENDPOINT }}
+                  TF_VAR_registry_username: ${{ secrets.REGISTRY_USERNAME }}
+                  TF_VAR_registry_password: ${{ secrets.REGISTRY_PASSWORD }}
+                  TF_VAR_extra_clusters: ${{ github.event.inputs.extra_clusters }}
+                  TF_VAR_use_ssl: ${{ github.event.inputs.ssl }}
