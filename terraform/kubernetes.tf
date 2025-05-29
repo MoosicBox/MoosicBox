@@ -66,8 +66,10 @@ resource "time_sleep" "wait_for_cert_manager" {
   create_duration = "120s"  # Increase to 2 minutes
 }
 
-# First, try to read the existing secret
+# First, try to read the existing secret (only if cluster exists)
 data "kubernetes_secret" "existing_registry_auth" {
+  count = local.active_cluster != null ? 1 : 0
+  
   metadata {
     name = "registry-moosicbox"
   }
@@ -76,6 +78,8 @@ data "kubernetes_secret" "existing_registry_auth" {
 
 # Check for existing deployments using external data source
 data "external" "check_deployments" {
+  count = local.active_cluster != null ? 1 : 0
+  
   depends_on = [local.active_cluster]
   
   program = ["bash", "-c", <<-EOT
@@ -87,9 +91,9 @@ data "external" "check_deployments" {
 }
 
 locals {
-  # Registry auth checks
-  registry_secret_exists = can(data.kubernetes_secret.existing_registry_auth.metadata[0].name)
-  registry_auth_name = local.registry_secret_exists ? data.kubernetes_secret.existing_registry_auth.metadata[0].name : kubernetes_secret.registry_auth[0].metadata[0].name
+  # Registry auth checks (handle both missing cluster and missing secret)
+  registry_secret_exists = local.active_cluster != null && length(data.kubernetes_secret.existing_registry_auth) > 0 ? can(data.kubernetes_secret.existing_registry_auth[0].metadata[0].name) : false
+  registry_auth_name = local.registry_secret_exists ? data.kubernetes_secret.existing_registry_auth[0].metadata[0].name : (length(kubernetes_secret.registry_auth) > 0 ? kubernetes_secret.registry_auth[0].metadata[0].name : "registry-moosicbox")
   
   # Use consistent names without timestamps to avoid creating multiple deployments
   tunnel_server_name = local.resource_names.tunnel_server

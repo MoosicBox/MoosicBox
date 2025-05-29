@@ -35,16 +35,35 @@ provider "digitalocean" {
   token = var.do_token
 }
 
-# Try to fetch existing cluster
-data "digitalocean_kubernetes_cluster" "existing" {
-  name = local.cluster_name
+# Check if cluster exists using doctl
+data "external" "cluster_check" {
+  program = ["bash", "-c", <<-EOT
+    export DIGITALOCEAN_ACCESS_TOKEN="${var.do_token}"
+    if doctl kubernetes cluster get ${local.cluster_name} >/dev/null 2>&1; then
+      echo '{"exists": "true"}'
+    else
+      echo '{"exists": "false"}'
+    fi
+  EOT
+  ]
 }
 
 locals {
-  # Check if cluster exists by seeing if the data source succeeds
-  cluster_exists = can(data.digitalocean_kubernetes_cluster.existing.id)
+  # Check if cluster exists based on external check
+  cluster_exists = data.external.cluster_check.result.exists == "true"
+}
+
+# Fetch existing cluster only if it exists
+data "digitalocean_kubernetes_cluster" "existing" {
+  count = local.cluster_exists ? 1 : 0
+  name  = local.cluster_name
+}
+
+locals {
   # Use existing cluster if available, otherwise use the newly created one
-  active_cluster = local.cluster_exists ? data.digitalocean_kubernetes_cluster.existing : (length(digitalocean_kubernetes_cluster.cluster) > 0 ? digitalocean_kubernetes_cluster.cluster[0] : null)
+  active_cluster = local.cluster_exists ? data.digitalocean_kubernetes_cluster.existing[0] : (
+    length(digitalocean_kubernetes_cluster.cluster) > 0 ? digitalocean_kubernetes_cluster.cluster[0] : null
+  )
 }
 
 # Create a new Kubernetes cluster only if it doesn't exist
@@ -67,24 +86,25 @@ resource "digitalocean_kubernetes_cluster" "cluster" {
 
 # Write kubeconfig locally for kubectl provider
 resource "local_file" "kubeconfig" {
+  count    = local.active_cluster != null ? 1 : 0
   content  = local.active_cluster.kube_config[0].raw_config
   filename = "${path.module}/kubeconfig"
 }
 
 provider "kubernetes" {
-  host  = local.active_cluster.endpoint
-  token = local.active_cluster.kube_config[0].token
-  cluster_ca_certificate = base64decode(
+  host  = local.active_cluster != null ? local.active_cluster.endpoint : ""
+  token = local.active_cluster != null ? local.active_cluster.kube_config[0].token : ""
+  cluster_ca_certificate = local.active_cluster != null ? base64decode(
     local.active_cluster.kube_config[0].cluster_ca_certificate
-  )
+  ) : ""
 }
 
 provider "kubectl" {
-  host  = local.active_cluster.endpoint
-  token = local.active_cluster.kube_config[0].token
-  cluster_ca_certificate = base64decode(
+  host  = local.active_cluster != null ? local.active_cluster.endpoint : ""
+  token = local.active_cluster != null ? local.active_cluster.kube_config[0].token : ""
+  cluster_ca_certificate = local.active_cluster != null ? base64decode(
     local.active_cluster.kube_config[0].cluster_ca_certificate
-  )
+  ) : ""
   load_config_file = false
 }
 
@@ -93,20 +113,21 @@ provider "docker" {
 
 provider "helm" {
   kubernetes {
-    host  = local.active_cluster.endpoint
-    token = local.active_cluster.kube_config[0].token
-    cluster_ca_certificate = base64decode(
+    host  = local.active_cluster != null ? local.active_cluster.endpoint : ""
+    token = local.active_cluster != null ? local.active_cluster.kube_config[0].token : ""
+    cluster_ca_certificate = local.active_cluster != null ? base64decode(
       local.active_cluster.kube_config[0].cluster_ca_certificate
-    )
+    ) : ""
   }
 }
 
-# Get information about the Kubernetes node pool
+# Get information about the Kubernetes node pool (only if cluster exists)
 data "digitalocean_kubernetes_cluster" "cluster_info" {
+  count = local.active_cluster != null ? 1 : 0
   name = local.cluster_name
+  
   depends_on = [
-    digitalocean_kubernetes_cluster.cluster,
-    data.digitalocean_kubernetes_cluster.existing
+    digitalocean_kubernetes_cluster.cluster
   ]
 }
 
@@ -158,5 +179,5 @@ resource "digitalocean_firewall" "kubernetes" {
   }
 
   # Tag the firewall with the cluster's default tag
-  tags = ["k8s:${data.digitalocean_kubernetes_cluster.cluster_info.id}"]
+  tags = local.active_cluster != null ? ["k8s:${local.active_cluster.id}"] : []
 }
