@@ -2,7 +2,7 @@ name: Tauri Prepare MoosicBox App Release
 
 on:
     release:
-        types: [published, edited]
+        types: published
 
 env:
     CARGO_TERM_COLOR: always
