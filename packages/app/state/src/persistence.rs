@@ -9,6 +9,7 @@ use crate::{AppState, AppStateError, UpdateAppState};
 #[derive(Debug, Clone, Copy, EnumString, AsRefStr)]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum PersistenceKey {
+    ConnectionId,
     ConnectionName,
     Connection,
     Connections,
@@ -186,6 +187,25 @@ impl AppState {
             .set(PersistenceKey::ConnectionName, &name)
             .await?;
         Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If the persistence fails
+    pub async fn get_or_init_connection_id(&self) -> Result<String, AppStateError> {
+        const KEY: PersistenceKey = PersistenceKey::ConnectionId;
+
+        let persistence = self.persistence().await;
+
+        Ok(if let Some(connection_id) = persistence.get(KEY).await? {
+            connection_id
+        } else {
+            let connection_id = nanoid::nanoid!();
+
+            persistence.set(KEY, &connection_id).await?;
+
+            connection_id
+        })
     }
 
     /// # Errors

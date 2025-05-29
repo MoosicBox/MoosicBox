@@ -921,18 +921,16 @@ pub fn run() {
                         .await
                         .unwrap()
                         .map(|x| x.api_url);
+                    let connection_name = STATE.get_connection_name().await.unwrap();
+                    let connection_id = STATE.get_or_init_connection_id().await.unwrap();
 
                     STATE
                         .set_state(moosicbox_app_state::UpdateAppState {
-                            connection_id: Some("123".into()),
-                            connection_name: Some("Test Tauri".into()),
+                            connection_id: Some(connection_id),
+                            connection_name,
                             api_url,
-                            client_id: std::env::var("MOOSICBOX_CLIENT_ID").ok(),
-                            signature_token: std::env::var("MOOSICBOX_SIGNATURE_TOKEN").ok(),
-                            api_token: std::env::var("MOOSICBOX_API_TOKEN").ok(),
                             profile: Some(moosicbox_app_native::PROFILE.to_string()),
-                            playback_target: None,
-                            current_session_id: None,
+                            ..Default::default()
                         })
                         .await?;
 
