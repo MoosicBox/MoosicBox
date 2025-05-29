@@ -47,8 +47,4 @@ terraform.log
 *.bak
 *~
 .*.swp
-.*.swo
-
-# Ignore Docker image hash tracking files
-.lb_image_hash
-.ts_image_hash 
+.*.swo 
