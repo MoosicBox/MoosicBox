@@ -34,7 +34,7 @@ on:
             node_size:
                 description: 'Node size (e.g. s-1vcpu-2gb)'
                 required: false
-                default: 's-1vcpu-512mb-10gb'
+                default: 's-1vcpu-2gb'
             create_firewall:
                 description: 'Create firewall rules for HTTP/HTTPS'
                 required: false
