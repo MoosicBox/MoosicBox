@@ -15,7 +15,7 @@ use moosicbox_app_state::{
 };
 use moosicbox_music_models::{ApiSource, PlaybackQuality, api::ApiTrack, id::Id};
 use moosicbox_player::{Playback, PlayerError};
-use moosicbox_session::models::{ApiSession, ApiUpdateSession, UpdateSession};
+use moosicbox_session::models::{ApiSession, ApiUpdateSession, PlaybackTarget, UpdateSession};
 use moosicbox_ws::models::{
     InboundPayload, OutboundPayload, SessionUpdatedPayload, UpdateSessionPayload,
 };
@@ -108,16 +108,46 @@ async fn on_startup() -> Result<(), tauri::Error> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TauriUpdateAppState {
+    pub connection_id: Option<String>,
+    pub connection_name: Option<String>,
+    pub api_url: Option<String>,
+    pub client_id: Option<String>,
+    pub signature_token: Option<String>,
+    pub api_token: Option<String>,
+    pub profile: Option<String>,
+    pub playback_target: Option<PlaybackTarget>,
+    pub current_session_id: Option<u64>,
+}
+
+impl From<TauriUpdateAppState> for UpdateAppState {
+    fn from(value: TauriUpdateAppState) -> Self {
+        Self {
+            connection_id: Some(value.connection_id),
+            connection_name: Some(value.connection_name),
+            api_url: Some(value.api_url),
+            client_id: Some(value.client_id),
+            signature_token: Some(value.signature_token),
+            api_token: Some(value.api_token),
+            profile: Some(value.profile),
+            playback_target: Some(value.playback_target),
+            current_session_id: Some(value.current_session_id),
+        }
+    }
+}
+
 #[tauri::command]
-async fn set_state(state: UpdateAppState) -> Result<(), TauriPlayerError> {
-    Ok(STATE.set_state(state).await?)
+async fn set_state(state: TauriUpdateAppState) -> Result<(), TauriPlayerError> {
+    Ok(STATE.set_state(state.into()).await?)
 }
 
 async fn update_log_layer(state: UpdateAppState) {
     log::debug!("update_log_layer: state={state:?}");
 
     {
-        if let Some(connection_id) = &state.connection_id {
+        if let Some(connection_id) = &state.connection_id.flatten() {
             LOG_LAYER
                 .get()
                 .map(|x| x.set_property("connectionId", connection_id.to_owned().into()));
@@ -127,7 +157,7 @@ async fn update_log_layer(state: UpdateAppState) {
     }
 
     {
-        if let Some(connection_name) = &state.connection_name {
+        if let Some(connection_name) = &state.connection_name.flatten() {
             LOG_LAYER
                 .get()
                 .map(|x| x.set_property("connectionName", connection_name.to_owned().into()));
@@ -137,7 +167,7 @@ async fn update_log_layer(state: UpdateAppState) {
     }
 
     {
-        if let Some(client_id) = &state.client_id {
+        if let Some(client_id) = &state.client_id.flatten() {
             LOG_LAYER
                 .get()
                 .map(|x| x.set_property("clientId", client_id.to_owned().into()));
@@ -147,7 +177,7 @@ async fn update_log_layer(state: UpdateAppState) {
     }
 
     {
-        if let Some(api_url) = &state.api_url {
+        if let Some(api_url) = &state.api_url.flatten() {
             LOG_LAYER
                 .get()
                 .map(|x| x.set_property("apiUrl", api_url.to_owned().into()));
@@ -157,7 +187,7 @@ async fn update_log_layer(state: UpdateAppState) {
     }
 
     {
-        if let Some(profile) = &state.profile {
+        if let Some(profile) = &state.profile.flatten() {
             LOG_LAYER
                 .get()
                 .map(|x| x.set_property("profile", profile.to_owned().into()));
@@ -926,10 +956,10 @@ pub fn run() {
 
                     STATE
                         .set_state(moosicbox_app_state::UpdateAppState {
-                            connection_id: Some(connection_id),
-                            connection_name,
-                            api_url,
-                            profile: Some(moosicbox_app_native::PROFILE.to_string()),
+                            connection_id: Some(Some(connection_id)),
+                            connection_name: Some(connection_name),
+                            api_url: Some(api_url),
+                            profile: Some(Some(moosicbox_app_native::PROFILE.to_string())),
                             ..Default::default()
                         })
                         .await?;

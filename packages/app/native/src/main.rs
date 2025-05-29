@@ -163,10 +163,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         STATE
             .set_state(moosicbox_app_state::UpdateAppState {
-                connection_id: Some(connection_id),
-                connection_name,
-                api_url,
-                profile: Some(PROFILE.to_string()),
+                connection_id: Some(Some(connection_id)),
+                connection_name: Some(connection_name),
+                api_url: Some(api_url),
+                profile: Some(Some(PROFILE.to_string())),
                 ..Default::default()
             })
             .await?;

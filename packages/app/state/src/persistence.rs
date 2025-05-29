@@ -150,7 +150,7 @@ impl AppState {
         PROFILES.upsert(PROFILE.to_string(), Arc::new(apis_map));
 
         self.set_state(UpdateAppState {
-            api_url: Some(connection.api_url.clone()),
+            api_url: Some(Some(connection.api_url.clone())),
             ..Default::default()
         })
         .await?;
