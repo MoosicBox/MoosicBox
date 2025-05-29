@@ -91,13 +91,12 @@ locals {
   registry_secret_exists = can(data.kubernetes_secret.existing_registry_auth.metadata[0].name)
   registry_auth_name = local.registry_secret_exists ? data.kubernetes_secret.existing_registry_auth.metadata[0].name : kubernetes_secret.registry_auth[0].metadata[0].name
   
-  # Use timestamp to create unique names for new deployments and services if existing ones are found
-  timestamp = formatdate("YYYYMMDDhhmmss", timestamp())
-  tunnel_server_name = "${local.resource_names.tunnel_server}-${local.timestamp}"
-  load_balancer_name = "${local.resource_names.lb}-${local.timestamp}"
-  tunnel_service_name = "${local.resource_names.tunnel_service}-${local.timestamp}"
-  load_balancer_service_name = "${local.resource_names.lb}-service-${local.timestamp}"
-  ingress_name = "${local.resource_names.ingress}-${local.timestamp}"
+  # Use consistent names without timestamps to avoid creating multiple deployments
+  tunnel_server_name = local.resource_names.tunnel_server
+  load_balancer_name = local.resource_names.lb
+  tunnel_service_name = local.resource_names.tunnel_service
+  load_balancer_service_name = "${local.resource_names.lb}-service"
+  ingress_name = local.resource_names.ingress
 }
 
 resource "kubernetes_deployment" "tunnel_server" {
@@ -208,10 +207,14 @@ resource "kubernetes_deployment" "load_balancer" {
       metadata {
         labels = {
           app = local.resource_names.lb
+          "io.kompose.service" = "moosicbox-tunnel-server-lb"
         }
       }
 
       spec {
+        # Use hostNetwork to bind directly to host ports 80/443
+        host_network = true
+        
         image_pull_secrets {
           name = local.registry_auth_name
         }
@@ -235,6 +238,20 @@ resource "kubernetes_deployment" "load_balancer" {
             name  = "CLUSTERS"
             value = local.clusters
           }
+          
+          # Add port configuration environment variables
+          env {
+            name  = "HTTP_PORT"
+            value = "80"
+          }
+          
+          dynamic "env" {
+            for_each = var.use_ssl ? [1] : []
+            content {
+              name  = "HTTPS_PORT"
+              value = "443"
+            }
+          }
 
           dynamic "volume_mount" {
             for_each = var.use_ssl ? [1] : []
@@ -245,10 +262,18 @@ resource "kubernetes_deployment" "load_balancer" {
             }
           }
 
+          port {
+            container_port = 80      # Must match hostPort when using hostNetwork
+            host_port     = 80
+            protocol      = "TCP"
+          }
+          
           dynamic "port" {
-            for_each = var.use_ssl ? [80, 443] : [80]
+            for_each = var.use_ssl ? [1] : []
             content {
-              container_port = port.value
+              container_port = 443   # Must match hostPort when using hostNetwork
+              host_port     = 443
+              protocol      = "TCP"
             }
           }
         }
@@ -268,23 +293,26 @@ resource "kubernetes_service" "load_balancer" {
   ]
 
   spec {
-    type = "NodePort"
+    type = "ClusterIP"  # With hostNetwork, pods are directly accessible on node IPs
 
     selector = {
       app = local.resource_names.lb
     }
 
+    port {
+      name        = "http"
+      port        = 80
+      target_port = 80
+      protocol    = "TCP"
+    }
+    
     dynamic "port" {
-      for_each = var.use_ssl ? [
-        { name = "http", port = 80 },
-        { name = "https", port = 443 }
-      ] : [
-        { name = "http", port = 80 }
-      ]
+      for_each = var.use_ssl ? [1] : []
       content {
-        name        = port.value.name
-        port        = port.value.port
-        target_port = port.value.port
+        name        = "https"
+        port        = 443
+        target_port = 443
+        protocol    = "TCP"
       }
     }
   }
@@ -326,59 +354,17 @@ spec:
     privateKeySecretRef:
       name: ${local.resource_names.issuer}-account-key
     solvers:
-      - http01:
-          ingress:
-            class: nginx
+      - dns01:
+          digitalocean:
+            tokenSecretRef:
+              name: digitalocean-dns
+              key: access-token
 YAML
 
   depends_on = [
     helm_release.cert_manager,
     time_sleep.wait_for_cert_manager
   ]
-}
-
-resource "kubernetes_ingress_v1" "tunnel_server" {
-  metadata {
-    name = local.ingress_name
-    annotations = var.use_ssl ? {
-      "cert-manager.io/issuer" = local.resource_names.issuer
-    } : {}
-  }
-
-  depends_on = [
-    local.active_cluster,
-    time_sleep.wait_for_cert_manager
-  ]
-
-  spec {
-    ingress_class_name = "nginx"
-
-    rule {
-      host = local.domain
-      http {
-        path {
-          path      = "/"
-          path_type = "Prefix"
-          backend {
-            service {
-              name = local.load_balancer_service_name
-              port {
-                number = 80
-              }
-            }
-          }
-        }
-      }
-    }
-
-    dynamic "tls" {
-      for_each = var.use_ssl ? [1] : []
-      content {
-        hosts       = [local.domain]
-        secret_name = local.resource_names.cert
-      }
-    }
-  }
 }
 
 # Only create if it doesn't exist
@@ -398,6 +384,23 @@ resource "kubernetes_secret" "registry_auth" {
         }
       }
     })
+  }
+
+  depends_on = [local.active_cluster]
+}
+
+# Secret for DNS-01 challenge with DigitalOcean
+resource "kubernetes_secret" "digitalocean_dns" {
+  count = var.use_ssl ? 1 : 0
+  
+  metadata {
+    name = "digitalocean-dns"
+  }
+
+  type = "Opaque"
+
+  data = {
+    "access-token" = var.do_token
   }
 
   depends_on = [local.active_cluster]
