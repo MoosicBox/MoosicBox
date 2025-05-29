@@ -30,13 +30,13 @@ variable "kubernetes_version" {
 variable "node_size" {
   description = "Size of the worker nodes"
   type        = string
-  default     = "s-2vcpu-4gb"
+  default     = "s-1vcpu-512mb-10gb"
 }
 
 variable "node_count" {
   description = "Number of worker nodes"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "aws_access_key_id" {
@@ -82,5 +82,5 @@ variable "extra_clusters" {
 variable "create_firewall" {
   description = "Whether to create a DigitalOcean firewall (requires additional permissions)"
   type        = bool
-  default     = false
+  default     = true
 }
