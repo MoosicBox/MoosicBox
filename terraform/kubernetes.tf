@@ -111,7 +111,8 @@ resource "kubernetes_deployment" "tunnel_server" {
   depends_on = [
     local.active_cluster,
     time_sleep.wait_for_cert_manager,
-    kubernetes_secret.registry_auth
+    kubernetes_secret.registry_auth,
+    null_resource.tunnel_server_image
   ]
 
   spec {
@@ -195,7 +196,8 @@ resource "kubernetes_deployment" "load_balancer" {
   depends_on = [
     local.active_cluster,
     time_sleep.wait_for_cert_manager,
-    kubernetes_secret.registry_auth
+    kubernetes_secret.registry_auth,
+    null_resource.load_balancer_image
   ]
 
   spec {
