@@ -28,8 +28,74 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
+    build-matrix:
+        name: Build matrix
+
+        strategy:
+            fail-fast: true
+
+            matrix:
+                os: ['ubuntu-latest']
+
+        runs-on: ${{ matrix.os }}
+
+        outputs:
+            matrix: ${{ steps.build-matrix-step.outputs.matrix }}
+
+        steps:
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Checkout
+              if: ${{ matrix.os == 'ubuntu-latest' }}
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Build matrix JSON
+              if: ${{ matrix.os == 'ubuntu-latest' }}
+              id: build-matrix-step
+              run: |
+                  MATRIX=$(
+                      cargo run -p clippier \
+                          features \
+                          . \
+                          -o json \
+                          | jq -rc \
+                              '[
+                                  .[]
+                                  | {
+                                      "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
+                                      "path": (.path),
+                                      "features": (.features),
+                                      "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
+                                      "os": (.os + "-latest"),
+                                      "dependencies": (.dependencies),
+                                      "toolchains": (.toolchains),
+                                      "ciSteps": (.ciSteps),
+                                      "ciToolchains": (.ciToolchains),
+                                      "env": (if .env != null then .env | gsub("\n";" ") else null end)
+                                  }
+                                  | del(.. | nulls)
+                              ]'
+                  )
+                  echo "Using matrix (raw):"
+                  echo $MATRIX
+                  echo "Using matrix:"
+                  echo $MATRIX | jq
+                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
+                  echo $MATRIX >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
     bloaty:
-        runs-on: ubuntu-latest
+        runs-on: ${{ matrix.package.os }}
+
+        needs: build-matrix
+
+        strategy:
+            fail-fast: false
+
+            matrix:
+                package: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
 
         steps:
             - uses: actions/checkout@v4
@@ -46,53 +112,41 @@ jobs:
               run: |
                   cargo install cargo-binutils
 
-            - name: Get dependencies
-              id: dependencies
-              run: |
-                  DEPENDENCIES="$(cargo run -p clippier dependencies . --os ubuntu)"
-                  echo "Using dependencies:"
-                  echo "$DEPENDENCIES"
-                  echo 'dependencies<<EOF' >> $GITHUB_OUTPUT
-                  echo "$DEPENDENCIES" >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
+            - name: Install winget
+              if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
+              uses: BSteffaniak/install-winget@v1
 
-            - name: Get environment
-              id: environment
-              run: |
-                  ENVIRONMENT="$(cargo run -p clippier environment . --os ubuntu -o json | jq -cr 'join(" ")')"
-                  echo "Using environment:"
-                  echo "$ENVIRONMENT"
-                  echo 'environment<<EOF' >> $GITHUB_OUTPUT
-                  echo "$ENVIRONMENT" >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
+            - name: Setup CI
+              if: ${{ matrix.package.ciSteps }}
+              run: ${{ matrix.package.ciSteps }}
 
-            - name: Get ci_steps
-              id: ci_steps
-              run: |
-                  CI_STEPS="$(cargo run -p clippier ci-steps . --os ubuntu -o json | jq -cr 'join(" ")')"
-                  echo "Using ci_steps:"
-                  echo "$CI_STEPS"
-                  echo 'ci_steps<<EOF' >> $GITHUB_OUTPUT
-                  echo "$CI_STEPS" >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
+            - uses: pnpm/action-setup@v3
+              if: ${{ contains(matrix.package.toolchains, 'pnpm') || contains(matrix.package.ciToolchains, 'pnpm') }}
+              name: Install pnpm
+              with:
+                  version: latest
+                  run_install: false
+
+            - uses: actions/setup-node@v4
+              if: ${{ contains(matrix.package.toolchains, 'node') || contains(matrix.package.ciToolchains, 'node') }}
+              name: Install node
+              with:
+                  node-version: latest
 
             - name: Setup cmake
               uses: jwlawson/actions-setup-cmake@v2
               with:
                   cmake-version: '3.x'
 
-            - name: Setup CI
-              if: ${{ steps.ci_steps.outputs.ci_steps }}
-              run: ${{ steps.ci_steps.outputs.ci_steps }}
-
             - name: Install dependencies
-              if: ${{ steps.dependencies.outputs.dependencies }}
+              if: ${{ matrix.package.dependencies }}
               shell: bash
-              run: ${{ steps.dependencies.outputs.dependencies }}
+              run: ${{ matrix.package.dependencies }}
 
-            - name: Run bloaty
+            - name: Run bloaty ${{ matrix.package.name }}
+              shell: bash
               run: |
-                  ${{ steps.environment.outputs.environment }} cargo run -p bloaty -- \
+                  ${{ matrix.package.env }} cargo run -p bloaty -- \
                         --skip-features fail-on-warnings,default \
                         --skip-feature-pattern '_.+' \
                         --output-format all \
