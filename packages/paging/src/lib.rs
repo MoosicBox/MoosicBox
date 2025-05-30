@@ -24,6 +24,18 @@ pub enum Page<T> {
     },
 }
 
+impl<T> Page<T> {
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self::WithTotal {
+            items: vec![],
+            offset: 0,
+            limit: 0,
+            total: 0,
+        }
+    }
+}
+
 #[cfg(feature = "openapi")]
 impl<T> utoipa::PartialSchema for Page<T> {
     fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
