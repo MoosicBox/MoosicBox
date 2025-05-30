@@ -455,7 +455,7 @@ strum_macros = "0.27.1"
 swc_bundler = "19.0.0"
 swc_common = { version = "11.0.0", features = ["tty-emitter"] }
 swc_ecma_ast = "11.0.0"
-swc_ecma_codegen = "13.1.0"
+swc_ecma_codegen = "13.2.0"
 swc_ecma_loader = { version = "11.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "20.0.3"
 swc_ecma_parser = "14.0.1"
