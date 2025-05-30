@@ -5,7 +5,7 @@ use hyperchad::{
     router::{Container, RouteRequest},
     transformer::html::ParseError,
 };
-use moosicbox_app_models::Connection;
+use moosicbox_app_models::{Connection, MusicApiSettings};
 use moosicbox_app_native_ui::downloads::DownloadTab;
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
@@ -13,6 +13,7 @@ use moosicbox_downloader::api::models::ApiDownloadTask;
 use moosicbox_music_api::{
     AlbumError, MusicApisError, SourceToMusicApi as _, TracksError, profiles::PROFILES,
 };
+use moosicbox_music_api_api::models::ApiMusicApi;
 use moosicbox_music_models::{
     AlbumSort, AlbumType, ApiSource, TrackApiSource,
     api::{ApiAlbum, ApiArtist},
@@ -565,11 +566,44 @@ pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError>
     let current_connection = STATE.get_current_connection().await?;
     let connection_name = STATE.get_connection_name().await?.unwrap_or_default();
 
+    #[allow(unused_mut)]
+    let mut music_api_settings: Vec<MusicApiSettings> = vec![];
+
+    let state = convert_state(&STATE).await;
+
+    if let Some(connection) = &state.connection {
+        let host = &connection.api_url;
+
+        let music_apis: Page<ApiMusicApi> = CLIENT
+            .get(&format!("{host}/music-api?moosicboxProfile={PROFILE}",))
+            .send()
+            .await
+            .inspect(|x| {
+                if !x.status().is_success() {
+                    log::error!("Error fetching music_apis: status={}", x.status());
+                }
+            })?
+            .json()
+            .await
+            .inspect_err(|e| log::error!("Error parsing music_apis response body: {e}"))
+            .unwrap_or_else(|_| Page::empty());
+
+        let music_apis = music_apis.into_items();
+
+        music_api_settings.extend(music_apis.into_iter().map(|x| MusicApiSettings {
+            name: x.name,
+            logged_in: x.logged_in,
+            run_scan_endpoint: x.run_scan_endpoint,
+            auth_endpoint: x.auth_endpoint,
+        }));
+    }
+
     moosicbox_app_native_ui::settings::settings(
-        &convert_state(&STATE).await,
+        &state,
         &connection_name,
         &connections,
         current_connection.as_ref(),
+        &music_api_settings,
     )
     .into_string()
     .try_into()

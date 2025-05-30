@@ -16,3 +16,17 @@ impl AsRef<Self> for Connection {
         self
     }
 }
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MusicApiSettings {
+    pub name: String,
+    pub logged_in: bool,
+    pub run_scan_endpoint: Option<String>,
+    pub auth_endpoint: Option<String>,
+}
+
+impl AsRef<Self> for MusicApiSettings {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}

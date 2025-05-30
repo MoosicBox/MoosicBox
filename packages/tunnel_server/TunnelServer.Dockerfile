@@ -36,6 +36,7 @@ RUN cat Cargo.toml | \
     \"packages\/middleware\",\r\
     \"packages\/music\/models\",\r\
     \"packages\/music_api\",\r\
+    \"packages\/music_api\/api\",\r\
     \"packages\/music_api\/models\",\r\
     \"packages\/paging\",\r\
     \"packages\/parsing_utils\",\r\
@@ -90,6 +91,7 @@ COPY packages/menu/models/Cargo.toml packages/menu/models/Cargo.toml
 COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/music/models/Cargo.toml packages/music/models/Cargo.toml
 COPY packages/music_api/Cargo.toml packages/music_api/Cargo.toml
+COPY packages/music_api/api/Cargo.toml packages/music_api/api/Cargo.toml
 COPY packages/music_api/models/Cargo.toml packages/music_api/models/Cargo.toml
 COPY packages/paging/Cargo.toml packages/paging/Cargo.toml
 COPY packages/parsing_utils/Cargo.toml packages/parsing_utils/Cargo.toml
@@ -168,7 +170,7 @@ RUN \
     cat "packages/async/macros/Cargo.toml" | \
     tr '\n' '\r' | \
     sed -E "s/\[lib\]/[lib]\r\
-path=\"..\/..\/temp_lib.rs\"/" | \ 
+path=\"..\/..\/temp_lib.rs\"/" | \
     tr '\r' '\n' \
     > "packages/async/macros/Cargo2.toml" && \
     mv "packages/async/macros/Cargo2.toml" "packages/async/macros/Cargo.toml" && \
@@ -177,6 +179,7 @@ path=\"..\/..\/temp_lib.rs\"/" | \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/library/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/menu/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/api/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simvar/harness/Cargo.toml" && \

@@ -2,7 +2,7 @@
 
 use hyperchad::transformer_models::{AlignItems, JustifyContent, LayoutDirection, TextAlign};
 use maud::{Markup, html};
-use moosicbox_app_models::Connection;
+use moosicbox_app_models::{Connection, MusicApiSettings};
 use strum::{AsRefStr, EnumString};
 
 use crate::{page, pre_escaped, state::State};
@@ -12,6 +12,7 @@ pub fn settings_page_content(
     connection_name: &str,
     connections: &[Connection],
     selected: Option<&Connection>,
+    music_api_settings: &[MusicApiSettings],
 ) -> Markup {
     html! {
         div sx-padding=(20) sx-gap=(10) {
@@ -77,18 +78,50 @@ pub fn settings_page_content(
                 div { "Download settings content will go here" }
             }
 
-            hr;
+            @for settings in music_api_settings {
+                hr;
 
-            section {
-                h2 { "Tidal" }
-                div { "Tidal settings content will go here" }
+                section {
+                    h2 { (settings.name) }
+                    (music_api_settings_content(settings))
+                }
             }
+        }
+    }
+}
 
-            hr;
-
-            section {
-                h2 { "Qobuz" }
-                div { "Qobuz settings content will go here" }
+#[must_use]
+fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
+    if settings.logged_in {
+        html! {
+            div sx-gap=(10) {
+                p { "Logged in!" }
+                button
+                    id="run-scan-button"
+                    type="button"
+                    sx-border-radius=(5)
+                    sx-background="#111"
+                    sx-border="2, #222"
+                    sx-padding-x=(10)
+                    sx-padding-y=(5)
+                    onclick="window.api.runTidalScan()"
+                {
+                    "Run Scan"
+                }
+            }
+        }
+    } else {
+        html! {
+            button
+                type="button"
+                sx-border-radius=(5)
+                sx-background="#111"
+                sx-border="2, #222"
+                sx-padding-x=(10)
+                sx-padding-y=(5)
+                onclick="window.api.startTidalAuth()"
+            {
+                "Start web authentication"
             }
         }
     }
@@ -198,9 +231,10 @@ pub fn settings(
     connection_name: &str,
     connections: &[Connection],
     selected: Option<&Connection>,
+    music_api_settings: &[MusicApiSettings],
 ) -> Markup {
     page(
         state,
-        &settings_page_content(connection_name, connections, selected),
+        &settings_page_content(connection_name, connections, selected, music_api_settings),
     )
 }
