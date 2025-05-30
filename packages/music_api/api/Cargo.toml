@@ -1,0 +1,37 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "multimedia", "network-programming"]
+description = "MoosicBox \"Music API\" API package"
+edition     = "2024"
+keywords    = ["album", "api", "artist", "models", "music"]
+license     = "MPL-2.0"
+name        = "moosicbox_music_api_api"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.1"
+
+[dependencies]
+actix-web              = { workspace = true }
+moosicbox_music_api    = { workspace = true, features = ["api"] }
+moosicbox_music_models = { workspace = true }
+moosicbox_paging       = { workspace = true }
+moosicbox_profiles     = { workspace = true, features = ["api"] }
+utoipa                 = { workspace = true, optional = true }
+
+log   = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[features]
+default = ["api", "db", "openapi"]
+
+fail-on-warnings = []
+
+openapi = [
+    "dep:utoipa",
+    "moosicbox_music_api/openapi",
+    "moosicbox_music_models/openapi",
+]
+
+db = ["moosicbox_music_models/db"]
+
+api = ["moosicbox_music_models/api"]

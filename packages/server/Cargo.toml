@@ -58,6 +58,9 @@ moosicbox_admin_htmx = { workspace = true, optional = true }
 moosicbox_downloader = { workspace = true, features = ["api"], optional = true }
 moosicbox_library = { workspace = true, features = ["api"], optional = true }
 moosicbox_menu = { workspace = true, features = ["api"], optional = true }
+moosicbox_music_api_api = { workspace = true, features = [
+    "api",
+], optional = true }
 moosicbox_player = { workspace = true, features = ["local"], optional = true }
 moosicbox_qobuz = { workspace = true, features = [
     "api",
@@ -363,6 +366,7 @@ app-apis = [
     "files-api",
     "library-api",
     "menu-api",
+    "music-api-api",
     "qobuz-api",
     "scan-api",
     "search-api",
@@ -384,6 +388,7 @@ downloader-api = ["dep:moosicbox_downloader", "downloader"]
 files-api = ["moosicbox_files/api"]
 library-api = ["dep:moosicbox_library", "library"]
 menu-api = ["dep:moosicbox_menu"]
+music-api-api = ["dep:moosicbox_music_api_api"]
 player-api = ["moosicbox_player?/api", "player"]
 qobuz-api = ["dep:moosicbox_qobuz", "qobuz"]
 scan-api = ["dep:moosicbox_scan", "scan"]
@@ -408,6 +413,7 @@ openapi = [
     "moosicbox_library?/openapi",
     "moosicbox_menu?/openapi",
     "moosicbox_music_api/openapi",
+    "moosicbox_music_api_api?/openapi",
     "moosicbox_music_models/openapi",
     "moosicbox_player?/openapi",
     "moosicbox_qobuz?/openapi",

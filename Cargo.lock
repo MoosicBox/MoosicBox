@@ -7131,6 +7131,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_music_api",
+ "moosicbox_music_api_api",
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_player",
@@ -7804,6 +7805,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_music_api_api"
+version = "0.1.1"
+dependencies = [
+ "actix-web",
+ "log 0.4.27",
+ "moosicbox_music_api",
+ "moosicbox_music_models",
+ "moosicbox_paging",
+ "moosicbox_profiles",
+ "serde",
+ "utoipa",
+]
+
+[[package]]
 name = "moosicbox_music_api_models"
 version = "0.1.1"
 dependencies = [
@@ -8074,6 +8089,7 @@ dependencies = [
  "moosicbox_menu",
  "moosicbox_middleware",
  "moosicbox_music_api",
+ "moosicbox_music_api_api",
  "moosicbox_music_models",
  "moosicbox_player",
  "moosicbox_profiles",

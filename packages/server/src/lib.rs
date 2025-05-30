@@ -360,6 +360,11 @@ pub async fn run<T>(
                 "/menu",
             )));
 
+            #[cfg(feature = "music-api-api")]
+            let app = app.service(moosicbox_music_api_api::api::bind_services(
+                actix_web::web::scope("/music-api"),
+            ));
+
             #[cfg(feature = "player-api")]
             let app = app.service(moosicbox_player::api::bind_services(actix_web::web::scope(
                 "/player",
