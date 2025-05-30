@@ -5,8 +5,8 @@ use actix_web::{
     web::{self, Json},
 };
 use log::info;
+use moosicbox_profiles::api::ProfileName;
 use serde_json::{Value, json};
-use switchy_database::profiles::api::ProfileName;
 
 #[cfg(feature = "openapi")]
 pub mod openapi;

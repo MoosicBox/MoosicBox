@@ -10,6 +10,7 @@ use actix_web::{HttpResponse, route};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use log::{debug, info};
+use moosicbox_profiles::api::ProfileNameUnverified;
 use moosicbox_tunnel::{
     TunnelEncoding, TunnelHttpRequest, TunnelRequest, TunnelResponse, TunnelStream,
 };
@@ -18,7 +19,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::str::FromStr as _;
-use switchy_database::profiles::api::ProfileNameUnverified;
 use switchy_http::models::Method;
 use thiserror::Error;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};

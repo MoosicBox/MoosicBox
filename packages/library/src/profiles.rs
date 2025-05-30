@@ -1,4 +1,7 @@
-use std::sync::{Arc, LazyLock, RwLock};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, LazyLock, RwLock},
+};
 
 use switchy_database::profiles::LibraryDatabase;
 
@@ -10,7 +13,7 @@ pub static PROFILES: LazyLock<LibraryMusicApiProfiles> =
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
 pub struct LibraryMusicApiProfiles {
-    profiles: Arc<RwLock<Vec<(String, LibraryMusicApi)>>>,
+    profiles: Arc<RwLock<BTreeMap<String, LibraryMusicApi>>>,
 }
 
 impl LibraryMusicApiProfiles {
@@ -18,17 +21,18 @@ impl LibraryMusicApiProfiles {
     ///
     /// Will panic if `RwLock` is poisoned
     pub fn add(&self, profile: String, db: LibraryDatabase) {
+        moosicbox_profiles::PROFILES.add(profile.clone());
         self.profiles
             .write()
             .unwrap()
-            .push((profile, LibraryMusicApi { db }));
+            .insert(profile, LibraryMusicApi { db });
     }
 
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
     pub fn remove(&self, profile: &str) {
-        self.profiles.write().unwrap().retain(|(p, _)| p != profile);
+        self.profiles.write().unwrap().remove(profile);
     }
 
     /// # Panics
@@ -71,7 +75,7 @@ impl LibraryMusicApiProfiles {
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
     use futures::future::{Ready, err, ok};
-    use switchy_database::profiles::api::ProfileName;
+    use moosicbox_profiles::api::ProfileName;
 
     use super::{LibraryMusicApi, PROFILES};
 

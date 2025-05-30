@@ -26,6 +26,7 @@ moosicbox_env_utils         = { workspace = true }
 moosicbox_json_utils        = { workspace = true, features = ["database"] }
 moosicbox_logging           = { workspace = true, features = ["free_log"] }
 moosicbox_middleware        = { workspace = true }
+moosicbox_profiles          = { workspace = true, features = ["api"] }
 moosicbox_task              = { workspace = true }
 moosicbox_tunnel            = { workspace = true }
 switchy_database            = { workspace = true, features = ["api"] }

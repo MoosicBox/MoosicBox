@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use moosicbox_config::AppType;
 use moosicbox_json_utils::database::DatabaseFetchError;
@@ -51,7 +51,7 @@ async fn add_profile(
     let library_music_api = moosicbox_library::LibraryMusicApi::new(library_database.clone());
 
     #[allow(unused_mut)]
-    let mut apis_map: HashMap<ApiSource, Arc<Box<dyn MusicApi>>> = HashMap::new();
+    let mut apis_map: BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>> = BTreeMap::new();
     #[cfg(feature = "library")]
     apis_map.insert(
         ApiSource::Library,

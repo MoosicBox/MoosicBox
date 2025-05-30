@@ -7,11 +7,9 @@ use actix_web::{
 };
 use maud::{Markup, html};
 use moosicbox_json_utils::database::DatabaseFetchError;
+use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;
-use switchy_database::{
-    config::ConfigDatabase,
-    profiles::{PROFILES, api::ProfileName},
-};
+use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,

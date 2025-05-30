@@ -13,11 +13,16 @@ version     = "0.1.1"
 [dependencies]
 moosicbox_assert = { workspace = true }
 
-tokio = { workspace = true, features = ["sync"] }
+actix-web = { workspace = true, optional = true }
+futures   = { workspace = true, optional = true }
+qstring   = { workspace = true, optional = true }
+tokio     = { workspace = true, features = ["sync"] }
 
 [features]
-default = ["events"]
+default = ["api", "events"]
 
 fail-on-warnings = []
 
 events = []
+
+api = ["dep:actix-web", "dep:futures", "dep:qstring"]

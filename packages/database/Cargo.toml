@@ -14,8 +14,9 @@ version     = "0.1.3"
 group = "switchy"
 
 [dependencies]
-moosicbox_assert = { workspace = true }
-moosicbox_task   = { workspace = true, optional = true }
+moosicbox_assert   = { workspace = true }
+moosicbox_profiles = { workspace = true, features = ["api"] }
+moosicbox_task     = { workspace = true, optional = true }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -33,7 +34,6 @@ regex = { workspace = true, optional = true }
 
 # Api dependencies
 actix-web = { workspace = true, optional = true }
-qstring   = { workspace = true, optional = true }
 
 async-trait = { workspace = true }
 chrono      = { workspace = true }
@@ -63,7 +63,7 @@ fail-on-warnings = []
 
 tls = ["sqlx/tls-rustls"]
 
-api = ["dep:actix-web", "dep:futures", "dep:qstring"]
+api = ["dep:actix-web", "dep:futures"]
 
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = ["dep:futures", "dep:sqlx", "sqlx", "sqlx/mysql"]

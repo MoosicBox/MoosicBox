@@ -124,7 +124,7 @@ impl AppState {
         &self,
         connection: &Connection,
     ) -> Result<(), AppStateError> {
-        use std::collections::HashMap;
+        use std::collections::BTreeMap;
 
         use moosicbox_music_api::{MusicApi, profiles::PROFILES};
         use moosicbox_music_models::ApiSource;
@@ -132,7 +132,7 @@ impl AppState {
 
         static PROFILE: &str = "master";
 
-        let mut apis_map: HashMap<ApiSource, Arc<Box<dyn MusicApi>>> = HashMap::new();
+        let mut apis_map: BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>> = BTreeMap::new();
 
         for api_source in ApiSource::all() {
             apis_map.insert(

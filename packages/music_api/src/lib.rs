@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 #![allow(clippy::type_complexity)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
 use models::{
@@ -21,20 +21,18 @@ use tokio::sync::{Mutex, RwLock};
 pub mod profiles;
 
 #[derive(Clone)]
-pub struct MusicApis<S: ::std::hash::BuildHasher + Clone = std::hash::RandomState>(
-    Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
-);
+pub struct MusicApis(Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>);
 
-impl Default for MusicApis<std::hash::RandomState> {
+impl Default for MusicApis {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl MusicApis<std::hash::RandomState> {
+impl MusicApis {
     #[must_use]
     pub fn new() -> Self {
-        Self(Arc::new(HashMap::new()))
+        Self(Arc::new(BTreeMap::new()))
     }
 
     pub fn add_source(&mut self, api: Arc<Box<dyn MusicApi>>) {
@@ -45,26 +43,20 @@ impl MusicApis<std::hash::RandomState> {
     }
 }
 
-impl<S: ::std::hash::BuildHasher + Clone> From<&MusicApis<S>>
-    for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>
-{
-    fn from(value: &MusicApis<S>) -> Self {
+impl From<&MusicApis> for Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>> {
+    fn from(value: &MusicApis) -> Self {
         value.0.clone()
     }
 }
 
-impl<S: ::std::hash::BuildHasher + Clone> From<MusicApis<S>>
-    for Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>
-{
-    fn from(value: MusicApis<S>) -> Self {
+impl From<MusicApis> for Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>> {
+    fn from(value: MusicApis) -> Self {
         value.0
     }
 }
 
-impl<S: ::std::hash::BuildHasher + Clone> From<Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>>
-    for MusicApis<S>
-{
-    fn from(value: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>) -> Self {
+impl From<Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>> for MusicApis {
+    fn from(value: Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>) -> Self {
         Self(value)
     }
 }
@@ -75,7 +67,7 @@ pub enum MusicApisError {
     NotFound(ApiSource),
 }
 
-impl<S: ::std::hash::BuildHasher + Clone> SourceToMusicApi for MusicApis<S> {
+impl SourceToMusicApi for MusicApis {
     fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
         let api = self
             .0
@@ -83,6 +75,40 @@ impl<S: ::std::hash::BuildHasher + Clone> SourceToMusicApi for MusicApis<S> {
             .ok_or(MusicApisError::NotFound(source))?;
 
         Ok(api.clone())
+    }
+}
+
+pub struct MusicApisIter<'a> {
+    inner: std::collections::btree_map::Iter<'a, ApiSource, Arc<Box<dyn MusicApi>>>,
+}
+
+impl<'a> Iterator for MusicApisIter<'a> {
+    type Item = (&'a ApiSource, &'a dyn MusicApi);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner
+            .next()
+            .map(|(src, api_arc)| (src, api_arc.as_ref().as_ref()))
+    }
+}
+
+impl MusicApis {
+    #[must_use]
+    pub fn iter(&self) -> MusicApisIter<'_> {
+        MusicApisIter {
+            inner: self.0.iter(),
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a MusicApis {
+    type Item = (&'a ApiSource, &'a dyn MusicApi);
+    type IntoIter = MusicApisIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        MusicApisIter {
+            inner: self.0.iter(),
+        }
     }
 }
 
@@ -345,9 +371,9 @@ pub trait MusicApi: Send + Sync {
 pub struct CachedMusicApi<T: MusicApi> {
     inner: T,
     cascade_delete: bool,
-    artists: Arc<RwLock<HashMap<Id, Option<Artist>>>>,
-    albums: Arc<RwLock<HashMap<Id, Option<Album>>>>,
-    tracks: Arc<RwLock<HashMap<Id, Option<Track>>>>,
+    artists: Arc<RwLock<BTreeMap<Id, Option<Artist>>>>,
+    albums: Arc<RwLock<BTreeMap<Id, Option<Album>>>>,
+    tracks: Arc<RwLock<BTreeMap<Id, Option<Track>>>>,
 }
 
 impl<T: MusicApi> CachedMusicApi<T> {
@@ -355,9 +381,9 @@ impl<T: MusicApi> CachedMusicApi<T> {
         Self {
             inner: api,
             cascade_delete: false,
-            artists: Arc::new(RwLock::new(HashMap::new())),
-            albums: Arc::new(RwLock::new(HashMap::new())),
-            tracks: Arc::new(RwLock::new(HashMap::new())),
+            artists: Arc::new(RwLock::new(BTreeMap::new())),
+            albums: Arc::new(RwLock::new(BTreeMap::new())),
+            tracks: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
@@ -405,7 +431,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
     }
 
     async fn cache_empty_values<E: Send + Sync>(
-        cache: &RwLock<HashMap<Id, Option<E>>>,
+        cache: &RwLock<BTreeMap<Id, Option<E>>>,
         ids: &[&Id],
     ) {
         let mut cache = cache.write().await;
@@ -418,7 +444,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         Self::cache_artists_inner(&self.artists, artists).await;
     }
 
-    async fn cache_artists_inner(cache: &RwLock<HashMap<Id, Option<Artist>>>, artists: &[Artist]) {
+    async fn cache_artists_inner(cache: &RwLock<BTreeMap<Id, Option<Artist>>>, artists: &[Artist]) {
         let mut cache = cache.write().await;
         for artist in artists {
             cache.insert(artist.id.clone(), Some(artist.to_owned()));
@@ -429,7 +455,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         Self::cache_albums_inner(&self.albums, albums).await;
     }
 
-    async fn cache_albums_inner(cache: &RwLock<HashMap<Id, Option<Album>>>, albums: &[Album]) {
+    async fn cache_albums_inner(cache: &RwLock<BTreeMap<Id, Option<Album>>>, albums: &[Album]) {
         let mut cache = cache.write().await;
         for album in albums {
             cache.insert(album.id.clone(), Some(album.to_owned()));
@@ -440,7 +466,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         Self::cache_tracks_inner(&self.tracks, tracks).await;
     }
 
-    async fn cache_tracks_inner(cache: &RwLock<HashMap<Id, Option<Track>>>, tracks: &[Track]) {
+    async fn cache_tracks_inner(cache: &RwLock<BTreeMap<Id, Option<Track>>>, tracks: &[Track]) {
         let mut cache = cache.write().await;
         for track in tracks {
             cache.insert(track.id.clone(), Some(track.to_owned()));
@@ -497,7 +523,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         Self::remove_cache_album_ids_inner(&mut *self.albums.write().await, ids);
     }
 
-    fn remove_cache_album_ids_inner(albums: &mut HashMap<Id, Option<Album>>, ids: &[&Id]) {
+    fn remove_cache_album_ids_inner(albums: &mut BTreeMap<Id, Option<Album>>, ids: &[&Id]) {
         Self::remove_cache_ids(albums, ids);
     }
 
@@ -505,7 +531,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
         Self::remove_cache_ids(&mut *self.tracks.write().await, ids);
     }
 
-    fn remove_cache_ids<E>(cache: &mut HashMap<Id, Option<E>>, ids: &[&Id]) {
+    fn remove_cache_ids<E>(cache: &mut BTreeMap<Id, Option<E>>, ids: &[&Id]) {
         for id in ids {
             cache.remove(*id);
         }
@@ -516,7 +542,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
     }
 
     async fn remove_cache_artists_inner(
-        cache: &RwLock<HashMap<Id, Option<Artist>>>,
+        cache: &RwLock<BTreeMap<Id, Option<Artist>>>,
         artists: &[Artist],
     ) {
         let mut cache = cache.write().await;
@@ -530,7 +556,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
     }
 
     async fn remove_cache_albums_inner(
-        cache: &RwLock<HashMap<Id, Option<Album>>>,
+        cache: &RwLock<BTreeMap<Id, Option<Album>>>,
         albums: &[Album],
     ) {
         let mut cache = cache.write().await;
@@ -544,7 +570,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
     }
 
     async fn remove_cache_tracks_inner(
-        cache: &RwLock<HashMap<Id, Option<Track>>>,
+        cache: &RwLock<BTreeMap<Id, Option<Track>>>,
         tracks: &[Track],
     ) {
         let mut cache = cache.write().await;

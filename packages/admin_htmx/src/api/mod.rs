@@ -8,10 +8,11 @@ use actix_web::{
     route, web,
 };
 use maud::{DOCTYPE, Markup, PreEscaped, html};
+use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;
 use switchy_database::{
     config::ConfigDatabase,
-    profiles::{LibraryDatabase, PROFILES, api::ProfileName},
+    profiles::{LibraryDatabase, PROFILES},
 };
 
 pub mod info;

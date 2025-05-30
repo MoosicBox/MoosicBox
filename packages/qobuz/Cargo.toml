@@ -60,5 +60,5 @@ default = ["api", "db", "openapi"]
 fail-on-warnings = []
 
 api     = ["dep:actix-web", "switchy_database/api"]
-db      = ["moosicbox_music_api/db"]
+db      = []
 openapi = ["dep:utoipa", "moosicbox_search/openapi"]

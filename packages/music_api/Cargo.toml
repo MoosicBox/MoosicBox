@@ -18,7 +18,7 @@ moosicbox_menu_models      = { workspace = true }
 moosicbox_music_api_models = { workspace = true }
 moosicbox_music_models     = { workspace = true }
 moosicbox_paging           = { workspace = true }
-switchy_database           = { workspace = true }
+moosicbox_profiles         = { workspace = true }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -35,12 +35,10 @@ test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["api", "db", "openapi"]
+default = ["api", "openapi"]
 
 fail-on-warnings = []
 
 openapi = ["moosicbox_music_api_models/openapi"]
 
-db = ["switchy_database/api"]
-
-api = ["dep:actix-web", "switchy_database/api"]
+api = ["dep:actix-web", "moosicbox_profiles/api"]

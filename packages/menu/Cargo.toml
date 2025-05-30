@@ -16,7 +16,7 @@ moosicbox_date_utils   = { workspace = true, features = ["chrono"] }
 moosicbox_json_utils   = { workspace = true, features = ["database"] }
 moosicbox_library      = { workspace = true }
 moosicbox_menu_models  = { workspace = true }
-moosicbox_music_api    = { workspace = true, features = ["db"] }
+moosicbox_music_api    = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging       = { workspace = true }
 moosicbox_scan         = { workspace = true }

@@ -6,8 +6,8 @@ use actix_web::{
     Result, get,
     web::{self},
 };
+use moosicbox_profiles::api::ProfileNameUnverified;
 use serde::Deserialize;
-use switchy_database::profiles::api::ProfileNameUnverified;
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]

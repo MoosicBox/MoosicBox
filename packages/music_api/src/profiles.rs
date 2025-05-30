@@ -1,7 +1,7 @@
 #![allow(clippy::type_complexity)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     sync::{Arc, LazyLock, RwLock},
 };
 
@@ -9,28 +9,28 @@ use moosicbox_music_models::ApiSource;
 
 use crate::{MusicApi, MusicApis};
 
-pub static PROFILES: LazyLock<MusicApisProfiles<std::hash::RandomState>> =
-    LazyLock::new(MusicApisProfiles::default);
+pub static PROFILES: LazyLock<MusicApisProfiles> = LazyLock::new(MusicApisProfiles::default);
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Default)]
-pub struct MusicApisProfiles<S: ::std::hash::BuildHasher + Clone = std::hash::RandomState> {
-    profiles: Arc<RwLock<Vec<(String, MusicApis<S>)>>>,
+pub struct MusicApisProfiles {
+    profiles: Arc<RwLock<BTreeMap<String, MusicApis>>>,
 }
 
-impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
+impl MusicApisProfiles {
     /// # Panics
     ///
     /// Will panic if `RwLock` is poisoned
     pub fn add(
         &self,
         profile: String,
-        music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
+        music_apis: Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>,
     ) {
+        moosicbox_profiles::PROFILES.add(profile.clone());
         self.profiles
             .write()
             .unwrap()
-            .push((profile, MusicApis(music_apis)));
+            .insert(profile, MusicApis(music_apis));
     }
 
     /// # Panics
@@ -39,14 +39,14 @@ impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
     pub fn upsert(
         &self,
         profile: String,
-        music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
+        music_apis: Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>,
     ) {
         let mut profiles = self.profiles.write().unwrap();
 
-        if let Some(existing) = profiles.iter_mut().find(|(p, _)| p == &profile) {
-            existing.1 = MusicApis(music_apis);
+        if let Some(existing) = profiles.iter_mut().find(|(p, _)| *p == &profile) {
+            *existing.1 = MusicApis(music_apis);
         } else {
-            profiles.push((profile, MusicApis(music_apis)));
+            profiles.insert(profile, MusicApis(music_apis));
         }
     }
 
@@ -54,7 +54,7 @@ impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
     ///
     /// Will panic if `RwLock` is poisoned
     pub fn remove(&self, profile: &str) {
-        self.profiles.write().unwrap().retain(|(p, _)| p != profile);
+        self.profiles.write().unwrap().remove(profile);
     }
 
     /// # Panics
@@ -65,8 +65,8 @@ impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
     pub fn add_fetch(
         &self,
         profile: &str,
-        music_apis: Arc<HashMap<ApiSource, Arc<Box<dyn MusicApi>>, S>>,
-    ) -> MusicApis<S> {
+        music_apis: Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>,
+    ) -> MusicApis {
         self.add(profile.to_owned(), music_apis);
         self.get(profile).unwrap()
     }
@@ -75,7 +75,7 @@ impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
     ///
     /// Will panic if `RwLock` is poisoned
     #[must_use]
-    pub fn get(&self, profile: &str) -> Option<MusicApis<S>> {
+    pub fn get(&self, profile: &str) -> Option<MusicApis> {
         self.profiles.read().unwrap().iter().find_map(|(p, api)| {
             if p == profile {
                 Some(api.clone())
@@ -103,7 +103,7 @@ impl<S: ::std::hash::BuildHasher + Clone> MusicApisProfiles<S> {
 pub mod api {
     use actix_web::{FromRequest, HttpRequest, dev::Payload, error::ErrorBadRequest};
     use futures::future::{Ready, err, ok};
-    use switchy_database::profiles::api::ProfileName;
+    use moosicbox_profiles::api::ProfileName;
 
     use super::{MusicApis, PROFILES};
 

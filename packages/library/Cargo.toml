@@ -26,6 +26,7 @@ moosicbox_menu_models = { workspace = true }
 moosicbox_music_api = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging = { workspace = true }
+moosicbox_profiles = { workspace = true }
 moosicbox_search = { workspace = true, features = ["api", "db"] }
 moosicbox_stream_utils = { workspace = true, optional = true }
 switchy_database = { workspace = true }
@@ -53,7 +54,12 @@ default = ["all-encoders", "all-sources", "api", "openapi"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web", "moosicbox_library_models/api", "switchy_database/api"]
+api = [
+    "dep:actix-web",
+    "moosicbox_library_models/api",
+    "moosicbox_profiles/api",
+    "switchy_database/api",
+]
 openapi = [
     "dep:utoipa",
     "moosicbox_library_models/openapi",

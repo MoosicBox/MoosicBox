@@ -12,9 +12,9 @@ use moosicbox_music_models::{
     ApiSource, AudioFormat, PlaybackQuality, Track,
     id::{Id, IdType, ParseIntegersError, parse_integer_ranges_to_ids},
 };
+use moosicbox_profiles::api::ProfileName;
 use moosicbox_session::models::PlaybackTarget;
 use serde::Deserialize;
-use switchy_database::profiles::api::ProfileName;
 
 use crate::{
     ApiPlaybackStatus, DEFAULT_PLAYBACK_RETRY_OPTIONS, PlaybackHandler, PlaybackStatus, PlayerError,
