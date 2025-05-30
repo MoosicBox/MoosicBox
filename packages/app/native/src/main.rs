@@ -91,7 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(feature = "assets")]
     for asset in moosicbox_app_native::assets::ASSETS.iter().cloned() {
-        log::debug!("app_native: adding static asset route: {asset:?}");
+        log::trace!("app_native: adding static asset route: {asset:?}");
         app = app.with_static_asset_route_result(asset).unwrap();
     }
 
