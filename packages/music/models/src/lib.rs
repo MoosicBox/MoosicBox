@@ -59,6 +59,8 @@ impl FromStr for ArtistSort {
     PartialEq,
     Clone,
     Hash,
+    Ord,
+    PartialOrd,
 )]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]

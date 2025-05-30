@@ -30,7 +30,7 @@ impl std::fmt::Display for IdType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Id {
     String(String),
     Number(u64),
