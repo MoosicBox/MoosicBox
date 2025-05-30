@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 
+use hyperchad_renderer_vanilla_js_hash::PLUGIN_HASH_HEX;
+
 fn main() {
     let output = Command::new("git")
         .args(["rev-parse", "HEAD"])
@@ -15,10 +17,16 @@ fn main() {
     let web_dir = manifest_dir.join("web");
     let src_dir = web_dir.join("src");
     let dist_dir = web_dir.join("dist");
+    let hash_dir = dist_dir.join(PLUGIN_HASH_HEX);
     let checksum_file = dist_dir.join(".checksum");
 
-    if dist_dir.is_dir() {
-        remove_all_except(&dist_dir, &checksum_file).unwrap();
+    println!(
+        "cargo:rustc-env=HYPERCHAD_VANILLA_JS_EMBED_SCRIPT_DIR={}",
+        hash_dir.display()
+    );
+
+    if hash_dir.is_dir() {
+        std::fs::remove_dir_all(&hash_dir).unwrap();
     }
 
     println!("Bundling web...");
@@ -81,7 +89,7 @@ fn main() {
     )
     .unwrap();
 
-    let resp = bundle(&index, &dist_dir);
+    let resp = bundle(&index, &hash_dir);
 
     std::fs::remove_file(&index).unwrap();
 
@@ -108,21 +116,6 @@ fn bundle(index: &Path, dist_dir: &Path) -> Result<(), &'static str> {
     println!("Bundling using swc...");
     hyperchad_js_bundler::swc::bundle(index, &dist_dir.join("index.js"), false);
     hyperchad_js_bundler::bundle(index, &dist_dir.join("index.min.js"));
-
-    Ok(())
-}
-
-fn remove_all_except(path: &Path, except: &Path) -> Result<(), std::io::Error> {
-    for entry in std::fs::read_dir(path)?.filter_map(Result::ok) {
-        let path = entry.path();
-        if path != except {
-            if Path::is_dir(&path) {
-                std::fs::remove_dir_all(&path)?;
-            } else {
-                std::fs::remove_file(&path)?;
-            }
-        }
-    }
 
     Ok(())
 }

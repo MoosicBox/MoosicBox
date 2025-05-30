@@ -36,10 +36,16 @@ const SCRIPT_NAME_EXTENSION: &str = "min.js";
 pub const SCRIPT_NAME: &str = concatcp!(SCRIPT_NAME_STEM, ".", SCRIPT_NAME_EXTENSION);
 
 #[cfg(all(debug_assertions, feature = "script"))]
-pub const SCRIPT: &str = include_str!("../web/dist/index.js");
+pub const SCRIPT: &str = include_str!(concat!(
+    env!("HYPERCHAD_VANILLA_JS_EMBED_SCRIPT_DIR"),
+    "/index.js"
+));
 
 #[cfg(all(not(debug_assertions), feature = "script"))]
-pub const SCRIPT: &str = include_str!("../web/dist/index.min.js");
+pub const SCRIPT: &str = include_str!(concat!(
+    env!("HYPERCHAD_VANILLA_JS_EMBED_SCRIPT_DIR"),
+    "/index.min.js"
+));
 
 #[cfg(all(feature = "hash", feature = "script"))]
 pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {

@@ -1,0 +1,65 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["gui"]
+description = "HyperChad Vanilla JS HTML renderer hash package"
+edition     = "2024"
+keywords    = ["gui", "html", "js", "render", "web"]
+license     = "MPL-2.0"
+name        = "hyperchad_renderer_vanilla_js_hash"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+const-hex         = { workspace = true }
+const_format      = { workspace = true }
+sha2-const-stable = { workspace = true }
+
+[features]
+default = ["all-plugins"]
+
+fail-on-warnings = []
+
+all-plugins = [
+    "plugin-actions",
+    "plugin-canvas",
+    "plugin-event",
+    "plugin-form",
+    "plugin-idiomorph",
+    "plugin-nav",
+    "plugin-routing",
+    "plugin-sse",
+    "plugin-tauri-event",
+]
+
+_actions = []
+plugin-actions = [
+    "plugin-actions-change",
+    "plugin-actions-click",
+    "plugin-actions-click-outside",
+    "plugin-actions-event",
+    "plugin-actions-immediate",
+    "plugin-actions-mouse-down",
+    "plugin-actions-mouse-over",
+    "plugin-actions-resize",
+]
+plugin-actions-change = ["_actions"]
+plugin-actions-click = ["_actions"]
+plugin-actions-click-outside = ["_actions"]
+plugin-actions-event = ["_actions"]
+plugin-actions-immediate = ["_actions"]
+plugin-actions-mouse-down = ["_actions"]
+plugin-actions-mouse-over = ["_actions"]
+plugin-actions-resize = ["_actions"]
+
+plugin-canvas      = []
+plugin-event       = []
+plugin-form        = []
+plugin-idiomorph   = []
+plugin-nav         = []
+plugin-routing     = []
+plugin-sse         = []
+plugin-tauri-event = []

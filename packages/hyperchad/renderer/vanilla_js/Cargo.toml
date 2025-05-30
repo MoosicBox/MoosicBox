@@ -15,10 +15,11 @@ version     = "0.1.0"
 group = "hyperchad"
 
 [package.metadata.cargo-machete]
-ignored = ["hyperchad_js_bundler"]
+ignored = ["hyperchad_js_bundler", "hyperchad_renderer_vanilla_js_hash"]
 
 [build-dependencies]
-hyperchad_js_bundler = { workspace = true, features = ["swc"] }
+hyperchad_js_bundler               = { workspace = true, features = ["swc"] }
+hyperchad_renderer_vanilla_js_hash = { workspace = true }
 
 [dependencies]
 hyperchad_renderer      = { workspace = true, features = ["canvas", "html"] }
@@ -66,20 +67,44 @@ plugin-actions = [
     "plugin-actions-mouse-over",
     "plugin-actions-resize",
 ]
-plugin-actions-change = ["_actions"]
-plugin-actions-click = ["_actions"]
-plugin-actions-click-outside = ["_actions"]
-plugin-actions-event = ["_actions"]
-plugin-actions-immediate = ["_actions"]
-plugin-actions-mouse-down = ["_actions"]
-plugin-actions-mouse-over = ["_actions"]
-plugin-actions-resize = ["_actions"]
+plugin-actions-change = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-change",
+]
+plugin-actions-click = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-click",
+]
+plugin-actions-click-outside = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-click-outside",
+]
+plugin-actions-event = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-event",
+]
+plugin-actions-immediate = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-immediate",
+]
+plugin-actions-mouse-down = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-mouse-down",
+]
+plugin-actions-mouse-over = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-mouse-over",
+]
+plugin-actions-resize = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-resize",
+]
 
-plugin-canvas      = []
-plugin-event       = []
-plugin-form        = []
-plugin-idiomorph   = []
-plugin-nav         = []
-plugin-routing     = []
-plugin-sse         = []
-plugin-tauri-event = []
+plugin-canvas      = ["hyperchad_renderer_vanilla_js_hash/plugin-canvas"]
+plugin-event       = ["hyperchad_renderer_vanilla_js_hash/plugin-event"]
+plugin-form        = ["hyperchad_renderer_vanilla_js_hash/plugin-form"]
+plugin-idiomorph   = ["hyperchad_renderer_vanilla_js_hash/plugin-idiomorph"]
+plugin-nav         = ["hyperchad_renderer_vanilla_js_hash/plugin-nav"]
+plugin-routing     = ["hyperchad_renderer_vanilla_js_hash/plugin-routing"]
+plugin-sse         = ["hyperchad_renderer_vanilla_js_hash/plugin-sse"]
+plugin-tauri-event = ["hyperchad_renderer_vanilla_js_hash/plugin-tauri-event"]
