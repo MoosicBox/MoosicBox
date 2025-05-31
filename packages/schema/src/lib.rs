@@ -154,6 +154,23 @@ impl Migrations {
     ///
     /// * If any asserts fail
     pub async fn run(&'static self, db: &dyn Database) -> Result<(), DatabaseError> {
+        self.run_until(db, None).await
+    }
+
+    /// # Errors
+    ///
+    /// * If the migrations table fails to be created
+    /// * If fails to select existing ran migrations
+    /// * If fails to insert new migration runs
+    ///
+    /// # Panics
+    ///
+    /// * If any asserts fail
+    pub async fn run_until(
+        &'static self,
+        db: &dyn Database,
+        migration_name: Option<&str>,
+    ) -> Result<(), DatabaseError> {
         db.create_table(MIGRATIONS_TABLE_NAME)
             .if_not_exists(true)
             .column(Column {
@@ -176,6 +193,13 @@ impl Migrations {
         let migrations = self.as_btree(true);
 
         for (name, migration) in migrations {
+            if let Some(migration_name) = migration_name {
+                if migration_name == name {
+                    log::info!("run_until: stopping on migration_name={name}");
+                    break;
+                }
+            }
+
             let results = db
                 .select(MIGRATIONS_TABLE_NAME)
                 .columns(&["name"])
