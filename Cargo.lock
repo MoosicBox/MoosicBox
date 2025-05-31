@@ -15118,8 +15118,8 @@ dependencies = [
 
 [[package]]
 name = "tracing-opentelemetry"
-version = "0.31.0"
-source = "git+https://github.com/BSteffaniak/tracing-opentelemetry?branch=upgrade-otel-to-0.30#6cd59e7ef41287235e3282bc29cbc24b05b70c69"
+version = "0.30.0"
+source = "git+https://github.com/tokio-rs/tracing-opentelemetry#8905ee70df3c9f427ee026b24271c4adfcd1d8b1"
 dependencies = [
  "js-sys",
  "once_cell",

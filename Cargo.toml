@@ -488,7 +488,7 @@ tokio-tungstenite = { version = "0.26.2", features = [
 tokio-util = "0.7.15"
 toml = "0.8.22"
 tracing = "0.1.41"
-tracing-opentelemetry = { version = "0.31.0" }
+tracing-opentelemetry = { version = "0.30.0" }
 tracing-subscriber = "0.3.19"
 tracy-client = { version = "0.18.0", default-features = false }
 turmoil = "0.6.6"
@@ -531,11 +531,10 @@ xml = "0.8.20"
 # pingora-http            = { git = "https://github.com/cloudflare/pingora" }
 # pingora-load-balancing  = { git = "https://github.com/cloudflare/pingora" }
 # pingora-proxy           = { git = "https://github.com/cloudflare/pingora" }
-# tracing-opentelemetry   = { git = "https://github.com/tokio-rs/tracing-opentelemetry" }
 # utoipa                  = { git = "https://github.com/juhaku/utoipa" }
 # utoipa-rapidoc          = { git = "https://github.com/juhaku/utoipa" }
 # utoipa-redoc            = { git = "https://github.com/juhaku/utoipa" }
 # utoipa-scalar           = { git = "https://github.com/juhaku/utoipa" }
 # utoipa-swagger-ui       = { git = "https://github.com/juhaku/utoipa" }
 
-tracing-opentelemetry = { git = "https://github.com/BSteffaniak/tracing-opentelemetry", branch = "upgrade-otel-to-0.30" }
+tracing-opentelemetry = { git = "https://github.com/tokio-rs/tracing-opentelemetry" }
