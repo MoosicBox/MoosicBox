@@ -54,18 +54,6 @@ opus = ["moosicbox_music_models/opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = [
-    "moosicbox_music_models/qobuz",
-    "moosicbox_player/qobuz",
-    "moosicbox_session/qobuz",
-]
-tidal = [
-    "moosicbox_music_models/tidal",
-    "moosicbox_player/tidal",
-    "moosicbox_session/tidal",
-]
-yt = [
-    "moosicbox_music_models/yt",
-    "moosicbox_player/yt",
-    "moosicbox_session/yt",
-]
+qobuz = []
+tidal = []
+yt    = []

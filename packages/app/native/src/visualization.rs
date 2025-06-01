@@ -335,7 +335,7 @@ pub async fn check_visualization_update() {
             if let Some(track) = session.playlist.tracks.get(position as usize) {
                 let track_id = track.track_id.clone();
                 let duration = track.duration;
-                let api_source = track.api_source;
+                let api_source = track.api_source.clone();
                 let seek = session.seek.unwrap_or_default();
                 let playing = session.playing;
                 drop(session);

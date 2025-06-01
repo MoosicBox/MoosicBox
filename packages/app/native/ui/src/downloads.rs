@@ -66,9 +66,9 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Markup {
             @match item {
                 ApiDownloadItem::Track { source, track_id, album_id, title, contains_cover, .. } => {
                     div {
-                        a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
+                        a href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
                             img
-                                src=(album_cover_url(host, album_id, source.into(), *contains_cover, cover_width, cover_height))
+                                src=(album_cover_url(host, album_id, &source.into(), *contains_cover, cover_width, cover_height))
                                 sx-width=(cover_width)
                                 sx-height=(cover_height)
                             {}
@@ -95,9 +95,9 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Markup {
                 }
                 ApiDownloadItem::AlbumCover { source, album_id, title, contains_cover, .. } => {
                     div {
-                        a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
+                        a href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
                             img
-                                src=(album_cover_url(host, album_id, source.into(), *contains_cover, cover_width, cover_height))
+                                src=(album_cover_url(host, album_id, &source.into(), *contains_cover, cover_width, cover_height))
                                 sx-width=(cover_width)
                                 sx-height=(cover_height)
                             {}
@@ -124,9 +124,9 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Markup {
                 }
                 ApiDownloadItem::ArtistCover { source, artist_id, album_id, title, contains_cover, .. } => {
                     div {
-                        a href=(album_page_url(&album_id.to_string(), false, Some(source.into()), None, None, None)) {
+                        a href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
                             img
-                                src=(artist_cover_url(host, artist_id, source.into(), *contains_cover, cover_width, cover_height))
+                                src=(artist_cover_url(host, artist_id, &source.into(), *contains_cover, cover_width, cover_height))
                                 sx-width=(cover_width)
                                 sx-height=(cover_height)
                             {}

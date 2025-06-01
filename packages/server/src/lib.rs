@@ -18,6 +18,7 @@ use actix_cors::Cors;
 use actix_web::{App, dev::ServerHandle, http, middleware};
 use moosicbox_config::{AppType, get_or_init_server_identity};
 use moosicbox_files::files::track_pool::service::Commander as _;
+use moosicbox_music_models::ApiSource;
 use std::{
     net::TcpListener,
     sync::{Arc, LazyLock},
@@ -97,6 +98,21 @@ pub async fn run<T>(
     tracing_subscriber::fmt::init();
     #[cfg(feature = "profiling-puffin")]
     start_puffin_server();
+
+    {
+        let mut api_sources = moosicbox_music_models::API_SOURCES.write().unwrap();
+
+        api_sources.insert(ApiSource::library());
+
+        #[cfg(feature = "tidal")]
+        api_sources.insert("Tidal".into());
+
+        #[cfg(feature = "qobuz")]
+        api_sources.insert("Qobuz".into());
+
+        #[cfg(feature = "yt")]
+        api_sources.insert("Yt".into());
+    }
 
     #[cfg(feature = "sqlite")]
     let config_db_path = {
@@ -380,12 +396,12 @@ pub async fn run<T>(
                 actix_web::web::scope("/library"),
             ));
 
-            #[cfg(feature = "tidal-api")]
+            #[cfg(all(feature = "tidal", feature = "tidal-api"))]
             let app = app.service(moosicbox_tidal::api::bind_services(actix_web::web::scope(
                 "/tidal",
             )));
 
-            #[cfg(feature = "qobuz-api")]
+            #[cfg(all(feature = "qobuz", feature = "qobuz-api"))]
             let app = app.service(moosicbox_qobuz::api::bind_services(actix_web::web::scope(
                 "/qobuz",
             )));
@@ -405,7 +421,7 @@ pub async fn run<T>(
                 "/upnp",
             )));
 
-            #[cfg(feature = "yt-api")]
+            #[cfg(all(feature = "yt", feature = "yt-api"))]
             let app = app.service(moosicbox_yt::api::bind_services(actix_web::web::scope(
                 "/yt",
             )));

@@ -96,19 +96,19 @@ export default function searchInput() {
                     20,
                     (results, _allResults, source) => {
                         switch (source) {
-                            case 'LIBRARY':
+                            case 'Library':
                                 setSearchResults(results);
                                 setLibraryLoading(false);
                                 break;
-                            case 'QOBUZ':
+                            case 'Qobuz':
                                 setQobuzSearchResults(results);
                                 setQobuzLoading(false);
                                 break;
-                            case 'TIDAL':
+                            case 'Tidal':
                                 setTidalSearchResults(results);
                                 setTidalLoading(false);
                                 break;
-                            case 'YT':
+                            case 'Yt':
                                 setYtSearchResults(results);
                                 setYtLoading(false);
                                 break;
@@ -373,37 +373,37 @@ export default function searchInput() {
                 ref={searchResultsRef!}
             >
                 <Tabs
-                    default={'LIBRARY'}
+                    default={'Library'}
                     tabs={{
-                        LIBRARY: displayApiSource('LIBRARY'),
-                        QOBUZ: displayApiSource('QOBUZ'),
-                        TIDAL: displayApiSource('TIDAL'),
-                        YT: displayApiSource('YT'),
+                        LIBRARY: displayApiSource('Library'),
+                        QOBUZ: displayApiSource('Qobuz'),
+                        TIDAL: displayApiSource('Tidal'),
+                        YT: displayApiSource('Yt'),
                     }}
                 >
                     {(tab) => {
                         switch (tab) {
-                            case 'LIBRARY':
+                            case 'Library':
                                 return searchResultsList(
-                                    'LIBRARY',
+                                    'Library',
                                     libraryLoading(),
                                     searchResults(),
                                 );
-                            case 'QOBUZ':
+                            case 'Qobuz':
                                 return searchResultsList(
-                                    'QOBUZ',
+                                    'Qobuz',
                                     qobuzLoading(),
                                     qobuzSearchResults(),
                                 );
-                            case 'TIDAL':
+                            case 'Tidal':
                                 return searchResultsList(
-                                    'TIDAL',
+                                    'Tidal',
                                     tidalLoading(),
                                     tidalSearchResults(),
                                 );
-                            case 'YT':
+                            case 'Yt':
                                 return searchResultsList(
-                                    'YT',
+                                    'Yt',
                                     ytLoading(),
                                     ytSearchResults(),
                                 );

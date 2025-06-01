@@ -30,6 +30,47 @@ impl std::fmt::Display for IdType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ApiId {
+    pub source: ApiSource,
+    pub id: Id,
+}
+
+impl ApiId {
+    #[must_use]
+    pub const fn new(source: ApiSource, id: Id) -> Self {
+        Self { source, id }
+    }
+}
+
+#[cfg(feature = "openapi")]
+impl utoipa::__dev::SchemaReferences for ApiId {
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        use utoipa::PartialSchema as _;
+
+        schemas.push(("Id".to_string(), String::schema()));
+    }
+}
+
+#[cfg(feature = "openapi")]
+impl utoipa::PartialSchema for ApiId {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        String::schema()
+    }
+}
+
+#[cfg(feature = "openapi")]
+impl utoipa::ToSchema for ApiId {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("Id")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Id {
     String(String),
@@ -69,71 +110,27 @@ impl Id {
     ///
     /// * If the value fails to parse into the relevant type
     #[must_use]
-    pub fn from_str(value: &str, source: ApiSource, id_type: IdType) -> Self {
-        Self::try_from_str(value, source, id_type).unwrap()
+    pub fn from_str(value: &str, source: &ApiSource) -> Self {
+        Self::try_from_str(value, source).unwrap()
     }
 
     /// # Errors
     ///
     /// * If the value fails to parse into the relevant type
-    pub fn try_from_str(
-        value: &str,
-        source: ApiSource,
-        id_type: IdType,
-    ) -> Result<Self, ParseIntError> {
-        Ok(match id_type {
-            IdType::Artist => match source {
-                ApiSource::Library => Self::Number(value.parse::<u64>()?),
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => Self::Number(value.parse::<u64>()?),
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => Self::Number(value.parse::<u64>()?),
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => Self::String(value.to_owned()),
-            },
-            IdType::Album => match source {
-                ApiSource::Library => Self::Number(value.parse::<u64>()?),
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => Self::Number(value.parse::<u64>()?),
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => Self::String(value.to_owned()),
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => Self::String(value.to_owned()),
-            },
-            IdType::Track => match source {
-                ApiSource::Library => Self::Number(value.parse::<u64>()?),
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => Self::Number(value.parse::<u64>()?),
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => Self::Number(value.parse::<u64>()?),
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => Self::String(value.to_owned()),
-            },
+    pub fn try_from_str(value: &str, source: &ApiSource) -> Result<Self, ParseIntError> {
+        Ok(if source.is_library() {
+            Self::Number(value.parse::<u64>()?)
+        } else {
+            Self::String(value.to_owned())
         })
     }
 
     #[must_use]
-    pub const fn default_value(source: ApiSource, id_type: IdType) -> Self {
-        #[allow(clippy::match_same_arms)]
-        match id_type {
-            IdType::Album => match source {
-                ApiSource::Library => Self::Number(0),
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => Self::Number(0),
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => Self::String(String::new()),
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => Self::String(String::new()),
-            },
-            IdType::Track | IdType::Artist => match source {
-                ApiSource::Library => Self::Number(0),
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => Self::Number(0),
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => Self::Number(0),
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => Self::String(String::new()),
-            },
+    pub fn default_value(source: &ApiSource) -> Self {
+        if source.is_library() {
+            Self::Number(0)
+        } else {
+            Self::String(String::new())
         }
     }
 
@@ -514,13 +511,10 @@ pub enum ParseIdsError {
 /// * If a value fails to parse to an `Id`
 pub fn parse_id_sequences(
     ids: &str,
-    source: ApiSource,
-    id_type: IdType,
+    source: &ApiSource,
 ) -> std::result::Result<Vec<Id>, ParseIdsError> {
     ids.split(',')
-        .map(|id| {
-            Id::try_from_str(id, source, id_type).map_err(|_| ParseIdsError::ParseId(id.into()))
-        })
+        .map(|id| Id::try_from_str(id, source).map_err(|_| ParseIdsError::ParseId(id.into())))
         .collect::<std::result::Result<Vec<_>, _>>()
 }
 
@@ -530,10 +524,9 @@ pub fn parse_id_sequences(
 /// * If a range is too large (> 100,000)
 pub fn parse_id_ranges(
     id_ranges: &str,
-    source: ApiSource,
-    id_type: IdType,
+    source: &ApiSource,
 ) -> std::result::Result<Vec<Id>, ParseIdsError> {
-    let default = Id::default_value(source, id_type);
+    let default = Id::default_value(source);
     let ranges = if default.is_number() {
         id_ranges.split('-').collect::<Vec<_>>()
     } else {
@@ -541,7 +534,7 @@ pub fn parse_id_ranges(
     };
 
     if ranges.len() == 1 {
-        parse_id_sequences(ranges[0], source, id_type)
+        parse_id_sequences(ranges[0], source)
     } else if ranges.len() > 2 && ranges.len() % 2 == 1 {
         Err(ParseIdsError::UnmatchedRange(id_ranges.into()))
     } else {
@@ -549,9 +542,9 @@ pub fn parse_id_ranges(
         let mut ids = Vec::new();
 
         while i < ranges.len() {
-            let mut start = parse_id_sequences(ranges[i], source, id_type)?;
+            let mut start = parse_id_sequences(ranges[i], source)?;
             let start_id = start[start.len() - 1].clone();
-            let mut end = parse_id_sequences(ranges[i + 1], source, id_type)?;
+            let mut end = parse_id_sequences(ranges[i + 1], source)?;
             let end_id = end[0].clone();
 
             ids.append(&mut start);
@@ -590,12 +583,12 @@ mod test {
 
     use crate::{
         ApiSource,
-        id::{Id, IdType, parse_id_ranges},
+        id::{Id, parse_id_ranges},
     };
 
     #[test_log::test]
     fn can_parse_number_track_id_ranges() {
-        let result = parse_id_ranges("1,2,3,5-10,450", ApiSource::Library, IdType::Track).unwrap();
+        let result = parse_id_ranges("1,2,3,5-10,450", &ApiSource::library()).unwrap();
 
         assert_eq!(
             result,
@@ -614,10 +607,9 @@ mod test {
         );
     }
 
-    #[cfg(feature = "yt")]
     #[test_log::test]
     fn can_parse_string_track_id_ranges() {
-        let result = parse_id_ranges("a,b,aaa,bbb,c-d,f", ApiSource::Yt, IdType::Track).unwrap();
+        let result = parse_id_ranges("a,b,aaa,bbb,c-d,f", &"bob".into()).unwrap();
 
         assert_eq!(
             result,

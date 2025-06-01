@@ -346,7 +346,7 @@ fn scan_track(
         scanner.on_scanned_track().await;
 
         let artist = output
-            .add_artist(&album_artist, &None, ApiSource::Library)
+            .add_artist(&album_artist, &None, ApiSource::library())
             .await;
         let mut artist = artist.write().await;
         let album = artist
@@ -355,7 +355,7 @@ fn scan_track(
                 &date_released,
                 Some(path_album.to_str().unwrap()),
                 &None,
-                ApiSource::Library,
+                ApiSource::library(),
             )
             .await;
         let mut album = album.write().await;
@@ -425,7 +425,7 @@ fn scan_track(
                 &channels,
                 TrackApiSource::Local,
                 &None,
-                ApiSource::Library,
+                ApiSource::library(),
             )
             .await;
 
@@ -450,7 +450,7 @@ fn scan_album_cover(
                 let artist = output
                     .write()
                     .await
-                    .add_artist(&album.artist, &None, ApiSource::Library)
+                    .add_artist(&album.artist, &None, ApiSource::library())
                     .await;
 
                 let output_album = artist
@@ -461,7 +461,7 @@ fn scan_album_cover(
                         &album.date_released.map(|x| x.and_utc().to_rfc3339()),
                         path.parent().and_then(|x| x.to_str()),
                         &None,
-                        ApiSource::Library,
+                        ApiSource::library(),
                     )
                     .await;
 
@@ -493,7 +493,7 @@ fn scan_artist_cover(
                 let output_artist = output
                     .write()
                     .await
-                    .add_artist(&artist.title, &None, ApiSource::Library)
+                    .add_artist(&artist.title, &None, ApiSource::library())
                     .await;
 
                 output_artist.write().await.cover = Some(path_str.to_string());

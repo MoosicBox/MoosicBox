@@ -36,8 +36,7 @@ use moosicbox_music_api::{
     },
 };
 use moosicbox_music_models::{
-    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
-    TrackApiSource, id::Id,
+    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, id::Id,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
@@ -87,6 +86,8 @@ static CLIENT: LazyLock<switchy_http::Client> =
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
 static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";
+
+pub static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "Tidal".into());
 
 impl ToUrl for TidalApiEndpoint {
     fn to_url(&self) -> String {
@@ -2349,8 +2350,8 @@ impl Default for TidalMusicApi {
 
 #[async_trait]
 impl MusicApi for TidalMusicApi {
-    fn source(&self) -> ApiSource {
-        ApiSource::Tidal
+    fn source(&self) -> &ApiSource {
+        &API_SOURCE
     }
 
     async fn artists(
@@ -2529,7 +2530,7 @@ impl MusicApi for TidalMusicApi {
             bit_depth: None,
             sample_rate: None,
             channels: Some(2),
-            source: TrackApiSource::Tidal,
+            source: API_SOURCE.clone().into(),
         }];
 
         Ok(PagingResponse::new(

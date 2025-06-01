@@ -282,7 +282,7 @@ pub async fn enable_scan_origin_endpoint(
     db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    enable_scan_origin(&db, query.origin)
+    enable_scan_origin(&db, &query.origin)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to enable scan origin: {e:?}")))?;
 
@@ -320,7 +320,7 @@ pub async fn disable_scan_origin_endpoint(
     db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
 ) -> Result<Json<Value>> {
-    disable_scan_origin(&db, query.origin)
+    disable_scan_origin(&db, &query.origin)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to disable scan origin: {e:?}")))?;
 

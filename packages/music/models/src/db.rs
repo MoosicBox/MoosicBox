@@ -10,16 +10,14 @@ use switchy_database::{
     query::{FilterableQuery as _, SortDirection, where_not_eq},
 };
 
-use crate::{AlbumVersionQuality, ApiSource, AudioFormat, TrackApiSource, TrackSize};
+use crate::{AlbumVersionQuality, ApiSource, ApiSources, AudioFormat, TrackApiSource, TrackSize};
 
 impl moosicbox_json_utils::MissingValue<ApiSource> for &switchy_database::Row {}
 impl ToValueType<ApiSource> for DatabaseValue {
     fn to_value_type(self) -> Result<ApiSource, ParseError> {
-        ApiSource::from_str(
-            self.as_str()
-                .ok_or_else(|| ParseError::ConvertType("ApiSource".into()))?,
-        )
-        .map_err(|_| ParseError::ConvertType("ApiSource".into()))
+        Ok(ApiSource::from(self.as_str().ok_or_else(|| {
+            ParseError::ConvertType("ApiSource".into())
+        })?))
     }
 }
 
@@ -148,4 +146,27 @@ pub async fn get_all_album_version_qualities(
     });
 
     Ok(versions)
+}
+
+impl moosicbox_json_utils::MissingValue<ApiSources> for &switchy_database::Row {}
+impl moosicbox_json_utils::MissingValue<ApiSources> for switchy_database::DatabaseValue {}
+impl ToValueType<ApiSources> for switchy_database::DatabaseValue {
+    fn to_value_type(self) -> Result<ApiSources, ParseError> {
+        serde_json::from_str(self.as_str().ok_or_else(|| {
+            ParseError::MissingValue("ApiSources: value is not a string".to_string())
+        })?)
+        .map_err(|_| ParseError::ConvertType("ApiSources".into()))
+    }
+}
+
+impl From<&ApiSource> for DatabaseValue {
+    fn from(value: &ApiSource) -> Self {
+        Self::String(value.0.clone())
+    }
+}
+
+impl From<ApiSource> for DatabaseValue {
+    fn from(value: ApiSource) -> Self {
+        Self::String(value.0)
+    }
 }

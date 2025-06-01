@@ -52,7 +52,7 @@ tokio        = { workspace = true, features = ["macros", "tracing"] }
 tokio-util   = { workspace = true }
 
 [features]
-default = ["all-formats", "all-sources", "api", "local", "openapi"]
+default = ["all-formats", "api", "local", "openapi"]
 
 fail-on-warnings = []
 
@@ -72,17 +72,3 @@ aac  = ["moosicbox_library/format-aac", "moosicbox_music_models/aac"]
 flac = ["moosicbox_library/format-flac", "moosicbox_music_models/flac"]
 mp3  = ["moosicbox_library/format-mp3", "moosicbox_music_models/mp3"]
 opus = ["moosicbox_library/format-opus", "moosicbox_music_models/opus"]
-
-all-sources = ["qobuz", "tidal", "yt"]
-
-qobuz = [
-    "moosicbox_files/qobuz",
-    "moosicbox_library/qobuz",
-    "moosicbox_music_models/qobuz",
-]
-tidal = [
-    "moosicbox_files/tidal",
-    "moosicbox_library/tidal",
-    "moosicbox_music_models/tidal",
-]
-yt = ["moosicbox_files/yt", "moosicbox_library/yt", "moosicbox_music_models/yt"]

@@ -109,13 +109,13 @@ export function displayAlbumVersionQualities(
 
 export function displayApiSource(source: ApiSource) {
     switch (source) {
-        case 'TIDAL':
+        case 'Tidal':
             return 'Tidal';
-        case 'QOBUZ':
+        case 'Qobuz':
             return 'Qobuz';
-        case 'YT':
+        case 'Yt':
             return 'YouTube Music';
-        case 'LIBRARY':
+        case 'Library':
             return 'Library';
         default:
             source satisfies never;
@@ -129,11 +129,11 @@ export function displayDownloadApiSource(source: Api.DownloadApiSource) {
     }
     if (typeof source === 'object' && 'source' in source) {
         switch (source.source) {
-            case 'TIDAL':
+            case 'Tidal':
                 return 'Tidal';
-            case 'QOBUZ':
+            case 'Qobuz':
                 return 'Qobuz';
-            case 'YT':
+            case 'Yt':
                 return 'YouTube Music';
         }
     }

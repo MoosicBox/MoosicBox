@@ -353,7 +353,7 @@ impl UpnpPlayer {
 
         let (transport_uri, _) = get_track_url(
             track_id,
-            track.api_source,
+            &track.api_source,
             &self.source,
             playback.quality,
             true,
@@ -370,7 +370,7 @@ impl UpnpPlayer {
 
         let (local_transport_uri, headers) = get_track_url(
             track_id,
-            track.api_source,
+            &track.api_source,
             &self.source,
             playback.quality,
             false,
@@ -515,7 +515,7 @@ impl UpnpPlayer {
 
                         Box::pin(async move {
                             moosicbox_logging::debug_or_trace!(
-                                ("position_info={position_info:?}"), 
+                                ("position_info={position_info:?}"),
                                 ("position_info={position_info:?} active_playback={:?}", active_playback.read().unwrap())
                             );
                             if position_info.track == 0

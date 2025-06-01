@@ -74,32 +74,21 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
 pub async fn get_album_from_source(
     db: &LibraryDatabase,
     album_id: &Id,
-    source: ApiSource,
+    source: &ApiSource,
 ) -> Result<Option<Album>, GetAlbumError> {
-    let mut album = match source {
-        ApiSource::Library => {
-            let albums = get_albums(db).await?;
-            albums
-                .iter()
-                .find(|album| &Into::<Id>::into(album.id) == album_id)
-                .cloned()
-                .map(TryInto::try_into)
-        }
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => moosicbox_tidal::album(db, album_id, None, None, None, None)
-            .await
-            .ok()
-            .map(TryInto::try_into),
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => moosicbox_qobuz::album(db, album_id, None, None)
-            .await
-            .ok()
-            .map(TryInto::try_into),
-        #[cfg(feature = "yt")]
-        ApiSource::Yt => moosicbox_yt::album(db, album_id, None, None, None, None)
-            .await
-            .ok()
-            .map(TryInto::try_into),
+    let mut album = if source.is_library() {
+        let albums = get_albums(db).await?;
+        albums
+            .iter()
+            .find(|album| &Into::<Id>::into(album.id) == album_id)
+            .cloned()
+            .map(TryInto::try_into)
+    } else {
+        unimplemented!("Not implemented");
+        // moosicbox_tidal::album(db, album_id, None, None, None, None)
+        //     .await
+        //     .ok()
+        //     .map(TryInto::try_into)
     }
     .transpose()?;
 
@@ -118,45 +107,25 @@ pub async fn get_album_from_source(
 pub async fn get_library_album(
     db: &LibraryDatabase,
     album_id: &Id,
-    source: ApiSource,
+    source: &ApiSource,
 ) -> Result<Option<LibraryAlbum>, GetAlbumError> {
     let albums = get_albums(db).await?;
 
-    Ok(match source {
-        ApiSource::Library => albums
+    Ok(if source.is_library() {
+        albums
             .iter()
             .find(|album| &Into::<Id>::into(album.id) == album_id)
-            .cloned(),
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => albums
+            .cloned()
+    } else {
+        albums
             .iter()
             .find(|album| {
                 album
                     .album_sources
                     .iter()
-                    .any(|x| x.source == ApiSource::Tidal && &x.id == album_id)
+                    .any(|x| &x.source == source && &x.id == album_id)
             })
-            .cloned(),
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => albums
-            .iter()
-            .find(|album| {
-                album
-                    .album_sources
-                    .iter()
-                    .any(|x| x.source == ApiSource::Qobuz && &x.id == album_id)
-            })
-            .cloned(),
-        #[cfg(feature = "yt")]
-        ApiSource::Yt => albums
-            .iter()
-            .find(|album| {
-                album
-                    .album_sources
-                    .iter()
-                    .any(|x| x.source == ApiSource::Yt && &x.id == album_id)
-            })
-            .cloned(),
+            .cloned()
     })
 }
 

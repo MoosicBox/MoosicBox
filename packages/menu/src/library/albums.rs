@@ -12,7 +12,7 @@ use moosicbox_music_api::{
     AlbumsError, ArtistAlbumsError, LibraryAlbumError, MusicApi, TracksError, models::AlbumsRequest,
 };
 use moosicbox_music_models::{
-    Album, ApiSource, Artist, Track, TrackApiSource,
+    Album, ApiSource, Artist, TrackApiSource,
     id::{Id, TryFromIdError},
 };
 use moosicbox_paging::Page;
@@ -22,9 +22,7 @@ use moosicbox_search::{
     data::{AsDataValues, AsDeleteTerm},
 };
 use moosicbox_session::delete_session_playlist_tracks_by_track_id;
-use switchy_database::{
-    DatabaseError, DatabaseValue, profiles::LibraryDatabase, query::FilterableQuery,
-};
+use switchy_database::{DatabaseError, profiles::LibraryDatabase, query::FilterableQuery};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
@@ -43,14 +41,14 @@ impl<T> From<PoisonError<T>> for GetAlbumTracksError {
 }
 
 pub fn propagate_api_sources_from_library_album<'a>(
-    source: ApiSource,
+    source: &ApiSource,
     album: &'a mut Album,
     library_albums: &[LibraryAlbum],
 ) -> &'a mut Album {
     let library_album = library_albums.iter().find(|y| {
         y.album_sources
             .iter()
-            .any(|z| z.source == source && z.id == album.id)
+            .any(|z| &z.source == source && z.id == album.id)
     });
 
     if let Some(library_album) = library_album {
@@ -91,13 +89,13 @@ pub async fn get_albums_from_source(
             api.albums(&request).await?.page
         };
 
-    let source = api.source();
+    let source = api.source().clone();
 
-    if source != ApiSource::Library {
+    if !source.is_library() {
         let library_albums = get_albums(db).await?;
 
         albums = albums.map(move |mut album| {
-            propagate_api_sources_from_library_album(source, &mut album, &library_albums);
+            propagate_api_sources_from_library_album(&source, &mut album, &library_albums);
 
             album
         });
@@ -112,15 +110,6 @@ pub enum GetAlbumVersionsError {
     Tracks(#[from] TracksError),
     #[error(transparent)]
     LibraryAlbumTracks(#[from] LibraryAlbumTracksError),
-    #[cfg(feature = "tidal")]
-    #[error(transparent)]
-    TidalAlbumTracks(#[from] moosicbox_tidal::TidalAlbumTracksError),
-    #[cfg(feature = "qobuz")]
-    #[error(transparent)]
-    QobuzAlbumTracks(#[from] moosicbox_qobuz::QobuzAlbumTracksError),
-    #[cfg(feature = "yt")]
-    #[error(transparent)]
-    YtAlbumTracks(#[from] moosicbox_yt::YtAlbumTracksError),
 }
 
 /// # Errors
@@ -135,55 +124,26 @@ pub async fn get_album_versions_from_source(
     log::trace!("get_album_versions_from_source: album_id={album_id} source={source}");
 
     #[allow(unreachable_code)]
-    Ok(if source == ApiSource::Library {
+    Ok(if source.is_library() {
         library_api.library_album_versions(album_id).await?
     } else {
-        #[allow(unused)]
-        let tracks: Vec<Track> = match source {
-            ApiSource::Library => unreachable!(),
-            #[cfg(feature = "tidal")]
-            ApiSource::Tidal => {
-                moosicbox_tidal::album_tracks(db, album_id, None, None, None, None, None, None)
-                    .await?
-                    .into_items()
-                    .into_iter()
-                    .map(Into::into)
-                    .collect::<Vec<_>>()
-            }
-
-            #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => moosicbox_qobuz::album_tracks(db, album_id, None, None, None, None)
-                .await?
-                .into_items()
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<_>>(),
-            #[cfg(feature = "yt")]
-            ApiSource::Yt => {
-                moosicbox_yt::album_tracks(db, album_id, None, None, None, None, None, None)
-                    .await?
-                    .into_items()
-                    .into_iter()
-                    .map(Into::into)
-                    .collect::<Vec<_>>()
-            }
-        };
-        vec![AlbumVersion {
-            tracks,
-            format: None,
-            bit_depth: None,
-            sample_rate: None,
-            channels: None,
-            source: match source {
-                ApiSource::Library => unreachable!(),
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => TrackApiSource::Tidal,
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => TrackApiSource::Qobuz,
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => TrackApiSource::Yt,
-            },
-        }]
+        unimplemented!("Not implemented");
+        // #[allow(unused)]
+        // let tracks: Vec<Track> =
+        //     moosicbox_tidal::album_tracks(db, album_id, None, None, None, None, None, None)
+        //         .await?
+        //         .into_items()
+        //         .into_iter()
+        //         .map(Into::into)
+        //         .collect::<Vec<_>>();
+        // vec![AlbumVersion {
+        //     tracks,
+        //     format: None,
+        //     bit_depth: None,
+        //     sample_rate: None,
+        //     channels: None,
+        //     source: source.into(),
+        // }]
     })
 }
 
@@ -267,7 +227,7 @@ pub async fn add_album(
 
     for album in &results.albums {
         if let Some(album) =
-            crate::library::get_library_album(db, &album.id.into(), ApiSource::Library).await?
+            crate::library::get_library_album(db, &album.id.into(), &ApiSource::library()).await?
         {
             albums.push(album);
         }
@@ -388,18 +348,9 @@ pub async fn remove_album(
 
     let target_tracks = tracks
         .into_iter()
-        .filter(|track| match track.track_source {
-            #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => album
-                .album_sources
-                .iter()
-                .any(|x| x.source == ApiSource::Tidal),
-            #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => album
-                .album_sources
-                .iter()
-                .any(|x| x.source == ApiSource::Qobuz),
-            _ => false,
+        .filter(|track| match &track.track_source {
+            TrackApiSource::Local => false,
+            TrackApiSource::Api(source) => album.album_sources.iter().any(|x| &x.source == source),
         })
         .collect::<Vec<_>>();
 
@@ -440,30 +391,11 @@ pub async fn remove_album(
     )
     .await?;
 
-    #[allow(unused_mut)]
-    let mut album_field_updates: Vec<(&str, DatabaseValue)> = vec![];
-
-    match api.source() {
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => {
-            album_field_updates.push(("tidal_id", DatabaseValue::Null));
-            album.album_sources.remove_source(ApiSource::Tidal);
-        }
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => {
-            album_field_updates.push(("qobuz_id", DatabaseValue::Null));
-            album.album_sources.remove_source(ApiSource::Qobuz);
-        }
-        _ => {}
-    }
-
-    if !album_field_updates.is_empty() {
-        db.update("albums")
-            .where_eq("id", album.id)
-            .values(album_field_updates)
-            .execute(&**db)
-            .await?;
-    }
+    db.delete("api_sources")
+        .where_eq("entity_type", "albums")
+        .where_eq("entity_id", album.id)
+        .execute(&**db)
+        .await?;
 
     moosicbox_library::cache::clear_cache();
 
@@ -475,19 +407,10 @@ pub async fn remove_album(
     )?;
 
     if has_local_tracks
-        || match api.source() {
-            #[cfg(feature = "tidal")]
-            ApiSource::Tidal => album
-                .album_sources
-                .iter()
-                .any(|x| x.source == ApiSource::Tidal),
-            #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => album
-                .album_sources
-                .iter()
-                .any(|x| x.source == ApiSource::Qobuz),
-            _ => false,
-        }
+        || album
+            .album_sources
+            .iter()
+            .any(|x| x.source != ApiSource::library())
     {
         log::debug!("Album has other sources, keeping LibraryAlbum");
         return Ok(album);

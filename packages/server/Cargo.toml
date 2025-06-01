@@ -62,20 +62,14 @@ moosicbox_music_api_api = { workspace = true, features = [
     "api",
 ], optional = true }
 moosicbox_player = { workspace = true, features = ["local"], optional = true }
-moosicbox_qobuz = { workspace = true, features = [
-    "api",
-    "db",
-], optional = true }
+moosicbox_qobuz = { workspace = true, features = ["db"], optional = true }
 moosicbox_scan = { workspace = true, features = [
     "api",
     "local",
 ], optional = true }
 moosicbox_search = { workspace = true, features = ["api"], optional = true }
-moosicbox_tidal = { workspace = true, features = [
-    "api",
-    "db",
-], optional = true }
-moosicbox_yt = { workspace = true, features = ["api", "db"], optional = true }
+moosicbox_tidal = { workspace = true, features = ["db"], optional = true }
+moosicbox_yt = { workspace = true, features = ["db"], optional = true }
 switchy_upnp = { workspace = true, optional = true, features = [
     "api",
     "listener",
@@ -310,49 +304,14 @@ sqlite-sqlx = [
 
 admin-htmx = ["admin-htmx-api"]
 downloader = ["dep:throttle", "moosicbox_downloader/api"]
-library = ["moosicbox_library/api"]
-player = ["dep:moosicbox_library", "dep:moosicbox_player"]
-qobuz = [
-    "moosicbox_admin_htmx?/qobuz",
-    "moosicbox_downloader?/qobuz",
-    "moosicbox_files/qobuz",
-    "moosicbox_library?/qobuz",
-    "moosicbox_menu?/qobuz",
-    "moosicbox_music_models/qobuz",
-    "moosicbox_player?/qobuz",
-    "moosicbox_qobuz/api",
-    "moosicbox_scan?/qobuz",
-    "moosicbox_session/qobuz",
-    "moosicbox_tunnel_sender?/qobuz",
-]
-scan = ["dep:throttle", "moosicbox_scan/api"]
-search = ["moosicbox_search/api"]
-tidal = [
-    "moosicbox_admin_htmx?/tidal",
-    "moosicbox_downloader?/tidal",
-    "moosicbox_files/tidal",
-    "moosicbox_library?/tidal",
-    "moosicbox_menu?/tidal",
-    "moosicbox_music_models/tidal",
-    "moosicbox_player?/tidal",
-    "moosicbox_scan?/tidal",
-    "moosicbox_session/tidal",
-    "moosicbox_tidal/api",
-    "moosicbox_tunnel_sender?/tidal",
-]
-upnp = ["dep:switchy_upnp", "player"]
-yt = [
-    "moosicbox_downloader?/yt",
-    "moosicbox_files/yt",
-    "moosicbox_library?/yt",
-    "moosicbox_menu?/yt",
-    "moosicbox_music_models/yt",
-    "moosicbox_player?/yt",
-    "moosicbox_scan?/yt",
-    "moosicbox_session/yt",
-    "moosicbox_tunnel_sender?/yt",
-    "moosicbox_yt/api",
-]
+library    = ["moosicbox_library/api"]
+player     = ["dep:moosicbox_library", "dep:moosicbox_player"]
+qobuz      = ["dep:moosicbox_qobuz"]
+scan       = ["dep:throttle", "moosicbox_scan/api"]
+search     = ["moosicbox_search/api"]
+tidal      = ["dep:moosicbox_tidal"]
+upnp       = ["dep:switchy_upnp", "player"]
+yt         = ["dep:moosicbox_yt"]
 
 # APIs
 all-apis = ["app-apis", "player-api", "upnp-api"]
@@ -390,13 +349,13 @@ library-api = ["dep:moosicbox_library", "library"]
 menu-api = ["dep:moosicbox_menu"]
 music-api-api = ["dep:moosicbox_music_api_api"]
 player-api = ["moosicbox_player?/api", "player"]
-qobuz-api = ["dep:moosicbox_qobuz", "qobuz"]
+qobuz-api = ["moosicbox_qobuz?/api"]
 scan-api = ["dep:moosicbox_scan", "scan"]
 search-api = ["dep:moosicbox_search", "search"]
 session-api = ["moosicbox_session/api"]
-tidal-api = ["dep:moosicbox_tidal", "tidal"]
+tidal-api = ["moosicbox_tidal?/api"]
 upnp-api = ["dep:switchy_upnp", "upnp"]
-yt-api = ["dep:moosicbox_yt", "yt"]
+yt-api = ["moosicbox_yt?/api"]
 
 openapi = [
     "dep:utoipa",

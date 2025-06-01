@@ -24,7 +24,7 @@ impl From<&ApiAlbumVersion> for AlbumVersionQuality {
             bit_depth: value.bit_depth,
             sample_rate: value.sample_rate,
             channels: value.channels,
-            source: value.source,
+            source: value.source.clone(),
         }
     }
 }

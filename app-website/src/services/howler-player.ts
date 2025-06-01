@@ -34,7 +34,7 @@ export function createPlayer(id: number): PlayerType {
         const trackType = track.apiSource;
 
         switch (trackType) {
-            case 'LIBRARY': {
+            case 'Library': {
                 const query = new QueryParams({
                     trackId: track.trackId.toString(),
                 });
@@ -102,7 +102,7 @@ export function createPlayer(id: number): PlayerType {
             const trackType = track.apiSource;
 
             switch (trackType) {
-                case 'LIBRARY': {
+                case 'Library': {
                     const trackFormat = track.format;
                     switch (trackFormat) {
                         case Api.AudioFormat.AAC:
@@ -127,9 +127,9 @@ export function createPlayer(id: number): PlayerType {
                     }
                     break;
                 }
-                case 'TIDAL':
-                case 'QOBUZ':
-                case 'YT':
+                case 'Tidal':
+                case 'Qobuz':
+                case 'Yt':
                     format = 'source';
                     break;
                 default:

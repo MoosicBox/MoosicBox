@@ -478,7 +478,7 @@ pub async fn delete_session_playlist_tracks_by_track_id(
     }
 
     db.delete("session_playlist_tracks")
-        .where_eq("type", "'LIBRARY'")
+        .where_eq("type", "'Library'")
         .filter_if_some(ids.map(|ids| where_in("track_id", ids.clone())))
         .execute(&**db)
         .await?

@@ -296,7 +296,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
                     let api = PROFILES
                         .get(PROFILE)
                         .unwrap()
-                        .get(*api_source)
+                        .get(api_source)
                         .map_err(|e| AppStateError::unknown(e.to_string()))?;
                     let versions = api
                         .album_versions(album_id, None, None)
@@ -306,7 +306,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
                     let Some(version) = versions
                         .iter()
                         .find(|x| {
-                            version_source.is_none_or(|y| x.source == y)
+                            version_source.as_ref().is_none_or(|y| &x.source == y)
                                 && sample_rate.is_none_or(|y| x.sample_rate.is_some_and(|x| x == y))
                                 && bit_depth.is_none_or(|y| x.bit_depth.is_some_and(|x| x == y))
                         })
@@ -377,7 +377,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
                     let api = PROFILES
                         .get(PROFILE)
                         .unwrap()
-                        .get(*api_source)
+                        .get(api_source)
                         .map_err(|e| AppStateError::unknown(e.to_string()))?;
                     let tracks = api
                         .tracks(Some(track_ids), None, None, None, None)

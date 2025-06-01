@@ -277,6 +277,13 @@ mod postgres {
 #[cfg(feature = "sqlite")]
 #[cfg(test)]
 mod sqlite_tests {
+    use moosicbox_json_utils::ToValueType;
+    use moosicbox_music_models::{
+        ApiSources,
+        id::{ApiId, Id},
+    };
+    use pretty_assertions::assert_eq;
+
     use super::*;
 
     #[test_log::test(tokio::test)]
@@ -309,5 +316,213 @@ mod sqlite_tests {
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
         sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_api_sources_migration() {
+        const API_SOURCES_COLUMN: &str = "
+            (
+                SELECT json_group_array(
+                    json_object(
+                       'id', api_sources.source_id,
+                       'source', api_sources.source
+                    )
+                )
+                FROM api_sources
+                WHERE api_sources.entity_type='{table}' AND api_sources.entity_id = {table}.id
+            ) AS api_sources
+            ";
+
+        let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+        sqlite::SQLITE_LIBRARY_MIGRATIONS
+            .run_until(
+                &*db,
+                Some("2025-05-31-110603_update_api_source_id_structure"),
+            )
+            .await
+            .unwrap();
+
+        // Insert test data
+        db.exec_raw(
+            "
+            INSERT INTO artists (id, title, cover, tidal_id, qobuz_id) VALUES
+                (1, 'title1', '', 'art123', 'art456'),
+                (2, 'title2', '', 'art789', NULL),
+                (3, 'title3', '', NULL, 'art101112'),
+                (4, 'title4', '', NULL, NULL);
+            INSERT INTO albums (id, artist_id, title, date_released, date_added, artwork, directory, blur, tidal_id, qobuz_id) VALUES
+                (1, 1, 'title1', '2022-01-01', '2022-01-01', '', '', 0, 'alb123', 'alb456'),
+                (2, 2, 'title2', '2022-01-01', '2022-01-01', '', '', 0, 'alb789', NULL),
+                (3, 3, 'title3', '2022-01-01', '2022-01-01', '', '', 0, NULL, 'alb101112'),
+                (4, 4, 'title4', '2022-01-01', '2022-01-01', '', '', 0, NULL, NULL);
+            INSERT INTO tracks (id, album_id, number, title, duration, file, format, source, tidal_id, qobuz_id) VALUES
+                (1, 1, 1, 'title1', 10, 'file1', 'FLAC', 'LOCAL', '123', '456'),
+                (2, 2, 2, 'title2', 13, 'file2', 'FLAC', 'LOCAL', '789', NULL),
+                (3, 3, 3, 'title3', 19, 'file3', 'FLAC', 'LOCAL', NULL, '101112'),
+                (4, 4, 4, 'title4', 15, 'file4', 'FLAC', 'LOCAL', NULL, NULL);
+        ",
+        )
+        .await
+        .unwrap();
+
+        // Run the migration
+        sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+
+        // Verify artists migration
+        let artists = db
+            .select("artists")
+            .columns(&[&API_SOURCES_COLUMN.replace("{table}", "artists")])
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(artists.len(), 4);
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                artists[0].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+                .with_api_id(ApiId {
+                    source: "Tidal".into(),
+                    id: Id::String("art123".into())
+                })
+                .with_api_id(ApiId {
+                    source: "Qobuz".into(),
+                    id: Id::String("art456".into())
+                })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                artists[1].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: "Tidal".into(),
+                id: Id::String("art789".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                artists[2].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: "Qobuz".into(),
+                id: Id::String("art101112".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                artists[3].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+        );
+
+        // Verify albums migration
+        let albums = db
+            .select("albums")
+            .columns(&[&API_SOURCES_COLUMN.replace("{table}", "albums")])
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(albums.len(), 4);
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                albums[0].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+                .with_api_id(ApiId {
+                    source: "Tidal".into(),
+                    id: Id::String("alb123".into())
+                })
+                .with_api_id(ApiId {
+                    source: "Qobuz".into(),
+                    id: Id::String("alb456".into())
+                })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                albums[1].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: "Tidal".into(),
+                id: Id::String("alb789".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                albums[2].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: "Qobuz".into(),
+                id: Id::String("alb101112".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                albums[3].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+        );
+
+        // Verify tracks migration
+        let tracks = db
+            .select("tracks")
+            .columns(&[&API_SOURCES_COLUMN.replace("{table}", "tracks")])
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(tracks.len(), 4);
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[0].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+                .with_api_id(ApiId {
+                    source: "Tidal".into(),
+                    id: Id::String("123".into())
+                })
+                .with_api_id(ApiId {
+                    source: "Qobuz".into(),
+                    id: Id::String("456".into())
+                })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[1].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: "Tidal".into(),
+                id: Id::String("789".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[2].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: "Qobuz".into(),
+                id: Id::String("101112".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[3].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+        );
     }
 }

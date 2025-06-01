@@ -52,7 +52,6 @@ url              = { workspace = true }
 default = [
     "all-decoders",
     "all-encoders",
-    "all-sources",
     "api",
     "cpal",
     "local",
@@ -69,7 +68,7 @@ profiling = [
     "moosicbox_resampler/profiling",
 ]
 
-api     = ["dep:actix-web", "moosicbox_music_api/api", "dep:moosicbox_profiles"]
+api     = ["dep:actix-web", "dep:moosicbox_profiles", "moosicbox_music_api/api"]
 openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
 # Player audio outputs
@@ -106,9 +105,3 @@ format-mp3  = ["moosicbox_music_models/mp3", "moosicbox_session/mp3"]
 format-opus = ["moosicbox_music_models/opus", "moosicbox_session/opus"]
 
 local = []
-
-all-sources = ["qobuz", "tidal", "yt"]
-
-qobuz = ["moosicbox_music_models/qobuz", "moosicbox_session/qobuz"]
-tidal = ["moosicbox_music_models/tidal", "moosicbox_session/tidal"]
-yt    = ["moosicbox_music_models/yt", "moosicbox_session/yt"]

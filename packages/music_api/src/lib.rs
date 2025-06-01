@@ -37,7 +37,7 @@ impl MusicApis {
 
     pub fn add_source(&mut self, api: Arc<Box<dyn MusicApi>>) {
         let mut map = (*self.0).clone();
-        map.insert(api.source(), api);
+        map.insert(api.source().clone(), api);
 
         self.0 = Arc::new(map);
     }
@@ -68,11 +68,11 @@ pub enum MusicApisError {
 }
 
 impl SourceToMusicApi for MusicApis {
-    fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
+    fn get(&self, source: &ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
         let api = self
             .0
-            .get(&source)
-            .ok_or(MusicApisError::NotFound(source))?;
+            .get(source)
+            .ok_or_else(|| MusicApisError::NotFound(source.clone()))?;
 
         Ok(api.clone())
     }
@@ -116,7 +116,7 @@ pub trait SourceToMusicApi {
     /// # Errors
     ///
     /// * If the `MusicApi` is not found
-    fn get(&self, source: ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError>;
+    fn get(&self, source: &ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError>;
 }
 
 #[derive(Debug, Error)]
@@ -254,7 +254,7 @@ impl From<&Track> for TrackOrId {
 
 #[async_trait]
 pub trait MusicApi: Send + Sync {
-    fn source(&self) -> ApiSource;
+    fn source(&self) -> &ApiSource;
 
     async fn artists(
         &self,
@@ -582,7 +582,7 @@ impl<T: MusicApi> CachedMusicApi<T> {
 
 #[async_trait]
 impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
-    fn source(&self) -> ApiSource {
+    fn source(&self) -> &ApiSource {
         self.inner.source()
     }
 
@@ -876,6 +876,8 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
 #[cfg(test)]
 #[allow(clippy::module_name_repetitions)]
 mod test {
+    use std::sync::LazyLock;
+
     use async_trait::async_trait;
     use moosicbox_music_api_models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
@@ -888,10 +890,12 @@ mod test {
 
     pub struct TestMusicApi {}
 
+    static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "test".into());
+
     #[async_trait]
     impl MusicApi for TestMusicApi {
-        fn source(&self) -> ApiSource {
-            ApiSource::Library
+        fn source(&self) -> &ApiSource {
+            &API_SOURCE
         }
 
         async fn artists(

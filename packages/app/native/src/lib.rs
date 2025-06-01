@@ -7,6 +7,7 @@ use std::sync::{LazyLock, OnceLock};
 use hyperchad::{renderer::Renderer, router::Router};
 use moosicbox_app_native_ui::state;
 use moosicbox_config::AppType;
+use moosicbox_music_models::ApiSource;
 
 pub mod actions;
 mod events;
@@ -87,7 +88,25 @@ pub async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::
     state
 }
 
+/// # Panics
+///
+/// * If the `API_SOURCES` `RwLock` is poisoned
 pub fn init() -> Router {
+    {
+        let mut api_sources = moosicbox_music_models::API_SOURCES.write().unwrap();
+
+        api_sources.insert(ApiSource::library());
+
+        #[cfg(feature = "tidal")]
+        api_sources.insert("Tidal".into());
+
+        #[cfg(feature = "qobuz")]
+        api_sources.insert("Qobuz".into());
+
+        #[cfg(feature = "yt")]
+        api_sources.insert("Yt".into());
+    }
+
     moosicbox_player::on_playback_event(events::on_playback_event);
 
     let router = Router::new()

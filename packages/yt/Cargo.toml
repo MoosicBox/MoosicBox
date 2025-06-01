@@ -16,14 +16,14 @@ ignored = ["strum"]
 [dependencies]
 moosicbox_assert = { workspace = true }
 moosicbox_date_utils = { workspace = true, features = ["chrono"] }
-moosicbox_files = { workspace = true, features = ["format-flac", "yt"] }
+moosicbox_files = { workspace = true, features = ["format-flac"] }
 moosicbox_json_utils = { workspace = true, features = [
     "database",
     "serde_json",
 ] }
 moosicbox_menu_models = { workspace = true }
 moosicbox_music_api = { workspace = true }
-moosicbox_music_models = { workspace = true, features = ["flac", "yt"] }
+moosicbox_music_models = { workspace = true, features = ["flac"] }
 moosicbox_paging = { workspace = true }
 moosicbox_search = { workspace = true, features = ["api"] }
 switchy_database = { workspace = true }

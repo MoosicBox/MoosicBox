@@ -17,8 +17,8 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
     let album_page_url = crate::albums::album_page_url(
         &track.album_id.to_string(),
         false,
-        Some(track.api_source),
-        Some(track.track_source),
+        Some(&track.api_source),
+        Some(&track.track_source),
         track.sample_rate,
         track.bit_depth,
     );
@@ -120,8 +120,8 @@ pub fn play_queue(state: &State) -> Markup {
                                 crate::albums::album_page_url(
                                     &track.album_id.to_string(),
                                     false,
-                                    Some(track.api_source),
-                                    Some(track.track_source),
+                                    Some(&track.api_source),
+                                    Some(&track.track_source),
                                     track.sample_rate,
                                     track.bit_depth
                                 )

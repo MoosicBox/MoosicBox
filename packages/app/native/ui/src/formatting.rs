@@ -44,52 +44,36 @@ pub trait ApiSourceFormat {
 
 impl ApiSourceFormat for ApiSource {
     fn into_formatted(self) -> String {
-        match self {
-            Self::Library => "Library".to_string(),
-            #[cfg(feature = "tidal")]
-            Self::Tidal => "Tidal".to_string(),
-            #[cfg(feature = "qobuz")]
-            Self::Qobuz => "Qobuz".to_string(),
-            #[cfg(feature = "yt")]
-            Self::Yt => "YouTube Music".to_string(),
-        }
+        self.into()
     }
 }
 
 pub trait TrackApiSourceFormat {
-    fn into_formatted(self) -> &'static str;
+    fn into_formatted(self) -> String;
 }
 
 impl TrackApiSourceFormat for TrackApiSource {
-    fn into_formatted(self) -> &'static str {
-        match self {
-            Self::Local => "Local",
-            #[cfg(feature = "tidal")]
-            Self::Tidal => "Tidal",
-            #[cfg(feature = "qobuz")]
-            Self::Qobuz => "Qobuz",
-            #[cfg(feature = "yt")]
-            Self::Yt => "YouTube Music",
-        }
+    fn into_formatted(self) -> String {
+        self.into()
     }
 }
 
 pub trait AudioFormatFormat {
-    fn into_formatted(self) -> &'static str;
+    fn into_formatted(self) -> String;
 }
 
 impl AudioFormatFormat for AudioFormat {
-    fn into_formatted(self) -> &'static str {
+    fn into_formatted(self) -> String {
         match self {
             #[cfg(feature = "aac")]
-            Self::Aac => "AAC",
+            Self::Aac => "AAC".to_string(),
             #[cfg(feature = "flac")]
-            Self::Flac => "FLAC",
+            Self::Flac => "FLAC".to_string(),
             #[cfg(feature = "mp3")]
-            Self::Mp3 => "MP3",
+            Self::Mp3 => "MP3".to_string(),
             #[cfg(feature = "opus")]
-            Self::Opus => "OPUS",
-            Self::Source => "N/A",
+            Self::Opus => "OPUS".to_string(),
+            Self::Source => "N/A".to_string(),
         }
     }
 }
@@ -102,11 +86,7 @@ impl AlbumVersionQualityFormat for AlbumVersionQuality {
     fn into_formatted(self) -> String {
         match self.source {
             TrackApiSource::Local => {
-                let mut formatted = self
-                    .format
-                    .expect("Missing format")
-                    .into_formatted()
-                    .to_string();
+                let mut formatted = self.format.expect("Missing format").into_formatted();
 
                 if let Some(sample_rate) = self.sample_rate {
                     if !formatted.is_empty() {
@@ -128,12 +108,7 @@ impl AlbumVersionQualityFormat for AlbumVersionQuality {
 
                 formatted
             }
-            #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => self.source.into_formatted().to_string(),
-            #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => self.source.into_formatted().to_string(),
-            #[cfg(feature = "yt")]
-            TrackApiSource::Yt => self.source.into_formatted().to_string(),
+            TrackApiSource::Api(..) => self.source.into_formatted(),
         }
     }
 }

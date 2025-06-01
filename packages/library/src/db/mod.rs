@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use moosicbox_json_utils::{
     ToValueType,
     database::{AsModelResultMapped as _, DatabaseFetchError},
@@ -15,6 +13,19 @@ use switchy_database::{
 use thiserror::Error;
 
 pub mod models;
+
+const API_SOURCES_COLUMN: &str = "
+    (
+        SELECT json_group_array(
+            json_object(
+               'id', api_sources.source_id,
+               'source', api_sources.source
+            )
+        )
+        FROM api_sources
+        WHERE api_sources.entity_type='{table}' AND api_sources.entity_id = {table}.id
+    ) AS {name}
+    ";
 
 use crate::{
     db::models::LibraryConfig,
@@ -125,7 +136,17 @@ pub async fn get_library_access_token(
 ///
 /// * If there was a database error
 pub async fn get_artists(db: &LibraryDatabase) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
-    Ok(db.select("artists").execute(&**db).await?.to_value_type()?)
+    Ok(db
+        .select("artists")
+        .columns(&[
+            "artists.*",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "api_sources"),
+        ])
+        .execute(&**db)
+        .await?
+        .to_value_type()?)
 }
 
 /// # Errors
@@ -142,9 +163,13 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, Datab
             "track_sizes.channels",
             "track_sizes.format",
             "artists.title as artist",
-            "artists.tidal_id as tidal_artist_id",
-            "artists.qobuz_id as qobuz_artist_id",
             "tracks.source",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "albums")
+                .replace("{name}", "api_sources"),
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "artist_api_sources"),
         ])
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
@@ -169,6 +194,12 @@ pub async fn get_artist(
 ) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
+        .columns(&[
+            "artists.*",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "api_sources"),
+        ])
         .where_eq(column.to_string(), id)
         .execute_first(&**db)
         .await?
@@ -185,6 +216,12 @@ pub async fn get_artist_by_album_id(
 ) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
+        .columns(&[
+            "artists.*",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "api_sources"),
+        ])
         .where_eq("albums.id", id)
         .join("albums", "albums.artist_id = artists.id")
         .execute_first(&**db)
@@ -202,6 +239,12 @@ pub async fn get_artists_by_album_ids(
 ) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
+        .columns(&[
+            "artists.*",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "api_sources"),
+        ])
         .distinct()
         .join("albums", "albums.artist_id = artists.id")
         .where_in("album.id", album_ids.to_vec())
@@ -219,45 +262,14 @@ pub async fn get_album_artist(
 ) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
-        .columns(&["artists.*"])
+        .columns(&[
+            "artists.*",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "api_sources"),
+        ])
         .join("albums", "albums.artist_id=artists.id")
         .where_eq("albums.id", album_id)
-        .execute_first(&**db)
-        .await?
-        .map(|x| x.to_value_type())
-        .transpose()?)
-}
-
-/// # Errors
-///
-/// * If there was a database error
-pub async fn get_tidal_album_artist(
-    db: &LibraryDatabase,
-    tidal_album_id: u64,
-) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
-    Ok(db
-        .select("artists")
-        .columns(&["artists.*"])
-        .join("albums", "albums.artist_id=artists.id")
-        .where_eq("albums.tidal_id", tidal_album_id)
-        .execute_first(&**db)
-        .await?
-        .map(|x| x.to_value_type())
-        .transpose()?)
-}
-
-/// # Errors
-///
-/// * If there was a database error
-pub async fn get_qobuz_album_artist(
-    db: &LibraryDatabase,
-    qobuz_album_id: &str,
-) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
-    Ok(db
-        .select("artists")
-        .columns(&["artists.*"])
-        .join("albums", "albums.artist_id=artists.id")
-        .where_eq("albums.qobuz_id", qobuz_album_id)
         .execute_first(&**db)
         .await?
         .map(|x| x.to_value_type())
@@ -277,8 +289,12 @@ pub async fn get_album(
         .columns(&[
             "albums.*",
             "artists.title as artist",
-            "artists.tidal_id as tidal_artist_id",
-            "artists.qobuz_id as qobuz_artist_id",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "albums")
+                .replace("{name}", "api_sources"),
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "artist_api_sources"),
         ])
         .where_eq(format!("albums.{column}"), id)
         .join("artists", "artists.id = albums.artist_id")
@@ -304,8 +320,6 @@ pub async fn get_album_tracks(
             "albums.date_released as date_released",
             "albums.date_added as date_added",
             "artists.title as artist",
-            "artists.tidal_id as tidal_artist_id",
-            "artists.qobuz_id as qobuz_artist_id",
             "artists.id as artist_id",
             "albums.artwork",
             "track_sizes.format",
@@ -315,6 +329,15 @@ pub async fn get_album_tracks(
             "track_sizes.overall_bitrate",
             "track_sizes.sample_rate",
             "track_sizes.channels",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "tracks")
+                .replace("{name}", "api_sources"),
+            &API_SOURCES_COLUMN
+                .replace("{table}", "albums")
+                .replace("{name}", "album_api_sources"),
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "artist_api_sources"),
         ])
         .where_eq("tracks.album_id", album_id)
         .join("albums", "albums.id=tracks.album_id")
@@ -345,10 +368,14 @@ pub async fn get_artist_albums(
             "track_sizes.sample_rate",
             "track_sizes.channels",
             "artists.title as artist",
-            "artists.tidal_id as tidal_artist_id",
-            "artists.qobuz_id as qobuz_artist_id",
             "tracks.format",
             "tracks.source",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "albums")
+                .replace("{name}", "api_sources"),
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "artist_api_sources"),
         ])
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
@@ -518,8 +545,6 @@ pub async fn get_tracks(
             "albums.date_released as date_released",
             "albums.date_added as date_added",
             "artists.title as artist",
-            "artists.tidal_id as tidal_artist_id",
-            "artists.qobuz_id as qobuz_artist_id",
             "artists.id as artist_id",
             "albums.artwork",
             "track_sizes.format",
@@ -529,6 +554,15 @@ pub async fn get_tracks(
             "track_sizes.overall_bitrate",
             "track_sizes.sample_rate",
             "track_sizes.channels",
+            &API_SOURCES_COLUMN
+                .replace("{table}", "tracks")
+                .replace("{name}", "api_sources"),
+            &API_SOURCES_COLUMN
+                .replace("{table}", "albums")
+                .replace("{name}", "album_api_sources"),
+            &API_SOURCES_COLUMN
+                .replace("{table}", "artists")
+                .replace("{name}", "artist_api_sources"),
         ])
         .filter_if_some(ids.map(|ids| where_in("tracks.id", ids.to_vec())))
         .join("albums", "albums.id=tracks.album_id")
@@ -616,9 +650,9 @@ pub async fn add_artist_and_get_artist(
 /// # Errors
 ///
 /// * If there was a database error
-pub async fn add_artist_map_and_get_artist<S: ::std::hash::BuildHasher + Send>(
+pub async fn add_artist_map_and_get_artist(
     db: &LibraryDatabase,
-    artist: HashMap<&str, DatabaseValue, S>,
+    artist: Vec<(&str, DatabaseValue)>,
 ) -> Result<LibraryArtist, DatabaseFetchError> {
     Ok(add_artist_maps_and_get_artists(db, vec![artist]).await?[0].clone())
 }
@@ -635,10 +669,10 @@ pub async fn add_artists_and_get_artists(
         artists
             .into_iter()
             .map(|artist| {
-                HashMap::from([
+                vec![
                     ("title", DatabaseValue::String(artist.title)),
                     ("cover", DatabaseValue::StringOpt(artist.cover)),
-                ])
+                ]
             })
             .collect(),
     )
@@ -648,17 +682,28 @@ pub async fn add_artists_and_get_artists(
 /// # Errors
 ///
 /// * If there was a database error
-pub async fn add_artist_maps_and_get_artists<S: ::std::hash::BuildHasher + Send>(
+pub async fn add_artist_maps_and_get_artists(
     db: &LibraryDatabase,
-    artists: Vec<HashMap<&str, DatabaseValue, S>>,
+    artists: Vec<Vec<(&str, DatabaseValue)>>,
 ) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
     let mut results = vec![];
 
-    for artist in artists {
-        let Some(title) = artist.get("title") else {
-            return Err(DatabaseFetchError::InvalidRequest);
-        };
+    let title = artists
+        .iter()
+        .find_map(|artist| {
+            artist
+                .iter()
+                .find(|(key, _)| *key == "title")
+                .map(|(_, value)| {
+                    value
+                        .as_str()
+                        .map(ToString::to_string)
+                        .ok_or(DatabaseFetchError::InvalidRequest)
+                })
+        })
+        .ok_or(DatabaseFetchError::InvalidRequest)??;
 
+    for artist in artists {
         let row: LibraryArtist = db
             .upsert("artists")
             .where_eq("title", title.clone())
@@ -715,9 +760,9 @@ pub async fn add_album_and_get_album(
 /// # Errors
 ///
 /// * If there was a database error
-pub async fn add_album_map_and_get_album<S: ::std::hash::BuildHasher + Send>(
+pub async fn add_album_map_and_get_album(
     db: &LibraryDatabase,
-    album: HashMap<&str, DatabaseValue, S>,
+    album: Vec<(&str, DatabaseValue)>,
 ) -> Result<LibraryAlbum, DatabaseFetchError> {
     Ok(add_album_maps_and_get_albums(db, vec![album]).await?[0].clone())
 }
@@ -734,7 +779,7 @@ pub async fn add_albums_and_get_albums(
         albums
             .into_iter()
             .map(|album| {
-                HashMap::from([
+                vec![
                     (
                         "artist_id",
                         #[allow(clippy::cast_possible_wrap)]
@@ -747,7 +792,7 @@ pub async fn add_albums_and_get_albums(
                     ),
                     ("artwork", DatabaseValue::StringOpt(album.artwork)),
                     ("directory", DatabaseValue::StringOpt(album.directory)),
-                ])
+                ]
             })
             .collect(),
     )
@@ -757,14 +802,16 @@ pub async fn add_albums_and_get_albums(
 /// # Errors
 ///
 /// * If there was a database error
-pub async fn add_album_maps_and_get_albums<S: ::std::hash::BuildHasher + Send>(
+pub async fn add_album_maps_and_get_albums(
     db: &LibraryDatabase,
-    albums: Vec<HashMap<&str, DatabaseValue, S>>,
+    albums: Vec<Vec<(&str, DatabaseValue)>>,
 ) -> Result<Vec<LibraryAlbum>, DatabaseFetchError> {
     let mut values = vec![];
 
     for album in albums {
-        if !album.contains_key("artist_id") || !album.contains_key("title") {
+        if !album.iter().any(|(x, _)| *x == "artist_id")
+            || !album.iter().any(|(x, _)| *x == "title")
+        {
             return Err(DatabaseFetchError::InvalidRequest);
         }
 
@@ -775,7 +822,7 @@ pub async fn add_album_maps_and_get_albums<S: ::std::hash::BuildHasher + Send>(
 
     Ok(db
         .upsert_multi("albums")
-        .unique(boxed![identifier("artist_id"), identifier("title"),])
+        .unique(boxed![identifier("artist_id"), identifier("title")])
         .values(values)
         .execute(&**db)
         .await?
@@ -787,8 +834,6 @@ pub struct InsertTrack {
     pub track: LibraryTrack,
     pub album_id: u64,
     pub file: Option<String>,
-    pub qobuz_id: Option<u64>,
-    pub tidal_id: Option<u64>,
 }
 
 /// # Errors
@@ -829,22 +874,6 @@ pub async fn add_tracks(
                 values.push(("file", DatabaseValue::String(file.clone())));
             }
 
-            if let Some(qobuz_id) = &insert.qobuz_id {
-                values.push((
-                    "qobuz_id",
-                    #[allow(clippy::cast_possible_wrap)]
-                    DatabaseValue::Number(*qobuz_id as i64),
-                ));
-            }
-
-            if let Some(tidal_id) = &insert.tidal_id {
-                values.push((
-                    "tidal_id",
-                    #[allow(clippy::cast_possible_wrap)]
-                    DatabaseValue::Number(*tidal_id as i64),
-                ));
-            }
-
             values
         })
         .collect::<Vec<_>>();
@@ -859,8 +888,49 @@ pub async fn add_tracks(
             identifier("number"),
             coalesce(boxed![identifier("format"), literal("''")]),
             identifier("source"),
-            coalesce(boxed![identifier("tidal_id"), literal("0")]),
-            coalesce(boxed![identifier("qobuz_id"), literal("0")]),
+        ])
+        .values(values)
+        .execute(&**db)
+        .await?
+        .to_value_type()?)
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct InsertApiSource {
+    pub entity_type: String,
+    pub entity_id: u64,
+    pub source: String,
+    pub source_id: String,
+}
+
+/// # Errors
+///
+/// * If there was a database error
+pub async fn add_api_sources(
+    db: &LibraryDatabase,
+    api_sources: Vec<InsertApiSource>,
+) -> Result<Vec<LibraryTrack>, DatabaseFetchError> {
+    let values = api_sources
+        .iter()
+        .map(|insert| {
+            vec![
+                (
+                    "entity_type",
+                    DatabaseValue::String(insert.entity_type.clone()),
+                ),
+                ("entity_id", DatabaseValue::UNumber(insert.entity_id)),
+                ("source", DatabaseValue::String(insert.source.clone())),
+                ("source_id", DatabaseValue::String(insert.source_id.clone())),
+            ]
+        })
+        .collect::<Vec<_>>();
+
+    Ok(db
+        .upsert_multi("api_sources")
+        .unique(boxed![
+            identifier("entity_type"),
+            identifier("entity_id"),
+            identifier("source"),
         ])
         .values(values)
         .execute(&**db)

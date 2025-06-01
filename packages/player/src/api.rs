@@ -10,7 +10,7 @@ use actix_web::{
 use moosicbox_music_api::{MusicApi, MusicApis, SourceToMusicApi as _};
 use moosicbox_music_models::{
     ApiSource, AudioFormat, PlaybackQuality, Track,
-    id::{Id, IdType, ParseIntegersError, parse_integer_ranges_to_ids},
+    id::{Id, ParseIntegersError, parse_integer_ranges_to_ids},
 };
 use moosicbox_profiles::api::ProfileName;
 use moosicbox_session::models::PlaybackTarget;
@@ -282,15 +282,15 @@ pub async fn play_album_endpoint(
     profile: ProfileName,
     music_apis: MusicApis,
 ) -> Result<Json<PlaybackStatus>> {
-    let source = query.source.unwrap_or(ApiSource::Library);
-    let album_id = Id::try_from_str(query.album_id.as_str(), source, IdType::Album)
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let album_id = Id::try_from_str(query.album_id.as_str(), &source)
         .map_err(|e| ErrorBadRequest(format!("Invalid album id: {e:?}")))?;
 
     get_player(query.host.as_deref())
         .await?
         .play_album(
             &**music_apis
-                .get(source)
+                .get(&source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             query.session_id,
             profile.into(),
@@ -358,7 +358,7 @@ pub async fn play_track_endpoint(
 ) -> Result<Json<PlaybackStatus>> {
     let track_id = get_track_or_ids_from_track_id_ranges(
         &**music_apis
-            .get(query.source.unwrap_or(ApiSource::Library))
+            .get(&query.source.clone().unwrap_or_else(ApiSource::library))
             .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         query.track_id.to_string().as_str(),
     )
@@ -437,7 +437,7 @@ pub async fn play_tracks_endpoint(
 ) -> Result<Json<PlaybackStatus>> {
     let track_ids = get_track_or_ids_from_track_id_ranges(
         &**music_apis
-            .get(query.source.unwrap_or(ApiSource::Library))
+            .get(&query.source.clone().unwrap_or_else(ApiSource::library))
             .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         &query.track_ids,
     )
@@ -597,7 +597,7 @@ pub async fn update_playback_endpoint(
         Some(
             get_track_or_ids_from_track_id_ranges(
                 &**music_apis
-                    .get(query.source.unwrap_or(ApiSource::Library))
+                    .get(&query.source.clone().unwrap_or_else(ApiSource::library))
                     .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
                 track_ids,
             )

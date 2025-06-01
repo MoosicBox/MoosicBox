@@ -9,7 +9,7 @@ use moosicbox_json_utils::{
 };
 use moosicbox_music_api::models::ImageCoverSize;
 use moosicbox_music_models::{
-    Album, AlbumSource, ApiSource, ApiSources, Artist, Track, TrackApiSource,
+    Album, ApiSources, Artist, Track,
     api::{ApiAlbum, ApiArtist},
     id::TryFromIdError,
 };
@@ -20,7 +20,7 @@ use moosicbox_search::api::models::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{QobuzAlbumReleaseType, format_title};
+use crate::{API_SOURCE, QobuzAlbumReleaseType, format_title};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -235,11 +235,11 @@ impl TryFrom<QobuzAlbum> for Album {
             directory: None,
             blur: false,
             versions: vec![],
-            album_source: AlbumSource::Qobuz,
-            api_source: ApiSource::Qobuz,
+            album_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
             artist_sources: ApiSources::default()
-                .with_source(ApiSource::Qobuz, value.artist_id.into()),
-            album_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
+                .with_source(API_SOURCE.clone(), value.artist_id.into()),
+            album_sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         })
     }
 }
@@ -485,9 +485,9 @@ impl From<QobuzTrack> for Track {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            track_source: TrackApiSource::Qobuz,
-            api_source: ApiSource::Qobuz,
-            sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
+            track_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }
@@ -509,7 +509,7 @@ impl From<QobuzTrack> for ApiGlobalSearchResult {
             bit_depth: None,
             sample_rate: None,
             channels: None,
-            source: TrackApiSource::Qobuz,
+            source: API_SOURCE.clone().into(),
         })
     }
 }
@@ -603,8 +603,8 @@ impl From<QobuzArtist> for Artist {
             id: value.id.into(),
             title: value.name,
             cover,
-            api_source: ApiSource::Qobuz,
-            api_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
+            api_source: API_SOURCE.clone(),
+            api_sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }
@@ -615,8 +615,8 @@ impl From<QobuzArtist> for ApiArtist {
             artist_id: value.id.into(),
             title: value.name,
             contains_cover: value.image.is_some(),
-            api_source: ApiSource::Qobuz,
-            api_sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
+            api_source: API_SOURCE.clone(),
+            api_sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }

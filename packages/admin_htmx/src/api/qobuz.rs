@@ -103,7 +103,7 @@ pub async fn run_scan_endpoint(
     db: LibraryDatabase,
     music_apis: MusicApis,
 ) -> Result<Markup, actix_web::Error> {
-    moosicbox_scan::run_scan(Some(vec![ScanOrigin::Qobuz]), &db, music_apis)
+    moosicbox_scan::run_scan(Some(vec![ScanOrigin::Api("Qobuz".into())]), &db, music_apis)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))?;
 

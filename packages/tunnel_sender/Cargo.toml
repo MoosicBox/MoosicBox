@@ -54,7 +54,7 @@ tokio-tungstenite = { workspace = true }
 tokio-util        = { workspace = true }
 
 [features]
-default = ["all-encoders", "all-sources", "base64"]
+default = ["all-encoders", "base64"]
 
 fail-on-warnings = []
 
@@ -91,17 +91,3 @@ format-aac  = ["moosicbox_music_models/aac", "moosicbox_ws/aac"]
 format-flac = ["moosicbox_music_models/flac", "moosicbox_ws/flac"]
 format-mp3  = ["moosicbox_music_models/mp3", "moosicbox_ws/mp3"]
 format-opus = ["moosicbox_music_models/opus", "moosicbox_ws/opus"]
-
-all-sources = ["qobuz", "tidal", "yt"]
-
-qobuz = [
-    "moosicbox_files/qobuz",
-    "moosicbox_music_models/qobuz",
-    "moosicbox_player/qobuz",
-]
-tidal = [
-    "moosicbox_files/tidal",
-    "moosicbox_music_models/tidal",
-    "moosicbox_player/tidal",
-]
-yt = ["moosicbox_files/yt", "moosicbox_music_models/yt", "moosicbox_player/yt"]

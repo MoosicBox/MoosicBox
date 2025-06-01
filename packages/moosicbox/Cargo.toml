@@ -62,39 +62,6 @@ fail-on-warnings = []
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = [
-    "dep:moosicbox_qobuz",
-    "moosicbox_app_native_ui/qobuz",
-    "moosicbox_downloader/qobuz",
-    "moosicbox_files/qobuz",
-    "moosicbox_library/qobuz",
-    "moosicbox_menu/qobuz",
-    "moosicbox_player/qobuz",
-    "moosicbox_scan/qobuz",
-    "moosicbox_session/qobuz",
-    "moosicbox_tunnel_sender/qobuz",
-]
-tidal = [
-    "dep:moosicbox_tidal",
-    "moosicbox_app_native_ui/tidal",
-    "moosicbox_downloader/tidal",
-    "moosicbox_files/tidal",
-    "moosicbox_library/tidal",
-    "moosicbox_menu/tidal",
-    "moosicbox_player/tidal",
-    "moosicbox_scan/tidal",
-    "moosicbox_session/tidal",
-    "moosicbox_tunnel_sender/tidal",
-]
-yt = [
-    "dep:moosicbox_yt",
-    "moosicbox_app_native_ui/yt",
-    "moosicbox_downloader/yt",
-    "moosicbox_files/yt",
-    "moosicbox_library/yt",
-    "moosicbox_menu/yt",
-    "moosicbox_player/yt",
-    "moosicbox_scan/yt",
-    "moosicbox_session/yt",
-    "moosicbox_tunnel_sender/yt",
-]
+qobuz = ["dep:moosicbox_qobuz"]
+tidal = ["dep:moosicbox_tidal"]
+yt    = ["dep:moosicbox_yt"]

@@ -54,14 +54,14 @@ async fn add_profile(
     let mut apis_map: BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>> = BTreeMap::new();
     #[cfg(feature = "library")]
     apis_map.insert(
-        ApiSource::Library,
+        ApiSource::library(),
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             library_music_api,
         ))),
     );
     #[cfg(feature = "tidal")]
     apis_map.insert(
-        ApiSource::Tidal,
+        moosicbox_tidal::API_SOURCE.clone(),
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             #[allow(clippy::redundant_clone)]
             moosicbox_tidal::TidalMusicApi::new(library_database.clone()),
@@ -69,7 +69,7 @@ async fn add_profile(
     );
     #[cfg(feature = "qobuz")]
     apis_map.insert(
-        ApiSource::Qobuz,
+        moosicbox_qobuz::API_SOURCE.clone(),
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             #[allow(clippy::redundant_clone)]
             moosicbox_qobuz::QobuzMusicApi::new(library_database.clone()),
@@ -77,7 +77,7 @@ async fn add_profile(
     );
     #[cfg(feature = "yt")]
     apis_map.insert(
-        ApiSource::Yt,
+        moosicbox_yt::API_SOURCE.clone(),
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             #[allow(clippy::redundant_clone)]
             moosicbox_yt::YtMusicApi::new(library_database.clone()),

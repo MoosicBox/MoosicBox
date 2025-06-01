@@ -57,8 +57,8 @@ impl RemoteLibraryMusicApi {
 
 #[async_trait]
 impl MusicApi for RemoteLibraryMusicApi {
-    fn source(&self) -> ApiSource {
-        self.api_source
+    fn source(&self) -> &ApiSource {
+        &self.api_source
     }
 
     async fn artists(
@@ -270,7 +270,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             }),
             filters = request.filters.as_ref().map_or_else(String::new, |x| {
                 format!(
-                    "{name}{artist}{search}{album_type}{artist_id}{tidal_artist_id}{qobuz_artist_id}",
+                    "{name}{artist}{search}{album_type}{artist_id}{api_source}",
                     name = x
                         .name
                         .as_ref()
@@ -291,14 +291,13 @@ impl MusicApi for RemoteLibraryMusicApi {
                         .artist_id
                         .as_ref()
                         .map_or_else(String::new, |x| format!("&artistId={x}")),
-                    tidal_artist_id = x
-                        .tidal_artist_id
+                    api_source = x
+                        .artist_api_id
                         .as_ref()
-                        .map_or_else(String::new, |x| format!("&tidalArtistId={x}")),
-                    qobuz_artist_id = x
-                        .qobuz_artist_id
-                        .as_ref()
-                        .map_or_else(String::new, |x| format!("&qobuzArtistId={x}")),
+                        .map_or_else(String::new, |x| format!(
+                            "&artistId={}&apiSource={}",
+                            x.id, x.source
+                        )),
                 )
             }),
         );
@@ -478,8 +477,7 @@ impl MusicApi for RemoteLibraryMusicApi {
                 search: None,
                 album_type,
                 artist_id: Some(artist_id.clone()),
-                tidal_artist_id: None,
-                qobuz_artist_id: None,
+                artist_api_id: None,
             }),
         };
 

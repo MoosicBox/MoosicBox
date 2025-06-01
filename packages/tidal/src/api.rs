@@ -8,7 +8,7 @@ use actix_web::{
     web::{self, Json},
 };
 use moosicbox_music_models::{
-    ApiSource, ApiSources, TrackApiSource,
+    ApiSource, ApiSources,
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
@@ -20,19 +20,20 @@ use strum_macros::{AsRefStr, EnumString};
 use switchy_database::profiles::LibraryDatabase;
 
 use crate::{
-    AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError, TidalAddFavoriteArtistError,
-    TidalAddFavoriteTrackError, TidalAlbumError, TidalAlbumOrder, TidalAlbumOrderDirection,
-    TidalAlbumTracksError, TidalAlbumType, TidalArtistAlbumsError, TidalArtistError,
-    TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceAuthorizationError,
-    TidalDeviceAuthorizationTokenError, TidalDeviceType, TidalFavoriteAlbumsError,
-    TidalFavoriteArtistsError, TidalFavoriteTracksError, TidalRemoveFavoriteAlbumError,
-    TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError, TidalSearchError, TidalTrack,
-    TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder, TidalTrackOrderDirection,
-    TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError, add_favorite_album, add_favorite_artist,
-    add_favorite_track, album, album_tracks, artist, artist_albums, device_authorization,
-    device_authorization_token, favorite_albums, favorite_artists, favorite_tracks,
-    models::TidalAlbum, remove_favorite_album, remove_favorite_artist, remove_favorite_track,
-    search, track, track_file_url, track_playback_info,
+    API_SOURCE, AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError,
+    TidalAddFavoriteArtistError, TidalAddFavoriteTrackError, TidalAlbumError, TidalAlbumOrder,
+    TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAlbumType, TidalArtistAlbumsError,
+    TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality,
+    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
+    TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
+    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError,
+    TidalSearchError, TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder,
+    TidalTrackOrderDirection, TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError,
+    add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
+    artist_albums, device_authorization, device_authorization_token, favorite_albums,
+    favorite_artists, favorite_tracks, models::TidalAlbum, remove_favorite_album,
+    remove_favorite_artist, remove_favorite_track, search, track, track_file_url,
+    track_playback_info,
 };
 
 pub fn bind_services<
@@ -147,7 +148,7 @@ impl From<TidalTrack> for ApiTrack {
             popularity: value.popularity,
             title: value.title,
             media_metadata_tags: value.media_metadata_tags,
-            api_source: ApiSource::Tidal,
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -196,9 +197,9 @@ impl From<ApiTidalTrack> for moosicbox_music_models::api::ApiTrack {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            track_source: TrackApiSource::Tidal,
-            api_source: ApiSource::Tidal,
-            sources: ApiSources::default().with_source(ApiSource::Tidal, value.id.into()),
+            track_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }

@@ -38,7 +38,7 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
-default = ["all-formats", "all-sources", "api", "db", "openapi", "tantivy"]
+default = ["all-formats", "api", "db", "openapi", "tantivy"]
 
 fail-on-warnings = []
 
@@ -56,9 +56,3 @@ aac  = []
 flac = []
 mp3  = []
 opus = []
-
-all-sources = ["qobuz", "tidal", "yt"]
-
-qobuz = []
-tidal = []
-yt    = []

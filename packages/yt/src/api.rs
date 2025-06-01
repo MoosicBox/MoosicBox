@@ -8,7 +8,7 @@ use actix_web::{
     web::{self, Json},
 };
 use moosicbox_music_models::{
-    ApiSource, ApiSources, TrackApiSource,
+    ApiSource, ApiSources,
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
@@ -20,7 +20,7 @@ use strum_macros::{AsRefStr, EnumString};
 use switchy_database::profiles::LibraryDatabase;
 
 use crate::{
-    AuthenticatedRequestError, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
+    API_SOURCE, AuthenticatedRequestError, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
     YtAddFavoriteTrackError, YtAlbumError, YtAlbumOrder, YtAlbumOrderDirection, YtAlbumTracksError,
     YtAlbumType, YtArtistAlbumsError, YtArtistError, YtArtistOrder, YtArtistOrderDirection,
     YtAudioQuality, YtDeviceAuthorizationError, YtDeviceAuthorizationTokenError, YtDeviceType,
@@ -145,7 +145,7 @@ impl From<YtTrack> for ApiTrack {
             popularity: value.popularity,
             title: value.title,
             media_metadata_tags: value.media_metadata_tags,
-            api_source: ApiSource::Yt,
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -201,9 +201,9 @@ impl From<ApiYtTrack> for moosicbox_music_models::api::ApiTrack {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            track_source: TrackApiSource::Yt,
-            api_source: ApiSource::Yt,
-            sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
+            track_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }
