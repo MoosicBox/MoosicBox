@@ -829,8 +829,8 @@ packages:
   '@oslojs/encoding@1.1.0':
     resolution: {integrity: sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ==}
 
-  '@pkgr/core@0.2.4':
-    resolution: {integrity: sha512-ROFF39F6ZrnzSUEmQQZUar0Jt4xVoP9WnDRdWwF4NNcXs3xBTLgBUDoOwW141y1jP+S8nahIbdxbFC7IShw9Iw==}
+  '@pkgr/core@0.2.5':
+    resolution: {integrity: sha512-YRx7tFgLkrpFkDAzVSV5sUJydmf2ZDrW+O3IbQ1JyeMW7B0FiWroFJTnR4/fD9CsusnAn4qRUcbb5jFnZSd6uw==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
   '@polka/url@1.0.0-next.29':
@@ -4028,8 +4028,8 @@ packages:
       typescript: ^4.9.4 || ^5.0.2
       zod: ^3
 
-  zod@3.25.42:
-    resolution: {integrity: sha512-PcALTLskaucbeHc41tU/xfjfhcz8z0GdhhDcSgrCTmSazUuqnYqiXO63M0QUBVwpBlsLsNVn5qHSC5Dw3KZvaQ==}
+  zod@3.25.45:
+    resolution: {integrity: sha512-kv1swJBZqv98NQibL0oVvkQE8rXT+6qGNM1FpZkFcJG2jnz4vbtu48bgaitp85CaBPLSKXibrEsU7MzJoVoZAA==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -4653,7 +4653,7 @@ snapshots:
 
   '@oslojs/encoding@1.1.0': {}
 
-  '@pkgr/core@0.2.4': {}
+  '@pkgr/core@0.2.5': {}
 
   '@polka/url@1.0.0-next.29': {}
 
@@ -5340,9 +5340,9 @@ snapshots:
       xxhash-wasm: 1.1.0
       yargs-parser: 21.1.1
       yocto-spinner: 0.2.3
-      zod: 3.25.42
-      zod-to-json-schema: 3.24.5(zod@3.25.42)
-      zod-to-ts: 1.2.0(typescript@5.8.3)(zod@3.25.42)
+      zod: 3.25.45
+      zod-to-json-schema: 3.24.5(zod@3.25.45)
+      zod-to-ts: 1.2.0(typescript@5.8.3)(zod@3.25.45)
     optionalDependencies:
       sharp: 0.33.5
     transitivePeerDependencies:
@@ -7860,7 +7860,7 @@ snapshots:
 
   synckit@0.11.8:
     dependencies:
-      '@pkgr/core': 0.2.4
+      '@pkgr/core': 0.2.5
 
   test-exclude@6.0.0:
     dependencies:
@@ -8464,15 +8464,15 @@ snapshots:
 
   yoctocolors@2.1.1: {}
 
-  zod-to-json-schema@3.24.5(zod@3.25.42):
+  zod-to-json-schema@3.24.5(zod@3.25.45):
     dependencies:
-      zod: 3.25.42
+      zod: 3.25.45
 
-  zod-to-ts@1.2.0(typescript@5.8.3)(zod@3.25.42):
+  zod-to-ts@1.2.0(typescript@5.8.3)(zod@3.25.45):
     dependencies:
       typescript: 5.8.3
-      zod: 3.25.42
+      zod: 3.25.45
 
-  zod@3.25.42: {}
+  zod@3.25.45: {}
 
   zwitch@2.0.4: {}
