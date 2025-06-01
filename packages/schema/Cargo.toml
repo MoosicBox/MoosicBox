@@ -19,12 +19,15 @@ log         = { workspace = true }
 thiserror   = { workspace = true }
 
 [dev-dependencies]
+moosicbox_json_utils = { workspace = true, features = ["database"] }
+moosicbox_music_models = { workspace = true, features = ["db"] }
 switchy_database_connection = { workspace = true, features = [
     "sqlite-rusqlite",
     "sqlite-sqlx",
 ] }
 test-log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
+pretty_assertions = { workspace = true }
 
 [features]
 default = ["postgres", "sqlite"]

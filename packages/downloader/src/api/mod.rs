@@ -1,9 +1,8 @@
 use std::{path::PathBuf, str::FromStr as _, sync::LazyLock};
 
 use crate::{
-    CreateDownloadTasksError, DOWNLOAD_QUEUE, DownloadApiSource, DownloadApiSourceType,
-    DownloadError, DownloadRequest, GetCreateDownloadTasksError, GetDownloadPathError,
-    MoosicboxDownloader,
+    CreateDownloadTasksError, DOWNLOAD_QUEUE, DownloadApiSource, DownloadError, DownloadRequest,
+    GetCreateDownloadTasksError, GetDownloadPathError, MoosicboxDownloader,
     api::models::{ApiDownloadLocation, ApiDownloadTask, ApiDownloadTaskState},
     db::{
         create_download_location, delete_download_location, delete_download_task,
@@ -23,7 +22,7 @@ use moosicbox_auth::NonTunnelRequestAuthorized;
 use moosicbox_music_api::{MusicApis, models::TrackAudioQuality};
 use moosicbox_music_models::{
     ApiSource,
-    id::{Id, IdType, parse_id_ranges},
+    id::{Id, parse_id_ranges},
 };
 use moosicbox_paging::Page;
 use regex::{Captures, Regex};
@@ -113,7 +112,7 @@ pub struct DownloadQuery {
     download_album_cover: Option<bool>,
     download_artist_cover: Option<bool>,
     quality: Option<TrackAudioQuality>,
-    source: DownloadApiSourceType,
+    source: String,
     url: Option<String>,
 }
 
@@ -140,7 +139,7 @@ impl From<DownloadError> for actix_web::Error {
             ("downloadAlbumCover" = Option<bool>, Query, description = "Whether or not to download the album cover, if available"),
             ("downloadArtistCover" = Option<bool>, Query, description = "Whether or not to download the artist cover, if available"),
             ("quality" = Option<TrackAudioQuality>, Query, description = "The track audio quality to download the tracks at"),
-            ("source" = DownloadApiSourceType, Query, description = "The API source to download the track from"),
+            ("source" = String, Query, description = "The API source to download the track from"),
             ("url" = Option<String>, Query, description = "The MoosicBox URL to download the audio from"),
         ),
         responses(
@@ -161,53 +160,43 @@ pub async fn download_endpoint(
 ) -> Result<Json<Value>> {
     let download_path = get_download_path(&db, query.location_id).await?;
 
-    let api_source = match &query.source {
-        DownloadApiSourceType::MoosicBox => ApiSource::Library,
-        #[cfg(feature = "tidal")]
-        DownloadApiSourceType::Tidal => ApiSource::Tidal,
-        #[cfg(feature = "qobuz")]
-        DownloadApiSourceType::Qobuz => ApiSource::Qobuz,
-        #[cfg(feature = "yt")]
-        DownloadApiSourceType::Yt => ApiSource::Yt,
+    let api_source = match query.source.as_str() {
+        "MoosicBox" => ApiSource::library(),
+        api => api.into(),
     };
 
     let track_id = if let Some(track_id) = &query.track_id {
-        Some(Id::try_from_str(track_id, api_source, IdType::Track).map_err(ErrorBadRequest)?)
+        Some(Id::try_from_str(track_id, &api_source).map_err(ErrorBadRequest)?)
     } else {
         None
     };
 
     let album_id = if let Some(album_id) = &query.album_id {
-        Some(Id::try_from_str(album_id, api_source, IdType::Album).map_err(ErrorBadRequest)?)
+        Some(Id::try_from_str(album_id, &api_source).map_err(ErrorBadRequest)?)
     } else {
         None
     };
 
     let track_ids = if let Some(track_ids) = &query.track_ids {
-        Some(parse_id_ranges(track_ids, api_source, IdType::Track).map_err(ErrorBadRequest)?)
+        Some(parse_id_ranges(track_ids, &api_source).map_err(ErrorBadRequest)?)
     } else {
         None
     };
 
     let album_ids = if let Some(album_ids) = &query.album_ids {
-        Some(parse_id_ranges(album_ids, api_source, IdType::Album).map_err(ErrorBadRequest)?)
+        Some(parse_id_ranges(album_ids, &api_source).map_err(ErrorBadRequest)?)
     } else {
         None
     };
 
-    let source = match query.source {
-        DownloadApiSourceType::MoosicBox => DownloadApiSource::MoosicBox(
+    let source = match query.source.as_str() {
+        "MoosicBox" => DownloadApiSource::MoosicBox(
             query
                 .url
                 .clone()
                 .ok_or_else(|| ErrorBadRequest("Missing MoosicBox url"))?,
         ),
-        #[cfg(feature = "tidal")]
-        DownloadApiSourceType::Tidal => DownloadApiSource::Tidal,
-        #[cfg(feature = "qobuz")]
-        DownloadApiSourceType::Qobuz => DownloadApiSource::Qobuz,
-        #[cfg(feature = "yt")]
-        DownloadApiSourceType::Yt => DownloadApiSource::Yt,
+        api => DownloadApiSource::Api(api.into()),
     };
 
     let quality = query.quality;

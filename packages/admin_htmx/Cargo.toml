@@ -40,17 +40,8 @@ default = ["api", "qobuz", "scan", "tidal"]
 
 fail-on-warnings = []
 
-qobuz = [
-    "dep:moosicbox_music_api",
-    "dep:moosicbox_qobuz",
-    "moosicbox_scan/qobuz",
-]
-tidal = [
-    "base64",
-    "dep:moosicbox_music_api",
-    "dep:moosicbox_tidal",
-    "moosicbox_scan/tidal",
-]
+qobuz = ["dep:moosicbox_music_api", "dep:moosicbox_qobuz"]
+tidal = ["base64", "dep:moosicbox_music_api", "dep:moosicbox_tidal"]
 
 scan = ["dep:moosicbox_scan"]
 

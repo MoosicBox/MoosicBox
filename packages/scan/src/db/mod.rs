@@ -42,7 +42,7 @@ pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Da
 /// * If a database error occurs
 pub async fn enable_scan_origin(
     db: &LibraryDatabase,
-    origin: ScanOrigin,
+    origin: &ScanOrigin,
 ) -> Result<(), DatabaseFetchError> {
     db.upsert("scan_locations")
         .where_eq("origin", origin.as_ref())
@@ -58,7 +58,7 @@ pub async fn enable_scan_origin(
 /// * If a database error occurs
 pub async fn disable_scan_origin(
     db: &LibraryDatabase,
-    origin: ScanOrigin,
+    origin: &ScanOrigin,
 ) -> Result<(), DatabaseFetchError> {
     db.delete("scan_locations")
         .where_eq("origin", origin.as_ref())

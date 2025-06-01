@@ -29,26 +29,32 @@ impl AsModel<LibraryArtist> for &switchy_database::Row {
 
 impl ToValueType<LibraryArtist> for &switchy_database::Row {
     fn to_value_type(self) -> Result<LibraryArtist, ParseError> {
+        let id = self.to_value("id")?;
+
         Ok(LibraryArtist {
-            id: self.to_value("id")?,
+            id,
             title: self.to_value("title")?,
             cover: self.to_value("cover")?,
-            tidal_id: self.to_value("tidal_id")?,
-            qobuz_id: self.to_value("qobuz_id")?,
-            yt_id: self.to_value("yt_id")?,
+            api_sources: self
+                .to_value::<ApiSources>("api_sources")
+                .unwrap_or_default()
+                .with_source(ApiSource::library(), id.into()),
         })
     }
 }
 
 impl AsModelResult<LibraryArtist, ParseError> for &switchy_database::Row {
     fn as_model(&self) -> Result<LibraryArtist, ParseError> {
+        let id = self.to_value("id")?;
+
         Ok(LibraryArtist {
-            id: self.to_value("id")?,
+            id,
             title: self.to_value("title")?,
             cover: self.to_value("cover")?,
-            tidal_id: self.to_value("tidal_id")?,
-            qobuz_id: self.to_value("qobuz_id")?,
-            yt_id: self.to_value("yt_id")?,
+            api_sources: self
+                .to_value::<ApiSources>("api_sources")
+                .unwrap_or_default()
+                .with_source(ApiSource::library(), id.into()),
         })
     }
 }
@@ -86,23 +92,10 @@ impl AsModel<LibraryAlbum> for &switchy_database::Row {
 impl MissingValue<LibraryAlbum> for &switchy_database::Row {}
 impl ToValueType<LibraryAlbum> for &switchy_database::Row {
     fn to_value_type(self) -> Result<LibraryAlbum, ParseError> {
-        #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
-        use moosicbox_music_models::id::Id;
-
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
-        #[cfg(feature = "tidal")]
-        let tidal_id: Option<Id> = self.to_value("tidal_id")?;
-        #[cfg(feature = "tidal")]
-        let tidal_artist_id: Option<Id> = self.to_value("tidal_artist_id")?;
-        #[cfg(feature = "qobuz")]
-        let qobuz_id: Option<Id> = self.to_value("qobuz_id")?;
-        #[cfg(feature = "qobuz")]
-        let qobuz_artist_id: Option<Id> = self.to_value("qobuz_artist_id")?;
-        #[cfg(feature = "yt")]
-        let yt_id: Option<Id> = self.to_value("yt_id")?;
-        #[cfg(feature = "yt")]
-        let yt_artist_id: Option<Id> = self.to_value("yt_artist_id")?;
+        let api_sources: ApiSources = self.to_value("api_sources")?;
+        let artist_api_sources: ApiSources = self.to_value("artist_api_sources")?;
 
         let id = self.to_value("id")?;
         let artist_id = self.to_value("artist_id")?;
@@ -120,68 +113,18 @@ impl ToValueType<LibraryAlbum> for &switchy_database::Row {
             source: AlbumSource::Local,
             blur: self.to_value("blur")?,
             versions: vec![],
-            album_sources: {
-                #[allow(unused_mut)]
-                let mut sources = ApiSources::default().with_source(ApiSource::Library, id.into());
-
-                #[cfg(feature = "tidal")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_id);
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_id);
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, yt_id);
-                }
-
-                sources
-            },
-            artist_sources: {
-                #[allow(unused_mut)]
-                let mut sources =
-                    ApiSources::default().with_source(ApiSource::Library, artist_id.into());
-
-                #[cfg(feature = "tidal")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_artist_id);
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_artist_id);
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, yt_artist_id);
-                }
-
-                sources
-            },
+            album_sources: api_sources.with_source(ApiSource::library(), id.into()),
+            artist_sources: artist_api_sources.with_source(ApiSource::library(), artist_id.into()),
         })
     }
 }
 
 impl AsModelResult<LibraryAlbum, ParseError> for &switchy_database::Row {
     fn as_model(&self) -> Result<LibraryAlbum, ParseError> {
-        #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
-        use moosicbox_music_models::id::Id;
-
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
-        #[cfg(feature = "tidal")]
-        let tidal_id: Option<Id> = self.to_value("tidal_id")?;
-        #[cfg(feature = "tidal")]
-        let tidal_artist_id: Option<Id> = self.to_value("tidal_artist_id")?;
-        #[cfg(feature = "qobuz")]
-        let qobuz_id: Option<Id> = self.to_value("qobuz_id")?;
-        #[cfg(feature = "qobuz")]
-        let qobuz_artist_id: Option<Id> = self.to_value("qobuz_artist_id")?;
-        #[cfg(feature = "yt")]
-        let yt_id: Option<Id> = self.to_value("yt_id")?;
-        #[cfg(feature = "yt")]
-        let yt_artist_id: Option<Id> = self.to_value("yt_artist_id")?;
+        let api_sources: ApiSources = self.to_value("api_sources")?;
+        let artist_api_sources: ApiSources = self.to_value("artist_api_sources")?;
 
         let id = self.to_value("id")?;
         let artist_id = self.to_value("artist_id")?;
@@ -199,45 +142,8 @@ impl AsModelResult<LibraryAlbum, ParseError> for &switchy_database::Row {
             source: AlbumSource::Local,
             blur: self.to_value("blur")?,
             versions: vec![],
-            album_sources: {
-                #[allow(unused_mut)]
-                let mut sources = ApiSources::default().with_source(ApiSource::Library, id.into());
-
-                #[cfg(feature = "tidal")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_id);
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_id);
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, yt_id);
-                }
-
-                sources
-            },
-            artist_sources: {
-                #[allow(unused_mut)]
-                let mut sources =
-                    ApiSources::default().with_source(ApiSource::Library, artist_id.into());
-
-                #[cfg(feature = "tidal")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_artist_id);
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_artist_id);
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, yt_artist_id);
-                }
-
-                sources
-            },
+            album_sources: api_sources.with_source(ApiSource::library(), id.into()),
+            artist_sources: artist_api_sources.with_source(ApiSource::library(), artist_id.into()),
         })
     }
 }
@@ -277,7 +183,7 @@ impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<switchy_datab
             }
 
             if let Some(album) = results.last_mut() {
-                if let Some(_source) = row.get("source") {
+                if let Some(source) = row.get("source") {
                     match row.to_value_type() {
                         Ok(version) => {
                             album.versions.push(version);
@@ -289,65 +195,27 @@ impl AsModelResultMapped<LibraryAlbum, DatabaseFetchError> for Vec<switchy_datab
                         }
                         Err(err) => {
                             log::error!(
-                                "Failed to parse AlbumVersionQuality for album id={}: {err:?}",
+                                "Failed to parse AlbumVersionQuality for album id={} ({source:?}): {err:?}",
                                 album.id
                             );
                         }
                     }
                 } else {
-                    #[cfg(feature = "tidal")]
-                    if album
+                    for source in album
                         .album_sources
                         .iter()
-                        .any(|x| x.source == ApiSource::Tidal)
+                        .filter(|x| !x.source.is_library())
                     {
                         album.versions.push(AlbumVersionQuality {
                             format: None,
                             bit_depth: None,
                             sample_rate: None,
                             channels: None,
-                            source: TrackApiSource::Tidal,
+                            source: source.source.clone().into(),
                         });
                         log::trace!(
-                            "Added Tidal version to album id={} count={}",
-                            album.id,
-                            album.versions.len()
-                        );
-                    }
-                    #[cfg(feature = "qobuz")]
-                    if album
-                        .album_sources
-                        .iter()
-                        .any(|x| x.source == ApiSource::Qobuz)
-                    {
-                        album.versions.push(AlbumVersionQuality {
-                            format: None,
-                            bit_depth: None,
-                            sample_rate: None,
-                            channels: None,
-                            source: TrackApiSource::Qobuz,
-                        });
-                        log::trace!(
-                            "Added Qobuz version to album id={} count={}",
-                            album.id,
-                            album.versions.len()
-                        );
-                    }
-                    #[cfg(feature = "yt")]
-                    if album
-                        .album_sources
-                        .iter()
-                        .any(|x| x.source == ApiSource::Yt)
-                    {
-                        album.versions.push(AlbumVersionQuality {
-                            format: None,
-                            bit_depth: None,
-                            sample_rate: None,
-                            channels: None,
-                            source: TrackApiSource::Yt,
-                        });
-                        log::trace!(
-                            "Added Yt version to album id={} count={}",
+                            "Added {} version to album id={} count={}",
+                            source.source,
                             album.id,
                             album.versions.len()
                         );
@@ -375,21 +243,8 @@ impl AsModelQuery<LibraryAlbum> for &switchy_database::Row {
         &self,
         db: std::sync::Arc<Box<dyn Database>>,
     ) -> Result<LibraryAlbum, DatabaseFetchError> {
-        #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
-        use moosicbox_music_models::id::Id;
-
-        #[cfg(feature = "tidal")]
-        let tidal_id: Option<Id> = self.to_value("tidal_id")?;
-        #[cfg(feature = "tidal")]
-        let tidal_artist_id: Option<Id> = self.to_value("tidal_artist_id")?;
-        #[cfg(feature = "qobuz")]
-        let qobuz_id: Option<Id> = self.to_value("qobuz_id")?;
-        #[cfg(feature = "qobuz")]
-        let qobuz_artist_id: Option<Id> = self.to_value("qobuz_artist_id")?;
-        #[cfg(feature = "yt")]
-        let yt_id: Option<Id> = self.to_value("yt_id")?;
-        #[cfg(feature = "yt")]
-        let yt_artist_id: Option<Id> = self.to_value("yt_artist_id")?;
+        let api_sources: ApiSources = self.to_value("api_sources")?;
+        let artist_api_sources: ApiSources = self.to_value("artist_api_sources")?;
 
         let id = self.to_value("id")?;
         let artist_id = self.to_value("artist_id")?;
@@ -410,45 +265,8 @@ impl AsModelQuery<LibraryAlbum> for &switchy_database::Row {
             source: AlbumSource::Local,
             blur: self.to_value("blur")?,
             versions: get_album_version_qualities(&db.into(), id).await?,
-            album_sources: {
-                #[allow(unused_mut)]
-                let mut sources = ApiSources::default().with_source(ApiSource::Library, id.into());
-
-                #[cfg(feature = "tidal")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_id);
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_id);
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, yt_id);
-                }
-
-                sources
-            },
-            artist_sources: {
-                #[allow(unused_mut)]
-                let mut sources =
-                    ApiSources::default().with_source(ApiSource::Library, artist_id.into());
-
-                #[cfg(feature = "tidal")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Tidal, tidal_artist_id);
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Qobuz, qobuz_artist_id);
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, yt_artist_id);
-                }
-
-                sources
-            },
+            album_sources: api_sources.with_source(ApiSource::library(), id.into()),
+            artist_sources: artist_api_sources.with_source(ApiSource::library(), artist_id.into()),
         })
     }
 }
@@ -468,8 +286,10 @@ impl AsModel<LibraryTrack> for &switchy_database::Row {
 impl ToValueType<LibraryTrack> for &switchy_database::Row {
     fn to_value_type(self) -> Result<LibraryTrack, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
+        let id = self.to_value("id")?;
+
         Ok(LibraryTrack {
-            id: self.to_value("id")?,
+            id,
             number: self.to_value("number")?,
             title: self.to_value("title")?,
             duration: self.to_value("duration")?,
@@ -499,10 +319,11 @@ impl ToValueType<LibraryTrack> for &switchy_database::Row {
             channels: self.to_value("channels").unwrap_or_default(),
             source: TrackApiSource::from_str(&self.to_value::<String>("source")?)
                 .expect("Missing source"),
-            api_source: ApiSource::Library,
-            qobuz_id: self.to_value("qobuz_id")?,
-            tidal_id: self.to_value("tidal_id")?,
-            yt_id: self.to_value("yt_id")?,
+            api_source: ApiSource::library(),
+            api_sources: self
+                .to_value::<ApiSources>("api_sources")
+                .unwrap_or_default()
+                .with_source(ApiSource::library(), id.into()),
         })
     }
 }
@@ -510,8 +331,10 @@ impl ToValueType<LibraryTrack> for &switchy_database::Row {
 impl AsModelResult<LibraryTrack, ParseError> for &switchy_database::Row {
     fn as_model(&self) -> Result<LibraryTrack, ParseError> {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
+        let id = self.to_value("id")?;
+
         Ok(LibraryTrack {
-            id: self.to_value("id")?,
+            id,
             number: self.to_value("number")?,
             title: self.to_value("title")?,
             duration: self.to_value("duration")?,
@@ -541,10 +364,11 @@ impl AsModelResult<LibraryTrack, ParseError> for &switchy_database::Row {
             channels: self.to_value("channels").unwrap_or_default(),
             source: TrackApiSource::from_str(&self.to_value::<String>("source")?)
                 .expect("Missing source"),
-            api_source: ApiSource::Library,
-            qobuz_id: self.to_value("qobuz_id")?,
-            tidal_id: self.to_value("tidal_id")?,
-            yt_id: self.to_value("yt_id")?,
+            api_source: ApiSource::library(),
+            api_sources: self
+                .to_value::<ApiSources>("api_sources")
+                .unwrap_or_default()
+                .with_source(ApiSource::library(), id.into()),
         })
     }
 }

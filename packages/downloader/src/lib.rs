@@ -35,12 +35,13 @@ use moosicbox_files::{
 };
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{
-    AlbumError, ArtistError, MusicApi, MusicApis, MusicApisError, TrackError, TracksError,
+    AlbumError, ArtistError, MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _,
+    TrackError, TracksError,
     models::{ImageCoverSize, TrackSource},
 };
 use moosicbox_music_models::{
     Album, ApiSource, Artist, AudioFormat, Track, TrackApiSource,
-    id::{Id, IdType, ParseIdsError},
+    id::{Id, ParseIdsError},
 };
 use moosicbox_remote_library::RemoteLibraryMusicApi;
 use queue::{DownloadQueue, ProgressListener};
@@ -73,31 +74,17 @@ static DOWNLOAD_QUEUE: LazyLock<Arc<RwLock<DownloadQueue>>> =
 #[strum_discriminants(derive(EnumIter, Serialize, Deserialize))]
 #[strum_discriminants(serde(rename_all = "SCREAMING_SNAKE_CASE"))]
 #[cfg_attr(feature = "openapi", strum_discriminants(derive(utoipa::ToSchema)))]
-#[strum_discriminants(name(DownloadApiSourceType))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[serde(tag = "source", content = "url")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum DownloadApiSource {
     MoosicBox(String),
-    #[cfg(feature = "tidal")]
-    Tidal,
-    #[cfg(feature = "qobuz")]
-    Qobuz,
-    #[cfg(feature = "yt")]
-    Yt,
+    Api(ApiSource),
 }
 
 impl From<ApiSource> for DownloadApiSource {
     fn from(value: ApiSource) -> Self {
-        match value {
-            ApiSource::Library => unreachable!(),
-            #[cfg(feature = "tidal")]
-            ApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            ApiSource::Yt => Self::Yt,
-        }
+        Self::Api(value)
     }
 }
 
@@ -110,14 +97,27 @@ impl From<&DownloadApiSource> for ApiSource {
 impl From<DownloadApiSource> for ApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
-            DownloadApiSource::MoosicBox(..) => Self::Library,
-            #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => Self::Yt,
+            DownloadApiSource::MoosicBox(..) => Self::library(),
+            DownloadApiSource::Api(source) => source,
         }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum TryFromTrackApiSourceError {
+    #[error("Invalid source")]
+    InvalidSource,
+}
+
+impl TryFrom<TrackApiSource> for DownloadApiSource {
+    type Error = TryFromTrackApiSourceError;
+
+    fn try_from(value: TrackApiSource) -> Result<Self, Self::Error> {
+        #[allow(unreachable_code)]
+        Ok(match value {
+            TrackApiSource::Api(source) => Self::Api(source),
+            TrackApiSource::Local => return Err(Self::Error::InvalidSource),
+        })
     }
 }
 
@@ -157,23 +157,15 @@ fn music_api_from_source(
     #[allow(unused)] music_apis: &MusicApis,
     source: DownloadApiSource,
 ) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
-    #[cfg(any(feature = "tidal", feature = "qobuz", feature = "yt"))]
-    use moosicbox_music_api::SourceToMusicApi as _;
-
     const PROFILE: &str = "master";
 
     Ok(match source {
         DownloadApiSource::MoosicBox(host) => Arc::new(Box::new(RemoteLibraryMusicApi::new(
             host,
-            ApiSource::Library,
+            ApiSource::library(),
             PROFILE.to_string(),
         ))),
-        #[cfg(feature = "tidal")]
-        DownloadApiSource::Tidal => music_apis.get(ApiSource::Tidal)?,
-        #[cfg(feature = "qobuz")]
-        DownloadApiSource::Qobuz => music_apis.get(ApiSource::Qobuz)?,
-        #[cfg(feature = "yt")]
-        DownloadApiSource::Yt => music_apis.get(ApiSource::Yt)?,
+        DownloadApiSource::Api(source) => music_apis.get(&source)?,
     })
 }
 
@@ -331,11 +323,7 @@ pub async fn get_create_download_tasks(
             #[allow(unreachable_code)]
             get_create_download_tasks_for_album_ids(
                 api,
-                &[Id::try_from_str(
-                    &album_id.to_string(),
-                    api.source(),
-                    IdType::Album,
-                )?],
+                &[Id::try_from_str(&album_id.to_string(), api.source())?],
                 download_path,
                 source.clone(),
                 quality,
@@ -367,11 +355,7 @@ pub async fn get_create_download_tasks(
             #[allow(unreachable_code)]
             get_create_download_tasks_for_track_ids(
                 api,
-                &[Id::try_from_str(
-                    &track_id.to_string(),
-                    api.source(),
-                    IdType::Track,
-                )?],
+                &[Id::try_from_str(&track_id.to_string(), api.source())?],
                 download_path,
                 source.clone(),
                 quality,
@@ -434,24 +418,9 @@ pub async fn get_create_download_tasks_for_tracks(
     for track in tracks {
         static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
 
-        #[allow(clippy::manual_let_else)]
-        let source = {
-            if let Some(source) = &source {
-                source.clone()
-            } else {
-                match track.track_source {
-                    TrackApiSource::Local => {
-                        return Err(GetCreateDownloadTasksError::InvalidSource);
-                    }
-                    #[cfg(feature = "tidal")]
-                    TrackApiSource::Tidal => DownloadApiSource::Tidal,
-                    #[cfg(feature = "qobuz")]
-                    TrackApiSource::Qobuz => DownloadApiSource::Qobuz,
-                    #[cfg(feature = "yt")]
-                    TrackApiSource::Yt => DownloadApiSource::Yt,
-                }
-            }
-        };
+        let source = source
+            .clone()
+            .unwrap_or_else(|| track.track_source.clone().try_into().unwrap());
 
         let quality = quality.unwrap_or(TrackAudioQuality::FlacHighestRes);
 
@@ -515,7 +484,9 @@ pub async fn get_create_download_tasks_for_album_ids(
     download_artist_cover: bool,
 ) -> Result<Vec<CreateDownloadTask>, GetCreateDownloadTasksError> {
     let mut tasks = vec![];
-    let source = source.clone().unwrap_or_else(|| api.source().into());
+    let source = source
+        .clone()
+        .unwrap_or_else(|| api.source().clone().into());
 
     for album_id in album_ids {
         let album = api
@@ -606,14 +577,9 @@ pub async fn get_create_download_tasks_for_album_ids(
             .with_rest_of_items_in_batches()
             .await?
             .into_iter()
-            .filter(|track| match source {
+            .filter(|track| match source.clone() {
                 DownloadApiSource::MoosicBox(_) => track.track_source == TrackApiSource::Local,
-                #[cfg(feature = "tidal")]
-                DownloadApiSource::Tidal => track.track_source == TrackApiSource::Tidal,
-                #[cfg(feature = "qobuz")]
-                DownloadApiSource::Qobuz => track.track_source == TrackApiSource::Qobuz,
-                #[cfg(feature = "yt")]
-                DownloadApiSource::Yt => track.track_source == TrackApiSource::Yt,
+                DownloadApiSource::Api(source) => track.track_source == source.into(),
             })
             .collect::<Vec<_>>();
 
@@ -1100,14 +1066,9 @@ pub async fn download_album_id(
         .with_rest_of_items_in_batches()
         .await?
         .into_iter()
-        .filter(|#[allow(unused)] track| match source {
+        .filter(|track| match source.clone() {
             DownloadApiSource::MoosicBox(_) => unimplemented!(),
-            #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => track.track_source == TrackApiSource::Tidal,
-            #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => track.track_source == TrackApiSource::Qobuz,
-            #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => track.track_source == TrackApiSource::Yt,
+            DownloadApiSource::Api(source) => track.track_source == source.into(),
         })
         .collect::<Vec<_>>();
 
@@ -1433,26 +1394,9 @@ mod test {
         serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
     }
 
-    #[cfg(feature = "tidal")]
     #[test_log::test]
-    fn can_deserialize_and_serialize_tidal_download_api_source() {
-        let serialized = serde_json::to_string(&DownloadApiSource::Tidal).unwrap();
-        log::debug!("serialized: {serialized}");
-        serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
-    }
-
-    #[cfg(feature = "qobuz")]
-    #[test_log::test]
-    fn can_deserialize_and_serialize_qobuz_download_api_source() {
-        let serialized = serde_json::to_string(&DownloadApiSource::Qobuz).unwrap();
-        log::debug!("serialized: {serialized}");
-        serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
-    }
-
-    #[cfg(feature = "yt")]
-    #[test_log::test]
-    fn can_deserialize_and_serialize_yt_download_api_source() {
-        let serialized = serde_json::to_string(&DownloadApiSource::Yt).unwrap();
+    fn can_deserialize_and_serialize_api_download_api_source() {
+        let serialized = serde_json::to_string(&DownloadApiSource::Api("Tidal".into())).unwrap();
         log::debug!("serialized: {serialized}");
         serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
     }

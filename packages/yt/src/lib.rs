@@ -38,8 +38,7 @@ use moosicbox_music_api::{
     },
 };
 use moosicbox_music_models::{
-    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track,
-    TrackApiSource, id::Id,
+    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, id::Id,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
@@ -87,6 +86,8 @@ static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
 
 static YT_API_BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
+
+pub static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "Yt".into());
 
 impl ToUrl for YtApiEndpoint {
     fn to_url(&self) -> String {
@@ -2378,8 +2379,8 @@ impl Default for YtMusicApi {
 
 #[async_trait]
 impl MusicApi for YtMusicApi {
-    fn source(&self) -> ApiSource {
-        ApiSource::Yt
+    fn source(&self) -> &ApiSource {
+        &API_SOURCE
     }
 
     async fn artists(
@@ -2536,7 +2537,7 @@ impl MusicApi for YtMusicApi {
             bit_depth: None,
             sample_rate: None,
             channels: Some(2),
-            source: TrackApiSource::Yt,
+            source: API_SOURCE.clone().into(),
         }];
 
         Ok(PagingResponse::new(

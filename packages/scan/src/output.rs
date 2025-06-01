@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock, atomic::AtomicU32},
 };
@@ -12,8 +12,8 @@ use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
     db::{
-        self, InsertTrack, SetTrackSize, add_album_maps_and_get_albums,
-        add_artist_maps_and_get_artists, add_tracks, set_track_sizes,
+        self, InsertApiSource, InsertTrack, SetTrackSize, add_album_maps_and_get_albums,
+        add_api_sources, add_artist_maps_and_get_artists, add_tracks, set_track_sizes,
     },
     models::{LibraryAlbum, LibraryArtist, LibraryTrack},
 };
@@ -126,6 +126,21 @@ impl ScanTrack {
             source,
             id: id.cloned(),
             api_source,
+        }
+    }
+
+    #[must_use]
+    pub fn to_api_source_sqlite_values<'a>(self) -> Option<Vec<(&'a str, DatabaseValue)>> {
+        if self.api_source.is_library() {
+            None
+        } else {
+            self.id.map(|id| {
+                vec![
+                    ("entity_type", "tracks".into()),
+                    ("source", self.api_source.into()),
+                    ("source_id", id.into()),
+                ]
+            })
         }
     }
 }
@@ -243,7 +258,7 @@ impl ScanAlbum {
         &mut self,
         url: String,
         headers: Option<&[(String, String)]>,
-        api_source: ApiSource,
+        api_source: &ApiSource,
     ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
             let path = CACHE_DIR
@@ -251,7 +266,7 @@ impl ScanAlbum {
                 .join(moosicbox_files::sanitize_filename(&self.artist.name))
                 .join(moosicbox_files::sanitize_filename(&self.name));
 
-            let filename = if api_source == ApiSource::Library {
+            let filename = if api_source.is_library() {
                 "album.jpg".to_string()
             } else if let Some(id) = &self.id {
                 let size = ImageCoverSize::Max;
@@ -276,9 +291,8 @@ impl ScanAlbum {
     ///
     /// * If failed to convert `artist_id` to a `i64`
     #[must_use]
-    pub fn to_sqlite_values<'a>(self, artist_id: u64) -> HashMap<&'a str, DatabaseValue> {
-        #[allow(unused_mut)]
-        let mut values = HashMap::from([
+    pub fn to_sqlite_values<'a>(self, artist_id: u64) -> Vec<(&'a str, DatabaseValue)> {
+        vec![
             (
                 "artist_id",
                 DatabaseValue::Number(i64::try_from(artist_id).unwrap()),
@@ -290,66 +304,22 @@ impl ScanAlbum {
             ),
             ("artwork", DatabaseValue::StringOpt(self.cover)),
             ("directory", DatabaseValue::StringOpt(self.directory)),
-        ]);
-        #[allow(unused)]
-        if let Some(id) = &self.id {
-            match self.api_source {
-                ApiSource::Library => {}
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => {
-                    values.insert("tidal_id", id.into());
-                }
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => {
-                    values.insert("qobuz_id", id.into());
-                }
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => {
-                    values.insert("yt_id", id.into());
-                }
-            }
-        }
-        values
+        ]
     }
 
-    /// # Panics
-    ///
-    /// * If failed to convert `artist_id` to a `i64`
     #[must_use]
-    pub fn to_database_values<'a>(self, artist_id: u64) -> HashMap<&'a str, DatabaseValue> {
-        #[allow(unused_mut)]
-        let mut values = HashMap::from([
-            (
-                "artist_id",
-                DatabaseValue::Number(i64::try_from(artist_id).unwrap()),
-            ),
-            ("title", DatabaseValue::String(self.name)),
-            (
-                "date_released",
-                DatabaseValue::StringOpt(self.date_released),
-            ),
-            ("artwork", DatabaseValue::StringOpt(self.cover)),
-            ("directory", DatabaseValue::StringOpt(self.directory)),
-        ]);
-        #[allow(unused)]
-        if let Some(id) = &self.id {
-            match self.api_source {
-                ApiSource::Library => {}
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => {
-                    values.insert("tidal_id", id.into());
-                }
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => {
-                    values.insert("qobuz_id", id.into());
-                }
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => {
-                    values.insert("yt_id", id.into());
-                }
-            }
+    pub fn to_api_source_sqlite_values<'a>(self) -> Option<Vec<(&'a str, DatabaseValue)>> {
+        if self.api_source.is_library() {
+            None
+        } else {
+            self.id.map(|id| {
+                vec![
+                    ("entity_type", "albums".into()),
+                    ("source", self.api_source.into()),
+                    ("source_id", id.into()),
+                ]
+            })
         }
-        values
     }
 }
 
@@ -428,7 +398,7 @@ impl ScanArtist {
         &mut self,
         url: String,
         headers: Option<&[(String, String)]>,
-        api_source: ApiSource,
+        api_source: &ApiSource,
     ) -> Result<Option<String>, FetchAndSaveBytesFromRemoteUrlError> {
         if self.cover.is_none() && !self.searched_cover {
             self.searched_cover = true;
@@ -437,7 +407,7 @@ impl ScanArtist {
                 .join(api_source.to_string())
                 .join(moosicbox_files::sanitize_filename(&self.name));
 
-            let filename = if api_source == ApiSource::Library {
+            let filename = if api_source.is_library() {
                 "artist.jpg".to_string()
             } else if let Some(id) = &self.id {
                 let size = ImageCoverSize::Max;
@@ -457,59 +427,26 @@ impl ScanArtist {
     }
 
     #[must_use]
-    pub fn to_sqlite_values<'a>(self) -> HashMap<&'a str, DatabaseValue> {
-        #[allow(unused_mut)]
-        let mut values = HashMap::from([
+    pub fn to_sqlite_values<'a>(self) -> Vec<(&'a str, DatabaseValue)> {
+        vec![
             ("title", DatabaseValue::String(self.name.clone())),
-            ("cover", DatabaseValue::StringOpt(self.cover.clone())),
-        ]);
-        #[allow(unused)]
-        if let Some(id) = &self.id {
-            match self.api_source {
-                ApiSource::Library => {}
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => {
-                    values.insert("tidal_id", id.into());
-                }
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => {
-                    values.insert("qobuz_id", id.into());
-                }
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => {
-                    values.insert("yt_id", id.into());
-                }
-            }
-        }
-        values
+            ("cover", DatabaseValue::StringOpt(self.cover)),
+        ]
     }
 
     #[must_use]
-    pub fn to_database_values<'a>(self) -> HashMap<&'a str, DatabaseValue> {
-        #[allow(unused_mut)]
-        let mut values = HashMap::from([
-            ("title", DatabaseValue::String(self.name.clone())),
-            ("cover", DatabaseValue::StringOpt(self.cover.clone())),
-        ]);
-        #[allow(unused)]
-        if let Some(id) = &self.id {
-            match self.api_source {
-                ApiSource::Library => {}
-                #[cfg(feature = "tidal")]
-                ApiSource::Tidal => {
-                    values.insert("tidal_id", id.into());
-                }
-                #[cfg(feature = "qobuz")]
-                ApiSource::Qobuz => {
-                    values.insert("qobuz_id", id.into());
-                }
-                #[cfg(feature = "yt")]
-                ApiSource::Yt => {
-                    values.insert("yt_id", id.into());
-                }
-            }
+    pub fn to_api_source_sqlite_values<'a>(self) -> Option<Vec<(&'a str, DatabaseValue)>> {
+        if self.api_source.is_library() {
+            None
+        } else {
+            self.id.map(|id| {
+                vec![
+                    ("entity_type", "artists".into()),
+                    ("source", self.api_source.into()),
+                    ("source_id", id.into()),
+                ]
+            })
         }
-        values
     }
 }
 
@@ -647,7 +584,7 @@ impl ScanOutput {
             db,
             artists
                 .iter()
-                .map(|artist| artist.clone().to_database_values())
+                .map(|artist| artist.clone().to_sqlite_values())
                 .collect::<Vec<_>>(),
         )
         .await?;
@@ -684,7 +621,7 @@ impl ScanOutput {
             |(artist, db)| async {
                 join_all(artist.albums.read().await.iter().map(|album| async {
                     let album = album.read().await;
-                    album.clone().to_database_values(db.id)
+                    album.clone().to_sqlite_values(db.id)
                 }))
                 .await
             },
@@ -731,34 +668,12 @@ impl ScanOutput {
                     Ok::<_, TryFromIdError>(InsertTrack {
                         album_id: db.id,
                         file: track.path.clone(),
-                        qobuz_id: match track.api_source {
-                            ApiSource::Library => None,
-                            #[cfg(feature = "tidal")]
-                            ApiSource::Tidal => None,
-                            #[cfg(feature = "qobuz")]
-                            ApiSource::Qobuz => {
-                                track.id.as_ref().map(TryInto::try_into).transpose()?
-                            }
-                            #[cfg(feature = "yt")]
-                            ApiSource::Yt => None,
-                        },
-                        tidal_id: match track.api_source {
-                            ApiSource::Library => None,
-                            #[cfg(feature = "tidal")]
-                            ApiSource::Tidal => {
-                                track.id.as_ref().map(TryInto::try_into).transpose()?
-                            }
-                            #[cfg(feature = "qobuz")]
-                            ApiSource::Qobuz => None,
-                            #[cfg(feature = "yt")]
-                            ApiSource::Yt => None,
-                        },
                         track: LibraryTrack {
                             number: track.number,
                             title: track.name.clone(),
                             duration: track.duration,
                             format: Some(track.format),
-                            source: track.source,
+                            source: track.source.clone(),
                             ..Default::default()
                         },
                     })
@@ -789,6 +704,59 @@ impl ScanOutput {
                 db_tracks.len()
             )));
         }
+
+        let db_api_sources_start = switchy_time::now();
+
+        let insert_api_sources = artists
+            .iter()
+            .zip(db_artists.iter())
+            .filter_map(|(artist, db)| {
+                artist.id.as_ref().map(|id| InsertApiSource {
+                    entity_type: "artists".to_string(),
+                    entity_id: db.id,
+                    source: id.to_string(),
+                    source_id: artist.api_source.to_string(),
+                })
+            })
+            .chain(
+                albums
+                    .iter()
+                    .zip(db_albums.iter())
+                    .filter_map(|(album, db)| {
+                        album.id.as_ref().map(|id| InsertApiSource {
+                            entity_type: "albums".to_string(),
+                            entity_id: db.id,
+                            source: id.to_string(),
+                            source_id: album.api_source.to_string(),
+                        })
+                    }),
+            )
+            .chain(
+                tracks
+                    .iter()
+                    .zip(db_tracks.iter())
+                    .filter_map(|(track, db)| {
+                        track.id.as_ref().map(|id| InsertApiSource {
+                            entity_type: "tracks".to_string(),
+                            entity_id: db.id,
+                            source: id.to_string(),
+                            source_id: track.api_source.to_string(),
+                        })
+                    }),
+            )
+            .collect::<Vec<_>>();
+
+        let db_api_sources = add_api_sources(db, insert_api_sources).await?;
+
+        let db_api_sources_end = switchy_time::now();
+        log::info!(
+            "Finished {} db api_sources update for scan in {}ms",
+            db_api_sources.len(),
+            db_api_sources_end
+                .duration_since(db_api_sources_start)
+                .unwrap()
+                .as_millis()
+        );
 
         let db_track_sizes_start = switchy_time::now();
         let track_sizes = tracks

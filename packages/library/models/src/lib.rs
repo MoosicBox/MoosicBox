@@ -24,9 +24,7 @@ pub struct LibraryArtist {
     pub id: u64,
     pub title: String,
     pub cover: Option<String>,
-    pub tidal_id: Option<u64>,
-    pub qobuz_id: Option<u64>,
-    pub yt_id: Option<u64>,
+    pub api_sources: ApiSources,
 }
 
 impl From<LibraryArtist> for Artist {
@@ -35,26 +33,8 @@ impl From<LibraryArtist> for Artist {
             id: value.id.into(),
             title: value.title,
             cover: value.cover,
-            api_source: ApiSource::Library,
-            api_sources: {
-                #[allow(unused_mut)]
-                let mut sources = ApiSources::default();
-                #[cfg(feature = "tidal")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into));
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into));
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into));
-                }
-                sources
-            },
+            api_source: ApiSource::library(),
+            api_sources: value.api_sources,
         }
     }
 }
@@ -163,7 +143,7 @@ impl TryFrom<LibraryAlbum> for Album {
             blur: value.blur,
             versions: value.versions,
             album_source: value.source,
-            api_source: ApiSource::Library,
+            api_source: ApiSource::library(),
             artist_sources: value.artist_sources,
             album_sources: value.album_sources,
         })
@@ -193,19 +173,6 @@ impl TryFrom<Album> for LibraryAlbum {
     }
 }
 
-#[must_use]
-pub const fn track_source_to_u8(source: TrackApiSource) -> u8 {
-    match source {
-        TrackApiSource::Local => 1,
-        #[cfg(feature = "tidal")]
-        TrackApiSource::Tidal => 2,
-        #[cfg(feature = "qobuz")]
-        TrackApiSource::Qobuz => 3,
-        #[cfg(feature = "yt")]
-        TrackApiSource::Yt => 4,
-    }
-}
-
 pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
     versions.sort_by(|a, b| {
         b.sample_rate
@@ -217,7 +184,7 @@ pub fn sort_album_versions(versions: &mut [AlbumVersionQuality]) {
             .unwrap_or_default()
             .cmp(&a.bit_depth.unwrap_or_default())
     });
-    versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
+    versions.sort_by(|a, b| a.source.cmp(&b.source));
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
@@ -246,9 +213,7 @@ pub struct LibraryTrack {
     pub channels: Option<u8>,
     pub source: TrackApiSource,
     pub api_source: ApiSource,
-    pub qobuz_id: Option<u64>,
-    pub tidal_id: Option<u64>,
-    pub yt_id: Option<u64>,
+    pub api_sources: ApiSources,
 }
 
 impl LibraryTrack {
@@ -289,26 +254,8 @@ impl From<LibraryTrack> for Track {
             sample_rate: value.sample_rate,
             channels: value.channels,
             track_source: value.source,
-            api_source: ApiSource::Library,
-            sources: {
-                #[allow(unused_mut)]
-                let mut sources = ApiSources::default();
-                #[cfg(feature = "tidal")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into));
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into));
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into));
-                }
-                sources
-            },
+            api_source: ApiSource::library(),
+            sources: value.api_sources,
         }
     }
 }

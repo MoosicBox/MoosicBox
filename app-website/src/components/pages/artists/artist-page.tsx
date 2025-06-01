@@ -38,7 +38,7 @@ export default function artistPage(props: {
             api.getAllAlbums(
                 {
                     artistId: qobuzId,
-                    source: 'QOBUZ',
+                    source: 'Qobuz',
                     albumType: 'LP',
                     sort: 'Release-Date-Desc',
                 },
@@ -47,7 +47,7 @@ export default function artistPage(props: {
             api.getAllAlbums(
                 {
                     artistId: qobuzId,
-                    source: 'QOBUZ',
+                    source: 'Qobuz',
                     albumType: 'EPS_AND_SINGLES',
                     sort: 'Release-Date-Desc',
                 },
@@ -56,7 +56,7 @@ export default function artistPage(props: {
             api.getAllAlbums(
                 {
                     artistId: qobuzId,
-                    source: 'QOBUZ',
+                    source: 'Qobuz',
                     albumType: 'COMPILATIONS',
                     sort: 'Release-Date-Desc',
                 },
@@ -70,7 +70,7 @@ export default function artistPage(props: {
             api.getAllAlbums(
                 {
                     artistId: tidalId,
-                    source: 'TIDAL',
+                    source: 'Tidal',
                     albumType: 'LP',
                     sort: 'Release-Date-Desc',
                 },
@@ -79,7 +79,7 @@ export default function artistPage(props: {
             api.getAllAlbums(
                 {
                     artistId: tidalId,
-                    source: 'TIDAL',
+                    source: 'Tidal',
                     albumType: 'EPS_AND_SINGLES',
                     sort: 'Release-Date-Desc',
                 },
@@ -88,7 +88,7 @@ export default function artistPage(props: {
             api.getAllAlbums(
                 {
                     artistId: tidalId,
-                    source: 'TIDAL',
+                    source: 'Tidal',
                     albumType: 'COMPILATIONS',
                     sort: 'Release-Date-Desc',
                 },
@@ -108,7 +108,7 @@ export default function artistPage(props: {
             );
             setLibraryArtist(artist);
 
-            const qobuzId = artist.apiSources.find((x) => x.source === 'QOBUZ')
+            const qobuzId = artist.apiSources.find((x) => x.source === 'Qobuz')
                 ?.id as string | undefined;
             if (qobuzId) {
                 loadQobuzAlbums(qobuzId);
@@ -121,7 +121,7 @@ export default function artistPage(props: {
             );
             setLibraryArtist(artist);
 
-            const tidalId = artist.apiSources.find((x) => x.source === 'TIDAL')
+            const tidalId = artist.apiSources.find((x) => x.source === 'Tidal')
                 ?.id as string | undefined;
             if (tidalId) {
                 loadTidalAlbums(tidalId);
@@ -157,12 +157,12 @@ export default function artistPage(props: {
             const artist = await loadLibraryArtist();
             loadedArtist = true;
 
-            const tidalId = artist?.apiSources.find((x) => x.source === 'TIDAL')
+            const tidalId = artist?.apiSources.find((x) => x.source === 'Tidal')
                 ?.id as string | undefined;
             if (tidalId) {
                 promises.push(loadTidalAlbums(tidalId));
             }
-            const qobuzId = artist?.apiSources.find((x) => x.source === 'QOBUZ')
+            const qobuzId = artist?.apiSources.find((x) => x.source === 'Qobuz')
                 ?.id as string | undefined;
             if (qobuzId) {
                 promises.push(loadQobuzAlbums(qobuzId));

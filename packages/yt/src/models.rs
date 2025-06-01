@@ -7,7 +7,7 @@ use moosicbox_json_utils::{
     serde_json::{ToNestedValue as _, ToValue as _},
 };
 use moosicbox_music_models::{
-    Album, AlbumSource, ApiSource, ApiSources, Artist, Track, TrackApiSource,
+    Album, ApiSources, Artist, Track,
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_search::api::models::{
@@ -17,7 +17,7 @@ use moosicbox_search::api::models::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::YtAlbumType;
+use crate::{API_SOURCE, YtAlbumType};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -46,8 +46,8 @@ impl From<YtArtist> for Artist {
             id: value.id.as_str().into(),
             title: value.name,
             cover: value.picture,
-            api_source: ApiSource::Yt,
-            api_sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
+            api_source: API_SOURCE.clone(),
+            api_sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }
@@ -58,8 +58,8 @@ impl From<YtArtist> for ApiArtist {
             artist_id: value.id.clone().into(),
             title: value.name,
             contains_cover: value.contains_cover,
-            api_source: ApiSource::Yt,
-            api_sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
+            api_source: API_SOURCE.clone(),
+            api_sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }
@@ -200,11 +200,11 @@ impl TryFrom<YtAlbum> for Album {
             directory: None,
             blur: false,
             versions: vec![],
-            album_source: AlbumSource::Yt,
-            api_source: ApiSource::Yt,
+            album_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
             artist_sources: ApiSources::default()
-                .with_source(ApiSource::Yt, value.artist_id.into()),
-            album_sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
+                .with_source(API_SOURCE.clone(), value.artist_id.into()),
+            album_sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         })
     }
 }
@@ -411,9 +411,9 @@ impl From<YtTrack> for Track {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            track_source: TrackApiSource::Yt,
-            api_source: ApiSource::Yt,
-            sources: ApiSources::default().with_source(ApiSource::Yt, value.id.into()),
+            track_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }
@@ -435,7 +435,7 @@ impl From<YtTrack> for ApiGlobalSearchResult {
             bit_depth: None,
             sample_rate: None,
             channels: None,
-            source: TrackApiSource::Yt,
+            source: API_SOURCE.clone().into(),
         })
     }
 }

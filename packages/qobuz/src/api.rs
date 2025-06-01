@@ -8,7 +8,7 @@ use actix_web::{
     web::{self, Json},
 };
 use moosicbox_music_models::{
-    ApiSource, ApiSources, TrackApiSource,
+    ApiSource, ApiSources,
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
@@ -20,12 +20,12 @@ use strum_macros::{AsRefStr, EnumString};
 use switchy_database::profiles::LibraryDatabase;
 
 use crate::{
-    QobuzAlbumError, QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAlbumTracksError,
-    QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality, QobuzFavoriteAlbumsError,
-    QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease, QobuzSearchError,
-    QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError, album, album_tracks,
-    artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks, format_title,
-    models::QobuzAlbum, search, track, track_file_url, user_login,
+    API_SOURCE, QobuzAlbumError, QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort,
+    QobuzAlbumTracksError, QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality,
+    QobuzFavoriteAlbumsError, QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease,
+    QobuzSearchError, QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
+    album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
+    format_title, models::QobuzAlbum, search, track, track_file_url, user_login,
 };
 
 pub fn bind_services<
@@ -199,7 +199,7 @@ impl From<QobuzRelease> for ApiRelease {
             parental_warning: value.parental_warning,
             number_of_tracks: value.tracks_count,
             date_released: value.release_date_original,
-            api_source: ApiSource::Qobuz,
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -226,7 +226,7 @@ impl From<QobuzTrack> for ApiTrack {
             parental_warning: value.parental_warning,
             isrc: value.isrc,
             title: format_title(&value.title, value.version.as_deref()),
-            api_source: ApiSource::Qobuz,
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -271,9 +271,9 @@ impl From<ApiQobuzTrack> for moosicbox_music_models::api::ApiTrack {
             overall_bitrate: None,
             sample_rate: None,
             channels: None,
-            track_source: TrackApiSource::Qobuz,
-            api_source: ApiSource::Qobuz,
-            sources: ApiSources::default().with_source(ApiSource::Qobuz, value.id.into()),
+            track_source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
+            sources: ApiSources::default().with_source(API_SOURCE.clone(), value.id.into()),
         }
     }
 }

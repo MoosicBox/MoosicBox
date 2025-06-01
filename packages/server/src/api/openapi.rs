@@ -55,17 +55,17 @@ pub fn init() -> OpenApi {
     let api = nest_api(api, "/menu", moosicbox_menu::api::Api::openapi());
     #[cfg(feature = "player-api")]
     let api = nest_api(api, "/player", moosicbox_player::api::Api::openapi());
-    #[cfg(feature = "qobuz-api")]
+    #[cfg(all(feature = "qobuz", feature = "qobuz-api"))]
     let api = nest_api(api, "/qobuz", moosicbox_qobuz::api::Api::openapi());
     #[cfg(feature = "scan-api")]
     let api = nest_api(api, "/scan", moosicbox_scan::api::Api::openapi());
     #[cfg(feature = "session-api")]
     let api = nest_api(api, "/session", moosicbox_session::api::Api::openapi());
-    #[cfg(feature = "tidal-api")]
+    #[cfg(all(feature = "tidal", feature = "tidal-api"))]
     let api = nest_api(api, "/tidal", moosicbox_tidal::api::Api::openapi());
     #[cfg(feature = "upnp-api")]
     let api = nest_api(api, "/upnp", switchy_upnp::api::Api::openapi());
-    #[cfg(feature = "yt-api")]
+    #[cfg(all(feature = "yt", feature = "yt-api"))]
     let api = nest_api(api, "/yt", moosicbox_yt::api::Api::openapi());
 
     api

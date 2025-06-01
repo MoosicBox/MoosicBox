@@ -13,19 +13,19 @@ export function artistRoute(
     const apiSource = artist.apiSource;
 
     switch (apiSource) {
-        case 'LIBRARY':
+        case 'Library':
             return `/artists?artistId=${
                 (artist as { artistId: number }).artistId
             }`;
-        case 'TIDAL':
+        case 'Tidal':
             return `/artists?tidalArtistId=${
                 (artist as { artistId: number }).artistId
             }`;
-        case 'QOBUZ':
+        case 'Qobuz':
             return `/artists?qobuzArtistId=${
                 (artist as { artistId: number }).artistId
             }`;
-        case 'YT':
+        case 'Yt':
             return `/artists?ytArtistId=${
                 (artist as { artistId: number }).artistId
             }`;

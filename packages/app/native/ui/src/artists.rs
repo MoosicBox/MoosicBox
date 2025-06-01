@@ -29,7 +29,7 @@ pub fn artist_cover_url_from_artist(
     artist_cover_url(
         host,
         &artist.artist_id,
-        artist.api_source,
+        &artist.api_source,
         artist.contains_cover,
         width,
         height,
@@ -40,7 +40,7 @@ pub fn artist_cover_url_from_artist(
 pub fn artist_cover_url(
     host: &str,
     artist_id: &Id,
-    source: ApiSource,
+    source: &ApiSource,
     contains_cover: bool,
     width: u16,
     height: u16,
@@ -66,7 +66,7 @@ fn artist_cover_img(host: &str, artist: &ApiArtist, size: u16) -> Markup {
 
 #[must_use]
 pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Markup {
-    fn source_html(artist_id: &Id, source: ApiSource, album_type: AlbumType, size: u16) -> Markup {
+    fn source_html(artist_id: &Id, source: &ApiSource, album_type: AlbumType, size: u16) -> Markup {
         html! {
             div
                 hx-get=(pre_escaped!("/artists/albums-list?artistId={artist_id}&size={size}&source={source}&albumType={album_type}"))
@@ -86,7 +86,7 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Markup {
 
     {
         let artist_id = artist.artist_id.clone();
-        let source = ApiSource::Library;
+        let source = ApiSource::library_ref();
         sources.extend(vec![
             source_html(&artist_id, source, AlbumType::Lp, size),
             source_html(&artist_id, source, AlbumType::EpsAndSingles, size),
@@ -94,9 +94,9 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Markup {
         ]);
     }
 
-    for source in &*artist.api_sources {
+    for source in &artist.api_sources {
         let artist_id = source.id.clone();
-        let source = source.source;
+        let source = &source.source;
         sources.extend(vec![
             source_html(&artist_id, source, AlbumType::Lp, size),
             source_html(&artist_id, source, AlbumType::EpsAndSingles, size),
@@ -188,7 +188,7 @@ pub fn albums_list(
         div sx-padding-y=(20) {
             h2 {
                 (album_type.into_formatted())
-                @if source == ApiSource::Library {
+                @if source.is_library() {
                     " in "
                 } @else {
                     " on "

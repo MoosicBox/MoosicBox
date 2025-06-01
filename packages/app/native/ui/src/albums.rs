@@ -33,7 +33,7 @@ use crate::{
 pub fn album_cover_url(
     host: &str,
     album_id: &Id,
-    source: ApiSource,
+    source: &ApiSource,
     contains_cover: bool,
     width: u16,
     height: u16,
@@ -52,7 +52,7 @@ pub fn album_cover_url_from_album(host: &str, album: &ApiAlbum, width: u16, heig
     album_cover_url(
         host,
         &album.album_id,
-        album.api_source,
+        &album.api_source,
         album.contains_cover,
         width,
         height,
@@ -64,7 +64,7 @@ pub fn album_cover_url_from_track(host: &str, track: &ApiTrack, width: u16, heig
     album_cover_url(
         host,
         &track.album_id,
-        track.api_source,
+        &track.api_source,
         track.contains_cover,
         width,
         height,
@@ -96,8 +96,8 @@ pub fn album_cover_img_from_track(host: &str, track: &ApiTrack, size: u16) -> Ma
 #[must_use]
 pub fn album_page_immediate(
     album_id: &str,
-    source: Option<ApiSource>,
-    version_source: Option<TrackApiSource>,
+    source: Option<&ApiSource>,
+    version_source: Option<&TrackApiSource>,
     sample_rate: Option<u32>,
     bit_depth: Option<u8>,
 ) -> Markup {
@@ -187,14 +187,14 @@ pub fn album_page_content(
                         h2 { (format_date_string(date_released, "%B %d, %Y")) }
                     }
                     div sx-dir="row" {
-                        @for version in album.versions.iter().copied() {
+                        @for version in album.versions.iter().cloned() {
                             @let selected = selected_version.is_some_and(|x| same_version(&version, &x.into()));
                             a href=(
                                 album_page_url(
                                     &album.album_id.to_string(),
                                     false,
-                                    Some(album.api_source),
-                                    Some(version.source),
+                                    Some(&album.api_source),
+                                    Some(&version.source),
                                     version.sample_rate,
                                     version.bit_depth,
                                 )
@@ -221,8 +221,8 @@ pub fn album_page_content(
                     sx-gap=(8)
                     fx-click=(Action::PlayAlbum {
                         album_id: album.album_id.clone(),
-                        api_source: album.api_source,
-                        version_source: selected_version.map(|x| x.source),
+                        api_source: album.api_source.clone(),
+                        version_source: selected_version.map(|x| x.source.clone()),
                         sample_rate: selected_version.and_then(|x| x.sample_rate),
                         bit_depth: selected_version.and_then(|x| x.bit_depth),
                     })
@@ -245,8 +245,8 @@ pub fn album_page_content(
                     sx-gap=(8)
                     fx-click=(Action::AddAlbumToQueue {
                         album_id: album.album_id.clone(),
-                        api_source: album.api_source,
-                        version_source: selected_version.map(|x| x.source),
+                        api_source: album.api_source.clone(),
+                        version_source: selected_version.map(|x| x.source.clone()),
                         sample_rate: selected_version.and_then(|x| x.sample_rate),
                         bit_depth: selected_version.and_then(|x| x.bit_depth),
                     })
@@ -331,8 +331,8 @@ pub fn album_page_tracks_table_body(version: &ApiAlbumVersion, track_id: Option<
                         fx-click=(Action::PlayAlbumStartingAtTrackId {
                             album_id: track.album_id.clone(),
                             start_track_id: track.track_id.clone(),
-                            api_source: track.api_source,
-                            version_source: Some(version.source),
+                            api_source: track.api_source.clone(),
+                            version_source: Some(version.source.clone()),
                             sample_rate: version.sample_rate,
                             bit_depth: version.bit_depth,
                         })
@@ -375,8 +375,8 @@ pub fn album_page_tracks_table_body_from_state(state: &State, version: &ApiAlbum
 pub fn album(
     state: &State,
     album_id: &str,
-    source: Option<ApiSource>,
-    version_source: Option<TrackApiSource>,
+    source: Option<&ApiSource>,
+    version_source: Option<&TrackApiSource>,
     sample_rate: Option<u32>,
     bit_depth: Option<u8>,
 ) -> Markup {
@@ -531,7 +531,7 @@ pub fn album_display(
                     }
                 }
                 div {
-                    (display_album_version_qualities(album.versions.iter().copied(), Some(25)))
+                    (display_album_version_qualities(album.versions.iter().cloned(), Some(25)))
                 }
             }
         }
@@ -569,7 +569,7 @@ pub fn album_display(
                         sx-border-radius=(button_size)
                         fx-click=(Action::PlayAlbum {
                             album_id: album.album_id.clone(),
-                            api_source: album.api_source,
+                            api_source: album.api_source.clone(),
                             version_source: None,
                             sample_rate: None,
                             bit_depth: None,
@@ -594,7 +594,7 @@ pub fn album_display(
                         sx-border-radius=(button_size)
                         fx-click=(Action::AddAlbumToQueue {
                             album_id: album.album_id.clone(),
-                            api_source: album.api_source,
+                            api_source: album.api_source.clone(),
                             version_source: None,
                             sample_rate: None,
                             bit_depth: None,
@@ -669,8 +669,8 @@ pub fn albums_page_url(filtered_sources: &[TrackApiSource], sort: AlbumSort) -> 
 pub fn album_page_url(
     album_id: &str,
     full: bool,
-    api_source: Option<ApiSource>,
-    version_source: Option<TrackApiSource>,
+    api_source: Option<&ApiSource>,
+    version_source: Option<&TrackApiSource>,
     sample_rate: Option<u32>,
     bit_depth: Option<u8>,
 ) -> PreEscaped<String> {
@@ -815,9 +815,9 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                         input
                                             fx-change=(ActionType::Navigate {
                                                 url: albums_page_url(&if checked {
-                                                    filtered_sources.iter().filter(|x| *x != source).copied().collect::<Vec<_>>()
+                                                    filtered_sources.iter().filter(|x| *x != source).cloned().collect::<Vec<_>>()
                                                 } else {
-                                                    [filtered_sources, &[*source]].concat()
+                                                    [filtered_sources, &[source.clone()]].concat()
                                                 }, sort)
                                             })
                                             type="checkbox"

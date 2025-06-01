@@ -39,13 +39,13 @@ export default function musicPage() {
     }
 
     async function scanQobuz() {
-        await api.enableScanOrigin('QOBUZ');
-        await api.startScan(['QOBUZ']);
+        await api.enableScanOrigin('Qobuz');
+        await api.startScan(['Qobuz']);
     }
 
     async function scanTidal() {
-        await api.enableScanOrigin('TIDAL');
-        await api.startScan(['TIDAL']);
+        await api.enableScanOrigin('Tidal');
+        await api.startScan(['Tidal']);
     }
 
     async function finish() {

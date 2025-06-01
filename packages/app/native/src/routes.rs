@@ -15,7 +15,7 @@ use moosicbox_music_api::{
 };
 use moosicbox_music_api_api::models::ApiMusicApi;
 use moosicbox_music_models::{
-    AlbumSort, AlbumType, ApiSource, TrackApiSource,
+    AlbumSort, AlbumType, ApiSource, TrackApiSource, TryFromStringTrackApiSourceError,
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
@@ -54,6 +54,8 @@ pub enum RouteError {
     Tracks(#[from] TracksError),
     #[error(transparent)]
     AppState(#[from] AppStateError),
+    #[error(transparent)]
+    TryFromStringTrackApiSource(#[from] TryFromStringTrackApiSourceError),
 }
 
 fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
@@ -61,7 +63,7 @@ fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
         .split(',')
         .filter(|x| !x.is_empty())
         .map(TryFrom::try_from)
-        .collect::<Result<Vec<_>, strum::ParseError>>()
+        .collect::<Result<Vec<_>, TryFromStringTrackApiSourceError>>()
         .map_err(|e| RouteError::RouteFailed(e.into()))
 }
 
@@ -232,7 +234,8 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
         .query
         .get("source")
         .map(TryFrom::try_from)
-        .transpose()?
+        .transpose()
+        .unwrap()
         .ok_or(RouteError::MissingQueryParam("Missing source query param"))?;
     let album_type: AlbumType = req
         .query
@@ -338,7 +341,8 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
             .query
             .get("source")
             .map(TryFrom::try_from)
-            .transpose()?
+            .transpose()
+            .unwrap()
             .unwrap_or_default();
 
         let version_source: Option<TrackApiSource> = req
@@ -362,7 +366,7 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
         if req.query.get("full").map(String::as_str) == Some("true") {
             let state = convert_state(&STATE).await;
             let album_id = album_id.into();
-            let api = PROFILES.get(PROFILE).unwrap().get(source)?;
+            let api = PROFILES.get(PROFILE).unwrap().get(&source)?;
             let album = api
                 .album(&album_id)
                 .await?
@@ -385,7 +389,7 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
                 &album,
                 &versions,
                 versions.iter().find(|v| {
-                    version_source.is_none_or(|x| v.source == x)
+                    version_source.as_ref().is_none_or(|x| &v.source == x)
                         && bit_depth.is_none_or(|x| v.bit_depth.is_some_and(|b| b == x))
                         && sample_rate.is_none_or(|x| v.sample_rate.is_some_and(|s| s == x))
                 }),
@@ -398,8 +402,8 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
             let container: Container = moosicbox_app_native_ui::albums::album(
                 &convert_state(&STATE).await,
                 album_id,
-                Some(source),
-                version_source,
+                Some(&source),
+                version_source.as_ref(),
                 sample_rate,
                 bit_depth,
             )
@@ -441,8 +445,12 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
     let host = &connection.api_url;
 
     Ok(if let Some(artist_id) = req.query.get("artistId") {
-        let source: Option<ApiSource> =
-            req.query.get("source").map(TryFrom::try_from).transpose()?;
+        let source: Option<ApiSource> = req
+            .query
+            .get("source")
+            .map(TryFrom::try_from)
+            .transpose()
+            .unwrap();
 
         let response = CLIENT
             .get(&format!(

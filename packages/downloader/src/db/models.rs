@@ -4,11 +4,10 @@ use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType, database::ToValue as _, serde_json::ToValue,
 };
 use moosicbox_music_api::models::TrackAudioQuality;
-use moosicbox_music_models::{TrackApiSource, id::Id};
+use moosicbox_music_models::id::Id;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use switchy_database::{AsId, DatabaseValue};
-use thiserror::Error;
 
 use crate::DownloadApiSource;
 
@@ -83,29 +82,6 @@ impl ToValueType<DownloadTaskState> for &serde_json::Value {
                 .ok_or_else(|| ParseError::ConvertType("DownloadTaskState".into()))?,
         )
         .map_err(|_| ParseError::ConvertType("DownloadTaskState".into()))
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum TryFromTrackApiSourceError {
-    #[error("Invalid source")]
-    InvalidSource,
-}
-
-impl TryFrom<TrackApiSource> for DownloadApiSource {
-    type Error = TryFromTrackApiSourceError;
-
-    fn try_from(value: TrackApiSource) -> Result<Self, Self::Error> {
-        #[allow(unreachable_code)]
-        Ok(match value {
-            #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            TrackApiSource::Yt => Self::Yt,
-            _ => return Err(Self::Error::InvalidSource),
-        })
     }
 }
 

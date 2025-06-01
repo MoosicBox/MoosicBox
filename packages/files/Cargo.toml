@@ -59,7 +59,6 @@ tokio-util          = { workspace = true, optional = true }
 default = [
     "all-decoders",
     "all-encoders",
-    "all-sources",
     "api",
     "files",
     "image",
@@ -146,11 +145,5 @@ format-aac  = ["moosicbox_music_models?/aac"]
 format-flac = ["moosicbox_music_models?/flac"]
 format-mp3  = ["moosicbox_music_models?/mp3"]
 format-opus = ["moosicbox_music_models?/opus"]
-
-all-sources = ["qobuz", "tidal", "yt"]
-
-qobuz = ["moosicbox_music_models/qobuz"]
-tidal = ["moosicbox_music_models/tidal"]
-yt    = ["moosicbox_music_models/yt"]
 
 profiling = ["dep:profiling", "moosicbox_image?/profiling"]

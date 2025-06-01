@@ -201,9 +201,9 @@ export default function albumPage(props: {
             if (props.albumId) {
                 setAlbum(await api.getAlbum(props.albumId));
             } else if (props.tidalAlbumId) {
-                setAlbum(await api.getAlbum(props.tidalAlbumId, 'TIDAL'));
+                setAlbum(await api.getAlbum(props.tidalAlbumId, 'Tidal'));
             } else if (props.qobuzAlbumId) {
-                setAlbum(await api.getAlbum(props.qobuzAlbumId, 'QOBUZ'));
+                setAlbum(await api.getAlbum(props.qobuzAlbumId, 'Qobuz'));
             }
         } catch {
             setAlbum(undefined);
@@ -215,11 +215,11 @@ export default function albumPage(props: {
             setVersions(await api.getAlbumVersions(props.albumId));
         } else if (props.tidalAlbumId) {
             setVersions(
-                await api.getAlbumVersions(props.tidalAlbumId, 'TIDAL'),
+                await api.getAlbumVersions(props.tidalAlbumId, 'Tidal'),
             );
         } else if (props.qobuzAlbumId) {
             setVersions(
-                await api.getAlbumVersions(props.qobuzAlbumId, 'QOBUZ'),
+                await api.getAlbumVersions(props.qobuzAlbumId, 'Qobuz'),
             );
         } else {
             throw new Error('Invalid album type');
@@ -348,31 +348,31 @@ export default function albumPage(props: {
     async function downloadAlbum(source: ApiSource | Api.DownloadApiSource) {
         console.debug('Downloading album from source:', source);
         switch (source) {
-            case 'QOBUZ':
+            case 'Qobuz':
                 await api.download(
                     {
                         albumId: album()?.albumSources.find(
-                            (x) => x.source === 'QOBUZ',
+                            (x) => x.source === 'Qobuz',
                         )?.id,
                     },
                     source,
                 );
                 break;
-            case 'TIDAL':
+            case 'Tidal':
                 await api.download(
                     {
                         albumId: album()?.albumSources.find(
-                            (x) => x.source === 'TIDAL',
+                            (x) => x.source === 'Tidal',
                         )?.id,
                     },
                     source,
                 );
                 break;
-            case 'YT':
+            case 'Yt':
                 await api.download(
                     {
                         albumId: album()?.albumSources.find(
-                            (x) => x.source === 'YT',
+                            (x) => x.source === 'Yt',
                         )?.id,
                     },
                     source,
@@ -490,21 +490,26 @@ export default function albumPage(props: {
             return false;
         }
 
-        let targetSource: ApiSource = 'LIBRARY';
+        let targetApiSource: ApiSource = 'Library';
+        let targetTrackSource: Api.TrackSource = Api.TrackSource.LOCAL;
 
         if (props.tidalAlbumId) {
-            targetSource = 'TIDAL';
+            targetApiSource = 'Tidal';
+            targetTrackSource = Api.TrackSource.TIDAL;
         }
         if (props.qobuzAlbumId) {
-            targetSource = 'QOBUZ';
+            targetApiSource = 'Qobuz';
+            targetTrackSource = Api.TrackSource.QOBUZ;
         }
 
-        if (!album()?.albumSources.find((x) => x.source === targetSource)?.id) {
+        if (
+            !album()?.albumSources.find((x) => x.source === targetApiSource)?.id
+        ) {
             return false;
         }
 
         const version = versions()!.find(
-            (version) => version.source === targetSource,
+            (version) => version.source === targetTrackSource,
         );
 
         return !version || version.tracks.length === 0;
@@ -726,7 +731,7 @@ export default function albumPage(props: {
                                                 Add to queue
                                             </div>
                                         </div>
-                                        {track.apiSource !== 'LIBRARY' && (
+                                        {track.apiSource !== 'Library' && (
                                             <div class="moosicbox-select-option">
                                                 <div
                                                     onClick={async () => {
@@ -902,7 +907,7 @@ export default function albumPage(props: {
                                 </button>
                                 <Show
                                     when={album()?.albumSources?.every(
-                                        (x) => x.source !== 'LIBRARY',
+                                        (x) => x.source !== 'Library',
                                     )}
                                 >
                                     <button
@@ -920,13 +925,13 @@ export default function albumPage(props: {
                                 <Show
                                     when={
                                         album()?.albumSources.some(
-                                            (x) => x.source === 'TIDAL',
+                                            (x) => x.source === 'Tidal',
                                         ) &&
                                         activeVersion()?.source ===
                                             Api.TrackSource.TIDAL &&
                                         album()?.albumSources.some(
                                             ({ source }) =>
-                                                source === 'LIBRARY',
+                                                source === 'Library',
                                         )
                                     }
                                 >
@@ -940,7 +945,7 @@ export default function albumPage(props: {
                                                     album()!.albumSources.find(
                                                         (x) =>
                                                             x.source ===
-                                                            'TIDAL',
+                                                            'Tidal',
                                                     )?.id,
                                             });
                                             return false;
@@ -952,13 +957,13 @@ export default function albumPage(props: {
                                 <Show
                                     when={
                                         album()?.albumSources.some(
-                                            (x) => x.source === 'QOBUZ',
+                                            (x) => x.source === 'Qobuz',
                                         ) &&
                                         activeVersion()?.source ===
                                             Api.TrackSource.QOBUZ &&
                                         album()?.albumSources.some(
                                             ({ source }) =>
-                                                source === 'LIBRARY',
+                                                source === 'Library',
                                         )
                                     }
                                 >
@@ -972,7 +977,7 @@ export default function albumPage(props: {
                                                     album()!.albumSources.find(
                                                         (x) =>
                                                             x.source ===
-                                                            'QOBUZ',
+                                                            'Qobuz',
                                                     )?.id,
                                             });
                                             return false;
@@ -997,7 +1002,7 @@ export default function albumPage(props: {
                                                     album()!.albumSources.find(
                                                         (x) =>
                                                             x.source ===
-                                                            'TIDAL',
+                                                            'Tidal',
                                                     )?.id,
                                             });
                                             return false;
@@ -1022,7 +1027,7 @@ export default function albumPage(props: {
                                                     album()!.albumSources.find(
                                                         (x) =>
                                                             x.source ===
-                                                            'QOBUZ',
+                                                            'Qobuz',
                                                     )?.id,
                                             });
                                             return false;
@@ -1037,7 +1042,7 @@ export default function albumPage(props: {
                                             Api.TrackSource.TIDAL &&
                                         album()?.albumSources.some(
                                             ({ source }) =>
-                                                source === 'LIBRARY',
+                                                source === 'Library',
                                         )
                                     }
                                 >
@@ -1046,7 +1051,7 @@ export default function albumPage(props: {
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             e.preventDefault();
-                                            downloadAlbum('TIDAL');
+                                            downloadAlbum('Tidal');
                                             return false;
                                         }}
                                     >
@@ -1059,7 +1064,7 @@ export default function albumPage(props: {
                                             Api.TrackSource.QOBUZ &&
                                         album()?.albumSources.some(
                                             ({ source }) =>
-                                                source === 'LIBRARY',
+                                                source === 'Library',
                                         )
                                     }
                                 >
@@ -1068,7 +1073,7 @@ export default function albumPage(props: {
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             e.preventDefault();
-                                            downloadAlbum('QOBUZ');
+                                            downloadAlbum('Qobuz');
                                             return false;
                                         }}
                                     >

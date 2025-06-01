@@ -3,7 +3,8 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use moosicbox_music_models::{
-    AlbumSort, AlbumSource, AlbumType, AudioFormat, TrackApiSource, id::Id,
+    AlbumSort, AlbumSource, AlbumType, AudioFormat, TrackApiSource,
+    id::{ApiId, Id},
 };
 use std::str::FromStr as _;
 
@@ -30,8 +31,7 @@ pub struct AlbumFilters {
     pub search: Option<String>,
     pub album_type: Option<AlbumType>,
     pub artist_id: Option<Id>,
-    pub tidal_artist_id: Option<Id>,
-    pub qobuz_artist_id: Option<Id>,
+    pub artist_api_id: Option<ApiId>,
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]

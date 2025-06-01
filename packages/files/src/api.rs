@@ -141,7 +141,7 @@ pub async fn track_visualization_endpoint(
     let source = get_track_id_source(
         music_apis,
         &query.track_id.into(),
-        query.source.unwrap_or(ApiSource::Library),
+        query.source.clone().unwrap_or_else(ApiSource::library),
         Some(TrackAudioQuality::Low),
     )
     .await?;
@@ -293,7 +293,7 @@ pub async fn track_endpoint(
     let source = get_track_id_source(
         music_apis.clone(),
         &query.track_id.into(),
-        query.source.unwrap_or(ApiSource::Library),
+        query.source.clone().unwrap_or_else(ApiSource::library),
         query.quality,
     )
     .await?;
@@ -369,7 +369,7 @@ pub async fn track_endpoint(
 
     let bytes = get_track_bytes(
         &**music_apis
-            .get(query.source.unwrap_or(ApiSource::Library))
+            .get(&query.source.clone().unwrap_or_else(ApiSource::library))
             .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
         &Id::Number(query.track_id),
         source,
@@ -486,7 +486,7 @@ pub async fn track_info_endpoint(
     Ok(Json(
         get_track_info(
             &**music_apis
-                .get(query.source.unwrap_or(ApiSource::Library))
+                .get(&query.source.clone().unwrap_or_else(ApiSource::library))
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &query.track_id,
         )
@@ -543,7 +543,7 @@ pub async fn tracks_info_endpoint(
     Ok(Json(
         get_tracks_info(
             &**music_apis
-                .get(query.source.unwrap_or(ApiSource::Library))
+                .get(&query.source.clone().unwrap_or_else(ApiSource::library))
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &ids,
         )
@@ -588,31 +588,29 @@ pub async fn track_urls_endpoint(
     query: web::Query<GetTrackUrlQuery>,
     music_apis: MusicApis,
 ) -> Result<Json<Vec<String>>> {
-    let source = query.source.unwrap_or(ApiSource::Library);
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
     let mut ids = vec![];
     if let Some(track_ids) = &query.track_ids {
-        ids.extend(
-            parse_id_ranges(track_ids, source, IdType::Track).map_err(|e| match e {
-                ParseIdsError::ParseId(id) => {
-                    ErrorBadRequest(format!("Could not parse trackId '{id}'"))
-                }
-                ParseIdsError::UnmatchedRange(range) => {
-                    ErrorBadRequest(format!("Unmatched range '{range}'"))
-                }
-                ParseIdsError::RangeTooLarge(range) => {
-                    ErrorBadRequest(format!("Range too large '{range}'"))
-                }
-            })?,
-        );
+        ids.extend(parse_id_ranges(track_ids, &source).map_err(|e| match e {
+            ParseIdsError::ParseId(id) => {
+                ErrorBadRequest(format!("Could not parse trackId '{id}'"))
+            }
+            ParseIdsError::UnmatchedRange(range) => {
+                ErrorBadRequest(format!("Unmatched range '{range}'"))
+            }
+            ParseIdsError::RangeTooLarge(range) => {
+                ErrorBadRequest(format!("Range too large '{range}'"))
+            }
+        })?);
     }
     if let Some(track_id) = &query.track_id {
-        ids.push(Id::try_from_str(track_id, source, IdType::Track).map_err(ErrorBadRequest)?);
+        ids.push(Id::try_from_str(track_id, &source).map_err(ErrorBadRequest)?);
     }
 
     let ids = ids;
 
     let api = music_apis
-        .get(source)
+        .get(&source)
         .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?;
 
     let mut urls = vec![];
@@ -686,21 +684,17 @@ pub async fn artist_source_artwork_endpoint(
     let paths = path.into_inner();
 
     let artist_id_string = paths;
-    let source = query.source.unwrap_or(ApiSource::Library);
-    let artist_id = match source {
-        ApiSource::Library => artist_id_string.parse::<u64>().map(Id::Number),
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => artist_id_string.parse::<u64>().map(Id::Number),
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => Ok(Id::String(artist_id_string)),
-        #[cfg(feature = "yt")]
-        ApiSource::Yt => Ok(Id::String(artist_id_string)),
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let artist_id = if source.is_library() {
+        artist_id_string.parse::<u64>().map(Id::Number)
+    } else {
+        Ok(Id::String(artist_id_string))
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
     let size = ImageCoverSize::Max;
     let api = music_apis
-        .get(source)
+        .get(&source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
     let artist = api
         .artist(&artist_id)
@@ -752,15 +746,11 @@ pub async fn artist_cover_endpoint(
     let paths = path.into_inner();
 
     let artist_id_string = paths.0;
-    let source = query.source.unwrap_or(ApiSource::Library);
-    let artist_id = match source {
-        ApiSource::Library => artist_id_string.parse::<u64>().map(Id::Number),
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => artist_id_string.parse::<u64>().map(Id::Number),
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => Ok(Id::String(artist_id_string)),
-        #[cfg(feature = "yt")]
-        ApiSource::Yt => Ok(Id::String(artist_id_string)),
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let artist_id = if source.is_library() {
+        artist_id_string.parse::<u64>().map(Id::Number)
+    } else {
+        Ok(Id::String(artist_id_string))
     }
     .map_err(|_e| ErrorBadRequest("Invalid artist_id"))?;
 
@@ -778,7 +768,7 @@ pub async fn artist_cover_endpoint(
 
     let size = u16::try_from(std::cmp::max(width, height)).unwrap().into();
     let api = music_apis
-        .get(source)
+        .get(&source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
     let artist = api
         .artist(&artist_id)
@@ -848,21 +838,17 @@ pub async fn album_source_artwork_endpoint(
     let paths = path.into_inner();
 
     let album_id_string = paths;
-    let source = query.source.unwrap_or(ApiSource::Library);
-    let album_id = match source {
-        ApiSource::Library => album_id_string.parse::<u64>().map(Id::Number),
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => Ok(Id::String(album_id_string)),
-        #[cfg(feature = "yt")]
-        ApiSource::Yt => Ok(Id::String(album_id_string)),
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let album_id = if source.is_library() {
+        album_id_string.parse::<u64>().map(Id::Number)
+    } else {
+        Ok(Id::String(album_id_string))
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
     let size = ImageCoverSize::Max;
     let api = music_apis
-        .get(source)
+        .get(&source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
     let album = api
         .album(&album_id)
@@ -914,15 +900,11 @@ pub async fn album_artwork_endpoint(
     let paths = path.into_inner();
 
     let album_id_string = paths.0;
-    let source = query.source.unwrap_or(ApiSource::Library);
-    let album_id = match source {
-        ApiSource::Library => album_id_string.parse::<u64>().map(Id::Number),
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => Ok(Id::String(album_id_string)),
-        #[cfg(feature = "yt")]
-        ApiSource::Yt => Ok(Id::String(album_id_string)),
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let album_id = if source.is_library() {
+        album_id_string.parse::<u64>().map(Id::Number)
+    } else {
+        Ok(Id::String(album_id_string))
     }
     .map_err(|_e| ErrorBadRequest("Invalid album_id"))?;
 
@@ -940,7 +922,7 @@ pub async fn album_artwork_endpoint(
 
     let size = u16::try_from(std::cmp::max(width, height)).unwrap().into();
     let api = music_apis
-        .get(source)
+        .get(&source)
         .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
     let album = api
         .album(&album_id)

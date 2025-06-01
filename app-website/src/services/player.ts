@@ -489,7 +489,7 @@ export async function addAlbumToQueue(album: Api.Album | Api.Track) {
     const albumType = 'apiSource' in album ? album.apiSource : 'TRACK';
 
     switch (albumType) {
-        case 'LIBRARY': {
+        case 'Library': {
             let id: string | number;
             if ('albumId' in album) {
                 id = album.albumId;
@@ -509,19 +509,19 @@ export async function addAlbumToQueue(album: Api.Album | Api.Track) {
             const tracks = versions[0]!.tracks;
             return addTracksToQueue(tracks);
         }
-        case 'TIDAL': {
+        case 'Tidal': {
             album = album as Api.Album;
             const page = await api.getTidalAlbumTracks(album.albumId as string);
             const tracks = page.items;
             return addTracksToQueue(tracks);
         }
-        case 'QOBUZ': {
+        case 'Qobuz': {
             album = album as Api.Album;
             const page = await api.getQobuzAlbumTracks(album.albumId as string);
             const tracks = page.items;
             return addTracksToQueue(tracks);
         }
-        case 'YT': {
+        case 'Yt': {
             album = album as Api.Album;
             const page = await api.getYtAlbumTracks(album.albumId as string);
             const tracks = page.items;

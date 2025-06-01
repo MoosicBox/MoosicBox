@@ -92,7 +92,7 @@ pub async fn get_track_id_source(
     source: ApiSource,
     quality: Option<TrackAudioQuality>,
 ) -> Result<TrackSource, TrackSourceError> {
-    let track_api = apis.get(source)?;
+    let track_api = apis.get(&source)?;
 
     log::debug!(
         "get_track_id_source: track_id={track_id} quality={quality:?} source={:?}",
@@ -106,19 +106,19 @@ pub async fn get_track_id_source(
 
     log::debug!("get_track_id_source: track={track:?}");
 
-    let track_source = track.track_source.into();
+    let track_source: ApiSource = track.track_source.clone().into();
 
     let (api, track) = if track_source == source {
         (track_api, track)
     } else {
-        let api = apis.get(track_source)?;
+        let api = apis.get(&track_source)?;
 
         (
             api.clone(),
             api.track(
                 track
                     .sources
-                    .get(track_source)
+                    .get(&track_source)
                     .ok_or_else(|| TrackSourceError::NotFound(track_id.to_owned()))?,
             )
             .await?

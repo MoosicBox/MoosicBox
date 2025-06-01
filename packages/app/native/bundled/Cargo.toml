@@ -28,7 +28,7 @@ thiserror    = { workspace = true }
 tokio        = { workspace = true }
 
 [features]
-default = ["all-decoders"]
+default = ["all-decoders", "all-sources"]
 
 fail-on-warnings = []
 
@@ -49,3 +49,9 @@ decoder-aac  = ["moosicbox_server/decoder-aac"]
 decoder-flac = ["moosicbox_server/decoder-flac"]
 decoder-mp3  = ["moosicbox_server/decoder-mp3"]
 decoder-opus = ["moosicbox_server/decoder-opus"]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["format-flac", "moosicbox_server/qobuz"]
+tidal = ["format-flac", "moosicbox_server/tidal"]
+yt    = ["format-flac", "moosicbox_server/yt"]

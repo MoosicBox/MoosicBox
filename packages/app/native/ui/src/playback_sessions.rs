@@ -21,8 +21,8 @@ pub fn playback_sessions(host: &str, sessions: &[ApiSession]) -> Markup {
                                 @let album_page_url = crate::albums::album_page_url(
                                     &track.album_id.to_string(),
                                     false,
-                                    Some(track.api_source),
-                                    Some(track.track_source),
+                                    Some(&track.api_source),
+                                    Some(&track.track_source),
                                     track.sample_rate,
                                     track.bit_depth,
                                 );

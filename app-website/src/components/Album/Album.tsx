@@ -46,13 +46,13 @@ function isExplicit(props: AlbumProps): boolean {
     const apiSource = props.album.apiSource;
 
     switch (apiSource) {
-        case 'LIBRARY':
+        case 'Library':
             return false;
-        case 'TIDAL':
+        case 'Tidal':
             return false;
-        case 'QOBUZ':
+        case 'Qobuz':
             return false;
-        case 'YT':
+        case 'Yt':
             return false;
         default:
             apiSource satisfies never;
@@ -169,13 +169,13 @@ export function albumRoute(
     const apiSource = album.apiSource;
 
     switch (apiSource) {
-        case 'LIBRARY':
+        case 'Library':
             return `/albums?albumId=${album.albumId}`;
-        case 'TIDAL':
+        case 'Tidal':
             return `/albums?tidalAlbumId=${album.albumId}`;
-        case 'QOBUZ':
+        case 'Qobuz':
             return `/albums?qobuzAlbumId=${album.albumId}`;
-        case 'YT':
+        case 'Yt':
             return `/albums?ytAlbumId=${album.albumId}`;
         default:
             // FIXME: This is a hack to get around the fact that the
@@ -185,11 +185,11 @@ export function albumRoute(
             }
             if (typeof apiSource === 'object' && 'source' in apiSource) {
                 switch (apiSource.source) {
-                    case 'TIDAL':
+                    case 'Tidal':
                         return `/albums?tidalAlbumId=${album.albumId}`;
-                    case 'QOBUZ':
+                    case 'Qobuz':
                         return `/albums?qobuzAlbumId=${album.albumId}`;
-                    case 'YT':
+                    case 'Yt':
                         return `/albums?ytAlbumId=${album.albumId}`;
                 }
             }

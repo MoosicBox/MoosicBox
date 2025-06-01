@@ -459,7 +459,7 @@ async fn propagate_state_to_plugin(update: ApiUpdateSession) {
     }
 }
 
-fn album_cover_url(album_id: &str, source: ApiSource, url: &str, query: &str) -> String {
+fn album_cover_url(album_id: &str, source: &ApiSource, url: &str, query: &str) -> String {
     format!("{url}/files/albums/{album_id}/300x300?source={source}{query}")
 }
 
@@ -469,7 +469,7 @@ fn convert_track(track: ApiTrack, url: &str, query: &str) -> app_tauri_plugin_pl
     let album_cover = if track.contains_cover {
         Some(album_cover_url(
             &track.album_id.to_string(),
-            api_source,
+            &api_source,
             url,
             query,
         ))

@@ -15,7 +15,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use moosicbox_files::get_content_length;
 use moosicbox_json_utils::database::DatabaseFetchError;
-use moosicbox_library_models::{LibraryAlbumType, track_source_to_u8};
+use moosicbox_library_models::LibraryAlbumType;
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
@@ -192,30 +192,15 @@ pub fn filter_albums<'a>(
         })
     });
 
-    #[cfg(feature = "tidal")]
-    let albums = albums.filter(|#[allow(unused)] album| {
+    let albums = albums.filter(|album| {
         request.filters.as_ref().is_none_or(|x| {
-            x.tidal_artist_id.as_ref().is_none_or(|id| {
+            x.artist_api_id.as_ref().is_none_or(|id| {
                 album
                     .artist_sources
                     .iter()
-                    .filter(|x| x.source == ApiSource::Tidal)
+                    .filter(|x| x.source == id.source)
                     .map(|x| &x.id)
-                    .any(|x| x == id)
-            })
-        })
-    });
-
-    #[cfg(feature = "qobuz")]
-    let albums = albums.filter(|#[allow(unused)] album| {
-        request.filters.as_ref().is_none_or(|x| {
-            x.qobuz_artist_id.as_ref().is_none_or(|id| {
-                album
-                    .artist_sources
-                    .iter()
-                    .filter(|x| x.source == ApiSource::Qobuz)
-                    .map(|x| &x.id)
-                    .any(|x| x == id)
+                    .any(|x| x == &id.id)
             })
         })
     });
@@ -223,8 +208,12 @@ pub fn filter_albums<'a>(
     albums
         .filter(|album| {
             request.sources.as_ref().is_none_or(|s| {
-                s.iter()
-                    .any(|source| album.versions.iter().any(|v| v.source == (*source).into()))
+                s.iter().any(|source| {
+                    album
+                        .versions
+                        .iter()
+                        .any(|v| v.source == source.clone().into())
+                })
             })
         })
         .filter(|album| {
@@ -649,7 +638,7 @@ pub enum LibraryAlbumError {
 pub async fn album_from_source(
     db: &LibraryDatabase,
     album_id: &Id,
-    source: ApiSource,
+    source: &ApiSource,
 ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
     Ok(db::get_album(
         db,
@@ -680,7 +669,7 @@ pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
             .unwrap_or_default()
             .cmp(&a.bit_depth.unwrap_or_default())
     });
-    versions.sort_by(|a, b| track_source_to_u8(a.source).cmp(&track_source_to_u8(b.source)));
+    versions.sort_by(|a, b| a.source.cmp(&b.source));
 }
 
 /// # Errors
@@ -1095,7 +1084,7 @@ impl LibraryMusicApi {
     pub async fn library_album_from_source(
         &self,
         album_id: &Id,
-        source: ApiSource,
+        source: &ApiSource,
     ) -> Result<Option<LibraryAlbum>, AlbumError> {
         Ok(album_from_source(&self.db, album_id, source).await?)
     }
@@ -1149,10 +1138,12 @@ impl LibraryMusicApi {
     }
 }
 
+static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "Library".into());
+
 #[async_trait]
 impl MusicApi for LibraryMusicApi {
-    fn source(&self) -> ApiSource {
-        ApiSource::Library
+    fn source(&self) -> &ApiSource {
+        &API_SOURCE
     }
 
     async fn artists(
@@ -1606,7 +1597,6 @@ mod test {
         assert_eq!(result, vec![]);
     }
 
-    #[cfg(all(feature = "qobuz", feature = "tidal"))]
     #[test]
     fn filter_albums_filters_albums_of_sources_that_dont_match() {
         use moosicbox_music_models::{AlbumVersionQuality, TrackApiSource};
@@ -1628,7 +1618,7 @@ mod test {
             artist: String::new(),
             artwork: None,
             versions: vec![AlbumVersionQuality {
-                source: TrackApiSource::Tidal,
+                source: TrackApiSource::Api("Tidal".into()),
                 ..Default::default()
             }],
             ..Default::default()
@@ -1639,7 +1629,7 @@ mod test {
             artist: String::new(),
             artwork: None,
             versions: vec![AlbumVersionQuality {
-                source: TrackApiSource::Qobuz,
+                source: TrackApiSource::Api("Qobuz".into()),
                 ..Default::default()
             }],
             ..Default::default()

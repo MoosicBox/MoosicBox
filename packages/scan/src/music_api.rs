@@ -3,7 +3,7 @@ use std::sync::Arc;
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{AlbumsError, MusicApi, models::AlbumsRequest};
-use moosicbox_music_models::{Album, ApiSource, AudioFormat, Track};
+use moosicbox_music_models::{Album, AudioFormat, Track};
 use moosicbox_paging::PagingRequest;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
@@ -145,7 +145,7 @@ pub async fn scan_albums(
             output
                 .write()
                 .await
-                .add_artist(&album.artist, &Some(&album.artist_id), api.source())
+                .add_artist(&album.artist, &Some(&album.artist_id), api.source().clone())
                 .await
         };
 
@@ -158,7 +158,7 @@ pub async fn scan_albums(
                     &album.date_released.map(|x| x.and_utc().to_rfc3339()),
                     None,
                     &Some(&album.id),
-                    api.source(),
+                    api.source().clone(),
                 )
                 .await
         };
@@ -264,7 +264,7 @@ async fn scan_tracks(
 
     let source = api.source();
 
-    if source == ApiSource::Library {
+    if source.is_library() {
         moosicbox_assert::die!("Invalid api source");
         return Ok(());
     }
@@ -286,17 +286,9 @@ async fn scan_tracks(
                 &None,
                 &None,
                 &None,
-                match source {
-                    ApiSource::Library => continue,
-                    #[cfg(feature = "tidal")]
-                    ApiSource::Tidal => moosicbox_music_models::TrackApiSource::Tidal,
-                    #[cfg(feature = "qobuz")]
-                    ApiSource::Qobuz => moosicbox_music_models::TrackApiSource::Qobuz,
-                    #[cfg(feature = "yt")]
-                    ApiSource::Yt => moosicbox_music_models::TrackApiSource::Yt,
-                },
+                source.clone().into(),
                 &Some(&track.id),
-                source,
+                source.clone(),
             )
             .await;
         if let Some(scanner) = &scanner {

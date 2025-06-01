@@ -136,7 +136,7 @@ impl AppState {
 
         for api_source in ApiSource::all() {
             apis_map.insert(
-                api_source,
+                api_source.clone(),
                 Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
                     RemoteLibraryMusicApi::new(
                         connection.api_url.clone(),

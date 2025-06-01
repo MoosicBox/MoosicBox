@@ -1266,7 +1266,7 @@ impl TunnelSender {
                     match get_track_id_source(
                         music_apis.ok_or(TunnelRequestError::MissingProfile)?,
                         &query.track_id.into(),
-                        query.source.unwrap_or(ApiSource::Library),
+                        query.source.clone().unwrap_or_else(ApiSource::library),
                         query.quality,
                     )
                     .await
@@ -1514,7 +1514,8 @@ impl TunnelSender {
                     headers.insert("content-type".to_string(), "application/json".to_string());
 
                     let music_apis = music_apis.ok_or(TunnelRequestError::MissingProfile)?;
-                    let api = music_apis.get(query.source.unwrap_or(ApiSource::Library))?;
+                    let api =
+                        music_apis.get(&query.source.clone().unwrap_or_else(ApiSource::library))?;
 
                     if let Ok(track_info) = get_track_info(&**api, &query.track_id.into()).await {
                         let mut bytes: Vec<u8> = Vec::new();
@@ -1539,17 +1540,11 @@ impl TunnelSender {
                                 .ok_or(TunnelRequestError::BadRequest("Invalid album_id".into()))?
                                 .as_str();
 
-                            let source = query.source.unwrap_or(ApiSource::Library);
-                            let album_id = match source {
-                                ApiSource::Library => {
-                                    album_id_string.parse::<u64>().map(Id::Number)
-                                }
-                                #[cfg(feature = "tidal")]
-                                ApiSource::Tidal => album_id_string.parse::<u64>().map(Id::Number),
-                                #[cfg(feature = "qobuz")]
-                                ApiSource::Qobuz => album_id_string.parse::<u64>().map(Id::Number),
-                                #[cfg(feature = "yt")]
-                                ApiSource::Yt => Ok(Id::String(album_id_string.to_owned())),
+                            let source = query.source.clone().unwrap_or_else(ApiSource::library);
+                            let album_id = if source.is_library() {
+                                album_id_string.parse::<u64>().map(Id::Number)
+                            } else {
+                                Ok(Id::String(album_id_string.to_owned()))
                             }
                             .map_err(|_| {
                                 TunnelRequestError::BadRequest("Invalid album_id".into())
@@ -1570,7 +1565,8 @@ impl TunnelSender {
 
                             let music_apis =
                                 music_apis.ok_or(TunnelRequestError::MissingProfile)?;
-                            let api = music_apis.get(query.source.unwrap_or(ApiSource::Library))?;
+                            let api = music_apis
+                                .get(&query.source.clone().unwrap_or_else(ApiSource::library))?;
 
                             let album = api
                                 .album(&album_id)

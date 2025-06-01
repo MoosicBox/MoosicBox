@@ -138,24 +138,9 @@ devtools = ["tauri/devtools"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = [
-    "moosicbox_app_native?/qobuz",
-    "moosicbox_app_state/qobuz",
-    "moosicbox_music_models/qobuz",
-    "moosicbox_session/qobuz",
-]
-tidal = [
-    "moosicbox_app_native?/tidal",
-    "moosicbox_app_state/tidal",
-    "moosicbox_music_models/tidal",
-    "moosicbox_session/tidal",
-]
-yt = [
-    "moosicbox_app_native?/yt",
-    "moosicbox_app_state/yt",
-    "moosicbox_music_models/yt",
-    "moosicbox_session/yt",
-]
+qobuz = ["moosicbox_app_state/qobuz"]
+tidal = ["moosicbox_app_state/tidal"]
+yt    = ["moosicbox_app_state/yt"]
 
 tauri-logger = ["dep:tauri-plugin-log"]
 

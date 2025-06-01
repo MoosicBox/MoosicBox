@@ -21,8 +21,7 @@ use switchy_database::profiles::LibraryDatabase;
 use moosicbox_files::get_content_length;
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_models::{
-    Album, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, TrackApiSource,
-    id::Id,
+    Album, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, id::Id,
 };
 use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use std::{
@@ -77,6 +76,8 @@ static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 
 static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
+
+pub static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "Qobuz".into());
 
 #[must_use]
 pub fn format_title(title: &str, version: Option<&str>) -> String {
@@ -2106,8 +2107,8 @@ impl Default for QobuzMusicApi {
 
 #[async_trait]
 impl MusicApi for QobuzMusicApi {
-    fn source(&self) -> ApiSource {
-        ApiSource::Qobuz
+    fn source(&self) -> &ApiSource {
+        &API_SOURCE
     }
 
     async fn artists(
@@ -2267,7 +2268,7 @@ impl MusicApi for QobuzMusicApi {
             bit_depth: None,
             sample_rate: None,
             channels: Some(2),
-            source: TrackApiSource::Qobuz,
+            source: API_SOURCE.clone().into(),
         }];
 
         Ok(PagingResponse::new(

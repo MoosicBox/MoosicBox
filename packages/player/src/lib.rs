@@ -220,7 +220,7 @@ pub struct PlaybackStatus {
 #[allow(clippy::too_many_lines, clippy::unused_async)]
 pub async fn get_track_url(
     track_id: &Id,
-    api_source: ApiSource,
+    api_source: &ApiSource,
     player_source: &PlayerSource,
     quality: PlaybackQuality,
     use_local_network_ip: bool,
@@ -296,24 +296,20 @@ pub async fn get_track_url(
             serializer.append_pair("moosicboxProfile", &profile);
         }
 
-        match api_source {
-            ApiSource::Library => {
-                if quality.format != AudioFormat::Source {
-                    serializer.append_pair("format", quality.format.as_ref());
-                }
+        if api_source.is_library() {
+            if quality.format != AudioFormat::Source {
+                serializer.append_pair("format", quality.format.as_ref());
             }
-            #[cfg(feature = "tidal")]
-            ApiSource::Tidal => {
-                serializer.append_pair("audioQuality", "HIGH");
-            }
-            #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => {
-                serializer.append_pair("audioQuality", "LOW");
-            }
-            #[cfg(feature = "yt")]
-            ApiSource::Yt => {
-                serializer.append_pair("audioQuality", "LOW");
-            }
+        } else {
+            serializer.append_pair("audioQuality", "HIGH");
+            // #[cfg(feature = "qobuz")]
+            // ApiSource::Qobuz => {
+            //     serializer.append_pair("audioQuality", "LOW");
+            // }
+            // #[cfg(feature = "yt")]
+            // ApiSource::Yt => {
+            //     serializer.append_pair("audioQuality", "LOW");
+            // }
         }
 
         serializer.finish()
@@ -321,53 +317,51 @@ pub async fn get_track_url(
 
     let query_string = format!("?{query_params}");
 
-    let url = match api_source {
-        ApiSource::Library => Ok::<_, PlayerError>(format!("{host}/files/track{query_string}")),
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => {
-            use moosicbox_json_utils::serde_json::ToValue as _;
-            let url = format!("{host}/tidal/track/url{query_string}");
-            log::debug!("Fetching track file url from {url}");
+    let url = if api_source.is_library() {
+        Ok::<_, PlayerError>(format!("{host}/files/track{query_string}"))
+    } else {
+        use moosicbox_json_utils::serde_json::ToValue as _;
+        let url = format!("{host}/tidal/track/url{query_string}");
+        log::debug!("Fetching track file url from {url}");
 
-            CLIENT
-                .get(&url)
-                .send()
-                .await?
-                .json::<serde_json::Value>()
-                .await?
-                .to_value::<Vec<String>>("urls")?
-                .first()
-                .cloned()
-                .ok_or(PlayerError::TrackFetchFailed(track_id.to_string()))
-        }
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => {
-            use moosicbox_json_utils::serde_json::ToValue as _;
-            let url = format!("{host}/qobuz/track/url{query_string}");
-            log::debug!("Fetching track file url from {url}");
+        CLIENT
+            .get(&url)
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await?
+            .to_value::<Vec<String>>("urls")?
+            .first()
+            .cloned()
+            .ok_or(PlayerError::TrackFetchFailed(track_id.to_string()))
+        // #[cfg(feature = "qobuz")]
+        // ApiSource::Qobuz => {
+        //     use moosicbox_json_utils::serde_json::ToValue as _;
+        //     let url = format!("{host}/qobuz/track/url{query_string}");
+        //     log::debug!("Fetching track file url from {url}");
 
-            Ok(CLIENT
-                .get(&url)
-                .send()
-                .await?
-                .json::<serde_json::Value>()
-                .await?
-                .to_value::<String>("url")?)
-        }
-        #[cfg(feature = "yt")]
-        ApiSource::Yt => {
-            use moosicbox_json_utils::serde_json::ToValue as _;
-            let url = format!("{host}/yt/track/url{query_string}");
-            log::debug!("Fetching track file url from {url}");
+        //     Ok(CLIENT
+        //         .get(&url)
+        //         .send()
+        //         .await?
+        //         .json::<serde_json::Value>()
+        //         .await?
+        //         .to_value::<String>("url")?)
+        // }
+        // #[cfg(feature = "yt")]
+        // ApiSource::Yt => {
+        //     use moosicbox_json_utils::serde_json::ToValue as _;
+        //     let url = format!("{host}/yt/track/url{query_string}");
+        //     log::debug!("Fetching track file url from {url}");
 
-            Ok(CLIENT
-                .get(&url)
-                .send()
-                .await?
-                .json::<serde_json::Value>()
-                .await?
-                .to_value::<String>("url")?)
-        }
+        //     Ok(CLIENT
+        //         .get(&url)
+        //         .send()
+        //         .await?
+        //         .json::<serde_json::Value>()
+        //         .await?
+        //         .to_value::<String>("url")?)
+        // }
     }?;
 
     Ok((url, headers))
@@ -1528,13 +1522,13 @@ async fn track_to_playable_stream(
     player_source: &PlayerSource,
     abort: CancellationToken,
 ) -> Result<PlayableTrack, PlayerError> {
-    track_id_to_playable_stream(&track.id, track.api_source, quality, player_source, abort).await
+    track_id_to_playable_stream(&track.id, &track.api_source, quality, player_source, abort).await
 }
 
 #[allow(unused)]
 async fn track_id_to_playable_stream(
     track_id: &Id,
-    source: ApiSource,
+    source: &ApiSource,
     quality: PlaybackQuality,
     player_source: &PlayerSource,
     abort: CancellationToken,
@@ -1600,12 +1594,15 @@ async fn track_or_id_to_playable(
     log::trace!(
         "track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}"
     );
-    Ok(match (playback_type, track.api_source) {
-        (PlaybackType::File | PlaybackType::Default, ApiSource::Library) => {
+    Ok(
+        if track.api_source.is_library()
+            && matches!(playback_type, PlaybackType::File | PlaybackType::Default)
+        {
             track_to_playable_file(track, quality).await?
-        }
-        _ => track_to_playable_stream(track, quality, player_source, abort).await?,
-    })
+        } else {
+            track_to_playable_stream(track, quality, player_source, abort).await?
+        },
+    )
 }
 
 async fn handle_retry<

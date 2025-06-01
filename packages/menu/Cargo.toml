@@ -25,10 +25,6 @@ moosicbox_session      = { workspace = true }
 switchy_database       = { workspace = true }
 switchy_time           = { workspace = true, features = ["std"] }
 
-moosicbox_qobuz = { workspace = true, optional = true }
-moosicbox_tidal = { workspace = true, optional = true }
-moosicbox_yt    = { workspace = true, optional = true }
-
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
@@ -39,7 +35,7 @@ thiserror = { workspace = true }
 tokio     = { workspace = true }
 
 [features]
-default = ["all-sources", "api", "local", "openapi"]
+default = ["api", "local", "openapi"]
 
 fail-on-warnings = []
 
@@ -56,34 +52,4 @@ openapi = [
     "moosicbox_library/openapi",
     "moosicbox_menu_models/openapi",
     "moosicbox_music_models/openapi",
-]
-
-all-sources = ["qobuz", "tidal", "yt"]
-
-qobuz = [
-    "dep:moosicbox_qobuz",
-    "moosicbox_library/qobuz",
-    "moosicbox_menu_models/qobuz",
-    "moosicbox_music_models/qobuz",
-    "moosicbox_qobuz/db",
-    "moosicbox_scan/qobuz",
-    "moosicbox_session/qobuz",
-]
-tidal = [
-    "dep:moosicbox_tidal",
-    "moosicbox_library/tidal",
-    "moosicbox_menu_models/tidal",
-    "moosicbox_music_models/tidal",
-    "moosicbox_scan/tidal",
-    "moosicbox_session/tidal",
-    "moosicbox_tidal/db",
-]
-yt = [
-    "dep:moosicbox_yt",
-    "moosicbox_library/yt",
-    "moosicbox_menu_models/yt",
-    "moosicbox_music_models/yt",
-    "moosicbox_scan/yt",
-    "moosicbox_session/yt",
-    "moosicbox_yt/db",
 ]

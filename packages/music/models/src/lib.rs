@@ -2,13 +2,20 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{ops::Deref, path::PathBuf, str::FromStr, sync::LazyLock};
+use std::{
+    collections::BTreeSet,
+    convert::Infallible,
+    path::PathBuf,
+    str::FromStr,
+    sync::{LazyLock, RwLock},
+};
 
-use id::Id;
+use id::{ApiId, Id};
 use moosicbox_date_utils::chrono::{self, NaiveDateTime, parse_date_time};
 use moosicbox_json_utils::{ParseError, ToValueType};
 use serde::{Deserialize, Serialize};
-use strum::{AsRefStr, EnumIter, EnumString, IntoEnumIterator};
+use serde_json::Value;
+use strum::{AsRefStr, EnumString};
 
 pub mod id;
 
@@ -46,55 +53,95 @@ impl FromStr for ArtistSort {
     }
 }
 
-#[derive(
-    Default,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    EnumString,
-    AsRefStr,
-    EnumIter,
-    Eq,
-    PartialEq,
-    Clone,
-    Hash,
-    Ord,
-    PartialOrd,
-)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone, Hash, Ord, PartialOrd)]
+#[serde(transparent)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum ApiSource {
-    #[default]
-    Library,
-    #[cfg(feature = "tidal")]
-    Tidal,
-    #[cfg(feature = "qobuz")]
-    Qobuz,
-    #[cfg(feature = "yt")]
-    Yt,
-}
+// TODO: Potentially make the inner type a `Arc<...>` instead of a `String`
+pub struct ApiSource(String);
+
+pub static LIBRARY_API_SOURCE: LazyLock<ApiSource> =
+    LazyLock::new(|| ApiSource("Library".to_string()));
 
 impl ApiSource {
+    #[must_use]
+    pub fn library() -> Self {
+        LIBRARY_API_SOURCE.clone()
+    }
+
+    #[must_use]
+    pub fn library_ref() -> &'static Self {
+        &LIBRARY_API_SOURCE
+    }
+
+    #[must_use]
+    pub fn is_library(&self) -> bool {
+        self == &*LIBRARY_API_SOURCE
+    }
+
+    #[must_use]
+    pub fn matches_str(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl AsRef<str> for ApiSource {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl Default for ApiSource {
+    fn default() -> Self {
+        LIBRARY_API_SOURCE.clone()
+    }
+}
+
+impl From<&String> for ApiSource {
+    fn from(value: &String) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<&str> for ApiSource {
+    fn from(value: &str) -> Self {
+        value.to_string().into()
+    }
+}
+
+impl From<String> for ApiSource {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<ApiSource> for String {
+    fn from(value: ApiSource) -> Self {
+        value.0
+    }
+}
+
+pub static API_SOURCES: LazyLock<RwLock<BTreeSet<ApiSource>>> =
+    LazyLock::new(|| RwLock::new(BTreeSet::new()));
+
+impl ApiSource {
+    /// # Panics
+    ///
+    /// * If the `API_SOURCES` `RwLock` is poisoned
+    pub fn register(source: impl Into<Self>) {
+        API_SOURCES.write().unwrap().insert(source.into());
+    }
+
+    /// # Panics
+    ///
+    /// * If the `API_SOURCES` `RwLock` is poisoned
     pub fn all() -> impl Iterator<Item = Self> {
-        Self::iter()
-    }
-}
-
-impl TryFrom<&String> for ApiSource {
-    type Error = strum::ParseError;
-
-    fn try_from(value: &String) -> Result<Self, Self::Error> {
-        Self::from_str(value.as_str())
-    }
-}
-
-impl TryFrom<String> for ApiSource {
-    type Error = strum::ParseError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::from_str(value.as_str())
+        API_SOURCES
+            .read()
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
 
@@ -104,21 +151,12 @@ impl std::fmt::Display for ApiSource {
     }
 }
 
-#[derive(
-    Default, Debug, Serialize, Deserialize, EnumString, AsRefStr, Eq, PartialEq, Clone, Copy,
-)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Default, Debug, AsRefStr, Eq, PartialEq, Clone, Ord, PartialOrd)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TrackApiSource {
     #[default]
     Local,
-    #[cfg(feature = "tidal")]
-    Tidal,
-    #[cfg(feature = "qobuz")]
-    Qobuz,
-    #[cfg(feature = "yt")]
-    Yt,
+    Api(ApiSource),
 }
 
 impl TrackApiSource {
@@ -128,17 +166,38 @@ impl TrackApiSource {
             #[allow(unused_mut)]
             let mut all = vec![TrackApiSource::Local];
 
-            #[cfg(feature = "tidal")]
-            all.push(TrackApiSource::Tidal);
-            #[cfg(feature = "qobuz")]
-            all.push(TrackApiSource::Qobuz);
-            #[cfg(feature = "yt")]
-            all.push(TrackApiSource::Yt);
+            all.extend(ApiSource::all().map(TrackApiSource::Api));
 
             all
         });
 
         &ALL
+    }
+}
+
+impl Serialize for TrackApiSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Local => "LOCAL".serialize(serializer),
+            Self::Api(api_source) => format!("API:{api_source}").serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TrackApiSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: Value = Value::deserialize(deserializer)?;
+
+        Ok(value.as_str().map_or_else(
+            || panic!("invalid type"),
+            |value| value.try_into().unwrap_or_else(|_| panic!("invalid type")),
+        ))
     }
 }
 
@@ -148,32 +207,78 @@ impl std::fmt::Display for TrackApiSource {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid track api source")]
+pub struct TryFromStringTrackApiSourceError;
+
 impl TryFrom<&String> for TrackApiSource {
-    type Error = strum::ParseError;
+    type Error = TryFromStringTrackApiSourceError;
 
     fn try_from(value: &String) -> Result<Self, Self::Error> {
-        Self::from_str(value.as_str())
+        value.as_str().try_into()
     }
 }
 
 impl TryFrom<String> for TrackApiSource {
-    type Error = strum::ParseError;
+    type Error = TryFromStringTrackApiSourceError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::from_str(value.as_str())
+        value.as_str().try_into()
+    }
+}
+
+impl TryFrom<&str> for TrackApiSource {
+    type Error = TryFromStringTrackApiSourceError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(if let Some((case, value)) = value.split_once(':') {
+            match case {
+                "API" => Self::Api(value.into()),
+                _ => return Err(TryFromStringTrackApiSourceError),
+            }
+        } else {
+            match value {
+                "LOCAL" => Self::Local,
+                _ => return Err(TryFromStringTrackApiSourceError),
+            }
+        })
+    }
+}
+
+impl FromStr for TrackApiSource {
+    type Err = TryFromStringTrackApiSourceError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value.try_into()
+    }
+}
+
+impl From<&ApiSource> for TrackApiSource {
+    fn from(value: &ApiSource) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<ApiSource> for TrackApiSource {
+    fn from(value: ApiSource) -> Self {
+        Self::Api(value)
+    }
+}
+
+impl From<TrackApiSource> for String {
+    fn from(value: TrackApiSource) -> Self {
+        match value {
+            TrackApiSource::Local => "Local".to_string(),
+            TrackApiSource::Api(source) => source.into(),
+        }
     }
 }
 
 impl From<TrackApiSource> for ApiSource {
     fn from(value: TrackApiSource) -> Self {
         match value {
-            TrackApiSource::Local => Self::Library,
-            #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            TrackApiSource::Yt => Self::Yt,
+            TrackApiSource::Local => LIBRARY_API_SOURCE.clone(),
+            TrackApiSource::Api(source) => source,
         }
     }
 }
@@ -182,12 +287,7 @@ impl From<AlbumSource> for TrackApiSource {
     fn from(value: AlbumSource) -> Self {
         match value {
             AlbumSource::Local => Self::Local,
-            #[cfg(feature = "tidal")]
-            AlbumSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            AlbumSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            AlbumSource::Yt => Self::Yt,
+            AlbumSource::Api(source) => Self::Api(source),
         }
     }
 }
@@ -256,9 +356,7 @@ struct TrackInner {
     sample_rate: Option<u32>,
     channels: Option<u8>,
     source: TrackApiSource,
-    qobuz_id: Option<u64>,
-    tidal_id: Option<u64>,
-    yt_id: Option<String>,
+    api_ids: Vec<ApiId>,
 }
 
 impl<'de> Deserialize<'de> for Track {
@@ -295,23 +393,11 @@ impl From<TrackInner> for Track {
             sample_rate: value.sample_rate,
             channels: value.channels,
             track_source: value.source,
-            api_source: ApiSource::Library,
+            api_source: ApiSource::library(),
             sources: {
-                #[allow(unused_mut)]
                 let mut sources = ApiSources::default();
-                #[cfg(feature = "tidal")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Tidal, value.tidal_id.map(Into::into));
-                }
-                #[cfg(feature = "qobuz")]
-                {
-                    sources =
-                        sources.with_source_opt(ApiSource::Qobuz, value.qobuz_id.map(Into::into));
-                }
-                #[cfg(feature = "yt")]
-                {
-                    sources = sources.with_source_opt(ApiSource::Yt, value.yt_id.map(Into::into));
+                for api_id in value.api_ids {
+                    sources = sources.with_api_id(api_id);
                 }
                 sources
             },
@@ -333,7 +419,7 @@ impl Track {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumVersionQuality {
@@ -345,49 +431,49 @@ pub struct AlbumVersionQuality {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(transparent)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct ApiSourceMapping {
-    pub source: ApiSource,
-    pub id: Id,
-}
-
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub struct ApiSources(Vec<ApiSourceMapping>);
+pub struct ApiSources(BTreeSet<ApiId>);
 
 impl ApiSources {
     pub fn add_source(&mut self, source: ApiSource, id: Id) {
-        self.0.push(ApiSourceMapping { source, id });
+        self.0.insert(ApiId { source, id });
     }
 
-    pub fn remove_source(&mut self, source: ApiSource) {
-        self.0.retain_mut(|x| x.source != source);
+    pub fn remove_source(&mut self, source: &ApiSource) {
+        self.0.retain(|x| &x.source != source);
     }
 
     pub fn add_source_opt(&mut self, source: ApiSource, id: Option<Id>) {
         if let Some(id) = id {
-            self.0.push(ApiSourceMapping { source, id });
+            self.0.insert(ApiId { source, id });
         }
     }
 
     #[must_use]
     pub fn with_source(mut self, source: ApiSource, id: Id) -> Self {
-        self.0.push(ApiSourceMapping { source, id });
+        self.0.insert(ApiId { source, id });
         self
     }
 
     #[must_use]
     pub fn with_source_opt(mut self, source: ApiSource, id: Option<Id>) -> Self {
         if let Some(id) = id {
-            self.0.push(ApiSourceMapping { source, id });
+            self.0.insert(ApiId { source, id });
         }
         self
     }
 
     #[must_use]
-    pub fn get(&self, source: ApiSource) -> Option<&Id> {
-        self.deref().iter().find_map(|x| {
-            if x.source == source {
+    pub fn with_api_id(mut self, api_id: ApiId) -> Self {
+        self.0.insert(api_id);
+        self
+    }
+
+    #[must_use]
+    pub fn get(&self, source: &ApiSource) -> Option<&Id> {
+        self.iter().find_map(|x| {
+            if &x.source == source {
                 Some(&x.id)
             } else {
                 None
@@ -396,11 +482,27 @@ impl ApiSources {
     }
 }
 
-impl Deref for ApiSources {
-    type Target = [ApiSourceMapping];
+impl ApiSources {
+    pub fn iter(&self) -> std::collections::btree_set::Iter<'_, ApiId> {
+        self.0.iter()
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl<'a> IntoIterator for &'a ApiSources {
+    type Item = &'a ApiId;
+    type IntoIter = std::collections::btree_set::Iter<'a, ApiId>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl IntoIterator for ApiSources {
+    type Item = ApiId;
+    type IntoIter = std::collections::btree_set::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -485,29 +587,31 @@ impl TryFrom<Track> for Album {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Default, AsRefStr)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Default, AsRefStr)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum AlbumSource {
     #[default]
     Local,
-    #[cfg(feature = "tidal")]
-    Tidal,
-    #[cfg(feature = "qobuz")]
-    Qobuz,
-    #[cfg(feature = "yt")]
-    Yt,
+    Api(ApiSource),
+}
+
+impl From<&ApiSource> for AlbumSource {
+    fn from(value: &ApiSource) -> Self {
+        value.clone().into()
+    }
+}
+
+impl From<ApiSource> for AlbumSource {
+    fn from(value: ApiSource) -> Self {
+        Self::Api(value)
+    }
 }
 
 impl From<AlbumSource> for ApiSource {
     fn from(value: AlbumSource) -> Self {
         match value {
-            AlbumSource::Local => Self::Library,
-            #[cfg(feature = "tidal")]
-            AlbumSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            AlbumSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            AlbumSource::Yt => Self::Yt,
+            AlbumSource::Local => Self::library(),
+            AlbumSource::Api(source) => source,
         }
     }
 }
@@ -516,29 +620,18 @@ impl From<TrackApiSource> for AlbumSource {
     fn from(value: TrackApiSource) -> Self {
         match value {
             TrackApiSource::Local => Self::Local,
-            #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            TrackApiSource::Yt => Self::Yt,
+            TrackApiSource::Api(source) => Self::Api(source),
         }
     }
 }
 
 impl FromStr for AlbumSource {
-    type Err = ();
+    type Err = Infallible;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input.to_lowercase().as_str() {
             "local" => Ok(Self::Local),
-            #[cfg(feature = "tidal")]
-            "tidal" => Ok(Self::Tidal),
-            #[cfg(feature = "qobuz")]
-            "qobuz" => Ok(Self::Qobuz),
-            #[cfg(feature = "yt")]
-            "yt" => Ok(Self::Yt),
-            _ => Err(()),
+            source => Ok(Self::Api(source.into())),
         }
     }
 }

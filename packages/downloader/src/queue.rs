@@ -548,7 +548,6 @@ impl Drop for DownloadQueue {
     }
 }
 
-#[cfg(feature = "tidal")]
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
@@ -717,7 +716,7 @@ mod tests {
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
                     track_id: 1.into(),
-                    source: DownloadApiSource::Tidal,
+                    source: DownloadApiSource::Api("Tidal".into()),
                     quality: TrackAudioQuality::FlacHighestRes,
                     artist_id: 1.into(),
                     artist: "artist".into(),
@@ -769,7 +768,7 @@ mod tests {
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
                         track_id: 1.into(),
-                        source: DownloadApiSource::Tidal,
+                        source: DownloadApiSource::Api("Tidal".into()),
                         quality: TrackAudioQuality::FlacHighestRes,
                         artist_id: 1.into(),
                         artist: "artist".into(),
@@ -788,7 +787,7 @@ mod tests {
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
                         track_id: 2.into(),
-                        source: DownloadApiSource::Tidal,
+                        source: DownloadApiSource::Api("Tidal".into()),
                         quality: TrackAudioQuality::FlacHighestRes,
                         artist_id: 1.into(),
                         artist: "artist".into(),
@@ -844,7 +843,7 @@ mod tests {
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
                         track_id: 1.into(),
-                        source: DownloadApiSource::Tidal,
+                        source: DownloadApiSource::Api("Tidal".into()),
                         quality: TrackAudioQuality::FlacHighestRes,
                         artist_id: 1.into(),
                         artist: "artist".into(),
@@ -863,7 +862,7 @@ mod tests {
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
                         track_id: 1.into(),
-                        source: DownloadApiSource::Tidal,
+                        source: DownloadApiSource::Api("Tidal".into()),
                         quality: TrackAudioQuality::FlacHighestRes,
                         artist_id: 1.into(),
                         artist: "artist".into(),
@@ -915,7 +914,7 @@ mod tests {
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
                     track_id: 1.into(),
-                    source: DownloadApiSource::Tidal,
+                    source: DownloadApiSource::Api("Tidal".into()),
                     quality: TrackAudioQuality::FlacHighestRes,
                     artist_id: 1.into(),
                     artist: "artist".into(),
@@ -939,7 +938,7 @@ mod tests {
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
                     track_id: 2.into(),
-                    source: DownloadApiSource::Tidal,
+                    source: DownloadApiSource::Api("Tidal".into()),
                     quality: TrackAudioQuality::FlacHighestRes,
                     artist_id: 1.into(),
                     artist: "artist".into(),

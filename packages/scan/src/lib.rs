@@ -37,19 +37,14 @@ pub fn cancel() {
     CANCELLATION_TOKEN.cancel();
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum ScanOrigin {
     #[cfg(feature = "local")]
     Local,
-    #[cfg(feature = "tidal")]
-    Tidal,
-    #[cfg(feature = "qobuz")]
-    Qobuz,
-    #[cfg(feature = "yt")]
-    Yt,
+    Api(ApiSource),
 }
 
 impl From<ScanOrigin> for ApiSource {
@@ -59,29 +54,14 @@ impl From<ScanOrigin> for ApiSource {
             ScanOrigin::Local => {
                 moosicbox_assert::die_or_panic!("Local ScanOrigin cant map to ApiSource")
             }
-            #[cfg(feature = "tidal")]
-            ScanOrigin::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            ScanOrigin::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            ScanOrigin::Yt => Self::Yt,
+            ScanOrigin::Api(source) => source,
         }
     }
 }
 
 impl From<ApiSource> for ScanOrigin {
     fn from(value: ApiSource) -> Self {
-        match value {
-            ApiSource::Library => {
-                moosicbox_assert::die_or_panic!("Library ApiSource cant map to ScanOrigin")
-            }
-            #[cfg(feature = "tidal")]
-            ApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            ApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            ApiSource::Yt => Self::Yt,
-        }
+        Self::Api(value)
     }
 }
 
@@ -98,12 +78,7 @@ impl From<TrackApiSource> for ScanOrigin {
                     moosicbox_assert::die_or_panic!("Local TrackApiSource cant map to ScanOrigin")
                 }
             }
-            #[cfg(feature = "tidal")]
-            TrackApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            TrackApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            TrackApiSource::Yt => Self::Yt,
+            TrackApiSource::Api(source) => Self::Api(source),
         }
     }
 }
@@ -113,12 +88,7 @@ impl From<ScanOrigin> for TrackApiSource {
         match value {
             #[cfg(feature = "local")]
             ScanOrigin::Local => Self::Local,
-            #[cfg(feature = "tidal")]
-            ScanOrigin::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            ScanOrigin::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            ScanOrigin::Yt => Self::Yt,
+            ScanOrigin::Api(source) => Self::Api(source),
         }
     }
 }
@@ -134,7 +104,7 @@ async fn get_origins_or_default(
         origins
             .iter()
             .filter(|o| enabled_origins.iter().any(|enabled| enabled == *o))
-            .copied()
+            .cloned()
             .collect::<Vec<_>>()
     } else {
         enabled_origins
@@ -283,7 +253,7 @@ impl Scanner {
             #[cfg(feature = "local")]
             ScanTask::Local { paths } => self.scan_local(db, paths).await?,
             ScanTask::Api { origin } => {
-                self.scan_music_api(&**music_apis.get((*origin).into())?, db)
+                self.scan_music_api(&**music_apis.get(&origin.clone().into())?, db)
                     .await?;
             }
         }
@@ -330,9 +300,11 @@ impl Scanner {
         db: &LibraryDatabase,
     ) -> Result<(), music_api::ScanError> {
         let enabled_origins = get_enabled_scan_origins(db).await?;
-        let enabled = enabled_origins
-            .into_iter()
-            .any(|origin| origin == api.source().into());
+        let enabled = enabled_origins.into_iter().any(|origin| match origin {
+            #[cfg(feature = "local")]
+            ScanOrigin::Local => false,
+            ScanOrigin::Api(source) => &source == api.source(),
+        });
         let scanner = self.clone();
 
         if !enabled {
@@ -361,16 +333,16 @@ pub async fn get_scan_origins(db: &LibraryDatabase) -> Result<Vec<ScanOrigin>, D
 /// * If a database error occurs
 pub async fn enable_scan_origin(
     db: &LibraryDatabase,
-    origin: ScanOrigin,
+    origin: &ScanOrigin,
 ) -> Result<(), DatabaseFetchError> {
     #[cfg(feature = "local")]
-    if origin == ScanOrigin::Local {
+    if origin == &ScanOrigin::Local {
         return Ok(());
     }
 
     let locations = db::get_scan_locations(db).await?;
 
-    if locations.iter().any(|location| location.origin == origin) {
+    if locations.iter().any(|location| &location.origin == origin) {
         return Ok(());
     }
 
@@ -382,11 +354,11 @@ pub async fn enable_scan_origin(
 /// * If a database error occurs
 pub async fn disable_scan_origin(
     db: &LibraryDatabase,
-    origin: ScanOrigin,
+    origin: &ScanOrigin,
 ) -> Result<(), DatabaseFetchError> {
     let locations = db::get_scan_locations(db).await?;
 
-    if locations.iter().all(|location| location.origin != origin) {
+    if locations.iter().all(|location| &location.origin != origin) {
         return Ok(());
     }
 

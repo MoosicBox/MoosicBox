@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use moosicbox_json_utils::{ParseError, ToValueType, serde_json::ToValue};
 use moosicbox_music_api::models::TrackAudioQuality;
-use moosicbox_music_models::id::Id;
+use moosicbox_music_models::{ApiSource, id::Id};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 
@@ -152,24 +152,14 @@ impl From<ApiDownloadTaskState> for DownloadTaskState {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApiDownloadApiSource {
     MoosicBox(String),
-    #[cfg(feature = "tidal")]
-    Tidal,
-    #[cfg(feature = "qobuz")]
-    Qobuz,
-    #[cfg(feature = "yt")]
-    Yt,
+    Api(ApiSource),
 }
 
 impl From<DownloadApiSource> for ApiDownloadApiSource {
     fn from(value: DownloadApiSource) -> Self {
         match value {
             DownloadApiSource::MoosicBox(host) => Self::MoosicBox(host),
-            #[cfg(feature = "tidal")]
-            DownloadApiSource::Tidal => Self::Tidal,
-            #[cfg(feature = "qobuz")]
-            DownloadApiSource::Qobuz => Self::Qobuz,
-            #[cfg(feature = "yt")]
-            DownloadApiSource::Yt => Self::Yt,
+            DownloadApiSource::Api(source) => Self::Api(source),
         }
     }
 }

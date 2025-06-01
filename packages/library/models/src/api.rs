@@ -34,7 +34,7 @@ impl From<LibraryAlbum> for ApiAlbum {
             blur: value.blur,
             versions: value.versions,
             album_source: value.source,
-            api_source: ApiSource::Library,
+            api_source: ApiSource::library(),
             artist_sources: value.artist_sources,
             album_sources: value.album_sources,
         }
@@ -78,7 +78,7 @@ impl From<ApiLibraryAlbum> for ApiAlbum {
                 .map(Into::into)
                 .collect::<Vec<_>>(),
             album_source: value.source,
-            api_source: ApiSource::Library,
+            api_source: ApiSource::library(),
             album_sources: value.album_sources,
             artist_sources: value.artist_sources,
         }
@@ -114,7 +114,7 @@ impl TryFrom<ApiLibraryAlbum> for Album {
             blur: value.blur,
             versions: vec![],
             album_source: value.source,
-            api_source: ApiSource::Library,
+            api_source: ApiSource::library(),
             album_sources: value.album_sources,
             artist_sources: value.artist_sources,
         })
@@ -208,9 +208,8 @@ impl From<ApiLibraryTrack> for LibraryTrack {
             channels: value.channels,
             source: value.source,
             api_source: value.api_source,
-            qobuz_id: None,
-            tidal_id: None,
-            yt_id: None,
+            api_sources: ApiSources::default()
+                .with_source(ApiSource::library(), value.track_id.into()),
         }
     }
 }
@@ -240,8 +239,8 @@ impl From<ApiLibraryTrack> for Track {
             sample_rate: value.sample_rate,
             channels: value.channels,
             track_source: value.source,
-            api_source: ApiSource::Library,
-            sources: ApiSources::default().with_source(ApiSource::Library, value.track_id.into()),
+            api_source: ApiSource::library(),
+            sources: ApiSources::default().with_source(ApiSource::library(), value.track_id.into()),
         }
     }
 }

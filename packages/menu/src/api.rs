@@ -19,7 +19,7 @@ use moosicbox_music_api::{
 use moosicbox_music_models::{
     AlbumSort, AlbumSource, AlbumType, ApiSource, ArtistSort,
     api::{ApiAlbum, ApiArtist, ApiTrack},
-    id::{Id, IdType, ParseIntegersError, parse_integer_ranges_to_ids},
+    id::{ApiId, Id, ParseIntegersError, parse_integer_ranges_to_ids},
 };
 use moosicbox_paging::{Page, PagingRequest};
 use serde::Deserialize;
@@ -33,7 +33,7 @@ use crate::library::{
         remove_album,
     },
     artists::{ArtistFilters, ArtistsRequest, get_all_artists},
-    get_album_from_source, get_artist, get_artist_albums, get_library_album,
+    get_album_from_source, get_artist, get_artist_albums,
 };
 
 pub fn bind_services<
@@ -82,21 +82,13 @@ pub fn bind_services<
 )]
 pub struct Api;
 
-fn album_id_for_source(id: &str, source: ApiSource) -> Result<Id, actix_web::Error> {
-    Ok(match source {
-        ApiSource::Library => id
-            .parse::<i32>()
+fn album_id_for_source(id: &str, source: &ApiSource) -> Result<Id, actix_web::Error> {
+    Ok(if source.is_library() {
+        id.parse::<i32>()
             .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?
-            .into(),
-        #[cfg(feature = "tidal")]
-        ApiSource::Tidal => id
-            .parse::<u64>()
-            .map_err(|_| ErrorBadRequest(format!("Bad Tidal album_id {id}")))?
-            .into(),
-        #[cfg(feature = "qobuz")]
-        ApiSource::Qobuz => id.to_string().into(),
-        #[cfg(feature = "yt")]
-        ApiSource::Yt => id.to_string().into(),
+            .into()
+    } else {
+        id.to_string().into()
     })
 }
 
@@ -196,8 +188,7 @@ pub struct GetAlbumsQuery {
     artist: Option<String>,
     search: Option<String>,
     artist_id: Option<String>,
-    tidal_artist_id: Option<u64>,
-    qobuz_artist_id: Option<u64>,
+    api_source: Option<ApiSource>,
     offset: Option<u32>,
     limit: Option<u32>,
 }
@@ -210,7 +201,7 @@ pub struct GetAlbumsQuery {
         description = "Get the albums for the specified criteria",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("source" = Option<ApiSource>, Query, description = "API Source to fetch the albums from"),
+            ("sources" = Option<ApiSource>, Query, description = "ApiSources to fetch the albums from"),
             ("albumType" = Option<AlbumType>, Query, description = "Album type to filter by"),
             ("sources" = Option<String>, Query, description = "List of API sources to filter by"),
             ("sort" = Option<String>, Query, description = "Order to sort by"),
@@ -218,8 +209,7 @@ pub struct GetAlbumsQuery {
             ("artist" = Option<String>, Query, description = "Artist name to filter by"),
             ("search" = Option<String>, Query, description = "Query to generically search by"),
             ("artistId" = Option<String>, Query, description = "Artist ID to filter by"),
-            ("tidalArtistId" = Option<i32>, Query, description = "Tidal artist ID to filter by"),
-            ("qobuzArtistId" = Option<i32>, Query, description = "Qobuz artist ID to filter by"),
+            ("apiSource" = Option<ApiSource>, Query, description = "ApiSource to search the artist by"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -238,7 +228,11 @@ pub async fn get_albums_endpoint(
     music_apis: MusicApis,
     db: LibraryDatabase,
 ) -> Result<Json<Page<ApiAlbum>>> {
-    let source = query.source.unwrap_or(ApiSource::Library);
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let artist_id = query
+        .artist_id
+        .as_ref()
+        .and_then(|x| Id::try_from_str(x.as_str(), &source).ok());
 
     let request = AlbumsRequest {
         page: if query.offset.is_some() || query.limit.is_some() {
@@ -276,16 +270,23 @@ pub async fn get_albums_endpoint(
             artist: query.artist.clone().map(|s| s.to_lowercase()),
             search: query.search.clone().map(|s| s.to_lowercase()),
             album_type: query.album_type,
-            artist_id: query
-                .artist_id
+            artist_id: artist_id.clone(),
+            artist_api_id: query
+                .api_source
                 .as_ref()
-                .and_then(|x| Id::try_from_str(x.as_str(), source, IdType::Artist).ok()),
-            tidal_artist_id: query.tidal_artist_id.map(Into::into),
-            qobuz_artist_id: query.qobuz_artist_id.map(Into::into),
+                .map(|x| {
+                    artist_id
+                        .ok_or_else(|| ErrorBadRequest("Invalid artist_id"))
+                        .map(|id| ApiId {
+                            source: x.clone(),
+                            id,
+                        })
+                })
+                .transpose()?,
         }),
     };
 
-    let api = music_apis.get(source).map_err(ErrorBadRequest)?;
+    let api = music_apis.get(&source).map_err(ErrorBadRequest)?;
 
     Ok(Json(
         get_albums_from_source(&db, &**api, request)
@@ -428,8 +429,8 @@ pub async fn get_album_versions_endpoint(
     library_api: LibraryMusicApi,
     db: LibraryDatabase,
 ) -> Result<Json<Vec<ApiAlbumVersion>>> {
-    let source = query.source.unwrap_or(ApiSource::Library);
-    let id = Id::try_from_str(&query.album_id, source, IdType::Album).map_err(ErrorBadRequest)?;
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let id = Id::try_from_str(&query.album_id, &source).map_err(ErrorBadRequest)?;
     Ok(Json(
         get_album_versions_from_source(&db, &library_api, &id, source)
             .await
@@ -526,20 +527,20 @@ pub async fn get_artist_endpoint(
     query: web::Query<GetArtistQuery>,
     music_apis: MusicApis,
 ) -> Result<Json<ApiArtist>> {
-    let source = query.source.unwrap_or(ApiSource::Library);
-    let api = music_apis.get(source).map_err(ErrorBadRequest)?;
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let api = music_apis.get(&source).map_err(ErrorBadRequest)?;
     Ok(Json(
         get_artist(
             &**api,
             query
                 .artist_id
                 .as_ref()
-                .and_then(|x| Id::try_from_str(x, source, IdType::Artist).ok())
+                .and_then(|x| Id::try_from_str(x, &source).ok())
                 .as_ref(),
             query
                 .album_id
                 .as_ref()
-                .and_then(|x| Id::try_from_str(x, source, IdType::Album).ok())
+                .and_then(|x| Id::try_from_str(x, &source).ok())
                 .as_ref(),
         )
         .await?
@@ -551,9 +552,7 @@ pub async fn get_artist_endpoint(
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAlbumQuery {
-    album_id: Option<String>,
-    tidal_album_id: Option<String>,
-    qobuz_album_id: Option<String>,
+    album_id: String,
     source: Option<ApiSource>,
 }
 
@@ -565,9 +564,7 @@ pub struct GetAlbumQuery {
         description = "Get the album for the specified criteria",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("albumId" = Option<String>, Query, description = "Album ID to filter by"),
-            ("tidalAlbumId" = Option<String>, Query, description = "Tidal album ID to filter by"),
-            ("qobuzAlbumId" = Option<String>, Query, description = "Qobuz album ID to filter by"),
+            ("albumId" = String, Query, description = "Album ID to filter by"),
             ("source" = Option<ApiSource>, Query, description = "Album source to retrieve"),
         ),
         responses(
@@ -584,51 +581,16 @@ pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<ApiAlbum>> {
-    Ok(Json(if let Some(id) = &query.album_id {
-        let source = query.source.unwrap_or(ApiSource::Library);
-        let id = Id::try_from_str(id, source, IdType::Album).map_err(ErrorBadRequest)?;
-        get_album_from_source(&db, &id, source)
+    let source = query.source.clone().unwrap_or_else(ApiSource::library);
+    let id = Id::try_from_str(&query.album_id, &source).map_err(ErrorBadRequest)?;
+
+    Ok(Json(
+        get_album_from_source(&db, &id, &source)
             .await
             .map_err(ErrorInternalServerError)?
             .ok_or_else(|| ErrorNotFound("Album not found"))?
-            .into()
-    } else {
-        #[allow(unused)]
-        let (id, source) = if let Some(id) = &query.tidal_album_id {
-            #[cfg(feature = "tidal")]
-            {
-                (
-                    Id::try_from_str(id, ApiSource::Tidal, IdType::Album)
-                        .map_err(ErrorBadRequest)?,
-                    ApiSource::Tidal,
-                )
-            }
-            #[cfg(not(feature = "tidal"))]
-            return Err(ErrorNotFound("Unsupported ApiSource"));
-        } else if let Some(id) = &query.qobuz_album_id {
-            #[cfg(feature = "qobuz")]
-            {
-                (
-                    Id::try_from_str(id, ApiSource::Qobuz, IdType::Album)
-                        .map_err(ErrorBadRequest)?,
-                    ApiSource::Qobuz,
-                )
-            }
-            #[cfg(not(feature = "qobuz"))]
-            return Err(ErrorNotFound("Unsupported ApiSource"));
-        } else {
-            return Err(ErrorNotFound("Album not found"));
-        };
-
-        #[allow(unreachable_code)]
-        {
-            get_library_album(&db, &id, source)
-                .await
-                .map_err(ErrorInternalServerError)?
-                .ok_or_else(|| ErrorNotFound("Album not found"))?
-                .into()
-        }
-    }))
+            .into(),
+    ))
 }
 
 #[derive(Deserialize, Clone)]
@@ -669,11 +631,11 @@ pub async fn add_album_endpoint(
     Ok(Json(
         add_album(
             &**music_apis
-                .get(query.source)
+                .get(&query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,
             &db,
-            &album_id_for_source(&query.album_id, query.source)?,
+            &album_id_for_source(&query.album_id, &query.source)?,
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to add album: {e:?}")))?
@@ -719,11 +681,11 @@ pub async fn remove_album_endpoint(
     Ok(Json(
         remove_album(
             &**music_apis
-                .get(query.source)
+                .get(&query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,
             &db,
-            &album_id_for_source(&query.album_id, query.source)?,
+            &album_id_for_source(&query.album_id, &query.source)?,
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to remove album: {e:?}")))?
@@ -769,11 +731,11 @@ pub async fn refavorite_album_endpoint(
     Ok(Json(
         refavorite_album(
             &**music_apis
-                .get(query.source)
+                .get(&query.source)
                 .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
             &library_api,
             &db,
-            &album_id_for_source(&query.album_id, query.source)?,
+            &album_id_for_source(&query.album_id, &query.source)?,
         )
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to re-favorite album: {e:?}")))?
