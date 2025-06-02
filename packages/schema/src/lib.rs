@@ -360,7 +360,9 @@ mod sqlite_tests {
                 (1, 1, 1, 'title1', 10, 'file1', 'FLAC', 'LOCAL', '123', '456'),
                 (2, 2, 2, 'title2', 13, 'file2', 'FLAC', 'LOCAL', '789', NULL),
                 (3, 3, 3, 'title3', 19, 'file3', 'FLAC', 'LOCAL', NULL, '101112'),
-                (4, 4, 4, 'title4', 15, 'file4', 'FLAC', 'LOCAL', NULL, NULL);
+                (4, 4, 4, 'title4', 15, 'file4', 'FLAC', 'LOCAL', NULL, NULL),
+                (5, 4, 4, 'title4', 15, NULL, 'SOURCE', 'LOCAL', '123', NULL),
+                (6, 4, 4, 'title4', 15, NULL, 'SOURCE', 'LOCAL', NULL, '123');
         ",
         )
         .await
@@ -476,12 +478,20 @@ mod sqlite_tests {
         // Verify tracks migration
         let tracks = db
             .select("tracks")
-            .columns(&[&API_SOURCES_COLUMN.replace("{table}", "tracks")])
+            .columns(&["id", &API_SOURCES_COLUMN.replace("{table}", "tracks")])
+            .sort("id", switchy_database::query::SortDirection::Asc)
             .execute(&*db)
             .await
             .unwrap();
 
-        assert_eq!(tracks.len(), 4);
+        assert_eq!(tracks.len(), 5);
+        assert_eq!(
+            tracks
+                .iter()
+                .filter_map(|x| x.get("id").and_then(|x| x.as_u64()))
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3, 4, 6]
+        );
         assert_eq!(
             <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
                 tracks[0].get("api_sources").unwrap()
@@ -523,6 +533,21 @@ mod sqlite_tests {
             )
             .unwrap(),
             ApiSources::default()
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[4].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+                .with_api_id(ApiId {
+                    source: "Tidal".into(),
+                    id: Id::String("123".into())
+                })
+                .with_api_id(ApiId {
+                    source: "Qobuz".into(),
+                    id: Id::String("123".into())
+                })
         );
     }
 }
