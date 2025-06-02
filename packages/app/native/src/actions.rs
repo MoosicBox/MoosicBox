@@ -297,7 +297,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
                         .get(PROFILE)
                         .unwrap()
                         .get(api_source)
-                        .map_err(|e| AppStateError::unknown(e.to_string()))?;
+                        .ok_or_else(|| AppStateError::unknown("Invalid source"))?;
                     let versions = api
                         .album_versions(album_id, None, None)
                         .await
@@ -378,7 +378,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
                         .get(PROFILE)
                         .unwrap()
                         .get(api_source)
-                        .map_err(|e| AppStateError::unknown(e.to_string()))?;
+                        .ok_or_else(|| AppStateError::unknown("Invalid source"))?;
                     let tracks = api
                         .tracks(Some(track_ids), None, None, None, None)
                         .await

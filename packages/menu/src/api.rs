@@ -286,7 +286,9 @@ pub async fn get_albums_endpoint(
         }),
     };
 
-    let api = music_apis.get(&source).map_err(ErrorBadRequest)?;
+    let api = music_apis
+        .get(&source)
+        .ok_or_else(|| ErrorBadRequest("Invalid source"))?;
 
     Ok(Json(
         get_albums_from_source(&db, &**api, request)
@@ -528,7 +530,9 @@ pub async fn get_artist_endpoint(
     music_apis: MusicApis,
 ) -> Result<Json<ApiArtist>> {
     let source = query.source.clone().unwrap_or_else(ApiSource::library);
-    let api = music_apis.get(&source).map_err(ErrorBadRequest)?;
+    let api = music_apis
+        .get(&source)
+        .ok_or_else(|| ErrorBadRequest("Invalid source"))?;
     Ok(Json(
         get_artist(
             &**api,
@@ -632,7 +636,7 @@ pub async fn add_album_endpoint(
         add_album(
             &**music_apis
                 .get(&query.source)
-                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+                .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
             &library_api,
             &db,
             &album_id_for_source(&query.album_id, &query.source)?,
@@ -682,7 +686,7 @@ pub async fn remove_album_endpoint(
         remove_album(
             &**music_apis
                 .get(&query.source)
-                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+                .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
             &library_api,
             &db,
             &album_id_for_source(&query.album_id, &query.source)?,
@@ -732,7 +736,7 @@ pub async fn refavorite_album_endpoint(
         refavorite_album(
             &**music_apis
                 .get(&query.source)
-                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+                .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
             &library_api,
             &db,
             &album_id_for_source(&query.album_id, &query.source)?,

@@ -122,6 +122,8 @@ pub enum ScanError {
     MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     ScanMusicApi(#[from] music_api::ScanError),
+    #[error("Invalid source")]
+    InvalidSource,
 }
 
 #[derive(Clone)]
@@ -253,8 +255,13 @@ impl Scanner {
             #[cfg(feature = "local")]
             ScanTask::Local { paths } => self.scan_local(db, paths).await?,
             ScanTask::Api { origin } => {
-                self.scan_music_api(&**music_apis.get(&origin.clone().into())?, db)
-                    .await?;
+                self.scan_music_api(
+                    &**music_apis
+                        .get(&origin.clone().into())
+                        .ok_or(ScanError::InvalidSource)?,
+                    db,
+                )
+                .await?;
             }
         }
 

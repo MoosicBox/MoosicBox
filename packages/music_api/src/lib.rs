@@ -61,13 +61,8 @@ impl From<Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>> for MusicApis {
 }
 
 impl SourceToMusicApi for MusicApis {
-    fn get(&self, source: &ApiSource) -> Result<Arc<Box<dyn MusicApi>>, Error> {
-        let api = self
-            .0
-            .get(source)
-            .ok_or_else(|| Error::MusicApiNotFound(source.clone()))?;
-
-        Ok(api.clone())
+    fn get(&self, source: &ApiSource) -> Option<Arc<Box<dyn MusicApi>>> {
+        self.0.get(source).cloned()
     }
 }
 
@@ -109,7 +104,7 @@ pub trait SourceToMusicApi {
     /// # Errors
     ///
     /// * If the `MusicApi` is not found
-    fn get(&self, source: &ApiSource) -> Result<Arc<Box<dyn MusicApi>>, Error>;
+    fn get(&self, source: &ApiSource) -> Option<Arc<Box<dyn MusicApi>>>;
 }
 
 #[derive(Debug, thiserror::Error)]

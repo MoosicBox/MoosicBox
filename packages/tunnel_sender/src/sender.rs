@@ -1514,8 +1514,11 @@ impl TunnelSender {
                     headers.insert("content-type".to_string(), "application/json".to_string());
 
                     let music_apis = music_apis.ok_or(TunnelRequestError::MissingProfile)?;
-                    let api =
-                        music_apis.get(&query.source.clone().unwrap_or_else(ApiSource::library))?;
+                    let api = music_apis
+                        .get(&query.source.clone().unwrap_or_else(ApiSource::library))
+                        .ok_or_else(|| {
+                            TunnelRequestError::BadRequest("Invalid source".to_string())
+                        })?;
 
                     if let Ok(track_info) = get_track_info(&**api, &query.track_id.into()).await {
                         let mut bytes: Vec<u8> = Vec::new();
@@ -1566,7 +1569,10 @@ impl TunnelSender {
                             let music_apis =
                                 music_apis.ok_or(TunnelRequestError::MissingProfile)?;
                             let api = music_apis
-                                .get(&query.source.clone().unwrap_or_else(ApiSource::library))?;
+                                .get(&query.source.clone().unwrap_or_else(ApiSource::library))
+                                .ok_or_else(|| {
+                                    TunnelRequestError::BadRequest("Invalid source".to_string())
+                                })?;
 
                             let album = api
                                 .album(&album_id)

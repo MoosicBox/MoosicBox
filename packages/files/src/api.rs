@@ -368,7 +368,7 @@ pub async fn track_endpoint(
     let bytes = get_track_bytes(
         &**music_apis
             .get(&query.source.clone().unwrap_or_else(ApiSource::library))
-            .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+            .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
         &Id::Number(query.track_id),
         source,
         format,
@@ -485,7 +485,7 @@ pub async fn track_info_endpoint(
         get_track_info(
             &**music_apis
                 .get(&query.source.clone().unwrap_or_else(ApiSource::library))
-                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+                .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
             &query.track_id,
         )
         .await?,
@@ -542,7 +542,7 @@ pub async fn tracks_info_endpoint(
         get_tracks_info(
             &**music_apis
                 .get(&query.source.clone().unwrap_or_else(ApiSource::library))
-                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+                .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
             &ids,
         )
         .await?,
@@ -609,7 +609,7 @@ pub async fn track_urls_endpoint(
 
     let api = music_apis
         .get(&source)
-        .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?;
+        .ok_or_else(|| ErrorBadRequest("Invalid source"))?;
 
     let mut urls = vec![];
 
@@ -693,7 +693,7 @@ pub async fn artist_source_artwork_endpoint(
     let size = ImageCoverSize::Max;
     let api = music_apis
         .get(&source)
-        .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
+        .ok_or_else(|| ErrorBadRequest("Invalid source"))?;
     let artist = api
         .artist(&artist_id)
         .await
@@ -767,7 +767,7 @@ pub async fn artist_cover_endpoint(
     let size = u16::try_from(std::cmp::max(width, height)).unwrap().into();
     let api = music_apis
         .get(&source)
-        .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
+        .ok_or_else(|| ErrorBadRequest("Invalid source"))?;
     let artist = api
         .artist(&artist_id)
         .await
@@ -847,7 +847,7 @@ pub async fn album_source_artwork_endpoint(
     let size = ImageCoverSize::Max;
     let api = music_apis
         .get(&source)
-        .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
+        .ok_or_else(|| ErrorBadRequest("Invalid source"))?;
     let album = api
         .album(&album_id)
         .await
@@ -921,7 +921,7 @@ pub async fn album_artwork_endpoint(
     let size = u16::try_from(std::cmp::max(width, height)).unwrap().into();
     let api = music_apis
         .get(&source)
-        .map_err(|e| ErrorInternalServerError(format!("Failed to get music_api: {e:?}")))?;
+        .ok_or_else(|| ErrorBadRequest("Invalid source"))?;
     let album = api
         .album(&album_id)
         .await

@@ -164,7 +164,9 @@ fn music_api_from_source(
             ApiSource::library(),
             PROFILE.to_string(),
         ))),
-        DownloadApiSource::Api(source) => music_apis.get(&source)?,
+        DownloadApiSource::Api(source) => music_apis
+            .get(&source)
+            .ok_or_else(|| moosicbox_music_api::Error::MusicApiNotFound(source.clone()))?,
     })
 }
 

@@ -360,7 +360,9 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
         if req.query.get("full").map(String::as_str) == Some("true") {
             let state = convert_state(&STATE).await;
             let album_id = album_id.into();
-            let api = PROFILES.get(PROFILE).unwrap().get(&source)?;
+            let api = PROFILES.get(PROFILE).unwrap().get(&source).ok_or_else(|| {
+                RouteError::MusicApi(moosicbox_music_api::Error::MusicApiNotFound(source.clone()))
+            })?;
             let album = api
                 .album(&album_id)
                 .await?

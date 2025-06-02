@@ -291,7 +291,7 @@ pub async fn play_album_endpoint(
         .play_album(
             &**music_apis
                 .get(&source)
-                .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+                .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
             query.session_id,
             profile.into(),
             &album_id,
@@ -359,7 +359,7 @@ pub async fn play_track_endpoint(
     let track_id = get_track_or_ids_from_track_id_ranges(
         &**music_apis
             .get(&query.source.clone().unwrap_or_else(ApiSource::library))
-            .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+            .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
         query.track_id.to_string().as_str(),
     )
     .await?
@@ -438,7 +438,7 @@ pub async fn play_tracks_endpoint(
     let track_ids = get_track_or_ids_from_track_id_ranges(
         &**music_apis
             .get(&query.source.clone().unwrap_or_else(ApiSource::library))
-            .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+            .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
         &query.track_ids,
     )
     .await?;
@@ -598,7 +598,7 @@ pub async fn update_playback_endpoint(
             get_track_or_ids_from_track_id_ranges(
                 &**music_apis
                     .get(&query.source.clone().unwrap_or_else(ApiSource::library))
-                    .map_err(|e| ErrorBadRequest(format!("Invalid source: {e:?}")))?,
+                    .ok_or_else(|| ErrorBadRequest("Invalid source"))?,
                 track_ids,
             )
             .await?,
