@@ -252,6 +252,21 @@ impl From<&Track> for TrackOrId {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum AuthenticationError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
+#[async_trait]
+pub trait AuthenticatedMusicApi: MusicApi {
+    async fn authenticate(&self) -> Result<(), AuthenticationError>;
+
+    fn is_logged_in(&self) -> bool;
+
+    async fn logout(&self) -> Result<(), AuthenticationError>;
+}
+
 #[async_trait]
 pub trait MusicApi: Send + Sync {
     fn source(&self) -> &ApiSource;
