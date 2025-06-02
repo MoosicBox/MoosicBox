@@ -55,6 +55,62 @@ impl DatabaseValue {
             _ => None,
         }
     }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            Self::Number(value) | Self::NumberOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    /// # Panics
+    ///
+    /// * If the value is an i64 and is negative
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            Self::UNumber(value) | Self::UNumberOpt(Some(value)) => Some(*value),
+            Self::Number(value) | Self::NumberOpt(Some(value)) => Some(
+                #[allow(clippy::cast_sign_loss)]
+                if *value >= 0 {
+                    *value as u64
+                } else {
+                    panic!("DatabaseValue::as_u64: value is negative")
+                },
+            ),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Self::Real(value) | Self::RealOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_datetime(&self) -> Option<NaiveDateTime> {
+        match self {
+            Self::DateTime(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Bool(value) | Self::BoolOpt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
 }
 
 impl<T: Into<Self>> From<Option<T>> for DatabaseValue {
