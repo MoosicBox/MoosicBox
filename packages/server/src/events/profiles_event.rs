@@ -9,10 +9,19 @@ use moosicbox_profiles::events::{
 };
 use switchy_database::{Database, config::ConfigDatabase};
 
+#[derive(Debug, thiserror::Error)]
+pub enum AddProfileError {
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
+    #[cfg(feature = "tidal")]
+    #[error(transparent)]
+    TidalConfig(#[from] moosicbox_tidal::TidalConfigError),
+}
+
 async fn add_profile(
     #[allow(unused)] app_type: AppType,
     profile: &str,
-) -> Result<(), DatabaseFetchError> {
+) -> Result<(), AddProfileError> {
     log::debug!("add_profile: app_type={app_type} profile={profile}");
 
     #[cfg(feature = "sqlite")]
@@ -64,7 +73,10 @@ async fn add_profile(
         moosicbox_tidal::API_SOURCE.clone(),
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             #[allow(clippy::redundant_clone)]
-            moosicbox_tidal::TidalMusicApi::new(library_database.clone()),
+            moosicbox_tidal::TidalMusicApi::builder()
+                .with_db(library_database.clone())
+                .build()
+                .await?,
         ))),
     );
     #[cfg(feature = "qobuz")]

@@ -55,7 +55,7 @@ pub async fn delete_tidal_config(
 }
 
 #[derive(Debug, Error)]
-pub enum TidalConfigError {
+pub enum GetTidalConfigError {
     #[error(transparent)]
     Database(#[from] DatabaseError),
     #[error(transparent)]
@@ -67,7 +67,7 @@ pub enum TidalConfigError {
 /// * If a database error occurs
 pub async fn get_tidal_config(
     db: &LibraryDatabase,
-) -> Result<Option<TidalConfig>, TidalConfigError> {
+) -> Result<Option<TidalConfig>, GetTidalConfigError> {
     let mut configs = db
         .select("tidal_config")
         .execute(&**db)
@@ -84,7 +84,7 @@ pub async fn get_tidal_config(
 /// * If a database error occurs
 pub async fn get_tidal_access_tokens(
     db: &LibraryDatabase,
-) -> Result<Option<(String, String)>, TidalConfigError> {
+) -> Result<Option<(String, String)>, GetTidalConfigError> {
     Ok(get_tidal_config(db)
         .await?
         .map(|c| (c.access_token.clone(), c.refresh_token)))
@@ -95,6 +95,6 @@ pub async fn get_tidal_access_tokens(
 /// * If a database error occurs
 pub async fn get_tidal_access_token(
     db: &LibraryDatabase,
-) -> Result<Option<String>, TidalConfigError> {
+) -> Result<Option<String>, GetTidalConfigError> {
     Ok(get_tidal_access_tokens(db).await?.map(|c| c.0))
 }

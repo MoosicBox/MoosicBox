@@ -9,7 +9,7 @@ pub mod db;
 
 pub mod models;
 
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, atomic::AtomicBool};
 
 use itertools::Itertools as _;
 use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
@@ -27,8 +27,8 @@ use moosicbox_json_utils::{
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
-    TrackError, TrackOrId, TracksError,
+    ArtistError, ArtistsError, AuthenticatedMusicApi, AuthenticationError, MusicApi,
+    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrId, TracksError,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
@@ -299,7 +299,7 @@ struct TidalCredentials {
 pub enum FetchCredentialsError {
     #[cfg(feature = "db")]
     #[error(transparent)]
-    TidalConfig(#[from] db::TidalConfigError),
+    TidalConfig(#[from] db::GetTidalConfigError),
     #[error("No access token available")]
     NoAccessTokenAvailable,
 }
@@ -2322,29 +2322,101 @@ impl From<TidalRemoveFavoriteTrackError> for RemoveTrackError {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum TidalConfigError {
+    #[cfg(feature = "db")]
+    #[error("Missing Db")]
+    MissingDb,
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    GetTidalConfig(#[from] db::GetTidalConfigError),
+}
+
+#[derive(Default)]
+pub struct TidalMusicApiBuilder {
+    #[cfg(feature = "db")]
+    db: Option<LibraryDatabase>,
+}
+
+impl TidalMusicApiBuilder {
+    #[cfg(feature = "db")]
+    #[must_use]
+    pub fn with_db(mut self, db: LibraryDatabase) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    #[cfg(feature = "db")]
+    pub fn db(&mut self, db: LibraryDatabase) -> &mut Self {
+        self.db = Some(db);
+        self
+    }
+
+    /// # Errors
+    ///
+    /// * If the `db` is missing
+    #[allow(clippy::unused_async)]
+    pub async fn build(self) -> Result<TidalMusicApi, TidalConfigError> {
+        #[cfg(feature = "db")]
+        let db = self.db.ok_or(TidalConfigError::MissingDb)?;
+
+        #[cfg(not(feature = "db"))]
+        let logged_in = false;
+        #[cfg(feature = "db")]
+        let logged_in = crate::db::get_tidal_config(&db)
+            .await
+            .is_ok_and(|x| x.is_some());
+
+        let logged_in = Arc::new(AtomicBool::new(logged_in));
+
+        Ok(TidalMusicApi {
+            #[cfg(feature = "db")]
+            db,
+            logged_in,
+        })
+    }
+}
+
 pub struct TidalMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
+    logged_in: Arc<AtomicBool>,
 }
 
 impl TidalMusicApi {
-    #[cfg(not(feature = "db"))]
     #[must_use]
-    pub const fn new() -> Self {
-        Self {}
-    }
-
-    #[cfg(feature = "db")]
-    #[must_use]
-    pub const fn new(db: LibraryDatabase) -> Self {
-        Self { db }
+    pub fn builder() -> TidalMusicApiBuilder {
+        TidalMusicApiBuilder::default()
     }
 }
 
-#[cfg(not(feature = "db"))]
-impl Default for TidalMusicApi {
-    fn default() -> Self {
-        Self::new()
+#[cfg(feature = "scan")]
+pub mod scan {
+    use async_trait::async_trait;
+    use moosicbox_music_api::{ScanError, ScannableMusicApi};
+
+    use crate::TidalMusicApi;
+
+    #[async_trait]
+    impl ScannableMusicApi for TidalMusicApi {
+        async fn scan(&self) -> Result<(), ScanError> {
+            Ok(())
+        }
+    }
+}
+
+#[async_trait]
+impl AuthenticatedMusicApi for TidalMusicApi {
+    async fn authenticate(&self) -> Result<(), AuthenticationError> {
+        Ok(())
+    }
+
+    fn is_logged_in(&self) -> bool {
+        self.logged_in.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    async fn logout(&self) -> Result<(), AuthenticationError> {
+        Ok(())
     }
 }
 

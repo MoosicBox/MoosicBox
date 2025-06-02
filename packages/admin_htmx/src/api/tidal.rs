@@ -13,7 +13,7 @@ use maud::{Markup, html};
 use moosicbox_music_api::MusicApis;
 #[cfg(feature = "scan")]
 use moosicbox_scan::ScanOrigin;
-use moosicbox_tidal::{TidalDeviceAuthorizationTokenError, db::TidalConfigError};
+use moosicbox_tidal::{TidalDeviceAuthorizationTokenError, db::GetTidalConfigError};
 use serde::Deserialize;
 use switchy_database::profiles::LibraryDatabase;
 use urlencoding::encode;
@@ -225,7 +225,7 @@ pub fn settings_logged_out() -> Markup {
 pub async fn settings(
     db: &LibraryDatabase,
     #[cfg(feature = "scan")] show_scan: bool,
-) -> Result<Markup, TidalConfigError> {
+) -> Result<Markup, GetTidalConfigError> {
     let logged_in = moosicbox_tidal::db::get_tidal_config(db).await?.is_some();
 
     Ok(if logged_in {
