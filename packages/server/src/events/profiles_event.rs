@@ -19,6 +19,9 @@ pub enum AddProfileError {
     #[cfg(feature = "qobuz")]
     #[error(transparent)]
     QobuzConfig(#[from] moosicbox_qobuz::QobuzConfigError),
+    #[cfg(feature = "yt")]
+    #[error(transparent)]
+    YtConfig(#[from] moosicbox_yt::YtConfigError),
 }
 
 async fn add_profile(
@@ -98,7 +101,10 @@ async fn add_profile(
         moosicbox_yt::API_SOURCE.clone(),
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             #[allow(clippy::redundant_clone)]
-            moosicbox_yt::YtMusicApi::new(library_database.clone()),
+            moosicbox_yt::YtMusicApi::builder()
+                .with_db(library_database.clone())
+                .build()
+                .await?,
         ))),
     );
     moosicbox_music_api::profiles::PROFILES.add(profile.to_string(), Arc::new(apis_map));

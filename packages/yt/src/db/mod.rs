@@ -55,7 +55,7 @@ pub async fn delete_yt_config(
 }
 
 #[derive(Debug, Error)]
-pub enum YtConfigError {
+pub enum GetYtConfigError {
     #[error(transparent)]
     Database(#[from] DatabaseError),
     #[error(transparent)]
@@ -67,7 +67,7 @@ pub enum YtConfigError {
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, YtConfigError> {
+pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, GetYtConfigError> {
     let mut configs = db
         .select("yt_config")
         .execute(&**db)
@@ -75,7 +75,7 @@ pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, YtC
         .to_value_type()?;
 
     if configs.is_empty() {
-        return Err(YtConfigError::NoConfigsAvailable);
+        return Err(GetYtConfigError::NoConfigsAvailable);
     }
 
     configs.sort_by(|a: &YtConfig, b: &YtConfig| a.issued_at.cmp(&b.issued_at));
@@ -88,7 +88,7 @@ pub async fn get_yt_config(db: &LibraryDatabase) -> Result<Option<YtConfig>, YtC
 /// * If a database error occurs
 pub async fn get_yt_access_tokens(
     db: &LibraryDatabase,
-) -> Result<Option<(String, String)>, YtConfigError> {
+) -> Result<Option<(String, String)>, GetYtConfigError> {
     Ok(get_yt_config(db)
         .await?
         .map(|c| (c.access_token.clone(), c.refresh_token)))
@@ -97,6 +97,6 @@ pub async fn get_yt_access_tokens(
 /// # Errors
 ///
 /// * If a database error occurs
-pub async fn get_yt_access_token(db: &LibraryDatabase) -> Result<Option<String>, YtConfigError> {
+pub async fn get_yt_access_token(db: &LibraryDatabase) -> Result<Option<String>, GetYtConfigError> {
     Ok(get_yt_access_tokens(db).await?.map(|c| c.0))
 }
