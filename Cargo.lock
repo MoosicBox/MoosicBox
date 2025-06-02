@@ -7800,6 +7800,7 @@ name = "moosicbox_music_api_api"
 version = "0.1.1"
 dependencies = [
  "actix-web",
+ "futures",
  "log 0.4.27",
  "moosicbox_music_api",
  "moosicbox_music_models",

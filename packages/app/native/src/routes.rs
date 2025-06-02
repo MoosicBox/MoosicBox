@@ -592,11 +592,17 @@ pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError>
 
         let music_apis = music_apis.into_items();
 
-        music_api_settings.extend(music_apis.into_iter().map(|x| MusicApiSettings {
-            name: x.name,
-            logged_in: x.logged_in,
-            run_scan_endpoint: x.run_scan_endpoint,
-            auth_endpoint: x.auth_endpoint,
+        music_api_settings.extend(music_apis.into_iter().map(|x| {
+            MusicApiSettings {
+                logged_in: x.logged_in,
+                run_scan_endpoint: x
+                    .scanning_enabled
+                    .then(|| format!("/music-api/scan?apiSource={}", x.name)),
+                auth_endpoint: x
+                    .authentication_enabled
+                    .then(|| format!("/music-api/auth?apiSource={}", x.name)),
+                name: x.name,
+            }
         }));
     }
 

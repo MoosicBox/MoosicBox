@@ -9,7 +9,7 @@ use moosicbox_paging::Page;
 use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;
 
-use crate::models::ApiMusicApi;
+use crate::models::{ApiMusicApi, convert_to_api_music_api};
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -70,12 +70,14 @@ pub async fn music_apis_endpoint(
         .ok_or_else(|| ErrorNotFound(format!("Missing profile '{profile_name}'")))?;
     let music_apis = music_apis.iter().collect::<Vec<_>>();
     let total = u32::try_from(music_apis.len()).unwrap();
-    let music_apis = music_apis
-        .into_iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .map(Into::into)
-        .collect();
+    let music_apis = futures::future::join_all(
+        music_apis
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .map(convert_to_api_music_api),
+    )
+    .await;
 
     Ok(Json(Page::WithTotal {
         items: music_apis,

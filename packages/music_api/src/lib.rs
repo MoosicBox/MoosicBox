@@ -76,12 +76,12 @@ pub struct MusicApisIter<'a> {
 }
 
 impl<'a> Iterator for MusicApisIter<'a> {
-    type Item = (&'a ApiSource, &'a dyn MusicApi);
+    type Item = &'a dyn MusicApi;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
             .next()
-            .map(|(src, api_arc)| (src, api_arc.as_ref().as_ref()))
+            .map(|(_src, api_arc)| api_arc.as_ref().as_ref())
     }
 }
 
@@ -95,7 +95,7 @@ impl MusicApis {
 }
 
 impl<'a> IntoIterator for &'a MusicApis {
-    type Item = (&'a ApiSource, &'a dyn MusicApi);
+    type Item = &'a dyn MusicApi;
     type IntoIter = MusicApisIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {

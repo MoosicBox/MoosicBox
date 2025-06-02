@@ -12,6 +12,7 @@ version     = "0.1.1"
 
 [dependencies]
 actix-web              = { workspace = true }
+futures                = { workspace = true, optional = true }
 moosicbox_music_api    = { workspace = true, features = ["api"] }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging       = { workspace = true }
@@ -34,4 +35,4 @@ openapi = [
 
 db = ["moosicbox_music_models/db"]
 
-api = ["moosicbox_music_models/api"]
+api = ["dep:futures", "moosicbox_music_models/api"]
