@@ -85,7 +85,8 @@ static CLIENT: LazyLock<switchy_http::Client> =
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
 static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";
 
-pub static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "Tidal".into());
+pub static API_SOURCE: LazyLock<ApiSource> =
+    LazyLock::new(|| ApiSource::register("Tidal", "Tidal"));
 
 impl ToUrl for TidalApiEndpoint {
     fn to_url(&self) -> String {

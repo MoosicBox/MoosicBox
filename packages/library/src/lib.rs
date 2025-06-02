@@ -26,7 +26,8 @@ use moosicbox_music_api::{
     },
 };
 use moosicbox_music_models::{
-    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, PlaybackQuality, Track, id::Id,
+    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, LIBRARY_API_SOURCE,
+    PlaybackQuality, Track, id::Id,
 };
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use moosicbox_search::{
@@ -1142,12 +1143,10 @@ impl LibraryMusicApi {
     }
 }
 
-static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "Library".into());
-
 #[async_trait]
 impl MusicApi for LibraryMusicApi {
     fn source(&self) -> &ApiSource {
-        &API_SOURCE
+        &LIBRARY_API_SOURCE
     }
 
     async fn artists(
@@ -1628,7 +1627,7 @@ mod test {
             artist: String::new(),
             artwork: None,
             versions: vec![AlbumVersionQuality {
-                source: TrackApiSource::Api("Tidal".into()),
+                source: TrackApiSource::Api(ApiSource::register("Tidal", "Tidal")),
                 ..Default::default()
             }],
             ..Default::default()
@@ -1639,7 +1638,7 @@ mod test {
             artist: String::new(),
             artwork: None,
             versions: vec![AlbumVersionQuality {
-                source: TrackApiSource::Api("Qobuz".into()),
+                source: TrackApiSource::Api(ApiSource::register("Qobuz", "Qobuz")),
                 ..Default::default()
             }],
             ..Default::default()

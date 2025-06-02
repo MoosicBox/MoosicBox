@@ -1375,6 +1375,9 @@ impl Downloader for MoosicboxDownloader {
 mod test {
     use super::*;
 
+    static TIDAL_API_SOURCE: LazyLock<ApiSource> =
+        LazyLock::new(|| ApiSource::register("Tidal", "Tidal"));
+
     #[test_log::test]
     fn can_deserialize_and_serialize_moosicbox_download_api_source() {
         let serialized =
@@ -1385,7 +1388,8 @@ mod test {
 
     #[test_log::test]
     fn can_deserialize_and_serialize_api_download_api_source() {
-        let serialized = serde_json::to_string(&DownloadApiSource::Api("Tidal".into())).unwrap();
+        let serialized =
+            serde_json::to_string(&DownloadApiSource::Api(TIDAL_API_SOURCE.clone())).unwrap();
         log::debug!("serialized: {serialized}");
         serde_json::from_str::<DownloadApiSource>(&serialized).unwrap();
     }

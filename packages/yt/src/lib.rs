@@ -85,7 +85,8 @@ static CLIENT: LazyLock<switchy_http::Client> =
 
 static YT_API_BASE_URL: &str = "https://music.youtube.com/youtubei/v1";
 
-pub static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "Yt".into());
+pub static API_SOURCE: LazyLock<ApiSource> =
+    LazyLock::new(|| ApiSource::register("Yt", "YouTube Music"));
 
 impl ToUrl for YtApiEndpoint {
     fn to_url(&self) -> String {

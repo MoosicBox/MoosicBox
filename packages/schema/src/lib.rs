@@ -279,7 +279,7 @@ mod postgres {
 mod sqlite_tests {
     use moosicbox_json_utils::ToValueType;
     use moosicbox_music_models::{
-        ApiSources,
+        ApiSource, ApiSources,
         id::{ApiId, Id},
     };
     use pretty_assertions::assert_eq;
@@ -332,6 +332,9 @@ mod sqlite_tests {
                 WHERE api_sources.entity_type='{table}' AND api_sources.entity_id = {table}.id
             ) AS api_sources
             ";
+
+        let tidal = ApiSource::register("Tidal", "Tidal");
+        let qobuz = ApiSource::register("Qobuz", "Qobuz");
 
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
@@ -387,11 +390,11 @@ mod sqlite_tests {
             .unwrap(),
             ApiSources::default()
                 .with_api_id(ApiId {
-                    source: "Tidal".into(),
+                    source: tidal.clone(),
                     id: Id::String("art123".into())
                 })
                 .with_api_id(ApiId {
-                    source: "Qobuz".into(),
+                    source: qobuz.clone(),
                     id: Id::String("art456".into())
                 })
         );
@@ -401,7 +404,7 @@ mod sqlite_tests {
             )
             .unwrap(),
             ApiSources::default().with_api_id(ApiId {
-                source: "Tidal".into(),
+                source: tidal.clone(),
                 id: Id::String("art789".into())
             })
         );
@@ -411,7 +414,7 @@ mod sqlite_tests {
             )
             .unwrap(),
             ApiSources::default().with_api_id(ApiId {
-                source: "Qobuz".into(),
+                source: qobuz.clone(),
                 id: Id::String("art101112".into())
             })
         );
@@ -439,11 +442,11 @@ mod sqlite_tests {
             .unwrap(),
             ApiSources::default()
                 .with_api_id(ApiId {
-                    source: "Tidal".into(),
+                    source: tidal.clone(),
                     id: Id::String("alb123".into())
                 })
                 .with_api_id(ApiId {
-                    source: "Qobuz".into(),
+                    source: qobuz.clone(),
                     id: Id::String("alb456".into())
                 })
         );
@@ -453,7 +456,7 @@ mod sqlite_tests {
             )
             .unwrap(),
             ApiSources::default().with_api_id(ApiId {
-                source: "Tidal".into(),
+                source: tidal.clone(),
                 id: Id::String("alb789".into())
             })
         );
@@ -463,7 +466,7 @@ mod sqlite_tests {
             )
             .unwrap(),
             ApiSources::default().with_api_id(ApiId {
-                source: "Qobuz".into(),
+                source: qobuz.clone(),
                 id: Id::String("alb101112".into())
             })
         );
@@ -499,11 +502,11 @@ mod sqlite_tests {
             .unwrap(),
             ApiSources::default()
                 .with_api_id(ApiId {
-                    source: "Tidal".into(),
+                    source: tidal.clone(),
                     id: Id::String("123".into())
                 })
                 .with_api_id(ApiId {
-                    source: "Qobuz".into(),
+                    source: qobuz.clone(),
                     id: Id::String("456".into())
                 })
         );
@@ -513,7 +516,7 @@ mod sqlite_tests {
             )
             .unwrap(),
             ApiSources::default().with_api_id(ApiId {
-                source: "Tidal".into(),
+                source: tidal.clone(),
                 id: Id::String("789".into())
             })
         );
@@ -523,7 +526,7 @@ mod sqlite_tests {
             )
             .unwrap(),
             ApiSources::default().with_api_id(ApiId {
-                source: "Qobuz".into(),
+                source: qobuz.clone(),
                 id: Id::String("101112".into())
             })
         );
@@ -541,11 +544,11 @@ mod sqlite_tests {
             .unwrap(),
             ApiSources::default()
                 .with_api_id(ApiId {
-                    source: "Tidal".into(),
+                    source: tidal.clone(),
                     id: Id::String("123".into())
                 })
                 .with_api_id(ApiId {
-                    source: "Qobuz".into(),
+                    source: qobuz.clone(),
                     id: Id::String("123".into())
                 })
         );

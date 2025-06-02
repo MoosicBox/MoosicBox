@@ -4,7 +4,6 @@
 
 use std::{
     collections::BTreeSet,
-    convert::Infallible,
     path::PathBuf,
     str::FromStr,
     sync::{LazyLock, RwLock},
@@ -53,16 +52,39 @@ impl FromStr for ArtistSort {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone, Hash, Ord, PartialOrd)]
-#[serde(transparent)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-// TODO: Potentially make the inner type a `Arc<...>` instead of a `String`
-pub struct ApiSource(String);
+pub static API_SOURCES: LazyLock<RwLock<BTreeSet<ApiSource>>> =
+    LazyLock::new(|| RwLock::new(BTreeSet::new()));
 
 pub static LIBRARY_API_SOURCE: LazyLock<ApiSource> =
-    LazyLock::new(|| ApiSource("Library".to_string()));
+    LazyLock::new(|| ApiSource::register("Library", "Library"));
+
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Ord, PartialOrd)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+// TODO: Potentially make the inner type a `Arc<...>` instead of a `String`
+pub struct ApiSource {
+    id: String,
+    display: String,
+}
 
 impl ApiSource {
+    /// # Panics
+    ///
+    /// * If the `API_SOURCES` `RwLock` is poisoned
+    pub fn register(id: impl Into<String>, display: impl Into<String>) -> Self {
+        let id = id.into();
+        let display = display.into();
+
+        let api_source = Self { id, display };
+
+        API_SOURCES.write().unwrap().insert(api_source.clone());
+
+        api_source
+    }
+
+    pub fn register_library() -> Self {
+        LIBRARY_API_SOURCE.clone()
+    }
+
     #[must_use]
     pub fn library() -> Self {
         LIBRARY_API_SOURCE.clone()
@@ -80,13 +102,42 @@ impl ApiSource {
 
     #[must_use]
     pub fn matches_str(&self, other: &str) -> bool {
-        self.0 == other
+        self.id == other
+    }
+
+    #[must_use]
+    pub fn to_string_display(&self) -> String {
+        self.as_display().to_string()
+    }
+
+    #[must_use]
+    pub const fn as_display(&self) -> &str {
+        self.display.as_str()
+    }
+}
+
+impl Serialize for ApiSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.id)
+    }
+}
+
+impl<'de> Deserialize<'de> for ApiSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value: String = Deserialize::deserialize(deserializer)?;
+        Ok(Self::from_str(&value).unwrap())
     }
 }
 
 impl AsRef<str> for ApiSource {
     fn as_ref(&self) -> &str {
-        self.0.as_ref()
+        self.id.as_ref()
     }
 }
 
@@ -96,41 +147,55 @@ impl Default for ApiSource {
     }
 }
 
-impl From<&String> for ApiSource {
-    fn from(value: &String) -> Self {
-        value.clone().into()
+impl TryFrom<&String> for ApiSource {
+    type Error = FromStringApiSourceError;
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        value.clone().try_into()
     }
 }
 
-impl From<&str> for ApiSource {
-    fn from(value: &str) -> Self {
-        value.to_string().into()
+impl TryFrom<&str> for ApiSource {
+    type Error = FromStringApiSourceError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.to_string().try_into()
     }
 }
 
-impl From<String> for ApiSource {
-    fn from(value: String) -> Self {
-        Self(value)
+impl TryFrom<String> for ApiSource {
+    type Error = FromStringApiSourceError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::from_str(&value)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid ApiSource: '{0}'")]
+pub struct FromStringApiSourceError(String);
+
+impl FromStr for ApiSource {
+    type Err = FromStringApiSourceError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        API_SOURCES
+            .read()
+            .unwrap()
+            .iter()
+            .find(|k| k.id == value)
+            .cloned()
+            .ok_or_else(|| FromStringApiSourceError(value.to_string()))
     }
 }
 
 impl From<ApiSource> for String {
     fn from(value: ApiSource) -> Self {
-        value.0
+        value.id
     }
 }
 
-pub static API_SOURCES: LazyLock<RwLock<BTreeSet<ApiSource>>> =
-    LazyLock::new(|| RwLock::new(BTreeSet::new()));
-
 impl ApiSource {
-    /// # Panics
-    ///
-    /// * If the `API_SOURCES` `RwLock` is poisoned
-    pub fn register(source: impl Into<Self>) {
-        API_SOURCES.write().unwrap().insert(source.into());
-    }
-
     /// # Panics
     ///
     /// * If the `API_SOURCES` `RwLock` is poisoned
@@ -236,7 +301,9 @@ impl TryFrom<&str> for TrackApiSource {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         Ok(if let Some((case, value)) = value.split_once(':') {
             match case {
-                "API" => Self::Api(value.into()),
+                "API" => Self::Api(value.try_into().map_err(|e: FromStringApiSourceError| {
+                    TryFromStringTrackApiSourceError(e.0)
+                })?),
                 _ => return Err(TryFromStringTrackApiSourceError(value.into())),
             }
         } else {
@@ -629,12 +696,12 @@ impl From<TrackApiSource> for AlbumSource {
 }
 
 impl FromStr for AlbumSource {
-    type Err = Infallible;
+    type Err = FromStringApiSourceError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input.to_lowercase().as_str() {
             "local" => Ok(Self::Local),
-            source => Ok(Self::Api(source.into())),
+            source => Ok(Self::Api(source.try_into()?)),
         }
     }
 }

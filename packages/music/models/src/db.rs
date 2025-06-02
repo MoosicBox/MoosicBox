@@ -15,9 +15,11 @@ use crate::{AlbumVersionQuality, ApiSource, ApiSources, AudioFormat, TrackApiSou
 impl moosicbox_json_utils::MissingValue<ApiSource> for &switchy_database::Row {}
 impl ToValueType<ApiSource> for DatabaseValue {
     fn to_value_type(self) -> Result<ApiSource, ParseError> {
-        Ok(ApiSource::from(self.as_str().ok_or_else(|| {
-            ParseError::ConvertType("ApiSource".into())
-        })?))
+        ApiSource::try_from(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("ApiSource".into()))?,
+        )
+        .map_err(|e| ParseError::ConvertType(format!("ApiSource: {e:?}")))
     }
 }
 
@@ -161,12 +163,12 @@ impl ToValueType<ApiSources> for switchy_database::DatabaseValue {
 
 impl From<&ApiSource> for DatabaseValue {
     fn from(value: &ApiSource) -> Self {
-        Self::String(value.0.clone())
+        Self::String(value.id.clone())
     }
 }
 
 impl From<ApiSource> for DatabaseValue {
     fn from(value: ApiSource) -> Self {
-        Self::String(value.0)
+        Self::String(value.id)
     }
 }

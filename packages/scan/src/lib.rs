@@ -47,6 +47,13 @@ pub enum ScanOrigin {
     Api(ApiSource),
 }
 
+impl ScanOrigin {
+    #[must_use]
+    pub fn for_api_source(source: impl Into<String>) -> Option<Self> {
+        ApiSource::try_from(source.into()).ok().map(Self::Api)
+    }
+}
+
 impl From<ScanOrigin> for ApiSource {
     fn from(value: ScanOrigin) -> Self {
         match value {

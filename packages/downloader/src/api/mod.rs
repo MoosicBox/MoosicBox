@@ -162,7 +162,7 @@ pub async fn download_endpoint(
 
     let api_source = match query.source.as_str() {
         "MoosicBox" => ApiSource::library(),
-        api => api.into(),
+        api => api.try_into().map_err(ErrorBadRequest)?,
     };
 
     let track_id = if let Some(track_id) = &query.track_id {
@@ -196,7 +196,7 @@ pub async fn download_endpoint(
                 .clone()
                 .ok_or_else(|| ErrorBadRequest("Missing MoosicBox url"))?,
         ),
-        api => DownloadApiSource::Api(api.into()),
+        api => DownloadApiSource::Api(api.try_into().map_err(ErrorBadRequest)?),
     };
 
     let quality = query.quality;

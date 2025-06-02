@@ -103,7 +103,10 @@ pub async fn run_scan_endpoint(
     db: LibraryDatabase,
     music_apis: MusicApis,
 ) -> Result<Markup, actix_web::Error> {
-    moosicbox_scan::run_scan(Some(vec![ScanOrigin::Api("Qobuz".into())]), &db, music_apis)
+    let api_source = ScanOrigin::for_api_source("Qobuz")
+        .ok_or_else(|| ErrorInternalServerError("Qobuz ApiSource is not registered"))?;
+
+    moosicbox_scan::run_scan(Some(vec![api_source]), &db, music_apis)
         .await
         .map_err(|e| ErrorInternalServerError(format!("Failed to run scan: {e:?}")))?;
 

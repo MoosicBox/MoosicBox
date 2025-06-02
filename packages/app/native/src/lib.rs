@@ -155,20 +155,16 @@ pub fn init() -> Router {
 pub async fn init_app_state(
     state: moosicbox_app_state::AppState,
 ) -> Result<moosicbox_app_state::AppState, moosicbox_app_state::AppStateError> {
-    {
-        let mut api_sources = moosicbox_music_models::API_SOURCES.write().unwrap();
+    ApiSource::register_library();
 
-        api_sources.insert(ApiSource::library());
+    #[cfg(feature = "tidal")]
+    ApiSource::register("Tidal", "Tidal");
 
-        #[cfg(feature = "tidal")]
-        api_sources.insert("Tidal".into());
+    #[cfg(feature = "qobuz")]
+    ApiSource::register("Qobuz", "Qobuz");
 
-        #[cfg(feature = "qobuz")]
-        api_sources.insert("Qobuz".into());
-
-        #[cfg(feature = "yt")]
-        api_sources.insert("Yt".into());
-    }
+    #[cfg(feature = "yt")]
+    ApiSource::register("Yt", "YouTube Music");
 
     let persistence_db = moosicbox_config::get_profile_dir_path(AppType::App, PROFILE)
         .map(|x| x.join("persistence.db"))

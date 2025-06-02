@@ -75,7 +75,8 @@ static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
 
-pub static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "Qobuz".into());
+pub static API_SOURCE: LazyLock<ApiSource> =
+    LazyLock::new(|| ApiSource::register("Qobuz", "Qobuz"));
 
 #[must_use]
 pub fn format_title(title: &str, version: Option<&str>) -> String {

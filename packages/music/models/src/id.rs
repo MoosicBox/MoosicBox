@@ -609,7 +609,8 @@ mod test {
 
     #[test_log::test]
     fn can_parse_string_track_id_ranges() {
-        let result = parse_id_ranges("a,b,aaa,bbb,c-d,f", &"bob".into()).unwrap();
+        let result =
+            parse_id_ranges("a,b,aaa,bbb,c-d,f", &ApiSource::register("bob", "bob")).unwrap();
 
         assert_eq!(
             result,

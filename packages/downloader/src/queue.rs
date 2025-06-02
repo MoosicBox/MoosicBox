@@ -552,7 +552,7 @@ impl Drop for DownloadQueue {
 mod tests {
     use async_trait::async_trait;
     use moosicbox_music_api::models::TrackAudioQuality;
-    use moosicbox_music_models::{Album, Artist, Track, id::Id};
+    use moosicbox_music_models::{Album, ApiSource, Artist, Track, id::Id};
     use pretty_assertions::assert_eq;
     use switchy_database::{Database, Row, query::*, schema::CreateTableStatement};
 
@@ -564,6 +564,9 @@ mod tests {
     use super::*;
 
     struct TestDownloader {}
+
+    static TIDAL_API_SOURCE: LazyLock<ApiSource> =
+        LazyLock::new(|| ApiSource::register("Tidal", "Tidal"));
 
     #[async_trait]
     impl Downloader for TestDownloader {
@@ -716,7 +719,7 @@ mod tests {
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
                     track_id: 1.into(),
-                    source: DownloadApiSource::Api("Tidal".into()),
+                    source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
                     quality: TrackAudioQuality::FlacHighestRes,
                     artist_id: 1.into(),
                     artist: "artist".into(),
@@ -768,7 +771,7 @@ mod tests {
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
                         track_id: 1.into(),
-                        source: DownloadApiSource::Api("Tidal".into()),
+                        source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
                         quality: TrackAudioQuality::FlacHighestRes,
                         artist_id: 1.into(),
                         artist: "artist".into(),
@@ -787,7 +790,7 @@ mod tests {
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
                         track_id: 2.into(),
-                        source: DownloadApiSource::Api("Tidal".into()),
+                        source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
                         quality: TrackAudioQuality::FlacHighestRes,
                         artist_id: 1.into(),
                         artist: "artist".into(),
@@ -843,7 +846,7 @@ mod tests {
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
                         track_id: 1.into(),
-                        source: DownloadApiSource::Api("Tidal".into()),
+                        source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
                         quality: TrackAudioQuality::FlacHighestRes,
                         artist_id: 1.into(),
                         artist: "artist".into(),
@@ -862,7 +865,7 @@ mod tests {
                     state: DownloadTaskState::Pending,
                     item: DownloadItem::Track {
                         track_id: 1.into(),
-                        source: DownloadApiSource::Api("Tidal".into()),
+                        source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
                         quality: TrackAudioQuality::FlacHighestRes,
                         artist_id: 1.into(),
                         artist: "artist".into(),
@@ -914,7 +917,7 @@ mod tests {
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
                     track_id: 1.into(),
-                    source: DownloadApiSource::Api("Tidal".into()),
+                    source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
                     quality: TrackAudioQuality::FlacHighestRes,
                     artist_id: 1.into(),
                     artist: "artist".into(),
@@ -938,7 +941,7 @@ mod tests {
                 state: DownloadTaskState::Pending,
                 item: DownloadItem::Track {
                     track_id: 2.into(),
-                    source: DownloadApiSource::Api("Tidal".into()),
+                    source: DownloadApiSource::Api(TIDAL_API_SOURCE.clone()),
                     quality: TrackAudioQuality::FlacHighestRes,
                     artist_id: 1.into(),
                     artist: "artist".into(),

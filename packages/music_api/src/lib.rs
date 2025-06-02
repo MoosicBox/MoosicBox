@@ -828,7 +828,7 @@ mod test {
 
     pub struct TestMusicApi {}
 
-    static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| "test".into());
+    static API_SOURCE: LazyLock<ApiSource> = LazyLock::new(|| ApiSource::register("test", "test"));
 
     #[async_trait]
     impl MusicApi for TestMusicApi {
