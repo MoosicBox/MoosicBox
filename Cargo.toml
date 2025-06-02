@@ -419,7 +419,7 @@ ratatui = "0.29.0"
 rb = "0.4.1"
 rcgen = "0.13.2"
 regex = "1.11.1"
-reqwest = { version = "0.12.18", default-features = false, features = [
+reqwest = { version = "0.12.19", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
