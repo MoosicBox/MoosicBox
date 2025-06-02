@@ -2,6 +2,7 @@ use moosicbox_music_api::MusicApi;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiMusicApi {
     pub name: String,
     pub logged_in: bool,
