@@ -9529,6 +9529,8 @@ dependencies = [
  "futures-util",
  "glob",
  "opentelemetry 0.29.1",
+ "percent-encoding 2.3.1",
+ "rand 0.9.1",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
@@ -15044,9 +15046,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fdb0c213ca27a9f57ab69ddb290fd80d970922355b83ae380b395d3986b8a2e"
+checksum = "5cc2d9e086a412a451384326f521c8123a99a466b329941a9403696bff9b0da2"
 dependencies = [
  "bitflags 2.9.1",
  "bytes",
@@ -15119,12 +15121,13 @@ dependencies = [
 [[package]]
 name = "tracing-opentelemetry"
 version = "0.30.0"
-source = "git+https://github.com/tokio-rs/tracing-opentelemetry#8905ee70df3c9f427ee026b24271c4adfcd1d8b1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd8e764bd6f5813fd8bebc3117875190c5b0415be8f7f8059bffb6ecd979c444"
 dependencies = [
  "js-sys",
  "once_cell",
- "opentelemetry 0.30.0",
- "opentelemetry_sdk 0.30.0",
+ "opentelemetry 0.29.1",
+ "opentelemetry_sdk 0.29.0",
  "smallvec",
  "tracing",
  "tracing-core",
@@ -17583,3 +17586,8 @@ dependencies = [
  "syn 2.0.101",
  "winnow 0.7.10",
 ]
+
+[[patch.unused]]
+name = "tracing-opentelemetry"
+version = "0.31.0"
+source = "git+https://github.com/tokio-rs/tracing-opentelemetry#da83e8927d91ca6ecf6db19d87fbaaadd57f6551"
