@@ -16,6 +16,9 @@ pub enum AddProfileError {
     #[cfg(feature = "tidal")]
     #[error(transparent)]
     TidalConfig(#[from] moosicbox_tidal::TidalConfigError),
+    #[cfg(feature = "qobuz")]
+    #[error(transparent)]
+    QobuzConfig(#[from] moosicbox_qobuz::QobuzConfigError),
 }
 
 async fn add_profile(
@@ -84,7 +87,10 @@ async fn add_profile(
         moosicbox_qobuz::API_SOURCE.clone(),
         Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
             #[allow(clippy::redundant_clone)]
-            moosicbox_qobuz::QobuzMusicApi::new(library_database.clone()),
+            moosicbox_qobuz::QobuzMusicApi::builder()
+                .with_db(library_database.clone())
+                .build()
+                .await?,
         ))),
     );
     #[cfg(feature = "yt")]

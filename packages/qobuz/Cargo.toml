@@ -55,10 +55,12 @@ url             = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["api", "db", "openapi"]
+default = ["api", "db", "openapi", "scan"]
 
 fail-on-warnings = []
 
 api     = ["dep:actix-web", "switchy_database/api"]
 db      = []
 openapi = ["dep:utoipa", "moosicbox_search/openapi"]
+
+scan = []
