@@ -92,21 +92,6 @@ pub async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::
 ///
 /// * If the `API_SOURCES` `RwLock` is poisoned
 pub fn init() -> Router {
-    {
-        let mut api_sources = moosicbox_music_models::API_SOURCES.write().unwrap();
-
-        api_sources.insert(ApiSource::library());
-
-        #[cfg(feature = "tidal")]
-        api_sources.insert("Tidal".into());
-
-        #[cfg(feature = "qobuz")]
-        api_sources.insert("Qobuz".into());
-
-        #[cfg(feature = "yt")]
-        api_sources.insert("Yt".into());
-    }
-
     moosicbox_player::on_playback_event(events::on_playback_event);
 
     let router = Router::new()
@@ -170,6 +155,21 @@ pub fn init() -> Router {
 pub async fn init_app_state(
     state: moosicbox_app_state::AppState,
 ) -> Result<moosicbox_app_state::AppState, moosicbox_app_state::AppStateError> {
+    {
+        let mut api_sources = moosicbox_music_models::API_SOURCES.write().unwrap();
+
+        api_sources.insert(ApiSource::library());
+
+        #[cfg(feature = "tidal")]
+        api_sources.insert("Tidal".into());
+
+        #[cfg(feature = "qobuz")]
+        api_sources.insert("Qobuz".into());
+
+        #[cfg(feature = "yt")]
+        api_sources.insert("Yt".into());
+    }
+
     let persistence_db = moosicbox_config::get_profile_dir_path(AppType::App, PROFILE)
         .map(|x| x.join("persistence.db"))
         .unwrap();
