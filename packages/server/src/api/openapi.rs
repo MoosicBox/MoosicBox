@@ -53,6 +53,12 @@ pub fn init() -> OpenApi {
     let api = nest_api(api, "/library", moosicbox_library::api::Api::openapi());
     #[cfg(feature = "menu-api")]
     let api = nest_api(api, "/menu", moosicbox_menu::api::Api::openapi());
+    #[cfg(feature = "music-api-api")]
+    let api = nest_api(
+        api,
+        "/music-api",
+        moosicbox_music_api_api::api::Api::openapi(),
+    );
     #[cfg(feature = "player-api")]
     let api = nest_api(api, "/player", moosicbox_player::api::Api::openapi());
     #[cfg(all(feature = "qobuz", feature = "qobuz-api"))]
