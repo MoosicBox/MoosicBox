@@ -128,7 +128,7 @@ pub async fn get_all_album_version_qualities(
         .sort("albums.id", SortDirection::Desc)
         .where_or(boxed![
             where_not_eq("track_sizes.format", AudioFormat::Source.as_ref()),
-            where_not_eq("tracks.source", TrackApiSource::Local.as_ref())
+            where_not_eq("tracks.source", TrackApiSource::Local.to_string())
         ])
         .execute(&**db)
         .await?

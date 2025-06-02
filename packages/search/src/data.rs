@@ -90,7 +90,7 @@ impl AsDataValues for Album {
                 ),
                 (
                     "version_sources",
-                    DataValue::String(version.source.as_ref().to_string()),
+                    DataValue::String(version.source.to_string()),
                 ),
             ]);
         }
@@ -143,7 +143,7 @@ impl AsDataValues for Track {
             ),
             (
                 "version_sources",
-                DataValue::String(self.track_source.as_ref().to_string()),
+                DataValue::String(self.track_source.to_string()),
             ),
         ]
     }

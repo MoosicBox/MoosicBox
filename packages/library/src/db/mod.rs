@@ -177,7 +177,7 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, Datab
         .sort("albums.id", SortDirection::Desc)
         .where_or(boxed![
             where_not_eq("track_sizes.format", AudioFormat::Source.as_ref()),
-            where_not_eq("tracks.source", TrackApiSource::Local.as_ref())
+            where_not_eq("tracks.source", TrackApiSource::Local.to_string())
         ])
         .execute(&**db)
         .await?
@@ -866,7 +866,7 @@ pub async fn add_tracks(
                 ),
                 (
                     "source",
-                    DatabaseValue::String(insert.track.source.as_ref().to_string()),
+                    DatabaseValue::String(insert.track.source.to_string()),
                 ),
             ];
 

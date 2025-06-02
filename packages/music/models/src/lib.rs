@@ -151,7 +151,7 @@ impl std::fmt::Display for ApiSource {
     }
 }
 
-#[derive(Default, Debug, AsRefStr, Eq, PartialEq, Clone, Ord, PartialOrd)]
+#[derive(Default, Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TrackApiSource {
     #[default]
@@ -203,13 +203,16 @@ impl<'de> Deserialize<'de> for TrackApiSource {
 
 impl std::fmt::Display for TrackApiSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_ref())
+        match self {
+            Self::Local => f.write_str("LOCAL"),
+            Self::Api(source) => f.write_fmt(format_args!("API:{source}")),
+        }
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Invalid track api source")]
-pub struct TryFromStringTrackApiSourceError;
+#[error("Invalid track api source: '{0}'")]
+pub struct TryFromStringTrackApiSourceError(String);
 
 impl TryFrom<&String> for TrackApiSource {
     type Error = TryFromStringTrackApiSourceError;
@@ -234,12 +237,12 @@ impl TryFrom<&str> for TrackApiSource {
         Ok(if let Some((case, value)) = value.split_once(':') {
             match case {
                 "API" => Self::Api(value.into()),
-                _ => return Err(TryFromStringTrackApiSourceError),
+                _ => return Err(TryFromStringTrackApiSourceError(value.into())),
             }
         } else {
             match value {
                 "LOCAL" => Self::Local,
-                _ => return Err(TryFromStringTrackApiSourceError),
+                _ => return Err(TryFromStringTrackApiSourceError(value.into())),
             }
         })
     }
@@ -268,8 +271,8 @@ impl From<ApiSource> for TrackApiSource {
 impl From<TrackApiSource> for String {
     fn from(value: TrackApiSource) -> Self {
         match value {
-            TrackApiSource::Local => "Local".to_string(),
-            TrackApiSource::Api(source) => source.into(),
+            TrackApiSource::Local => "LOCAL".to_string(),
+            TrackApiSource::Api(source) => format!("API:{source}"),
         }
     }
 }
