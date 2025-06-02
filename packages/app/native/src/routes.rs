@@ -579,7 +579,7 @@ pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError>
         let host = &connection.api_url;
 
         let music_apis: Page<ApiMusicApi> = CLIENT
-            .get(&format!("{host}/music-api?moosicboxProfile={PROFILE}",))
+            .get(&format!("{host}/music-api?moosicboxProfile={PROFILE}"))
             .send()
             .await
             .inspect(|x| {
@@ -606,7 +606,11 @@ pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError>
                 name: x.name,
             }
         }));
+    } else {
+        log::debug!("No connection");
     }
+
+    log::debug!("music_api_settings={music_api_settings:?}");
 
     moosicbox_app_native_ui::settings::settings(
         &state,
