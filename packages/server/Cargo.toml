@@ -124,6 +124,7 @@ tracy-client = { workspace = true, default-features = false, optional = true, fe
 default = [
     "all-apis",
     "all-formats",
+    "all-sources",
     "base64",
     "cpal",
     "openapi",
@@ -306,12 +307,15 @@ admin-htmx = ["admin-htmx-api"]
 downloader = ["dep:throttle", "moosicbox_downloader/api"]
 library    = ["moosicbox_library/api"]
 player     = ["dep:moosicbox_library", "dep:moosicbox_player"]
-qobuz      = ["dep:moosicbox_qobuz"]
 scan       = ["dep:throttle", "moosicbox_scan/api"]
 search     = ["moosicbox_search/api"]
-tidal      = ["dep:moosicbox_tidal"]
 upnp       = ["dep:switchy_upnp", "player"]
-yt         = ["dep:moosicbox_yt"]
+
+all-sources = ["qobuz", "tidal", "yt"]
+
+qobuz = ["dep:moosicbox_qobuz"]
+tidal = ["dep:moosicbox_tidal"]
+yt    = ["dep:moosicbox_yt"]
 
 # APIs
 all-apis = ["app-apis", "player-api", "upnp-api"]
