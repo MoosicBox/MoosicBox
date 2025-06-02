@@ -39,7 +39,7 @@ use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
 };
 use moosicbox_music_api::{
-    AuthenticatedMusicApi, MusicApi, TrackOrId,
+    MusicApi, TrackOrId,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
@@ -2145,36 +2145,6 @@ impl QobuzMusicApi {
     }
 }
 
-#[cfg(feature = "scan")]
-pub mod scan {
-    use async_trait::async_trait;
-    use moosicbox_music_api::ScannableMusicApi;
-
-    use crate::QobuzMusicApi;
-
-    #[async_trait]
-    impl ScannableMusicApi for QobuzMusicApi {
-        async fn scan(&self) -> Result<(), moosicbox_music_api::Error> {
-            Ok(())
-        }
-    }
-}
-
-#[async_trait]
-impl AuthenticatedMusicApi for QobuzMusicApi {
-    async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
-        Ok(())
-    }
-
-    fn is_logged_in(&self) -> bool {
-        self.logged_in.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    async fn logout(&self) -> Result<(), moosicbox_music_api::Error> {
-        Ok(())
-    }
-}
-
 #[async_trait]
 impl MusicApi for QobuzMusicApi {
     fn source(&self) -> &ApiSource {
@@ -2613,6 +2583,22 @@ impl MusicApi for QobuzMusicApi {
         Ok(get_content_length(&url, None, None)
             .await
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
+    }
+
+    async fn scan(&self) -> Result<(), moosicbox_music_api::Error> {
+        Ok(())
+    }
+
+    async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
+        Ok(())
+    }
+
+    async fn is_logged_in(&self) -> Result<bool, moosicbox_music_api::Error> {
+        Ok(self.logged_in.load(std::sync::atomic::Ordering::SeqCst))
+    }
+
+    async fn logout(&self) -> Result<(), moosicbox_music_api::Error> {
+        Ok(())
     }
 }
 

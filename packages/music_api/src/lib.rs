@@ -111,6 +111,8 @@ pub trait SourceToMusicApi {
 pub enum Error {
     #[error("Music API for source not found: {0}")]
     MusicApiNotFound(ApiSource),
+    #[error("Unsupported Action")]
+    UnsupportedAction,
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -162,20 +164,6 @@ impl From<&Track> for TrackOrId {
     fn from(value: &Track) -> Self {
         Self::Track(Box::new(value.to_owned()))
     }
-}
-
-#[async_trait]
-pub trait ScannableMusicApi: MusicApi {
-    async fn scan(&self) -> Result<(), Error>;
-}
-
-#[async_trait]
-pub trait AuthenticatedMusicApi: MusicApi {
-    async fn authenticate(&self) -> Result<(), Error>;
-
-    fn is_logged_in(&self) -> bool;
-
-    async fn logout(&self) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -292,6 +280,30 @@ pub trait MusicApi: Send + Sync {
         source: &TrackSource,
         quality: PlaybackQuality,
     ) -> Result<Option<u64>, Error>;
+
+    async fn scan(&self) -> Result<(), Error> {
+        Err(Error::UnsupportedAction)
+    }
+
+    async fn authenticate(&self) -> Result<(), Error> {
+        Err(Error::UnsupportedAction)
+    }
+
+    fn scan_enabled(&self) -> bool {
+        false
+    }
+
+    fn authentication_enabled(&self) -> bool {
+        false
+    }
+
+    async fn is_logged_in(&self) -> Result<bool, Error> {
+        Err(Error::UnsupportedAction)
+    }
+
+    async fn logout(&self) -> Result<(), Error> {
+        Err(Error::UnsupportedAction)
+    }
 }
 
 pub struct CachedMusicApi<T: MusicApi> {
