@@ -87,9 +87,7 @@ impl From<TrackSourceError> for actix_web::Error {
         match e {
             TrackSourceError::NotFound(_) => ErrorNotFound(e.to_string()),
             TrackSourceError::InvalidSource => ErrorBadRequest(e.to_string()),
-            TrackSourceError::Track(_) | TrackSourceError::MusicApis(_) => {
-                ErrorInternalServerError(e.to_string())
-            }
+            TrackSourceError::MusicApi(_) => ErrorInternalServerError(e.to_string()),
         }
     }
 }
@@ -242,7 +240,7 @@ impl From<GetTrackBytesError> for actix_web::Error {
             | GetTrackBytesError::ParseInt(_)
             | GetTrackBytesError::Recv(_)
             | GetTrackBytesError::Commander(_)
-            | GetTrackBytesError::Track(_)
+            | GetTrackBytesError::MusicApi(_)
             | GetTrackBytesError::TrackInfo(_) => ErrorInternalServerError(err),
             GetTrackBytesError::NotFound => ErrorNotFound(err),
             GetTrackBytesError::UnsupportedFormat => ErrorBadRequest(err),
@@ -635,7 +633,7 @@ impl From<ArtistCoverError> for actix_web::Error {
     fn from(err: ArtistCoverError) -> Self {
         match err {
             ArtistCoverError::NotFound(..) => ErrorNotFound(err.to_string()),
-            ArtistCoverError::Artist(_)
+            ArtistCoverError::MusicApi(_)
             | ArtistCoverError::FetchCover(_)
             | ArtistCoverError::FetchLocalArtistCover(_)
             | ArtistCoverError::IO(_)
@@ -789,7 +787,7 @@ impl From<AlbumCoverError> for actix_web::Error {
     fn from(err: AlbumCoverError) -> Self {
         match err {
             AlbumCoverError::NotFound(..) => ErrorNotFound(err.to_string()),
-            AlbumCoverError::Album(_)
+            AlbumCoverError::MusicApi(_)
             | AlbumCoverError::FetchCover(_)
             | AlbumCoverError::FetchLocalAlbumCover(_)
             | AlbumCoverError::IO(_)

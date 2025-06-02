@@ -56,8 +56,7 @@ impl moosicbox_music_api::SourceToMusicApi for SourceToRemoteLibrary {
     fn get(
         &self,
         source: &moosicbox_music_models::ApiSource,
-    ) -> Result<Arc<Box<dyn moosicbox_music_api::MusicApi>>, moosicbox_music_api::MusicApisError>
-    {
+    ) -> Result<Arc<Box<dyn moosicbox_music_api::MusicApi>>, moosicbox_music_api::Error> {
         Ok(Arc::new(Box::new(
             moosicbox_remote_library::RemoteLibraryMusicApi::new(
                 self.host.clone(),

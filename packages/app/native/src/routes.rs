@@ -10,9 +10,7 @@ use moosicbox_app_native_ui::downloads::DownloadTab;
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_downloader::api::models::ApiDownloadTask;
-use moosicbox_music_api::{
-    AlbumError, MusicApisError, SourceToMusicApi as _, TracksError, profiles::PROFILES,
-};
+use moosicbox_music_api::{SourceToMusicApi as _, profiles::PROFILES};
 use moosicbox_music_api_api::models::ApiMusicApi;
 use moosicbox_music_models::{
     AlbumSort, AlbumType, ApiSource, TrackApiSource, TryFromStringTrackApiSourceError,
@@ -47,11 +45,7 @@ pub enum RouteError {
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
-    MusicApis(#[from] MusicApisError),
-    #[error(transparent)]
-    Album(#[from] AlbumError),
-    #[error(transparent)]
-    Tracks(#[from] TracksError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     AppState(#[from] AppStateError),
     #[error(transparent)]

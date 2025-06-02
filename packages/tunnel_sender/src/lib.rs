@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use bytes::Bytes;
-use moosicbox_music_api::{MusicApisError, models::TrackAudioQuality};
+use moosicbox_music_api::{Error, models::TrackAudioQuality};
 use moosicbox_music_models::{ApiSource, AudioFormat};
 use moosicbox_ws::WebsocketMessageError;
 use serde::Deserialize;
@@ -59,7 +59,7 @@ pub enum TunnelRequestError {
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
-    MusicApis(#[from] MusicApisError),
+    MusicApi(#[from] Error),
 }
 
 #[derive(Debug, Deserialize)]

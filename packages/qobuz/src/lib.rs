@@ -39,9 +39,7 @@ use moosicbox_json_utils::{
     serde_json::{ToNestedValue, ToValue},
 };
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, AuthenticatedMusicApi, AuthenticationError, MusicApi,
-    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrId, TracksError,
+    AuthenticatedMusicApi, MusicApi, TrackOrId,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
@@ -1989,91 +1987,91 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchApp
     Ok(AppConfig { app_id, secrets })
 }
 
-impl From<QobuzFavoriteArtistsError> for ArtistsError {
+impl From<QobuzFavoriteArtistsError> for moosicbox_music_api::Error {
     fn from(err: QobuzFavoriteArtistsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzArtistError> for ArtistError {
+impl From<QobuzArtistError> for moosicbox_music_api::Error {
     fn from(err: QobuzArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzAddFavoriteArtistError> for AddArtistError {
+impl From<QobuzAddFavoriteArtistError> for moosicbox_music_api::Error {
     fn from(err: QobuzAddFavoriteArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzRemoveFavoriteArtistError> for RemoveArtistError {
+impl From<QobuzRemoveFavoriteArtistError> for moosicbox_music_api::Error {
     fn from(err: QobuzRemoveFavoriteArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzFavoriteAlbumsError> for AlbumsError {
+impl From<QobuzFavoriteAlbumsError> for moosicbox_music_api::Error {
     fn from(err: QobuzFavoriteAlbumsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzAlbumError> for AlbumError {
+impl From<QobuzAlbumError> for moosicbox_music_api::Error {
     fn from(err: QobuzAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzArtistAlbumsError> for ArtistAlbumsError {
+impl From<QobuzArtistAlbumsError> for moosicbox_music_api::Error {
     fn from(err: QobuzArtistAlbumsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzAddFavoriteAlbumError> for AddAlbumError {
+impl From<QobuzAddFavoriteAlbumError> for moosicbox_music_api::Error {
     fn from(err: QobuzAddFavoriteAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzRemoveFavoriteAlbumError> for RemoveAlbumError {
+impl From<QobuzRemoveFavoriteAlbumError> for moosicbox_music_api::Error {
     fn from(err: QobuzRemoveFavoriteAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzFavoriteTracksError> for TracksError {
+impl From<QobuzFavoriteTracksError> for moosicbox_music_api::Error {
     fn from(err: QobuzFavoriteTracksError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzAlbumTracksError> for TracksError {
+impl From<QobuzAlbumTracksError> for moosicbox_music_api::Error {
     fn from(err: QobuzAlbumTracksError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzTrackError> for TrackError {
+impl From<QobuzTrackError> for moosicbox_music_api::Error {
     fn from(err: QobuzTrackError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzTrackFileUrlError> for TrackError {
+impl From<QobuzTrackFileUrlError> for moosicbox_music_api::Error {
     fn from(err: QobuzTrackFileUrlError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzAddFavoriteTrackError> for AddTrackError {
+impl From<QobuzAddFavoriteTrackError> for moosicbox_music_api::Error {
     fn from(err: QobuzAddFavoriteTrackError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<QobuzRemoveFavoriteTrackError> for RemoveTrackError {
+impl From<QobuzRemoveFavoriteTrackError> for moosicbox_music_api::Error {
     fn from(err: QobuzRemoveFavoriteTrackError) -> Self {
         Self::Other(Box::new(err))
     }
@@ -2150,13 +2148,13 @@ impl QobuzMusicApi {
 #[cfg(feature = "scan")]
 pub mod scan {
     use async_trait::async_trait;
-    use moosicbox_music_api::{ScanError, ScannableMusicApi};
+    use moosicbox_music_api::ScannableMusicApi;
 
     use crate::QobuzMusicApi;
 
     #[async_trait]
     impl ScannableMusicApi for QobuzMusicApi {
-        async fn scan(&self) -> Result<(), ScanError> {
+        async fn scan(&self) -> Result<(), moosicbox_music_api::Error> {
             Ok(())
         }
     }
@@ -2164,7 +2162,7 @@ pub mod scan {
 
 #[async_trait]
 impl AuthenticatedMusicApi for QobuzMusicApi {
-    async fn authenticate(&self) -> Result<(), AuthenticationError> {
+    async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
         Ok(())
     }
 
@@ -2172,7 +2170,7 @@ impl AuthenticatedMusicApi for QobuzMusicApi {
         self.logged_in.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    async fn logout(&self) -> Result<(), AuthenticationError> {
+    async fn logout(&self) -> Result<(), moosicbox_music_api::Error> {
         Ok(())
     }
 }
@@ -2189,7 +2187,7 @@ impl MusicApi for QobuzMusicApi {
         limit: Option<u32>,
         _order: Option<ArtistOrder>,
         _order_direction: Option<ArtistOrderDirection>,
-    ) -> PagingResult<Artist, ArtistsError> {
+    ) -> PagingResult<Artist, moosicbox_music_api::Error> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
             &self.db,
@@ -2202,7 +2200,7 @@ impl MusicApi for QobuzMusicApi {
         .inner_into())
     }
 
-    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, moosicbox_music_api::Error> {
         Ok(
             match artist(
                 #[cfg(feature = "db")]
@@ -2230,7 +2228,7 @@ impl MusicApi for QobuzMusicApi {
         )
     }
 
-    async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
+    async fn add_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
             &self.db,
@@ -2241,7 +2239,7 @@ impl MusicApi for QobuzMusicApi {
         .await?)
     }
 
-    async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
+    async fn remove_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
             &self.db,
@@ -2256,7 +2254,7 @@ impl MusicApi for QobuzMusicApi {
         &self,
         artist: &Artist,
         size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, ArtistError> {
+    ) -> Result<Option<ImageCoverSource>, moosicbox_music_api::Error> {
         let artist = crate::artist(
             #[cfg(feature = "db")]
             &self.db,
@@ -2273,7 +2271,10 @@ impl MusicApi for QobuzMusicApi {
             .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
-    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
+    async fn albums(
+        &self,
+        request: &AlbumsRequest,
+    ) -> PagingResult<Album, moosicbox_music_api::Error> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
             &self.db,
@@ -2287,10 +2288,10 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?
-        .inner_try_into_map_err(|e| AlbumsError::Other(Box::new(e)))?)
+        .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 
-    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, moosicbox_music_api::Error> {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
@@ -2301,7 +2302,7 @@ impl MusicApi for QobuzMusicApi {
             )
             .await?
             .try_into()
-            .map_err(|e| AlbumError::Other(Box::new(e)))?,
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?,
         ))
     }
 
@@ -2310,7 +2311,7 @@ impl MusicApi for QobuzMusicApi {
         album_id: &Id,
         offset: Option<u32>,
         limit: Option<u32>,
-    ) -> PagingResult<AlbumVersion, TracksError> {
+    ) -> PagingResult<AlbumVersion, moosicbox_music_api::Error> {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(50);
 
@@ -2362,7 +2363,7 @@ impl MusicApi for QobuzMusicApi {
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, ArtistAlbumsError> {
+    ) -> PagingResult<Album, moosicbox_music_api::Error> {
         Ok(artist_albums(
             #[cfg(feature = "db")]
             &self.db,
@@ -2377,10 +2378,10 @@ impl MusicApi for QobuzMusicApi {
             None,
         )
         .await?
-        .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?)
+        .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 
-    async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
+    async fn add_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
             &self.db,
@@ -2391,7 +2392,7 @@ impl MusicApi for QobuzMusicApi {
         .await?)
     }
 
-    async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
+    async fn remove_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
             &self.db,
@@ -2406,7 +2407,7 @@ impl MusicApi for QobuzMusicApi {
         &self,
         album: &Album,
         size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, AlbumError> {
+    ) -> Result<Option<ImageCoverSource>, moosicbox_music_api::Error> {
         let album = crate::album(
             #[cfg(feature = "db")]
             &self.db,
@@ -2430,7 +2431,7 @@ impl MusicApi for QobuzMusicApi {
         limit: Option<u32>,
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, moosicbox_music_api::Error> {
         let Some(track_ids) = track_ids else {
             return Ok(favorite_tracks(
                 #[cfg(feature = "db")]
@@ -2486,7 +2487,7 @@ impl MusicApi for QobuzMusicApi {
                 Ok(tracks) => tracks,
                 Err(e) => {
                     moosicbox_assert::die_or_err!(
-                        TracksError::Other(Box::new(e)),
+                        moosicbox_music_api::Error::Other(Box::new(e)),
                         "Failed to fetch track: {e:?}",
                     );
                 }
@@ -2514,7 +2515,7 @@ impl MusicApi for QobuzMusicApi {
         limit: Option<u32>,
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, moosicbox_music_api::Error> {
         Ok(album_tracks(
             #[cfg(feature = "db")]
             &self.db,
@@ -2528,7 +2529,7 @@ impl MusicApi for QobuzMusicApi {
         .inner_into())
     }
 
-    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, moosicbox_music_api::Error> {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
@@ -2542,7 +2543,7 @@ impl MusicApi for QobuzMusicApi {
         ))
     }
 
-    async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
+    async fn add_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
             &self.db,
@@ -2553,7 +2554,7 @@ impl MusicApi for QobuzMusicApi {
         .await?)
     }
 
-    async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
+    async fn remove_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
             &self.db,
@@ -2568,7 +2569,7 @@ impl MusicApi for QobuzMusicApi {
         &self,
         track: TrackOrId,
         quality: TrackAudioQuality,
-    ) -> Result<Option<TrackSource>, TrackError> {
+    ) -> Result<Option<TrackSource>, moosicbox_music_api::Error> {
         let url = track_file_url(
             #[cfg(feature = "db")]
             &self.db,
@@ -2597,7 +2598,7 @@ impl MusicApi for QobuzMusicApi {
         track: TrackOrId,
         _source: &TrackSource,
         _quality: PlaybackQuality,
-    ) -> Result<Option<u64>, TrackError> {
+    ) -> Result<Option<u64>, moosicbox_music_api::Error> {
         let url = track_file_url(
             #[cfg(feature = "db")]
             &self.db,
@@ -2611,7 +2612,7 @@ impl MusicApi for QobuzMusicApi {
 
         Ok(get_content_length(&url, None, None)
             .await
-            .map_err(|e| TrackError::Other(Box::new(e)))?)
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 }
 

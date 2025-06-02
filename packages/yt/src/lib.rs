@@ -29,9 +29,7 @@ use moosicbox_json_utils::{
 };
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, AuthenticatedMusicApi, AuthenticationError, MusicApi,
-    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrId, TracksError,
+    AuthenticatedMusicApi, MusicApi, TrackOrId,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         TrackAudioQuality, TrackOrder, TrackOrderDirection, TrackSource,
@@ -2255,97 +2253,97 @@ impl TryFrom<AlbumType> for YtAlbumType {
     }
 }
 
-impl From<YtFavoriteArtistsError> for ArtistsError {
+impl From<YtFavoriteArtistsError> for moosicbox_music_api::Error {
     fn from(err: YtFavoriteArtistsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtArtistError> for ArtistError {
+impl From<YtArtistError> for moosicbox_music_api::Error {
     fn from(err: YtArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtAddFavoriteArtistError> for AddArtistError {
+impl From<YtAddFavoriteArtistError> for moosicbox_music_api::Error {
     fn from(err: YtAddFavoriteArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtRemoveFavoriteArtistError> for RemoveArtistError {
+impl From<YtRemoveFavoriteArtistError> for moosicbox_music_api::Error {
     fn from(err: YtRemoveFavoriteArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtFavoriteAlbumsError> for AlbumsError {
+impl From<YtFavoriteAlbumsError> for moosicbox_music_api::Error {
     fn from(err: YtFavoriteAlbumsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtAlbumError> for AlbumError {
+impl From<YtAlbumError> for moosicbox_music_api::Error {
     fn from(err: YtAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtArtistAlbumsError> for ArtistAlbumsError {
+impl From<YtArtistAlbumsError> for moosicbox_music_api::Error {
     fn from(err: YtArtistAlbumsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TryFromAlbumTypeError> for ArtistAlbumsError {
+impl From<TryFromAlbumTypeError> for moosicbox_music_api::Error {
     fn from(err: TryFromAlbumTypeError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtAddFavoriteAlbumError> for AddAlbumError {
+impl From<YtAddFavoriteAlbumError> for moosicbox_music_api::Error {
     fn from(err: YtAddFavoriteAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtRemoveFavoriteAlbumError> for RemoveAlbumError {
+impl From<YtRemoveFavoriteAlbumError> for moosicbox_music_api::Error {
     fn from(err: YtRemoveFavoriteAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtFavoriteTracksError> for TracksError {
+impl From<YtFavoriteTracksError> for moosicbox_music_api::Error {
     fn from(err: YtFavoriteTracksError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtAlbumTracksError> for TracksError {
+impl From<YtAlbumTracksError> for moosicbox_music_api::Error {
     fn from(err: YtAlbumTracksError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtTrackError> for TrackError {
+impl From<YtTrackError> for moosicbox_music_api::Error {
     fn from(err: YtTrackError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtTrackFileUrlError> for TrackError {
+impl From<YtTrackFileUrlError> for moosicbox_music_api::Error {
     fn from(err: YtTrackFileUrlError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtAddFavoriteTrackError> for AddTrackError {
+impl From<YtAddFavoriteTrackError> for moosicbox_music_api::Error {
     fn from(err: YtAddFavoriteTrackError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<YtRemoveFavoriteTrackError> for RemoveTrackError {
+impl From<YtRemoveFavoriteTrackError> for moosicbox_music_api::Error {
     fn from(err: YtRemoveFavoriteTrackError) -> Self {
         Self::Other(Box::new(err))
     }
@@ -2422,13 +2420,13 @@ impl YtMusicApi {
 #[cfg(feature = "scan")]
 pub mod scan {
     use async_trait::async_trait;
-    use moosicbox_music_api::{ScanError, ScannableMusicApi};
+    use moosicbox_music_api::ScannableMusicApi;
 
     use crate::YtMusicApi;
 
     #[async_trait]
     impl ScannableMusicApi for YtMusicApi {
-        async fn scan(&self) -> Result<(), ScanError> {
+        async fn scan(&self) -> Result<(), moosicbox_music_api::Error> {
             Ok(())
         }
     }
@@ -2436,7 +2434,7 @@ pub mod scan {
 
 #[async_trait]
 impl AuthenticatedMusicApi for YtMusicApi {
-    async fn authenticate(&self) -> Result<(), AuthenticationError> {
+    async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
         Ok(())
     }
 
@@ -2444,7 +2442,7 @@ impl AuthenticatedMusicApi for YtMusicApi {
         self.logged_in.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    async fn logout(&self) -> Result<(), AuthenticationError> {
+    async fn logout(&self) -> Result<(), moosicbox_music_api::Error> {
         Ok(())
     }
 }
@@ -2461,7 +2459,7 @@ impl MusicApi for YtMusicApi {
         limit: Option<u32>,
         order: Option<ArtistOrder>,
         order_direction: Option<ArtistOrderDirection>,
-    ) -> PagingResult<Artist, ArtistsError> {
+    ) -> PagingResult<Artist, moosicbox_music_api::Error> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
             &self.db,
@@ -2479,7 +2477,7 @@ impl MusicApi for YtMusicApi {
         .inner_into())
     }
 
-    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, moosicbox_music_api::Error> {
         Ok(
             match artist(
                 #[cfg(feature = "db")]
@@ -2509,7 +2507,7 @@ impl MusicApi for YtMusicApi {
         )
     }
 
-    async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
+    async fn add_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
             &self.db,
@@ -2523,7 +2521,7 @@ impl MusicApi for YtMusicApi {
         .await?)
     }
 
-    async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
+    async fn remove_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
             &self.db,
@@ -2537,7 +2535,10 @@ impl MusicApi for YtMusicApi {
         .await?)
     }
 
-    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
+    async fn albums(
+        &self,
+        request: &AlbumsRequest,
+    ) -> PagingResult<Album, moosicbox_music_api::Error> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
             &self.db,
@@ -2552,10 +2553,10 @@ impl MusicApi for YtMusicApi {
             None,
         )
         .await?
-        .inner_try_into_map_err(|e| AlbumsError::Other(Box::new(e)))?)
+        .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 
-    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, moosicbox_music_api::Error> {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
@@ -2568,7 +2569,7 @@ impl MusicApi for YtMusicApi {
             )
             .await?
             .try_into()
-            .map_err(|e| AlbumError::Other(Box::new(e)))?,
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?,
         ))
     }
 
@@ -2577,7 +2578,7 @@ impl MusicApi for YtMusicApi {
         album_id: &Id,
         offset: Option<u32>,
         limit: Option<u32>,
-    ) -> PagingResult<AlbumVersion, TracksError> {
+    ) -> PagingResult<AlbumVersion, moosicbox_music_api::Error> {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(50);
 
@@ -2631,7 +2632,7 @@ impl MusicApi for YtMusicApi {
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, ArtistAlbumsError> {
+    ) -> PagingResult<Album, moosicbox_music_api::Error> {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
@@ -2649,7 +2650,7 @@ impl MusicApi for YtMusicApi {
                 None,
             )
             .await?
-            .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?
+            .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
         } else {
             let pages = futures::future::join_all(
                 vec![
@@ -2715,11 +2716,11 @@ impl MusicApi for YtMusicApi {
                     })
                 }))),
             }
-            .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?
+            .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
         })
     }
 
-    async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
+    async fn add_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
             &self.db,
@@ -2733,7 +2734,7 @@ impl MusicApi for YtMusicApi {
         .await?)
     }
 
-    async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
+    async fn remove_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
             &self.db,
@@ -2754,7 +2755,7 @@ impl MusicApi for YtMusicApi {
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, moosicbox_music_api::Error> {
         moosicbox_assert::assert_or_unimplemented!(
             track_ids.is_none(),
             "Fetching specific tracks by id is not implemented yet"
@@ -2784,7 +2785,7 @@ impl MusicApi for YtMusicApi {
         limit: Option<u32>,
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, moosicbox_music_api::Error> {
         Ok(album_tracks(
             #[cfg(feature = "db")]
             &self.db,
@@ -2800,7 +2801,7 @@ impl MusicApi for YtMusicApi {
         .inner_into())
     }
 
-    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, moosicbox_music_api::Error> {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
@@ -2816,7 +2817,7 @@ impl MusicApi for YtMusicApi {
         ))
     }
 
-    async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
+    async fn add_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
             &self.db,
@@ -2830,7 +2831,7 @@ impl MusicApi for YtMusicApi {
         .await?)
     }
 
-    async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
+    async fn remove_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
             &self.db,
@@ -2848,7 +2849,7 @@ impl MusicApi for YtMusicApi {
         &self,
         track: TrackOrId,
         quality: TrackAudioQuality,
-    ) -> Result<Option<TrackSource>, TrackError> {
+    ) -> Result<Option<TrackSource>, moosicbox_music_api::Error> {
         let url = track_file_url(
             #[cfg(feature = "db")]
             &self.db,
@@ -2881,7 +2882,7 @@ impl MusicApi for YtMusicApi {
         track: TrackOrId,
         _source: &TrackSource,
         _quality: PlaybackQuality,
-    ) -> Result<Option<u64>, TrackError> {
+    ) -> Result<Option<u64>, moosicbox_music_api::Error> {
         let Some(url) = track_file_url(
             #[cfg(feature = "db")]
             &self.db,
@@ -2897,6 +2898,6 @@ impl MusicApi for YtMusicApi {
 
         Ok(get_content_length(&url, None, None)
             .await
-            .map_err(|e| TrackError::Other(Box::new(e)))?)
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 }

@@ -7,9 +7,7 @@ use std::sync::{Arc, LazyLock};
 use async_trait::async_trait;
 use moosicbox_menu_models::{AlbumVersion, api::ApiAlbumVersion};
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, MusicApi, RemoveAlbumError, RemoveArtistError, RemoveTrackError,
-    TrackError, TrackOrId, TracksError,
+    MusicApi, TrackOrId,
     models::{
         AlbumFilters, AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder,
         ArtistOrderDirection, ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder,
@@ -67,7 +65,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         limit: Option<u32>,
         order: Option<ArtistOrder>,
         order_direction: Option<ArtistOrderDirection>,
-    ) -> PagingResult<Artist, ArtistsError> {
+    ) -> PagingResult<Artist, moosicbox_music_api::Error> {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
@@ -90,21 +88,21 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| ArtistsError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(PagingResponse::empty());
             }
-            return Err(ArtistsError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let value: Vec<ApiArtist> = response
             .json()
             .await
-            .map_err(|e| ArtistsError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         let total = u32::try_from(value.len()).unwrap();
         let items: Result<Vec<_>, _> = value
@@ -113,7 +111,7 @@ impl MusicApi for RemoteLibraryMusicApi {
             .take(std::cmp::min(total - offset, limit) as usize)
             .map(TryInto::try_into)
             .collect();
-        let items = items.map_err(|e| ArtistsError::Other(Box::new(e)))?;
+        let items = items.map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         let page = PagingResponse::new(
             Page::WithTotal {
@@ -138,7 +136,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(page)
     }
 
-    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, moosicbox_music_api::Error> {
         let request = CLIENT
             .request(
                 switchy_http::models::Method::Get,
@@ -153,34 +151,37 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(None);
             }
-            return Err(ArtistError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let value: ApiArtist = response
             .json()
             .await
-            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         Ok(Some(value.into()))
     }
 
-    async fn add_artist(&self, _artist_id: &Id) -> Result<(), AddArtistError> {
+    async fn add_artist(&self, _artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         unimplemented!("Adding artist is not implemented")
     }
 
-    async fn remove_artist(&self, _artist_id: &Id) -> Result<(), RemoveArtistError> {
+    async fn remove_artist(&self, _artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         unimplemented!("Removing artist is not implemented")
     }
 
-    async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
+    async fn album_artist(
+        &self,
+        album_id: &Id,
+    ) -> Result<Option<Artist>, moosicbox_music_api::Error> {
         let request = CLIENT
             .request(
                 switchy_http::models::Method::Get,
@@ -195,21 +196,21 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(None);
             }
-            return Err(ArtistError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let value: ApiArtist = response
             .json()
             .await
-            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         Ok(Some(value.into()))
     }
@@ -218,7 +219,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         &self,
         artist: &Artist,
         _size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, ArtistError> {
+    ) -> Result<Option<ImageCoverSource>, moosicbox_music_api::Error> {
         let artist_id = &artist.id;
         let url = format!("{host}/files/artists/{artist_id}/source", host = self.host);
         let request = CLIENT
@@ -228,15 +229,15 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| ArtistError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(None);
             }
-            return Err(ArtistError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         Ok(Some(ImageCoverSource::RemoteUrl {
@@ -248,7 +249,10 @@ impl MusicApi for RemoteLibraryMusicApi {
         }))
     }
 
-    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
+    async fn albums(
+        &self,
+        request: &AlbumsRequest,
+    ) -> PagingResult<Album, moosicbox_music_api::Error> {
         let url = format!(
             "{host}/menu/albums?offset={offset}&limit={limit}{sort}{sources}{filters}",
             host = self.host,
@@ -309,26 +313,26 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = req
             .send()
             .await
-            .map_err(|e| AlbumsError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(PagingResponse::empty());
             }
-            return Err(AlbumsError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let page: Page<ApiAlbum> = response
             .json()
             .await
-            .map_err(|e| AlbumsError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         let page: Page<Result<Album, _>> = page.map(TryInto::try_into);
         let page = page
             .transpose()
-            .map_err(|e| AlbumsError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         let page = PagingResponse::new(page, {
             let api = self.clone();
@@ -345,7 +349,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         Ok(page)
     }
 
-    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, moosicbox_music_api::Error> {
         let request = CLIENT
             .request(
                 switchy_http::models::Method::Get,
@@ -360,27 +364,25 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| AlbumError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(None);
             }
-            return Err(AlbumError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let value: ApiAlbum = response
             .json()
             .await
-            .map_err(|e| AlbumError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
-        Ok(Some(
-            value
-                .try_into()
-                .map_err(|e| AlbumError::Other(Box::new(e)))?,
-        ))
+        Ok(Some(value.try_into().map_err(|e| {
+            moosicbox_music_api::Error::Other(Box::new(e))
+        })?))
     }
 
     async fn album_versions(
@@ -388,7 +390,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         album_id: &Id,
         offset: Option<u32>,
         limit: Option<u32>,
-    ) -> PagingResult<AlbumVersion, TracksError> {
+    ) -> PagingResult<AlbumVersion, moosicbox_music_api::Error> {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(50);
 
@@ -406,21 +408,21 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| TracksError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(PagingResponse::empty());
             }
-            return Err(TracksError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let value: Vec<ApiAlbumVersion> = response
             .json()
             .await
-            .map_err(|e| TracksError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         let total = u32::try_from(value.len()).unwrap();
         let items = value
@@ -463,7 +465,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, ArtistAlbumsError> {
+    ) -> PagingResult<Album, moosicbox_music_api::Error> {
         let request = AlbumsRequest {
             page: Some(PagingRequest {
                 offset: offset.unwrap_or(0),
@@ -483,15 +485,15 @@ impl MusicApi for RemoteLibraryMusicApi {
 
         self.albums(&request)
             .await
-            .map(|x| x.map_err(|e| ArtistAlbumsError::Other(Box::new(e))))
-            .map_err(|e| ArtistAlbumsError::Other(Box::new(e)))
+            .map(|x| x.map_err(|e| moosicbox_music_api::Error::Other(Box::new(e))))
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
     }
 
-    async fn add_album(&self, _album_id: &Id) -> Result<(), AddAlbumError> {
+    async fn add_album(&self, _album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         unimplemented!("Adding album is not implemented")
     }
 
-    async fn remove_album(&self, _album_id: &Id) -> Result<(), RemoveAlbumError> {
+    async fn remove_album(&self, _album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         unimplemented!("Removing album is not implemented")
     }
 
@@ -499,7 +501,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         &self,
         album: &Album,
         _size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, AlbumError> {
+    ) -> Result<Option<ImageCoverSource>, moosicbox_music_api::Error> {
         let album_id = &album.id;
         let url = format!("{host}/files/albums/{album_id}/source", host = self.host);
         let request = CLIENT
@@ -509,15 +511,15 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| AlbumError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(None);
             }
-            return Err(AlbumError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         Ok(Some(ImageCoverSource::RemoteUrl {
@@ -536,7 +538,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, moosicbox_music_api::Error> {
         let Some(track_ids) = track_ids else {
             unimplemented!("Fetching all tracks is not implemented");
         };
@@ -560,18 +562,18 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| TracksError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
-            return Err(TracksError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let tracks: Vec<Track> = response
             .json::<Vec<ApiTrack>>()
             .await
-            .map_err(|e| TracksError::Other(Box::new(e)))?
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
             .into_iter()
             .map(Into::into)
             .collect();
@@ -616,7 +618,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         limit: Option<u32>,
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, moosicbox_music_api::Error> {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
@@ -634,21 +636,21 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| TracksError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(PagingResponse::empty());
             }
-            return Err(TracksError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let value: Vec<ApiTrack> = response
             .json()
             .await
-            .map_err(|e| TracksError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         let total = u32::try_from(value.len()).unwrap();
 
@@ -683,7 +685,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         })
     }
 
-    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, moosicbox_music_api::Error> {
         let track_ids_str = track_id.to_string();
 
         let request = CLIENT
@@ -700,32 +702,32 @@ impl MusicApi for RemoteLibraryMusicApi {
         let response = request
             .send()
             .await
-            .map_err(|e| TrackError::Other(Box::new(e)))?;
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         if !response.status().is_success() {
             if response.status() == StatusCode::NotFound {
                 return Ok(None);
             }
-            return Err(TrackError::Other(Box::new(RequestError::Unsuccessful(
-                format!("Status {}", response.status()),
-            ))));
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
         }
 
         let mut tracks = response
             .json::<Vec<ApiTrack>>()
             .await
-            .map_err(|e| TrackError::Other(Box::new(e)))?
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
             .into_iter()
             .map(Into::into);
 
         Ok(tracks.next())
     }
 
-    async fn add_track(&self, _track_id: &Id) -> Result<(), AddTrackError> {
+    async fn add_track(&self, _track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         unimplemented!("Adding track is not implemented")
     }
 
-    async fn remove_track(&self, _track_id: &Id) -> Result<(), RemoveTrackError> {
+    async fn remove_track(&self, _track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         unimplemented!("Removing track is not implemented")
     }
 
@@ -733,7 +735,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         &self,
         track: TrackOrId,
         _quality: TrackAudioQuality,
-    ) -> Result<Option<TrackSource>, TrackError> {
+    ) -> Result<Option<TrackSource>, moosicbox_music_api::Error> {
         let track_id = track.id();
         let url = format!("{host}/files/track?trackId={track_id}", host = self.host);
 
@@ -757,7 +759,7 @@ impl MusicApi for RemoteLibraryMusicApi {
         _track: TrackOrId,
         _source: &TrackSource,
         _quality: PlaybackQuality,
-    ) -> Result<Option<u64>, TrackError> {
+    ) -> Result<Option<u64>, moosicbox_music_api::Error> {
         unimplemented!("Fetching track size is not implemented")
     }
 }

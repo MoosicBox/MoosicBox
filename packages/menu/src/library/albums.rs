@@ -8,9 +8,7 @@ use moosicbox_library::{
     models::LibraryAlbum,
 };
 use moosicbox_menu_models::AlbumVersion;
-use moosicbox_music_api::{
-    AlbumsError, ArtistAlbumsError, LibraryAlbumError, MusicApi, TracksError, models::AlbumsRequest,
-};
+use moosicbox_music_api::{MusicApi, models::AlbumsRequest};
 use moosicbox_music_models::{
     Album, ApiSource, Artist, TrackApiSource,
     id::{Id, TryFromIdError},
@@ -64,9 +62,7 @@ pub enum GetAlbumsError {
     #[error(transparent)]
     GetAlbums(#[from] super::GetAlbumsError),
     #[error(transparent)]
-    Albums(#[from] AlbumsError),
-    #[error(transparent)]
-    ArtistAlbums(#[from] ArtistAlbumsError),
+    MusicApi(#[from] moosicbox_music_api::Error),
 }
 
 /// # Errors
@@ -107,7 +103,7 @@ pub async fn get_albums_from_source(
 #[derive(Debug, Error)]
 pub enum GetAlbumVersionsError {
     #[error(transparent)]
-    Tracks(#[from] TracksError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     LibraryAlbumTracks(#[from] LibraryAlbumTracksError),
 }
@@ -150,13 +146,9 @@ pub async fn get_album_versions_from_source(
 #[derive(Debug, Error)]
 pub enum AddAlbumError {
     #[error(transparent)]
-    Album(#[from] moosicbox_music_api::AlbumError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     GetAlbum(#[from] GetAlbumError),
-    #[error(transparent)]
-    Tracks(#[from] moosicbox_music_api::TracksError),
-    #[error(transparent)]
-    AddAlbum(#[from] moosicbox_music_api::AddAlbumError),
     #[error(transparent)]
     UpdateDatabase(#[from] moosicbox_scan::output::UpdateDatabaseError),
     #[error(transparent)]
@@ -290,13 +282,7 @@ pub enum RemoveAlbumError {
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
-    LibraryAlbum(#[from] LibraryAlbumError),
-    #[error(transparent)]
-    Album(#[from] moosicbox_music_api::AlbumError),
-    #[error(transparent)]
-    Tracks(#[from] moosicbox_music_api::TracksError),
-    #[error(transparent)]
-    RemoveAlbum(#[from] moosicbox_music_api::RemoveAlbumError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     DeleteFromIndex(#[from] DeleteFromIndexError),
     #[error(transparent)]
@@ -438,15 +424,7 @@ pub enum ReFavoriteAlbumError {
     #[error(transparent)]
     RemoveAlbum(#[from] RemoveAlbumError),
     #[error(transparent)]
-    Artist(#[from] moosicbox_music_api::ArtistError),
-    #[error(transparent)]
-    LibraryAlbum(#[from] LibraryAlbumError),
-    #[error(transparent)]
-    Album(#[from] moosicbox_music_api::AlbumError),
-    #[error(transparent)]
-    Albums(#[from] moosicbox_music_api::AlbumsError),
-    #[error(transparent)]
-    ArtistAlbums(#[from] moosicbox_music_api::ArtistAlbumsError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     ChronoParse(#[from] chrono::ParseError),
     #[error("Missing album")]

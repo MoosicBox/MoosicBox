@@ -35,8 +35,7 @@ use moosicbox_files::{
 };
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{
-    AlbumError, ArtistError, MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _,
-    TrackError, TracksError,
+    MusicApi, MusicApis, SourceToMusicApi as _,
     models::{ImageCoverSize, TrackSource},
 };
 use moosicbox_music_models::{
@@ -136,7 +135,7 @@ pub enum DownloadError {
     #[error(transparent)]
     CreateDownloadTasks(#[from] CreateDownloadTasksError),
     #[error(transparent)]
-    MusicApis(#[from] MusicApisError),
+    MusicApi(#[from] moosicbox_music_api::Error),
 }
 
 #[derive(Debug, Clone)]
@@ -156,7 +155,7 @@ pub struct DownloadRequest {
 fn music_api_from_source(
     #[allow(unused)] music_apis: &MusicApis,
     source: DownloadApiSource,
-) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
+) -> Result<Arc<Box<dyn MusicApi>>, moosicbox_music_api::Error> {
     const PROFILE: &str = "master";
 
     Ok(match source {
@@ -282,11 +281,7 @@ pub enum GetCreateDownloadTasksError {
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
-    Artist(#[from] ArtistError),
-    #[error(transparent)]
-    Album(#[from] AlbumError),
-    #[error(transparent)]
-    Tracks(#[from] TracksError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     ParseInt(#[from] ParseIntError),
     #[error(transparent)]
@@ -639,9 +634,7 @@ pub enum DownloadTrackError {
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
-    MusicApis(#[from] MusicApisError),
-    #[error(transparent)]
-    Track(#[from] TrackError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     TrackSource(#[from] TrackSourceError),
     #[error(transparent)]
@@ -733,7 +726,7 @@ async fn download_track(
         Ok(()) => Ok(()),
         Err(e) => Err(match e {
             DownloadTrackInnerError::DatabaseFetch(e) => DownloadTrackError::DatabaseFetch(e),
-            DownloadTrackInnerError::Track(e) => DownloadTrackError::Track(e),
+            DownloadTrackInnerError::MusicApi(e) => DownloadTrackError::MusicApi(e),
             DownloadTrackInnerError::TrackSource(e) => DownloadTrackError::TrackSource(e),
             DownloadTrackInnerError::GetTrackBytes(e) => DownloadTrackError::GetTrackBytes(e),
             DownloadTrackInnerError::IO(e) => DownloadTrackError::IO(e),
@@ -767,7 +760,7 @@ pub enum DownloadTrackInnerError {
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
-    Track(#[from] TrackError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     TrackSource(#[from] TrackSourceError),
     #[error(transparent)]
@@ -1008,7 +1001,7 @@ pub enum DownloadAlbumError {
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
-    MusicApis(#[from] MusicApisError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     DownloadTrack(#[from] DownloadTrackError),
     #[error(transparent)]
@@ -1017,12 +1010,6 @@ pub enum DownloadAlbumError {
     SaveBytesStreamToFile(#[from] SaveBytesStreamToFileError),
     #[error(transparent)]
     ArtistCover(#[from] ArtistCoverError),
-    #[error(transparent)]
-    Artist(#[from] ArtistError),
-    #[error(transparent)]
-    Album(#[from] AlbumError),
-    #[error(transparent)]
-    Tracks(#[from] TracksError),
     #[error(transparent)]
     AlbumCover(#[from] AlbumCoverError),
     #[error("Invalid source")]

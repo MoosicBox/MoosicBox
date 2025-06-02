@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
 use moosicbox_music_api::{
-    AlbumError, MusicApi,
+    MusicApi,
     models::{ImageCoverSize, ImageCoverSource},
 };
 use moosicbox_music_models::{Album, id::Id};
@@ -42,7 +42,7 @@ pub enum AlbumCoverError {
     #[error("Album cover not found for album: {0}")]
     NotFound(Id),
     #[error(transparent)]
-    Album(#[from] AlbumError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     FetchCover(#[from] FetchCoverError),
     #[error(transparent)]

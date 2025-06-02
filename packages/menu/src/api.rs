@@ -485,7 +485,7 @@ pub async fn get_artist_albums_endpoint(
 impl From<GetArtistError> for actix_web::Error {
     fn from(e: GetArtistError) -> Self {
         match e {
-            GetArtistError::Artist(_) => ErrorInternalServerError(e),
+            GetArtistError::MusicApi(_) => ErrorInternalServerError(e),
             GetArtistError::InvalidRequest => {
                 ErrorBadRequest(format!("Failed to fetch artist: {e:?}"))
             }

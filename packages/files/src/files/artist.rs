@@ -8,7 +8,7 @@ use std::{
 use bytes::BytesMut;
 use futures::{StreamExt, TryStreamExt};
 use moosicbox_music_api::{
-    ArtistError, MusicApi,
+    MusicApi,
     models::{ImageCoverSize, ImageCoverSource},
 };
 use moosicbox_music_models::{Artist, id::Id};
@@ -46,7 +46,7 @@ pub enum ArtistCoverError {
     #[error("Artist cover not found for artist: {0} ({1})")]
     NotFound(Id, String),
     #[error(transparent)]
-    Artist(#[from] ArtistError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     FetchCover(#[from] FetchCoverError),
     #[error(transparent)]

@@ -26,9 +26,7 @@ use moosicbox_json_utils::{
 };
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
-    AddAlbumError, AddArtistError, AddTrackError, AlbumError, AlbumsError, ArtistAlbumsError,
-    ArtistError, ArtistsError, AuthenticatedMusicApi, AuthenticationError, MusicApi,
-    RemoveAlbumError, RemoveArtistError, RemoveTrackError, TrackError, TrackOrId, TracksError,
+    AuthenticatedMusicApi, MusicApi, TrackOrId,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
@@ -2226,97 +2224,97 @@ impl TryFrom<AlbumType> for TidalAlbumType {
     }
 }
 
-impl From<TidalFavoriteArtistsError> for ArtistsError {
+impl From<TidalFavoriteArtistsError> for moosicbox_music_api::Error {
     fn from(err: TidalFavoriteArtistsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalArtistError> for ArtistError {
+impl From<TidalArtistError> for moosicbox_music_api::Error {
     fn from(err: TidalArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalAddFavoriteArtistError> for AddArtistError {
+impl From<TidalAddFavoriteArtistError> for moosicbox_music_api::Error {
     fn from(err: TidalAddFavoriteArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalRemoveFavoriteArtistError> for RemoveArtistError {
+impl From<TidalRemoveFavoriteArtistError> for moosicbox_music_api::Error {
     fn from(err: TidalRemoveFavoriteArtistError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalFavoriteAlbumsError> for AlbumsError {
+impl From<TidalFavoriteAlbumsError> for moosicbox_music_api::Error {
     fn from(err: TidalFavoriteAlbumsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalAlbumError> for AlbumError {
+impl From<TidalAlbumError> for moosicbox_music_api::Error {
     fn from(err: TidalAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalArtistAlbumsError> for ArtistAlbumsError {
+impl From<TidalArtistAlbumsError> for moosicbox_music_api::Error {
     fn from(err: TidalArtistAlbumsError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TryFromAlbumTypeError> for ArtistAlbumsError {
+impl From<TryFromAlbumTypeError> for moosicbox_music_api::Error {
     fn from(err: TryFromAlbumTypeError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalAddFavoriteAlbumError> for AddAlbumError {
+impl From<TidalAddFavoriteAlbumError> for moosicbox_music_api::Error {
     fn from(err: TidalAddFavoriteAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalRemoveFavoriteAlbumError> for RemoveAlbumError {
+impl From<TidalRemoveFavoriteAlbumError> for moosicbox_music_api::Error {
     fn from(err: TidalRemoveFavoriteAlbumError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalFavoriteTracksError> for TracksError {
+impl From<TidalFavoriteTracksError> for moosicbox_music_api::Error {
     fn from(err: TidalFavoriteTracksError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalAlbumTracksError> for TracksError {
+impl From<TidalAlbumTracksError> for moosicbox_music_api::Error {
     fn from(err: TidalAlbumTracksError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalTrackError> for TrackError {
+impl From<TidalTrackError> for moosicbox_music_api::Error {
     fn from(err: TidalTrackError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalTrackFileUrlError> for TrackError {
+impl From<TidalTrackFileUrlError> for moosicbox_music_api::Error {
     fn from(err: TidalTrackFileUrlError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalAddFavoriteTrackError> for AddTrackError {
+impl From<TidalAddFavoriteTrackError> for moosicbox_music_api::Error {
     fn from(err: TidalAddFavoriteTrackError) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
-impl From<TidalRemoveFavoriteTrackError> for RemoveTrackError {
+impl From<TidalRemoveFavoriteTrackError> for moosicbox_music_api::Error {
     fn from(err: TidalRemoveFavoriteTrackError) -> Self {
         Self::Other(Box::new(err))
     }
@@ -2393,13 +2391,13 @@ impl TidalMusicApi {
 #[cfg(feature = "scan")]
 pub mod scan {
     use async_trait::async_trait;
-    use moosicbox_music_api::{ScanError, ScannableMusicApi};
+    use moosicbox_music_api::ScannableMusicApi;
 
     use crate::TidalMusicApi;
 
     #[async_trait]
     impl ScannableMusicApi for TidalMusicApi {
-        async fn scan(&self) -> Result<(), ScanError> {
+        async fn scan(&self) -> Result<(), moosicbox_music_api::Error> {
             Ok(())
         }
     }
@@ -2407,7 +2405,7 @@ pub mod scan {
 
 #[async_trait]
 impl AuthenticatedMusicApi for TidalMusicApi {
-    async fn authenticate(&self) -> Result<(), AuthenticationError> {
+    async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
         Ok(())
     }
 
@@ -2415,7 +2413,7 @@ impl AuthenticatedMusicApi for TidalMusicApi {
         self.logged_in.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    async fn logout(&self) -> Result<(), AuthenticationError> {
+    async fn logout(&self) -> Result<(), moosicbox_music_api::Error> {
         Ok(())
     }
 }
@@ -2432,7 +2430,7 @@ impl MusicApi for TidalMusicApi {
         limit: Option<u32>,
         order: Option<ArtistOrder>,
         order_direction: Option<ArtistOrderDirection>,
-    ) -> PagingResult<Artist, ArtistsError> {
+    ) -> PagingResult<Artist, moosicbox_music_api::Error> {
         Ok(favorite_artists(
             #[cfg(feature = "db")]
             &self.db,
@@ -2450,7 +2448,7 @@ impl MusicApi for TidalMusicApi {
         .inner_into())
     }
 
-    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, moosicbox_music_api::Error> {
         Ok(
             match artist(
                 #[cfg(feature = "db")]
@@ -2480,7 +2478,7 @@ impl MusicApi for TidalMusicApi {
         )
     }
 
-    async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
+    async fn add_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_artist(
             #[cfg(feature = "db")]
             &self.db,
@@ -2494,7 +2492,7 @@ impl MusicApi for TidalMusicApi {
         .await?)
     }
 
-    async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
+    async fn remove_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_artist(
             #[cfg(feature = "db")]
             &self.db,
@@ -2512,7 +2510,7 @@ impl MusicApi for TidalMusicApi {
         &self,
         artist: &Artist,
         size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, ArtistError> {
+    ) -> Result<Option<ImageCoverSource>, moosicbox_music_api::Error> {
         let artist = crate::artist(
             #[cfg(feature = "db")]
             &self.db,
@@ -2529,7 +2527,10 @@ impl MusicApi for TidalMusicApi {
             .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
-    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
+    async fn albums(
+        &self,
+        request: &AlbumsRequest,
+    ) -> PagingResult<Album, moosicbox_music_api::Error> {
         Ok(favorite_albums(
             #[cfg(feature = "db")]
             &self.db,
@@ -2544,11 +2545,11 @@ impl MusicApi for TidalMusicApi {
             None,
         )
         .await?
-        .map_err(|e| AlbumsError::Other(Box::new(e)))
-        .inner_try_into_map_err(|e| AlbumsError::Other(Box::new(e)))?)
+        .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))
+        .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 
-    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, moosicbox_music_api::Error> {
         Ok(Some(
             album(
                 #[cfg(feature = "db")]
@@ -2561,7 +2562,7 @@ impl MusicApi for TidalMusicApi {
             )
             .await?
             .try_into()
-            .map_err(|e| AlbumError::Other(Box::new(e)))?,
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?,
         ))
     }
 
@@ -2570,7 +2571,7 @@ impl MusicApi for TidalMusicApi {
         album_id: &Id,
         offset: Option<u32>,
         limit: Option<u32>,
-    ) -> PagingResult<AlbumVersion, TracksError> {
+    ) -> PagingResult<AlbumVersion, moosicbox_music_api::Error> {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(50);
 
@@ -2624,7 +2625,7 @@ impl MusicApi for TidalMusicApi {
         limit: Option<u32>,
         _order: Option<AlbumOrder>,
         _order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, ArtistAlbumsError> {
+    ) -> PagingResult<Album, moosicbox_music_api::Error> {
         let offset = offset.unwrap_or(0);
         let limit = limit.unwrap_or(100);
 
@@ -2642,7 +2643,7 @@ impl MusicApi for TidalMusicApi {
                 None,
             )
             .await?
-            .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?
+            .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
         } else {
             let pages = futures::future::join_all(
                 vec![
@@ -2708,11 +2709,11 @@ impl MusicApi for TidalMusicApi {
                     })
                 }))),
             }
-            .inner_try_into_map_err(|e| ArtistAlbumsError::Other(Box::new(e)))?
+            .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
         })
     }
 
-    async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
+    async fn add_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_album(
             #[cfg(feature = "db")]
             &self.db,
@@ -2726,7 +2727,7 @@ impl MusicApi for TidalMusicApi {
         .await?)
     }
 
-    async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
+    async fn remove_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_album(
             #[cfg(feature = "db")]
             &self.db,
@@ -2744,7 +2745,7 @@ impl MusicApi for TidalMusicApi {
         &self,
         album: &Album,
         size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, AlbumError> {
+    ) -> Result<Option<ImageCoverSource>, moosicbox_music_api::Error> {
         let album = crate::album(
             #[cfg(feature = "db")]
             &self.db,
@@ -2768,7 +2769,7 @@ impl MusicApi for TidalMusicApi {
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, moosicbox_music_api::Error> {
         let Some(track_ids) = track_ids else {
             return Ok(favorite_tracks(
                 #[cfg(feature = "db")]
@@ -2831,7 +2832,7 @@ impl MusicApi for TidalMusicApi {
                 Ok(tracks) => tracks,
                 Err(e) => {
                     moosicbox_assert::die_or_err!(
-                        TracksError::Other(Box::new(e)),
+                        moosicbox_music_api::Error::Other(Box::new(e)),
                         "Failed to fetch track: {e:?}",
                     );
                 }
@@ -2859,7 +2860,7 @@ impl MusicApi for TidalMusicApi {
         limit: Option<u32>,
         _order: Option<TrackOrder>,
         _order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, moosicbox_music_api::Error> {
         Ok(album_tracks(
             #[cfg(feature = "db")]
             &self.db,
@@ -2875,7 +2876,7 @@ impl MusicApi for TidalMusicApi {
         .inner_into())
     }
 
-    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, moosicbox_music_api::Error> {
         Ok(Some(
             track(
                 #[cfg(feature = "db")]
@@ -2891,7 +2892,7 @@ impl MusicApi for TidalMusicApi {
         ))
     }
 
-    async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
+    async fn add_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(add_favorite_track(
             #[cfg(feature = "db")]
             &self.db,
@@ -2905,7 +2906,7 @@ impl MusicApi for TidalMusicApi {
         .await?)
     }
 
-    async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
+    async fn remove_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
         Ok(remove_favorite_track(
             #[cfg(feature = "db")]
             &self.db,
@@ -2923,7 +2924,7 @@ impl MusicApi for TidalMusicApi {
         &self,
         track: TrackOrId,
         quality: TrackAudioQuality,
-    ) -> Result<Option<TrackSource>, TrackError> {
+    ) -> Result<Option<TrackSource>, moosicbox_music_api::Error> {
         let url = track_file_url(
             #[cfg(feature = "db")]
             &self.db,
@@ -2956,7 +2957,7 @@ impl MusicApi for TidalMusicApi {
         track: TrackOrId,
         _source: &TrackSource,
         _quality: PlaybackQuality,
-    ) -> Result<Option<u64>, TrackError> {
+    ) -> Result<Option<u64>, moosicbox_music_api::Error> {
         let Some(url) = track_file_url(
             #[cfg(feature = "db")]
             &self.db,
@@ -2972,6 +2973,6 @@ impl MusicApi for TidalMusicApi {
 
         Ok(get_content_length(&url, None, None)
             .await
-            .map_err(|e| TrackError::Other(Box::new(e)))?)
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 }

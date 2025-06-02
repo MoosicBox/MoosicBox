@@ -15,7 +15,6 @@ use moosicbox_menu_models::AlbumVersion;
 pub use moosicbox_music_api_models as models;
 use moosicbox_music_models::{Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track, id::Id};
 use moosicbox_paging::PagingResult;
-use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
 pub mod profiles;
@@ -61,18 +60,12 @@ impl From<Arc<BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>>>> for MusicApis {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum MusicApisError {
-    #[error("Music API for source not found: {0}")]
-    NotFound(ApiSource),
-}
-
 impl SourceToMusicApi for MusicApis {
-    fn get(&self, source: &ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError> {
+    fn get(&self, source: &ApiSource) -> Result<Arc<Box<dyn MusicApi>>, Error> {
         let api = self
             .0
             .get(source)
-            .ok_or_else(|| MusicApisError::NotFound(source.clone()))?;
+            .ok_or_else(|| Error::MusicApiNotFound(source.clone()))?;
 
         Ok(api.clone())
     }
@@ -116,89 +109,13 @@ pub trait SourceToMusicApi {
     /// # Errors
     ///
     /// * If the `MusicApi` is not found
-    fn get(&self, source: &ApiSource) -> Result<Arc<Box<dyn MusicApi>>, MusicApisError>;
+    fn get(&self, source: &ApiSource) -> Result<Arc<Box<dyn MusicApi>>, Error>;
 }
 
-#[derive(Debug, Error)]
-pub enum ArtistsError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum ArtistError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum AddArtistError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum RemoveArtistError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum AlbumsError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum AlbumError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum ArtistAlbumsError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum LibraryAlbumError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum AddAlbumError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum RemoveAlbumError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum TracksError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum TrackError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum AddTrackError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Debug, Error)]
-pub enum RemoveTrackError {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Music API for source not found: {0}")]
+    MusicApiNotFound(ApiSource),
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -212,7 +129,7 @@ impl TrackOrId {
     /// # Errors
     ///
     /// * If failed to get the track from the `MusicApi`
-    pub async fn track(self, api: &dyn MusicApi) -> Result<Option<Track>, TrackError> {
+    pub async fn track(self, api: &dyn MusicApi) -> Result<Option<Track>, Error> {
         Ok(match self {
             Self::Track(track) => Some(*track),
             Self::Id(id) => api.track(&id).await?,
@@ -252,30 +169,18 @@ impl From<&Track> for TrackOrId {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum ScanError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
-}
-
 #[async_trait]
 pub trait ScannableMusicApi: MusicApi {
-    async fn scan(&self) -> Result<(), ScanError>;
-}
-
-#[derive(Debug, Error)]
-pub enum AuthenticationError {
-    #[error(transparent)]
-    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
+    async fn scan(&self) -> Result<(), Error>;
 }
 
 #[async_trait]
 pub trait AuthenticatedMusicApi: MusicApi {
-    async fn authenticate(&self) -> Result<(), AuthenticationError>;
+    async fn authenticate(&self) -> Result<(), Error>;
 
     fn is_logged_in(&self) -> bool;
 
-    async fn logout(&self) -> Result<(), AuthenticationError>;
+    async fn logout(&self) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -288,19 +193,19 @@ pub trait MusicApi: Send + Sync {
         limit: Option<u32>,
         order: Option<ArtistOrder>,
         order_direction: Option<ArtistOrderDirection>,
-    ) -> PagingResult<Artist, ArtistsError>;
+    ) -> PagingResult<Artist, Error>;
 
-    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError>;
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, Error>;
 
-    async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError>;
+    async fn add_artist(&self, artist_id: &Id) -> Result<(), Error>;
 
-    async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError>;
+    async fn remove_artist(&self, artist_id: &Id) -> Result<(), Error>;
 
-    async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
+    async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, Error> {
         let Some(album) = self
             .album(album_id)
             .await
-            .map_err(|e| ArtistError::Other(e.into()))?
+            .map_err(|e| Error::Other(e.into()))?
         else {
             return Ok(None);
         };
@@ -312,23 +217,23 @@ pub trait MusicApi: Send + Sync {
         &self,
         artist: &Artist,
         _size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, ArtistError> {
+    ) -> Result<Option<ImageCoverSource>, Error> {
         Ok(artist
             .cover
             .clone()
             .map(|url| ImageCoverSource::RemoteUrl { url, headers: None }))
     }
 
-    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError>;
+    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, Error>;
 
-    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError>;
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, Error>;
 
     async fn album_versions(
         &self,
         album_id: &Id,
         offset: Option<u32>,
         limit: Option<u32>,
-    ) -> PagingResult<AlbumVersion, TracksError>;
+    ) -> PagingResult<AlbumVersion, Error>;
 
     #[allow(clippy::too_many_arguments)]
     async fn artist_albums(
@@ -339,17 +244,17 @@ pub trait MusicApi: Send + Sync {
         limit: Option<u32>,
         order: Option<AlbumOrder>,
         order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, ArtistAlbumsError>;
+    ) -> PagingResult<Album, Error>;
 
-    async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError>;
+    async fn add_album(&self, album_id: &Id) -> Result<(), Error>;
 
-    async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError>;
+    async fn remove_album(&self, album_id: &Id) -> Result<(), Error>;
 
     async fn album_cover_source(
         &self,
         album: &Album,
         _size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, AlbumError> {
+    ) -> Result<Option<ImageCoverSource>, Error> {
         Ok(album
             .artwork
             .clone()
@@ -363,9 +268,9 @@ pub trait MusicApi: Send + Sync {
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError>;
+    ) -> PagingResult<Track, Error>;
 
-    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError>;
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, Error>;
 
     async fn album_tracks(
         &self,
@@ -374,24 +279,24 @@ pub trait MusicApi: Send + Sync {
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError>;
+    ) -> PagingResult<Track, Error>;
 
-    async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError>;
+    async fn add_track(&self, track_id: &Id) -> Result<(), Error>;
 
-    async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError>;
+    async fn remove_track(&self, track_id: &Id) -> Result<(), Error>;
 
     async fn track_source(
         &self,
         track: TrackOrId,
         quality: TrackAudioQuality,
-    ) -> Result<Option<TrackSource>, TrackError>;
+    ) -> Result<Option<TrackSource>, Error>;
 
     async fn track_size(
         &self,
         track: TrackOrId,
         source: &TrackSource,
         quality: PlaybackQuality,
-    ) -> Result<Option<u64>, TrackError>;
+    ) -> Result<Option<u64>, Error>;
 }
 
 pub struct CachedMusicApi<T: MusicApi> {
@@ -618,7 +523,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         limit: Option<u32>,
         order: Option<ArtistOrder>,
         order_direction: Option<ArtistOrderDirection>,
-    ) -> PagingResult<Artist, ArtistsError> {
+    ) -> PagingResult<Artist, Error> {
         let mut artists = self
             .inner
             .artists(offset, limit, order, order_direction)
@@ -647,7 +552,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         Ok(artists)
     }
 
-    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
+    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, Error> {
         if let Some(artist) = self.get_artist_from_cache(artist_id).await {
             return Ok(artist);
         }
@@ -668,17 +573,17 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         Ok(artists.into_iter().next())
     }
 
-    async fn add_artist(&self, artist_id: &Id) -> Result<(), AddArtistError> {
+    async fn add_artist(&self, artist_id: &Id) -> Result<(), Error> {
         self.inner.add_artist(artist_id).await
     }
 
-    async fn remove_artist(&self, artist_id: &Id) -> Result<(), RemoveArtistError> {
+    async fn remove_artist(&self, artist_id: &Id) -> Result<(), Error> {
         self.remove_cache_artist_ids(&[artist_id]).await;
 
         self.inner.remove_artist(artist_id).await
     }
 
-    async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, ArtistError> {
+    async fn album_artist(&self, album_id: &Id) -> Result<Option<Artist>, Error> {
         let artists = self
             .inner
             .album_artist(album_id)
@@ -697,15 +602,15 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         &self,
         artist: &Artist,
         size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, ArtistError> {
+    ) -> Result<Option<ImageCoverSource>, Error> {
         self.inner.artist_cover_source(artist, size).await
     }
 
-    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
+    async fn albums(&self, request: &AlbumsRequest) -> PagingResult<Album, Error> {
         self.inner.albums(request).await
     }
 
-    async fn album(&self, album_id: &Id) -> Result<Option<Album>, AlbumError> {
+    async fn album(&self, album_id: &Id) -> Result<Option<Album>, Error> {
         if let Some(album) = self.get_album_from_cache(album_id).await {
             return Ok(album);
         }
@@ -718,7 +623,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         album_id: &Id,
         offset: Option<u32>,
         limit: Option<u32>,
-    ) -> PagingResult<AlbumVersion, TracksError> {
+    ) -> PagingResult<AlbumVersion, Error> {
         self.inner.album_versions(album_id, offset, limit).await
     }
 
@@ -731,7 +636,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         limit: Option<u32>,
         order: Option<AlbumOrder>,
         order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, ArtistAlbumsError> {
+    ) -> PagingResult<Album, Error> {
         let mut albums = self
             .inner
             .artist_albums(artist_id, album_type, offset, limit, order, order_direction)
@@ -760,11 +665,11 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         Ok(albums)
     }
 
-    async fn add_album(&self, album_id: &Id) -> Result<(), AddAlbumError> {
+    async fn add_album(&self, album_id: &Id) -> Result<(), Error> {
         self.inner.add_album(album_id).await
     }
 
-    async fn remove_album(&self, album_id: &Id) -> Result<(), RemoveAlbumError> {
+    async fn remove_album(&self, album_id: &Id) -> Result<(), Error> {
         self.remove_cache_album_ids(&[album_id]).await;
 
         self.inner.remove_album(album_id).await
@@ -774,7 +679,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         &self,
         album: &Album,
         size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, AlbumError> {
+    ) -> Result<Option<ImageCoverSource>, Error> {
         self.inner.album_cover_source(album, size).await
     }
 
@@ -785,7 +690,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, Error> {
         let mut tracks = self
             .inner
             .tracks(track_ids, offset, limit, order, order_direction)
@@ -814,7 +719,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         Ok(tracks)
     }
 
-    async fn track(&self, track_id: &Id) -> Result<Option<Track>, TrackError> {
+    async fn track(&self, track_id: &Id) -> Result<Option<Track>, Error> {
         if let Some(track) = self.get_track_from_cache(track_id).await {
             return Ok(track);
         }
@@ -842,7 +747,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         limit: Option<u32>,
         order: Option<TrackOrder>,
         order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, TracksError> {
+    ) -> PagingResult<Track, Error> {
         let mut tracks = self
             .inner
             .album_tracks(album_id, offset, limit, order, order_direction)
@@ -871,11 +776,11 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         Ok(tracks)
     }
 
-    async fn add_track(&self, track_id: &Id) -> Result<(), AddTrackError> {
+    async fn add_track(&self, track_id: &Id) -> Result<(), Error> {
         self.inner.add_track(track_id).await
     }
 
-    async fn remove_track(&self, track_id: &Id) -> Result<(), RemoveTrackError> {
+    async fn remove_track(&self, track_id: &Id) -> Result<(), Error> {
         self.remove_cache_track_ids(&[track_id]).await;
 
         self.inner.remove_track(track_id).await
@@ -885,7 +790,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         &self,
         track: TrackOrId,
         quality: TrackAudioQuality,
-    ) -> Result<Option<TrackSource>, TrackError> {
+    ) -> Result<Option<TrackSource>, Error> {
         self.inner.track_source(track, quality).await
     }
 
@@ -894,7 +799,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         track: TrackOrId,
         source: &TrackSource,
         quality: PlaybackQuality,
-    ) -> Result<Option<u64>, TrackError> {
+    ) -> Result<Option<u64>, Error> {
         self.inner.track_size(track, source, quality).await
     }
 }
@@ -930,27 +835,27 @@ mod test {
             _limit: Option<u32>,
             _order: Option<ArtistOrder>,
             _order_direction: Option<ArtistOrderDirection>,
-        ) -> PagingResult<Artist, ArtistsError> {
+        ) -> PagingResult<Artist, Error> {
             Ok(PagingResponse::empty())
         }
 
-        async fn artist(&self, _artist_id: &Id) -> Result<Option<Artist>, ArtistError> {
+        async fn artist(&self, _artist_id: &Id) -> Result<Option<Artist>, Error> {
             Ok(None)
         }
 
-        async fn add_artist(&self, _artist_id: &Id) -> Result<(), AddArtistError> {
+        async fn add_artist(&self, _artist_id: &Id) -> Result<(), Error> {
             Ok(())
         }
 
-        async fn remove_artist(&self, _artist_id: &Id) -> Result<(), RemoveArtistError> {
+        async fn remove_artist(&self, _artist_id: &Id) -> Result<(), Error> {
             Ok(())
         }
 
-        async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, AlbumsError> {
+        async fn albums(&self, _request: &AlbumsRequest) -> PagingResult<Album, Error> {
             Ok(PagingResponse::empty())
         }
 
-        async fn album(&self, _album_id: &Id) -> Result<Option<Album>, AlbumError> {
+        async fn album(&self, _album_id: &Id) -> Result<Option<Album>, Error> {
             Ok(None)
         }
 
@@ -959,7 +864,7 @@ mod test {
             _album_id: &Id,
             _offset: Option<u32>,
             _limit: Option<u32>,
-        ) -> PagingResult<AlbumVersion, TracksError> {
+        ) -> PagingResult<AlbumVersion, Error> {
             Ok(PagingResponse::empty())
         }
 
@@ -972,15 +877,15 @@ mod test {
             _limit: Option<u32>,
             _order: Option<AlbumOrder>,
             _order_direction: Option<AlbumOrderDirection>,
-        ) -> PagingResult<Album, ArtistAlbumsError> {
+        ) -> PagingResult<Album, Error> {
             Ok(PagingResponse::empty())
         }
 
-        async fn add_album(&self, _album_id: &Id) -> Result<(), AddAlbumError> {
+        async fn add_album(&self, _album_id: &Id) -> Result<(), Error> {
             Ok(())
         }
 
-        async fn remove_album(&self, _album_id: &Id) -> Result<(), RemoveAlbumError> {
+        async fn remove_album(&self, _album_id: &Id) -> Result<(), Error> {
             Ok(())
         }
 
@@ -991,11 +896,11 @@ mod test {
             _limit: Option<u32>,
             _order: Option<TrackOrder>,
             _order_direction: Option<TrackOrderDirection>,
-        ) -> PagingResult<Track, TracksError> {
+        ) -> PagingResult<Track, Error> {
             Ok(PagingResponse::empty())
         }
 
-        async fn track(&self, _track_id: &Id) -> Result<Option<Track>, TrackError> {
+        async fn track(&self, _track_id: &Id) -> Result<Option<Track>, Error> {
             Ok(None)
         }
 
@@ -1006,15 +911,15 @@ mod test {
             _limit: Option<u32>,
             _order: Option<TrackOrder>,
             _order_direction: Option<TrackOrderDirection>,
-        ) -> PagingResult<Track, TracksError> {
+        ) -> PagingResult<Track, Error> {
             Ok(PagingResponse::empty())
         }
 
-        async fn add_track(&self, _track_id: &Id) -> Result<(), AddTrackError> {
+        async fn add_track(&self, _track_id: &Id) -> Result<(), Error> {
             Ok(())
         }
 
-        async fn remove_track(&self, _track_id: &Id) -> Result<(), RemoveTrackError> {
+        async fn remove_track(&self, _track_id: &Id) -> Result<(), Error> {
             Ok(())
         }
 
@@ -1022,7 +927,7 @@ mod test {
             &self,
             _track: TrackOrId,
             _quality: TrackAudioQuality,
-        ) -> Result<Option<TrackSource>, TrackError> {
+        ) -> Result<Option<TrackSource>, Error> {
             Ok(None)
         }
 
@@ -1031,7 +936,7 @@ mod test {
             _track: TrackOrId,
             _source: &TrackSource,
             _quality: PlaybackQuality,
-        ) -> Result<Option<u64>, TrackError> {
+        ) -> Result<Option<u64>, Error> {
             Ok(None)
         }
     }

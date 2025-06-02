@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use moosicbox_files::FetchAndSaveBytesFromRemoteUrlError;
 use moosicbox_json_utils::database::DatabaseFetchError;
-use moosicbox_music_api::{AlbumsError, MusicApi, models::AlbumsRequest};
+use moosicbox_music_api::{MusicApi, models::AlbumsRequest};
 use moosicbox_music_models::{Album, AudioFormat, Track};
 use moosicbox_paging::PagingRequest;
 use switchy_database::profiles::LibraryDatabase;
@@ -20,7 +20,7 @@ pub enum ScanError {
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
-    Albums(#[from] AlbumsError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     UpdateDatabase(#[from] UpdateDatabaseError),
     #[error(transparent)]

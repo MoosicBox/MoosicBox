@@ -15,7 +15,7 @@ use moosicbox_audio_decoder::{
 };
 use moosicbox_audio_output::{AudioOutputError, AudioWrite, Channels, SignalSpec};
 use moosicbox_music_api::{
-    MusicApi, MusicApis, MusicApisError, SourceToMusicApi as _, TrackError, TracksError,
+    MusicApi, MusicApis, SourceToMusicApi as _,
     models::{TrackAudioQuality, TrackSource},
 };
 use moosicbox_music_models::{ApiSource, AudioFormat, PlaybackQuality, Track, id::Id};
@@ -74,9 +74,7 @@ pub enum TrackSourceError {
     #[error("Invalid source")]
     InvalidSource,
     #[error(transparent)]
-    Track(#[from] TrackError),
-    #[error(transparent)]
-    MusicApis(#[from] MusicApisError),
+    MusicApi(#[from] moosicbox_music_api::Error),
 }
 
 /// # Errors
@@ -172,7 +170,7 @@ pub enum GetTrackBytesError {
     #[error(transparent)]
     Recv(#[from] RecvError),
     #[error(transparent)]
-    Track(#[from] TrackError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     TrackInfo(#[from] TrackInfoError),
     #[error(transparent)]
@@ -747,9 +745,7 @@ pub enum TrackInfoError {
     #[error(transparent)]
     GetTrackBytes(#[from] Box<GetTrackBytesError>),
     #[error(transparent)]
-    Track(#[from] TrackError),
-    #[error(transparent)]
-    Tracks(#[from] TracksError),
+    MusicApi(#[from] moosicbox_music_api::Error),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

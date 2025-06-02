@@ -9,7 +9,7 @@ use moosicbox_library::{
     db,
     models::LibraryAlbum,
 };
-use moosicbox_music_api::{ArtistError, MusicApi};
+use moosicbox_music_api::MusicApi;
 use moosicbox_music_models::{Album, ApiSource, Artist, id::Id};
 use std::{
     sync::{Arc, PoisonError},
@@ -21,7 +21,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum GetArtistError {
     #[error(transparent)]
-    Artist(#[from] ArtistError),
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error("Invalid request")]
     InvalidRequest,
 }
