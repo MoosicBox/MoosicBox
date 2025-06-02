@@ -253,6 +253,17 @@ impl From<&Track> for TrackOrId {
 }
 
 #[derive(Debug, Error)]
+pub enum ScanError {
+    #[error(transparent)]
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
+
+#[async_trait]
+pub trait ScannableMusicApi: MusicApi {
+    async fn scan(&self) -> Result<(), ScanError>;
+}
+
+#[derive(Debug, Error)]
 pub enum AuthenticationError {
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
