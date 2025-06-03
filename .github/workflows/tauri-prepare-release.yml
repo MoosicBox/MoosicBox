@@ -20,12 +20,12 @@ jobs:
             fail-fast: false
             matrix:
                 release:
-                    - os: ubuntu-latest
-                      profile: debug
-                      target: desktop
-                      tag: debug
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: ubuntu-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: debug
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     # - os: ubuntu-latest
                     #   profile: release
@@ -47,12 +47,12 @@ jobs:
                     #   bundled: true
                     #   features: desktop,bundled
 
-                    - os: windows-latest
-                      profile: debug
-                      target: desktop
-                      tag: debug
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: windows-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: debug
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     # - os: windows-latest
                     #   profile: release
@@ -74,12 +74,12 @@ jobs:
                     #   bundled: true
                     #   features: desktop,bundled
 
-                    - os: macos-latest
-                      profile: debug
-                      target: desktop
-                      tag: debug
-                      bundled: true
-                      features: desktop,bundled
+                    # - os: macos-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: debug
+                    #   bundled: true
+                    #   features: desktop,bundled
 
                     # - os: macos-latest
                     #   profile: release
@@ -101,11 +101,11 @@ jobs:
                     #   bundled: true
                     #   features: desktop,bundled
 
-                    - os: ubuntu-latest
-                      profile: debug
-                      target: desktop
-                      tag: debug-client
-                      features: desktop,client
+                    # - os: ubuntu-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: debug-client
+                    #   features: desktop,client
 
                     # - os: ubuntu-latest
                     #   profile: release
@@ -125,11 +125,11 @@ jobs:
                     #   tag: release-lto-no-panic-client
                     #   features: desktop,client
 
-                    - os: windows-latest
-                      profile: debug
-                      target: desktop
-                      tag: debug-client
-                      features: desktop,client
+                    # - os: windows-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: debug-client
+                    #   features: desktop,client
 
                     # - os: windows-latest
                     #   profile: release
@@ -149,11 +149,11 @@ jobs:
                     #   tag: release-lto-no-panic-client
                     #   features: desktop,client
 
-                    - os: macos-latest
-                      profile: debug
-                      target: desktop
-                      tag: debug-client
-                      features: desktop,client
+                    # - os: macos-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: debug-client
+                    #   features: desktop,client
 
                     # - os: macos-latest
                     #   profile: release
@@ -173,12 +173,12 @@ jobs:
                     #   tag: release-lto-no-panic-client
                     #   features: desktop,client
 
-                    - os: ubuntu-latest
-                      profile: debug
-                      target: android
-                      tag: debug
-                      # tag: debug-client
-                      features: android,client
+                    # - os: ubuntu-latest
+                    #   profile: debug
+                    #   target: android
+                    #   tag: debug
+                    #   # tag: debug-client
+                    #   features: android,client
 
                     - os: ubuntu-latest
                       profile: release
@@ -198,13 +198,13 @@ jobs:
                       bundled: true
                       features: android,bundled
 
-                    - os: ubuntu-latest
-                      profile: debug
-                      target: desktop
-                      tag: hyperchad-debug
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: ubuntu-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: hyperchad-debug
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
                     #   profile: release
@@ -230,13 +230,13 @@ jobs:
                     #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
-                    - os: windows-latest
-                      profile: debug
-                      target: desktop
-                      tag: hyperchad-debug
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: windows-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: hyperchad-debug
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     # - os: windows-latest
                     #   profile: release
@@ -262,13 +262,13 @@ jobs:
                     #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
-                    - os: macos-latest
-                      profile: debug
-                      target: desktop
-                      tag: hyperchad-debug
-                      bundled: true
-                      features: desktop,bundled
-                      config: tauri.hyperchad.conf.json
+                    # - os: macos-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: hyperchad-debug
+                    #   bundled: true
+                    #   features: desktop,bundled
+                    #   config: tauri.hyperchad.conf.json
 
                     # - os: macos-latest
                     #   profile: release
@@ -294,12 +294,12 @@ jobs:
                     #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
-                    - os: ubuntu-latest
-                      profile: debug
-                      target: desktop
-                      tag: hyperchad-debug-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: ubuntu-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: hyperchad-debug-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
                     #   profile: release
@@ -322,12 +322,12 @@ jobs:
                     #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
-                    - os: windows-latest
-                      profile: debug
-                      target: desktop
-                      tag: hyperchad-debug-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: windows-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: hyperchad-debug-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     # - os: windows-latest
                     #   profile: release
@@ -350,12 +350,12 @@ jobs:
                     #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
-                    - os: macos-latest
-                      profile: debug
-                      target: desktop
-                      tag: hyperchad-debug-client
-                      features: desktop,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: macos-latest
+                    #   profile: debug
+                    #   target: desktop
+                    #   tag: hyperchad-debug-client
+                    #   features: desktop,client
+                    #   config: tauri.hyperchad.conf.json
 
                     # - os: macos-latest
                     #   profile: release
@@ -378,12 +378,12 @@ jobs:
                     #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
-                    - os: ubuntu-latest
-                      profile: debug
-                      target: android
-                      tag: hyperchad-debug
-                      features: android,client
-                      config: tauri.hyperchad.conf.json
+                    # - os: ubuntu-latest
+                    #   profile: debug
+                    #   target: android
+                    #   tag: hyperchad-debug
+                    #   features: android,client
+                    #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
                       profile: release
@@ -703,11 +703,11 @@ jobs:
                       decompress: true
                       decompress_file: MoosicBox_x64_macos_app.zip
                       decompress_algorithm: zip
-                    - name: MoosicBox_x64_macos_debug
-                      extension: app
-                      decompress: true
-                      decompress_file: MoosicBox_x64_macos_debug_app.zip
-                      decompress_algorithm: zip
+                    # - name: MoosicBox_x64_macos_debug
+                    #   extension: app
+                    #   decompress: true
+                    #   decompress_file: MoosicBox_x64_macos_debug_app.zip
+                    #   decompress_algorithm: zip
 
         steps:
             - name: Set asset names
