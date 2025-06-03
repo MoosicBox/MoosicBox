@@ -42,9 +42,38 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use switchy_http::models::Method;
-use thiserror::Error;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Http(#[from] switchy_http::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    TidalConfig(#[from] db::GetTidalConfigError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Request failed (error {0})")]
+    RequestFailed(String),
+    #[error("Request failed (error {0}): {1}")]
+    HttpRequestFailed(u16, String),
+    #[error("MaxFailedAttempts")]
+    MaxFailedAttempts,
+    #[error("No response body")]
+    NoResponseBody,
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+}
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -163,22 +192,11 @@ macro_rules! tidal_api_endpoint {
     };
 }
 
-#[derive(Debug, Error)]
-pub enum TidalDeviceAuthorizationError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
 /// * If the JSON response failed to parse
-pub async fn device_authorization(
-    client_id: String,
-    open: bool,
-) -> Result<Value, TidalDeviceAuthorizationError> {
+pub async fn device_authorization(client_id: String, open: bool) -> Result<Value, Error> {
     let url = tidal_api_endpoint!(DeviceAuthorization);
 
     let params = [
@@ -210,17 +228,6 @@ pub async fn device_authorization(
     }))
 }
 
-#[derive(Debug, Error)]
-pub enum TidalDeviceAuthorizationTokenError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Panics
 ///
 /// * If failed to serialize user `Value` to string
@@ -236,7 +243,7 @@ pub async fn device_authorization_token(
     client_secret: String,
     device_code: String,
     #[cfg(feature = "db")] persist: Option<bool>,
-) -> Result<Value, TidalDeviceAuthorizationTokenError> {
+) -> Result<Value, Error> {
     let url = tidal_api_endpoint!(AuthorizationToken);
 
     let params = [
@@ -295,20 +302,11 @@ struct TidalCredentials {
     persist: bool,
 }
 
-#[derive(Debug, Error)]
-pub enum FetchCredentialsError {
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    TidalConfig(#[from] db::GetTidalConfigError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
-}
-
 #[allow(clippy::unused_async)]
 async fn fetch_credentials(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     access_token: Option<String>,
-) -> Result<TidalCredentials, FetchCredentialsError> {
+) -> Result<TidalCredentials, Error> {
     #[cfg(feature = "db")]
     {
         Ok(if let Some(access_token) = access_token {
@@ -342,42 +340,24 @@ async fn fetch_credentials(
                 }
             }
         }
-        .ok_or(FetchCredentialsError::NoAccessTokenAvailable)??)
+        .ok_or(Error::NoAccessTokenAvailable)??)
     }
 
     #[cfg(not(feature = "db"))]
     {
         Ok(TidalCredentials {
-            access_token: access_token.ok_or(FetchCredentialsError::NoAccessTokenAvailable)?,
+            access_token: access_token.ok_or(Error::NoAccessTokenAvailable)?,
             client_id: None,
             refresh_token: None,
         })
     }
 }
 
-#[derive(Debug, Error)]
-pub enum AuthenticatedRequestError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[error(transparent)]
-    FetchCredentials(#[from] FetchCredentialsError),
-    #[error(transparent)]
-    RefetchAccessToken(#[from] RefetchAccessTokenError),
-    #[error("Unauthorized")]
-    Unauthorized,
-    #[error("Request failed (error {0})")]
-    RequestFailed(u16, String),
-    #[error("MaxFailedAttempts")]
-    MaxFailedAttempts,
-    #[error("No response body")]
-    NoResponseBody,
-}
-
 async fn authenticated_request(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     access_token: Option<String>,
-) -> Result<Value, AuthenticatedRequestError> {
+) -> Result<Value, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -389,7 +369,7 @@ async fn authenticated_request(
         1,
     )
     .await?
-    .ok_or_else(|| AuthenticatedRequestError::NoResponseBody)
+    .ok_or_else(|| Error::NoResponseBody)
 }
 
 async fn authenticated_post_request(
@@ -398,7 +378,7 @@ async fn authenticated_post_request(
     access_token: Option<String>,
     body: Option<Value>,
     form: Option<Vec<(&str, &str)>>,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -421,7 +401,7 @@ async fn authenticated_delete_request(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     access_token: Option<String>,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -444,10 +424,10 @@ async fn authenticated_request_inner(
     body: Option<Value>,
     form: Option<Vec<(String, String)>>,
     attempt: u8,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     if attempt > 3 {
         log::error!("Max failed attempts for reauthentication reached");
-        return Err(AuthenticatedRequestError::MaxFailedAttempts);
+        return Err(Error::MaxFailedAttempts);
     }
 
     log::debug!("Making authenticated request to {url}");
@@ -508,29 +488,18 @@ async fn authenticated_request_inner(
             }
 
             log::debug!("No client_id or refresh_token available. Unauthorized");
-            Err(AuthenticatedRequestError::Unauthorized)
+            Err(Error::Unauthorized)
         }
-        400..=599 => Err(AuthenticatedRequestError::RequestFailed(
+        400..=599 => Err(Error::HttpRequestFailed(
             status,
             response.text().await.unwrap_or_default(),
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
             Err(switchy_http::Error::Decode) => Ok(None),
-            Err(e) => Err(AuthenticatedRequestError::Http(e)),
+            Err(e) => Err(Error::Http(e)),
         },
     }
-}
-
-#[derive(Debug, Error)]
-pub enum RefetchAccessTokenError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
 }
 
 async fn refetch_access_token(
@@ -538,7 +507,7 @@ async fn refetch_access_token(
     client_id: &str,
     refresh_token: &str,
     #[cfg(feature = "db")] persist: bool,
-) -> Result<String, RefetchAccessTokenError> {
+) -> Result<String, Error> {
     log::debug!("Refetching access token");
     let url = tidal_api_endpoint!(AuthorizationToken);
 
@@ -597,18 +566,6 @@ pub enum TidalArtistOrderDirection {
     Desc,
 }
 
-#[derive(Debug, Error)]
-pub enum TidalFavoriteArtistsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
@@ -622,7 +579,7 @@ pub async fn favorite_artists(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> PagingResult<TidalArtist, TidalFavoriteArtistsError> {
+) -> PagingResult<TidalArtist, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -636,7 +593,7 @@ pub async fn favorite_artists(
         }
     };
 
-    let user_id = user_id.ok_or(TidalFavoriteArtistsError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         FavoriteArtists,
@@ -675,11 +632,11 @@ pub async fn favorite_artists(
 
     let items = value
         .to_value::<Option<Vec<&Value>>>("items")?
-        .ok_or_else(|| TidalFavoriteArtistsError::RequestFailed(format!("{value:?}")))?
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?
         .into_iter()
         .map(|value| value.to_value("item"))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| TidalFavoriteArtistsError::RequestFailed(format!("{e:?}: {value:?}")))?;
+        .map_err(|e| Error::RequestFailed(format!("{e:?}: {value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -720,18 +677,6 @@ pub async fn favorite_artists(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum TidalAddFavoriteArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -746,7 +691,7 @@ pub async fn add_favorite_artist(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), TidalAddFavoriteArtistError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -757,7 +702,7 @@ pub async fn add_favorite_artist(
         }
     };
 
-    let user_id = user_id.ok_or(TidalAddFavoriteArtistError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         AddFavoriteArtist,
@@ -790,18 +735,6 @@ pub async fn add_favorite_artist(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum TidalRemoveFavoriteArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -816,7 +749,7 @@ pub async fn remove_favorite_artist(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), TidalRemoveFavoriteArtistError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -827,7 +760,7 @@ pub async fn remove_favorite_artist(
         }
     };
 
-    let user_id = user_id.ok_or(TidalRemoveFavoriteArtistError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         RemoveFavoriteArtist,
@@ -893,18 +826,6 @@ impl From<AlbumSort> for TidalAlbumOrderDirection {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum TidalFavoriteAlbumsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
@@ -918,7 +839,7 @@ pub async fn favorite_albums(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> PagingResult<TidalAlbum, TidalFavoriteAlbumsError> {
+) -> PagingResult<TidalAlbum, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -932,7 +853,7 @@ pub async fn favorite_albums(
         }
     };
 
-    let user_id = user_id.ok_or(TidalFavoriteAlbumsError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         FavoriteAlbums,
@@ -971,11 +892,11 @@ pub async fn favorite_albums(
 
     let items = value
         .to_value::<Option<Vec<&Value>>>("items")?
-        .ok_or_else(|| TidalFavoriteAlbumsError::RequestFailed(format!("{value:?}")))?
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?
         .into_iter()
         .map(|value| value.to_value("item"))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| TidalFavoriteAlbumsError::RequestFailed(format!("{e:?}: {value:?}")))?;
+        .map_err(|e| Error::RequestFailed(format!("{e:?}: {value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -1031,7 +952,7 @@ pub async fn all_favorite_albums(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<Vec<TidalAlbum>, TidalFavoriteAlbumsError> {
+) -> Result<Vec<TidalAlbum>, Error> {
     let mut all_albums = vec![];
 
     let mut offset = 0;
@@ -1065,18 +986,6 @@ pub async fn all_favorite_albums(
     Ok(all_albums)
 }
 
-#[derive(Debug, Error)]
-pub enum TidalAddFavoriteAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1091,7 +1000,7 @@ pub async fn add_favorite_album(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), TidalAddFavoriteAlbumError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -1102,7 +1011,7 @@ pub async fn add_favorite_album(
         }
     };
 
-    let user_id = user_id.ok_or(TidalAddFavoriteAlbumError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         AddFavoriteAlbum,
@@ -1135,18 +1044,6 @@ pub async fn add_favorite_album(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum TidalRemoveFavoriteAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1161,7 +1058,7 @@ pub async fn remove_favorite_album(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), TidalRemoveFavoriteAlbumError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -1172,7 +1069,7 @@ pub async fn remove_favorite_album(
         }
     };
 
-    let user_id = user_id.ok_or(TidalRemoveFavoriteAlbumError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         RemoveFavoriteAlbum,
@@ -1223,18 +1120,6 @@ pub enum TidalTrackOrderDirection {
     Desc,
 }
 
-#[derive(Debug, Error)]
-pub enum TidalFavoriteTracksError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
@@ -1248,7 +1133,7 @@ pub async fn favorite_tracks(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> PagingResult<TidalTrack, TidalFavoriteTracksError> {
+) -> PagingResult<TidalTrack, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1262,7 +1147,7 @@ pub async fn favorite_tracks(
         }
     };
 
-    let user_id = user_id.ok_or(TidalFavoriteTracksError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         FavoriteTracks,
@@ -1301,11 +1186,11 @@ pub async fn favorite_tracks(
 
     let items = value
         .to_value::<Option<Vec<&Value>>>("items")?
-        .ok_or_else(|| TidalFavoriteTracksError::RequestFailed(format!("{value:?}")))?
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?
         .into_iter()
         .map(|value| value.to_value("item"))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| TidalFavoriteTracksError::RequestFailed(format!("{e:?}: {value:?}")))?;
+        .map_err(|e| Error::RequestFailed(format!("{e:?}: {value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -1346,18 +1231,6 @@ pub async fn favorite_tracks(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum TidalAddFavoriteTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1372,7 +1245,7 @@ pub async fn add_favorite_track(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), TidalAddFavoriteTrackError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -1383,7 +1256,7 @@ pub async fn add_favorite_track(
         }
     };
 
-    let user_id = user_id.ok_or(TidalAddFavoriteTrackError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         AddFavoriteTrack,
@@ -1416,18 +1289,6 @@ pub async fn add_favorite_track(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum TidalRemoveFavoriteTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1442,7 +1303,7 @@ pub async fn remove_favorite_track(
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), TidalRemoveFavoriteTrackError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -1453,7 +1314,7 @@ pub async fn remove_favorite_track(
         }
     };
 
-    let user_id = user_id.ok_or(TidalRemoveFavoriteTrackError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = tidal_api_endpoint!(
         RemoveFavoriteTrack,
@@ -1485,16 +1346,6 @@ pub async fn remove_favorite_track(
     log::trace!("Received remove favorite track response: {value:?}");
 
     Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum TidalArtistAlbumsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, AsRefStr, PartialEq, Eq, Copy, Clone)]
@@ -1554,7 +1405,7 @@ pub async fn artist_albums(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> PagingResult<TidalAlbum, TidalArtistAlbumsError> {
+) -> PagingResult<TidalAlbum, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1605,7 +1456,7 @@ pub async fn artist_albums(
 
     let items = value
         .to_value::<Option<_>>("items")?
-        .ok_or_else(|| TidalArtistAlbumsError::RequestFailed(format!("{value:?}")))?;
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -1647,16 +1498,6 @@ pub async fn artist_albums(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum TidalAlbumTracksError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
@@ -1668,7 +1509,7 @@ pub async fn album_tracks(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> PagingResult<TidalTrack, TidalAlbumTracksError> {
+) -> PagingResult<TidalTrack, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1702,7 +1543,7 @@ pub async fn album_tracks(
 
     let items = value
         .to_value::<Option<_>>("items")?
-        .ok_or_else(|| TidalAlbumTracksError::RequestFailed(format!("{value:?}")))?;
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -1743,16 +1584,6 @@ pub async fn album_tracks(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum TidalAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1766,7 +1597,7 @@ pub async fn album(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<TidalAlbum, TidalAlbumError> {
+) -> Result<TidalAlbum, Error> {
     let url = tidal_api_endpoint!(
         Album,
         &[(":albumId", &album_id.to_string())],
@@ -1794,14 +1625,6 @@ pub async fn album(
     Ok(value.as_model()?)
 }
 
-#[derive(Debug, Error)]
-pub enum TidalArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1815,7 +1638,7 @@ pub async fn artist(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<TidalArtist, TidalArtistError> {
+) -> Result<TidalArtist, Error> {
     let url = tidal_api_endpoint!(
         Artist,
         &[(":artistId", &artist_id.to_string())],
@@ -1845,14 +1668,6 @@ pub async fn artist(
     Ok(value.as_model()?)
 }
 
-#[derive(Debug, Error)]
-pub enum TidalTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1865,7 +1680,7 @@ pub async fn track(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<TidalTrack, TidalTrackError> {
+) -> Result<TidalTrack, Error> {
     let url = tidal_api_endpoint!(
         Track,
         &[(":trackId", &track_id.to_string())],
@@ -1933,14 +1748,6 @@ pub enum TidalSearchType {
     UserProfiles,
 }
 
-#[derive(Debug, Error)]
-pub enum TidalSearchError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1961,7 +1768,7 @@ pub async fn search(
     locale: Option<String>,
     device_type: Option<TidalDeviceType>,
     access_token: Option<String>,
-) -> Result<TidalSearchResults, TidalSearchError> {
+) -> Result<TidalSearchResults, Error> {
     static DEFAULT_TYPES: [TidalSearchType; 3] = [
         TidalSearchType::Artists,
         TidalSearchType::Albums,
@@ -2045,14 +1852,6 @@ impl From<TrackAudioQuality> for TidalAudioQuality {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum TidalTrackFileUrlError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -2063,7 +1862,7 @@ pub async fn track_file_url(
     audio_quality: TidalAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
-) -> Result<Vec<String>, TidalTrackFileUrlError> {
+) -> Result<Vec<String>, Error> {
     let url = tidal_api_endpoint!(
         TrackUrl,
         &[(":trackId", &track_id.to_string())],
@@ -2106,16 +1905,6 @@ pub struct TidalTrackPlaybackInfo {
     pub track_replay_gain: f64,
 }
 
-#[derive(Debug, Error)]
-pub enum TidalTrackPlaybackInfoError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -2126,7 +1915,7 @@ pub async fn track_playback_info(
     audio_quality: TidalAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
-) -> Result<TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError> {
+) -> Result<TidalTrackPlaybackInfo, Error> {
     let url = tidal_api_endpoint!(
         TrackPlaybackInfo,
         &[(":trackId", &track_id.to_string())],
@@ -2207,11 +1996,9 @@ impl From<TrackOrderDirection> for TidalTrackOrderDirection {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum TryFromAlbumTypeError {
-    #[error("Unsupported AlbumType")]
-    UnsupportedAlbumType,
-}
+#[derive(Debug, thiserror::Error)]
+#[error("Unsupported AlbumType")]
+pub struct TryFromAlbumTypeError;
 
 impl TryFrom<AlbumType> for TidalAlbumType {
     type Error = TryFromAlbumTypeError;
@@ -2221,103 +2008,19 @@ impl TryFrom<AlbumType> for TidalAlbumType {
             AlbumType::Lp => Ok(Self::Lp),
             AlbumType::Compilations => Ok(Self::Compilations),
             AlbumType::EpsAndSingles => Ok(Self::EpsAndSingles),
-            _ => Err(TryFromAlbumTypeError::UnsupportedAlbumType),
+            _ => Err(TryFromAlbumTypeError),
         }
     }
 }
 
-impl From<TidalFavoriteArtistsError> for moosicbox_music_api::Error {
-    fn from(err: TidalFavoriteArtistsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalArtistError> for moosicbox_music_api::Error {
-    fn from(err: TidalArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalAddFavoriteArtistError> for moosicbox_music_api::Error {
-    fn from(err: TidalAddFavoriteArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalRemoveFavoriteArtistError> for moosicbox_music_api::Error {
-    fn from(err: TidalRemoveFavoriteArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalFavoriteAlbumsError> for moosicbox_music_api::Error {
-    fn from(err: TidalFavoriteAlbumsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalAlbumError> for moosicbox_music_api::Error {
-    fn from(err: TidalAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalArtistAlbumsError> for moosicbox_music_api::Error {
-    fn from(err: TidalArtistAlbumsError) -> Self {
+impl From<Error> for moosicbox_music_api::Error {
+    fn from(err: Error) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
 impl From<TryFromAlbumTypeError> for moosicbox_music_api::Error {
     fn from(err: TryFromAlbumTypeError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalAddFavoriteAlbumError> for moosicbox_music_api::Error {
-    fn from(err: TidalAddFavoriteAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalRemoveFavoriteAlbumError> for moosicbox_music_api::Error {
-    fn from(err: TidalRemoveFavoriteAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalFavoriteTracksError> for moosicbox_music_api::Error {
-    fn from(err: TidalFavoriteTracksError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalAlbumTracksError> for moosicbox_music_api::Error {
-    fn from(err: TidalAlbumTracksError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalTrackError> for moosicbox_music_api::Error {
-    fn from(err: TidalTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalTrackFileUrlError> for moosicbox_music_api::Error {
-    fn from(err: TidalTrackFileUrlError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalAddFavoriteTrackError> for moosicbox_music_api::Error {
-    fn from(err: TidalAddFavoriteTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TidalRemoveFavoriteTrackError> for moosicbox_music_api::Error {
-    fn from(err: TidalRemoveFavoriteTrackError) -> Self {
         Self::Other(Box::new(err))
     }
 }
@@ -2435,10 +2138,7 @@ impl MusicApi for TidalMusicApi {
             {
                 Ok(artist) => Some(artist.into()),
                 Err(e) => {
-                    if let TidalArtistError::AuthenticatedRequest(
-                        AuthenticatedRequestError::RequestFailed(status, _),
-                    ) = &e
-                    {
+                    if let Error::HttpRequestFailed(status, _) = &e {
                         if *status == 404 {
                             return Ok(None);
                         }
