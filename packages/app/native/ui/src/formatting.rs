@@ -185,3 +185,8 @@ pub fn format_date(date: &NaiveDateTime, format: &str) -> String {
 pub fn format_size(size: u64) -> String {
     bytesize::ByteSize::b(size).to_string()
 }
+
+#[must_use]
+pub fn classify_name(class: &str) -> String {
+    class.replace(|c: char| !c.is_ascii_alphanumeric(), "-")
+}
