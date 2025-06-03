@@ -50,11 +50,58 @@ use moosicbox_music_api::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
-use thiserror::Error;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
 
 use crate::models::QobuzImage;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Http(#[from] switchy_http::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+    #[error("No App ID found in output")]
+    NoAppId,
+    #[error("No seed and timezone found in output")]
+    NoSeedAndTimezone,
+    #[error("No info and extras found in output")]
+    NoInfoAndExtras,
+    #[error("No matching info for timezone")]
+    NoMatchingInfoForTimezone,
+    #[error(transparent)]
+    Utf8(#[from] Utf8Error),
+    #[error("Failed to fetch app id")]
+    FailedToFetchAppId,
+    #[error("No app secret available")]
+    NoAppSecretAvailable,
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Request failed (error {0})")]
+    RequestFailed(String),
+    #[error("Request failed (error {0}): {1}")]
+    HttpRequestFailed(u16, String),
+    #[error("MaxFailedAttempts")]
+    MaxFailedAttempts,
+    #[error("No response body")]
+    NoResponseBody,
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error(transparent)]
+    Base64Decode(#[from] base64::DecodeError),
+    #[error(transparent)]
+    Config(#[from] QobuzConfigError),
+}
 
 static AUTH_HEADER_NAME: &str = "x-user-auth-token";
 static APP_ID_HEADER_NAME: &str = "x-app-id";
@@ -96,24 +143,12 @@ struct QobuzCredentials {
     persist: bool,
 }
 
-#[derive(Debug, Error)]
-pub enum FetchCredentialsError {
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    DatabaseFetch(#[from] DatabaseFetchError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
-}
-
 #[allow(clippy::unused_async)]
 async fn fetch_credentials(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     app_id: Option<String>,
     access_token: Option<String>,
-) -> Result<QobuzCredentials, FetchCredentialsError> {
+) -> Result<QobuzCredentials, Error> {
     #[cfg(feature = "db")]
     {
         Ok(if let Some(access_token) = access_token {
@@ -161,35 +196,17 @@ async fn fetch_credentials(
                 }
             }
         }
-        .ok_or(FetchCredentialsError::NoAccessTokenAvailable)??)
+        .ok_or(Error::NoAccessTokenAvailable)??)
     }
 
     #[cfg(not(feature = "db"))]
     {
         Ok(QobuzCredentials {
-            access_token: access_token.ok_or(FetchCredentialsError::NoAccessTokenAvailable)?,
+            access_token: access_token.ok_or(Error::NoAccessTokenAvailable)?,
             app_id,
             username: None,
         })
     }
-}
-
-#[derive(Debug, Error)]
-pub enum AuthenticatedRequestError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[error(transparent)]
-    FetchCredentials(#[from] FetchCredentialsError),
-    #[error(transparent)]
-    RefetchAccessToken(#[from] RefetchAccessTokenError),
-    #[error("Unauthorized")]
-    Unauthorized,
-    #[error("Request failed (error {0})")]
-    RequestFailed(u16, String),
-    #[error("No response body")]
-    NoResponseBody,
-    #[error("MaxFailedAttempts")]
-    MaxFailedAttempts,
 }
 
 async fn authenticated_request(
@@ -197,7 +214,7 @@ async fn authenticated_request(
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
-) -> Result<Value, AuthenticatedRequestError> {
+) -> Result<Value, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -210,7 +227,7 @@ async fn authenticated_request(
         1,
     )
     .await?
-    .ok_or_else(|| AuthenticatedRequestError::NoResponseBody)
+    .ok_or_else(|| Error::NoResponseBody)
 }
 
 #[allow(unused)]
@@ -221,7 +238,7 @@ async fn authenticated_post_request(
     access_token: Option<String>,
     body: Option<Value>,
     form: Option<Vec<(&str, &str)>>,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -247,7 +264,7 @@ async fn authenticated_delete_request(
     url: &str,
     app_id: Option<String>,
     access_token: Option<String>,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -273,10 +290,10 @@ async fn authenticated_request_inner(
     body: Option<Value>,
     form: Option<Vec<(String, String)>>,
     attempt: u8,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     if attempt > 3 {
         log::error!("Max failed attempts for reauthentication reached");
-        return Err(AuthenticatedRequestError::MaxFailedAttempts);
+        return Err(Error::MaxFailedAttempts);
     }
 
     log::debug!("Making authenticated request to {url}");
@@ -291,7 +308,7 @@ async fn authenticated_request_inner(
 
     let Some(app_id) = &credentials.app_id else {
         log::debug!("No app_id available");
-        return Err(AuthenticatedRequestError::Unauthorized);
+        return Err(Error::Unauthorized);
     };
 
     let mut request = CLIENT
@@ -317,7 +334,7 @@ async fn authenticated_request_inner(
             log::debug!("Received unauthorized response");
 
             let Some(username) = credentials.username else {
-                return Err(AuthenticatedRequestError::Unauthorized);
+                return Err(Error::Unauthorized);
             };
 
             return authenticated_request_inner(
@@ -344,30 +361,16 @@ async fn authenticated_request_inner(
             )
             .await;
         }
-        400..=599 => Err(AuthenticatedRequestError::RequestFailed(
+        400..=599 => Err(Error::HttpRequestFailed(
             status,
             response.text().await.unwrap_or_else(|_| String::new()),
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
             Err(switchy_http::Error::Decode) => Ok(None),
-            Err(e) => Err(AuthenticatedRequestError::Http(e)),
+            Err(e) => Err(Error::Http(e)),
         },
     }
-}
-
-#[derive(Debug, Error)]
-pub enum RefetchAccessTokenError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    DatabaseFetch(#[from] DatabaseFetchError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
 }
 
 async fn refetch_access_token(
@@ -376,7 +379,7 @@ async fn refetch_access_token(
     username: &str,
     access_token: &str,
     #[cfg(feature = "db")] persist: bool,
-) -> Result<String, RefetchAccessTokenError> {
+) -> Result<String, Error> {
     log::debug!("Refetching access token");
     let url = qobuz_api_endpoint!(
         UserLogin,
@@ -577,34 +580,6 @@ pub enum QobuzAlbumOrder {
     Desc,
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzUserLoginError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    DatabaseFetch(#[from] DatabaseFetchError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
-    #[error("No app id available")]
-    NoAppIdAvailable,
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-    #[error(transparent)]
-    QobuzFetchLoginSource(#[from] QobuzFetchLoginSourceError),
-    #[error(transparent)]
-    QobuzFetchBundleSource(#[from] QobuzFetchBundleSourceError),
-    #[error(transparent)]
-    QobuzFetchAppSecrets(#[from] QobuzFetchAppSecretsError),
-    #[error("Failed to fetch app id")]
-    FailedToFetchAppId,
-    #[error("Unauthorized")]
-    Unauthorized,
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -622,7 +597,7 @@ pub async fn user_login(
     password: &str,
     app_id: Option<String>,
     #[cfg(feature = "db")] persist: Option<bool>,
-) -> Result<Value, QobuzUserLoginError> {
+) -> Result<Value, Error> {
     let url = qobuz_api_endpoint!(
         UserLogin,
         &[],
@@ -656,8 +631,8 @@ pub async fn user_login(
                 }
             } else {
                 let login_source = fetch_login_source().await?;
-                let bundle_version = search_bundle_version(&login_source)
-                    .ok_or(QobuzUserLoginError::FailedToFetchAppId)?;
+                let bundle_version =
+                    search_bundle_version(&login_source).ok_or(Error::FailedToFetchAppId)?;
                 let bundle = fetch_bundle_source(&bundle_version).await?;
                 let config = search_app_config(&bundle)?;
 
@@ -689,7 +664,7 @@ pub async fn user_login(
         .await?;
 
     if response.status() == StatusCode::Unauthorized {
-        return Err(QobuzUserLoginError::Unauthorized);
+        return Err(Error::Unauthorized);
     } else if !response.status().is_success() {
         log::error!(
             "Received unsuccessful response: error {}",
@@ -717,14 +692,6 @@ pub async fn user_login(
     }))
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -741,7 +708,7 @@ pub async fn artist(
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<QobuzArtist, QobuzArtistError> {
+) -> Result<QobuzArtist, Error> {
     let url = qobuz_api_endpoint!(
         Artist,
         &[],
@@ -762,14 +729,6 @@ pub async fn artist(
     Ok(value.to_value_type()?)
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzFavoriteArtistsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
@@ -778,7 +737,7 @@ pub async fn favorite_artists(
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> PagingResult<QobuzArtist, QobuzFavoriteArtistsError> {
+) -> PagingResult<QobuzArtist, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -837,12 +796,6 @@ pub async fn favorite_artists(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzAddFavoriteArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -859,7 +812,7 @@ pub async fn add_favorite_artist(
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(), QobuzAddFavoriteArtistError> {
+) -> Result<(), Error> {
     let url = qobuz_api_endpoint!(
         AddFavorites,
         &[],
@@ -880,12 +833,6 @@ pub async fn add_favorite_artist(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzRemoveFavoriteArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -902,7 +849,7 @@ pub async fn remove_favorite_artist(
     artist_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(), QobuzRemoveFavoriteArtistError> {
+) -> Result<(), Error> {
     let url = qobuz_api_endpoint!(
         RemoveFavorites,
         &[],
@@ -923,14 +870,6 @@ pub async fn remove_favorite_artist(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzArtistAlbumsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn artist_albums(
@@ -944,7 +883,7 @@ pub async fn artist_albums(
     track_size: Option<u8>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> PagingResult<QobuzRelease, QobuzArtistAlbumsError> {
+) -> PagingResult<QobuzRelease, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1014,16 +953,6 @@ pub async fn artist_albums(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-    #[error("Not found")]
-    NotFound,
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -1040,7 +969,7 @@ pub async fn album(
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<QobuzAlbum, QobuzAlbumError> {
+) -> Result<QobuzAlbum, Error> {
     let url = qobuz_api_endpoint!(
         Album,
         &[],
@@ -1054,21 +983,9 @@ pub async fn album(
         app_id,
         access_token,
     )
-    .await
-    .map_err(|e| match e {
-        AuthenticatedRequestError::RequestFailed(404, _) => QobuzAlbumError::NotFound,
-        _ => e.into(),
-    })?;
+    .await?;
 
     Ok(value.to_value_type()?)
-}
-
-#[derive(Debug, Error)]
-pub enum QobuzFavoriteAlbumsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
 }
 
 async fn request_favorite_albums(
@@ -1077,7 +994,7 @@ async fn request_favorite_albums(
     mut limit: u32,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<Value, QobuzFavoriteAlbumsError> {
+) -> Result<Value, Error> {
     let offset = offset.to_string();
 
     loop {
@@ -1102,11 +1019,11 @@ async fn request_favorite_albums(
         {
             Ok(value) => return Ok(value),
             Err(err) => match err {
-                AuthenticatedRequestError::NoResponseBody => {
+                Error::NoResponseBody => {
                     log::debug!("Received empty response for favorite albums... retrying");
                     limit += 1;
                 }
-                _ => return Err(QobuzFavoriteAlbumsError::AuthenticatedRequest(err)),
+                _ => return Err(err),
             },
         }
     }
@@ -1131,7 +1048,7 @@ pub async fn favorite_albums(
     #[allow(clippy::used_underscore_binding)] _album_type: Option<QobuzAlbumReleaseType>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> PagingResult<QobuzAlbum, QobuzFavoriteAlbumsError> {
+) -> PagingResult<QobuzAlbum, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1200,7 +1117,7 @@ pub async fn all_favorite_albums(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<Vec<QobuzAlbum>, QobuzFavoriteAlbumsError> {
+) -> Result<Vec<QobuzAlbum>, Error> {
     let mut all_albums = vec![];
 
     let mut offset = 0;
@@ -1230,12 +1147,6 @@ pub async fn all_favorite_albums(
     Ok(all_albums)
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzAddFavoriteAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -1252,7 +1163,7 @@ pub async fn add_favorite_album(
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(), QobuzAddFavoriteAlbumError> {
+) -> Result<(), Error> {
     let url = qobuz_api_endpoint!(AddFavorites, &[], &[("album_ids", &album_id.to_string()),]);
 
     let value = authenticated_request(
@@ -1267,12 +1178,6 @@ pub async fn add_favorite_album(
     log::trace!("Received add favorite album response: {value:?}");
 
     Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum QobuzRemoveFavoriteAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
 }
 
 /// # Errors
@@ -1291,7 +1196,7 @@ pub async fn remove_favorite_album(
     album_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(), QobuzRemoveFavoriteAlbumError> {
+) -> Result<(), Error> {
     let url = qobuz_api_endpoint!(
         RemoveFavorites,
         &[],
@@ -1312,14 +1217,6 @@ pub async fn remove_favorite_album(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzAlbumTracksError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
@@ -1329,7 +1226,7 @@ pub async fn album_tracks(
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> PagingResult<QobuzTrack, QobuzAlbumTracksError> {
+) -> PagingResult<QobuzTrack, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1413,14 +1310,6 @@ pub async fn album_tracks(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -1438,7 +1327,7 @@ pub async fn track(
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<QobuzTrack, QobuzTrackError> {
+) -> Result<QobuzTrack, Error> {
     let url = qobuz_api_endpoint!(
         Track,
         &[],
@@ -1457,14 +1346,6 @@ pub async fn track(
     Ok(value.to_value_type()?)
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzFavoriteTracksError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
@@ -1473,7 +1354,7 @@ pub async fn favorite_tracks(
     limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> PagingResult<QobuzTrack, QobuzFavoriteTracksError> {
+) -> PagingResult<QobuzTrack, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1530,12 +1411,6 @@ pub async fn favorite_tracks(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzAddFavoriteTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -1552,7 +1427,7 @@ pub async fn add_favorite_track(
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(), QobuzAddFavoriteTrackError> {
+) -> Result<(), Error> {
     let url = qobuz_api_endpoint!(AddFavorites, &[], &[("track_ids", &track_id.to_string()),]);
 
     let value = authenticated_request(
@@ -1567,12 +1442,6 @@ pub async fn add_favorite_track(
     log::trace!("Received add favorite track response: {value:?}");
 
     Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum QobuzRemoveFavoriteTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
 }
 
 /// # Errors
@@ -1591,7 +1460,7 @@ pub async fn remove_favorite_track(
     track_id: &Id,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<(), QobuzRemoveFavoriteTrackError> {
+) -> Result<(), Error> {
     let url = qobuz_api_endpoint!(
         RemoveFavorites,
         &[],
@@ -1645,22 +1514,6 @@ impl From<TrackAudioQuality> for QobuzAudioQuality {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzTrackFileUrlError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    DatabaseFetch(#[from] DatabaseFetchError),
-    #[error("No app secret available")]
-    NoAppSecretAvailable,
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Panics
 ///
 /// * If time went backwards
@@ -1684,7 +1537,7 @@ pub async fn track_file_url(
     access_token: Option<String>,
     app_id: Option<String>,
     app_secret: Option<String>,
-) -> Result<String, QobuzTrackFileUrlError> {
+) -> Result<String, Error> {
     #[cfg(feature = "db")]
     let app_secret = if let Some(app_secret) = app_secret {
         app_secret
@@ -1694,13 +1547,13 @@ pub async fn track_file_url(
             .iter()
             .find(|secret| secret.timezone == "berlin")
             .or_else(|| app_secrets.first())
-            .ok_or(QobuzTrackFileUrlError::NoAppSecretAvailable)?;
+            .ok_or(Error::NoAppSecretAvailable)?;
 
         app_secrets.secret.clone()
     };
 
     #[cfg(not(feature = "db"))]
-    let app_secret = app_secret.ok_or(QobuzTrackFileUrlError::NoAppSecretAvailable)?;
+    let app_secret = app_secret.ok_or(Error::NoAppSecretAvailable)?;
 
     let intent = "stream";
     let format_id = quality.as_format_id();
@@ -1742,22 +1595,6 @@ pub async fn track_file_url(
     Ok(url)
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzSearchError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    DatabaseFetch(#[from] DatabaseFetchError),
-    #[error("No app secret available")]
-    NoAppSecretAvailable,
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the API request failed
@@ -1777,7 +1614,7 @@ pub async fn search(
     limit: Option<usize>,
     access_token: Option<String>,
     app_id: Option<String>,
-) -> Result<QobuzSearchResults, QobuzSearchError> {
+) -> Result<QobuzSearchResults, Error> {
     let url = qobuz_api_endpoint!(
         Search,
         &[],
@@ -1802,17 +1639,8 @@ pub async fn search(
     Ok(value.to_value_type()?)
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzFetchLoginSourceError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-}
-
 #[allow(unused)]
-async fn fetch_login_source() -> Result<String, QobuzFetchLoginSourceError> {
+async fn fetch_login_source() -> Result<String, Error> {
     let url = qobuz_api_endpoint!(Login);
 
     Ok(CLIENT.get(&url).send().await?.text().await?)
@@ -1838,41 +1666,11 @@ fn search_bundle_version(login_source: &str) -> Option<String> {
     None
 }
 
-#[derive(Debug, Error)]
-pub enum QobuzFetchBundleSourceError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-}
-
 #[allow(unused)]
-async fn fetch_bundle_source(bundle_version: &str) -> Result<String, QobuzFetchBundleSourceError> {
+async fn fetch_bundle_source(bundle_version: &str) -> Result<String, Error> {
     let url = qobuz_api_endpoint!(Bundle, &[(":bundleVersion", bundle_version)]);
 
     Ok(CLIENT.get(&url).send().await?.text().await?)
-}
-
-#[derive(Debug, Error)]
-pub enum QobuzFetchAppSecretsError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[error(transparent)]
-    Base64Decode(#[from] base64::DecodeError),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[error("No App ID found in output")]
-    NoAppId,
-    #[error("No seed and timezone found in output")]
-    NoSeedAndTimezone,
-    #[error("No info and extras found in output")]
-    NoInfoAndExtras,
-    #[error("No matching info for timezone")]
-    NoMatchingInfoForTimezone,
-    #[error(transparent)]
-    Utf8(#[from] Utf8Error),
 }
 
 fn capitalize(value: &str) -> String {
@@ -1888,7 +1686,7 @@ pub(crate) struct AppConfig {
 }
 
 #[allow(unused)]
-pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchAppSecretsError> {
+pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, Error> {
     static SEED_AND_TIMEZONE_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(r#"[a-z]\.initialSeed\("([\w=]+)",window\.utimezone\.(.+?)\)"#).unwrap()
     });
@@ -1904,10 +1702,10 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchApp
             log::debug!("Found app_id={app_id}");
             app_id.to_string()
         } else {
-            return Err(QobuzFetchAppSecretsError::NoAppId);
+            return Err(Error::NoAppId);
         }
     } else {
-        return Err(QobuzFetchAppSecretsError::NoAppId);
+        return Err(Error::NoAppId);
     };
 
     let mut seed_timezones = vec![];
@@ -1918,21 +1716,21 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchApp
             log::debug!("Found seed={seed}");
             seed.to_string()
         } else {
-            return Err(QobuzFetchAppSecretsError::NoSeedAndTimezone);
+            return Err(Error::NoSeedAndTimezone);
         };
         let timezone = if let Some(timezone) = caps.get(2) {
             let timezone = timezone.as_str();
             log::debug!("Found timezone={timezone}");
             timezone.to_string()
         } else {
-            return Err(QobuzFetchAppSecretsError::NoSeedAndTimezone);
+            return Err(Error::NoSeedAndTimezone);
         };
 
         seed_timezones.push((seed, timezone));
     }
 
     if seed_timezones.is_empty() {
-        return Err(QobuzFetchAppSecretsError::NoSeedAndTimezone);
+        return Err(Error::NoSeedAndTimezone);
     }
 
     let mut name_info_extras = vec![];
@@ -1943,28 +1741,28 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchApp
             log::debug!("Found name={name}");
             name.to_string()
         } else {
-            return Err(QobuzFetchAppSecretsError::NoInfoAndExtras);
+            return Err(Error::NoInfoAndExtras);
         };
         let info = if let Some(info) = caps.get(2) {
             let info = info.as_str();
             log::debug!("Found info={info}");
             info.to_string()
         } else {
-            return Err(QobuzFetchAppSecretsError::NoInfoAndExtras);
+            return Err(Error::NoInfoAndExtras);
         };
         let extras = if let Some(extras) = caps.get(3) {
             let extras = extras.as_str();
             log::debug!("Found extras={extras}");
             extras.to_string()
         } else {
-            return Err(QobuzFetchAppSecretsError::NoInfoAndExtras);
+            return Err(Error::NoInfoAndExtras);
         };
 
         name_info_extras.push((name, info, extras));
     }
 
     if name_info_extras.is_empty() {
-        return Err(QobuzFetchAppSecretsError::NoInfoAndExtras);
+        return Err(Error::NoInfoAndExtras);
     }
 
     let mut secrets = HashMap::new();
@@ -1975,7 +1773,7 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchApp
         let (_, info, _) = name_info_extras
             .iter()
             .find(|(name, _, _)| name.starts_with(&capitalize(&timezone)))
-            .ok_or(QobuzFetchAppSecretsError::NoMatchingInfoForTimezone)
+            .ok_or(Error::NoMatchingInfoForTimezone)
             .expect("No matching name for timezone");
 
         let secret_base64 = format!("{seed}{info}");
@@ -1989,92 +1787,8 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, QobuzFetchApp
     Ok(AppConfig { app_id, secrets })
 }
 
-impl From<QobuzFavoriteArtistsError> for moosicbox_music_api::Error {
-    fn from(err: QobuzFavoriteArtistsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzArtistError> for moosicbox_music_api::Error {
-    fn from(err: QobuzArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzAddFavoriteArtistError> for moosicbox_music_api::Error {
-    fn from(err: QobuzAddFavoriteArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzRemoveFavoriteArtistError> for moosicbox_music_api::Error {
-    fn from(err: QobuzRemoveFavoriteArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzFavoriteAlbumsError> for moosicbox_music_api::Error {
-    fn from(err: QobuzFavoriteAlbumsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzAlbumError> for moosicbox_music_api::Error {
-    fn from(err: QobuzAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzArtistAlbumsError> for moosicbox_music_api::Error {
-    fn from(err: QobuzArtistAlbumsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzAddFavoriteAlbumError> for moosicbox_music_api::Error {
-    fn from(err: QobuzAddFavoriteAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzRemoveFavoriteAlbumError> for moosicbox_music_api::Error {
-    fn from(err: QobuzRemoveFavoriteAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzFavoriteTracksError> for moosicbox_music_api::Error {
-    fn from(err: QobuzFavoriteTracksError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzAlbumTracksError> for moosicbox_music_api::Error {
-    fn from(err: QobuzAlbumTracksError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzTrackError> for moosicbox_music_api::Error {
-    fn from(err: QobuzTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzTrackFileUrlError> for moosicbox_music_api::Error {
-    fn from(err: QobuzTrackFileUrlError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzAddFavoriteTrackError> for moosicbox_music_api::Error {
-    fn from(err: QobuzAddFavoriteTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<QobuzRemoveFavoriteTrackError> for moosicbox_music_api::Error {
-    fn from(err: QobuzRemoveFavoriteTrackError) -> Self {
+impl From<Error> for moosicbox_music_api::Error {
+    fn from(err: Error) -> Self {
         Self::Other(Box::new(err))
     }
 }
@@ -2185,10 +1899,7 @@ impl MusicApi for QobuzMusicApi {
             {
                 Ok(artist) => Some(artist.into()),
                 Err(e) => {
-                    if let QobuzArtistError::AuthenticatedRequest(
-                        AuthenticatedRequestError::RequestFailed(status, _),
-                    ) = &e
-                    {
+                    if let Error::HttpRequestFailed(status, _) = &e {
                         if *status == 404 {
                             return Ok(None);
                         }

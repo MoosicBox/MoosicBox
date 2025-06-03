@@ -3,7 +3,7 @@
 use actix_web::{
     HttpRequest, Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
-    error::{ErrorInternalServerError, ErrorUnauthorized},
+    error::{ErrorInternalServerError, ErrorNotFound, ErrorUnauthorized},
     route,
     web::{self, Json},
 };
@@ -20,12 +20,10 @@ use strum_macros::{AsRefStr, EnumString};
 use switchy_database::profiles::LibraryDatabase;
 
 use crate::{
-    API_SOURCE, QobuzAlbumError, QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort,
-    QobuzAlbumTracksError, QobuzArtistAlbumsError, QobuzArtistError, QobuzAudioQuality,
-    QobuzFavoriteAlbumsError, QobuzFavoriteArtistsError, QobuzFavoriteTracksError, QobuzRelease,
-    QobuzSearchError, QobuzTrack, QobuzTrackError, QobuzTrackFileUrlError, QobuzUserLoginError,
-    album, album_tracks, artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    format_title, models::QobuzAlbum, search, track, track_file_url, user_login,
+    API_SOURCE, Error, QobuzAlbumOrder, QobuzAlbumReleaseType, QobuzAlbumSort, QobuzAudioQuality,
+    QobuzRelease, QobuzTrack, album, album_tracks, artist, artist_albums, favorite_albums,
+    favorite_artists, favorite_tracks, format_title, models::QobuzAlbum, search, track,
+    track_file_url, user_login,
 };
 
 pub fn bind_services<
@@ -73,23 +71,40 @@ pub fn bind_services<
 )]
 pub struct Api;
 
-impl From<QobuzUserLoginError> for actix_web::Error {
-    fn from(err: QobuzUserLoginError) -> Self {
-        match err {
-            QobuzUserLoginError::Unauthorized => ErrorUnauthorized(err.to_string()),
-            QobuzUserLoginError::Http(_)
-            | QobuzUserLoginError::NoAccessTokenAvailable
-            | QobuzUserLoginError::NoAppIdAvailable
-            | QobuzUserLoginError::Parse(_)
-            | QobuzUserLoginError::QobuzFetchLoginSource(_)
-            | QobuzUserLoginError::QobuzFetchBundleSource(_)
-            | QobuzUserLoginError::QobuzFetchAppSecrets(_)
-            | QobuzUserLoginError::FailedToFetchAppId => ErrorInternalServerError(err.to_string()),
-            #[cfg(feature = "db")]
-            QobuzUserLoginError::Database(_) | QobuzUserLoginError::DatabaseFetch(_) => {
-                ErrorInternalServerError(err.to_string())
+impl From<Error> for actix_web::Error {
+    fn from(e: Error) -> Self {
+        match &e {
+            Error::Unauthorized => {
+                return ErrorUnauthorized(e.to_string());
             }
+            Error::HttpRequestFailed(status, message) => {
+                if *status == 404 {
+                    return ErrorNotFound(format!("Tidal album not found: {message}"));
+                }
+            }
+            Error::NoUserIdAvailable
+            | Error::Parse(..)
+            | Error::Http(..)
+            | Error::NoAccessTokenAvailable
+            | Error::RequestFailed(..)
+            | Error::MaxFailedAttempts
+            | Error::NoResponseBody
+            | Error::NoAppId
+            | Error::NoSeedAndTimezone
+            | Error::NoInfoAndExtras
+            | Error::NoMatchingInfoForTimezone
+            | Error::Utf8(..)
+            | Error::FailedToFetchAppId
+            | Error::NoAppSecretAvailable
+            | Error::Base64Decode(..)
+            | Error::Config(..)
+            | Error::Serde(..) => {}
+            #[cfg(feature = "db")]
+            Error::Database(_) | Error::DatabaseFetch(_) => {}
         }
+
+        log::error!("{e:?}");
+        ErrorInternalServerError(e.to_string())
     }
 }
 
@@ -292,12 +307,6 @@ static QOBUZ_ACCESS_TOKEN_HEADER: &str = "x-qobuz-access-token";
 static QOBUZ_APP_ID_HEADER: &str = "x-qobuz-app-id";
 static QOBUZ_APP_SECRET_HEADER: &str = "x-qobuz-app-secret";
 
-impl From<QobuzArtistError> for actix_web::Error {
-    fn from(err: QobuzArtistError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzArtistQuery {
@@ -343,12 +352,6 @@ pub async fn artist_endpoint(
     .await?;
 
     Ok(Json(artist.into()))
-}
-
-impl From<QobuzFavoriteArtistsError> for actix_web::Error {
-    fn from(err: QobuzFavoriteArtistsError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -403,12 +406,6 @@ pub async fn favorite_artists_endpoint(
     ))
 }
 
-impl From<QobuzAlbumError> for actix_web::Error {
-    fn from(err: QobuzAlbumError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbumQuery {
@@ -454,12 +451,6 @@ pub async fn album_endpoint(
     .await?;
 
     Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
-}
-
-impl From<QobuzArtistAlbumsError> for actix_web::Error {
-    fn from(err: QobuzArtistAlbumsError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
@@ -595,12 +586,6 @@ pub async fn artist_albums_endpoint(
     Ok(Json(albums.into()))
 }
 
-impl From<QobuzFavoriteAlbumsError> for actix_web::Error {
-    fn from(err: QobuzFavoriteAlbumsError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzFavoriteAlbumsQuery {
@@ -660,12 +645,6 @@ pub async fn favorite_albums_endpoint(
     Ok(Json(albums.into()))
 }
 
-impl From<QobuzAlbumTracksError> for actix_web::Error {
-    fn from(err: QobuzAlbumTracksError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzAlbumTracksQuery {
@@ -720,12 +699,6 @@ pub async fn album_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
-impl From<QobuzTrackError> for actix_web::Error {
-    fn from(err: QobuzTrackError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzTrackQuery {
@@ -771,12 +744,6 @@ pub async fn track_endpoint(
     .await?;
 
     Ok(Json(track.into()))
-}
-
-impl From<QobuzFavoriteTracksError> for actix_web::Error {
-    fn from(err: QobuzFavoriteTracksError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -830,12 +797,6 @@ pub async fn favorite_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
-impl From<QobuzTrackFileUrlError> for actix_web::Error {
-    fn from(err: QobuzTrackFileUrlError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QobuzTrackFileUrlQuery {
@@ -887,12 +848,6 @@ pub async fn track_file_url_endpoint(
         )
         .await?,
     })))
-}
-
-impl From<QobuzSearchError> for actix_web::Error {
-    fn from(err: QobuzSearchError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
