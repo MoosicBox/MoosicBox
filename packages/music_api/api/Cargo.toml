@@ -14,7 +14,7 @@ version     = "0.1.1"
 actix-web              = { workspace = true }
 futures                = { workspace = true, optional = true }
 moosicbox_music_api    = { workspace = true, features = ["api"] }
-moosicbox_music_models = { workspace = true }
+moosicbox_music_models = { workspace = true, optional = true }
 moosicbox_paging       = { workspace = true }
 moosicbox_profiles     = { workspace = true, features = ["api"] }
 utoipa                 = { workspace = true, optional = true }
@@ -30,9 +30,9 @@ fail-on-warnings = []
 openapi = [
     "dep:utoipa",
     "moosicbox_music_api/openapi",
-    "moosicbox_music_models/openapi",
+    "moosicbox_music_models?/openapi",
 ]
 
-db = ["moosicbox_music_models/db"]
+db = ["moosicbox_music_models?/db"]
 
 api = ["dep:futures", "moosicbox_music_models/api"]

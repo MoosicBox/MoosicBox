@@ -92,10 +92,12 @@ pub fn settings_page_content(
 
 #[must_use]
 fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
-    if settings.logged_in {
+    if !settings.authentication_enabled || settings.logged_in {
         html! {
             div sx-gap=(10) {
-                p { "Logged in!" }
+                @if settings.logged_in {
+                    p { "Logged in!" }
+                }
                 button
                     id="run-scan-button"
                     type="button"

@@ -809,6 +809,26 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
     ) -> Result<Option<u64>, Error> {
         self.inner.track_size(track, source, quality).await
     }
+
+    async fn scan(&self) -> Result<(), Error> {
+        self.inner.scan().await
+    }
+
+    fn authentication_enabled(&self) -> bool {
+        self.inner.authentication_enabled()
+    }
+
+    async fn authenticate(&self) -> Result<(), Error> {
+        self.inner.authenticate().await
+    }
+
+    async fn is_logged_in(&self) -> Result<bool, Error> {
+        self.inner.is_logged_in().await
+    }
+
+    async fn logout(&self) -> Result<(), Error> {
+        self.inner.logout().await
+    }
 }
 
 #[cfg(test)]

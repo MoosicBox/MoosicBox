@@ -19,8 +19,10 @@ impl AsRef<Self> for Connection {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MusicApiSettings {
+    pub id: String,
     pub name: String,
     pub logged_in: bool,
+    pub authentication_enabled: bool,
     pub run_scan_endpoint: Option<String>,
     pub auth_endpoint: Option<String>,
 }

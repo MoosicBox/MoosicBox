@@ -1,7 +1,7 @@
 use actix_web::{
     Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
-    error::ErrorNotFound,
+    error::{ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
 };
@@ -42,7 +42,7 @@ pub struct GetMusicApis {
         tags = ["MusicApi"],
         get,
         path = "",
-        description = "Get a list of tracks associated with a music APIs",
+        description = "Get the list enabled music APIs",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
@@ -78,6 +78,10 @@ pub async fn music_apis_endpoint(
             .map(convert_to_api_music_api),
     )
     .await;
+    let music_apis = music_apis
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ErrorInternalServerError)?;
 
     Ok(Json(Page::WithTotal {
         items: music_apis,

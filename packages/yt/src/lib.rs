@@ -2876,12 +2876,18 @@ impl MusicApi for YtMusicApi {
         Ok(())
     }
 
+    fn authentication_enabled(&self) -> bool {
+        true
+    }
+
     async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
         Ok(())
     }
 
     async fn is_logged_in(&self) -> Result<bool, moosicbox_music_api::Error> {
-        Ok(self.logged_in.load(std::sync::atomic::Ordering::SeqCst))
+        let logged_in = self.logged_in.load(std::sync::atomic::Ordering::SeqCst);
+        log::debug!("is_logged_in={logged_in}");
+        Ok(logged_in)
     }
 
     async fn logout(&self) -> Result<(), moosicbox_music_api::Error> {

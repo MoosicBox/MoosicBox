@@ -596,6 +596,7 @@ pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError>
 
         music_api_settings.extend(music_apis.into_iter().map(|x| {
             MusicApiSettings {
+                authentication_enabled: x.authentication_enabled,
                 logged_in: x.logged_in,
                 run_scan_endpoint: x
                     .scanning_enabled
@@ -604,6 +605,7 @@ pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError>
                     .authentication_enabled
                     .then(|| format!("/music-api/auth?apiSource={}", x.name)),
                 name: x.name,
+                id: x.id,
             }
         }));
     } else {
