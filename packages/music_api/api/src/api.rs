@@ -31,7 +31,9 @@ pub fn bind_services<
         music_apis_endpoint,
         auth_music_api_endpoint,
     ),
-    components(schemas())
+    components(schemas(
+        ApiMusicApi,
+    ))
 )]
 pub struct Api;
 
@@ -114,8 +116,9 @@ pub struct AuthMusicApi {
         ),
         responses(
             (
-                status = 204,
-                description = "Success response",
+                status = 200,
+                description = "The authenticated MusicApi",
+                body = ApiMusicApi,
             )
         )
     )
@@ -124,7 +127,7 @@ pub struct AuthMusicApi {
 pub async fn auth_music_api_endpoint(
     query: web::Query<AuthMusicApi>,
     music_apis: MusicApis,
-) -> Result<()> {
+) -> Result<Json<ApiMusicApi>> {
     let music_api = music_apis
         .get(&query.api_source)
         .ok_or_else(|| ErrorNotFound(format!("MusicApi '{}' not found", query.api_source)))?;
@@ -134,5 +137,9 @@ pub async fn auth_music_api_endpoint(
         .await
         .map_err(ErrorInternalServerError)?;
 
-    Ok(())
+    Ok(Json(
+        convert_to_api_music_api(&**music_api)
+            .await
+            .map_err(ErrorInternalServerError)?,
+    ))
 }
