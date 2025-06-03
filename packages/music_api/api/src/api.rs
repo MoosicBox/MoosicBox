@@ -5,6 +5,8 @@ use actix_web::{
     route,
     web::{self, Json},
 };
+use moosicbox_music_api::{MusicApis, SourceToMusicApi as _};
+use moosicbox_music_models::ApiSource;
 use moosicbox_paging::Page;
 use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;
@@ -16,7 +18,9 @@ pub fn bind_services<
 >(
     scope: Scope<T>,
 ) -> Scope<T> {
-    scope.service(music_apis_endpoint)
+    scope
+        .service(music_apis_endpoint)
+        .service(auth_music_api_endpoint)
 }
 
 #[cfg(feature = "openapi")]
@@ -25,6 +29,7 @@ pub fn bind_services<
     tags((name = "MusicApi")),
     paths(
         music_apis_endpoint,
+        auth_music_api_endpoint,
     ),
     components(schemas())
 )]
@@ -89,4 +94,45 @@ pub async fn music_apis_endpoint(
         limit,
         total,
     }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthMusicApi {
+    api_source: ApiSource,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["MusicApi"],
+        post,
+        path = "auth",
+        description = "Authenticate a specific MusicApi",
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+            ("apiSource" = Option<u32>, Query, description = "ApiSource to authenticate"),
+        ),
+        responses(
+            (
+                status = 204,
+                description = "Success response",
+            )
+        )
+    )
+)]
+#[route("/auth", method = "POST")]
+pub async fn auth_music_api_endpoint(
+    query: web::Query<AuthMusicApi>,
+    music_apis: MusicApis,
+) -> Result<()> {
+    let music_api = music_apis
+        .get(&query.api_source)
+        .ok_or_else(|| ErrorNotFound(format!("MusicApi '{}' not found", query.api_source)))?;
+
+    music_api
+        .authenticate()
+        .await
+        .map_err(ErrorInternalServerError)?;
+
+    Ok(())
 }
