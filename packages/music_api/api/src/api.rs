@@ -21,6 +21,7 @@ pub fn bind_services<
     scope
         .service(music_apis_endpoint)
         .service(auth_music_api_endpoint)
+        .service(scan_music_api_endpoint)
 }
 
 #[cfg(feature = "openapi")]
@@ -30,6 +31,7 @@ pub fn bind_services<
     paths(
         music_apis_endpoint,
         auth_music_api_endpoint,
+        scan_music_api_endpoint,
     ),
     components(schemas(
         ApiMusicApi,
@@ -136,6 +138,49 @@ pub async fn auth_music_api_endpoint(
         .authenticate()
         .await
         .map_err(ErrorInternalServerError)?;
+
+    Ok(Json(
+        convert_to_api_music_api(&**music_api)
+            .await
+            .map_err(ErrorInternalServerError)?,
+    ))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanMusicApi {
+    api_source: ApiSource,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["MusicApi"],
+        post,
+        path = "/scan",
+        description = "Scan a specific MusicApi",
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+            ("apiSource" = Option<u32>, Query, description = "ApiSource to scan"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "The scanned MusicApi",
+                body = ApiMusicApi,
+            )
+        )
+    )
+)]
+#[route("/scan", method = "POST")]
+pub async fn scan_music_api_endpoint(
+    query: web::Query<ScanMusicApi>,
+    music_apis: MusicApis,
+) -> Result<Json<ApiMusicApi>> {
+    let music_api = music_apis
+        .get(&query.api_source)
+        .ok_or_else(|| ErrorNotFound(format!("MusicApi '{}' not found", query.api_source)))?;
+
+    music_api.scan().await.map_err(ErrorInternalServerError)?;
 
     Ok(Json(
         convert_to_api_music_api(&**music_api)
