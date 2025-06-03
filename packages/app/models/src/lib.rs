@@ -32,3 +32,27 @@ impl AsRef<Self> for MusicApiSettings {
         self
     }
 }
+
+#[cfg(feature = "music-api-api")]
+pub mod music_api_api {
+    use moosicbox_music_api_api::models::ApiMusicApi;
+
+    use crate::MusicApiSettings;
+
+    impl From<ApiMusicApi> for MusicApiSettings {
+        fn from(value: ApiMusicApi) -> Self {
+            Self {
+                authentication_enabled: value.authentication_enabled,
+                logged_in: value.logged_in,
+                run_scan_endpoint: value
+                    .scanning_enabled
+                    .then(|| format!("/music-api/scan?apiSource={}", value.name)),
+                auth_endpoint: value
+                    .authentication_enabled
+                    .then(|| format!("/music-api/auth?apiSource={}", value.name)),
+                name: value.name,
+                id: value.id,
+            }
+        }
+    }
+}

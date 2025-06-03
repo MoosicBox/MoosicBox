@@ -7103,6 +7103,7 @@ name = "moosicbox_app_models"
 version = "0.1.1"
 dependencies = [
  "log 0.4.27",
+ "moosicbox_music_api_api",
  "serde",
 ]
 

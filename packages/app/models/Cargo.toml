@@ -14,7 +14,11 @@ version     = "0.1.1"
 log   = { workspace = true }
 serde = { workspace = true }
 
+moosicbox_music_api_api = { workspace = true, optional = true }
+
 [features]
-default = []
+default = ["music-api-api"]
 
 fail-on-warnings = []
+
+music-api-api = ["dep:moosicbox_music_api_api"]
