@@ -1,7 +1,7 @@
 use std::{num::ParseIntError, str::FromStr, sync::LazyLock};
 
 use hyperchad::{
-    renderer::View,
+    renderer::{Content, View},
     router::{Container, RouteRequest},
     transformer::html::ParseError,
 };
@@ -594,20 +594,7 @@ pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError>
 
         let music_apis = music_apis.into_items();
 
-        music_api_settings.extend(music_apis.into_iter().map(|x| {
-            MusicApiSettings {
-                authentication_enabled: x.authentication_enabled,
-                logged_in: x.logged_in,
-                run_scan_endpoint: x
-                    .scanning_enabled
-                    .then(|| format!("/music-api/scan?apiSource={}", x.name)),
-                auth_endpoint: x
-                    .authentication_enabled
-                    .then(|| format!("/music-api/auth?apiSource={}", x.name)),
-                name: x.name,
-                id: x.id,
-            }
-        }));
+        music_api_settings.extend(music_apis.into_iter().map(Into::into));
     } else {
         log::debug!("No connection");
     }
@@ -774,4 +761,90 @@ pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View,
             moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
             RouteError::ParseMarkup
         })
+}
+
+pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteError> {
+    let Some(api_source) = req.query.get("apiSource") else {
+        return Err(RouteError::MissingQueryParam("apiSource"));
+    };
+    let api_source = ApiSource::from_str(api_source)
+        .inspect_err(|e| {
+            moosicbox_assert::die_or_error!("Invalid apiSource: {e:?}");
+        })
+        .map_err(|e| RouteError::RouteFailed(e.into()))?;
+
+    if let Some(connection) = &STATE.get_current_connection().await? {
+        let host = &connection.api_url;
+
+        let music_api: ApiMusicApi = CLIENT
+            .post(&format!(
+                "{host}/music-api/scan?apiSource={api_source}&moosicboxProfile={PROFILE}"
+            ))
+            .send()
+            .await
+            .inspect(|x| {
+                if !x.status().is_success() {
+                    log::error!("Error scanning music_api: status={}", x.status());
+                }
+            })?
+            .json()
+            .await?;
+
+        let settings = music_api.into();
+
+        return Ok(Content::try_view(
+            moosicbox_app_native_ui::settings::music_api_settings_content(&settings),
+        )?);
+    }
+
+    Ok(Content::try_partial_view(
+        "settings-scan-error",
+        moosicbox_app_native_ui::settings::scan_error_message(
+            api_source.as_ref(),
+            Some("Failed to scan"),
+        ),
+    )?)
+}
+
+pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteError> {
+    let Some(api_source) = req.query.get("apiSource") else {
+        return Err(RouteError::MissingQueryParam("apiSource"));
+    };
+    let api_source = ApiSource::from_str(api_source)
+        .inspect_err(|e| {
+            moosicbox_assert::die_or_error!("Invalid apiSource: {e:?}");
+        })
+        .map_err(|e| RouteError::RouteFailed(e.into()))?;
+
+    if let Some(connection) = &STATE.get_current_connection().await? {
+        let host = &connection.api_url;
+
+        let music_api: ApiMusicApi = CLIENT
+            .post(&format!(
+                "{host}/music-api/auth?apiSource={api_source}&moosicboxProfile={PROFILE}"
+            ))
+            .send()
+            .await
+            .inspect(|x| {
+                if !x.status().is_success() {
+                    log::error!("Error authenticating music_api: status={}", x.status());
+                }
+            })?
+            .json()
+            .await?;
+
+        let settings = music_api.into();
+
+        return Ok(Content::try_view(
+            moosicbox_app_native_ui::settings::music_api_settings_content(&settings),
+        )?);
+    }
+
+    Ok(Content::try_partial_view(
+        "settings-auth-error",
+        moosicbox_app_native_ui::settings::auth_error_message(
+            api_source.as_ref(),
+            Some("Failed to authenticate"),
+        ),
+    )?)
 }

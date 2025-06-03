@@ -5,7 +5,7 @@ use maud::{Markup, html};
 use moosicbox_app_models::{Connection, MusicApiSettings};
 use strum::{AsRefStr, EnumString};
 
-use crate::{page, pre_escaped, state::State};
+use crate::{formatting::classify_name, page, pre_escaped, state::State};
 
 #[must_use]
 pub fn settings_page_content(
@@ -91,39 +91,67 @@ pub fn settings_page_content(
 }
 
 #[must_use]
-fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
-    if !settings.authentication_enabled || settings.logged_in {
-        html! {
-            div sx-gap=(10) {
-                @if settings.logged_in {
-                    p { "Logged in!" }
+pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
+    html! {
+        // FIXME: HTML encode settings.id
+        @let id = format!("settings-{}", classify_name(&settings.id));
+        div id=(id) {
+            @if !settings.authentication_enabled || settings.logged_in {
+                div sx-gap=(10) {
+                    @if settings.logged_in {
+                        p { "Logged in!" }
+                    }
+                    button
+                        hx-post={(pre_escaped!("/music-api/scan?apiSource="))(settings.id)}
+                        hx-swap={"#"(id)}
+                        id="run-scan-button"
+                        type="button"
+                        sx-border-radius=(5)
+                        sx-background="#111"
+                        sx-border="2, #222"
+                        sx-padding-x=(10)
+                        sx-padding-y=(5)
+                    {
+                        "Run Scan"
+                    }
+                    (scan_error_message(&settings.id, None))
                 }
+            } @else {
                 button
-                    id="run-scan-button"
+                    hx-post={(pre_escaped!("/music-api/auth?apiSource="))(settings.id)}
+                    hx-swap={"#"(id)}
                     type="button"
                     sx-border-radius=(5)
                     sx-background="#111"
                     sx-border="2, #222"
                     sx-padding-x=(10)
                     sx-padding-y=(5)
-                    onclick="window.api.runTidalScan()"
                 {
-                    "Run Scan"
+                    "Start web authentication"
                 }
+                (auth_error_message(&settings.id, None))
             }
         }
-    } else {
-        html! {
-            button
-                type="button"
-                sx-border-radius=(5)
-                sx-background="#111"
-                sx-border="2, #222"
-                sx-padding-x=(10)
-                sx-padding-y=(5)
-                onclick="window.api.startTidalAuth()"
-            {
-                "Start web authentication"
+    }
+}
+
+#[must_use]
+pub fn scan_error_message(id: &str, message: Option<&str>) -> Markup {
+    html! {
+        div id={"settings-scan-error-"(classify_name(id))} {
+            @if let Some(message) = message {
+                (message)
+            }
+        }
+    }
+}
+
+#[must_use]
+pub fn auth_error_message(id: &str, message: Option<&str>) -> Markup {
+    html! {
+        div id={"settings-auth-error-"(classify_name(id))} {
+            @if let Some(message) = message {
+                (message)
             }
         }
     }
