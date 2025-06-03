@@ -37,6 +37,41 @@ pub enum Content {
     Json(serde_json::Value),
 }
 
+impl Content {
+    #[must_use]
+    pub fn view(view: impl Into<View>) -> Self {
+        Self::View(view.into())
+    }
+
+    /// # Errors
+    ///
+    /// * If the `view` fails to convert to a `View`
+    pub fn try_view<T: TryInto<View>>(view: T) -> Result<Self, T::Error> {
+        Ok(Self::View(view.try_into()?))
+    }
+
+    #[must_use]
+    pub fn partial_view(target: impl Into<String>, container: impl Into<Container>) -> Self {
+        Self::PartialView(PartialView {
+            target: target.into(),
+            container: container.into(),
+        })
+    }
+
+    /// # Errors
+    ///
+    /// * If the `container` fails to convert to a `Container`
+    pub fn try_partial_view<T: TryInto<Container>>(
+        target: impl Into<String>,
+        container: T,
+    ) -> Result<Self, T::Error> {
+        Ok(Self::PartialView(PartialView {
+            target: target.into(),
+            container: container.try_into()?,
+        }))
+    }
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct PartialView {
     pub target: String,
