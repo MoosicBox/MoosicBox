@@ -188,5 +188,7 @@ pub fn format_size(size: u64) -> String {
 
 #[must_use]
 pub fn classify_name(class: &str) -> String {
-    class.replace(|c: char| !c.is_ascii_alphanumeric(), "-")
+    class
+        .to_ascii_lowercase()
+        .replace(|c: char| !c.is_ascii_alphanumeric(), "-")
 }
