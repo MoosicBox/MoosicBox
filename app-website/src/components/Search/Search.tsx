@@ -375,10 +375,10 @@ export default function searchInput() {
                 <Tabs
                     default={'Library'}
                     tabs={{
-                        LIBRARY: displayApiSource('Library'),
-                        QOBUZ: displayApiSource('Qobuz'),
-                        TIDAL: displayApiSource('Tidal'),
-                        YT: displayApiSource('Yt'),
+                        Library: displayApiSource('Library'),
+                        Qobuz: displayApiSource('Qobuz'),
+                        Tidal: displayApiSource('Tidal'),
+                        Yt: displayApiSource('Yt'),
                     }}
                 >
                     {(tab) => {
