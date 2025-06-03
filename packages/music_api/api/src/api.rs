@@ -106,7 +106,7 @@ pub struct AuthMusicApi {
     feature = "openapi", utoipa::path(
         tags = ["MusicApi"],
         post,
-        path = "auth",
+        path = "/auth",
         description = "Authenticate a specific MusicApi",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
