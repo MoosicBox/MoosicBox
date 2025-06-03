@@ -13,7 +13,7 @@ use maud::{Markup, html};
 use moosicbox_music_api::MusicApis;
 #[cfg(feature = "scan")]
 use moosicbox_scan::ScanOrigin;
-use moosicbox_tidal::{TidalDeviceAuthorizationTokenError, db::GetTidalConfigError};
+use moosicbox_tidal::db::GetTidalConfigError;
 use serde::Deserialize;
 use switchy_database::profiles::LibraryDatabase;
 use urlencoding::encode;
@@ -102,7 +102,7 @@ async fn device_authorization_token(
     htmx: Htmx,
     device_code: &str,
     url: &str,
-) -> Result<Markup, TidalDeviceAuthorizationTokenError> {
+) -> Result<Markup, moosicbox_tidal::Error> {
     let response = moosicbox_tidal::device_authorization_token(
         db,
         CLIENT_ID.clone(),

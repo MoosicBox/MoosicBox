@@ -20,20 +20,13 @@ use strum_macros::{AsRefStr, EnumString};
 use switchy_database::profiles::LibraryDatabase;
 
 use crate::{
-    API_SOURCE, AuthenticatedRequestError, SearchType, TidalAddFavoriteAlbumError,
-    TidalAddFavoriteArtistError, TidalAddFavoriteTrackError, TidalAlbumError, TidalAlbumOrder,
-    TidalAlbumOrderDirection, TidalAlbumTracksError, TidalAlbumType, TidalArtistAlbumsError,
-    TidalArtistError, TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality,
-    TidalDeviceAuthorizationError, TidalDeviceAuthorizationTokenError, TidalDeviceType,
-    TidalFavoriteAlbumsError, TidalFavoriteArtistsError, TidalFavoriteTracksError,
-    TidalRemoveFavoriteAlbumError, TidalRemoveFavoriteArtistError, TidalRemoveFavoriteTrackError,
-    TidalSearchError, TidalTrack, TidalTrackError, TidalTrackFileUrlError, TidalTrackOrder,
-    TidalTrackOrderDirection, TidalTrackPlaybackInfo, TidalTrackPlaybackInfoError,
-    add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks, artist,
-    artist_albums, device_authorization, device_authorization_token, favorite_albums,
-    favorite_artists, favorite_tracks, models::TidalAlbum, remove_favorite_album,
-    remove_favorite_artist, remove_favorite_track, search, track, track_file_url,
-    track_playback_info,
+    API_SOURCE, Error, SearchType, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumType,
+    TidalArtistOrder, TidalArtistOrderDirection, TidalAudioQuality, TidalDeviceType, TidalTrack,
+    TidalTrackOrder, TidalTrackOrderDirection, TidalTrackPlaybackInfo, add_favorite_album,
+    add_favorite_artist, add_favorite_track, album, album_tracks, artist, artist_albums,
+    device_authorization, device_authorization_token, favorite_albums, favorite_artists,
+    favorite_tracks, models::TidalAlbum, remove_favorite_album, remove_favorite_artist,
+    remove_favorite_track, search, track, track_file_url, track_playback_info,
 };
 
 pub fn bind_services<
@@ -214,14 +207,35 @@ pub struct ApiTidalArtist {
     pub api_source: ApiSource,
 }
 
-static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
+impl From<Error> for actix_web::Error {
+    fn from(e: Error) -> Self {
+        match &e {
+            Error::Unauthorized => {
+                return ErrorUnauthorized(e.to_string());
+            }
+            Error::HttpRequestFailed(status, message) => {
+                if *status == 404 {
+                    return ErrorNotFound(format!("Tidal album not found: {message}"));
+                }
+            }
+            Error::NoUserIdAvailable
+            | Error::Parse(..)
+            | Error::Http(..)
+            | Error::NoAccessTokenAvailable
+            | Error::RequestFailed(..)
+            | Error::MaxFailedAttempts
+            | Error::NoResponseBody
+            | Error::Serde(..) => {}
+            #[cfg(feature = "db")]
+            Error::Database(..) | Error::TidalConfig(..) => {}
+        }
 
-impl From<TidalDeviceAuthorizationError> for actix_web::Error {
-    fn from(err: TidalDeviceAuthorizationError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
+        log::error!("{e:?}");
+        ErrorInternalServerError(e.to_string())
     }
 }
+
+static TIDAL_ACCESS_TOKEN_HEADER: &str = "x-tidal-access-token";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -257,13 +271,6 @@ pub async fn device_authorization_endpoint(
     Ok(Json(
         device_authorization(query.client_id.clone(), query.open.unwrap_or(false)).await?,
     ))
-}
-
-impl From<TidalDeviceAuthorizationTokenError> for actix_web::Error {
-    fn from(err: TidalDeviceAuthorizationTokenError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -316,15 +323,6 @@ pub async fn device_authorization_token_endpoint(
     ))
 }
 
-impl From<TidalTrackFileUrlError> for actix_web::Error {
-    fn from(e: TidalTrackFileUrlError) -> Self {
-        match e {
-            TidalTrackFileUrlError::AuthenticatedRequest(e) => ErrorUnauthorized(e.to_string()),
-            TidalTrackFileUrlError::Parse(_) => ErrorInternalServerError(e.to_string()),
-        }
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrackFileUrlQuery {
@@ -373,13 +371,6 @@ pub async fn track_file_url_endpoint(
     })))
 }
 
-impl From<TidalTrackPlaybackInfoError> for actix_web::Error {
-    fn from(err: TidalTrackPlaybackInfoError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrackPlaybackInfoQuery {
@@ -426,13 +417,6 @@ pub async fn track_playback_info_endpoint(
         )
         .await?,
     ))
-}
-
-impl From<TidalFavoriteArtistsError> for actix_web::Error {
-    fn from(err: TidalFavoriteArtistsError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -503,13 +487,6 @@ pub async fn favorite_artists_endpoint(
     ))
 }
 
-impl From<TidalAddFavoriteArtistError> for actix_web::Error {
-    fn from(err: TidalAddFavoriteArtistError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAddFavoriteArtistsQuery {
@@ -569,13 +546,6 @@ pub async fn add_favorite_artist_endpoint(
     })))
 }
 
-impl From<TidalRemoveFavoriteArtistError> for actix_web::Error {
-    fn from(err: TidalRemoveFavoriteArtistError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalRemoveFavoriteArtistsQuery {
@@ -633,13 +603,6 @@ pub async fn remove_favorite_artist_endpoint(
     Ok(Json(serde_json::json!({
         "success": true
     })))
-}
-
-impl From<TidalFavoriteAlbumsError> for actix_web::Error {
-    fn from(err: TidalFavoriteAlbumsError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -707,20 +670,13 @@ pub async fn favorite_albums_endpoint(
         .await?
         .map(|x| {
             x.try_into()
-                .map_err(|e| TidalFavoriteAlbumsError::RequestFailed(format!("{e:?}")))
-                as Result<ApiAlbum, TidalFavoriteAlbumsError>
+                .map_err(|e| Error::RequestFailed(format!("{e:?}")))
+                as Result<ApiAlbum, Error>
         })
         .transpose()
         .map_err(ErrorInternalServerError)?
         .into(),
     ))
-}
-
-impl From<TidalAddFavoriteAlbumError> for actix_web::Error {
-    fn from(err: TidalAddFavoriteAlbumError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -782,13 +738,6 @@ pub async fn add_favorite_album_endpoint(
     })))
 }
 
-impl From<TidalRemoveFavoriteAlbumError> for actix_web::Error {
-    fn from(err: TidalRemoveFavoriteAlbumError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalRemoveFavoriteAlbumsQuery {
@@ -846,13 +795,6 @@ pub async fn remove_favorite_album_endpoint(
     Ok(Json(serde_json::json!({
         "success": true
     })))
-}
-
-impl From<TidalAddFavoriteTrackError> for actix_web::Error {
-    fn from(err: TidalAddFavoriteTrackError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -914,13 +856,6 @@ pub async fn add_favorite_track_endpoint(
     })))
 }
 
-impl From<TidalRemoveFavoriteTrackError> for actix_web::Error {
-    fn from(err: TidalRemoveFavoriteTrackError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalRemoveFavoriteTracksQuery {
@@ -978,13 +913,6 @@ pub async fn remove_favorite_track_endpoint(
     Ok(Json(serde_json::json!({
         "success": true
     })))
-}
-
-impl From<TidalFavoriteTracksError> for actix_web::Error {
-    fn from(err: TidalFavoriteTracksError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -1052,13 +980,6 @@ pub async fn favorite_tracks_endpoint(
     .into();
 
     Ok(Json(tracks.into()))
-}
-
-impl From<TidalArtistAlbumsError> for actix_web::Error {
-    fn from(err: TidalArtistAlbumsError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -1145,13 +1066,6 @@ pub async fn artist_albums_endpoint(
     Ok(Json(albums.try_into().map_err(ErrorInternalServerError)?))
 }
 
-impl From<TidalAlbumTracksError> for actix_web::Error {
-    fn from(err: TidalAlbumTracksError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbumTracksQuery {
@@ -1213,23 +1127,6 @@ pub async fn album_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
-impl From<TidalAlbumError> for actix_web::Error {
-    fn from(err: TidalAlbumError) -> Self {
-        log::error!("{err:?}");
-        if let TidalAlbumError::AuthenticatedRequest(AuthenticatedRequestError::RequestFailed(
-            status,
-            _,
-        )) = err
-        {
-            if status == 404 {
-                return ErrorNotFound("Tidal album not found");
-            }
-        }
-
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalAlbumQuery {
@@ -1282,13 +1179,6 @@ pub async fn album_endpoint(
     .await?;
 
     Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
-}
-
-impl From<TidalArtistError> for actix_web::Error {
-    fn from(err: TidalArtistError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -1345,13 +1235,6 @@ pub async fn artist_endpoint(
     Ok(Json(artist.into()))
 }
 
-impl From<TidalTrackError> for actix_web::Error {
-    fn from(err: TidalTrackError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TidalTrackQuery {
@@ -1404,12 +1287,6 @@ pub async fn track_endpoint(
     .await?;
 
     Ok(Json(track.into()))
-}
-
-impl From<TidalSearchError> for actix_web::Error {
-    fn from(err: TidalSearchError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
