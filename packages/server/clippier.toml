@@ -43,7 +43,7 @@ features = [
     "all-formats",
     "all-os-formats",
     "default",
-    "opus",
+    "encoder-opus",
     "pulseaudio",
     "pulseaudio-simple",
     "pulseaudio-standard",
