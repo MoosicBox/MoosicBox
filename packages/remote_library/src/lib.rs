@@ -171,11 +171,15 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     async fn add_artist(&self, _artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        unimplemented!("Adding artist is not implemented")
+        Err(moosicbox_music_api::Error::UnsupportedAction(
+            "Adding artist is not implemented",
+        ))
     }
 
     async fn remove_artist(&self, _artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        unimplemented!("Removing artist is not implemented")
+        Err(moosicbox_music_api::Error::UnsupportedAction(
+            "Removing artist is not implemented",
+        ))
     }
 
     async fn album_artist(
@@ -490,11 +494,15 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     async fn add_album(&self, _album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        unimplemented!("Adding album is not implemented")
+        Err(moosicbox_music_api::Error::UnsupportedAction(
+            "Adding album is not implemented",
+        ))
     }
 
     async fn remove_album(&self, _album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        unimplemented!("Removing album is not implemented")
+        Err(moosicbox_music_api::Error::UnsupportedAction(
+            "Removing album is not implemented",
+        ))
     }
 
     async fn album_cover_source(
@@ -540,7 +548,9 @@ impl MusicApi for RemoteLibraryMusicApi {
         order_direction: Option<TrackOrderDirection>,
     ) -> PagingResult<Track, moosicbox_music_api::Error> {
         let Some(track_ids) = track_ids else {
-            unimplemented!("Fetching all tracks is not implemented");
+            return Err(moosicbox_music_api::Error::UnsupportedAction(
+                "Fetching all tracks is not implemented",
+            ));
         };
 
         let track_ids_str = track_ids
@@ -724,11 +734,15 @@ impl MusicApi for RemoteLibraryMusicApi {
     }
 
     async fn add_track(&self, _track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        unimplemented!("Adding track is not implemented")
+        Err(moosicbox_music_api::Error::UnsupportedAction(
+            "Adding track is not implemented",
+        ))
     }
 
     async fn remove_track(&self, _track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        unimplemented!("Removing track is not implemented")
+        Err(moosicbox_music_api::Error::UnsupportedAction(
+            "Removing track is not implemented",
+        ))
     }
 
     async fn track_source(
@@ -760,6 +774,8 @@ impl MusicApi for RemoteLibraryMusicApi {
         _source: &TrackSource,
         _quality: PlaybackQuality,
     ) -> Result<Option<u64>, moosicbox_music_api::Error> {
-        unimplemented!("Fetching track size is not implemented")
+        Err(moosicbox_music_api::Error::UnsupportedAction(
+            "Fetching track size is not implemented",
+        ))
     }
 }
