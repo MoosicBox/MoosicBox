@@ -18,11 +18,14 @@ impl AsRef<Self> for Connection {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct MusicApiSettings {
     pub id: String,
     pub name: String,
     pub logged_in: bool,
-    pub authentication_enabled: bool,
+    pub supports_authentication: bool,
+    pub supports_scan: bool,
+    pub scan_enabled: bool,
     pub run_scan_endpoint: Option<String>,
     pub auth_endpoint: Option<String>,
 }
@@ -42,13 +45,15 @@ pub mod music_api_api {
     impl From<ApiMusicApi> for MusicApiSettings {
         fn from(value: ApiMusicApi) -> Self {
             Self {
-                authentication_enabled: value.authentication_enabled,
                 logged_in: value.logged_in,
+                supports_scan: value.supports_scan,
+                scan_enabled: value.scan_enabled,
                 run_scan_endpoint: value
-                    .scanning_enabled
+                    .supports_scan
                     .then(|| format!("/music-api/scan?apiSource={}", value.name)),
+                supports_authentication: value.supports_authentication,
                 auth_endpoint: value
-                    .authentication_enabled
+                    .supports_authentication
                     .then(|| format!("/music-api/auth?apiSource={}", value.name)),
                 name: value.name,
                 id: value.id,

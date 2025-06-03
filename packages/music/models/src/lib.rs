@@ -238,6 +238,11 @@ impl TrackApiSource {
 
         &ALL
     }
+
+    #[must_use]
+    pub fn for_api_source(source: impl Into<String>) -> Option<Self> {
+        ApiSource::try_from(source.into()).ok().map(Self::Api)
+    }
 }
 
 impl Serialize for TrackApiSource {

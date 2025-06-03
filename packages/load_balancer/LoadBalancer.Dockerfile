@@ -19,6 +19,7 @@ RUN cat Cargo.toml | \
     \"packages\/audio_output\",\r\
     \"packages\/audio_zone\",\r\
     \"packages\/audio_zone\/models\",\r\
+    \"packages\/auth\",\r\
     \"packages\/config\",\r\
     \"packages\/database\",\r\
     \"packages\/database_connection\",\r\
@@ -36,9 +37,11 @@ RUN cat Cargo.toml | \
     \"packages\/logging\",\r\
     \"packages\/mdns\",\r\
     \"packages\/menu\/models\",\r\
+    \"packages\/middleware\",\r\
     \"packages\/music\/models\",\r\
     \"packages\/music_api\",\r\
     \"packages\/music_api\/api\",\r\
+    \"packages\/music_api\/helpers\",\r\
     \"packages\/music_api\/models\",\r\
     \"packages\/paging\",\r\
     \"packages\/parsing_utils\",\r\
@@ -46,6 +49,7 @@ RUN cat Cargo.toml | \
     \"packages\/profiles\",\r\
     \"packages\/random\",\r\
     \"packages\/resampler\",\r\
+    \"packages\/scan\",\r\
     \"packages\/search\",\r\
     \"packages\/session\",\r\
     \"packages\/session\/models\",\r\
@@ -72,6 +76,7 @@ COPY packages/audio_encoder/Cargo.toml packages/audio_encoder/Cargo.toml
 COPY packages/audio_output/Cargo.toml packages/audio_output/Cargo.toml
 COPY packages/audio_zone/Cargo.toml packages/audio_zone/Cargo.toml
 COPY packages/audio_zone/models/Cargo.toml packages/audio_zone/models/Cargo.toml
+COPY packages/auth/Cargo.toml packages/auth/Cargo.toml
 COPY packages/config/Cargo.toml packages/config/Cargo.toml
 COPY packages/database/Cargo.toml packages/database/Cargo.toml
 COPY packages/database_connection/Cargo.toml packages/database_connection/Cargo.toml
@@ -89,9 +94,11 @@ COPY packages/load_balancer/Cargo.toml packages/load_balancer/Cargo.toml
 COPY packages/logging/Cargo.toml packages/logging/Cargo.toml
 COPY packages/mdns/Cargo.toml packages/mdns/Cargo.toml
 COPY packages/menu/models/Cargo.toml packages/menu/models/Cargo.toml
+COPY packages/middleware/Cargo.toml packages/middleware/Cargo.toml
 COPY packages/music/models/Cargo.toml packages/music/models/Cargo.toml
 COPY packages/music_api/Cargo.toml packages/music_api/Cargo.toml
 COPY packages/music_api/api/Cargo.toml packages/music_api/api/Cargo.toml
+COPY packages/music_api/helpers/Cargo.toml packages/music_api/helpers/Cargo.toml
 COPY packages/music_api/models/Cargo.toml packages/music_api/models/Cargo.toml
 COPY packages/paging/Cargo.toml packages/paging/Cargo.toml
 COPY packages/parsing_utils/Cargo.toml packages/parsing_utils/Cargo.toml
@@ -99,6 +106,7 @@ COPY packages/player/Cargo.toml packages/player/Cargo.toml
 COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/random/Cargo.toml packages/random/Cargo.toml
 COPY packages/resampler/Cargo.toml packages/resampler/Cargo.toml
+COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
 COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
@@ -126,6 +134,7 @@ packages/audio_decoder|\
 packages/audio_encoder|\
 packages/audio_output|\
 packages/audio_zone|\
+packages/auth|\
 packages/config|\
 packages/database|\
 packages/database_connection|\
@@ -140,6 +149,7 @@ packages/library|\
 packages/load_balancer|\
 packages/logging|\
 packages/mdns|\
+packages/middleware|\
 packages/music_api|\
 packages/paging|\
 packages/parsing_utils|\
@@ -147,6 +157,7 @@ packages/player|\
 packages/profiles|\
 packages/random|\
 packages/resampler|\
+packages/scan|\
 packages/search|\
 packages/session|\
 packages/simvar|\
@@ -175,6 +186,7 @@ path=\"..\/..\/temp_lib.rs\"/" | \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/menu/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/api/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/helpers/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simvar/harness/Cargo.toml" && \

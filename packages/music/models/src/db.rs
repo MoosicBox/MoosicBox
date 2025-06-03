@@ -172,3 +172,27 @@ impl From<ApiSource> for DatabaseValue {
         Self::String(value.id)
     }
 }
+
+impl moosicbox_json_utils::MissingValue<TrackApiSource> for &switchy_database::Row {}
+impl ToValueType<TrackApiSource> for &switchy_database::Row {
+    fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
+        self.get("origin")
+            .ok_or_else(|| ParseError::MissingValue("origin".into()))?
+            .to_value_type()
+    }
+}
+impl ToValueType<TrackApiSource> for DatabaseValue {
+    fn to_value_type(self) -> Result<TrackApiSource, ParseError> {
+        TrackApiSource::from_str(
+            self.as_str()
+                .ok_or_else(|| ParseError::ConvertType("TrackApiSource".into()))?,
+        )
+        .map_err(|_| ParseError::ConvertType("TrackApiSource".into()))
+    }
+}
+
+impl AsId for TrackApiSource {
+    fn as_id(&self) -> DatabaseValue {
+        DatabaseValue::String(self.to_string())
+    }
+}

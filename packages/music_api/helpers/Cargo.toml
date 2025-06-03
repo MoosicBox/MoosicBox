@@ -1,0 +1,26 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "multimedia", "network-programming"]
+description = "MoosicBox music API helpers package"
+edition     = "2024"
+keywords    = ["album", "api", "artist", "helpers", "music"]
+license     = "MPL-2.0"
+name        = "moosicbox_music_api_helpers"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.1"
+
+[dependencies]
+moosicbox_music_api = { workspace = true }
+moosicbox_scan      = { workspace = true, optional = true }
+switchy_database    = { workspace = true }
+
+log = { workspace = true }
+
+[features]
+default = ["auth", "scan"]
+
+fail-on-warnings = []
+
+auth = []
+scan = ["dep:moosicbox_scan"]

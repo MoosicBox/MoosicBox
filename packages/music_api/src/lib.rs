@@ -111,8 +111,10 @@ pub trait SourceToMusicApi {
 pub enum Error {
     #[error("Music API for source not found: {0}")]
     MusicApiNotFound(ApiSource),
-    #[error("Unsupported Action")]
-    UnsupportedAction,
+    #[error("Unsupported Action: {0}")]
+    UnsupportedAction(&'static str),
+    #[error("Unauthorized")]
+    Unauthorized,
     #[error(transparent)]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
@@ -281,28 +283,36 @@ pub trait MusicApi: Send + Sync {
         quality: PlaybackQuality,
     ) -> Result<Option<u64>, Error>;
 
+    async fn enable_scan(&self) -> Result<(), Error> {
+        Err(Error::UnsupportedAction("enable_scan"))
+    }
+
     async fn scan(&self) -> Result<(), Error> {
-        Err(Error::UnsupportedAction)
+        Err(Error::UnsupportedAction("scan"))
     }
 
     async fn authenticate(&self) -> Result<(), Error> {
-        Err(Error::UnsupportedAction)
+        Err(Error::UnsupportedAction("authenticate"))
     }
 
-    fn scan_enabled(&self) -> bool {
+    async fn scan_enabled(&self) -> Result<bool, Error> {
+        Err(Error::UnsupportedAction("scan_enabled"))
+    }
+
+    fn supports_scan(&self) -> bool {
         false
     }
 
-    fn authentication_enabled(&self) -> bool {
+    fn supports_authentication(&self) -> bool {
         false
     }
 
     async fn is_logged_in(&self) -> Result<bool, Error> {
-        Err(Error::UnsupportedAction)
+        Err(Error::UnsupportedAction("is_logged_in"))
     }
 
     async fn logout(&self) -> Result<(), Error> {
-        Err(Error::UnsupportedAction)
+        Err(Error::UnsupportedAction("logout"))
     }
 }
 
@@ -810,12 +820,24 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         self.inner.track_size(track, source, quality).await
     }
 
+    async fn enable_scan(&self) -> Result<(), Error> {
+        self.inner.enable_scan().await
+    }
+
+    async fn scan_enabled(&self) -> Result<bool, Error> {
+        self.inner.scan_enabled().await
+    }
+
+    fn supports_scan(&self) -> bool {
+        self.inner.supports_scan()
+    }
+
     async fn scan(&self) -> Result<(), Error> {
         self.inner.scan().await
     }
 
-    fn authentication_enabled(&self) -> bool {
-        self.inner.authentication_enabled()
+    fn supports_authentication(&self) -> bool {
+        self.inner.supports_authentication()
     }
 
     async fn authenticate(&self) -> Result<(), Error> {

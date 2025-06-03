@@ -187,7 +187,8 @@ pub fn format_size(size: u64) -> String {
 }
 
 #[must_use]
-pub fn classify_name(class: &str) -> String {
+pub fn classify_name<T: AsRef<str>>(class: T) -> String {
+    let class = class.as_ref();
     class
         .to_ascii_lowercase()
         .replace(|c: char| !c.is_ascii_alphanumeric(), "-")

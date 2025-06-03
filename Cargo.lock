@@ -7812,6 +7812,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_music_api_helpers"
+version = "0.1.1"
+dependencies = [
+ "log 0.4.27",
+ "moosicbox_music_api",
+ "moosicbox_scan",
+ "switchy_database",
+]
+
+[[package]]
 name = "moosicbox_music_api_models"
 version = "0.1.1"
 dependencies = [
@@ -7935,6 +7945,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_menu_models",
  "moosicbox_music_api",
+ "moosicbox_music_api_helpers",
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_search",
@@ -8231,6 +8242,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_menu_models",
  "moosicbox_music_api",
+ "moosicbox_music_api_helpers",
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_search",
@@ -8425,6 +8437,7 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_menu_models",
  "moosicbox_music_api",
+ "moosicbox_music_api_helpers",
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_search",

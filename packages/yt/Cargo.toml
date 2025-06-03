@@ -23,6 +23,7 @@ moosicbox_json_utils = { workspace = true, features = [
 ] }
 moosicbox_menu_models = { workspace = true }
 moosicbox_music_api = { workspace = true }
+moosicbox_music_api_helpers = { workspace = true, features = ["auth"] }
 moosicbox_music_models = { workspace = true, features = ["flac"] }
 moosicbox_paging = { workspace = true }
 moosicbox_search = { workspace = true, features = ["api"] }
@@ -56,4 +57,4 @@ api     = ["dep:actix-web", "switchy_database/api", "switchy_database/api"]
 db      = []
 openapi = ["dep:utoipa", "moosicbox_search/openapi"]
 
-scan = []
+scan = ["db", "moosicbox_music_api_helpers/scan"]

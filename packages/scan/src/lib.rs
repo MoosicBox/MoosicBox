@@ -11,9 +11,7 @@ use event::{PROGRESS_LISTENERS, ProgressEvent, ScanTask};
 use moosicbox_config::get_cache_dir_path;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{MusicApi, MusicApis, SourceToMusicApi as _};
-use moosicbox_music_models::{ApiSource, TrackApiSource};
-use serde::{Deserialize, Serialize};
-use strum_macros::{AsRefStr, EnumString};
+use moosicbox_music_models::TrackApiSource;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
@@ -37,68 +35,7 @@ pub fn cancel() {
     CANCELLATION_TOKEN.cancel();
 }
 
-#[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-pub enum ScanOrigin {
-    #[cfg(feature = "local")]
-    Local,
-    Api(ApiSource),
-}
-
-impl ScanOrigin {
-    #[must_use]
-    pub fn for_api_source(source: impl Into<String>) -> Option<Self> {
-        ApiSource::try_from(source.into()).ok().map(Self::Api)
-    }
-}
-
-impl From<ScanOrigin> for ApiSource {
-    fn from(value: ScanOrigin) -> Self {
-        match value {
-            #[cfg(feature = "local")]
-            ScanOrigin::Local => {
-                moosicbox_assert::die_or_panic!("Local ScanOrigin cant map to ApiSource")
-            }
-            ScanOrigin::Api(source) => source,
-        }
-    }
-}
-
-impl From<ApiSource> for ScanOrigin {
-    fn from(value: ApiSource) -> Self {
-        Self::Api(value)
-    }
-}
-
-impl From<TrackApiSource> for ScanOrigin {
-    fn from(value: TrackApiSource) -> Self {
-        match value {
-            TrackApiSource::Local => {
-                #[cfg(feature = "local")]
-                {
-                    Self::Local
-                }
-                #[cfg(not(feature = "local"))]
-                {
-                    moosicbox_assert::die_or_panic!("Local TrackApiSource cant map to ScanOrigin")
-                }
-            }
-            TrackApiSource::Api(source) => Self::Api(source),
-        }
-    }
-}
-
-impl From<ScanOrigin> for TrackApiSource {
-    fn from(value: ScanOrigin) -> Self {
-        match value {
-            #[cfg(feature = "local")]
-            ScanOrigin::Local => Self::Local,
-            ScanOrigin::Api(source) => Self::Api(source),
-        }
-    }
-}
+pub type ScanOrigin = TrackApiSource;
 
 #[allow(unused)]
 async fn get_origins_or_default(
@@ -306,22 +243,28 @@ impl Scanner {
 
     /// # Errors
     ///
+    /// * If fails to fetch the enabled scan origins
+    pub async fn is_scan_origin_enabled(
+        &self,
+        db: &LibraryDatabase,
+        origin: &ScanOrigin,
+    ) -> Result<bool, music_api::ScanError> {
+        is_scan_origin_enabled(db, origin).await
+    }
+
+    /// # Errors
+    ///
+    /// * If fails to fetch the enabled scan origins
     /// * If the scan fails
-    /// * If tokio task fails to join
     pub async fn scan_music_api(
         &self,
         api: &dyn MusicApi,
         db: &LibraryDatabase,
     ) -> Result<(), music_api::ScanError> {
-        let enabled_origins = get_enabled_scan_origins(db).await?;
-        let enabled = enabled_origins.into_iter().any(|origin| match origin {
-            #[cfg(feature = "local")]
-            ScanOrigin::Local => false,
-            ScanOrigin::Api(source) => &source == api.source(),
-        });
-        let scanner = self.clone();
-
-        if !enabled {
+        if !self
+            .is_scan_origin_enabled(db, &api.source().into())
+            .await?
+        {
             log::debug!(
                 "scan_music_api: scan origin is not enabled: {}",
                 api.source()
@@ -329,10 +272,22 @@ impl Scanner {
             return Ok(());
         }
 
+        let scanner = self.clone();
+
         music_api::scan(api, db, CANCELLATION_TOKEN.clone(), Some(scanner)).await?;
 
         Ok(())
     }
+}
+
+/// # Errors
+///
+/// * If fails to fetch the enabled scan origins
+pub async fn is_scan_origin_enabled(
+    db: &LibraryDatabase,
+    origin: &ScanOrigin,
+) -> Result<bool, music_api::ScanError> {
+    Ok(get_enabled_scan_origins(db).await?.contains(origin))
 }
 
 /// # Errors

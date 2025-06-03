@@ -96,25 +96,43 @@ pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
         // FIXME: HTML encode settings.id
         @let id = format!("settings-{}", classify_name(&settings.id));
         div id=(id) {
-            @if !settings.authentication_enabled || settings.logged_in {
+            @if !settings.supports_authentication || settings.logged_in {
                 div sx-gap=(10) {
                     @if settings.logged_in {
                         p { "Logged in!" }
                     }
-                    button
-                        hx-post={(pre_escaped!("/music-api/scan?apiSource="))(settings.id)}
-                        hx-swap={"#"(id)}
-                        id="run-scan-button"
-                        type="button"
-                        sx-border-radius=(5)
-                        sx-background="#111"
-                        sx-border="2, #222"
-                        sx-padding-x=(10)
-                        sx-padding-y=(5)
-                    {
-                        "Run Scan"
+                    @if settings.supports_scan {
+                        @if settings.scan_enabled {
+                            button
+                                hx-post={(pre_escaped!("/music-api/scan?apiSource="))(settings.id)}
+                                hx-swap={"#"(id)}
+                                id="run-scan-button"
+                                type="button"
+                                sx-border-radius=(5)
+                                sx-background="#111"
+                                sx-border="2, #222"
+                                sx-padding-x=(10)
+                                sx-padding-y=(5)
+                            {
+                                "Run Scan"
+                            }
+                        } @else {
+                            button
+                                hx-post={(pre_escaped!("/music-api/enable-scan-origin?apiSource="))(settings.id)}
+                                hx-swap={"#"(id)}
+                                id="run-scan-button"
+                                type="button"
+                                sx-border-radius=(5)
+                                sx-background="#111"
+                                sx-border="2, #222"
+                                sx-padding-x=(10)
+                                sx-padding-y=(5)
+                            {
+                                "Enable scan origin"
+                            }
+                        }
+                        (scan_error_message(&settings.id, None))
                     }
-                    (scan_error_message(&settings.id, None))
                 }
             } @else {
                 button
@@ -136,7 +154,8 @@ pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
 }
 
 #[must_use]
-pub fn scan_error_message(id: &str, message: Option<&str>) -> Markup {
+pub fn scan_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Markup {
+    let id = id.as_ref();
     html! {
         div id={"settings-scan-error-"(classify_name(id))} {
             @if let Some(message) = message {
@@ -147,7 +166,8 @@ pub fn scan_error_message(id: &str, message: Option<&str>) -> Markup {
 }
 
 #[must_use]
-pub fn auth_error_message(id: &str, message: Option<&str>) -> Markup {
+pub fn auth_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Markup {
+    let id = id.as_ref();
     html! {
         div id={"settings-auth-error-"(classify_name(id))} {
             @if let Some(message) = message {

@@ -305,11 +305,17 @@ sqlite-sqlx = [
 
 admin-htmx = ["admin-htmx-api"]
 downloader = ["dep:throttle", "moosicbox_downloader/api"]
-library    = ["moosicbox_library/api"]
-player     = ["dep:moosicbox_library", "dep:moosicbox_player"]
-scan       = ["dep:throttle", "moosicbox_scan/api"]
-search     = ["moosicbox_search/api"]
-upnp       = ["dep:switchy_upnp", "player"]
+library = ["moosicbox_library/api"]
+player = ["dep:moosicbox_library", "dep:moosicbox_player"]
+scan = [
+    "dep:throttle",
+    "moosicbox_qobuz?/scan",
+    "moosicbox_scan/api",
+    "moosicbox_tidal?/scan",
+    "moosicbox_yt?/scan",
+]
+search = ["moosicbox_search/api"]
+upnp = ["dep:switchy_upnp", "player"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 

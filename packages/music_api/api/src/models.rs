@@ -8,8 +8,9 @@ pub struct ApiMusicApi {
     pub id: String,
     pub name: String,
     pub logged_in: bool,
-    pub scanning_enabled: bool,
-    pub authentication_enabled: bool,
+    pub supports_scan: bool,
+    pub scan_enabled: bool,
+    pub supports_authentication: bool,
 }
 
 pub async fn convert_to_api_music_api(
@@ -18,12 +19,17 @@ pub async fn convert_to_api_music_api(
     Ok(ApiMusicApi {
         id: api.source().to_string(),
         name: api.source().to_string_display(),
-        logged_in: if api.authentication_enabled() {
+        logged_in: if api.supports_authentication() {
             api.is_logged_in().await?
         } else {
             false
         },
-        scanning_enabled: api.scan_enabled(),
-        authentication_enabled: api.authentication_enabled(),
+        supports_scan: api.supports_scan(),
+        scan_enabled: if api.supports_scan() {
+            api.scan_enabled().await?
+        } else {
+            false
+        },
+        supports_authentication: api.supports_authentication(),
     })
 }

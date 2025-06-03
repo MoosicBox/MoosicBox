@@ -13,9 +13,9 @@ pub mod models;
 #[cfg(feature = "local")]
 pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DatabaseFetchError> {
     db.upsert("scan_locations")
-        .where_eq("origin", ScanOrigin::Local.as_ref())
+        .where_eq("origin", ScanOrigin::Local.to_string())
         .where_eq("path", path)
-        .value("origin", ScanOrigin::Local.as_ref())
+        .value("origin", ScanOrigin::Local.to_string())
         .value("path", path)
         .execute(&**db)
         .await?;
@@ -29,7 +29,7 @@ pub async fn add_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), Datab
 #[cfg(feature = "local")]
 pub async fn remove_scan_path(db: &LibraryDatabase, path: &str) -> Result<(), DatabaseFetchError> {
     db.delete("scan_locations")
-        .where_eq("origin", ScanOrigin::Local.as_ref())
+        .where_eq("origin", ScanOrigin::Local.to_string())
         .where_eq("path", path)
         .execute(&**db)
         .await?;
@@ -45,8 +45,8 @@ pub async fn enable_scan_origin(
     origin: &ScanOrigin,
 ) -> Result<(), DatabaseFetchError> {
     db.upsert("scan_locations")
-        .where_eq("origin", origin.as_ref())
-        .value("origin", origin.as_ref())
+        .where_eq("origin", origin.to_string())
+        .value("origin", origin.to_string())
         .execute(&**db)
         .await?;
 
@@ -61,7 +61,7 @@ pub async fn disable_scan_origin(
     origin: &ScanOrigin,
 ) -> Result<(), DatabaseFetchError> {
     db.delete("scan_locations")
-        .where_eq("origin", origin.as_ref())
+        .where_eq("origin", origin.to_string())
         .execute(&**db)
         .await?;
 
@@ -105,7 +105,7 @@ pub async fn get_scan_locations_for_origin(
 ) -> Result<Vec<ScanLocation>, DatabaseFetchError> {
     Ok(db
         .select("scan_locations")
-        .where_eq("origin", origin.as_ref())
+        .where_eq("origin", origin.to_string())
         .execute(&**db)
         .await?
         .to_value_type()?)

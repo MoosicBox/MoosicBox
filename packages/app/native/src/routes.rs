@@ -6,7 +6,7 @@ use hyperchad::{
     transformer::html::ParseError,
 };
 use moosicbox_app_models::{Connection, MusicApiSettings};
-use moosicbox_app_native_ui::downloads::DownloadTab;
+use moosicbox_app_native_ui::{downloads::DownloadTab, formatting::classify_name};
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_downloader::api::models::ApiDownloadTask;
@@ -798,10 +798,47 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
     }
 
     Ok(Content::try_partial_view(
-        "settings-scan-error",
+        format!("settings-scan-error-{}", classify_name(&api_source)),
+        moosicbox_app_native_ui::settings::scan_error_message(&api_source, Some("Failed to scan")),
+    )?)
+}
+
+pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Content, RouteError> {
+    let Some(api_source) = req.query.get("apiSource") else {
+        return Err(RouteError::MissingQueryParam("apiSource"));
+    };
+    let api_source = ApiSource::from_str(api_source)
+        .inspect_err(|e| {
+            moosicbox_assert::die_or_error!("Invalid apiSource: {e:?}");
+        })
+        .map_err(|e| RouteError::RouteFailed(e.into()))?;
+
+    if let Some(connection) = &STATE.get_current_connection().await? {
+        let host = &connection.api_url;
+
+        let music_api: ApiMusicApi = CLIENT
+            .post(&format!(
+                "{host}/music-api/scan-origins?moosicboxProfile={PROFILE}&apiSource={api_source}",
+            ))
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        log::debug!("music_api_enable_scan_origin_route: music_api={music_api:?}");
+
+        let settings = music_api.into();
+
+        return Ok(Content::try_view(
+            moosicbox_app_native_ui::settings::music_api_settings_content(&settings),
+        )?);
+    }
+
+    Ok(Content::try_partial_view(
+        format!("settings-scan-error-{}", classify_name(&api_source)),
         moosicbox_app_native_ui::settings::scan_error_message(
-            api_source.as_ref(),
-            Some("Failed to scan"),
+            &api_source,
+            Some("Failed to enable scan origin"),
         ),
     )?)
 }
@@ -841,9 +878,9 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
     }
 
     Ok(Content::try_partial_view(
-        "settings-auth-error",
+        format!("settings-auth-error-{}", classify_name(&api_source)),
         moosicbox_app_native_ui::settings::auth_error_message(
-            api_source.as_ref(),
+            &api_source,
             Some("Failed to authenticate"),
         ),
     )?)

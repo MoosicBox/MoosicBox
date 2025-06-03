@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue as _};
 use serde::{Deserialize, Serialize};
 use switchy_database::{AsId, DatabaseValue};
@@ -14,24 +12,6 @@ pub struct ScanLocation {
     pub path: Option<String>,
     pub created: String,
     pub updated: String,
-}
-
-impl MissingValue<ScanOrigin> for &switchy_database::Row {}
-impl ToValueType<ScanOrigin> for &switchy_database::Row {
-    fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
-        self.get("origin")
-            .ok_or_else(|| ParseError::MissingValue("origin".into()))?
-            .to_value_type()
-    }
-}
-impl ToValueType<ScanOrigin> for DatabaseValue {
-    fn to_value_type(self) -> Result<ScanOrigin, ParseError> {
-        ScanOrigin::from_str(
-            self.as_str()
-                .ok_or_else(|| ParseError::ConvertType("ScanOrigin".into()))?,
-        )
-        .map_err(|_| ParseError::ConvertType("ScanOrigin".into()))
-    }
 }
 
 impl MissingValue<ScanLocation> for &switchy_database::Row {}
@@ -50,11 +30,5 @@ impl ToValueType<ScanLocation> for &switchy_database::Row {
 impl AsId for ScanLocation {
     fn as_id(&self) -> DatabaseValue {
         DatabaseValue::Number(i64::from(self.id))
-    }
-}
-
-impl AsId for ScanOrigin {
-    fn as_id(&self) -> DatabaseValue {
-        DatabaseValue::String(self.as_ref().to_string())
     }
 }

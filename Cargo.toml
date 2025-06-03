@@ -76,6 +76,7 @@ members = [
     "packages/music/models",
     "packages/music_api",
     "packages/music_api/api",
+    "packages/music_api/helpers",
     "packages/music_api/models",
     "packages/openport",
     "packages/paging",
@@ -201,6 +202,7 @@ moosicbox_menu_models        = { version = "0.1.1", default-features = false, pa
 moosicbox_middleware         = { version = "0.1.1", default-features = false, path = "packages/middleware" }
 moosicbox_music_api          = { version = "0.1.1", default-features = false, path = "packages/music_api" }
 moosicbox_music_api_api      = { version = "0.1.1", default-features = false, path = "packages/music_api/api" }
+moosicbox_music_api_helpers  = { version = "0.1.1", default-features = false, path = "packages/music_api/helpers" }
 moosicbox_music_api_models   = { version = "0.1.1", default-features = false, path = "packages/music_api/models" }
 moosicbox_music_models       = { version = "0.1.1", default-features = false, path = "packages/music/models" }
 moosicbox_paging             = { version = "0.1.1", default-features = false, path = "packages/paging" }

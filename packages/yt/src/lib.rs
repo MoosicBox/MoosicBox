@@ -12,10 +12,11 @@ pub mod models;
 use std::{
     fmt::Display,
     str::FromStr as _,
-    sync::{Arc, LazyLock, atomic::AtomicBool},
+    sync::{Arc, LazyLock},
 };
 
 use models::{YtAlbum, YtArtist, YtSearchResults, YtTrack};
+use moosicbox_music_api_helpers::ApiAuth;
 #[cfg(feature = "db")]
 use switchy_database::DatabaseError;
 #[cfg(feature = "db")]
@@ -2395,12 +2396,12 @@ impl YtMusicApiBuilder {
             .await
             .is_ok_and(|x| x.is_some());
 
-        let logged_in = Arc::new(AtomicBool::new(logged_in));
+        let auth = ApiAuth::new(logged_in);
 
         Ok(YtMusicApi {
             #[cfg(feature = "db")]
             db,
-            logged_in,
+            auth,
         })
     }
 }
@@ -2408,7 +2409,7 @@ impl YtMusicApiBuilder {
 pub struct YtMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
-    logged_in: Arc<AtomicBool>,
+    auth: ApiAuth,
 }
 
 impl YtMusicApi {
@@ -2872,11 +2873,26 @@ impl MusicApi for YtMusicApi {
             .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
     }
 
-    async fn scan(&self) -> Result<(), moosicbox_music_api::Error> {
-        Ok(())
+    fn supports_scan(&self) -> bool {
+        cfg!(feature = "scan")
     }
 
-    fn authentication_enabled(&self) -> bool {
+    #[cfg(feature = "scan")]
+    async fn enable_scan(&self) -> Result<(), moosicbox_music_api::Error> {
+        moosicbox_music_api_helpers::scan::enable_scan(self, &self.db).await
+    }
+
+    #[cfg(feature = "scan")]
+    async fn scan_enabled(&self) -> Result<bool, moosicbox_music_api::Error> {
+        moosicbox_music_api_helpers::scan::scan_enabled(self, &self.db).await
+    }
+
+    #[cfg(feature = "scan")]
+    async fn scan(&self) -> Result<(), moosicbox_music_api::Error> {
+        moosicbox_music_api_helpers::scan::scan(self, &self.db).await
+    }
+
+    fn supports_authentication(&self) -> bool {
         true
     }
 
@@ -2885,7 +2901,7 @@ impl MusicApi for YtMusicApi {
     }
 
     async fn is_logged_in(&self) -> Result<bool, moosicbox_music_api::Error> {
-        let logged_in = self.logged_in.load(std::sync::atomic::Ordering::SeqCst);
+        let logged_in = self.auth.is_logged_in();
         log::debug!("is_logged_in={logged_in}");
         Ok(logged_in)
     }
