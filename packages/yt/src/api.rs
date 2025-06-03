@@ -20,14 +20,9 @@ use strum_macros::{AsRefStr, EnumString};
 use switchy_database::profiles::LibraryDatabase;
 
 use crate::{
-    API_SOURCE, AuthenticatedRequestError, YtAddFavoriteAlbumError, YtAddFavoriteArtistError,
-    YtAddFavoriteTrackError, YtAlbumError, YtAlbumOrder, YtAlbumOrderDirection, YtAlbumTracksError,
-    YtAlbumType, YtArtistAlbumsError, YtArtistError, YtArtistOrder, YtArtistOrderDirection,
-    YtAudioQuality, YtDeviceAuthorizationError, YtDeviceAuthorizationTokenError, YtDeviceType,
-    YtFavoriteAlbumsError, YtFavoriteArtistsError, YtFavoriteTracksError,
-    YtRemoveFavoriteAlbumError, YtRemoveFavoriteArtistError, YtRemoveFavoriteTrackError,
-    YtSearchError, YtTrack, YtTrackError, YtTrackFileUrlError, YtTrackOrder, YtTrackOrderDirection,
-    YtTrackPlaybackInfo, YtTrackPlaybackInfoError, add_favorite_album, add_favorite_artist,
+    API_SOURCE, Error, YtAlbumOrder, YtAlbumOrderDirection, YtAlbumType, YtArtistOrder,
+    YtArtistOrderDirection, YtAudioQuality, YtDeviceType, YtTrack, YtTrackOrder,
+    YtTrackOrderDirection, YtTrackPlaybackInfo, add_favorite_album, add_favorite_artist,
     add_favorite_track, album, album_tracks, artist, artist_albums, device_authorization,
     device_authorization_token, favorite_albums, favorite_artists, favorite_tracks,
     remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
@@ -218,14 +213,37 @@ pub struct ApiYtArtist {
     pub api_source: ApiSource,
 }
 
-static YT_ACCESS_TOKEN_HEADER: &str = "x-yt-access-token";
+impl From<Error> for actix_web::Error {
+    fn from(e: Error) -> Self {
+        match &e {
+            Error::Unauthorized => {
+                return ErrorUnauthorized(e.to_string());
+            }
+            Error::HttpRequestFailed(status, message) => {
+                if *status == 404 {
+                    return ErrorNotFound(format!("Tidal album not found: {message}"));
+                }
+            }
+            Error::NoUserIdAvailable
+            | Error::Parse(..)
+            | Error::Http(..)
+            | Error::NoAccessTokenAvailable
+            | Error::RequestFailed(..)
+            | Error::MaxFailedAttempts
+            | Error::NoResponseBody
+            | Error::EmptyResponse
+            | Error::Config(..)
+            | Error::Serde(..) => {}
+            #[cfg(feature = "db")]
+            Error::Database(..) | Error::YtConfig(..) => {}
+        }
 
-impl From<YtDeviceAuthorizationError> for actix_web::Error {
-    fn from(err: YtDeviceAuthorizationError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
+        log::error!("{e:?}");
+        ErrorInternalServerError(e.to_string())
     }
 }
+
+static YT_ACCESS_TOKEN_HEADER: &str = "x-yt-access-token";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -261,13 +279,6 @@ pub async fn device_authorization_endpoint(
     Ok(Json(
         device_authorization(query.client_id.clone(), query.open.unwrap_or(false)).await?,
     ))
-}
-
-impl From<YtDeviceAuthorizationTokenError> for actix_web::Error {
-    fn from(err: YtDeviceAuthorizationTokenError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -320,15 +331,6 @@ pub async fn device_authorization_token_endpoint(
     ))
 }
 
-impl From<YtTrackFileUrlError> for actix_web::Error {
-    fn from(e: YtTrackFileUrlError) -> Self {
-        match e {
-            YtTrackFileUrlError::AuthenticatedRequest(e) => ErrorUnauthorized(e.to_string()),
-            YtTrackFileUrlError::Parse(_) => ErrorInternalServerError(e.to_string()),
-        }
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtTrackFileUrlQuery {
@@ -376,13 +378,6 @@ pub async fn track_file_url_endpoint(
     })))
 }
 
-impl From<YtTrackPlaybackInfoError> for actix_web::Error {
-    fn from(err: YtTrackPlaybackInfoError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtTrackPlaybackInfoQuery {
@@ -428,13 +423,6 @@ pub async fn track_playback_info_endpoint(
         )
         .await?,
     ))
-}
-
-impl From<YtFavoriteArtistsError> for actix_web::Error {
-    fn from(err: YtFavoriteArtistsError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -504,13 +492,6 @@ pub async fn favorite_artists_endpoint(
     ))
 }
 
-impl From<YtAddFavoriteArtistError> for actix_web::Error {
-    fn from(err: YtAddFavoriteArtistError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAddFavoriteArtistsQuery {
@@ -569,13 +550,6 @@ pub async fn add_favorite_artist_endpoint(
     })))
 }
 
-impl From<YtRemoveFavoriteArtistError> for actix_web::Error {
-    fn from(err: YtRemoveFavoriteArtistError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtRemoveFavoriteArtistsQuery {
@@ -632,13 +606,6 @@ pub async fn remove_favorite_artist_endpoint(
     Ok(Json(serde_json::json!({
         "success": true
     })))
-}
-
-impl From<YtFavoriteAlbumsError> for actix_web::Error {
-    fn from(err: YtFavoriteAlbumsError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -705,20 +672,13 @@ pub async fn favorite_albums_endpoint(
         .await?
         .map(|x| {
             x.try_into()
-                .map_err(|e| YtFavoriteAlbumsError::RequestFailed(format!("{e:?}")))
-                as Result<ApiAlbum, YtFavoriteAlbumsError>
+                .map_err(|e| Error::RequestFailed(format!("{e:?}")))
+                as Result<ApiAlbum, Error>
         })
         .transpose()
         .map_err(ErrorInternalServerError)?
         .into(),
     ))
-}
-
-impl From<YtAddFavoriteAlbumError> for actix_web::Error {
-    fn from(err: YtAddFavoriteAlbumError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -779,13 +739,6 @@ pub async fn add_favorite_album_endpoint(
     })))
 }
 
-impl From<YtRemoveFavoriteAlbumError> for actix_web::Error {
-    fn from(err: YtRemoveFavoriteAlbumError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtRemoveFavoriteAlbumsQuery {
@@ -842,13 +795,6 @@ pub async fn remove_favorite_album_endpoint(
     Ok(Json(serde_json::json!({
         "success": true
     })))
-}
-
-impl From<YtAddFavoriteTrackError> for actix_web::Error {
-    fn from(err: YtAddFavoriteTrackError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -909,13 +855,6 @@ pub async fn add_favorite_track_endpoint(
     })))
 }
 
-impl From<YtRemoveFavoriteTrackError> for actix_web::Error {
-    fn from(err: YtRemoveFavoriteTrackError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtRemoveFavoriteTracksQuery {
@@ -972,13 +911,6 @@ pub async fn remove_favorite_track_endpoint(
     Ok(Json(serde_json::json!({
         "success": true
     })))
-}
-
-impl From<YtFavoriteTracksError> for actix_web::Error {
-    fn from(err: YtFavoriteTracksError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -1045,13 +977,6 @@ pub async fn favorite_tracks_endpoint(
     .into();
 
     Ok(Json(tracks.into()))
-}
-
-impl From<YtArtistAlbumsError> for actix_web::Error {
-    fn from(err: YtArtistAlbumsError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -1135,20 +1060,13 @@ pub async fn artist_albums_endpoint(
         .await?
         .map(|x| {
             x.try_into()
-                .map_err(|e| YtArtistAlbumsError::RequestFailed(format!("{e:?}")))
-                as Result<ApiAlbum, YtArtistAlbumsError>
+                .map_err(|e| Error::RequestFailed(format!("{e:?}")))
+                as Result<ApiAlbum, Error>
         })
         .transpose()
         .map_err(ErrorInternalServerError)?
         .into(),
     ))
-}
-
-impl From<YtAlbumTracksError> for actix_web::Error {
-    fn from(err: YtAlbumTracksError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -1211,23 +1129,6 @@ pub async fn album_tracks_endpoint(
     Ok(Json(tracks.into()))
 }
 
-impl From<YtAlbumError> for actix_web::Error {
-    fn from(err: YtAlbumError) -> Self {
-        log::error!("{err:?}");
-        if let YtAlbumError::AuthenticatedRequest(AuthenticatedRequestError::RequestFailed(
-            status,
-            _,
-        )) = err
-        {
-            if status == 404 {
-                return ErrorNotFound("Yt album not found");
-            }
-        }
-
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtAlbumQuery {
@@ -1279,13 +1180,6 @@ pub async fn album_endpoint(
     .await?;
 
     Ok(Json(album.try_into().map_err(ErrorInternalServerError)?))
-}
-
-impl From<YtArtistError> for actix_web::Error {
-    fn from(err: YtArtistError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
@@ -1341,13 +1235,6 @@ pub async fn artist_endpoint(
     Ok(Json(artist.into()))
 }
 
-impl From<YtTrackError> for actix_web::Error {
-    fn from(err: YtTrackError) -> Self {
-        log::error!("{err:?}");
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YtTrackQuery {
@@ -1399,12 +1286,6 @@ pub async fn track_endpoint(
     .await?;
 
     Ok(Json(track.into()))
-}
-
-impl From<YtSearchError> for actix_web::Error {
-    fn from(err: YtSearchError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
 }
 
 #[derive(Deserialize)]
