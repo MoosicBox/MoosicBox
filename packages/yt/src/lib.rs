@@ -43,9 +43,42 @@ use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
-use thiserror::Error;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("No user ID available")]
+    NoUserIdAvailable,
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Http(#[from] switchy_http::Error),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+    #[cfg(feature = "db")]
+    #[error(transparent)]
+    YtConfig(#[from] db::GetYtConfigError),
+    #[error("No access token available")]
+    NoAccessTokenAvailable,
+    #[error("Unauthorized")]
+    Unauthorized,
+    #[error("Request failed (error {0})")]
+    RequestFailed(String),
+    #[error("Request failed (error {0}): {1}")]
+    HttpRequestFailed(u16, String),
+    #[error("MaxFailedAttempts")]
+    MaxFailedAttempts,
+    #[error("No response body")]
+    NoResponseBody,
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error("Empty response")]
+    EmptyResponse,
+    #[error(transparent)]
+    Config(#[from] YtConfigError),
+}
 
 #[derive(Debug, Serialize, Deserialize, EnumString, AsRefStr, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -167,22 +200,11 @@ macro_rules! yt_api_endpoint {
     };
 }
 
-#[derive(Debug, Error)]
-pub enum YtDeviceAuthorizationError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
 /// * If the JSON response failed to parse
-pub async fn device_authorization(
-    client_id: String,
-    open: bool,
-) -> Result<Value, YtDeviceAuthorizationError> {
+pub async fn device_authorization(client_id: String, open: bool) -> Result<Value, Error> {
     let url = yt_api_endpoint!(DeviceAuthorization);
 
     let params = [
@@ -214,32 +236,18 @@ pub async fn device_authorization(
     }))
 }
 
-#[derive(Debug, Error)]
-pub enum RequestError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[error("Unauthorized")]
-    Unauthorized,
-    #[error("Request failed (error {0})")]
-    RequestFailed(u16, String),
-    #[error("MaxFailedAttempts")]
-    MaxFailedAttempts,
-    #[error("No response body")]
-    NoResponseBody,
-}
-
 #[allow(unused)]
-async fn request(url: &str) -> Result<Value, RequestError> {
+async fn request(url: &str) -> Result<Value, Error> {
     request_inner(Method::Get, url, None, None, 1)
         .await?
-        .ok_or_else(|| RequestError::NoResponseBody)
+        .ok_or_else(|| Error::NoResponseBody)
 }
 
 async fn post_request(
     url: &str,
     body: Option<Value>,
     form: Option<Vec<(&str, &str)>>,
-) -> Result<Option<Value>, RequestError> {
+) -> Result<Option<Value>, Error> {
     request_inner(
         Method::Post,
         url,
@@ -256,7 +264,7 @@ async fn post_request(
 }
 
 #[allow(unused)]
-async fn delete_request(url: &str) -> Result<Option<Value>, RequestError> {
+async fn delete_request(url: &str) -> Result<Option<Value>, Error> {
     request_inner(Method::Delete, url, None, None, 1).await
 }
 
@@ -267,10 +275,10 @@ async fn request_inner(
     body: Option<Value>,
     form: Option<Vec<(String, String)>>,
     attempt: u8,
-) -> Result<Option<Value>, RequestError> {
+) -> Result<Option<Value>, Error> {
     if attempt > 3 {
         log::error!("Max failed attempts for request reached");
-        return Err(RequestError::MaxFailedAttempts);
+        return Err(Error::MaxFailedAttempts);
     }
 
     log::debug!("Making request to {url}");
@@ -298,29 +306,18 @@ async fn request_inner(
     match status {
         401 => {
             log::debug!("Received unauthorized response");
-            Err(RequestError::Unauthorized)
+            Err(Error::Unauthorized)
         }
-        400..=599 => Err(RequestError::RequestFailed(
+        400..=599 => Err(Error::HttpRequestFailed(
             status,
             response.text().await.unwrap_or_default(),
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
             Err(switchy_http::Error::Decode) => Ok(None),
-            Err(e) => Err(RequestError::Http(e)),
+            Err(e) => Err(Error::Http(e)),
         },
     }
-}
-
-#[derive(Debug, Error)]
-pub enum YtDeviceAuthorizationTokenError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
 }
 
 /// # Panics
@@ -338,7 +335,7 @@ pub async fn device_authorization_token(
     client_secret: String,
     device_code: String,
     #[cfg(feature = "db")] persist: Option<bool>,
-) -> Result<Value, YtDeviceAuthorizationTokenError> {
+) -> Result<Value, Error> {
     let url = yt_api_endpoint!(AuthorizationToken);
 
     let params = [
@@ -397,20 +394,11 @@ struct YtCredentials {
     persist: bool,
 }
 
-#[derive(Debug, Error)]
-pub enum FetchCredentialsError {
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    YtConfig(#[from] db::GetYtConfigError),
-    #[error("No access token available")]
-    NoAccessTokenAvailable,
-}
-
 #[allow(clippy::unused_async)]
 async fn fetch_credentials(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     access_token: Option<String>,
-) -> Result<YtCredentials, FetchCredentialsError> {
+) -> Result<YtCredentials, Error> {
     #[cfg(feature = "db")]
     {
         Ok(if let Some(access_token) = access_token {
@@ -444,42 +432,24 @@ async fn fetch_credentials(
                 }
             }
         }
-        .ok_or(FetchCredentialsError::NoAccessTokenAvailable)??)
+        .ok_or(Error::NoAccessTokenAvailable)??)
     }
 
     #[cfg(not(feature = "db"))]
     {
         Ok(YtCredentials {
-            access_token: access_token.ok_or(FetchCredentialsError::NoAccessTokenAvailable)?,
+            access_token: access_token.ok_or(Error::NoAccessTokenAvailable)?,
             client_id: None,
             refresh_token: None,
         })
     }
 }
 
-#[derive(Debug, Error)]
-pub enum AuthenticatedRequestError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[error(transparent)]
-    FetchCredentials(#[from] FetchCredentialsError),
-    #[error(transparent)]
-    RefetchAccessToken(#[from] RefetchAccessTokenError),
-    #[error("Unauthorized")]
-    Unauthorized,
-    #[error("Request failed (error {0})")]
-    RequestFailed(u16, String),
-    #[error("MaxFailedAttempts")]
-    MaxFailedAttempts,
-    #[error("No response body")]
-    NoResponseBody,
-}
-
 async fn authenticated_request(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     access_token: Option<String>,
-) -> Result<Value, AuthenticatedRequestError> {
+) -> Result<Value, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -491,7 +461,7 @@ async fn authenticated_request(
         1,
     )
     .await?
-    .ok_or_else(|| AuthenticatedRequestError::NoResponseBody)
+    .ok_or_else(|| Error::NoResponseBody)
 }
 
 async fn authenticated_post_request(
@@ -500,7 +470,7 @@ async fn authenticated_post_request(
     access_token: Option<String>,
     body: Option<Value>,
     form: Option<Vec<(&str, &str)>>,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -523,7 +493,7 @@ async fn authenticated_delete_request(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
     access_token: Option<String>,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
         db,
@@ -560,10 +530,10 @@ async fn authenticated_request_inner(
     body: Option<Value>,
     form: Option<Vec<(String, String)>>,
     attempt: u8,
-) -> Result<Option<Value>, AuthenticatedRequestError> {
+) -> Result<Option<Value>, Error> {
     if attempt > 3 {
         log::error!("Max failed attempts for reauthentication reached");
-        return Err(AuthenticatedRequestError::MaxFailedAttempts);
+        return Err(Error::MaxFailedAttempts);
     }
 
     log::debug!("Making authenticated request to {url}");
@@ -629,29 +599,18 @@ async fn authenticated_request_inner(
             }
 
             log::debug!("No client_id or refresh_token available. Unauthorized");
-            Err(AuthenticatedRequestError::Unauthorized)
+            Err(Error::Unauthorized)
         }
-        400..=599 => Err(AuthenticatedRequestError::RequestFailed(
+        400..=599 => Err(Error::HttpRequestFailed(
             status,
             response.text().await.unwrap_or_default(),
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
             Err(switchy_http::Error::Decode) => Ok(None),
-            Err(e) => Err(AuthenticatedRequestError::Http(e)),
+            Err(e) => Err(Error::Http(e)),
         },
     }
-}
-
-#[derive(Debug, Error)]
-pub enum RefetchAccessTokenError {
-    #[error(transparent)]
-    Http(#[from] switchy_http::Error),
-    #[cfg(feature = "db")]
-    #[error(transparent)]
-    Database(#[from] DatabaseError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
 }
 
 async fn refetch_access_token(
@@ -659,7 +618,7 @@ async fn refetch_access_token(
     client_id: &str,
     refresh_token: &str,
     #[cfg(feature = "db")] persist: bool,
-) -> Result<String, RefetchAccessTokenError> {
+) -> Result<String, Error> {
     log::debug!("Refetching access token");
     let url = yt_api_endpoint!(AuthorizationToken);
 
@@ -718,18 +677,6 @@ pub enum YtArtistOrderDirection {
     Desc,
 }
 
-#[derive(Debug, Error)]
-pub enum YtFavoriteArtistsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_artists(
@@ -743,7 +690,7 @@ pub async fn favorite_artists(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> PagingResult<YtArtist, YtFavoriteArtistsError> {
+) -> PagingResult<YtArtist, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -757,7 +704,7 @@ pub async fn favorite_artists(
         }
     };
 
-    let user_id = user_id.ok_or(YtFavoriteArtistsError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         FavoriteArtists,
@@ -796,11 +743,11 @@ pub async fn favorite_artists(
 
     let items = value
         .to_value::<Option<Vec<&Value>>>("items")?
-        .ok_or_else(|| YtFavoriteArtistsError::RequestFailed(format!("{value:?}")))?
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?
         .into_iter()
         .map(|value| value.to_value("item"))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| YtFavoriteArtistsError::RequestFailed(format!("{e:?}: {value:?}")))?;
+        .map_err(|e| Error::RequestFailed(format!("{e:?}: {value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -841,18 +788,6 @@ pub async fn favorite_artists(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum YtAddFavoriteArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -867,7 +802,7 @@ pub async fn add_favorite_artist(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), YtAddFavoriteArtistError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -878,7 +813,7 @@ pub async fn add_favorite_artist(
         }
     };
 
-    let user_id = user_id.ok_or(YtAddFavoriteArtistError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         AddFavoriteArtist,
@@ -911,18 +846,6 @@ pub async fn add_favorite_artist(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum YtRemoveFavoriteArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -937,7 +860,7 @@ pub async fn remove_favorite_artist(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), YtRemoveFavoriteArtistError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -948,7 +871,7 @@ pub async fn remove_favorite_artist(
         }
     };
 
-    let user_id = user_id.ok_or(YtRemoveFavoriteArtistError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         RemoveFavoriteArtist,
@@ -1020,18 +943,6 @@ impl From<AlbumSort> for YtAlbumOrderDirection {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum YtFavoriteAlbumsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_albums(
@@ -1045,7 +956,7 @@ pub async fn favorite_albums(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> PagingResult<YtAlbum, YtFavoriteAlbumsError> {
+) -> PagingResult<YtAlbum, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1059,7 +970,7 @@ pub async fn favorite_albums(
         }
     };
 
-    let user_id = user_id.ok_or(YtFavoriteAlbumsError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         FavoriteAlbums,
@@ -1098,11 +1009,11 @@ pub async fn favorite_albums(
 
     let items = value
         .to_value::<Option<Vec<&Value>>>("items")?
-        .ok_or_else(|| YtFavoriteAlbumsError::RequestFailed(format!("{value:?}")))?
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?
         .into_iter()
         .map(|value| value.to_value("item"))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| YtFavoriteAlbumsError::RequestFailed(format!("{e:?}: {value:?}")))?;
+        .map_err(|e| Error::RequestFailed(format!("{e:?}: {value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -1158,7 +1069,7 @@ pub async fn all_favorite_albums(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<Vec<YtAlbum>, YtFavoriteAlbumsError> {
+) -> Result<Vec<YtAlbum>, Error> {
     let mut all_albums = vec![];
 
     let mut offset = 0;
@@ -1192,18 +1103,6 @@ pub async fn all_favorite_albums(
     Ok(all_albums)
 }
 
-#[derive(Debug, Error)]
-pub enum YtAddFavoriteAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1218,7 +1117,7 @@ pub async fn add_favorite_album(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), YtAddFavoriteAlbumError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -1229,7 +1128,7 @@ pub async fn add_favorite_album(
         }
     };
 
-    let user_id = user_id.ok_or(YtAddFavoriteAlbumError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         AddFavoriteAlbum,
@@ -1262,18 +1161,6 @@ pub async fn add_favorite_album(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum YtRemoveFavoriteAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1288,7 +1175,7 @@ pub async fn remove_favorite_album(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), YtRemoveFavoriteAlbumError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -1299,7 +1186,7 @@ pub async fn remove_favorite_album(
         }
     };
 
-    let user_id = user_id.ok_or(YtRemoveFavoriteAlbumError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         RemoveFavoriteAlbum,
@@ -1350,18 +1237,6 @@ pub enum YtTrackOrderDirection {
     Desc,
 }
 
-#[derive(Debug, Error)]
-pub enum YtFavoriteTracksError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn favorite_tracks(
@@ -1375,7 +1250,7 @@ pub async fn favorite_tracks(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> PagingResult<YtTrack, YtFavoriteTracksError> {
+) -> PagingResult<YtTrack, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1389,7 +1264,7 @@ pub async fn favorite_tracks(
         }
     };
 
-    let user_id = user_id.ok_or(YtFavoriteTracksError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         FavoriteTracks,
@@ -1428,11 +1303,11 @@ pub async fn favorite_tracks(
 
     let items = value
         .to_value::<Option<Vec<&Value>>>("items")?
-        .ok_or_else(|| YtFavoriteTracksError::RequestFailed(format!("{value:?}")))?
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?
         .into_iter()
         .map(|value| value.to_value("item"))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| YtFavoriteTracksError::RequestFailed(format!("{e:?}: {value:?}")))?;
+        .map_err(|e| Error::RequestFailed(format!("{e:?}: {value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -1473,18 +1348,6 @@ pub async fn favorite_tracks(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum YtAddFavoriteTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1499,7 +1362,7 @@ pub async fn add_favorite_track(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), YtAddFavoriteTrackError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -1510,7 +1373,7 @@ pub async fn add_favorite_track(
         }
     };
 
-    let user_id = user_id.ok_or(YtAddFavoriteTrackError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         AddFavoriteTrack,
@@ -1543,18 +1406,6 @@ pub async fn add_favorite_track(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-pub enum YtRemoveFavoriteTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("No user ID available")]
-    NoUserIdAvailable,
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1569,7 +1420,7 @@ pub async fn remove_favorite_track(
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
     user_id: Option<u64>,
-) -> Result<(), YtRemoveFavoriteTrackError> {
+) -> Result<(), Error> {
     #[cfg(feature = "db")]
     let user_id = if let Some(user_id) = user_id {
         Some(user_id)
@@ -1580,7 +1431,7 @@ pub async fn remove_favorite_track(
         }
     };
 
-    let user_id = user_id.ok_or(YtRemoveFavoriteTrackError::NoUserIdAvailable)?;
+    let user_id = user_id.ok_or(Error::NoUserIdAvailable)?;
 
     let url = yt_api_endpoint!(
         RemoveFavoriteTrack,
@@ -1612,16 +1463,6 @@ pub async fn remove_favorite_track(
     log::trace!("Received remove favorite track response: {value:?}");
 
     Ok(())
-}
-
-#[derive(Debug, Error)]
-pub enum YtArtistAlbumsError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
 }
 
 #[derive(
@@ -1671,7 +1512,7 @@ pub async fn artist_albums(
     locale: Option<String>,
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
-) -> PagingResult<YtAlbum, YtArtistAlbumsError> {
+) -> PagingResult<YtAlbum, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1722,7 +1563,7 @@ pub async fn artist_albums(
 
     let items = value
         .to_value::<Option<_>>("items")?
-        .ok_or_else(|| YtArtistAlbumsError::RequestFailed(format!("{value:?}")))?;
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -1764,16 +1605,6 @@ pub async fn artist_albums(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum YtAlbumTracksError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 #[allow(clippy::too_many_arguments)]
 #[async_recursion]
 pub async fn album_tracks(
@@ -1785,7 +1616,7 @@ pub async fn album_tracks(
     locale: Option<String>,
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
-) -> PagingResult<YtTrack, YtAlbumTracksError> {
+) -> PagingResult<YtTrack, Error> {
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(100);
 
@@ -1819,7 +1650,7 @@ pub async fn album_tracks(
 
     let items = value
         .to_value::<Option<_>>("items")?
-        .ok_or_else(|| YtAlbumTracksError::RequestFailed(format!("{value:?}")))?;
+        .ok_or_else(|| Error::RequestFailed(format!("{value:?}")))?;
 
     let total = value.to_value("totalNumberOfItems")?;
 
@@ -1860,16 +1691,6 @@ pub async fn album_tracks(
     })
 }
 
-#[derive(Debug, Error)]
-pub enum YtAlbumError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error("Request failed: {0:?}")]
-    RequestFailed(String),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1883,7 +1704,7 @@ pub async fn album(
     locale: Option<String>,
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
-) -> Result<YtAlbum, YtAlbumError> {
+) -> Result<YtAlbum, Error> {
     let url = yt_api_endpoint!(
         Album,
         &[(":albumId", &album_id.to_string())],
@@ -1911,14 +1732,6 @@ pub async fn album(
     Ok(value.as_model()?)
 }
 
-#[derive(Debug, Error)]
-pub enum YtArtistError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1932,7 +1745,7 @@ pub async fn artist(
     locale: Option<String>,
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
-) -> Result<YtArtist, YtArtistError> {
+) -> Result<YtArtist, Error> {
     let url = yt_api_endpoint!(
         Artist,
         &[(":artistId", &artist_id.to_string())],
@@ -1962,14 +1775,6 @@ pub async fn artist(
     Ok(value.as_model()?)
 }
 
-#[derive(Debug, Error)]
-pub enum YtTrackError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -1982,7 +1787,7 @@ pub async fn track(
     locale: Option<String>,
     device_type: Option<YtDeviceType>,
     access_token: Option<String>,
-) -> Result<YtTrack, YtTrackError> {
+) -> Result<YtTrack, Error> {
     let url = yt_api_endpoint!(
         Track,
         &[(":trackId", &track_id.to_string())],
@@ -2012,16 +1817,6 @@ pub async fn track(
     Ok(value.as_model()?)
 }
 
-#[derive(Debug, Error)]
-pub enum YtSearchError {
-    #[error(transparent)]
-    Request(#[from] RequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-    #[error("Empty response")]
-    EmptyResponse,
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -2032,7 +1827,7 @@ pub async fn search(
     query: &str,
     _offset: Option<usize>,
     _limit: Option<usize>,
-) -> Result<YtSearchResults, YtSearchError> {
+) -> Result<YtSearchResults, Error> {
     let url = yt_api_endpoint!(Search, &[], &[("prettyPrint", &false.to_string()),]);
 
     let date = chrono::Local::now();
@@ -2053,7 +1848,7 @@ pub async fn search(
         None,
     )
     .await?
-    .ok_or(YtSearchError::EmptyResponse)?;
+    .ok_or(Error::EmptyResponse)?;
 
     log::trace!("Received search response: {value:?}");
 
@@ -2080,14 +1875,6 @@ impl From<TrackAudioQuality> for YtAudioQuality {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum YtTrackFileUrlError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -2098,7 +1885,7 @@ pub async fn track_file_url(
     audio_quality: YtAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
-) -> Result<Vec<String>, YtTrackFileUrlError> {
+) -> Result<Vec<String>, Error> {
     let url = yt_api_endpoint!(
         TrackUrl,
         &[(":trackId", &track_id.to_string())],
@@ -2141,16 +1928,6 @@ pub struct YtTrackPlaybackInfo {
     pub track_replay_gain: f64,
 }
 
-#[derive(Debug, Error)]
-pub enum YtTrackPlaybackInfoError {
-    #[error(transparent)]
-    AuthenticatedRequest(#[from] AuthenticatedRequestError),
-    #[error(transparent)]
-    Serde(#[from] serde_json::Error),
-    #[error(transparent)]
-    Parse(#[from] ParseError),
-}
-
 /// # Errors
 ///
 /// * If the HTTP request failed
@@ -2161,7 +1938,7 @@ pub async fn track_playback_info(
     audio_quality: YtAudioQuality,
     track_id: &Id,
     access_token: Option<String>,
-) -> Result<YtTrackPlaybackInfo, YtTrackPlaybackInfoError> {
+) -> Result<YtTrackPlaybackInfo, Error> {
     let url = yt_api_endpoint!(
         TrackPlaybackInfo,
         &[(":trackId", &track_id.to_string())],
@@ -2236,11 +2013,9 @@ impl From<TrackOrderDirection> for YtTrackOrderDirection {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum TryFromAlbumTypeError {
-    #[error("Unsupported AlbumType")]
-    UnsupportedAlbumType,
-}
+#[derive(Debug, thiserror::Error)]
+#[error("Unsupported AlbumType")]
+pub struct TryFromAlbumTypeError;
 
 impl TryFrom<AlbumType> for YtAlbumType {
     type Error = TryFromAlbumTypeError;
@@ -2250,103 +2025,19 @@ impl TryFrom<AlbumType> for YtAlbumType {
             AlbumType::Lp => Ok(Self::Lp),
             AlbumType::Compilations => Ok(Self::Compilations),
             AlbumType::EpsAndSingles => Ok(Self::EpsAndSingles),
-            _ => Err(TryFromAlbumTypeError::UnsupportedAlbumType),
+            _ => Err(TryFromAlbumTypeError),
         }
     }
 }
 
-impl From<YtFavoriteArtistsError> for moosicbox_music_api::Error {
-    fn from(err: YtFavoriteArtistsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtArtistError> for moosicbox_music_api::Error {
-    fn from(err: YtArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtAddFavoriteArtistError> for moosicbox_music_api::Error {
-    fn from(err: YtAddFavoriteArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtRemoveFavoriteArtistError> for moosicbox_music_api::Error {
-    fn from(err: YtRemoveFavoriteArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtFavoriteAlbumsError> for moosicbox_music_api::Error {
-    fn from(err: YtFavoriteAlbumsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtAlbumError> for moosicbox_music_api::Error {
-    fn from(err: YtAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtArtistAlbumsError> for moosicbox_music_api::Error {
-    fn from(err: YtArtistAlbumsError) -> Self {
+impl From<Error> for moosicbox_music_api::Error {
+    fn from(err: Error) -> Self {
         Self::Other(Box::new(err))
     }
 }
 
 impl From<TryFromAlbumTypeError> for moosicbox_music_api::Error {
     fn from(err: TryFromAlbumTypeError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtAddFavoriteAlbumError> for moosicbox_music_api::Error {
-    fn from(err: YtAddFavoriteAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtRemoveFavoriteAlbumError> for moosicbox_music_api::Error {
-    fn from(err: YtRemoveFavoriteAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtFavoriteTracksError> for moosicbox_music_api::Error {
-    fn from(err: YtFavoriteTracksError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtAlbumTracksError> for moosicbox_music_api::Error {
-    fn from(err: YtAlbumTracksError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtTrackError> for moosicbox_music_api::Error {
-    fn from(err: YtTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtTrackFileUrlError> for moosicbox_music_api::Error {
-    fn from(err: YtTrackFileUrlError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtAddFavoriteTrackError> for moosicbox_music_api::Error {
-    fn from(err: YtAddFavoriteTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<YtRemoveFavoriteTrackError> for moosicbox_music_api::Error {
-    fn from(err: YtRemoveFavoriteTrackError) -> Self {
         Self::Other(Box::new(err))
     }
 }
@@ -2464,10 +2155,7 @@ impl MusicApi for YtMusicApi {
             {
                 Ok(artist) => Some(artist.into()),
                 Err(e) => {
-                    if let YtArtistError::AuthenticatedRequest(
-                        AuthenticatedRequestError::RequestFailed(status, _),
-                    ) = &e
-                    {
+                    if let Error::HttpRequestFailed(status, _) = &e {
                         if *status == 404 {
                             return Ok(None);
                         }
