@@ -16,7 +16,10 @@ use std::{
 };
 
 use models::{YtAlbum, YtArtist, YtSearchResults, YtTrack};
-use moosicbox_music_api_helpers::ApiAuth;
+use moosicbox_music_api_helpers::{
+    ApiAuth,
+    auth::{Auth as _, username_password::UsernamePasswordAuth},
+};
 #[cfg(feature = "db")]
 use switchy_database::DatabaseError;
 #[cfg(feature = "db")]
@@ -2087,7 +2090,10 @@ impl YtMusicApiBuilder {
             .await
             .is_ok_and(|x| x.is_some());
 
-        let auth = ApiAuth::new(logged_in);
+        let auth = ApiAuth::builder()
+            .with_logged_in(logged_in)
+            .with_auth(UsernamePasswordAuth::new())
+            .build();
 
         Ok(YtMusicApi {
             #[cfg(feature = "db")]
@@ -2100,7 +2106,7 @@ impl YtMusicApiBuilder {
 pub struct YtMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
-    auth: ApiAuth,
+    auth: ApiAuth<UsernamePasswordAuth>,
 }
 
 impl YtMusicApi {
@@ -2585,6 +2591,10 @@ impl MusicApi for YtMusicApi {
     }
 
     async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
+        self.auth.login().await.map_err(|e| {
+            log::error!("Failed to authenticate: {e:?}");
+            moosicbox_music_api::Error::Unauthorized
+        })?;
         Ok(())
     }
 

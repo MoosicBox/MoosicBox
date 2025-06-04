@@ -1,0 +1,90 @@
+use std::time::Duration;
+
+use async_trait::async_trait;
+use switchy::unsync::futures::FutureExt as _;
+
+use super::Auth;
+
+#[derive(Debug, Clone)]
+pub struct PollAuth {
+    timeout: Duration,
+}
+
+impl Default for PollAuth {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PollAuth {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            timeout: Duration::from_secs(60),
+        }
+    }
+
+    /// Sets the timeout duration.
+    #[must_use]
+    pub fn with_timeout(mut self, timeout: impl Into<Duration>) -> Self {
+        self.timeout = timeout.into();
+        self
+    }
+
+    /// Sets the timeout duration to the given number of seconds.
+    #[must_use]
+    pub const fn with_timeout_secs(mut self, timeout: u64) -> Self {
+        self.timeout = Duration::from_secs(timeout);
+        self
+    }
+
+    /// Sets the timeout duration to the given number of milliseconds.
+    #[must_use]
+    pub const fn with_timeout_millis(mut self, timeout: u64) -> Self {
+        self.timeout = Duration::from_millis(timeout);
+        self
+    }
+
+    /// Sets the timeout duration.
+    #[must_use]
+    pub fn timeout(&mut self, timeout: impl Into<Duration>) -> &mut Self {
+        self.timeout = timeout.into();
+        self
+    }
+
+    /// Sets the timeout duration to the given number of seconds.
+    #[must_use]
+    pub const fn timeout_secs(&mut self, timeout: u64) -> &mut Self {
+        self.timeout = Duration::from_secs(timeout);
+        self
+    }
+
+    /// Sets the timeout duration to the given number of milliseconds.
+    #[must_use]
+    pub const fn timeout_millis(&mut self, timeout: u64) -> &mut Self {
+        self.timeout = Duration::from_millis(timeout);
+        self
+    }
+
+    /// # Errors
+    ///
+    /// * If the poll fails
+    #[allow(clippy::unused_async)]
+    pub async fn poll(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        Ok(false)
+    }
+}
+
+#[async_trait]
+impl Auth for PollAuth {
+    async fn login(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        switchy::unsync::select! {
+            success = self.poll().fuse() => {
+                Ok(success?)
+            },
+            () = switchy::unsync::time::sleep(self.timeout) => {
+                Ok(false)
+            }
+        }
+    }
+}

@@ -13,7 +13,10 @@ use itertools::Itertools;
 use models::{QobuzAlbum, QobuzArtist, QobuzRelease, QobuzSearchResults, QobuzTrack};
 #[cfg(feature = "db")]
 use moosicbox_json_utils::database::DatabaseFetchError;
-use moosicbox_music_api_helpers::ApiAuth;
+use moosicbox_music_api_helpers::{
+    ApiAuth,
+    auth::{Auth as _, username_password::UsernamePasswordAuth},
+};
 #[cfg(feature = "db")]
 use switchy_database::DatabaseError;
 #[cfg(feature = "db")]
@@ -1838,7 +1841,10 @@ impl QobuzMusicApiBuilder {
             .await
             .is_ok_and(|x| x.is_some());
 
-        let auth = ApiAuth::new(logged_in);
+        let auth = ApiAuth::builder()
+            .with_logged_in(logged_in)
+            .with_auth(UsernamePasswordAuth::new())
+            .build();
 
         Ok(QobuzMusicApi {
             #[cfg(feature = "db")]
@@ -1851,7 +1857,7 @@ impl QobuzMusicApiBuilder {
 pub struct QobuzMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
-    auth: ApiAuth,
+    auth: ApiAuth<UsernamePasswordAuth>,
 }
 
 impl QobuzMusicApi {
@@ -2322,6 +2328,10 @@ impl MusicApi for QobuzMusicApi {
     }
 
     async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
+        self.auth.login().await.map_err(|e| {
+            log::error!("Failed to authenticate: {e:?}");
+            moosicbox_music_api::Error::Unauthorized
+        })?;
         Ok(())
     }
 

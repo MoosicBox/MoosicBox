@@ -23,7 +23,9 @@ moosicbox_json_utils = { workspace = true, features = [
 ] }
 moosicbox_menu_models = { workspace = true }
 moosicbox_music_api = { workspace = true }
-moosicbox_music_api_helpers = { workspace = true, features = ["auth"] }
+moosicbox_music_api_helpers = { workspace = true, features = [
+    "auth-username-password",
+] }
 moosicbox_music_models = { workspace = true, features = ["flac"] }
 moosicbox_paging = { workspace = true }
 moosicbox_search = { workspace = true, features = ["api"] }

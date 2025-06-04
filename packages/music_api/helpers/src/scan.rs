@@ -1,5 +1,5 @@
 use moosicbox_music_api::{MusicApi, SourceToMusicApi as _, profiles::PROFILES};
-use switchy_database::profiles::LibraryDatabase;
+use switchy::database::profiles::LibraryDatabase;
 
 /// # Errors
 ///
