@@ -716,7 +716,7 @@ fn build_set_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
 fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
     values
         .iter()
-        .map(|(name, value)| format!("{name}={}", value.deref().to_sql()))
+        .map(|(name, value)| format!("{name}=({})", value.deref().to_sql()))
         .collect()
 }
 

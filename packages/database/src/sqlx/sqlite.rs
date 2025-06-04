@@ -873,7 +873,7 @@ fn build_set_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16) ->
         .iter()
         .map(|(name, value)| {
             format!(
-                "{}={}",
+                "{}=({})",
                 format_identifier(name),
                 value.deref().to_sql(index)
             )
