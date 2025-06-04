@@ -261,7 +261,7 @@ impl Migrations {
 pub use sqlite::*;
 
 #[cfg(feature = "sqlite")]
-mod sqlite {
+pub mod sqlite {
     use include_dir::include_dir;
 
     use crate::Migrations;
@@ -279,7 +279,7 @@ mod sqlite {
 pub use postgres::*;
 
 #[cfg(feature = "postgres")]
-mod postgres {
+pub mod postgres {
     use include_dir::include_dir;
 
     use crate::Migrations;
