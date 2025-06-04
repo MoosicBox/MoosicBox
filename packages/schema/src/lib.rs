@@ -338,7 +338,7 @@ mod sqlite_tests {
     }
 
     #[test_log::test(tokio::test)]
-    async fn test_api_sources_migration() {
+    async fn test_api_sources_table_migration() {
         const API_SOURCES_COLUMN: &str = "
             (
                 SELECT json_group_array(
@@ -501,6 +501,243 @@ mod sqlite_tests {
         let tracks = db
             .select("tracks")
             .columns(&["id", &API_SOURCES_COLUMN.replace("{table}", "tracks")])
+            .sort("id", switchy_database::query::SortDirection::Asc)
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(tracks.len(), 5);
+        assert_eq!(
+            tracks
+                .iter()
+                .filter_map(|x| x.get("id").and_then(|x| x.as_u64()))
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3, 4, 6]
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[0].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+                .with_api_id(ApiId {
+                    source: tidal.clone(),
+                    id: Id::String("123".into())
+                })
+                .with_api_id(ApiId {
+                    source: qobuz.clone(),
+                    id: Id::String("456".into())
+                })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[1].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: tidal.clone(),
+                id: Id::String("789".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[2].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: qobuz.clone(),
+                id: Id::String("101112".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[3].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                tracks[4].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+                .with_api_id(ApiId {
+                    source: tidal.clone(),
+                    id: Id::String("123".into())
+                })
+                .with_api_id(ApiId {
+                    source: qobuz.clone(),
+                    id: Id::String("123".into())
+                })
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn test_api_sources_column_migration() {
+        let tidal = ApiSource::register("Tidal", "Tidal");
+        let qobuz = ApiSource::register("Qobuz", "Qobuz");
+
+        let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
+
+        sqlite::SQLITE_LIBRARY_MIGRATIONS
+            .run_until(&*db, Some("2025-06-03-211603_cache_api_sources_on_tables"))
+            .await
+            .unwrap();
+
+        // Insert test data
+        db.exec_raw(
+            "
+            INSERT INTO artists (id, title, cover) VALUES
+                (1, 'title1', ''),
+                (2, 'title2', ''),
+                (3, 'title3', ''),
+                (4, 'title4', '');
+            INSERT INTO albums (id, artist_id, title, date_released, date_added, artwork, directory, blur) VALUES
+                (1, 1, 'title1', '2022-01-01', '2022-01-01', '', '', 0),
+                (2, 2, 'title2', '2022-01-01', '2022-01-01', '', '', 0),
+                (3, 3, 'title3', '2022-01-01', '2022-01-01', '', '', 0),
+                (4, 4, 'title4', '2022-01-01', '2022-01-01', '', '', 0);
+            INSERT INTO tracks (id, album_id, number, title, duration, file, format, source) VALUES
+                (1, 1, 1, 'title1', 10, 'file1', 'FLAC', 'LOCAL'),
+                (2, 2, 2, 'title2', 13, 'file2', 'FLAC', 'LOCAL'),
+                (3, 3, 3, 'title3', 19, 'file3', 'FLAC', 'LOCAL'),
+                (4, 4, 4, 'title4', 15, 'file4', 'FLAC', 'LOCAL'),
+                (6, 4, 4, 'title4', 15, NULL, 'SOURCE', 'LOCAL');
+
+            INSERT INTO api_sources (entity_type, entity_id, source, source_id) VALUES
+                ('artists', 1, 'Tidal', 'art123'),
+                ('artists', 1, 'Qobuz', 'art456'),
+                ('artists', 2, 'Tidal', 'art789'),
+                ('artists', 3, 'Qobuz', 'art101112');
+            INSERT INTO api_sources (entity_type, entity_id, source, source_id) VALUES
+                ('albums', 1, 'Tidal', 'alb123'),
+                ('albums', 1, 'Qobuz', 'alb456'),
+                ('albums', 2, 'Tidal', 'alb789'),
+                ('albums', 3, 'Qobuz', 'alb101112');
+            INSERT INTO api_sources (entity_type, entity_id, source, source_id) VALUES
+                ('tracks', 1, 'Tidal', '123'),
+                ('tracks', 1, 'Qobuz', '456'),
+                ('tracks', 2, 'Tidal', '789'),
+                ('tracks', 3, 'Qobuz', '101112'),
+                ('tracks', 6, 'Tidal', '123'),
+                ('tracks', 6, 'Qobuz', '123');
+        ",
+        )
+        .await
+        .unwrap();
+
+        // Run the migration
+        sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+
+        // Verify artists migration
+        let artists = db
+            .select("artists")
+            .columns(&["api_sources"])
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(artists.len(), 4);
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                artists[0].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+                .with_api_id(ApiId {
+                    source: tidal.clone(),
+                    id: Id::String("art123".into())
+                })
+                .with_api_id(ApiId {
+                    source: qobuz.clone(),
+                    id: Id::String("art456".into())
+                })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                artists[1].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: tidal.clone(),
+                id: Id::String("art789".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                artists[2].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: qobuz.clone(),
+                id: Id::String("art101112".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                artists[3].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+        );
+
+        // Verify albums migration
+        let albums = db
+            .select("albums")
+            .columns(&["api_sources"])
+            .execute(&*db)
+            .await
+            .unwrap();
+
+        assert_eq!(albums.len(), 4);
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                albums[0].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+                .with_api_id(ApiId {
+                    source: tidal.clone(),
+                    id: Id::String("alb123".into())
+                })
+                .with_api_id(ApiId {
+                    source: qobuz.clone(),
+                    id: Id::String("alb456".into())
+                })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                albums[1].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: tidal.clone(),
+                id: Id::String("alb789".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                albums[2].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default().with_api_id(ApiId {
+                source: qobuz.clone(),
+                id: Id::String("alb101112".into())
+            })
+        );
+        assert_eq!(
+            <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
+                albums[3].get("api_sources").unwrap()
+            )
+            .unwrap(),
+            ApiSources::default()
+        );
+
+        // Verify tracks migration
+        let tracks = db
+            .select("tracks")
+            .columns(&["id", "api_sources"])
             .sort("id", switchy_database::query::SortDirection::Asc)
             .execute(&*db)
             .await

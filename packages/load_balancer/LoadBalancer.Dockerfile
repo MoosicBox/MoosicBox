@@ -50,6 +50,7 @@ RUN cat Cargo.toml | \
     \"packages\/random\",\r\
     \"packages\/resampler\",\r\
     \"packages\/scan\",\r\
+    \"packages\/schema\",\r\
     \"packages\/search\",\r\
     \"packages\/session\",\r\
     \"packages\/session\/models\",\r\
@@ -107,6 +108,7 @@ COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/random/Cargo.toml packages/random/Cargo.toml
 COPY packages/resampler/Cargo.toml packages/resampler/Cargo.toml
 COPY packages/scan/Cargo.toml packages/scan/Cargo.toml
+COPY packages/schema/Cargo.toml packages/schema/Cargo.toml
 COPY packages/search/Cargo.toml packages/search/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
@@ -158,6 +160,7 @@ packages/profiles|\
 packages/random|\
 packages/resampler|\
 packages/scan|\
+packages/schema|\
 packages/search|\
 packages/session|\
 packages/simvar|\

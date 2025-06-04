@@ -1,31 +1,19 @@
 use moosicbox_json_utils::{
-    ToValueType,
-    database::{AsModelResultMapped as _, DatabaseFetchError},
+    ParseError, ToValueType,
+    database::{AsModelResultMapped as _, DatabaseFetchError, ToValue as _},
 };
 use moosicbox_music_models::{AudioFormat, PlaybackQuality, TrackApiSource, TrackSize, id::Id};
 use switchy_database::{
-    DatabaseError, DatabaseValue, boxed,
+    DatabaseError, DatabaseValue, Row, boxed,
     profiles::LibraryDatabase,
     query::{
-        FilterableQuery, SortDirection, coalesce, identifier, literal, where_in, where_not_eq,
+        FilterableQuery, SortDirection, coalesce, identifier, literal, select, where_in,
+        where_not_eq,
     },
 };
 use thiserror::Error;
 
 pub mod models;
-
-const API_SOURCES_COLUMN: &str = "
-    (
-        SELECT json_group_array(
-            json_object(
-               'id', api_sources.source_id,
-               'source', api_sources.source
-            )
-        )
-        FROM api_sources
-        WHERE api_sources.entity_type='{table}' AND api_sources.entity_id = {table}.id
-    ) AS {name}
-    ";
 
 use crate::{
     db::models::LibraryConfig,
@@ -136,17 +124,7 @@ pub async fn get_library_access_token(
 ///
 /// * If there was a database error
 pub async fn get_artists(db: &LibraryDatabase) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
-    Ok(db
-        .select("artists")
-        .columns(&[
-            "artists.*",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "api_sources"),
-        ])
-        .execute(&**db)
-        .await?
-        .to_value_type()?)
+    Ok(db.select("artists").execute(&**db).await?.to_value_type()?)
 }
 
 /// # Errors
@@ -164,12 +142,7 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, Datab
             "track_sizes.format",
             "artists.title as artist",
             "tracks.source",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "albums")
-                .replace("{name}", "api_sources"),
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "artist_api_sources"),
+            "artists.api_sources as artist_api_sources",
         ])
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
@@ -194,12 +167,6 @@ pub async fn get_artist(
 ) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
-        .columns(&[
-            "artists.*",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "api_sources"),
-        ])
         .where_eq(column.to_string(), id)
         .execute_first(&**db)
         .await?
@@ -216,12 +183,6 @@ pub async fn get_artist_by_album_id(
 ) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
-        .columns(&[
-            "artists.*",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "api_sources"),
-        ])
         .where_eq("albums.id", id)
         .join("albums", "albums.artist_id = artists.id")
         .execute_first(&**db)
@@ -239,12 +200,6 @@ pub async fn get_artists_by_album_ids(
 ) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
-        .columns(&[
-            "artists.*",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "api_sources"),
-        ])
         .distinct()
         .join("albums", "albums.artist_id = artists.id")
         .where_in("album.id", album_ids.to_vec())
@@ -262,12 +217,6 @@ pub async fn get_album_artist(
 ) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
     Ok(db
         .select("artists")
-        .columns(&[
-            "artists.*",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "api_sources"),
-        ])
         .join("albums", "albums.artist_id=artists.id")
         .where_eq("albums.id", album_id)
         .execute_first(&**db)
@@ -289,12 +238,7 @@ pub async fn get_album(
         .columns(&[
             "albums.*",
             "artists.title as artist",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "albums")
-                .replace("{name}", "api_sources"),
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "artist_api_sources"),
+            "artists.api_sources as artist_api_sources",
         ])
         .where_eq(format!("albums.{column}"), id)
         .join("artists", "artists.id = albums.artist_id")
@@ -329,15 +273,8 @@ pub async fn get_album_tracks(
             "track_sizes.overall_bitrate",
             "track_sizes.sample_rate",
             "track_sizes.channels",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "tracks")
-                .replace("{name}", "api_sources"),
-            &API_SOURCES_COLUMN
-                .replace("{table}", "albums")
-                .replace("{name}", "album_api_sources"),
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "artist_api_sources"),
+            "albums.api_sources as album_api_sources",
+            "artists.api_sources as artist_api_sources",
         ])
         .where_eq("tracks.album_id", album_id)
         .join("albums", "albums.id=tracks.album_id")
@@ -370,12 +307,7 @@ pub async fn get_artist_albums(
             "artists.title as artist",
             "tracks.format",
             "tracks.source",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "albums")
-                .replace("{name}", "api_sources"),
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "artist_api_sources"),
+            "artists.api_sources as artist_api_sources",
         ])
         .left_join("tracks", "tracks.album_id=albums.id")
         .left_join("track_sizes", "track_sizes.track_id=tracks.id")
@@ -554,15 +486,8 @@ pub async fn get_tracks(
             "track_sizes.overall_bitrate",
             "track_sizes.sample_rate",
             "track_sizes.channels",
-            &API_SOURCES_COLUMN
-                .replace("{table}", "tracks")
-                .replace("{name}", "api_sources"),
-            &API_SOURCES_COLUMN
-                .replace("{table}", "albums")
-                .replace("{name}", "album_api_sources"),
-            &API_SOURCES_COLUMN
-                .replace("{table}", "artists")
-                .replace("{name}", "artist_api_sources"),
+            "albums.api_sources as album_api_sources",
+            "artists.api_sources as artist_api_sources",
         ])
         .filter_if_some(ids.map(|ids| where_in("tracks.id", ids.to_vec())))
         .join("albums", "albums.id=tracks.album_id")
@@ -903,13 +828,31 @@ pub struct InsertApiSource {
     pub source_id: String,
 }
 
+pub struct ApiSourceMapping {
+    pub entity_type: String,
+    pub entity_id: u64,
+    pub source: String,
+    pub source_id: String,
+}
+
+impl ToValueType<ApiSourceMapping> for &switchy_database::Row {
+    fn to_value_type(self) -> Result<ApiSourceMapping, ParseError> {
+        Ok(ApiSourceMapping {
+            entity_type: self.to_value("entity_type")?,
+            entity_id: self.to_value("entity_id")?,
+            source: self.to_value("source")?,
+            source_id: self.to_value("source_id")?,
+        })
+    }
+}
+
 /// # Errors
 ///
 /// * If there was a database error
 pub async fn add_api_sources(
     db: &LibraryDatabase,
     api_sources: Vec<InsertApiSource>,
-) -> Result<Vec<LibraryTrack>, DatabaseFetchError> {
+) -> Result<Vec<ApiSourceMapping>, DatabaseFetchError> {
     let values = api_sources
         .iter()
         .map(|insert| {
@@ -936,4 +879,40 @@ pub async fn add_api_sources(
         .execute(&**db)
         .await?
         .to_value_type()?)
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct UpdateApiSource {
+    pub entity_id: u64,
+    pub source: String,
+    pub source_id: String,
+}
+
+/// # Errors
+///
+/// * If there was a database error
+pub async fn update_api_sources(
+    db: &LibraryDatabase,
+    table: &str,
+) -> Result<Vec<Row>, DatabaseFetchError> {
+    Ok(db
+        .update(table)
+        .value(
+            "api_sources",
+            Box::new(
+                select("api_sources")
+                    .columns(&["\
+                    json_group_array(
+                        json_object(
+                           'id', api_sources.source_id,
+                           'source', api_sources.source
+                        )
+                    )\
+                    "])
+                    .where_eq("api_sources.entity_type", table)
+                    .where_eq("api_sources.entity_id", identifier(&format!("{table}.id"))),
+            ) as Box<dyn switchy_database::query::Expression>,
+        )
+        .execute(&**db)
+        .await?)
 }

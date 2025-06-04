@@ -11,7 +11,7 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [package.metadata.cargo-machete]
-ignored = ["strum"]
+ignored = ["strum", "switchy_database_connection"]
 
 [dependencies]
 moosicbox_assert       = { workspace = true }
@@ -50,6 +50,17 @@ strum_macros = { workspace = true }
 thiserror    = { workspace = true }
 tokio        = { workspace = true, features = ["macros", "tracing"] }
 tokio-util   = { workspace = true }
+
+[dev-dependencies]
+moosicbox_schema = { workspace = true, features = ["sqlite"] }
+paste = { workspace = true }
+pretty_assertions = { workspace = true }
+switchy = { workspace = true, features = ["database-connection-sqlite-sqlx"] }
+switchy_database_connection = { workspace = true, features = [
+    "sqlite-rusqlite",
+    "sqlite-sqlx",
+] }
+test-log = { workspace = true }
 
 [features]
 default = ["all-formats", "api", "local", "openapi"]

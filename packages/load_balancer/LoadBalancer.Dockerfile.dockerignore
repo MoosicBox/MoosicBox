@@ -33,6 +33,7 @@
 !/packages/random
 !/packages/resampler
 !/packages/scan
+!/packages/schema
 !/packages/search
 !/packages/session
 !/packages/simvar
