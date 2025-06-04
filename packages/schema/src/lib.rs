@@ -53,17 +53,36 @@ pub async fn migrate_config(db: &dyn Database) -> Result<(), MigrateError> {
 /// * If the migrations fail to run
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub async fn migrate_library(db: &dyn Database) -> Result<(), MigrateError> {
+    migrate_library_until(db, None).await
+}
+
+/// # Panics
+///
+/// * If the db connection fails to establish
+///
+/// # Errors
+///
+/// * If the migrations fail to run
+#[cfg(any(feature = "postgres", feature = "sqlite"))]
+pub async fn migrate_library_until(
+    db: &dyn Database,
+    migration_name: Option<&str>,
+) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
     {
         log::debug!("migrate_library: running postgres migrations");
-        POSTGRES_LIBRARY_MIGRATIONS.run(db).await?;
+        POSTGRES_LIBRARY_MIGRATIONS
+            .run_until(db, migration_name)
+            .await?;
         log::debug!("migrate_library: finished running postgres migrations");
     }
 
     #[cfg(feature = "sqlite")]
     {
         log::debug!("migrate_library: running sqlite migrations");
-        SQLITE_LIBRARY_MIGRATIONS.run(db).await?;
+        SQLITE_LIBRARY_MIGRATIONS
+            .run_until(db, migration_name)
+            .await?;
         log::debug!("migrate_library: finished running sqlite migrations");
     }
 
