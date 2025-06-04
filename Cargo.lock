@@ -7815,10 +7815,11 @@ dependencies = [
 name = "moosicbox_music_api_helpers"
 version = "0.1.1"
 dependencies = [
+ "async-trait",
  "log 0.4.27",
  "moosicbox_music_api",
  "moosicbox_scan",
- "switchy_database",
+ "switchy",
 ]
 
 [[package]]

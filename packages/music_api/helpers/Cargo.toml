@@ -13,14 +13,23 @@ version     = "0.1.1"
 [dependencies]
 moosicbox_music_api = { workspace = true }
 moosicbox_scan      = { workspace = true, optional = true }
-switchy_database    = { workspace = true }
+switchy             = { workspace = true, features = ["database"] }
 
-log = { workspace = true }
+async-trait = { workspace = true }
+log         = { workspace = true }
 
 [features]
-default = ["auth", "scan"]
+default = ["auth", "auth-poll", "auth-username-password", "scan"]
 
 fail-on-warnings = []
 
 auth = []
+auth-poll = [
+    "auth",
+    "switchy/async-macros",
+    "switchy/async-time",
+    "switchy/async-tokio",
+]
+auth-username-password = ["auth"]
+
 scan = ["dep:moosicbox_scan"]
