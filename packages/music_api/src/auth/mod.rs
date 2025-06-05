@@ -233,6 +233,30 @@ impl ApiAuth {
 
         Ok(false)
     }
+
+    #[cfg(feature = "auth-poll")]
+    #[must_use]
+    pub fn as_poll(&self) -> Option<&poll::PollAuth> {
+        <Self as AuthExt>::as_poll(self)
+    }
+
+    #[cfg(feature = "auth-poll")]
+    #[must_use]
+    pub fn into_poll(self) -> Option<poll::PollAuth> {
+        <Self as AuthExt>::into_poll(self)
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[must_use]
+    pub fn as_username_password(&self) -> Option<&username_password::UsernamePasswordAuth> {
+        <Self as AuthExt>::as_username_password(self)
+    }
+
+    #[cfg(feature = "auth-username-password")]
+    #[must_use]
+    pub fn into_username_password(self) -> Option<username_password::UsernamePasswordAuth> {
+        <Self as AuthExt>::into_username_password(self)
+    }
 }
 
 impl AuthExt for ApiAuth {
