@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.173.0
-        version: 3.173.0(typescript@5.8.3)
+        specifier: ^3.174.0
+        version: 3.174.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -310,9 +310,9 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.173.0':
-    resolution: {integrity: sha512-/qvSyYaNBV8RpB+B24H2CqF7DA+OHzUqMa/NUJWmCE41UNHPlscFgNMfR0EV7IKqH0woKtzA3DOloBZfPjINVg==}
-    engines: {node: '>=18'}
+  '@pulumi/pulumi@3.174.0':
+    resolution: {integrity: sha512-NgkY96JE/0304nvOdktd4B2s3KVBxvV6AuSzTnjFxG52W/M8kk0MFEHR4oD2feM7TpO4XGMUwu5X980SrlG9UQ==}
+    engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
       typescript: '>= 3.8.3 < 6'
@@ -2842,7 +2842,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.173.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.174.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.4
       '@logdna/tail-file': 2.2.0
