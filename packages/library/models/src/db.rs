@@ -95,7 +95,7 @@ impl ToValueType<LibraryAlbum> for &switchy_database::Row {
         let album_type: Option<LibraryAlbumType> = self.to_value("album_type")?;
 
         let api_sources: ApiSources = self.to_value("api_sources")?;
-        let artist_api_sources: ApiSources = self.to_value("artist_api_sources")?;
+        let artist_api_sources: Option<ApiSources> = self.to_value("artist_api_sources")?;
 
         let id = self.to_value("id")?;
         let artist_id = self.to_value("artist_id")?;
@@ -114,7 +114,9 @@ impl ToValueType<LibraryAlbum> for &switchy_database::Row {
             blur: self.to_value("blur")?,
             versions: vec![],
             album_sources: api_sources.with_source(ApiSource::library(), id.into()),
-            artist_sources: artist_api_sources.with_source(ApiSource::library(), artist_id.into()),
+            artist_sources: artist_api_sources
+                .unwrap_or_default()
+                .with_source(ApiSource::library(), artist_id.into()),
         })
     }
 }

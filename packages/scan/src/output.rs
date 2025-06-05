@@ -715,8 +715,8 @@ impl ScanOutput {
                 artist.id.as_ref().map(|id| InsertApiSource {
                     entity_type: "artists".to_string(),
                     entity_id: db.id,
-                    source: id.to_string(),
-                    source_id: artist.api_source.to_string(),
+                    source: artist.api_source.to_string(),
+                    source_id: id.to_string(),
                 })
             })
             .chain(
@@ -727,8 +727,8 @@ impl ScanOutput {
                         album.id.as_ref().map(|id| InsertApiSource {
                             entity_type: "albums".to_string(),
                             entity_id: db.id,
-                            source: id.to_string(),
-                            source_id: album.api_source.to_string(),
+                            source: album.api_source.to_string(),
+                            source_id: id.to_string(),
                         })
                     }),
             )
@@ -740,8 +740,8 @@ impl ScanOutput {
                         track.id.as_ref().map(|id| InsertApiSource {
                             entity_type: "tracks".to_string(),
                             entity_id: db.id,
-                            source: id.to_string(),
-                            source_id: track.api_source.to_string(),
+                            source: track.api_source.to_string(),
+                            source_id: id.to_string(),
                         })
                     }),
             )
@@ -904,7 +904,8 @@ impl Default for ScanOutput {
 #[cfg(test)]
 mod test {
     use moosicbox_json_utils::ToValueType;
-    use moosicbox_music_models::{ApiSources, id::ApiId};
+    use moosicbox_library::models::LibraryAlbumType;
+    use moosicbox_music_models::{AlbumSource, ApiSources, id::ApiId};
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -1173,4 +1174,165 @@ mod test {
     test_update_api_sources!(rusqlite, {
         switchy::database_connection::init_sqlite_rusqlite(None).unwrap()
     });
+
+    #[test_log::test(tokio::test)]
+    async fn can_scan_singe_artist_with_single_album_with_single_track() {
+        static API_SOURCE: LazyLock<ApiSource> =
+            LazyLock::new(|| ApiSource::register("MockApi", "MockApi"));
+
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let api_source = API_SOURCE.clone();
+
+        let name = "artist1";
+        let id = "1".into();
+
+        let artist = output
+            .add_artist(name, &Some(&id), api_source.clone())
+            .await;
+
+        let name = "album1";
+        let id = "1".into();
+        let date_released = "2022-01-01".to_string();
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                name,
+                &Some(date_released),
+                None,
+                &Some(&id),
+                api_source.clone(),
+            )
+            .await;
+
+        let name = "track1";
+        let id = "1".into();
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source.clone().into(),
+                &Some(&id),
+                api_source.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let artists: Vec<LibraryArtist> = db
+            .select("artists")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let albums: Vec<LibraryAlbum> = db
+            .select("albums")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let tracks: Vec<LibraryTrack> = db
+            .select("tracks")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        assert_eq!(
+            artists,
+            vec![LibraryArtist {
+                id: 1,
+                title: "artist1".to_string(),
+                cover: None,
+                api_sources: ApiSources::default()
+                    .with_source(ApiSource::library(), 1.into())
+                    .with_source(api_source.clone(), "1".into()),
+            }]
+        );
+
+        assert_eq!(
+            albums,
+            vec![LibraryAlbum {
+                id: 1,
+                title: "album1".to_string(),
+                artist: String::new(),
+                artist_id: 1,
+                album_type: LibraryAlbumType::default(),
+                date_released: Some("2022-01-01".to_string()),
+                date_added: albums.first().and_then(|x| x.date_added.clone()),
+                artwork: None,
+                directory: None,
+                source: AlbumSource::Local,
+                blur: false,
+                versions: vec![],
+                album_sources: ApiSources::default()
+                    .with_source(ApiSource::library(), 1.into())
+                    .with_source(api_source.clone(), "1".into()),
+                artist_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+            }]
+        );
+
+        assert_eq!(
+            tracks,
+            vec![LibraryTrack {
+                id: 1,
+                number: 1,
+                title: "track1".to_string(),
+                duration: 10.0,
+                album: String::new(),
+                album_id: 1,
+                album_type: LibraryAlbumType::default(),
+                date_released: None,
+                date_added: None,
+                artist: String::new(),
+                artist_id: 0,
+                file: None,
+                artwork: None,
+                blur: false,
+                bytes: 0,
+                format: Some(AudioFormat::Source),
+                bit_depth: None,
+                audio_bitrate: None,
+                overall_bitrate: None,
+                sample_rate: None,
+                channels: None,
+                source: TrackApiSource::Api(api_source.clone()),
+                api_source: ApiSource::library(),
+                api_sources: ApiSources::default()
+                    .with_source(ApiSource::library(), 1.into())
+                    .with_source(api_source.clone(), "1".into()),
+            }]
+        );
+    }
 }
