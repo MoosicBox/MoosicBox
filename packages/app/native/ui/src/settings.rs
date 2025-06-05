@@ -2,7 +2,7 @@
 
 use hyperchad::transformer_models::{AlignItems, JustifyContent, LayoutDirection, TextAlign};
 use maud::{Markup, html};
-use moosicbox_app_models::{Connection, MusicApiSettings};
+use moosicbox_app_models::{AuthMethod, Connection, MusicApiSettings};
 use strum::{AsRefStr, EnumString};
 
 use crate::{formatting::classify_name, page, pre_escaped, state::State};
@@ -104,10 +104,10 @@ pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
                     @if settings.supports_scan {
                         @if settings.scan_enabled {
                             button
+                                type="button"
                                 hx-post={(pre_escaped!("/music-api/scan?apiSource="))(settings.id)}
                                 hx-swap={"#"(id)}
                                 id="run-scan-button"
-                                type="button"
                                 sx-border-radius=(5)
                                 sx-background="#111"
                                 sx-border="2, #222"
@@ -118,10 +118,10 @@ pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
                             }
                         } @else {
                             button
+                                type="button"
                                 hx-post={(pre_escaped!("/music-api/enable-scan-origin?apiSource="))(settings.id)}
                                 hx-swap={"#"(id)}
                                 id="run-scan-button"
-                                type="button"
                                 sx-border-radius=(5)
                                 sx-background="#111"
                                 sx-border="2, #222"
@@ -135,19 +135,42 @@ pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
                     }
                 }
             } @else {
-                button
+                form
                     hx-post={(pre_escaped!("/music-api/auth?apiSource="))(settings.id)}
                     hx-swap={"#"(id)}
-                    type="button"
-                    sx-border-radius=(5)
-                    sx-background="#111"
-                    sx-border="2, #222"
-                    sx-padding-x=(10)
-                    sx-padding-y=(5)
                 {
-                    "Start web authentication"
+                    @match &settings.auth {
+                        AuthMethod::UsernamePassword => {
+                            input type="hidden" name="type" value="username-password";
+                            input type="text" name="username" placeholder="Username";
+                            input type="password" name="password" placeholder="Password";
+                            button
+                                type="submit"
+                                sx-border-radius=(5)
+                                sx-background="#111"
+                                sx-border="2, #222"
+                                sx-padding-x=(10)
+                                sx-padding-y=(5)
+                            {
+                                "Login"
+                            }
+                        }
+                        AuthMethod::Poll => {
+                            input type="hidden" name="type" value="poll";
+                            button
+                                type="submit"
+                                sx-border-radius=(5)
+                                sx-background="#111"
+                                sx-border="2, #222"
+                                sx-padding-x=(10)
+                                sx-padding-y=(5)
+                            {
+                                "Start web authentication"
+                            }
+                        }
+                    }
+                    (auth_error_message(&settings.id, None))
                 }
-                (auth_error_message(&settings.id, None))
             }
         }
     }

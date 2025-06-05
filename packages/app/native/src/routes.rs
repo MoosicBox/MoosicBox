@@ -11,7 +11,7 @@ use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_downloader::api::models::ApiDownloadTask;
 use moosicbox_music_api::{SourceToMusicApi as _, profiles::PROFILES};
-use moosicbox_music_api_api::models::ApiMusicApi;
+use moosicbox_music_api_api::models::{ApiMusicApi, AuthValues};
 use moosicbox_music_models::{
     AlbumSort, AlbumType, ApiSource, TrackApiSource, TryFromStringTrackApiSourceError,
     api::{ApiAlbum, ApiArtist},
@@ -34,6 +34,8 @@ pub enum RouteError {
     MissingConnection,
     #[error("Failed to parse markup")]
     ParseMarkup,
+    #[error("Failed to parse body")]
+    ParseBody(#[from] hyperchad::router::ParseError),
     #[error(transparent)]
     StrumParse(#[from] strum::ParseError),
     #[error(transparent)]
@@ -844,6 +846,9 @@ pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Con
 }
 
 pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteError> {
+    let auth_values = req.parse_form::<AuthValues>()?;
+
+    log::debug!("music_api_auth_route: auth_type={auth_values:#?}");
     let Some(api_source) = req.query.get("apiSource") else {
         return Err(RouteError::MissingQueryParam("apiSource"));
     };
@@ -860,6 +865,7 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
             .post(&format!(
                 "{host}/music-api/auth?apiSource={api_source}&moosicboxProfile={PROFILE}"
             ))
+            .form(&auth_values)
             .send()
             .await
             .inspect(|x| {

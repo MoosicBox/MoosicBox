@@ -16,11 +16,13 @@ pub struct ApiMusicApi {
 pub async fn convert_to_api_music_api(
     api: &dyn MusicApi,
 ) -> Result<ApiMusicApi, moosicbox_music_api::Error> {
+    let auth = api.auth();
     Ok(ApiMusicApi {
         id: api.source().to_string(),
         name: api.source().to_string_display(),
-        logged_in: if api.supports_authentication() {
-            api.is_logged_in().await?
+        supports_authentication: auth.is_some(),
+        logged_in: if let Some(auth) = auth {
+            auth.is_logged_in().await?
         } else {
             false
         },
@@ -30,6 +32,14 @@ pub async fn convert_to_api_music_api(
         } else {
             false
         },
-        supports_authentication: api.supports_authentication(),
     })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum AuthValues {
+    UsernamePassword { username: String, password: String },
+    Poll,
 }

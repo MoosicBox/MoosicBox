@@ -1,17 +1,17 @@
 use actix_web::{
     Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
-    error::{ErrorInternalServerError, ErrorNotFound},
+    error::{ErrorBadRequest, ErrorInternalServerError, ErrorNotFound},
     route,
     web::{self, Json},
 };
-use moosicbox_music_api::{MusicApis, SourceToMusicApi as _};
+use moosicbox_music_api::{MusicApis, SourceToMusicApi as _, auth::AuthExt as _};
 use moosicbox_music_models::ApiSource;
 use moosicbox_paging::Page;
 use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;
 
-use crate::models::{ApiMusicApi, convert_to_api_music_api};
+use crate::models::{ApiMusicApi, AuthValues, convert_to_api_music_api};
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -130,16 +130,35 @@ pub struct AuthMusicApi {
 #[route("/auth", method = "POST")]
 pub async fn auth_music_api_endpoint(
     query: web::Query<AuthMusicApi>,
+    form: web::Form<AuthValues>,
     music_apis: MusicApis,
 ) -> Result<Json<ApiMusicApi>> {
     let music_api = music_apis
         .get(&query.api_source)
         .ok_or_else(|| ErrorNotFound(format!("MusicApi '{}' not found", query.api_source)))?;
 
-    music_api
-        .authenticate()
-        .await
-        .map_err(ErrorInternalServerError)?;
+    match form.0 {
+        AuthValues::UsernamePassword { username, password } => {
+            music_api
+                .auth()
+                .cloned()
+                .and_then(|x| x.into_username_password())
+                .ok_or_else(|| ErrorBadRequest("Auth not supported"))?
+                .login(username, password)
+                .await
+                .map_err(ErrorInternalServerError)?;
+        }
+        AuthValues::Poll => {
+            music_api
+                .auth()
+                .cloned()
+                .and_then(|x| x.into_poll())
+                .ok_or_else(|| ErrorBadRequest("Auth not supported"))?
+                .login()
+                .await
+                .map_err(ErrorInternalServerError)?;
+        }
+    }
 
     Ok(Json(
         convert_to_api_music_api(&**music_api)

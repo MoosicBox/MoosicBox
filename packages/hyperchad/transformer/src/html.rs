@@ -1501,6 +1501,14 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                             },
                         }
                     }
+                    Some("hidden") => {
+                        container.element = crate::Element::Input {
+                            name: get_tag_attr_value_owned(tag, "name"),
+                            input: crate::Input::Hidden {
+                                value: get_tag_attr_value_owned(tag, "value"),
+                            },
+                        }
+                    }
                     Some(_) | None => {
                         return None;
                     }

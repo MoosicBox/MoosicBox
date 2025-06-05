@@ -3441,6 +3441,9 @@ pub enum Input {
         value: Option<String>,
         placeholder: Option<String>,
     },
+    Hidden {
+        value: Option<String>,
+    },
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
@@ -3469,6 +3472,13 @@ impl Input {
                     .with_attr_opt("placeholder", placeholder.to_owned());
                 f.write_fmt(format_args!(
                     "<input type=\"password\"{attrs} />",
+                    attrs = attrs.to_string_pad_left(),
+                ))?;
+            }
+            Self::Hidden { value } => {
+                let attrs = attrs.with_attr_opt("value", value.to_owned());
+                f.write_fmt(format_args!(
+                    "<input type=\"hidden\"{attrs} />",
                     attrs = attrs.to_string_pad_left(),
                 ))?;
             }
@@ -3504,6 +3514,13 @@ impl std::fmt::Display for Input {
                     .with_attr_opt("placeholder", placeholder.to_owned());
                 f.write_fmt(format_args!(
                     "<input type=\"password\"{attrs} />",
+                    attrs = attrs.to_string_pad_left(),
+                ))
+            }
+            Self::Hidden { value } => {
+                let attrs = Attrs::new().with_attr_opt("value", value.to_owned());
+                f.write_fmt(format_args!(
+                    "<input type=\"hidden\"{attrs} />",
                     attrs = attrs.to_string_pad_left(),
                 ))
             }

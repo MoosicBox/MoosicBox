@@ -1,13 +1,18 @@
 use std::time::Duration;
 
-use async_trait::async_trait;
-use switchy::unsync::futures::FutureExt as _;
+use switchy_async::futures::FutureExt as _;
 
 use super::Auth;
 
 #[derive(Debug, Clone)]
 pub struct PollAuth {
     timeout: Duration,
+}
+
+impl From<PollAuth> for Auth {
+    fn from(value: PollAuth) -> Self {
+        Self::Poll(value)
+    }
 }
 
 impl Default for PollAuth {
@@ -75,14 +80,16 @@ impl PollAuth {
     }
 }
 
-#[async_trait]
-impl Auth for PollAuth {
-    async fn login(&self) -> Result<bool, Box<dyn std::error::Error>> {
-        switchy::unsync::select! {
+impl PollAuth {
+    /// # Errors
+    ///
+    /// * If the poll auth fails
+    pub async fn login(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        switchy_async::select! {
             success = self.poll().fuse() => {
                 Ok(success?)
             },
-            () = switchy::unsync::time::sleep(self.timeout) => {
+            () = switchy_async::time::sleep(self.timeout) => {
                 Ok(false)
             }
         }

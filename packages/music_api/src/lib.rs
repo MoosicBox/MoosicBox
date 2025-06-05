@@ -6,6 +6,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_trait::async_trait;
+use auth::ApiAuth;
 use models::{
     AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
     ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
@@ -17,6 +18,7 @@ use moosicbox_music_models::{Album, AlbumType, ApiSource, Artist, PlaybackQualit
 use moosicbox_paging::PagingResult;
 use tokio::sync::{Mutex, RwLock};
 
+pub mod auth;
 pub mod profiles;
 
 #[derive(Clone)]
@@ -291,8 +293,8 @@ pub trait MusicApi: Send + Sync {
         Err(Error::UnsupportedAction("scan"))
     }
 
-    async fn authenticate(&self) -> Result<(), Error> {
-        Err(Error::UnsupportedAction("authenticate"))
+    fn auth(&self) -> Option<&ApiAuth> {
+        None
     }
 
     async fn scan_enabled(&self) -> Result<bool, Error> {
@@ -300,10 +302,6 @@ pub trait MusicApi: Send + Sync {
     }
 
     fn supports_scan(&self) -> bool {
-        false
-    }
-
-    fn supports_authentication(&self) -> bool {
         false
     }
 
@@ -836,12 +834,8 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         self.inner.scan().await
     }
 
-    fn supports_authentication(&self) -> bool {
-        self.inner.supports_authentication()
-    }
-
-    async fn authenticate(&self) -> Result<(), Error> {
-        self.inner.authenticate().await
+    fn auth(&self) -> Option<&ApiAuth> {
+        self.inner.auth()
     }
 
     async fn is_logged_in(&self) -> Result<bool, Error> {

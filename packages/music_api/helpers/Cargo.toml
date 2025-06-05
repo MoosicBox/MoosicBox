@@ -15,21 +15,11 @@ moosicbox_music_api = { workspace = true }
 moosicbox_scan      = { workspace = true, optional = true }
 switchy             = { workspace = true, features = ["database"] }
 
-async-trait = { workspace = true }
-log         = { workspace = true }
+log = { workspace = true }
 
 [features]
-default = ["auth", "auth-poll", "auth-username-password", "scan"]
+default = ["scan"]
 
 fail-on-warnings = []
-
-auth = []
-auth-poll = [
-    "auth",
-    "switchy/async-macros",
-    "switchy/async-time",
-    "switchy/async-tokio",
-]
-auth-username-password = ["auth"]
 
 scan = ["dep:moosicbox_scan"]

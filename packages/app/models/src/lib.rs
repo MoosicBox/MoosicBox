@@ -17,7 +17,14 @@ impl AsRef<Self> for Connection {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)]
+pub enum AuthMethod {
+    UsernamePassword,
+    Poll,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicApiSettings {
     pub id: String,
@@ -27,7 +34,7 @@ pub struct MusicApiSettings {
     pub supports_scan: bool,
     pub scan_enabled: bool,
     pub run_scan_endpoint: Option<String>,
-    pub auth_endpoint: Option<String>,
+    pub auth: AuthMethod,
 }
 
 impl AsRef<Self> for MusicApiSettings {
@@ -40,21 +47,19 @@ impl AsRef<Self> for MusicApiSettings {
 pub mod music_api_api {
     use moosicbox_music_api_api::models::ApiMusicApi;
 
-    use crate::MusicApiSettings;
+    use crate::{AuthMethod, MusicApiSettings};
 
     impl From<ApiMusicApi> for MusicApiSettings {
         fn from(value: ApiMusicApi) -> Self {
             Self {
-                logged_in: value.logged_in,
+                logged_in: false,//value.logged_in,
                 supports_scan: value.supports_scan,
                 scan_enabled: value.scan_enabled,
                 run_scan_endpoint: value
                     .supports_scan
                     .then(|| format!("/music-api/scan?apiSource={}", value.name)),
                 supports_authentication: value.supports_authentication,
-                auth_endpoint: value
-                    .supports_authentication
-                    .then(|| format!("/music-api/auth?apiSource={}", value.name)),
+                auth: AuthMethod::UsernamePassword,
                 name: value.name,
                 id: value.id,
             }

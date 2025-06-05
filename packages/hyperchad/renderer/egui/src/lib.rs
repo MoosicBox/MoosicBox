@@ -3308,13 +3308,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
 
         let response = match &element.element {
-            Element::Input { input, .. } => Some(Self::render_input(
-                element,
-                ui,
-                ctx,
-                input,
-                render_context.checkboxes,
-            )),
+            Element::Input { input, .. } => {
+                Self::render_input(element, ui, ctx, input, render_context.checkboxes)
+            }
             Element::Raw { value } => Some(
                 ui.label(
                     egui::RichText::new(value).size(
@@ -3366,12 +3362,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         ctx: &egui::Context,
         input: &Input,
         checkboxes: &mut HashMap<egui::Id, bool>,
-    ) -> Response {
+    ) -> Option<Response> {
         match input {
             Input::Text { .. } | Input::Password { .. } => {
-                Self::render_text_input(container, ui, ctx, input)
+                Some(Self::render_text_input(container, ui, ctx, input))
             }
-            Input::Checkbox { .. } => Self::render_checkbox_input(ui, input, checkboxes),
+            Input::Checkbox { .. } => Some(Self::render_checkbox_input(ui, input, checkboxes)),
+            Input::Hidden { .. } => None,
         }
     }
 

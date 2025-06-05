@@ -19,6 +19,7 @@ moosicbox_music_api_models = { workspace = true }
 moosicbox_music_models     = { workspace = true }
 moosicbox_paging           = { workspace = true }
 moosicbox_profiles         = { workspace = true }
+switchy_async              = { workspace = true, optional = true }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -35,10 +36,21 @@ test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["api", "openapi"]
+default = ["all-auth", "api", "openapi"]
 
 fail-on-warnings = []
 
 openapi = ["moosicbox_music_api_models/openapi"]
 
 api = ["dep:actix-web", "moosicbox_profiles/api"]
+
+_auth = []
+all-auth = ["auth-poll", "auth-username-password"]
+auth-poll = [
+    "_auth",
+    "dep:switchy_async",
+    "switchy_async/macros",
+    "switchy_async/time",
+    "switchy_async/tokio",
+]
+auth-username-password = ["_auth"]

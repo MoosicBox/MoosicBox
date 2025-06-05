@@ -2,31 +2,15 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-#[cfg(feature = "api")]
-pub mod api;
-#[cfg(feature = "db")]
-pub mod db;
-
-pub mod models;
-
 use std::{
     fmt::Display,
     str::FromStr as _,
     sync::{Arc, LazyLock},
 };
 
-use models::{YtAlbum, YtArtist, YtSearchResults, YtTrack};
-use moosicbox_music_api_helpers::{
-    ApiAuth,
-    auth::{Auth as _, username_password::UsernamePasswordAuth},
-};
-#[cfg(feature = "db")]
-use switchy_database::DatabaseError;
-#[cfg(feature = "db")]
-use switchy_database::profiles::LibraryDatabase;
-
 use async_recursion::async_recursion;
 use async_trait::async_trait;
+use models::{YtAlbum, YtArtist, YtSearchResults, YtTrack};
 use moosicbox_files::get_content_length;
 use moosicbox_json_utils::{
     MissingValue, ParseError, ToValueType, database::AsModelResult as _, serde_json::ToValue,
@@ -34,6 +18,7 @@ use moosicbox_json_utils::{
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     MusicApi, TrackOrId,
+    auth::{ApiAuth, username_password::UsernamePasswordAuth},
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         TrackAudioQuality, TrackOrder, TrackOrderDirection, TrackSource,
@@ -48,6 +33,18 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use tokio::sync::Mutex;
 use url::form_urlencoded;
+
+#[cfg(feature = "db")]
+use switchy_database::DatabaseError;
+#[cfg(feature = "db")]
+use switchy_database::profiles::LibraryDatabase;
+
+#[cfg(feature = "api")]
+pub mod api;
+#[cfg(feature = "db")]
+pub mod db;
+
+pub mod models;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -2106,7 +2103,7 @@ impl YtMusicApiBuilder {
 pub struct YtMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
-    auth: ApiAuth<UsernamePasswordAuth>,
+    auth: ApiAuth,
 }
 
 impl YtMusicApi {
@@ -2586,25 +2583,7 @@ impl MusicApi for YtMusicApi {
         moosicbox_music_api_helpers::scan::scan(self, &self.db).await
     }
 
-    fn supports_authentication(&self) -> bool {
-        true
-    }
-
-    async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
-        self.auth.login().await.map_err(|e| {
-            log::error!("Failed to authenticate: {e:?}");
-            moosicbox_music_api::Error::Unauthorized
-        })?;
-        Ok(())
-    }
-
-    async fn is_logged_in(&self) -> Result<bool, moosicbox_music_api::Error> {
-        let logged_in = self.auth.is_logged_in();
-        log::debug!("is_logged_in={logged_in}");
-        Ok(logged_in)
-    }
-
-    async fn logout(&self) -> Result<(), moosicbox_music_api::Error> {
-        Ok(())
+    fn auth(&self) -> Option<&ApiAuth> {
+        Some(&self.auth)
     }
 }

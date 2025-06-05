@@ -13,10 +13,6 @@ use std::sync::{Arc, LazyLock};
 
 use itertools::Itertools as _;
 use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
-use moosicbox_music_api_helpers::{
-    ApiAuth,
-    auth::{Auth as _, poll::PollAuth},
-};
 #[cfg(feature = "db")]
 use switchy_database::DatabaseError;
 #[cfg(feature = "db")]
@@ -31,6 +27,7 @@ use moosicbox_json_utils::{
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     MusicApi, TrackOrId,
+    auth::{ApiAuth, poll::PollAuth},
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
@@ -2089,7 +2086,7 @@ impl TidalMusicApiBuilder {
 pub struct TidalMusicApi {
     #[cfg(feature = "db")]
     db: LibraryDatabase,
-    auth: ApiAuth<PollAuth>,
+    auth: ApiAuth,
 }
 
 impl TidalMusicApi {
@@ -2673,25 +2670,7 @@ impl MusicApi for TidalMusicApi {
         moosicbox_music_api_helpers::scan::scan(self, &self.db).await
     }
 
-    fn supports_authentication(&self) -> bool {
-        true
-    }
-
-    async fn authenticate(&self) -> Result<(), moosicbox_music_api::Error> {
-        self.auth.login().await.map_err(|e| {
-            log::error!("Failed to authenticate: {e:?}");
-            moosicbox_music_api::Error::Unauthorized
-        })?;
-        Ok(())
-    }
-
-    async fn is_logged_in(&self) -> Result<bool, moosicbox_music_api::Error> {
-        let logged_in = self.auth.is_logged_in();
-        log::debug!("is_logged_in={logged_in}");
-        Ok(logged_in)
-    }
-
-    async fn logout(&self) -> Result<(), moosicbox_music_api::Error> {
-        Ok(())
+    fn auth(&self) -> Option<&ApiAuth> {
+        Some(&self.auth)
     }
 }

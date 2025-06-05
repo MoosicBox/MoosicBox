@@ -907,6 +907,14 @@ pub fn element_to_html(
                         f.write_all(b"\"")?;
                     }
                 }
+                Input::Hidden { value } => {
+                    f.write_all(b" type=\"hidden\"")?;
+                    if let Some(value) = value {
+                        f.write_all(b" value=\"")?;
+                        f.write_all(value.as_bytes())?;
+                        f.write_all(b"\"")?;
+                    }
+                }
             }
 
             if let Some(name) = name {
