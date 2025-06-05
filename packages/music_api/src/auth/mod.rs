@@ -20,6 +20,15 @@ pub enum Auth {
     None,
 }
 
+impl<T> From<Option<T>> for Auth
+where
+    T: Into<Self>,
+{
+    fn from(value: Option<T>) -> Self {
+        value.map_or(Self::None, Into::into)
+    }
+}
+
 pub trait AuthExt {
     #[cfg(feature = "auth-poll")]
     fn as_poll(&self) -> Option<&poll::PollAuth>;
@@ -88,6 +97,13 @@ impl ApiAuthBuilder {
             auth: None,
             logged_in: None,
         }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn without_auth(mut self) -> Self {
+        self.auth = Some(Auth::None);
+        self
     }
 
     #[must_use]

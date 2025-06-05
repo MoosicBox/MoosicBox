@@ -1,4 +1,4 @@
-use moosicbox_music_api::MusicApi;
+use moosicbox_music_api::{MusicApi, auth::Auth};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -10,7 +10,7 @@ pub struct ApiMusicApi {
     pub logged_in: bool,
     pub supports_scan: bool,
     pub scan_enabled: bool,
-    pub supports_authentication: bool,
+    pub auth_method: Option<AuthMethod>,
 }
 
 pub async fn convert_to_api_music_api(
@@ -20,7 +20,7 @@ pub async fn convert_to_api_music_api(
     Ok(ApiMusicApi {
         id: api.source().to_string(),
         name: api.source().to_string_display(),
-        supports_authentication: auth.is_some(),
+        auth_method: auth.and_then(|x| auth_method(x)),
         logged_in: if let Some(auth) = auth {
             auth.is_logged_in().await?
         } else {
@@ -33,6 +33,24 @@ pub async fn convert_to_api_music_api(
             false
         },
     })
+}
+
+fn auth_method(value: &Auth) -> Option<AuthMethod> {
+    match value {
+        #[cfg(feature = "auth-username-password")]
+        Auth::UsernamePassword(..) => Some(AuthMethod::UsernamePassword),
+        #[cfg(feature = "auth-poll")]
+        Auth::Poll(..) => Some(AuthMethod::Poll),
+        Auth::None => None,
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum AuthMethod {
+    UsernamePassword,
+    Poll,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

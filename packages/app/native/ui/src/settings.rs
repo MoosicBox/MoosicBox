@@ -96,7 +96,7 @@ pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
         // FIXME: HTML encode settings.id
         @let id = format!("settings-{}", classify_name(&settings.id));
         div id=(id) {
-            @if !settings.supports_authentication || settings.logged_in {
+            @if settings.auth_method.is_none() || settings.logged_in {
                 div sx-gap=(10) {
                     @if settings.logged_in {
                         p { "Logged in!" }
@@ -134,12 +134,12 @@ pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
                         (scan_error_message(&settings.id, None))
                     }
                 }
-            } @else {
+            } @else if let Some(auth_method) = &settings.auth_method {
                 form
                     hx-post={(pre_escaped!("/music-api/auth?apiSource="))(settings.id)}
                     hx-swap={"#"(id)}
                 {
-                    @match &settings.auth {
+                    @match auth_method {
                         AuthMethod::UsernamePassword => {
                             input type="hidden" name="type" value="username-password";
                             input type="text" name="username" placeholder="Username";

@@ -28,6 +28,8 @@ default = ["api", "db", "openapi"]
 fail-on-warnings = []
 
 openapi = [
+    "auth-poll",
+    "auth-username-password",
     "dep:utoipa",
     "moosicbox_music_api/openapi",
     "moosicbox_music_models?/openapi",
@@ -36,3 +38,6 @@ openapi = [
 db = ["moosicbox_music_models?/db"]
 
 api = ["dep:futures", "moosicbox_music_models/api"]
+
+auth-poll              = ["moosicbox_music_api/auth-poll"]
+auth-username-password = ["moosicbox_music_api/auth-username-password"]

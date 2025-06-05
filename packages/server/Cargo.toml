@@ -319,9 +319,12 @@ upnp = ["dep:switchy_upnp", "player"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["dep:moosicbox_qobuz"]
-tidal = ["dep:moosicbox_tidal"]
-yt    = ["dep:moosicbox_yt"]
+qobuz = [
+    "dep:moosicbox_qobuz",
+    "moosicbox_music_api_api?/auth-username-password",
+]
+tidal = ["dep:moosicbox_tidal", "moosicbox_music_api_api?/auth-poll"]
+yt = ["dep:moosicbox_yt"]
 
 # APIs
 all-apis = ["app-apis", "player-api", "upnp-api"]

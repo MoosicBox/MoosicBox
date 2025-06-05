@@ -17,8 +17,11 @@ serde = { workspace = true }
 moosicbox_music_api_api = { workspace = true, optional = true }
 
 [features]
-default = ["music-api-api"]
+default = ["auth-poll", "auth-username-password", "music-api-api"]
 
 fail-on-warnings = []
 
 music-api-api = ["dep:moosicbox_music_api_api"]
+
+auth-poll              = ["moosicbox_music_api_api?/auth-poll"]
+auth-username-password = ["moosicbox_music_api_api?/auth-username-password"]

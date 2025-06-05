@@ -18,7 +18,7 @@ use moosicbox_json_utils::{
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{
     MusicApi, TrackOrId,
-    auth::{ApiAuth, username_password::UsernamePasswordAuth},
+    auth::ApiAuth,
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         TrackAudioQuality, TrackOrder, TrackOrderDirection, TrackSource,
@@ -2088,8 +2088,8 @@ impl YtMusicApiBuilder {
             .is_ok_and(|x| x.is_some());
 
         let auth = ApiAuth::builder()
+            .without_auth()
             .with_logged_in(logged_in)
-            .with_auth(UsernamePasswordAuth::new())
             .build();
 
         Ok(YtMusicApi {

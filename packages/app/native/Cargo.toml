@@ -211,9 +211,17 @@ format-opus = [
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["format-flac", "moosicbox_app_native_bundled?/qobuz"]
-tidal = ["format-flac", "moosicbox_app_native_bundled?/tidal"]
-yt    = ["format-flac", "moosicbox_app_native_bundled?/yt"]
+qobuz = [
+    "format-flac",
+    "moosicbox_app_native_bundled?/qobuz",
+    "moosicbox_music_api_api/auth-username-password",
+]
+tidal = [
+    "format-flac",
+    "moosicbox_app_native_bundled?/tidal",
+    "moosicbox_music_api_api/auth-poll",
+]
+yt = ["format-flac", "moosicbox_app_native_bundled?/yt"]
 
 assets        = ["hyperchad/renderer-assets"]
 static-routes = ["hyperchad/router-static-routes"]

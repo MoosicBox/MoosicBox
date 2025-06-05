@@ -1801,6 +1801,8 @@ pub enum QobuzConfigError {
     #[cfg(feature = "db")]
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    #[error(transparent)]
+    MusicApi(#[from] moosicbox_music_api::Error),
 }
 
 #[derive(Default)]
@@ -1840,7 +1842,32 @@ impl QobuzMusicApiBuilder {
 
         let auth = ApiAuth::builder()
             .with_logged_in(logged_in)
-            .with_auth(UsernamePasswordAuth::new())
+            .with_auth(
+                UsernamePasswordAuth::builder()
+                    .with_handler({
+                        #[cfg(feature = "db")]
+                        let db = db.clone();
+                        move |username, password| {
+                            #[cfg(feature = "db")]
+                            let db = db.clone();
+                            async move {
+                                user_login(
+                                    #[cfg(feature = "db")]
+                                    &db,
+                                    &username,
+                                    &password,
+                                    None,
+                                    #[cfg(feature = "db")]
+                                    Some(true),
+                                )
+                                .await
+                                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+                                Ok(true)
+                            }
+                        }
+                    })
+                    .build()?,
+            )
             .build();
 
         Ok(QobuzMusicApi {

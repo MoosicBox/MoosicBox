@@ -139,6 +139,10 @@ pub async fn auth_music_api_endpoint(
 
     match form.0 {
         AuthValues::UsernamePassword { username, password } => {
+            #[cfg(not(feature = "auth-username-password"))]
+            return Err(ErrorBadRequest("Auth not supported"));
+
+            #[cfg(feature = "auth-username-password")]
             music_api
                 .auth()
                 .cloned()
@@ -149,6 +153,10 @@ pub async fn auth_music_api_endpoint(
                 .map_err(ErrorInternalServerError)?;
         }
         AuthValues::Poll => {
+            #[cfg(not(feature = "auth-poll"))]
+            return Err(ErrorBadRequest("Auth not supported"));
+
+            #[cfg(feature = "auth-poll")]
             music_api
                 .auth()
                 .cloned()
