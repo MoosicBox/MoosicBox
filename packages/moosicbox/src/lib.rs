@@ -3,6 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 pub use moosicbox_admin_htmx as admin_htmx;
+pub use moosicbox_app_models as app_models;
 pub use moosicbox_app_native_ui as app_native_ui;
 pub use moosicbox_arb as arb;
 pub use moosicbox_assert as assert;

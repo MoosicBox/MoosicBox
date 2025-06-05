@@ -12,6 +12,7 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_admin_htmx        = { workspace = true }
+moosicbox_app_models        = { workspace = true }
 moosicbox_app_native_ui     = { workspace = true }
 moosicbox_arb               = { workspace = true }
 moosicbox_assert            = { workspace = true }
@@ -64,6 +65,10 @@ all-sources = ["qobuz", "tidal", "yt"]
 
 _flac = ["moosicbox_app_native_ui/flac"]
 
-qobuz = ["_flac", "dep:moosicbox_qobuz"]
-tidal = ["_flac", "dep:moosicbox_tidal"]
-yt    = ["_flac", "dep:moosicbox_yt"]
+qobuz = [
+    "_flac",
+    "dep:moosicbox_qobuz",
+    "moosicbox_app_models/auth-username-password",
+]
+tidal = ["_flac", "dep:moosicbox_tidal", "moosicbox_app_models/auth-poll"]
+yt = ["_flac", "dep:moosicbox_yt"]

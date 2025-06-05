@@ -11,9 +11,10 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [package.metadata.cargo-machete]
-ignored = ["strum", "thiserror"]
+ignored = ["moosicbox_app_models", "strum", "thiserror"]
 
 [dependencies]
+moosicbox_app_models    = { workspace = true, optional = true }
 moosicbox_assert        = { workspace = true }
 moosicbox_async_service = { workspace = true }
 moosicbox_config        = { workspace = true }
@@ -52,6 +53,14 @@ decoder-opus = ["moosicbox_server/decoder-opus"]
 
 all-sources = ["qobuz", "tidal", "yt"]
 
-qobuz = ["format-flac", "moosicbox_server/qobuz"]
-tidal = ["format-flac", "moosicbox_server/tidal"]
-yt    = ["format-flac", "moosicbox_server/yt"]
+qobuz = [
+    "format-flac",
+    "moosicbox_app_models/auth-username-password",
+    "moosicbox_server/qobuz",
+]
+tidal = [
+    "format-flac",
+    "moosicbox_app_models/auth-poll",
+    "moosicbox_server/tidal",
+]
+yt = ["format-flac", "moosicbox_server/yt"]

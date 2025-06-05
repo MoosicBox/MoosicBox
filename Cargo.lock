@@ -6950,6 +6950,7 @@ name = "moosicbox"
 version = "0.1.0"
 dependencies = [
  "moosicbox_admin_htmx",
+ "moosicbox_app_models",
  "moosicbox_app_native_ui",
  "moosicbox_arb",
  "moosicbox_assert",
@@ -7146,6 +7147,7 @@ name = "moosicbox_app_native_bundled"
 version = "0.1.1"
 dependencies = [
  "log 0.4.27",
+ "moosicbox_app_models",
  "moosicbox_assert",
  "moosicbox_async_service",
  "moosicbox_config",

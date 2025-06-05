@@ -22,9 +22,7 @@ moosicbox_json_utils = { workspace = true, features = [
     "serde_json",
 ] }
 moosicbox_menu_models = { workspace = true }
-moosicbox_music_api = { workspace = true, features = [
-    "auth-username-password",
-] }
+moosicbox_music_api = { workspace = true }
 moosicbox_music_api_helpers = { workspace = true }
 moosicbox_music_models = { workspace = true, features = ["flac"] }
 moosicbox_paging = { workspace = true }
