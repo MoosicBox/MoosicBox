@@ -1,5 +1,6 @@
 use std::{
     ops::{Deref, DerefMut},
+    pin::Pin,
     sync::{Arc, atomic::AtomicBool},
 };
 
@@ -78,10 +79,29 @@ impl AuthExt for Auth {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ApiAuthBuilder {
     auth: Option<Auth>,
     logged_in: Option<bool>,
+    validate_credentials: Option<
+        Arc<
+            dyn Fn() -> Pin<
+                    Box<
+                        dyn Future<Output = Result<bool, Box<dyn std::error::Error + Send>>> + Send,
+                    >,
+                > + Send
+                + Sync,
+        >,
+    >,
+}
+
+impl std::fmt::Debug for ApiAuthBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiAuthBuilder")
+            .field("auth", &self.auth)
+            .field("logged_in", &self.logged_in)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for ApiAuthBuilder {
@@ -96,6 +116,7 @@ impl ApiAuthBuilder {
         Self {
             auth: None,
             logged_in: None,
+            validate_credentials: None,
         }
     }
 
@@ -124,32 +145,60 @@ impl ApiAuthBuilder {
         self
     }
 
+    #[must_use]
+    pub fn with_validate_credentials<
+        Fut: Future<Output = Result<bool, Box<dyn std::error::Error + Send>>> + Send + 'static,
+        Func: Fn() -> Fut + Send + Sync + 'static,
+    >(
+        mut self,
+        validate_credentials: Func,
+    ) -> Self {
+        self.validate_credentials = Some(Arc::new(move || Box::pin(validate_credentials())));
+        self
+    }
+
     /// # Panics
     ///
     /// * If `auth` is `None`
     #[must_use]
     pub fn build(self) -> ApiAuth {
         let auth = self.auth.unwrap();
+        let logged_in = Arc::new(AtomicBool::new(self.logged_in.unwrap_or(false)));
 
-        ApiAuth::new(auth, self.logged_in.unwrap_or(false))
+        ApiAuth {
+            logged_in,
+            auth,
+            validate_credentials: self.validate_credentials,
+        }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ApiAuth {
     logged_in: Arc<AtomicBool>,
     auth: Auth,
+    validate_credentials: Option<
+        Arc<
+            dyn Fn() -> Pin<
+                    Box<
+                        dyn Future<Output = Result<bool, Box<dyn std::error::Error + Send>>> + Send,
+                    >,
+                > + Send
+                + Sync,
+        >,
+    >,
+}
+
+impl std::fmt::Debug for ApiAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiAuth")
+            .field("logged_in", &self.logged_in)
+            .field("auth", &self.auth)
+            .finish_non_exhaustive()
+    }
 }
 
 impl ApiAuth {
-    #[must_use]
-    pub fn new(auth: Auth, logged_in: bool) -> Self {
-        Self {
-            auth,
-            logged_in: Arc::new(AtomicBool::new(logged_in)),
-        }
-    }
-
     #[must_use]
     pub const fn builder() -> ApiAuthBuilder {
         ApiAuthBuilder::new()
@@ -166,6 +215,19 @@ impl ApiAuth {
     pub fn set_logged_in(&self, logged_in: bool) {
         self.logged_in
             .store(logged_in, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// # Errors
+    ///
+    /// * If the authentication validation fails
+    pub async fn validate_credentials(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
+        if let Some(validate_credentials) = &self.validate_credentials {
+            let valid = validate_credentials().await?;
+
+            self.set_logged_in(valid);
+        }
+
+        Ok(false)
     }
 }
 
