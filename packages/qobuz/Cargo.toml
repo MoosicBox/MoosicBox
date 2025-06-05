@@ -29,9 +29,13 @@ moosicbox_music_api_helpers = { workspace = true }
 moosicbox_music_models = { workspace = true, features = ["flac"] }
 moosicbox_paging = { workspace = true }
 moosicbox_search = { workspace = true, features = ["api"] }
-switchy_database = { workspace = true }
-switchy_http = { workspace = true, features = ["json", "reqwest"] }
-switchy_time = { workspace = true, features = ["std"] }
+switchy = { workspace = true, features = [
+    "async-tokio",
+    "database",
+    "http-json",
+    "http-reqwest",
+    "time-std",
+] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -62,7 +66,7 @@ default = ["api", "db", "openapi", "scan"]
 
 fail-on-warnings = []
 
-api     = ["dep:actix-web", "switchy_database/api"]
+api     = ["dep:actix-web", "switchy/database-api"]
 db      = []
 openapi = ["dep:utoipa", "moosicbox_search/openapi"]
 

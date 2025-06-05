@@ -35,7 +35,7 @@ use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
-use switchy_http::models::{Method, StatusCode};
+use switchy::http::models::{Method, StatusCode};
 use tokio::sync::Mutex;
 use url::form_urlencoded;
 
@@ -44,9 +44,7 @@ use crate::models::QobuzImage;
 #[cfg(feature = "db")]
 use moosicbox_json_utils::database::DatabaseFetchError;
 #[cfg(feature = "db")]
-use switchy_database::DatabaseError;
-#[cfg(feature = "db")]
-use switchy_database::profiles::LibraryDatabase;
+use switchy::database::{DatabaseError, profiles::LibraryDatabase};
 
 #[cfg(feature = "api")]
 pub mod api;
@@ -62,7 +60,7 @@ pub enum Error {
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
-    Http(#[from] switchy_http::Error),
+    Http(#[from] switchy::http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -120,8 +118,8 @@ trait ToUrl {
 static QOBUZ_PLAY_API_BASE_URL: &str = "https://play.qobuz.com";
 static QOBUZ_API_BASE_URL: &str = "https://www.qobuz.com/api.json/0.2";
 
-static CLIENT: LazyLock<switchy_http::Client> =
-    LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<switchy::http::Client> =
+    LazyLock::new(|| switchy::http::Client::builder().build().unwrap());
 
 pub static API_SOURCE: LazyLock<ApiSource> =
     LazyLock::new(|| ApiSource::register("Qobuz", "Qobuz"));
@@ -367,7 +365,7 @@ async fn authenticated_request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(switchy_http::Error::Decode) => Ok(None),
+            Err(switchy::http::Error::Decode) => Ok(None),
             Err(e) => Err(Error::Http(e)),
         },
     }
@@ -580,6 +578,48 @@ pub enum QobuzAlbumOrder {
     Desc,
 }
 
+async fn validate_credentials(#[cfg(feature = "db")] db: &LibraryDatabase) -> Result<bool, Error> {
+    if let Err(e) = favorite_albums(
+        #[cfg(feature = "db")]
+        db,
+        Some(0),
+        Some(1),
+        None,
+        None,
+        None,
+    )
+    .await
+    {
+        log::debug!("validate_credentials: error: {e:?}");
+        match e {
+            Error::Unauthorized => Ok(false),
+            Error::NoUserIdAvailable
+            | Error::Parse(..)
+            | Error::Http(..)
+            | Error::NoAccessTokenAvailable
+            | Error::NoAppId
+            | Error::NoSeedAndTimezone
+            | Error::NoInfoAndExtras
+            | Error::NoMatchingInfoForTimezone
+            | Error::Utf8(..)
+            | Error::FailedToFetchAppId
+            | Error::NoAppSecretAvailable
+            | Error::RequestFailed(..)
+            | Error::HttpRequestFailed(..)
+            | Error::MaxFailedAttempts
+            | Error::NoResponseBody
+            | Error::Serde(..)
+            | Error::Base64Decode(..)
+            | Error::Config(..) => Err(e),
+            #[cfg(feature = "db")]
+            Error::Database(_) | Error::DatabaseFetch(_) => Err(e),
+        }
+    } else {
+        log::debug!("validate_credentials: success");
+        Ok(true)
+    }
+}
+
 /// # Errors
 ///
 /// * If the API request failed
@@ -659,7 +699,7 @@ pub async fn user_login(
     let response = CLIENT
         .post(&url)
         .header(APP_ID_HEADER_NAME, &app_id)
-        .header(switchy_http::Header::ContentLength.as_ref(), "0")
+        .header(switchy::http::Header::ContentLength.as_ref(), "0")
         .send()
         .await?;
 
@@ -1557,7 +1597,7 @@ pub async fn track_file_url(
 
     let intent = "stream";
     let format_id = quality.as_format_id();
-    let request_ts = switchy_time::now()
+    let request_ts = switchy::time::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
@@ -1868,7 +1908,32 @@ impl QobuzMusicApiBuilder {
                     })
                     .build()?,
             )
+            .with_validate_credentials({
+                #[cfg(feature = "db")]
+                let db = db.clone();
+                move || {
+                    #[cfg(feature = "db")]
+                    let db = db.clone();
+                    async move {
+                        validate_credentials(
+                            #[cfg(feature = "db")]
+                            &db,
+                        )
+                        .await
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
+                    }
+                }
+            })
             .build();
+
+        switchy::unsync::task::spawn({
+            let auth = auth.clone();
+            async move {
+                if let Err(e) = auth.validate_credentials().await {
+                    moosicbox_assert::die_or_error!("Failed to validate credentials: {e:?}");
+                }
+            }
+        });
 
         Ok(QobuzMusicApi {
             #[cfg(feature = "db")]
