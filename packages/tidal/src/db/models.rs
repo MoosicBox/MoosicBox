@@ -3,7 +3,7 @@ use moosicbox_json_utils::{
     database::{AsModel, AsModelResult, ToValue},
 };
 use serde::{Deserialize, Serialize};
-use switchy_database::{AsId, DatabaseValue, Row};
+use switchy::database::{AsId, DatabaseValue, Row};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -23,7 +23,7 @@ pub struct TidalConfig {
     pub updated: String,
 }
 
-impl MissingValue<TidalConfig> for &switchy_database::Row {
+impl MissingValue<TidalConfig> for &switchy::database::Row {
     fn missing_value(&self, error: ParseError) -> Result<TidalConfig, ParseError> {
         Err(error)
     }

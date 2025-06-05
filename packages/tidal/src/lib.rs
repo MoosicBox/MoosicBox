@@ -14,9 +14,7 @@ use std::sync::{Arc, LazyLock};
 use itertools::Itertools as _;
 use models::{TidalAlbum, TidalArtist, TidalSearchResults, TidalTrack};
 #[cfg(feature = "db")]
-use switchy_database::DatabaseError;
-#[cfg(feature = "db")]
-use switchy_database::profiles::LibraryDatabase;
+use switchy::database::{DatabaseError, profiles::LibraryDatabase};
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -41,7 +39,7 @@ use moosicbox_paging::{Page, PagingResponse, PagingResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
-use switchy_http::models::Method;
+use switchy::http::models::Method;
 use tokio::sync::Mutex;
 use url::form_urlencoded;
 
@@ -52,7 +50,7 @@ pub enum Error {
     #[error(transparent)]
     Parse(#[from] ParseError),
     #[error(transparent)]
-    Http(#[from] switchy_http::Error),
+    Http(#[from] switchy::http::Error),
     #[cfg(feature = "db")]
     #[error(transparent)]
     Database(#[from] DatabaseError),
@@ -109,8 +107,8 @@ enum TidalApiEndpoint {
     Search,
 }
 
-static CLIENT: LazyLock<switchy_http::Client> =
-    LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
+static CLIENT: LazyLock<switchy::http::Client> =
+    LazyLock::new(|| switchy::http::Client::builder().build().unwrap());
 
 static TIDAL_AUTH_API_BASE_URL: &str = "https://auth.tidal.com/v1";
 static TIDAL_API_BASE_URL: &str = "https://api.tidal.com/v1";
@@ -353,6 +351,43 @@ async fn fetch_credentials(
     }
 }
 
+async fn validate_credentials(#[cfg(feature = "db")] db: &LibraryDatabase) -> Result<bool, Error> {
+    if let Err(e) = favorite_albums(
+        #[cfg(feature = "db")]
+        db,
+        Some(0),
+        Some(1),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    {
+        log::debug!("validate_credentials: error: {e:?}");
+        match e {
+            Error::Unauthorized => Ok(false),
+            Error::NoUserIdAvailable
+            | Error::Parse(..)
+            | Error::Http(..)
+            | Error::NoAccessTokenAvailable
+            | Error::RequestFailed(..)
+            | Error::HttpRequestFailed(..)
+            | Error::MaxFailedAttempts
+            | Error::NoResponseBody
+            | Error::Serde(..) => Err(e),
+            #[cfg(feature = "db")]
+            Error::Database(_) | Error::TidalConfig(_) => Err(e),
+        }
+    } else {
+        log::debug!("validate_credentials: success");
+        Ok(true)
+    }
+}
+
 async fn authenticated_request(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     url: &str,
@@ -440,7 +475,7 @@ async fn authenticated_request_inner(
     .await?;
 
     let mut request = CLIENT.request(method, url).header(
-        switchy_http::Header::Authorization.as_ref(),
+        switchy::http::Header::Authorization.as_ref(),
         &format!("Bearer {}", credentials.access_token),
     );
 
@@ -496,7 +531,7 @@ async fn authenticated_request_inner(
         )),
         _ => match response.json::<Value>().await {
             Ok(value) => Ok(Some(value)),
-            Err(switchy_http::Error::Decode) => Ok(None),
+            Err(switchy::http::Error::Decode) => Ok(None),
             Err(e) => Err(Error::Http(e)),
         },
     }
@@ -2073,7 +2108,32 @@ impl TidalMusicApiBuilder {
         let auth = ApiAuth::builder()
             .with_logged_in(logged_in)
             .with_auth(PollAuth::new())
+            .with_validate_credentials({
+                #[cfg(feature = "db")]
+                let db = db.clone();
+                move || {
+                    #[cfg(feature = "db")]
+                    let db = db.clone();
+                    async move {
+                        validate_credentials(
+                            #[cfg(feature = "db")]
+                            &db,
+                        )
+                        .await
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
+                    }
+                }
+            })
             .build();
+
+        switchy::unsync::task::spawn({
+            let auth = auth.clone();
+            async move {
+                if let Err(e) = auth.validate_credentials().await {
+                    moosicbox_assert::die_or_error!("Failed to validate credentials: {e:?}");
+                }
+            }
+        });
 
         Ok(TidalMusicApi {
             #[cfg(feature = "db")]

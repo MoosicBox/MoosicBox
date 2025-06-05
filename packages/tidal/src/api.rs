@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 #[cfg(feature = "db")]
-use switchy_database::profiles::LibraryDatabase;
+use switchy::database::profiles::LibraryDatabase;
 
 use crate::{
     API_SOURCE, Error, SearchType, TidalAlbumOrder, TidalAlbumOrderDirection, TidalAlbumType,
