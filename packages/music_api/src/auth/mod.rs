@@ -222,9 +222,13 @@ impl ApiAuth {
     /// * If the authentication validation fails
     pub async fn validate_credentials(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
         if let Some(validate_credentials) = &self.validate_credentials {
-            let valid = validate_credentials().await?;
-
-            self.set_logged_in(valid);
+            match validate_credentials().await {
+                Ok(valid) => self.set_logged_in(valid),
+                Err(e) => {
+                    self.set_logged_in(false);
+                    return Err(e);
+                }
+            }
         }
 
         Ok(false)
