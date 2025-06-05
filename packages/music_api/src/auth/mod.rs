@@ -260,6 +260,24 @@ impl ApiAuth {
         Ok(false)
     }
 
+    /// # Errors
+    ///
+    /// * If the `func` throws an error
+    pub async fn attempt_login<
+        Fut: Future<Output = Result<bool, Box<dyn std::error::Error + Send>>> + Send + 'static,
+        Func: Fn(&Auth) -> Fut + Send + Sync + 'static,
+    >(
+        &self,
+        func: Func,
+    ) -> Result<bool, Box<dyn std::error::Error + Send>> {
+        let logged_in = func(&self.auth).await?;
+
+        self.logged_in
+            .store(logged_in, std::sync::atomic::Ordering::SeqCst);
+
+        Ok(logged_in)
+    }
+
     #[cfg(feature = "auth-poll")]
     #[must_use]
     pub fn as_poll(&self) -> Option<&poll::PollAuth> {
