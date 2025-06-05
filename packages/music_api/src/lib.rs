@@ -304,14 +304,6 @@ pub trait MusicApi: Send + Sync {
     fn supports_scan(&self) -> bool {
         false
     }
-
-    async fn is_logged_in(&self) -> Result<bool, Error> {
-        Err(Error::UnsupportedAction("is_logged_in"))
-    }
-
-    async fn logout(&self) -> Result<(), Error> {
-        Err(Error::UnsupportedAction("logout"))
-    }
 }
 
 pub struct CachedMusicApi<T: MusicApi> {
@@ -836,14 +828,6 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
 
     fn auth(&self) -> Option<&ApiAuth> {
         self.inner.auth()
-    }
-
-    async fn is_logged_in(&self) -> Result<bool, Error> {
-        self.inner.is_logged_in().await
-    }
-
-    async fn logout(&self) -> Result<(), Error> {
-        self.inner.logout().await
     }
 }
 

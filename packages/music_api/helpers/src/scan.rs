@@ -39,8 +39,10 @@ pub async fn scan(
 ) -> Result<(), moosicbox_music_api::Error> {
     const PROFILE: &str = "master";
 
-    if !music_api.is_logged_in().await? {
-        return Err(moosicbox_music_api::Error::Unauthorized);
+    if let Some(auth) = music_api.auth() {
+        if !auth.is_logged_in().await? {
+            return Err(moosicbox_music_api::Error::Unauthorized);
+        }
     }
 
     let source = music_api.source();
