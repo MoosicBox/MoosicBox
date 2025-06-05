@@ -48,7 +48,7 @@ pub mod music_api_api {
     impl From<ApiMusicApi> for MusicApiSettings {
         fn from(value: ApiMusicApi) -> Self {
             Self {
-                logged_in: false, //value.logged_in,
+                logged_in: value.logged_in,
                 supports_scan: value.supports_scan,
                 scan_enabled: value.scan_enabled,
                 run_scan_endpoint: value
