@@ -75,7 +75,7 @@ impl PollAuth {
     ///
     /// * If the poll fails
     #[allow(clippy::unused_async)]
-    pub async fn poll(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub async fn poll(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
         Ok(false)
     }
 }
@@ -84,7 +84,7 @@ impl PollAuth {
     /// # Errors
     ///
     /// * If the poll auth fails
-    pub async fn login(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub async fn login(&self) -> Result<bool, Box<dyn std::error::Error + Send>> {
         switchy_async::select! {
             success = self.poll().fuse() => {
                 Ok(success?)
