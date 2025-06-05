@@ -5,7 +5,7 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_music_api::{MusicApis, SourceToMusicApi as _, auth::AuthExt as _};
+use moosicbox_music_api::{MusicApis, SourceToMusicApi as _};
 use moosicbox_music_models::ApiSource;
 use moosicbox_paging::Page;
 use moosicbox_profiles::api::ProfileName;
@@ -128,6 +128,7 @@ pub struct AuthMusicApi {
     )
 )]
 #[route("/auth", method = "POST")]
+#[cfg_attr(not(feature = "_auth"), allow(unreachable_code, unused))]
 pub async fn auth_music_api_endpoint(
     query: web::Query<AuthMusicApi>,
     form: web::Form<AuthValues>,
