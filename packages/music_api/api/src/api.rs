@@ -144,28 +144,40 @@ pub async fn auth_music_api_endpoint(
             return Err(ErrorBadRequest("Auth not supported"));
 
             #[cfg(feature = "auth-username-password")]
-            music_api
-                .auth()
-                .cloned()
-                .and_then(|x| x.into_username_password())
-                .ok_or_else(|| ErrorBadRequest("Auth not supported"))?
-                .login(username, password)
+            if let Some(auth) = music_api.auth() {
+                let user_pass_auth = auth
+                    .clone()
+                    .into_username_password()
+                    .ok_or_else(|| ErrorBadRequest("Auth not supported"))?;
+
+                auth.attempt_login(move |_| {
+                    let user_pass_auth = user_pass_auth.clone();
+                    let username = username.clone();
+                    let password = password.clone();
+                    async move { user_pass_auth.login(username, password).await }
+                })
                 .await
                 .map_err(ErrorInternalServerError)?;
+            }
         }
         AuthValues::Poll => {
             #[cfg(not(feature = "auth-poll"))]
             return Err(ErrorBadRequest("Auth not supported"));
 
             #[cfg(feature = "auth-poll")]
-            music_api
-                .auth()
-                .cloned()
-                .and_then(|x| x.into_poll())
-                .ok_or_else(|| ErrorBadRequest("Auth not supported"))?
-                .login()
+            if let Some(auth) = music_api.auth() {
+                let poll_auth = auth
+                    .clone()
+                    .into_poll()
+                    .ok_or_else(|| ErrorBadRequest("Auth not supported"))?;
+
+                auth.attempt_login(move |_| {
+                    let poll_auth = poll_auth.clone();
+                    async move { poll_auth.login().await }
+                })
                 .await
                 .map_err(ErrorInternalServerError)?;
+            }
         }
     }
 
