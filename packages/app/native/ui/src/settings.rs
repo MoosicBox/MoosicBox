@@ -83,15 +83,22 @@ pub fn settings_page_content(
 
                 section {
                     h2 { (settings.name) }
-                    (music_api_settings_content(settings))
+                    (music_api_settings_content(settings, AuthState::Initial))
                 }
             }
         }
     }
 }
 
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
+pub enum AuthState {
+    #[default]
+    Initial,
+    Polling,
+}
+
 #[must_use]
-pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
+pub fn music_api_settings_content(settings: &MusicApiSettings, auth_state: AuthState) -> Markup {
     html! {
         // FIXME: HTML encode settings.id
         @let id = format!("settings-{}", classify_name(&settings.id));
@@ -156,16 +163,23 @@ pub fn music_api_settings_content(settings: &MusicApiSettings) -> Markup {
                             }
                         }
                         AuthMethod::Poll => {
-                            input type="hidden" name="type" value="poll";
-                            button
-                                type="submit"
-                                sx-border-radius=(5)
-                                sx-background="#111"
-                                sx-border="2, #222"
-                                sx-padding-x=(10)
-                                sx-padding-y=(5)
-                            {
-                                "Start web authentication"
+                            @match auth_state {
+                                AuthState::Initial => {
+                                    input type="hidden" name="type" value="poll";
+                                    button
+                                        type="submit"
+                                        sx-border-radius=(5)
+                                        sx-background="#111"
+                                        sx-border="2, #222"
+                                        sx-padding-x=(10)
+                                        sx-padding-y=(5)
+                                    {
+                                        "Start web authentication"
+                                    }
+                                }
+                                AuthState::Polling => {
+                                    "Polling..."
+                                }
                             }
                         }
                     }

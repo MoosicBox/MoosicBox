@@ -6,7 +6,9 @@ use hyperchad::{
     transformer::html::ParseError,
 };
 use moosicbox_app_models::{Connection, MusicApiSettings};
-use moosicbox_app_native_ui::{downloads::DownloadTab, formatting::classify_name};
+use moosicbox_app_native_ui::{
+    downloads::DownloadTab, formatting::classify_name, settings::AuthState,
+};
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_downloader::api::models::ApiDownloadTask;
@@ -795,7 +797,10 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
         let settings = music_api.into();
 
         return Ok(Content::try_view(
-            moosicbox_app_native_ui::settings::music_api_settings_content(&settings),
+            moosicbox_app_native_ui::settings::music_api_settings_content(
+                &settings,
+                AuthState::Initial,
+            ),
         )?);
     }
 
@@ -832,7 +837,10 @@ pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Con
         let settings = music_api.into();
 
         return Ok(Content::try_view(
-            moosicbox_app_native_ui::settings::music_api_settings_content(&settings),
+            moosicbox_app_native_ui::settings::music_api_settings_content(
+                &settings,
+                AuthState::Initial,
+            ),
         )?);
     }
 
@@ -878,8 +886,13 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
 
         let settings = music_api.into();
 
+        let auth_state = match auth_values {
+            AuthValues::UsernamePassword { .. } => AuthState::Initial,
+            AuthValues::Poll => AuthState::Polling,
+        };
+
         return Ok(Content::try_view(
-            moosicbox_app_native_ui::settings::music_api_settings_content(&settings),
+            moosicbox_app_native_ui::settings::music_api_settings_content(&settings, auth_state),
         )?);
     }
 
