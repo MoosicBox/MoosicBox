@@ -2568,6 +2568,10 @@ impl MusicApi for YtMusicApi {
         Some(&self.auth)
     }
 
+    fn supports_search(&self) -> bool {
+        true
+    }
+
     async fn search(
         &self,
         query: &str,

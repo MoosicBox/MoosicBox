@@ -2411,6 +2411,10 @@ impl MusicApi for QobuzMusicApi {
         Some(&self.auth)
     }
 
+    fn supports_search(&self) -> bool {
+        true
+    }
+
     async fn search(
         &self,
         query: &str,

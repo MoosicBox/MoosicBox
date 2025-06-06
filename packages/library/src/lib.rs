@@ -1508,6 +1508,10 @@ impl MusicApi for LibraryMusicApi {
         Ok(Some(bytes))
     }
 
+    fn supports_search(&self) -> bool {
+        true
+    }
+
     async fn search(
         &self,
         query: &str,

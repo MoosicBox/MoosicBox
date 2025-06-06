@@ -306,6 +306,10 @@ pub trait MusicApi: Send + Sync {
         false
     }
 
+    fn supports_search(&self) -> bool {
+        false
+    }
+
     async fn search(
         &self,
         _query: &str,
@@ -838,6 +842,10 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
 
     fn auth(&self) -> Option<&ApiAuth> {
         self.inner.auth()
+    }
+
+    fn supports_search(&self) -> bool {
+        self.inner.supports_search()
     }
 
     async fn search(

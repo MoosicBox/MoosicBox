@@ -780,6 +780,10 @@ impl MusicApi for RemoteLibraryMusicApi {
         ))
     }
 
+    fn supports_search(&self) -> bool {
+        true
+    }
+
     async fn search(
         &self,
         query: &str,
