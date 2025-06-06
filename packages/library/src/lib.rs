@@ -22,7 +22,7 @@ use moosicbox_music_api::{
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
-        TrackSource, search::api::ApiGlobalSearchResult,
+        TrackSource, search::api::ApiSearchResultsResponse,
     },
 };
 use moosicbox_music_models::{
@@ -806,24 +806,21 @@ pub enum LibrarySearchType {
     UserProfiles,
 }
 
-#[derive(Debug, Error)]
-pub enum LibrarySearchError {
-    #[error(transparent)]
-    DatabaseFetch(#[from] DatabaseFetchError),
-}
-
 /// # Errors
 ///
 /// * If there was a database error
-#[allow(clippy::too_many_arguments)]
-pub fn search(
+#[allow(clippy::too_many_arguments, clippy::unused_async)]
+pub async fn search(
     _db: &LibraryDatabase,
     _query: &str,
-    _offset: Option<usize>,
-    _limit: Option<usize>,
-    _types: &Option<Vec<LibrarySearchType>>,
-) -> Result<Vec<ApiGlobalSearchResult>, LibrarySearchError> {
-    let items = vec![];
+    _offset: Option<u32>,
+    _limit: Option<u32>,
+    _types: Option<&[LibrarySearchType]>,
+) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
+    let items = ApiSearchResultsResponse {
+        position: 0,
+        results: vec![],
+    };
     log::trace!("Received search response: {items:?}");
 
     Ok(items)
@@ -1509,6 +1506,17 @@ impl MusicApi for LibraryMusicApi {
         .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
 
         Ok(Some(bytes))
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
+        let results = search(&self.db, query, offset, limit, None).await?;
+
+        Ok(results)
     }
 }
 

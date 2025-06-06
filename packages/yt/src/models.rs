@@ -2122,6 +2122,7 @@ impl From<YtSearchResults> for ApiSearchResultsResponse {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<YtSearchResultsFormatted> for ApiSearchResultsResponse {
     fn from(value: YtSearchResultsFormatted) -> Self {
         let artists = value
@@ -2148,7 +2149,7 @@ impl From<YtSearchResultsFormatted> for ApiSearchResultsResponse {
         };
 
         Self {
-            position,
+            position: u32::try_from(position).unwrap(),
             results: [artists, albums, tracks].concat(),
         }
     }

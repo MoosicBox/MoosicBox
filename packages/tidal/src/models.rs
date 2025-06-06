@@ -643,6 +643,7 @@ pub struct TidalSearchResults {
     pub limit: usize,
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<TidalSearchResults> for ApiSearchResultsResponse {
     fn from(value: TidalSearchResults) -> Self {
         let artists = value
@@ -672,7 +673,7 @@ impl From<TidalSearchResults> for ApiSearchResultsResponse {
         };
 
         Self {
-            position,
+            position: u32::try_from(position).unwrap(),
             results: [artists, albums, tracks].concat(),
         }
     }

@@ -65,7 +65,7 @@ pub enum ApiGlobalSearchResult {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ApiSearchResultsResponse {
-    pub position: usize,
+    pub position: u32,
     pub results: Vec<ApiGlobalSearchResult>,
 }
 
@@ -81,7 +81,7 @@ impl From<Vec<ApiGlobalSearchResult>> for ApiSearchResultsResponse {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiRawSearchResultsResponse {
-    pub position: usize,
+    pub position: u32,
     pub results: Vec<NamedFieldDocument>,
 }
 

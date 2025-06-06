@@ -23,12 +23,12 @@ use crate::{
     LibraryArtistOrder, LibraryArtistOrderDirection, LibraryAudioQuality,
     LibraryFavoriteAlbumsError, LibraryFavoriteArtistsError, LibraryFavoriteTracksError,
     LibraryRemoveFavoriteAlbumError, LibraryRemoveFavoriteArtistError,
-    LibraryRemoveFavoriteTrackError, LibrarySearchError, LibraryTrack, LibraryTrackError,
-    LibraryTrackFileUrlError, LibraryTrackOrder, LibraryTrackOrderDirection, ReindexError,
-    SearchType, add_favorite_album, add_favorite_artist, add_favorite_track, album, album_tracks,
-    artist, artist_albums, favorite_albums, favorite_artists, favorite_tracks,
-    reindex_global_search_index, remove_favorite_album, remove_favorite_artist,
-    remove_favorite_track, search, track, track_file_url,
+    LibraryRemoveFavoriteTrackError, LibraryTrack, LibraryTrackError, LibraryTrackFileUrlError,
+    LibraryTrackOrder, LibraryTrackOrderDirection, ReindexError, SearchType, add_favorite_album,
+    add_favorite_artist, add_favorite_track, album, album_tracks, artist, artist_albums,
+    favorite_albums, favorite_artists, favorite_tracks, reindex_global_search_index,
+    remove_favorite_album, remove_favorite_artist, remove_favorite_track, search, track,
+    track_file_url,
 };
 
 pub fn bind_services<
@@ -965,18 +965,12 @@ pub async fn track_endpoint(
     Ok(Json(track.into()))
 }
 
-impl From<LibrarySearchError> for actix_web::Error {
-    fn from(err: LibrarySearchError) -> Self {
-        ErrorInternalServerError(err.to_string())
-    }
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibrarySearchQuery {
     query: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    offset: Option<u32>,
+    limit: Option<u32>,
     types: Option<Vec<SearchType>>,
 }
 
@@ -989,8 +983,8 @@ pub struct LibrarySearchQuery {
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("query" = String, Query, description = "The search query"),
-            ("offset" = Option<usize>, Query, description = "Page offset"),
-            ("limit" = Option<usize>, Query, description = "Page limit"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
             ("types" = Option<Vec<SearchType>>, Query, description = "List of types to filter the search by"),
         ),
         responses(
@@ -1012,13 +1006,16 @@ pub async fn search_endpoint(
         &query.query,
         query.offset,
         query.limit,
-        &query
+        query
             .types
             .clone()
-            .map(|x| x.into_iter().map(Into::into).collect::<Vec<_>>()),
-    )?;
+            .map(|x| x.into_iter().map(Into::into).collect::<Vec<_>>())
+            .as_deref(),
+    )
+    .await
+    .map_err(ErrorInternalServerError)?;
 
-    Ok(Json(results.into()))
+    Ok(Json(results))
 }
 
 impl From<ReindexError> for actix_web::Error {

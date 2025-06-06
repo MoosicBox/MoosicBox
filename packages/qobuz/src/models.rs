@@ -741,6 +741,7 @@ pub struct QobuzSearchResults {
     pub tracks: QobuzSearchResultList<QobuzTrack>,
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<QobuzSearchResults> for ApiSearchResultsResponse {
     fn from(value: QobuzSearchResults) -> Self {
         let artists = value
@@ -770,7 +771,7 @@ impl From<QobuzSearchResults> for ApiSearchResultsResponse {
         };
 
         Self {
-            position,
+            position: u32::try_from(position).unwrap(),
             results: [artists, albums, tracks].concat(),
         }
     }

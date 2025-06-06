@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 
 use itertools::Itertools;
+use moosicbox_music_api_models::search::api::{ApiGlobalSearchResult, ApiSearchResultsResponse};
 use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, DisjunctionMaxQuery, QueryParser, TermQuery};
@@ -873,8 +874,8 @@ fn construct_global_search_query(
 /// * If failed to search the global search index
 pub fn search_global_search_index(
     search: &str,
-    offset: usize,
-    limit: usize,
+    offset: u32,
+    limit: u32,
 ) -> Result<Vec<NamedFieldDocument>, SearchIndexError> {
     log::debug!("Searching global_search_index...");
     let query = sanitize_query(search);
@@ -932,7 +933,7 @@ pub fn search_global_search_index(
     // We can now perform our query.
     let top_docs = searcher.search(
         &global_search_query,
-        &TopDocs::with_limit(limit).and_offset(offset),
+        &TopDocs::with_limit(limit as usize).and_offset(offset as usize),
     )?;
 
     // The actual documents still need to be
@@ -960,6 +961,53 @@ pub fn search_global_search_index(
     log::debug!("Searched global_search_index");
 
     Ok(results)
+}
+
+/// # Errors
+///
+/// * If failed to search the global search index
+pub async fn global_search(
+    query: &str,
+    offset: Option<u32>,
+    limit: Option<u32>,
+) -> Result<ApiSearchResultsResponse, SearchIndexError> {
+    use moosicbox_json_utils::ToValueType;
+
+    let limit = limit.unwrap_or(10);
+    let offset = offset.unwrap_or(0);
+
+    let mut position = offset;
+    let mut results: Vec<ApiGlobalSearchResult> = vec![];
+
+    while results.len() < limit as usize {
+        let values = search_global_search_index(query, position, limit)?;
+
+        if values.is_empty() {
+            break;
+        }
+
+        for value in values {
+            position += 1;
+
+            let value: ApiGlobalSearchResult = match value.to_value_type() {
+                Ok(value) => value,
+                Err(err) => {
+                    log::error!("Failed to parse search result: {err:?}");
+                    continue;
+                }
+            };
+
+            if !results.iter().any(|r| r.to_key() == value.to_key()) {
+                results.push(value);
+
+                if results.len() >= limit as usize {
+                    break;
+                }
+            }
+        }
+    }
+
+    Ok(ApiSearchResultsResponse { position, results })
 }
 
 #[cfg(test)]

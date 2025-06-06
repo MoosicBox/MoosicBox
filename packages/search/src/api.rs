@@ -5,14 +5,13 @@ use actix_web::{
     get,
     web::{self, Json},
 };
-use moosicbox_json_utils::ToValueType;
 use moosicbox_music_api_models::search::api::{
-    ApiGlobalSearchResult, ApiRawSearchResultsResponse, ApiSearchResultsResponse,
+    ApiRawSearchResultsResponse, ApiSearchResultsResponse,
 };
 use serde::Deserialize;
 use tantivy::schema::NamedFieldDocument;
 
-use crate::search_global_search_index;
+use crate::{global_search, search_global_search_index};
 
 pub fn bind_services<
     T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
@@ -28,59 +27,29 @@ pub fn bind_services<
 #[serde(rename_all = "camelCase")]
 pub struct SearchGlobalSearchQuery {
     query: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    offset: Option<u32>,
+    limit: Option<u32>,
 }
 
 #[get("/global-search")]
 pub async fn search_global_search_endpoint(
     query: web::Query<SearchGlobalSearchQuery>,
 ) -> Result<Json<ApiSearchResultsResponse>> {
-    let limit = query.limit.unwrap_or(10);
-    let offset = query.offset.unwrap_or(0);
-
-    let mut position = offset;
-    let mut results: Vec<ApiGlobalSearchResult> = vec![];
-
-    while results.len() < limit {
-        let values = search_global_search_index(&query.query, position, limit).map_err(|e| {
-            ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
-        })?;
-
-        if values.is_empty() {
-            break;
-        }
-
-        for value in values {
-            position += 1;
-
-            let value: ApiGlobalSearchResult = match value.to_value_type() {
-                Ok(value) => value,
-                Err(err) => {
-                    log::error!("Failed to parse search result: {err:?}");
-                    continue;
-                }
-            };
-
-            if !results.iter().any(|r| r.to_key() == value.to_key()) {
-                results.push(value);
-
-                if results.len() >= limit {
-                    break;
-                }
-            }
-        }
-    }
-
-    Ok(Json(ApiSearchResultsResponse { position, results }))
+    Ok(Json(
+        global_search(&query.query, query.offset, query.limit)
+            .await
+            .map_err(|e| {
+                ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
+            })?,
+    ))
 }
 
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchRawGlobalSearchQuery {
     query: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    offset: Option<u32>,
+    limit: Option<u32>,
 }
 
 #[get("/raw-global-search")]
@@ -93,7 +62,7 @@ pub async fn search_raw_global_search_endpoint(
     let mut position = offset;
     let mut results: Vec<NamedFieldDocument> = vec![];
 
-    while results.len() < limit {
+    while results.len() < limit as usize {
         let values = search_global_search_index(&query.query, position, limit).map_err(|e| {
             ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
         })?;
@@ -107,7 +76,7 @@ pub async fn search_raw_global_search_endpoint(
 
             results.push(value);
 
-            if results.len() >= limit {
+            if results.len() >= limit as usize {
                 break;
             }
         }
