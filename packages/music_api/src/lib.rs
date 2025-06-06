@@ -10,13 +10,14 @@ use auth::ApiAuth;
 use models::{
     AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
     ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
-    TrackSource,
+    TrackSource, search::api::ApiSearchResultsResponse,
 };
 use moosicbox_menu_models::AlbumVersion;
-pub use moosicbox_music_api_models as models;
 use moosicbox_music_models::{Album, AlbumType, ApiSource, Artist, PlaybackQuality, Track, id::Id};
 use moosicbox_paging::PagingResult;
 use tokio::sync::{Mutex, RwLock};
+
+pub use moosicbox_music_api_models as models;
 
 pub mod auth;
 pub mod profiles;
@@ -303,6 +304,15 @@ pub trait MusicApi: Send + Sync {
 
     fn supports_scan(&self) -> bool {
         false
+    }
+
+    async fn search(
+        &self,
+        _query: &str,
+        _offset: Option<u32>,
+        _limit: Option<u32>,
+    ) -> Result<ApiSearchResultsResponse, Error> {
+        Err(Error::UnsupportedAction("search"))
     }
 }
 
@@ -828,6 +838,15 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
 
     fn auth(&self) -> Option<&ApiAuth> {
         self.inner.auth()
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<ApiSearchResultsResponse, Error> {
+        self.inner.search(query, offset, limit).await
     }
 }
 

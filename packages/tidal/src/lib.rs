@@ -29,7 +29,7 @@ use moosicbox_music_api::{
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
-        TrackSource,
+        TrackSource, search::api::ApiSearchResultsResponse,
     },
 };
 use moosicbox_music_models::{
@@ -1784,8 +1784,8 @@ pub enum TidalSearchType {
 pub async fn search(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     query: &str,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    offset: Option<u32>,
+    limit: Option<u32>,
     include_contributions: Option<bool>,
     include_did_you_mean: Option<bool>,
     include_user_playlists: Option<bool>,
@@ -2724,5 +2724,32 @@ impl MusicApi for TidalMusicApi {
 
     fn auth(&self) -> Option<&ApiAuth> {
         Some(&self.auth)
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
+        let results = search(
+            #[cfg(feature = "db")]
+            &self.db,
+            query,
+            offset,
+            limit,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?;
+
+        Ok(results.into())
     }
 }

@@ -854,8 +854,8 @@ pub async fn track_file_url_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct QobuzSearchQuery {
     query: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    offset: Option<u32>,
+    limit: Option<u32>,
 }
 
 #[cfg_attr(
@@ -867,8 +867,8 @@ pub struct QobuzSearchQuery {
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("query" = String, Query, description = "The search query"),
-            ("offset" = Option<usize>, Query, description = "Page offset"),
-            ("limit" = Option<usize>, Query, description = "Page limit"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
         responses(
             (

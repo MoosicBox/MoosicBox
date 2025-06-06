@@ -15,7 +15,7 @@ ignored = ["strum"]
 
 [dependencies]
 moosicbox_menu_models      = { workspace = true }
-moosicbox_music_api_models = { workspace = true }
+moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models     = { workspace = true }
 moosicbox_paging           = { workspace = true }
 moosicbox_profiles         = { workspace = true }

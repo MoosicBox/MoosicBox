@@ -21,6 +21,7 @@ async-trait = { workspace = true }
 log         = { workspace = true }
 thiserror   = { workspace = true }
 tokio       = { workspace = true }
+urlencoding = { workspace = true }
 
 [features]
 default = ["aac", "flac", "mp3", "opus"]

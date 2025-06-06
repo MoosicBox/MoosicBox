@@ -22,6 +22,7 @@ use moosicbox_music_api::{
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         TrackAudioQuality, TrackOrder, TrackOrderDirection, TrackSource,
+        search::api::ApiSearchResultsResponse,
     },
 };
 use moosicbox_music_models::{
@@ -1805,8 +1806,8 @@ pub async fn track(
 #[allow(clippy::too_many_arguments)]
 pub async fn search(
     query: &str,
-    _offset: Option<usize>,
-    _limit: Option<usize>,
+    _offset: Option<u32>,
+    _limit: Option<u32>,
 ) -> Result<YtSearchResults, Error> {
     let url = yt_api_endpoint!(Search, &[], &[("prettyPrint", &false.to_string()),]);
 
@@ -2565,5 +2566,16 @@ impl MusicApi for YtMusicApi {
 
     fn auth(&self) -> Option<&ApiAuth> {
         Some(&self.auth)
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
+        let results = search(query, offset, limit).await?;
+
+        Ok(results.into())
     }
 }

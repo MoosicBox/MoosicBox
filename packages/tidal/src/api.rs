@@ -1293,8 +1293,8 @@ pub async fn track_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct TidalSearchQuery {
     query: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    offset: Option<u32>,
+    limit: Option<u32>,
     include_contributions: Option<bool>,
     include_did_you_mean: Option<bool>,
     include_user_playlists: Option<bool>,
@@ -1314,8 +1314,8 @@ pub struct TidalSearchQuery {
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("query" = String, Query, description = "The search query"),
-            ("offset" = Option<usize>, Query, description = "Page offset"),
-            ("limit" = Option<usize>, Query, description = "Page limit"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
             ("include_contributions" = Option<bool>, Query, description = "Include contribution results"),
             ("include_did_you_mean" = Option<bool>, Query, description = "Include 'did you mean?' results"),
             ("include_user_playlists" = Option<bool>, Query, description = "Include user playlists"),

@@ -7955,7 +7955,6 @@ dependencies = [
  "moosicbox_music_api_helpers",
  "moosicbox_music_models",
  "moosicbox_paging",
- "moosicbox_search",
  "regex",
  "serde",
  "serde_json",
@@ -7981,6 +7980,7 @@ dependencies = [
  "switchy_http",
  "thiserror 2.0.12",
  "tokio",
+ "urlencoding",
 ]
 
 [[package]]
@@ -8256,7 +8256,6 @@ dependencies = [
  "moosicbox_music_api_helpers",
  "moosicbox_music_models",
  "moosicbox_paging",
- "moosicbox_search",
  "open",
  "serde",
  "serde_json",
@@ -8450,7 +8449,6 @@ dependencies = [
  "moosicbox_music_api_helpers",
  "moosicbox_music_models",
  "moosicbox_paging",
- "moosicbox_search",
  "open",
  "serde",
  "serde_json",

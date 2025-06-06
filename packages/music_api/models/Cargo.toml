@@ -43,4 +43,8 @@ db = ["moosicbox_music_models/db", "switchy_database/api"]
 api        = ["moosicbox_music_models/api", "switchy_database/api"]
 api-search = ["moosicbox_music_models/api", "search"]
 
-search = ["dep:tantivy"]
+search = [
+    "dep:tantivy",
+    "moosicbox_json_utils/tantivy",
+    "moosicbox_music_models/tantivy",
+]

@@ -25,7 +25,7 @@ use moosicbox_music_api::{
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
-        TrackSource,
+        TrackSource, search::api::ApiSearchResultsResponse,
     },
 };
 use moosicbox_music_models::{
@@ -1645,8 +1645,8 @@ pub async fn track_file_url(
 pub async fn search(
     #[cfg(feature = "db")] db: &LibraryDatabase,
     query: &str,
-    offset: Option<usize>,
-    limit: Option<usize>,
+    offset: Option<u32>,
+    limit: Option<u32>,
     access_token: Option<String>,
     app_id: Option<String>,
 ) -> Result<QobuzSearchResults, Error> {
@@ -2409,6 +2409,26 @@ impl MusicApi for QobuzMusicApi {
 
     fn auth(&self) -> Option<&ApiAuth> {
         Some(&self.auth)
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
+        let results = search(
+            #[cfg(feature = "db")]
+            &self.db,
+            query,
+            offset,
+            limit,
+            None,
+            None,
+        )
+        .await?;
+
+        Ok(results.into())
     }
 }
 

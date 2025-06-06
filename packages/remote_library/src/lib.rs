@@ -11,7 +11,7 @@ use moosicbox_music_api::{
     models::{
         AlbumFilters, AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder,
         ArtistOrderDirection, ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder,
-        TrackOrderDirection, TrackSource,
+        TrackOrderDirection, TrackSource, search::api::ApiSearchResultsResponse,
     },
 };
 use moosicbox_music_models::{
@@ -23,6 +23,7 @@ use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use switchy_http::models::StatusCode;
 use thiserror::Error;
 use tokio::sync::Mutex;
+use urlencoding::encode;
 
 static CLIENT: LazyLock<switchy_http::Client> =
     LazyLock::new(|| switchy_http::Client::builder().build().unwrap());
@@ -777,5 +778,42 @@ impl MusicApi for RemoteLibraryMusicApi {
         Err(moosicbox_music_api::Error::UnsupportedAction(
             "Fetching track size is not implemented",
         ))
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        offset: Option<u32>,
+        limit: Option<u32>,
+    ) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
+        let url = format!(
+            "{host}/search/global-search?query={query}{offset}{limit}",
+            host = self.host,
+            query = encode(query),
+            offset = offset.map_or_else(String::new, |x| format!("&offset={x}")),
+            limit = limit.map_or_else(String::new, |x| format!("&limit={x}")),
+        );
+
+        let request = CLIENT
+            .request(switchy_http::models::Method::Get, &url)
+            .header("moosicbox-profile", &self.profile);
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
+
+        if !response.status().is_success() {
+            return Err(moosicbox_music_api::Error::Other(Box::new(
+                RequestError::Unsuccessful(format!("Status {}", response.status())),
+            )));
+        }
+
+        let results = response
+            .json::<ApiSearchResultsResponse>()
+            .await
+            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
+
+        Ok(results)
     }
 }

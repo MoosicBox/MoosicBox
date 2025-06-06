@@ -26,7 +26,6 @@ moosicbox_music_api = { workspace = true, features = ["auth-poll"] }
 moosicbox_music_api_helpers = { workspace = true }
 moosicbox_music_models = { workspace = true, features = ["flac"] }
 moosicbox_paging = { workspace = true }
-moosicbox_search = { workspace = true, features = ["api"] }
 switchy = { workspace = true, features = [
     "async-tokio",
     "database",
@@ -59,6 +58,6 @@ fail-on-warnings = []
 
 api     = ["dep:actix-web", "switchy/database-api"]
 db      = []
-openapi = ["dep:utoipa", "moosicbox_search/openapi"]
+openapi = ["dep:utoipa", "moosicbox_music_api/openapi"]
 
 scan = ["db", "moosicbox_music_api_helpers/scan"]
