@@ -235,7 +235,7 @@ async fn authenticated_post_request(
     app_id: Option<String>,
     access_token: Option<String>,
     body: Option<Value>,
-    form: Option<Vec<(&str, &str)>>,
+    form: Option<Value>,
 ) -> Result<Option<Value>, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
@@ -245,12 +245,7 @@ async fn authenticated_post_request(
         app_id,
         access_token,
         body,
-        form.map(|values| {
-            values
-                .iter()
-                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
-                .collect::<Vec<_>>()
-        }),
+        form,
         1,
     )
     .await
@@ -286,7 +281,7 @@ async fn authenticated_request_inner(
     app_id: Option<String>,
     access_token: Option<String>,
     body: Option<Value>,
-    form: Option<Vec<(String, String)>>,
+    form: Option<Value>,
     attempt: u8,
 ) -> Result<Option<Value>, Error> {
     if attempt > 3 {

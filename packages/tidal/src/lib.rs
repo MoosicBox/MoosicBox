@@ -197,10 +197,10 @@ macro_rules! tidal_api_endpoint {
 pub async fn device_authorization(client_id: String, open: bool) -> Result<Value, Error> {
     let url = tidal_api_endpoint!(DeviceAuthorization);
 
-    let params = [
-        ("client_id", client_id.clone()),
-        ("scope", "r_usr w_usr w_sub".to_string()),
-    ];
+    let params = serde_json::json!({
+        "client_id": &client_id,
+        "scope": "r_usr w_usr w_sub",
+    });
 
     let value: Value = CLIENT.post(&url).form(&params).send().await?.json().await?;
 
@@ -244,16 +244,13 @@ pub async fn device_authorization_token(
 ) -> Result<Value, Error> {
     let url = tidal_api_endpoint!(AuthorizationToken);
 
-    let params = [
-        ("client_id", client_id.clone()),
-        ("client_secret", client_secret.clone()),
-        ("device_code", device_code.clone()),
-        (
-            "grant_type",
-            "urn:ietf:params:oauth:grant-type:device_code".to_string(),
-        ),
-        ("scope", "r_usr w_usr w_sub".to_string()),
-    ];
+    let params = serde_json::json!({
+        "client_id": &client_id,
+        "client_secret": &client_secret,
+        "device_code": &device_code,
+        "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+        "scope": "r_usr w_usr w_sub",
+    });
 
     let value: Value = CLIENT.post(&url).form(&params).send().await?.json().await?;
 
@@ -412,7 +409,7 @@ async fn authenticated_post_request(
     url: &str,
     access_token: Option<String>,
     body: Option<Value>,
-    form: Option<Vec<(&str, &str)>>,
+    form: Option<Value>,
 ) -> Result<Option<Value>, Error> {
     authenticated_request_inner(
         #[cfg(feature = "db")]
@@ -421,12 +418,7 @@ async fn authenticated_post_request(
         url,
         access_token,
         body,
-        form.map(|values| {
-            values
-                .iter()
-                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
-                .collect::<Vec<_>>()
-        }),
+        form,
         1,
     )
     .await
@@ -457,7 +449,7 @@ async fn authenticated_request_inner(
     url: &str,
     access_token: Option<String>,
     body: Option<Value>,
-    form: Option<Vec<(String, String)>>,
+    form: Option<Value>,
     attempt: u8,
 ) -> Result<Option<Value>, Error> {
     if attempt > 3 {
@@ -546,12 +538,12 @@ async fn refetch_access_token(
     log::debug!("Refetching access token");
     let url = tidal_api_endpoint!(AuthorizationToken);
 
-    let params = [
-        ("client_id", client_id.to_string()),
-        ("refresh_token", refresh_token.to_string()),
-        ("grant_type", "refresh_token".to_string()),
-        ("scope", "r_usr w_usr w_sub".to_string()),
-    ];
+    let params = serde_json::json!({
+        "client_id": &client_id,
+        "refresh_token": &refresh_token,
+        "grant_type": "refresh_token",
+        "scope": "r_usr w_usr w_sub",
+    });
 
     let value: Value = CLIENT.post(&url).form(&params).send().await?.json().await?;
 
@@ -761,7 +753,7 @@ pub async fn add_favorite_artist(
         &url,
         access_token,
         None,
-        Some(vec![("artistId", &artist_id.to_string())]),
+        Some(serde_json::json!({ "artistId": &artist_id })),
     )
     .await?;
 
@@ -1070,7 +1062,7 @@ pub async fn add_favorite_album(
         &url,
         access_token,
         None,
-        Some(vec![("albumId", &album_id.to_string())]),
+        Some(serde_json::json!({ "albumId": &album_id })),
     )
     .await?;
 
@@ -1315,7 +1307,7 @@ pub async fn add_favorite_track(
         &url,
         access_token,
         None,
-        Some(vec![("trackId", &track_id.to_string())]),
+        Some(serde_json::json!({ "trackId": &track_id })),
     )
     .await?;
 
