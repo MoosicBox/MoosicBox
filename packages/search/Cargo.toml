@@ -20,7 +20,6 @@ switchy_fs              = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
-utoipa    = { workspace = true, optional = true }
 
 itertools = { workspace = true }
 log       = { workspace = true }
@@ -50,10 +49,6 @@ api = [
     "moosicbox_search_models/api",
 ]
 db = ["moosicbox_music_models/db"]
-openapi = [
-    "dep:utoipa",
-    "moosicbox_music_models/openapi",
-    "moosicbox_search_models/openapi",
-]
+openapi = ["moosicbox_music_models/openapi", "moosicbox_search_models/openapi"]
 
 simulator = ["switchy_fs/simulator"]

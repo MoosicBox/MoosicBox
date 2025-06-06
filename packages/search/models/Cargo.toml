@@ -10,20 +10,15 @@ readme      = "README.md"
 repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
-[package.metadata.cargo-machete]
-ignored = ["strum_macros"]
-
 [dependencies]
 moosicbox_json_utils = { workspace = true, features = [
     "tantivy",
 ], optional = true }
 moosicbox_music_models = { workspace = true, features = ["tantivy"] }
 
-log          = { workspace = true }
-serde        = { workspace = true, features = ["derive"] }
-strum        = { workspace = true, features = ["derive"] }
-strum_macros = { workspace = true }
-tantivy      = { workspace = true }
+log     = { workspace = true }
+serde   = { workspace = true, features = ["derive"] }
+tantivy = { workspace = true }
 
 utoipa = { workspace = true, optional = true }
 

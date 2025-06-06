@@ -8075,7 +8075,6 @@ dependencies = [
  "test-log",
  "thiserror 2.0.12",
  "tokio",
- "utoipa",
 ]
 
 [[package]]
@@ -8086,8 +8085,6 @@ dependencies = [
  "moosicbox_json_utils",
  "moosicbox_music_models",
  "serde",
- "strum 0.27.1",
- "strum_macros 0.27.1",
  "tantivy",
  "utoipa",
 ]
