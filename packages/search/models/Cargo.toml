@@ -27,5 +27,5 @@ default = ["api", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["dep:moosicbox_json_utils"]
-openapi = ["dep:utoipa"]
+api     = ["dep:moosicbox_json_utils", "moosicbox_music_models/api"]
+openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
