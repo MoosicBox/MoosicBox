@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use actix_web::{
     Result, Scope,
     dev::{ServiceFactory, ServiceRequest},
@@ -5,7 +7,9 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_music_api::{MusicApis, SourceToMusicApi as _};
+use moosicbox_music_api::{
+    MusicApis, SourceToMusicApi as _, models::search::api::ApiSearchResultsResponse,
+};
 use moosicbox_music_models::ApiSource;
 use moosicbox_paging::Page;
 use moosicbox_profiles::api::ProfileName;
@@ -23,6 +27,7 @@ pub fn bind_services<
         .service(auth_music_api_endpoint)
         .service(scan_music_api_endpoint)
         .service(enable_scan_origin_music_api_endpoint)
+        .service(search_music_apis_endpoint)
 }
 
 #[cfg(feature = "openapi")]
@@ -34,6 +39,7 @@ pub fn bind_services<
         auth_music_api_endpoint,
         scan_music_api_endpoint,
         enable_scan_origin_music_api_endpoint,
+        search_music_apis_endpoint,
     ),
     components(schemas(
         ApiMusicApi,
@@ -275,4 +281,65 @@ pub async fn enable_scan_origin_music_api_endpoint(
             .await
             .map_err(ErrorInternalServerError)?,
     ))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMusicApis {
+    query: String,
+    offset: Option<u32>,
+    limit: Option<u32>,
+}
+
+#[cfg_attr(
+    feature = "openapi", utoipa::path(
+        tags = ["MusicApi"],
+        get,
+        path = "/search",
+        description = "Search the music APIs",
+        params(
+            ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
+            ("query" = String, Query, description = "The search query"),
+            ("offset" = Option<u32>, Query, description = "Page offset"),
+            ("limit" = Option<u32>, Query, description = "Page limit"),
+        ),
+        responses(
+            (
+                status = 200,
+                description = "A paginated response of search results for the music APIs",
+                body = Value,
+            )
+        )
+    )
+)]
+#[route("/search", method = "GET")]
+pub async fn search_music_apis_endpoint(
+    query: web::Query<SearchMusicApis>,
+    profile_name: ProfileName,
+) -> Result<Json<BTreeMap<ApiSource, ApiSearchResultsResponse>>> {
+    let profile_name: String = profile_name.into();
+    let music_apis = moosicbox_music_api::profiles::PROFILES
+        .get(&profile_name)
+        .ok_or_else(|| ErrorNotFound(format!("Missing profile '{profile_name}'")))?;
+    let music_apis = music_apis
+        .iter()
+        .filter(|x| x.supports_search())
+        .collect::<Vec<_>>();
+
+    let search_results = music_apis
+        .iter()
+        .map(|x| x.search(&query.query, query.offset, query.limit));
+    let search_results = futures::future::join_all(search_results).await;
+    let search_results = search_results
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(ErrorInternalServerError)?;
+
+    let search_results = music_apis
+        .into_iter()
+        .map(|x| x.source().clone())
+        .zip(search_results.into_iter())
+        .collect::<BTreeMap<_, _>>();
+
+    Ok(Json(search_results))
 }
