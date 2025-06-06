@@ -147,7 +147,11 @@ pub fn init() -> Router {
         })
         .with_route_result("/music-api/auth", |req| async move {
             routes::music_api_auth_route(req).await
-        });
+        })
+        .with_route_result(
+            "/search",
+            |req| async move { routes::search_route(req).await },
+        );
 
     moosicbox_assert::assert_or_panic!(ROUTER.set(router.clone()).is_ok(), "Already set ROUTER");
 

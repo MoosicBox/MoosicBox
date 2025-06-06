@@ -10,7 +10,7 @@ use moosicbox_music_models::{
     Album, ApiSources, Artist, Track,
     api::{ApiAlbum, ApiArtist},
 };
-use moosicbox_search::api::models::{
+use moosicbox_search::models::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };

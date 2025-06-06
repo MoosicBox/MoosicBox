@@ -19,6 +19,7 @@ use moosicbox_music_models::{
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
+use moosicbox_search_models::api::ApiSearchResultsResponse;
 use moosicbox_session_models::ApiSession;
 use serde::Deserialize;
 use switchy::http::models::Method;
@@ -903,4 +904,45 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
             Some("Failed to authenticate"),
         ),
     )?)
+}
+
+#[derive(Deserialize)]
+pub struct SearchRequest {
+    query: String,
+}
+
+pub async fn search_route(req: RouteRequest) -> Result<Content, RouteError> {
+    let request = req.parse_form::<SearchRequest>()?;
+    let query = &request.query;
+
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let response = CLIENT
+        .get(&format!(
+            "{host}/search/global-search?moosicboxProfile={PROFILE}&query={query}"
+        ))
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    let results: ApiSearchResultsResponse = response.json().await?;
+
+    log::trace!("search_route: results={results:?}");
+
+    moosicbox_app_native_ui::search::search(&results.results)
+        .into_string()
+        .try_into()
+        .map_err(|e| {
+            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
+            RouteError::ParseMarkup
+        })
 }

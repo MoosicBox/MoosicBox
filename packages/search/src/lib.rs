@@ -22,6 +22,8 @@ use thiserror::Error;
 use tokio::sync::Semaphore;
 use tokio::task::JoinError;
 
+pub use moosicbox_search_models as models;
+
 #[cfg(feature = "api")]
 pub mod api;
 #[cfg(feature = "db")]

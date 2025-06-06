@@ -12,7 +12,7 @@ use moosicbox_music_models::{
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
-use moosicbox_search::api::models::ApiSearchResultsResponse;
+use moosicbox_search::models::api::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};

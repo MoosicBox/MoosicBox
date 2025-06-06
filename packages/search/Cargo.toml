@@ -11,11 +11,12 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-moosicbox_config       = { workspace = true }
-moosicbox_json_utils   = { workspace = true, features = ["tantivy"] }
-moosicbox_music_models = { workspace = true, features = ["tantivy"] }
-moosicbox_task         = { workspace = true }
-switchy_fs             = { workspace = true, features = ["std"] }
+moosicbox_config        = { workspace = true }
+moosicbox_json_utils    = { workspace = true, features = ["tantivy"] }
+moosicbox_music_models  = { workspace = true, features = ["tantivy"] }
+moosicbox_search_models = { workspace = true }
+moosicbox_task          = { workspace = true }
+switchy_fs              = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -42,8 +43,17 @@ default = ["api", "db", "openapi"]
 
 fail-on-warnings = []
 
-api     = ["db", "dep:actix-web", "moosicbox_music_models/api"]
-db      = ["moosicbox_music_models/db"]
-openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
+api = [
+    "db",
+    "dep:actix-web",
+    "moosicbox_music_models/api",
+    "moosicbox_search_models/api",
+]
+db = ["moosicbox_music_models/db"]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_music_models/openapi",
+    "moosicbox_search_models/openapi",
+]
 
 simulator = ["switchy_fs/simulator"]

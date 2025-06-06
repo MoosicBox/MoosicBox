@@ -10,6 +10,7 @@ pub mod downloads;
 pub mod formatting;
 pub mod play_queue;
 pub mod playback_sessions;
+pub mod search;
 pub mod settings;
 pub mod state;
 

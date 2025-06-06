@@ -1,41 +1,88 @@
-use std::str::FromStr;
+use std::str::FromStr as _;
 
-use actix_web::{
-    Result, Scope,
-    dev::{ServiceFactory, ServiceRequest},
-    error::ErrorInternalServerError,
-    get,
-    web::{self, Json},
-};
-use moosicbox_json_utils::{ParseError, ToValueType, tantivy::ToValue};
-use moosicbox_music_models::{AudioFormat, TrackApiSource, api::ApiAlbumVersionQuality};
-use serde::Deserialize;
+use moosicbox_json_utils::{ParseError, ToValueType, tantivy::ToValue as _};
+use moosicbox_music_models::{AudioFormat, TrackApiSource, api::ApiAlbumVersionQuality, id::Id};
+use serde::{Deserialize, Serialize};
 use tantivy::schema::NamedFieldDocument;
 
-pub mod models;
-
-use crate::search_global_search_index;
-use models::{
-    ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
-    ApiGlobalTrackSearchResult, ApiRawSearchResultsResponse, ApiSearchResultsResponse,
-};
-
-pub fn bind_services<
-    T: ServiceFactory<ServiceRequest, Config = (), Error = actix_web::Error, InitError = ()>,
->(
-    scope: Scope<T>,
-) -> Scope<T> {
-    scope
-        .service(search_global_search_endpoint)
-        .service(search_raw_global_search_endpoint)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiGlobalArtistSearchResult {
+    pub artist_id: Id,
+    pub title: String,
+    pub contains_cover: bool,
+    pub blur: bool,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct SearchGlobalSearchQuery {
-    query: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiGlobalAlbumSearchResult {
+    pub artist_id: Id,
+    pub artist: String,
+    pub album_id: Id,
+    pub title: String,
+    pub contains_cover: bool,
+    pub blur: bool,
+    pub date_released: Option<String>,
+    pub date_added: Option<String>,
+    pub versions: Vec<ApiAlbumVersionQuality>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiGlobalTrackSearchResult {
+    pub artist_id: Id,
+    pub artist: String,
+    pub album_id: Id,
+    pub album: String,
+    pub track_id: Id,
+    pub title: String,
+    pub contains_cover: bool,
+    pub blur: bool,
+    pub date_released: Option<String>,
+    pub date_added: Option<String>,
+    pub format: Option<AudioFormat>,
+    pub bit_depth: Option<u8>,
+    pub sample_rate: Option<u32>,
+    pub channels: Option<u8>,
+    pub source: TrackApiSource,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(tag = "type")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub enum ApiGlobalSearchResult {
+    Artist(ApiGlobalArtistSearchResult),
+    Album(ApiGlobalAlbumSearchResult),
+    Track(ApiGlobalTrackSearchResult),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct ApiSearchResultsResponse {
+    pub position: usize,
+    pub results: Vec<ApiGlobalSearchResult>,
+}
+
+impl From<Vec<ApiGlobalSearchResult>> for ApiSearchResultsResponse {
+    fn from(value: Vec<ApiGlobalSearchResult>) -> Self {
+        Self {
+            position: 0,
+            results: value,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiRawSearchResultsResponse {
+    pub position: usize,
+    pub results: Vec<NamedFieldDocument>,
 }
 
 impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
@@ -143,7 +190,8 @@ impl ToValueType<ApiGlobalSearchResult> for &NamedFieldDocument {
 }
 
 impl ApiGlobalSearchResult {
-    fn to_key(&self) -> String {
+    #[must_use]
+    pub fn to_key(&self) -> String {
         match self {
             Self::Artist(artist) => format!("artist|{}", artist.title),
             Self::Album(album) => {
@@ -154,88 +202,4 @@ impl ApiGlobalSearchResult {
             }
         }
     }
-}
-
-#[get("/global-search")]
-pub async fn search_global_search_endpoint(
-    query: web::Query<SearchGlobalSearchQuery>,
-) -> Result<Json<ApiSearchResultsResponse>> {
-    let limit = query.limit.unwrap_or(10);
-    let offset = query.offset.unwrap_or(0);
-
-    let mut position = offset;
-    let mut results: Vec<ApiGlobalSearchResult> = vec![];
-
-    while results.len() < limit {
-        let values = search_global_search_index(&query.query, position, limit).map_err(|e| {
-            ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
-        })?;
-
-        if values.is_empty() {
-            break;
-        }
-
-        for value in values {
-            position += 1;
-
-            let value: ApiGlobalSearchResult = match value.to_value_type() {
-                Ok(value) => value,
-                Err(err) => {
-                    log::error!("Failed to parse search result: {err:?}");
-                    continue;
-                }
-            };
-
-            if !results.iter().any(|r| r.to_key() == value.to_key()) {
-                results.push(value);
-
-                if results.len() >= limit {
-                    break;
-                }
-            }
-        }
-    }
-
-    Ok(Json(ApiSearchResultsResponse { position, results }))
-}
-
-#[derive(Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchRawGlobalSearchQuery {
-    query: String,
-    offset: Option<usize>,
-    limit: Option<usize>,
-}
-
-#[get("/raw-global-search")]
-pub async fn search_raw_global_search_endpoint(
-    query: web::Query<SearchRawGlobalSearchQuery>,
-) -> Result<Json<ApiRawSearchResultsResponse>> {
-    let limit = query.limit.unwrap_or(10);
-    let offset = query.offset.unwrap_or(0);
-
-    let mut position = offset;
-    let mut results: Vec<NamedFieldDocument> = vec![];
-
-    while results.len() < limit {
-        let values = search_global_search_index(&query.query, position, limit).map_err(|e| {
-            ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
-        })?;
-
-        if values.is_empty() {
-            break;
-        }
-
-        for value in values {
-            position += 1;
-
-            results.push(value);
-
-            if results.len() >= limit {
-                break;
-            }
-        }
-    }
-
-    Ok(Json(ApiRawSearchResultsResponse { position, results }))
 }

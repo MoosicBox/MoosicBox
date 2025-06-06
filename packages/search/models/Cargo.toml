@@ -1,0 +1,36 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["database", "development-tools"]
+description = "MoosicBox Search models package"
+edition     = "2024"
+keywords    = ["api", "database", "models", "search", "tantivy"]
+license     = "MPL-2.0"
+name        = "moosicbox_search_models"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.1"
+
+[package.metadata.cargo-machete]
+ignored = ["strum_macros"]
+
+[dependencies]
+moosicbox_json_utils = { workspace = true, features = [
+    "tantivy",
+], optional = true }
+moosicbox_music_models = { workspace = true, features = ["tantivy"] }
+
+log          = { workspace = true }
+serde        = { workspace = true, features = ["derive"] }
+strum        = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+tantivy      = { workspace = true }
+
+utoipa = { workspace = true, optional = true }
+
+[features]
+default = ["api", "openapi"]
+
+fail-on-warnings = []
+
+api     = ["dep:moosicbox_json_utils"]
+openapi = ["dep:utoipa"]

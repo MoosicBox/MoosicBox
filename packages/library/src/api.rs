@@ -10,7 +10,7 @@ use actix_web::{
 use moosicbox_music_api::models::AlbumsRequest;
 use moosicbox_music_models::{AlbumSort, api::ApiAlbum, id::parse_integer_ranges_to_ids};
 use moosicbox_paging::{Page, PagingRequest};
-use moosicbox_search::api::models::ApiSearchResultsResponse;
+use moosicbox_search::models::api::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
@@ -89,10 +89,10 @@ pub fn bind_services<
         ApiLibraryAlbum,
         ApiLibraryTrack,
         ApiSearchResultsResponse,
-        moosicbox_search::api::models::ApiGlobalSearchResult,
-        moosicbox_search::api::models::ApiGlobalArtistSearchResult,
-        moosicbox_search::api::models::ApiGlobalAlbumSearchResult,
-        moosicbox_search::api::models::ApiGlobalTrackSearchResult,
+        moosicbox_search::models::api::ApiGlobalSearchResult,
+        moosicbox_search::models::api::ApiGlobalArtistSearchResult,
+        moosicbox_search::models::api::ApiGlobalAlbumSearchResult,
+        moosicbox_search::models::api::ApiGlobalTrackSearchResult,
         LibraryArtistOrder,
         LibraryArtistOrderDirection,
         LibraryAlbumOrder,

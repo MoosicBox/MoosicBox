@@ -45,6 +45,7 @@ RUN cat Cargo.toml | \
     \"packages\/random\",\r\
     \"packages\/resampler\",\r\
     \"packages\/search\",\r\
+    \"packages\/search\/models\",\r\
     \"packages\/session\",\r\
     \"packages\/session\/models\",\r\
     \"packages\/simvar\",\r\
@@ -100,6 +101,7 @@ COPY packages/profiles/Cargo.toml packages/profiles/Cargo.toml
 COPY packages/random/Cargo.toml packages/random/Cargo.toml
 COPY packages/resampler/Cargo.toml packages/resampler/Cargo.toml
 COPY packages/search/Cargo.toml packages/search/Cargo.toml
+COPY packages/search/models/Cargo.toml packages/search/models/Cargo.toml
 COPY packages/session/Cargo.toml packages/session/Cargo.toml
 COPY packages/session/models/Cargo.toml packages/session/models/Cargo.toml
 COPY packages/simvar/Cargo.toml packages/simvar/Cargo.toml
@@ -181,6 +183,7 @@ path=\"..\/..\/temp_lib.rs\"/" | \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/api/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/music_api/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/search/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/session/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simvar/harness/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/simvar/utils/Cargo.toml"

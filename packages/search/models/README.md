@@ -1,0 +1,1 @@
+# MoosicBox Search models crate

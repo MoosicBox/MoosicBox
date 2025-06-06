@@ -7132,6 +7132,7 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_player",
+ "moosicbox_search_models",
  "moosicbox_session_models",
  "moosicbox_task",
  "moosicbox_ws",
@@ -7183,6 +7184,7 @@ dependencies = [
  "moosicbox_menu_models",
  "moosicbox_music_models",
  "moosicbox_paging",
+ "moosicbox_search_models",
  "moosicbox_session_models",
  "rust_decimal",
  "rust_decimal_macros",
@@ -8061,6 +8063,7 @@ dependencies = [
  "moosicbox_config",
  "moosicbox_json_utils",
  "moosicbox_music_models",
+ "moosicbox_search_models",
  "moosicbox_task",
  "pretty_assertions",
  "regex",
@@ -8072,6 +8075,20 @@ dependencies = [
  "test-log",
  "thiserror 2.0.12",
  "tokio",
+ "utoipa",
+]
+
+[[package]]
+name = "moosicbox_search_models"
+version = "0.1.1"
+dependencies = [
+ "log 0.4.27",
+ "moosicbox_json_utils",
+ "moosicbox_music_models",
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "tantivy",
  "utoipa",
 ]
 

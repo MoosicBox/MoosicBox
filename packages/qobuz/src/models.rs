@@ -13,7 +13,7 @@ use moosicbox_music_models::{
     api::{ApiAlbum, ApiArtist},
     id::TryFromIdError,
 };
-use moosicbox_search::api::models::{
+use moosicbox_search::models::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
