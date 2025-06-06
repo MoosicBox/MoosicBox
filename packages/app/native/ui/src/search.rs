@@ -2,7 +2,7 @@
 
 use hyperchad::transformer_models::{AlignItems, TextAlign};
 use maud::{Markup, html};
-use moosicbox_search_models::api::{
+use moosicbox_music_api_models::search::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult,
 };

@@ -22,6 +22,9 @@ switchy_database       = { workspace = true }
 # API Dependencies
 utoipa = { workspace = true, optional = true }
 
+# Search Dependencies
+tantivy = { workspace = true, optional = true }
+
 log          = { workspace = true }
 serde        = { workspace = true, features = ["derive"] }
 serde_json   = { workspace = true }
@@ -29,7 +32,7 @@ strum        = { workspace = true }
 strum_macros = { workspace = true }
 
 [features]
-default = ["api", "db", "openapi"]
+default = ["api", "api-search", "db", "openapi"]
 
 fail-on-warnings = []
 
@@ -37,4 +40,7 @@ openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
 db = ["moosicbox_music_models/db", "switchy_database/api"]
 
-api = ["moosicbox_music_models/api", "switchy_database/api"]
+api        = ["moosicbox_music_models/api", "switchy_database/api"]
+api-search = ["moosicbox_music_models/api", "search"]
+
+search = ["dep:tantivy"]

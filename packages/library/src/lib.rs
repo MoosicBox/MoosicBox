@@ -22,7 +22,7 @@ use moosicbox_music_api::{
     models::{
         AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
         ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
-        TrackSource,
+        TrackSource, search::api::ApiGlobalSearchResult,
     },
 };
 use moosicbox_music_models::{
@@ -31,8 +31,7 @@ use moosicbox_music_models::{
 };
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use moosicbox_search::{
-    PopulateIndexError, RecreateIndexError, data::AsDataValues as _,
-    models::api::ApiGlobalSearchResult, populate_global_search_index,
+    PopulateIndexError, RecreateIndexError, data::AsDataValues as _, populate_global_search_index,
 };
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};

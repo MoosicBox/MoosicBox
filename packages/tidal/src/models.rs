@@ -6,15 +6,17 @@ use moosicbox_json_utils::{
     database::AsModelResult,
     serde_json::{ToNestedValue, ToValue},
 };
-use moosicbox_music_api::models::ImageCoverSize;
+use moosicbox_music_api::models::{
+    ImageCoverSize,
+    search::api::{
+        ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
+        ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
+    },
+};
 use moosicbox_music_models::{
     Album, ApiSources, Artist, Track,
     api::{ApiAlbum, ApiArtist},
     id::TryFromIdError,
-};
-use moosicbox_search::models::api::{
-    ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
-    ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

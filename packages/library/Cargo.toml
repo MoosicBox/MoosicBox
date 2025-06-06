@@ -23,7 +23,7 @@ moosicbox_json_utils = { workspace = true, features = [
 ] }
 moosicbox_library_models = { workspace = true, features = ["db"] }
 moosicbox_menu_models = { workspace = true }
-moosicbox_music_api = { workspace = true }
+moosicbox_music_api = { workspace = true, features = ["models-api-search"] }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging = { workspace = true }
 moosicbox_profiles = { workspace = true }

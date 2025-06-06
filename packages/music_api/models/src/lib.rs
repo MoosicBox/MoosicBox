@@ -2,6 +2,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+#[cfg(feature = "search")]
+pub mod search;
+
 use moosicbox_music_models::{
     AlbumSort, AlbumSource, AlbumType, AudioFormat, TrackApiSource,
     id::{ApiId, Id},

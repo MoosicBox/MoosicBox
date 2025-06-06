@@ -60,10 +60,10 @@ moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_music_api = { workspace = true }
 moosicbox_music_api_api = { workspace = true }
+moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging = { workspace = true }
 moosicbox_player = { workspace = true }
-moosicbox_search_models = { workspace = true, features = ["api"] }
 moosicbox_session_models = { workspace = true }
 moosicbox_task = { workspace = true }
 moosicbox_ws = { workspace = true }

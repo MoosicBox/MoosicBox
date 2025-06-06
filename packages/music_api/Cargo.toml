@@ -54,3 +54,6 @@ auth-poll = [
     "switchy_async/tokio",
 ]
 auth-username-password = ["_auth"]
+
+models-api-search = ["moosicbox_music_api_models/api-search"]
+models-search     = ["moosicbox_music_api_models/search"]

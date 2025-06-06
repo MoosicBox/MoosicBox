@@ -7,12 +7,12 @@ use actix_web::{
     route,
     web::{self, Json},
 };
+use moosicbox_music_api::models::search::api::ApiSearchResultsResponse;
 use moosicbox_music_models::{
     ApiSource, ApiSources,
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
-use moosicbox_search::models::api::ApiSearchResultsResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};

@@ -6,13 +6,13 @@ use moosicbox_json_utils::{
     database::AsModelResult,
     serde_json::{ToNestedValue as _, ToValue as _},
 };
+use moosicbox_music_api::models::search::api::{
+    ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
+    ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
+};
 use moosicbox_music_models::{
     Album, ApiSources, Artist, Track,
     api::{ApiAlbum, ApiArtist},
-};
-use moosicbox_search::models::api::{
-    ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
-    ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

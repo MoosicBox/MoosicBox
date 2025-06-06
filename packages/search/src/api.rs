@@ -6,12 +6,12 @@ use actix_web::{
     web::{self, Json},
 };
 use moosicbox_json_utils::ToValueType;
+use moosicbox_music_api_models::search::api::{
+    ApiGlobalSearchResult, ApiRawSearchResultsResponse, ApiSearchResultsResponse,
+};
 use serde::Deserialize;
 use tantivy::schema::NamedFieldDocument;
 
-use crate::models::api::{
-    ApiGlobalSearchResult, ApiRawSearchResultsResponse, ApiSearchResultsResponse,
-};
 use crate::search_global_search_index;
 
 pub fn bind_services<

@@ -14,12 +14,12 @@ use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_downloader::api::models::ApiDownloadTask;
 use moosicbox_music_api::{SourceToMusicApi as _, profiles::PROFILES};
 use moosicbox_music_api_api::models::{ApiMusicApi, AuthValues};
+use moosicbox_music_api_models::search::api::ApiSearchResultsResponse;
 use moosicbox_music_models::{
     AlbumSort, AlbumType, ApiSource, TrackApiSource, TryFromStringTrackApiSourceError,
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
-use moosicbox_search_models::api::ApiSearchResultsResponse;
 use moosicbox_session_models::ApiSession;
 use serde::Deserialize;
 use switchy::http::models::Method;
