@@ -102,7 +102,15 @@ pub fn number_to_html_string(number: &Number, px: bool) -> String {
 pub fn color_to_css_string(color: Color) -> String {
     color.a.map_or_else(
         || format!("rgb({},{},{})", color.r, color.g, color.b),
-        |a| format!("rgba({},{},{},{})", color.r, color.g, color.b, a),
+        |a| {
+            format!(
+                "rgba({},{},{},{})",
+                color.r,
+                color.g,
+                color.b,
+                f64::from(a) / f64::from(u8::MAX)
+            )
+        },
     )
 }
 
