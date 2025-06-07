@@ -140,6 +140,12 @@ pub mod api {
         }
     }
 
+    impl AsRef<str> for ProfileName {
+        fn as_ref(&self) -> &str {
+            &self.0
+        }
+    }
+
     impl ProfileName {
         /// # Errors
         ///
