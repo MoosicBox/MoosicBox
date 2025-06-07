@@ -36,11 +36,9 @@ pub async fn search_global_search_endpoint(
     query: web::Query<SearchGlobalSearchQuery>,
 ) -> Result<Json<ApiSearchResultsResponse>> {
     Ok(Json(
-        global_search(&query.query, query.offset, query.limit)
-            .await
-            .map_err(|e| {
-                ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
-            })?,
+        global_search(&query.query, query.offset, query.limit).map_err(|e| {
+            ErrorInternalServerError(format!("Failed to search global search index: {e:?}"))
+        })?,
     ))
 }
 

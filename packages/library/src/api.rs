@@ -1010,7 +1010,6 @@ pub async fn search_endpoint(
             .map(|x| x.into_iter().map(Into::into).collect::<Vec<_>>())
             .as_deref(),
     )
-    .await
     .map_err(ErrorInternalServerError)?;
 
     Ok(Json(results))

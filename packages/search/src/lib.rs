@@ -966,7 +966,7 @@ pub fn search_global_search_index(
 /// # Errors
 ///
 /// * If failed to search the global search index
-pub async fn global_search(
+pub fn global_search(
     query: &str,
     offset: Option<u32>,
     limit: Option<u32>,

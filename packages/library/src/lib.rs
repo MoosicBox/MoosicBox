@@ -809,15 +809,14 @@ pub enum LibrarySearchType {
 /// # Errors
 ///
 /// * If there was a database error
-#[allow(clippy::too_many_arguments, clippy::unused_async)]
-pub async fn search(
+#[allow(clippy::too_many_arguments)]
+pub fn search(
     query: &str,
     offset: Option<u32>,
     limit: Option<u32>,
     _types: Option<&[LibrarySearchType]>,
 ) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
     let results = moosicbox_search::global_search(query, offset, limit)
-        .await
         .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
     log::trace!("Received search response: results={results:?}");
 
@@ -1516,7 +1515,7 @@ impl MusicApi for LibraryMusicApi {
         offset: Option<u32>,
         limit: Option<u32>,
     ) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
-        let results = search(query, offset, limit, None).await?;
+        let results = search(query, offset, limit, None)?;
 
         Ok(results)
     }
