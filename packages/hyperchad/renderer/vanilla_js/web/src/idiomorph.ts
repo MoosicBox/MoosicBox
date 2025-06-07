@@ -33,11 +33,6 @@ on('swapHtml', ({ target, html, inner }) => {
                     elements.push(node);
                 }
             },
-            afterNodeMorphed(_old: Node, node: Node) {
-                if (node instanceof HTMLElement) {
-                    elements.push(node);
-                }
-            },
         },
     }).filter((x) => x instanceof HTMLElement) as HTMLElement[];
 

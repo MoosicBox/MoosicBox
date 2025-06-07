@@ -187,13 +187,8 @@ onElement(({ element }) => {
     }
 });
 
-const processedElements = new WeakSet();
-
 export function processElement(element: HTMLElement) {
-    if (!processedElements.has(element)) {
-        processedElements.add(element);
-        elementHandlers.forEach((handler) => handler({ element }));
-    }
+    elementHandlers.forEach((handler) => handler({ element }));
 
     for (const child of element.children) {
         processElement(child as HTMLElement);
