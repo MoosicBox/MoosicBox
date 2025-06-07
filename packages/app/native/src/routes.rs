@@ -1,4 +1,4 @@
-use std::{num::ParseIntError, str::FromStr, sync::LazyLock};
+use std::{collections::BTreeMap, num::ParseIntError, str::FromStr, sync::LazyLock};
 
 use hyperchad::{
     renderer::{Content, View},
@@ -923,7 +923,7 @@ pub async fn search_route(req: RouteRequest) -> Result<Content, RouteError> {
 
     let response = CLIENT
         .get(&format!(
-            "{host}/search/global-search?moosicboxProfile={PROFILE}&query={query}"
+            "{host}/music-api/search?moosicboxProfile={PROFILE}&query={query}"
         ))
         .send()
         .await?;
@@ -934,11 +934,11 @@ pub async fn search_route(req: RouteRequest) -> Result<Content, RouteError> {
         return Err(RouteError::RouteFailed(message.into()));
     }
 
-    let results: ApiSearchResultsResponse = response.json().await?;
+    let results: BTreeMap<ApiSource, ApiSearchResultsResponse> = response.json().await?;
 
     log::trace!("search_route: results={results:?}");
 
-    moosicbox_app_native_ui::search::search(&results.results)
+    moosicbox_app_native_ui::search::search(&results)
         .into_string()
         .try_into()
         .map_err(|e| {

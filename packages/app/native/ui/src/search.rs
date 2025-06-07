@@ -1,16 +1,19 @@
 #![allow(clippy::module_name_repetitions)]
 
+use std::collections::BTreeMap;
+
 use hyperchad::transformer_models::{AlignItems, TextAlign};
 use maud::{Markup, html};
 use moosicbox_music_api_models::search::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
-    ApiGlobalTrackSearchResult,
+    ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
 };
+use moosicbox_music_models::ApiSource;
 
 use crate::pre_escaped;
 
 #[must_use]
-pub fn search(results: &[ApiGlobalSearchResult]) -> Markup {
+pub fn search(results: &BTreeMap<ApiSource, ApiSearchResultsResponse>) -> Markup {
     html! {
         div id="search" sx-padding=(20) sx-gap=(10) {
             section sx-align-items=(AlignItems::Start) {
@@ -38,7 +41,12 @@ pub fn search(results: &[ApiGlobalSearchResult]) -> Markup {
                         h2 { "Search Results" }
                     }
 
-                    (results_content(results))
+                    div {
+                        @for (source, results) in results {
+                            (source.to_string_display())
+                            (results_content(&results.results))
+                        }
+                    }
                 }
             }
         }
