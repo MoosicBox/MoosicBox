@@ -54,6 +54,6 @@ fail-on-warnings = []
 
 api     = ["dep:actix-web", "switchy_database/api", "switchy_database/api"]
 db      = []
-openapi = ["dep:utoipa"]
+openapi = ["dep:utoipa", "moosicbox_music_api/openapi"]
 
 scan = ["db", "moosicbox_music_api_helpers/scan"]
