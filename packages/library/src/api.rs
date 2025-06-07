@@ -999,10 +999,8 @@ pub struct LibrarySearchQuery {
 #[route("/search", method = "GET")]
 pub async fn search_endpoint(
     query: web::Query<LibrarySearchQuery>,
-    db: LibraryDatabase,
 ) -> Result<Json<ApiSearchResultsResponse>> {
     let results = search(
-        &db,
         &query.query,
         query.offset,
         query.limit,
