@@ -1,8 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::collections::BTreeMap;
-
-use hyperchad::transformer_models::{AlignItems, Position, TextAlign};
+use hyperchad::{
+    actions::ActionType,
+    transformer_models::{AlignItems, Position, TextAlign, Visibility},
+};
 use maud::{Markup, html};
 use moosicbox_music_api_models::search::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
@@ -10,13 +11,17 @@ use moosicbox_music_api_models::search::api::{
 };
 use moosicbox_music_models::ApiSource;
 
-use crate::pre_escaped;
+use crate::{pre_escaped, public_img};
 
 #[must_use]
-pub fn search(results: &BTreeMap<ApiSource, ApiSearchResultsResponse>) -> Markup {
+pub fn search<'a>(
+    results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
+    open: bool,
+) -> Markup {
     html! {
         div
             id="search"
+            sx-visibility=(if open { Visibility::Visible } else { Visibility::Hidden })
             sx-padding=(20)
             sx-gap=(10)
             sx-position=(Position::Fixed)
@@ -51,9 +56,46 @@ pub fn search(results: &BTreeMap<ApiSource, ApiSearchResultsResponse>) -> Markup
                         h2 { "Search Results" }
                     }
 
-                    (search_results(results.iter()))
+                    (search_results(results))
                 }
             }
+            button
+                id="close-search-button"
+                sx-border-radius=(100)
+                sx-background="#fff"
+                sx-border="2, #222"
+                sx-padding=(10)
+                sx-margin-x=(20)
+                sx-margin-y=(10)
+                sx-position=(Position::Fixed)
+                sx-top=(0)
+                sx-right=(0)
+                fx-click=(ActionType::hide_str_id("search").and(ActionType::show_str_id("search-button")))
+            {
+                img
+                    sx-width=(20)
+                    sx-height=(20)
+                    src=(public_img!("cross.svg"));
+            }
+        }
+        button
+            id="search-button"
+            sx-visibility=(if open { Visibility::Hidden } else { Visibility::Visible })
+            sx-border-radius=(100)
+            sx-background="#fff"
+            sx-border="2, #222"
+            sx-padding=(10)
+            sx-margin-x=(20)
+            sx-margin-y=(10)
+            sx-position=(Position::Fixed)
+            sx-top=(0)
+            sx-right=(0)
+            fx-click=(ActionType::hide_self().and(ActionType::show_str_id("search")))
+        {
+            img
+                sx-width=(20)
+                sx-height=(20)
+                src=(public_img!("magnifying-glass.svg"));
         }
     }
 }

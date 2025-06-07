@@ -30,6 +30,7 @@ use maud::{Markup, html};
 use moosicbox_music_models::{AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
 use play_queue::play_queue;
+use search::search;
 use serde::{Deserialize, Serialize};
 use state::State;
 
@@ -636,6 +637,7 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
             (play_queue(state))
             (audio_zones())
             (playback_sessions())
+            (search(std::iter::empty(), false))
         }
     }
 }
