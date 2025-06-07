@@ -1,7 +1,9 @@
 use std::str::FromStr as _;
 
 use moosicbox_json_utils::{ParseError, ToValueType, tantivy::ToValue as _};
-use moosicbox_music_models::{AudioFormat, TrackApiSource, api::ApiAlbumVersionQuality, id::Id};
+use moosicbox_music_models::{
+    ApiSource, AudioFormat, TrackApiSource, api::ApiAlbumVersionQuality, id::Id,
+};
 use serde::{Deserialize, Serialize};
 use tantivy::schema::NamedFieldDocument;
 
@@ -13,6 +15,7 @@ pub struct ApiGlobalArtistSearchResult {
     pub title: String,
     pub contains_cover: bool,
     pub blur: bool,
+    pub api_source: ApiSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -28,6 +31,7 @@ pub struct ApiGlobalAlbumSearchResult {
     pub date_released: Option<String>,
     pub date_added: Option<String>,
     pub versions: Vec<ApiAlbumVersionQuality>,
+    pub api_source: ApiSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -49,6 +53,7 @@ pub struct ApiGlobalTrackSearchResult {
     pub sample_rate: Option<u32>,
     pub channels: Option<u8>,
     pub source: TrackApiSource,
+    pub api_source: ApiSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -94,6 +99,7 @@ impl ToValueType<ApiGlobalArtistSearchResult> for &NamedFieldDocument {
                 .to_value::<Option<&str>>("cover")?
                 .is_some_and(|cover| !cover.is_empty()),
             blur: self.to_value("blur")?,
+            api_source: ApiSource::library(),
         })
     }
 }
@@ -141,6 +147,7 @@ impl ToValueType<ApiGlobalAlbumSearchResult> for &NamedFieldDocument {
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()?,
+            api_source: ApiSource::library(),
         })
     }
 }
@@ -172,6 +179,7 @@ impl ToValueType<ApiGlobalTrackSearchResult> for &NamedFieldDocument {
             channels: self.to_value("version_channels")?,
             source: TrackApiSource::from_str(self.to_value("version_sources")?)
                 .map_err(|_| ParseError::ConvertType("TrackSource".into()))?,
+            api_source: ApiSource::library(),
         })
     }
 }

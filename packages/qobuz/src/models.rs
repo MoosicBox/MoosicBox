@@ -267,6 +267,7 @@ impl From<QobuzAlbum> for ApiGlobalSearchResult {
             date_released: Some(value.release_date_original),
             date_added: None,
             versions: vec![],
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -512,6 +513,7 @@ impl From<QobuzTrack> for ApiGlobalSearchResult {
             sample_rate: None,
             channels: None,
             source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -630,6 +632,7 @@ impl From<QobuzArtist> for ApiGlobalSearchResult {
             title: value.name,
             contains_cover: value.image.is_some(),
             blur: false,
+            api_source: API_SOURCE.clone(),
         })
     }
 }

@@ -69,6 +69,7 @@ impl From<TidalArtist> for ApiGlobalSearchResult {
             title: value.name,
             contains_cover: value.contains_cover,
             blur: false,
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -169,6 +170,7 @@ impl From<TidalSearchArtist> for ApiGlobalSearchResult {
             title: value.name,
             contains_cover: value.contains_cover,
             blur: false,
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -369,6 +371,7 @@ impl From<TidalSearchAlbum> for ApiGlobalSearchResult {
             date_released: value.release_date,
             date_added: None,
             versions: vec![],
+            api_source: API_SOURCE.clone(),
         })
     }
 }
@@ -570,6 +573,7 @@ impl From<TidalSearchTrack> for ApiGlobalSearchResult {
             sample_rate: None,
             channels: None,
             source: API_SOURCE.clone().into(),
+            api_source: API_SOURCE.clone(),
         })
     }
 }
