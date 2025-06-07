@@ -7737,6 +7737,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_paging",
+ "moosicbox_profiles",
  "moosicbox_scan",
  "moosicbox_search",
  "moosicbox_session",

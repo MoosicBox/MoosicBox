@@ -8,7 +8,7 @@ use moosicbox_library::{
     models::LibraryAlbum,
 };
 use moosicbox_menu_models::AlbumVersion;
-use moosicbox_music_api::{MusicApi, models::AlbumsRequest};
+use moosicbox_music_api::{MusicApi, SourceToMusicApi as _, models::AlbumsRequest};
 use moosicbox_music_models::{
     Album, ApiSource, Artist, TrackApiSource,
     id::{Id, TryFromIdError},
@@ -106,6 +106,8 @@ pub enum GetAlbumVersionsError {
     MusicApi(#[from] moosicbox_music_api::Error),
     #[error(transparent)]
     LibraryAlbumTracks(#[from] LibraryAlbumTracksError),
+    #[error("Unknown source: {album_source:?}")]
+    UnknownSource { album_source: String },
 }
 
 /// # Errors
@@ -114,6 +116,7 @@ pub enum GetAlbumVersionsError {
 pub async fn get_album_versions_from_source(
     #[allow(unused)] db: &LibraryDatabase,
     library_api: &LibraryMusicApi,
+    profile: &str,
     album_id: &Id,
     source: ApiSource,
 ) -> Result<Vec<AlbumVersion>, GetAlbumVersionsError> {
@@ -123,23 +126,29 @@ pub async fn get_album_versions_from_source(
     Ok(if source.is_library() {
         library_api.library_album_versions(album_id).await?
     } else {
-        unimplemented!("Not implemented");
-        // #[allow(unused)]
-        // let tracks: Vec<Track> =
-        //     moosicbox_tidal::album_tracks(db, album_id, None, None, None, None, None, None)
-        //         .await?
-        //         .into_items()
-        //         .into_iter()
-        //         .map(Into::into)
-        //         .collect::<Vec<_>>();
-        // vec![AlbumVersion {
-        //     tracks,
-        //     format: None,
-        //     bit_depth: None,
-        //     sample_rate: None,
-        //     channels: None,
-        //     source: source.into(),
-        // }]
+        let music_api = moosicbox_music_api::profiles::PROFILES
+            .get(profile)
+            .ok_or_else(|| GetAlbumVersionsError::UnknownSource {
+                album_source: source.to_string(),
+            })?
+            .get(&source)
+            .ok_or_else(|| GetAlbumVersionsError::UnknownSource {
+                album_source: source.to_string(),
+            })?;
+
+        let tracks = music_api
+            .album_tracks(album_id, None, None, None, None)
+            .await?
+            .into_items();
+
+        vec![AlbumVersion {
+            tracks,
+            format: None,
+            bit_depth: None,
+            sample_rate: None,
+            channels: None,
+            source: source.into(),
+        }]
     })
 }
 

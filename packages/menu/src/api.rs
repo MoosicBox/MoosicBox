@@ -22,6 +22,7 @@ use moosicbox_music_models::{
     id::{ApiId, Id, ParseIntegersError, parse_integer_ranges_to_ids},
 };
 use moosicbox_paging::{Page, PagingRequest};
+use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
@@ -430,11 +431,12 @@ pub async fn get_album_versions_endpoint(
     query: web::Query<GetAlbumVersionsQuery>,
     library_api: LibraryMusicApi,
     db: LibraryDatabase,
+    profile: ProfileName,
 ) -> Result<Json<Vec<ApiAlbumVersion>>> {
     let source = query.source.clone().unwrap_or_else(ApiSource::library);
     let id = Id::try_from_str(&query.album_id, &source).map_err(ErrorBadRequest)?;
     Ok(Json(
-        get_album_versions_from_source(&db, &library_api, &id, source)
+        get_album_versions_from_source(&db, &library_api, profile.as_ref(), &id, source)
             .await
             .map_err(|_e| ErrorInternalServerError("Failed to fetch album versions"))?
             .into_iter()
@@ -583,13 +585,14 @@ pub struct GetAlbumQuery {
 #[get("/album")]
 pub async fn get_album_endpoint(
     query: web::Query<GetAlbumQuery>,
+    profile: ProfileName,
     db: LibraryDatabase,
 ) -> Result<Json<ApiAlbum>> {
     let source = query.source.clone().unwrap_or_else(ApiSource::library);
     let id = Id::try_from_str(&query.album_id, &source).map_err(ErrorBadRequest)?;
 
     Ok(Json(
-        get_album_from_source(&db, &id, &source)
+        get_album_from_source(&db, profile.as_ref(), &id, &source)
             .await
             .map_err(ErrorInternalServerError)?
             .ok_or_else(|| ErrorNotFound("Album not found"))?

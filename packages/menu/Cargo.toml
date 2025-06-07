@@ -19,6 +19,7 @@ moosicbox_menu_models  = { workspace = true }
 moosicbox_music_api    = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging       = { workspace = true }
+moosicbox_profiles     = { workspace = true, optional = true, features = ["api"] }
 moosicbox_scan         = { workspace = true }
 moosicbox_search       = { workspace = true }
 moosicbox_session      = { workspace = true }
@@ -43,6 +44,7 @@ local = ["moosicbox_scan/local"]
 
 api = [
     "dep:actix-web",
+    "dep:moosicbox_profiles",
     "moosicbox_library/api",
     "moosicbox_menu_models/api",
     "moosicbox_music_api/api",

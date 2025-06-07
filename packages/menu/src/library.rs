@@ -9,7 +9,7 @@ use moosicbox_library::{
     db,
     models::LibraryAlbum,
 };
-use moosicbox_music_api::MusicApi;
+use moosicbox_music_api::{MusicApi, SourceToMusicApi as _};
 use moosicbox_music_models::{Album, ApiSource, Artist, id::Id};
 use std::{
     sync::{Arc, PoisonError},
@@ -56,6 +56,8 @@ pub enum GetAlbumError {
     GetAlbums(#[from] GetAlbumsError),
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
+    #[error(transparent)]
+    MusicApi(#[from] moosicbox_music_api::Error),
     #[error("Invalid request")]
     InvalidRequest,
     #[error(transparent)]
@@ -73,6 +75,7 @@ impl<T> From<PoisonError<T>> for GetAlbumError {
 /// * If the `LibraryMusicApi` fails to get the album from the `ApiSource`
 pub async fn get_album_from_source(
     db: &LibraryDatabase,
+    profile: &str,
     album_id: &Id,
     source: &ApiSource,
 ) -> Result<Option<Album>, GetAlbumError> {
@@ -83,14 +86,20 @@ pub async fn get_album_from_source(
             .find(|album| &Into::<Id>::into(album.id) == album_id)
             .cloned()
             .map(TryInto::try_into)
+            .transpose()?
     } else {
-        unimplemented!("Not implemented");
-        // moosicbox_tidal::album(db, album_id, None, None, None, None)
-        //     .await
-        //     .ok()
-        //     .map(TryInto::try_into)
-    }
-    .transpose()?;
+        let music_api = moosicbox_music_api::profiles::PROFILES
+            .get(profile)
+            .ok_or_else(|| GetAlbumError::UnknownSource {
+                album_source: source.to_string(),
+            })?
+            .get(source)
+            .ok_or_else(|| GetAlbumError::UnknownSource {
+                album_source: source.to_string(),
+            })?;
+
+        music_api.album(album_id).await?
+    };
 
     if let Some(album) = &mut album {
         let library_albums = get_albums(db).await?;
