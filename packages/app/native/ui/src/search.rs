@@ -2,7 +2,9 @@
 
 use hyperchad::{
     actions::ActionType,
-    transformer_models::{AlignItems, Position, TextAlign, Visibility},
+    transformer_models::{
+        AlignItems, LayoutDirection, LayoutOverflow, Position, TextAlign, Visibility,
+    },
 };
 use maud::{Markup, html};
 use moosicbox_music_api_models::search::api::{
@@ -11,10 +13,13 @@ use moosicbox_music_api_models::search::api::{
 };
 use moosicbox_music_models::ApiSource;
 
-use crate::{pre_escaped, public_img};
+use crate::{
+    albums::album_cover_url, artists::artist_cover_url, pre_escaped, public_img, state::State,
+};
 
 #[must_use]
 pub fn search<'a>(
+    state: &State,
     results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
     open: bool,
 ) -> Markup {
@@ -31,8 +36,17 @@ pub fn search<'a>(
             sx-bottom=(0)
             sx-background="#00000088"
         {
-            section sx-align-items=(AlignItems::Start) {
-                div sx-align-items=(AlignItems::End) sx-gap=(10) {
+            section
+                sx-align-items=(AlignItems::Start)
+                sx-width="100%"
+                sx-height="100%"
+            {
+                div
+                    sx-align-items=(AlignItems::End)
+                    sx-gap=(10)
+                    sx-width="100%"
+                    sx-height="100%"
+                {
                     form
                         hx-post="/search"
                         sx-width="100%"
@@ -56,7 +70,9 @@ pub fn search<'a>(
                         h2 { "Search Results" }
                     }
 
-                    (search_results(results))
+                    @if let Some(host) = state.connection.as_ref().map(|x| x.api_url.as_str()) {
+                        (search_results(host, results))
+                    }
                 }
             }
             button
@@ -101,31 +117,32 @@ pub fn search<'a>(
 }
 
 pub fn search_results<'a>(
+    host: &str,
     results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
 ) -> Markup {
     html! {
-        div id="search-results" sx-gap=(10) {
+        div id="search-results" sx-width="100%" sx-gap=(10) sx-overflow-y=(LayoutOverflow::Auto) {
             @for (source, results) in results {
                 (source.to_string_display())
-                (results_content(&results.results))
+                (results_content(host, &results.results))
             }
         }
     }
 }
 
 #[must_use]
-pub fn results_content(results: &[ApiGlobalSearchResult]) -> Markup {
+pub fn results_content(host: &str, results: &[ApiGlobalSearchResult]) -> Markup {
     html! {
         @for result in results {
             @match result {
                 ApiGlobalSearchResult::Artist(artist) => {
-                    (artist_result(artist))
+                    (artist_result(host, artist))
                 }
                 ApiGlobalSearchResult::Album(album) => {
-                    (album_result(album))
+                    (album_result(host, album))
                 }
                 ApiGlobalSearchResult::Track(track) => {
-                    (track_result(track))
+                    (track_result(host, track))
                 }
             }
         }
@@ -133,11 +150,16 @@ pub fn results_content(results: &[ApiGlobalSearchResult]) -> Markup {
 }
 
 #[must_use]
-fn artist_result(artist: &ApiGlobalArtistSearchResult) -> Markup {
+fn artist_result(host: &str, artist: &ApiGlobalArtistSearchResult) -> Markup {
     let artist_id = artist.artist_id.clone();
     let source = artist.api_source.clone();
     html! {
-        div {
+        div sx-dir=(LayoutDirection::Row) {
+            @let size = 70;
+            img
+                src=(artist_cover_url(host, &artist_id, &source, artist.contains_cover, size, size))
+                sx-width=(size)
+                sx-height=(size);
             a href={(pre_escaped!("/artists?artistId="))(artist_id)(pre_escaped!("&source="))(source)} {
                 (artist.title)
             }
@@ -146,11 +168,16 @@ fn artist_result(artist: &ApiGlobalArtistSearchResult) -> Markup {
 }
 
 #[must_use]
-fn album_result(album: &ApiGlobalAlbumSearchResult) -> Markup {
+fn album_result(host: &str, album: &ApiGlobalAlbumSearchResult) -> Markup {
     let album_id = album.album_id.clone();
     let source = album.api_source.clone();
     html! {
-        div {
+        div sx-dir=(LayoutDirection::Row) {
+            @let size = 70;
+            img
+                src=(album_cover_url(host, &album_id, &source, album.contains_cover, size, size))
+                sx-width=(size)
+                sx-height=(size);
             a href={(pre_escaped!("/albums?albumId="))(album_id)(pre_escaped!("&source="))(source)} {
                 (album.title)
             }
@@ -159,12 +186,17 @@ fn album_result(album: &ApiGlobalAlbumSearchResult) -> Markup {
 }
 
 #[must_use]
-fn track_result(track: &ApiGlobalTrackSearchResult) -> Markup {
+fn track_result(host: &str, track: &ApiGlobalTrackSearchResult) -> Markup {
     let album_id = track.album_id.clone();
     let title = track.title.clone();
     let source = track.api_source.clone();
     html! {
-        div {
+        div sx-dir=(LayoutDirection::Row) {
+            @let size = 70;
+            img
+                src=(album_cover_url(host, &album_id, &source, track.contains_cover, size, size))
+                sx-width=(size)
+                sx-height=(size);
             a href={(pre_escaped!("/albums?albumId="))(album_id)(pre_escaped!("&source="))(source)} {
                 (title)
             }
