@@ -938,11 +938,8 @@ pub async fn search_route(req: RouteRequest) -> Result<Content, RouteError> {
 
     log::trace!("search_route: results={results:?}");
 
-    moosicbox_app_native_ui::search::search(&results)
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            RouteError::ParseMarkup
-        })
+    Ok(Content::try_partial_view(
+        "search-results",
+        moosicbox_app_native_ui::search::search_results(results.iter()),
+    )?)
 }

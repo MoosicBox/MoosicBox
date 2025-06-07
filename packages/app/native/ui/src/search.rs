@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use hyperchad::transformer_models::{AlignItems, TextAlign};
+use hyperchad::transformer_models::{AlignItems, Position, TextAlign};
 use maud::{Markup, html};
 use moosicbox_music_api_models::search::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
@@ -15,7 +15,17 @@ use crate::pre_escaped;
 #[must_use]
 pub fn search(results: &BTreeMap<ApiSource, ApiSearchResultsResponse>) -> Markup {
     html! {
-        div id="search" sx-padding=(20) sx-gap=(10) {
+        div
+            id="search"
+            sx-padding=(20)
+            sx-gap=(10)
+            sx-position=(Position::Fixed)
+            sx-top=(0)
+            sx-left=(0)
+            sx-right=(0)
+            sx-bottom=(0)
+            sx-background="#00000088"
+        {
             section sx-align-items=(AlignItems::Start) {
                 div sx-align-items=(AlignItems::End) sx-gap=(10) {
                     form
@@ -41,13 +51,21 @@ pub fn search(results: &BTreeMap<ApiSource, ApiSearchResultsResponse>) -> Markup
                         h2 { "Search Results" }
                     }
 
-                    div {
-                        @for (source, results) in results {
-                            (source.to_string_display())
-                            (results_content(&results.results))
-                        }
-                    }
+                    (search_results(results.iter()))
                 }
+            }
+        }
+    }
+}
+
+pub fn search_results<'a>(
+    results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
+) -> Markup {
+    html! {
+        div id="search-results" sx-gap=(10) {
+            @for (source, results) in results {
+                (source.to_string_display())
+                (results_content(&results.results))
             }
         }
     }
@@ -75,9 +93,10 @@ pub fn results_content(results: &[ApiGlobalSearchResult]) -> Markup {
 #[must_use]
 fn artist_result(artist: &ApiGlobalArtistSearchResult) -> Markup {
     let artist_id = artist.artist_id.clone();
+    let source = artist.api_source.clone();
     html! {
         div {
-            a href={(pre_escaped!("/artists?artistId="))(artist_id)} {
+            a href={(pre_escaped!("/artists?artistId="))(artist_id)(pre_escaped!("&source="))(source)} {
                 (artist.title)
             }
         }
@@ -87,9 +106,10 @@ fn artist_result(artist: &ApiGlobalArtistSearchResult) -> Markup {
 #[must_use]
 fn album_result(album: &ApiGlobalAlbumSearchResult) -> Markup {
     let album_id = album.album_id.clone();
+    let source = album.api_source.clone();
     html! {
         div {
-            a href={(pre_escaped!("/albums?albumId="))(album_id)} {
+            a href={(pre_escaped!("/albums?albumId="))(album_id)(pre_escaped!("&source="))(source)} {
                 (album.title)
             }
         }
@@ -100,9 +120,10 @@ fn album_result(album: &ApiGlobalAlbumSearchResult) -> Markup {
 fn track_result(track: &ApiGlobalTrackSearchResult) -> Markup {
     let album_id = track.album_id.clone();
     let title = track.title.clone();
+    let source = track.api_source.clone();
     html! {
         div {
-            a href={(pre_escaped!("/albums?albumId="))(album_id)} {
+            a href={(pre_escaped!("/albums?albumId="))(album_id)(pre_escaped!("&source="))(source)} {
                 (title)
             }
         }
