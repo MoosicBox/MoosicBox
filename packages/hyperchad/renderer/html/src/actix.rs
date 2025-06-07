@@ -216,11 +216,18 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             .map_err(ErrorInternalServerError)?;
 
         match content {
-            Some(content) => match content {
-                hyperchad_renderer::Content::View(..)
-                | hyperchad_renderer::Content::PartialView(..) => {
+            Some(content) => match &content {
+                hyperchad_renderer::Content::View(..) => {
                     let body = self.to_body(content, req).await?;
                     Ok(HttpResponse::Ok()
+                        .content_type(ContentType::html())
+                        .body(body))
+                }
+                hyperchad_renderer::Content::PartialView(PartialView { target, .. }) => {
+                    let target = format!("#{target}");
+                    let body = self.to_body(content, req).await?;
+                    Ok(HttpResponse::Ok()
+                        .append_header(("v-fragment", target))
                         .content_type(ContentType::html())
                         .body(body))
                 }

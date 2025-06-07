@@ -34,7 +34,12 @@ pub trait LambdaResponseProcessor<T: Send + Sync + Clone> {
         body: Option<Arc<Bytes>>,
     ) -> Result<T, lambda_runtime::Error>;
 
-    async fn to_response(&self, data: T) -> Result<Option<Content>, lambda_runtime::Error>;
+    fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>>;
+
+    async fn to_response(
+        &self,
+        data: T,
+    ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error>;
 
     async fn to_body(
         &self,
@@ -115,18 +120,24 @@ impl<
 
                 let mut gz = GzEncoder::new(vec![], Compression::default());
 
-                response = match content {
-                    Some(Content::Html(x)) => {
-                        gz.write_all(x.as_bytes())?;
-                        response.header(CONTENT_TYPE, "text/html")
+                if let Some((content, headers)) = content {
+                    if let Some(headers) = headers {
+                        for (key, value) in headers {
+                            response = response.header(key, value);
+                        }
                     }
-                    #[cfg(feature = "json")]
-                    Some(Content::Json(x)) => {
-                        gz.write_all(serde_json::to_string(&x)?.as_bytes())?;
-                        response.header(CONTENT_TYPE, "application/json")
+                    match content {
+                        Content::Html(x) => {
+                            gz.write_all(x.as_bytes())?;
+                            response = response.header(CONTENT_TYPE, "text/html");
+                        }
+                        #[cfg(feature = "json")]
+                        Content::Json(x) => {
+                            gz.write_all(serde_json::to_string(&x)?.as_bytes())?;
+                            response = response.header(CONTENT_TYPE, "application/json");
+                        }
                     }
-                    None => response,
-                };
+                }
 
                 let gzip = gz.finish()?;
 

@@ -36,14 +36,27 @@ function handleResponse(element: HTMLElement, text: string): boolean {
     return true;
 }
 
+function raise(message: string): never {
+    throw new Error(message);
+}
+
 async function handleHtmlResponse(
     element: HTMLElement,
     response: Promise<Response>,
 ): Promise<void> {
     const resp = await response;
     if (resp.status === 204) return;
+    let target = element;
 
-    handleResponse(element, await resp.text());
+    const fragment = resp.headers.get('v-fragment');
+
+    if (fragment) {
+        target =
+            document.querySelector(fragment) ??
+            raise(`Could not find element for fragment ${fragment}`);
+    }
+
+    handleResponse(target, await resp.text());
 }
 
 /**

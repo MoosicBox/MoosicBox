@@ -209,7 +209,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
     async fn to_response(
         &self,
         req: PreparedRequest,
-    ) -> Result<Option<Content>, lambda_runtime::Error> {
+    ) -> Result<Option<(Content, Option<Vec<(String, String)>>)>, lambda_runtime::Error> {
         let content = self
             .router
             .navigate(req.req.clone())
@@ -217,9 +217,22 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             .map_err(|e| Box::new(e) as lambda_runtime::Error)?;
 
         if let Some(content) = content {
-            Ok(Some(self.to_body(content, req).await?))
+            let headers = self.headers(&content);
+            let body = self.to_body(content, req).await?;
+            Ok(Some((body, headers)))
         } else {
             Ok(None)
+        }
+    }
+
+    fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
+        match content {
+            hyperchad_renderer::Content::View(..) => None,
+            hyperchad_renderer::Content::PartialView(view) => {
+                Some(vec![("v-fragment".to_string(), view.target.clone())])
+            }
+            #[cfg(feature = "json")]
+            hyperchad_renderer::Content::Json(..) => None,
         }
     }
 
