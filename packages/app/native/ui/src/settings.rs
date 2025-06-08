@@ -78,7 +78,18 @@ pub fn settings_page_content(
                 div { "Download settings content will go here" }
             }
 
-            @for settings in music_api_settings {
+            div hx-get=(pre_escaped!("/settings/music-api-settings")) hx-trigger="load" {
+                (music_api_settings_section(&music_api_settings))
+            }
+        }
+    }
+}
+
+#[must_use]
+pub fn music_api_settings_section(settings: &[MusicApiSettings]) -> Markup {
+    html! {
+        div id="settings-music-api-settings-section" {
+            @for settings in settings {
                 hr;
 
                 section {

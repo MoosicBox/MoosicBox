@@ -7095,6 +7095,7 @@ dependencies = [
  "flume",
  "hyperchad",
  "log 0.4.27",
+ "maud",
  "moosicbox_app_models",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_ui",

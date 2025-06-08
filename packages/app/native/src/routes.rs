@@ -1,13 +1,14 @@
 use std::{collections::BTreeMap, num::ParseIntError, str::FromStr, sync::LazyLock};
 
 use hyperchad::{
-    renderer::{Content, View},
+    renderer::{Content, PartialView, View},
     router::{Container, RouteRequest},
     transformer::html::ParseError,
 };
+use maud::Markup;
 use moosicbox_app_models::{Connection, MusicApiSettings};
 use moosicbox_app_native_ui::{
-    downloads::DownloadTab, formatting::classify_name, settings::AuthState,
+    downloads::DownloadTab, formatting::classify_name, settings::AuthState, state::State,
 };
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
@@ -24,7 +25,7 @@ use moosicbox_session_models::ApiSession;
 use serde::Deserialize;
 use switchy::http::models::Method;
 
-use crate::{PROFILE, STATE, convert_state};
+use crate::{PROFILE, RENDERER, STATE, convert_state};
 
 static CLIENT: LazyLock<switchy::http::Client> =
     LazyLock::new(|| switchy::http::Client::builder().build().unwrap());
@@ -571,47 +572,34 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
 }
 
 pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError> {
+    let state = convert_state(&STATE).await;
+
+    switchy::unsync::task::spawn({
+        let state = state.clone();
+        async move {
+            let markup = settings_music_api_settings_markup(&state).await.unwrap();
+            let renderer = RENDERER.get().unwrap();
+            renderer
+                .render_partial(PartialView {
+                    target: "settings-music-api-settings-section".to_string(),
+                    container: markup.into_string().try_into().unwrap(),
+                })
+                .await?;
+
+            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+        }
+    });
+
     let connections = STATE.get_connections().await?;
     let current_connection = STATE.get_current_connection().await?;
     let connection_name = STATE.get_connection_name().await?.unwrap_or_default();
-
-    #[allow(unused_mut)]
-    let mut music_api_settings: Vec<MusicApiSettings> = vec![];
-
-    let state = convert_state(&STATE).await;
-
-    if let Some(connection) = &state.connection {
-        let host = &connection.api_url;
-
-        let music_apis: Page<ApiMusicApi> = CLIENT
-            .get(&format!("{host}/music-api?moosicboxProfile={PROFILE}"))
-            .send()
-            .await
-            .inspect(|x| {
-                if !x.status().is_success() {
-                    log::error!("Error fetching music_apis: status={}", x.status());
-                }
-            })?
-            .json()
-            .await
-            .inspect_err(|e| log::error!("Error parsing music_apis response body: {e}"))
-            .unwrap_or_else(|_| Page::empty());
-
-        let music_apis = music_apis.into_items();
-
-        music_api_settings.extend(music_apis.into_iter().map(Into::into));
-    } else {
-        log::debug!("No connection");
-    }
-
-    log::debug!("music_api_settings={music_api_settings:?}");
 
     moosicbox_app_native_ui::settings::settings(
         &state,
         &connection_name,
         &connections,
         current_connection.as_ref(),
-        &music_api_settings,
+        &[],
     )
     .into_string()
     .try_into()
@@ -766,6 +754,45 @@ pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View,
             moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
             RouteError::ParseMarkup
         })
+}
+
+pub async fn settings_music_api_settings_route(_req: RouteRequest) -> Result<Content, RouteError> {
+    let state = convert_state(&STATE).await;
+
+    Ok(Content::try_partial_view(
+        "settings-music-api-settings-section",
+        settings_music_api_settings_markup(&state).await?,
+    )?)
+}
+
+async fn settings_music_api_settings_markup(state: &State) -> Result<Markup, RouteError> {
+    let mut music_api_settings: Vec<MusicApiSettings> = vec![];
+
+    if let Some(connection) = &state.connection {
+        let host = &connection.api_url;
+
+        let music_apis: Page<ApiMusicApi> = CLIENT
+            .get(&format!("{host}/music-api?moosicboxProfile={PROFILE}"))
+            .send()
+            .await
+            .inspect(|x| {
+                if !x.status().is_success() {
+                    log::error!("Error fetching music_apis: status={}", x.status());
+                }
+            })?
+            .json()
+            .await
+            .inspect_err(|e| log::error!("Error parsing music_apis response body: {e}"))
+            .unwrap_or_else(|_| Page::empty());
+
+        let music_apis = music_apis.into_items();
+
+        music_api_settings.extend(music_apis.into_iter().map(Into::into));
+    } else {
+        log::debug!("No connection");
+    }
+
+    Ok(moosicbox_app_native_ui::settings::music_api_settings_section(&music_api_settings))
 }
 
 pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteError> {
