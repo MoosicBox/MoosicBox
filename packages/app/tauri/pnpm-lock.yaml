@@ -13,7 +13,7 @@ importers:
         version: 0.9.4(prettier-plugin-astro@0.14.1)(prettier@3.5.3)(typescript@5.8.3)
       '@astrojs/node':
         specifier: ^9.2.2
-        version: 9.2.2(astro@5.9.0(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0))
+        version: 9.2.2(astro@5.9.1(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0))
       '@astrojs/solid-js':
         specifier: ^5.1.0
         version: 5.1.0(@testing-library/jest-dom@5.17.0)(@types/node@22.15.30)(jiti@2.4.2)(solid-js@1.9.7)(yaml@2.8.0)
@@ -45,8 +45,8 @@ importers:
         specifier: ^2.2.2
         version: 2.2.2
       astro:
-        specifier: ^5.9.0
-        version: 5.9.0(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0)
+        specifier: ^5.9.1
+        version: 5.9.1(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0)
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0
@@ -151,8 +151,8 @@ packages:
     peerDependencies:
       typescript: ^5.0.0
 
-  '@astrojs/compiler@2.12.0':
-    resolution: {integrity: sha512-7bCjW6tVDpUurQLeKBUN9tZ5kSv5qYrGmcn0sG0IwacL7isR2ZbyyA3AdZ4uxsuUFOS2SlgReTH7wkxO6zpqWA==}
+  '@astrojs/compiler@2.12.1':
+    resolution: {integrity: sha512-WDSyVIiz7sNcJcCJxJFITu6XjfGhJ50Z0auyaWsrM+xb07IlhBLFtQuDkNy0caVHWNcKTM2LISAaHhgkRqGAVg==}
 
   '@astrojs/internal-helpers@0.6.1':
     resolution: {integrity: sha512-l5Pqf6uZu31aG+3Lv8nl/3s4DbUzdlxTWDof4pEpto6GUJNhhCbelVi9dEyurOVyqaelwmS9oSyOWOENSfgo9A==}
@@ -1395,8 +1395,8 @@ packages:
     resolution: {integrity: sha512-JepyLROIad6f44uyqMF6HKE2QbunNzp3mYKRcPoDGt0QkxXmH222FAFC64WTyQu2Kg8NNEXHTN/sWuUId9sSxw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  astro@5.9.0:
-    resolution: {integrity: sha512-AHF7oZDBQRwggHUG0bwBhRQjrDD+vJpCtPd0/GVxDB1hGRV0SQuFWS0UHX5bYczIqFcao1z9o9o0r2rQtHrTMg==}
+  astro@5.9.1:
+    resolution: {integrity: sha512-wxoJcTbuDZNFSv6EaL0PAlrp0Wx6VnOAULCXvy0scsV70oWMeUkdxuBxfO54JxO5Qgyvwj9h99y6E0elqOpGtA==}
     engines: {node: 18.20.8 || ^20.3.0 || >=22.0.0, npm: '>=9.6.5', pnpm: '>=7.1.0'}
     hasBin: true
 
@@ -1616,8 +1616,8 @@ packages:
     engines: {node: '>=4'}
     hasBin: true
 
-  cssstyle@4.3.1:
-    resolution: {integrity: sha512-ZgW+Jgdd7i52AaLYCriF8Mxqft0gD/R9i9wi6RWBhs1pqdPEzPjym7rvRKi397WmQFf3SlyUsszhw+VVCbx79Q==}
+  cssstyle@4.4.0:
+    resolution: {integrity: sha512-W0Y2HOXlPkb2yaKrCVRjinYKciu/qSLEmK0K9mcfDei3zwlnHFEHAs/Du3cIRwPqY+J4JsiBzUjoHyc8RsJ03A==}
     engines: {node: '>=18'}
 
   csstype@3.1.3:
@@ -4069,13 +4069,13 @@ snapshots:
       - prettier
       - prettier-plugin-astro
 
-  '@astrojs/compiler@2.12.0': {}
+  '@astrojs/compiler@2.12.1': {}
 
   '@astrojs/internal-helpers@0.6.1': {}
 
   '@astrojs/language-server@2.15.4(prettier-plugin-astro@0.14.1)(prettier@3.5.3)(typescript@5.8.3)':
     dependencies:
-      '@astrojs/compiler': 2.12.0
+      '@astrojs/compiler': 2.12.1
       '@astrojs/yaml2ts': 0.2.2
       '@jridgewell/sourcemap-codec': 1.5.0
       '@volar/kit': 2.4.14(typescript@5.8.3)
@@ -4125,10 +4125,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@astrojs/node@9.2.2(astro@5.9.0(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0))':
+  '@astrojs/node@9.2.2(astro@5.9.1(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0))':
     dependencies:
       '@astrojs/internal-helpers': 0.6.1
-      astro: 5.9.0(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0)
+      astro: 5.9.1(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0)
       send: 1.2.0
       server-destroy: 1.0.1
     transitivePeerDependencies:
@@ -5276,10 +5276,10 @@ snapshots:
 
   astro-eslint-parser@1.2.2:
     dependencies:
-      '@astrojs/compiler': 2.12.0
+      '@astrojs/compiler': 2.12.1
       '@typescript-eslint/scope-manager': 8.33.1
       '@typescript-eslint/types': 8.33.1
-      astrojs-compiler-sync: 1.1.1(@astrojs/compiler@2.12.0)
+      astrojs-compiler-sync: 1.1.1(@astrojs/compiler@2.12.1)
       debug: 4.4.1
       entities: 6.0.0
       eslint-scope: 8.3.0
@@ -5291,9 +5291,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  astro@5.9.0(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0):
+  astro@5.9.1(@types/node@22.15.30)(jiti@2.4.2)(rollup@4.42.0)(typescript@5.8.3)(yaml@2.8.0):
     dependencies:
-      '@astrojs/compiler': 2.12.0
+      '@astrojs/compiler': 2.12.1
       '@astrojs/internal-helpers': 0.6.1
       '@astrojs/markdown-remark': 6.3.2
       '@astrojs/telemetry': 3.3.0
@@ -5391,9 +5391,9 @@ snapshots:
       - uploadthing
       - yaml
 
-  astrojs-compiler-sync@1.1.1(@astrojs/compiler@2.12.0):
+  astrojs-compiler-sync@1.1.1(@astrojs/compiler@2.12.1):
     dependencies:
-      '@astrojs/compiler': 2.12.0
+      '@astrojs/compiler': 2.12.1
       synckit: 0.11.8
 
   async-function@1.0.0: {}
@@ -5606,7 +5606,7 @@ snapshots:
 
   cssesc@3.0.0: {}
 
-  cssstyle@4.3.1:
+  cssstyle@4.4.0:
     dependencies:
       '@asamuzakjp/css-color': 3.2.0
       rrweb-cssom: 0.8.0
@@ -6678,7 +6678,7 @@ snapshots:
 
   jsdom@24.1.3:
     dependencies:
-      cssstyle: 4.3.1
+      cssstyle: 4.4.0
       data-urls: 5.0.0
       decimal.js: 10.5.0
       form-data: 4.0.3
@@ -7346,7 +7346,7 @@ snapshots:
 
   prettier-plugin-astro@0.14.1:
     dependencies:
-      '@astrojs/compiler': 2.12.0
+      '@astrojs/compiler': 2.12.1
       prettier: 3.5.3
       sass-formatter: 0.7.9
 
