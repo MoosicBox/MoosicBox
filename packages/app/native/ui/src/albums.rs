@@ -512,7 +512,14 @@ pub fn album_display(
     show_details: bool,
     show_media_controls: bool,
 ) -> Markup {
-    let album_page_url = album_page_url(&album.album_id.to_string(), false, None, None, None, None);
+    let album_page_url = album_page_url(
+        &album.album_id.to_string(),
+        false,
+        Some(&album.api_source),
+        None,
+        None,
+        None,
+    );
 
     let details = if show_details {
         let artist_page_url = artist_page_url(&album.artist_id.to_string());
