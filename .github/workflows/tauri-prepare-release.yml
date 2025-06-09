@@ -8,7 +8,7 @@ env:
     CARGO_TERM_COLOR: always
     ANDROID_HOME: /home/runner/.android
     ANDROID_SDK_ROOT: /home/runner/.android
-    NDK_HOME: /home/runner/.android/ndk/25.0.8775105
+    NDK_HOME: /home/runner/.android/ndk/27.2.12479018
 
 jobs:
     package:
@@ -477,19 +477,19 @@ jobs:
                   mkdir -p ~/.android/cmdline-tools/latest
                   mv cmdline-tools/* ~/.android/cmdline-tools/latest/
                   yes | ~/.android/cmdline-tools/latest/bin/sdkmanager --licenses
-                  ~/.android/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "platform-tools" "ndk;25.0.8775105" "build-tools;33.0.0"
+                  ~/.android/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "platform-tools" "ndk;27.2.12479018" "build-tools;34.0.0"
 
                   export ANDROID_NDK_HOME=$NDK_HOME
 
-                  echo "ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/25.0.8775105" >> $GITHUB_ENV
+                  echo "ANDROID_NDK_HOME=$HOME/Android/Sdk/ndk/27.2.12479018" >> $GITHUB_ENV
 
                   export TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
                   export TARGET=aarch64-linux-android
-                  export API=33
+                  export API=35
 
                   echo "TOOLCHAIN=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64" >> $GITHUB_ENV
                   echo "TARGET=aarch64-linux-android" >> $GITHUB_ENV
-                  echo "API=33" >> $GITHUB_ENV
+                  echo "API=35" >> $GITHUB_ENV
 
                   export AR=$TOOLCHAIN/bin/llvm-ar
                   export CC=$TOOLCHAIN/bin/$TARGET$API-clang
