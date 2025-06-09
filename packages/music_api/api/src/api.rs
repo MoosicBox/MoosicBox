@@ -122,7 +122,7 @@ pub struct AuthMusicApi {
         description = "Authenticate a specific MusicApi",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("apiSource" = Option<u32>, Query, description = "ApiSource to authenticate"),
+            ("apiSource" = ApiSource, Query, description = "ApiSource to authenticate"),
         ),
         responses(
             (
@@ -208,7 +208,7 @@ pub struct ScanMusicApi {
         description = "Scan a specific MusicApi",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("apiSource" = Option<u32>, Query, description = "ApiSource to scan"),
+            ("apiSource" = ApiSource, Query, description = "ApiSource to scan"),
         ),
         responses(
             (
@@ -251,7 +251,7 @@ pub struct EnableScanMusicApi {
         description = "Enable a specific MusicApi scan origin",
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
-            ("apiSource" = Option<u32>, Query, description = "ApiSource to scan"),
+            ("apiSource" = ApiSource, Query, description = "ApiSource to scan"),
         ),
         responses(
             (
