@@ -1,5 +1,7 @@
-window.genUuid = function () {
-    let d = new Date().getTime(); //Timestamp
+import { v } from './core';
+
+v.genUuid = function () {
+    let d = new Date().getTime();
     let d2 =
         (typeof performance !== 'undefined' &&
             performance.now &&

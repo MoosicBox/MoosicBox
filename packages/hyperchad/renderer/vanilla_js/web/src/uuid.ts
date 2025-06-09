@@ -1,1 +1,3 @@
-window.genUuid = crypto.randomUUID;
+import { v } from './core';
+
+v.genUuid = crypto.randomUUID;
