@@ -70,42 +70,43 @@ async fn add_profile(
     #[cfg(feature = "library")]
     apis_map.insert(
         ApiSource::library(),
-        Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
-            library_music_api,
-        ))),
+        Arc::new(Box::new(library_music_api.cached())),
     );
     #[cfg(feature = "tidal")]
     apis_map.insert(
         moosicbox_tidal::API_SOURCE.clone(),
-        Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
+        Arc::new(Box::new(
             #[allow(clippy::redundant_clone)]
             moosicbox_tidal::TidalMusicApi::builder()
                 .with_db(library_database.clone())
                 .build()
-                .await?,
-        ))),
+                .await?
+                .cached(),
+        )),
     );
     #[cfg(feature = "qobuz")]
     apis_map.insert(
         moosicbox_qobuz::API_SOURCE.clone(),
-        Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
+        Arc::new(Box::new(
             #[allow(clippy::redundant_clone)]
             moosicbox_qobuz::QobuzMusicApi::builder()
                 .with_db(library_database.clone())
                 .build()
-                .await?,
-        ))),
+                .await?
+                .cached(),
+        )),
     );
     #[cfg(feature = "yt")]
     apis_map.insert(
         moosicbox_yt::API_SOURCE.clone(),
-        Arc::new(Box::new(moosicbox_music_api::CachedMusicApi::new(
+        Arc::new(Box::new(
             #[allow(clippy::redundant_clone)]
             moosicbox_yt::YtMusicApi::builder()
                 .with_db(library_database.clone())
                 .build()
-                .await?,
-        ))),
+                .await?
+                .cached(),
+        )),
     );
     moosicbox_music_api::profiles::PROFILES.add(profile.to_string(), Arc::new(apis_map));
 

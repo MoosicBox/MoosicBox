@@ -318,6 +318,19 @@ pub trait MusicApi: Send + Sync {
     ) -> Result<ApiSearchResultsResponse, Error> {
         Err(Error::UnsupportedAction("search"))
     }
+
+    fn cached(self) -> impl MusicApi
+    where
+        Self: Sized,
+    {
+        CachedMusicApi {
+            inner: self,
+            cascade_delete: false,
+            artists: Arc::new(RwLock::new(BTreeMap::new())),
+            albums: Arc::new(RwLock::new(BTreeMap::new())),
+            tracks: Arc::new(RwLock::new(BTreeMap::new())),
+        }
+    }
 }
 
 pub struct CachedMusicApi<T: MusicApi> {
@@ -855,6 +868,13 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
         limit: Option<u32>,
     ) -> Result<ApiSearchResultsResponse, Error> {
         self.inner.search(query, offset, limit).await
+    }
+
+    fn cached(self) -> impl MusicApi
+    where
+        Self: Sized,
+    {
+        self
     }
 }
 
