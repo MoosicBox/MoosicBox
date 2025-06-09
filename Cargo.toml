@@ -391,7 +391,7 @@ opentelemetry = { version = "0.30.0", features = ["trace"] }
 opentelemetry-otlp = { version = "0.30.0", features = ["tonic"] }
 opentelemetry_sdk = { version = "0.30.0", features = ["rt-tokio"] }
 opus = "0.3.0"
-os_info = { version = "3.11.0", default-features = false }
+os_info = { version = "3.12.0", default-features = false }
 paste = "1.0.15"
 pin-project = "1.1.10"
 pin-project-lite = "0.2.16"
