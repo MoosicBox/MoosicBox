@@ -41,7 +41,6 @@ log              = { workspace = true }
 profiling        = { workspace = true, optional = true }
 regex            = { workspace = true }
 serde            = { workspace = true, features = ["derive"] }
-serde_json       = { workspace = true }
 symphonia        = { workspace = true }
 thiserror        = { workspace = true }
 tokio            = { workspace = true, features = ["macros", "rt", "time", "tracing"] }

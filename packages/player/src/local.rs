@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
 use moosicbox_audio_output::{AudioOutput, AudioOutputFactory};
+use moosicbox_music_api::models::TrackAudioQuality;
 use moosicbox_music_models::TrackApiSource;
 use moosicbox_session::models::UpdateSession;
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -86,6 +87,7 @@ impl Player for LocalPlayer {
             playback_type,
             track,
             playback.quality,
+            TrackAudioQuality::Low,
             &self.source,
             playback.abort.clone(),
         )

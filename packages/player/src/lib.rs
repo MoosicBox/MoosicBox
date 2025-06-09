@@ -20,7 +20,7 @@ use moosicbox_audio_decoder::media_sources::{
 };
 use moosicbox_audio_output::AudioOutputFactory;
 use moosicbox_json_utils::{ParseError, database::DatabaseFetchError};
-use moosicbox_music_api::MusicApi;
+use moosicbox_music_api::{MusicApi, models::TrackAudioQuality};
 use moosicbox_music_models::{ApiSource, AudioFormat, PlaybackQuality, Track, id::Id};
 use moosicbox_session::{
     get_session_playlist,
@@ -222,7 +222,8 @@ pub async fn get_track_url(
     track_id: &Id,
     api_source: &ApiSource,
     player_source: &PlayerSource,
-    quality: PlaybackQuality,
+    format: PlaybackQuality,
+    quality: TrackAudioQuality,
     use_local_network_ip: bool,
 ) -> Result<(String, Option<HashMap<String, String>>), PlayerError> {
     let (host, query, headers) = match player_source {
@@ -286,8 +287,9 @@ pub async fn get_track_url(
             }
         }
 
-        serializer.append_pair("trackId", &track_id.to_string());
-        serializer.append_pair("source", api_source.as_ref());
+        serializer
+            .append_pair("trackId", &track_id.to_string())
+            .append_pair("quality", quality.as_ref());
 
         if let Some(profile) = headers
             .as_ref()
@@ -296,20 +298,11 @@ pub async fn get_track_url(
             serializer.append_pair("moosicboxProfile", &profile);
         }
 
-        if api_source.is_library() {
-            if quality.format != AudioFormat::Source {
-                serializer.append_pair("format", quality.format.as_ref());
-            }
-        } else {
-            serializer.append_pair("audioQuality", "HIGH");
-            // #[cfg(feature = "qobuz")]
-            // ApiSource::Qobuz => {
-            //     serializer.append_pair("audioQuality", "LOW");
-            // }
-            // #[cfg(feature = "yt")]
-            // ApiSource::Yt => {
-            //     serializer.append_pair("audioQuality", "LOW");
-            // }
+        if format.format != AudioFormat::Source {
+            serializer.append_pair("format", format.format.as_ref());
+        }
+        if !api_source.is_library() {
+            serializer.append_pair("source", api_source.as_ref());
         }
 
         serializer.finish()
@@ -317,54 +310,7 @@ pub async fn get_track_url(
 
     let query_string = format!("?{query_params}");
 
-    let url = if api_source.is_library() {
-        Ok::<_, PlayerError>(format!("{host}/files/track{query_string}"))
-    } else {
-        use moosicbox_json_utils::serde_json::ToValue as _;
-        let url = format!("{host}/tidal/track/url{query_string}");
-        log::debug!("Fetching track file url from {url}");
-
-        CLIENT
-            .get(&url)
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?
-            .to_value::<Vec<String>>("urls")?
-            .first()
-            .cloned()
-            .ok_or(PlayerError::TrackFetchFailed(track_id.to_string()))
-        // #[cfg(feature = "qobuz")]
-        // ApiSource::Qobuz => {
-        //     use moosicbox_json_utils::serde_json::ToValue as _;
-        //     let url = format!("{host}/qobuz/track/url{query_string}");
-        //     log::debug!("Fetching track file url from {url}");
-
-        //     Ok(CLIENT
-        //         .get(&url)
-        //         .send()
-        //         .await?
-        //         .json::<serde_json::Value>()
-        //         .await?
-        //         .to_value::<String>("url")?)
-        // }
-        // #[cfg(feature = "yt")]
-        // ApiSource::Yt => {
-        //     use moosicbox_json_utils::serde_json::ToValue as _;
-        //     let url = format!("{host}/yt/track/url{query_string}");
-        //     log::debug!("Fetching track file url from {url}");
-
-        //     Ok(CLIENT
-        //         .get(&url)
-        //         .send()
-        //         .await?
-        //         .json::<serde_json::Value>()
-        //         .await?
-        //         .to_value::<String>("url")?)
-        // }
-    }?;
-
-    Ok((url, headers))
+    Ok((format!("{host}/files/track{query_string}"), headers))
 }
 
 /// # Errors
@@ -1375,9 +1321,10 @@ pub fn trigger_playback_event(current: &Playback, previous: &Playback) {
 #[allow(unused, clippy::too_many_lines)]
 async fn track_to_playable_file(
     track: &Track,
-    quality: PlaybackQuality,
+    format: PlaybackQuality,
+    quality: TrackAudioQuality,
 ) -> Result<PlayableTrack, PlayerError> {
-    log::trace!("track_to_playable_file track={track:?} quality={quality:?}");
+    log::trace!("track_to_playable_file track={track:?} format={format:?} quality={quality:?}");
 
     let mut hint = Hint::new();
 
@@ -1392,10 +1339,10 @@ async fn track_to_playable_file(
     }
 
     #[allow(clippy::match_wildcard_for_single_variants)]
-    let same_source = match quality.format {
+    let same_source = match format.format {
         AudioFormat::Source => true,
         #[allow(unreachable_patterns)]
-        _ => track.format.is_none_or(|format| format == quality.format),
+        _ => track.format.is_none_or(|x| x == format.format),
     };
 
     let source: Box<dyn MediaSource> = if same_source {
@@ -1404,7 +1351,7 @@ async fn track_to_playable_file(
         #[allow(unused_mut)]
         let mut signal_chain = SignalChain::new();
 
-        match quality.format {
+        match format.format {
             #[cfg(feature = "format-aac")]
             AudioFormat::Aac => {
                 #[cfg(feature = "encoder-aac")]
@@ -1467,7 +1414,7 @@ async fn track_to_playable_file(
             }
             #[allow(unreachable_patterns)]
             _ => {
-                moosicbox_assert::die!("Invalid format {}", quality.format);
+                moosicbox_assert::die!("Invalid format {}", format.format);
             }
         }
 
@@ -1518,22 +1465,33 @@ async fn track_to_playable_file(
 #[allow(unused)]
 async fn track_to_playable_stream(
     track: &Track,
-    quality: PlaybackQuality,
+    format: PlaybackQuality,
+    quality: TrackAudioQuality,
     player_source: &PlayerSource,
     abort: CancellationToken,
 ) -> Result<PlayableTrack, PlayerError> {
-    track_id_to_playable_stream(&track.id, &track.api_source, quality, player_source, abort).await
+    track_id_to_playable_stream(
+        &track.id,
+        &track.api_source,
+        format,
+        quality,
+        player_source,
+        abort,
+    )
+    .await
 }
 
 #[allow(unused)]
 async fn track_id_to_playable_stream(
     track_id: &Id,
     source: &ApiSource,
-    quality: PlaybackQuality,
+    format: PlaybackQuality,
+    quality: TrackAudioQuality,
     player_source: &PlayerSource,
     abort: CancellationToken,
 ) -> Result<PlayableTrack, PlayerError> {
-    let (url, headers) = get_track_url(track_id, source, player_source, quality, false).await?;
+    let (url, headers) =
+        get_track_url(track_id, source, player_source, format, quality, false).await?;
 
     log::debug!("Fetching track bytes from url: {url}");
 
@@ -1557,7 +1515,7 @@ async fn track_id_to_playable_stream(
         true,
         #[cfg(feature = "format-flac")]
         {
-            quality.format == moosicbox_music_models::AudioFormat::Flac
+            format.format == moosicbox_music_models::AudioFormat::Flac
         },
         #[cfg(not(feature = "format-flac"))]
         false,
@@ -1587,20 +1545,21 @@ async fn track_id_to_playable_stream(
 async fn track_or_id_to_playable(
     playback_type: PlaybackType,
     track: &Track,
-    quality: PlaybackQuality,
+    format: PlaybackQuality,
+    quality: TrackAudioQuality,
     player_source: &PlayerSource,
     abort: CancellationToken,
 ) -> Result<PlayableTrack, PlayerError> {
     log::trace!(
-        "track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={quality:?}"
+        "track_or_id_to_playable playback_type={playback_type:?} track={track:?} quality={format:?}"
     );
     Ok(
         if track.api_source.is_library()
             && matches!(playback_type, PlaybackType::File | PlaybackType::Default)
         {
-            track_to_playable_file(track, quality).await?
+            track_to_playable_file(track, format, quality).await?
         } else {
-            track_to_playable_stream(track, quality, player_source, abort).await?
+            track_to_playable_stream(track, format, quality, player_source, abort).await?
         },
     )
 }

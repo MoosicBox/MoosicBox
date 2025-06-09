@@ -14,7 +14,7 @@ use moosicbox_async_service::CancellationToken;
 use moosicbox_audio_output::{
     AudioOutputError, AudioOutputFactory, AudioWrite, Channels, SignalSpec,
 };
-use moosicbox_music_api::SourceToMusicApi;
+use moosicbox_music_api::{SourceToMusicApi, models::TrackAudioQuality};
 use moosicbox_session::models::UpdateSession;
 use rupnp::{Device, Service};
 
@@ -356,6 +356,7 @@ impl UpnpPlayer {
             &track.api_source,
             &self.source,
             playback.quality,
+            TrackAudioQuality::FlacHighestRes,
             true,
         )
         .await?;
@@ -373,6 +374,7 @@ impl UpnpPlayer {
             &track.api_source,
             &self.source,
             playback.quality,
+            TrackAudioQuality::FlacHighestRes,
             false,
         )
         .await?;

@@ -7890,7 +7890,6 @@ dependencies = [
  "profiling",
  "regex",
  "serde",
- "serde_json",
  "switchy_database",
  "switchy_http",
  "switchy_random",
