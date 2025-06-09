@@ -38,6 +38,10 @@ fn main() {
     }
 
     let plugins: Vec<&str> = vec![
+        #[cfg(all(not(feature = "plugin-uuid-insecure"), feature = "plugin-uuid"))]
+        "uuid",
+        #[cfg(feature = "plugin-uuid-insecure")]
+        "uuid-insecure",
         #[cfg(feature = "plugin-idiomorph")]
         "idiomorph",
         #[cfg(not(feature = "plugin-idiomorph"))]

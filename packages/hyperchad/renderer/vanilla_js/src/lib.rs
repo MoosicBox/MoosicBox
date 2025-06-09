@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, io::Write, sync::LazyLock};
 
 use async_trait::async_trait;
 use const_format::concatcp;
@@ -21,6 +21,13 @@ use hyperchad_transformer::{
     models::{LayoutDirection, Route, Visibility},
 };
 use maud::{DOCTYPE, PreEscaped, html};
+
+static INSECURE_WARNING: LazyLock<()> = LazyLock::new(|| {
+    #[cfg(all(not(debug_assertions), feature = "plugin-uuid-insecure"))]
+    log::warn!(
+        "The `plugin-uuid-insecure` feature is enabled. If this is a production service make sure to disable that feature and just use `plugin-uuid`"
+    );
+});
 
 #[derive(Debug, Default, Clone)]
 pub struct VanillaJsTagRenderer {
@@ -60,6 +67,10 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
     bytes.extend(b"sse;");
     #[cfg(feature = "plugin-tauri-event")]
     bytes.extend(b"tauri-event;");
+    #[cfg(all(not(feature = "plugin-uuid-insecure"), feature = "plugin-uuid"))]
+    bytes.extend(b"uuid;");
+    #[cfg(feature = "plugin-uuid-insecure")]
+    bytes.extend(b"uuid-insecure;");
     #[cfg(feature = "plugin-routing")]
     bytes.extend(b"routing;");
     #[cfg(feature = "plugin-event")]
@@ -648,6 +659,8 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
         event_name: String,
         event_value: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let () = *INSECURE_WARNING;
+
         publisher
             .publish(RendererEvent::Event {
                 name: event_name,
@@ -665,6 +678,8 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
         publisher: HtmlRendererEventPub,
         view: View,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let () = *INSECURE_WARNING;
+
         publisher
             .publish(RendererEvent::View(view))
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
@@ -679,6 +694,8 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
         publisher: HtmlRendererEventPub,
         partial: PartialView,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let () = *INSECURE_WARNING;
+
         publisher
             .publish(RendererEvent::Partial(partial))
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
@@ -693,6 +710,8 @@ impl ExtendHtmlRenderer for VanillaJsRenderer {
         publisher: HtmlRendererEventPub,
         update: canvas::CanvasUpdate,
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
+        let () = *INSECURE_WARNING;
+
         publisher
             .publish(RendererEvent::CanvasUpdate(update))
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;

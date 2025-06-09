@@ -243,6 +243,14 @@ renderer-vanilla-js-plugin-tauri-event = [
     "hyperchad_app?/plugin-tauri-event",
     "hyperchad_renderer_vanilla_js?/plugin-tauri-event",
 ]
+renderer-vanilla-js-plugin-uuid = [
+    "hyperchad_app?/plugin-uuid",
+    "hyperchad_renderer_vanilla_js?/plugin-uuid",
+]
+renderer-vanilla-js-plugin-uuid-insecure = [
+    "hyperchad_app?/plugin-uuid-insecure",
+    "hyperchad_renderer_vanilla_js?/plugin-uuid-insecure",
+]
 renderer-vanilla-js-script = ["hyperchad_renderer_vanilla_js?/script"]
 
 router = ["dep:hyperchad_router"]

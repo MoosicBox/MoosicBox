@@ -21,6 +21,16 @@ const PLUGIN_TAURI_EVENT_HASH: &str = "-tauri-event";
 #[cfg(not(feature = "plugin-tauri-event"))]
 const PLUGIN_TAURI_EVENT_HASH: &str = "";
 
+#[cfg(all(not(feature = "plugin-uuid-insecure"), feature = "plugin-uuid"))]
+const PLUGIN_UUID_HASH: &str = "-uuid";
+#[cfg(not(all(not(feature = "plugin-uuid-insecure"), feature = "plugin-uuid")))]
+const PLUGIN_UUID_HASH: &str = "";
+
+#[cfg(feature = "plugin-uuid-insecure")]
+const PLUGIN_UUID_INSECURE_HASH: &str = "-uuid-insecure";
+#[cfg(not(feature = "plugin-uuid-insecure"))]
+const PLUGIN_UUID_INSECURE_HASH: &str = "";
+
 #[cfg(feature = "plugin-routing")]
 const PLUGIN_ROUTING_HASH: &str = "-routing";
 #[cfg(not(feature = "plugin-routing"))]
@@ -87,6 +97,8 @@ pub const PLUGIN_HASH: &str = const_format::concatcp!(
     PLUGIN_NAV_HASH,
     PLUGIN_SSE_HASH,
     PLUGIN_TAURI_EVENT_HASH,
+    PLUGIN_UUID_HASH,
+    PLUGIN_UUID_INSECURE_HASH,
     PLUGIN_ROUTING_HASH,
     PLUGIN_EVENT_HASH,
     PLUGIN_ACTIONS_CHANGE_HASH,

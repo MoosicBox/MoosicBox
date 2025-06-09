@@ -33,6 +33,7 @@ all-plugins = [
     "plugin-routing",
     "plugin-sse",
     "plugin-tauri-event",
+    "plugin-uuid",
 ]
 
 _actions = []
@@ -55,11 +56,13 @@ plugin-actions-mouse-down = ["_actions"]
 plugin-actions-mouse-over = ["_actions"]
 plugin-actions-resize = ["_actions"]
 
-plugin-canvas      = []
-plugin-event       = []
-plugin-form        = []
-plugin-idiomorph   = []
-plugin-nav         = []
-plugin-routing     = []
-plugin-sse         = []
-plugin-tauri-event = []
+plugin-canvas        = []
+plugin-event         = []
+plugin-form          = []
+plugin-idiomorph     = []
+plugin-nav           = []
+plugin-routing       = []
+plugin-sse           = []
+plugin-tauri-event   = []
+plugin-uuid          = []
+plugin-uuid-insecure = []

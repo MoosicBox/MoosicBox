@@ -133,7 +133,10 @@ vanilla-js = [
     "hyperchad/renderer-vanilla-js-plugin-idiomorph",
     "hyperchad/renderer-vanilla-js-plugin-nav",
     "hyperchad/renderer-vanilla-js-plugin-routing",
+    "hyperchad/renderer-vanilla-js-plugin-uuid",
 ]
+
+insecure = ["hyperchad/renderer-vanilla-js-plugin-uuid-insecure"]
 
 actix  = ["_sse", "hyperchad/renderer-html-actix"]
 lambda = ["_sse", "hyperchad/renderer-html-lambda"]

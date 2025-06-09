@@ -1,0 +1,1 @@
+window.genUuid = crypto.randomUUID;
