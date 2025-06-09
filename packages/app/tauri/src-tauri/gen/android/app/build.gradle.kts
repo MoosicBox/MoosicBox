@@ -28,8 +28,7 @@ android {
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.moosicbox"
-        minSdk = 24
-        targetSdk = 34
+        minSdk = 34
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
         ndk { abiFilters += listOf("armeabi-v7a", "arm64a-v8a", "x86", "x86_64") }
