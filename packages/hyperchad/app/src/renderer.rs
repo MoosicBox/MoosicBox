@@ -359,6 +359,7 @@ pub mod html {
                     method: switchy::http::models::Method::Get,
                     query: std::collections::BTreeMap::new(),
                     headers: std::collections::BTreeMap::new(),
+                    cookies: std::collections::BTreeMap::new(),
                     info: RequestInfo {
                         client: std::sync::Arc::new(ClientInfo {
                             os: ClientOs {

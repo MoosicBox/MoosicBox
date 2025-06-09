@@ -178,6 +178,14 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             })
             .collect();
 
+        let cookies = req
+            .headers()
+            .get("Cookie")
+            .map(|x| parse_cookies(x.to_str().unwrap_or_default()))
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+
         let path = req.raw_http_path().to_string();
 
         let os_name =
@@ -196,6 +204,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 method: Method::from_str(req.method().as_str()).map_err(Box::new)?,
                 query,
                 headers,
+                cookies,
                 body,
                 info: RequestInfo {
                     client: Arc::new(ClientInfo {
@@ -277,4 +286,16 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
             hyperchad_renderer::Content::Json(value) => Content::Json(value),
         })
     }
+}
+
+fn parse_cookies(header: &str) -> Vec<(String, String)> {
+    header
+        .split(';')
+        .filter_map(|part| {
+            let mut parts = part.trim().splitn(2, '=');
+            let key = parts.next()?.trim();
+            let value = parts.next()?.trim();
+            Some((key.to_string(), value.to_string()))
+        })
+        .collect()
 }

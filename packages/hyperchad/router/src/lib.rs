@@ -94,6 +94,7 @@ pub struct RouteRequest {
     pub method: Method,
     pub query: BTreeMap<String, String>,
     pub headers: BTreeMap<String, String>,
+    pub cookies: BTreeMap<String, String>,
     pub info: RequestInfo,
     pub body: Option<Arc<Bytes>>,
 }
@@ -112,6 +113,7 @@ impl RouteRequest {
             method: Method::Get,
             query: QString::from(query).into_iter().collect(),
             headers: BTreeMap::new(),
+            cookies: BTreeMap::new(),
             info,
             body: None,
         }
@@ -247,6 +249,7 @@ impl From<Navigation> for RouteRequest {
             method: Method::Get,
             query: BTreeMap::new(),
             headers: BTreeMap::new(),
+            cookies: BTreeMap::new(),
             info: RequestInfo { client: value.1 },
             body: None,
         }
@@ -470,6 +473,7 @@ impl From<String> for RouteRequest {
             method: Method::Get,
             query: BTreeMap::new(),
             headers: BTreeMap::new(),
+            cookies: BTreeMap::new(),
             info: RequestInfo::default(),
             body: None,
         }
@@ -537,6 +541,7 @@ impl From<(String, RequestInfo)> for RouteRequest {
             method: Method::Get,
             query: QString::from(query).into_iter().collect(),
             headers: BTreeMap::new(),
+            cookies: BTreeMap::new(),
             info: value.1,
             body: None,
         }
