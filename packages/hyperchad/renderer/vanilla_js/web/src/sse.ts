@@ -1,5 +1,18 @@
-import { triggerMessage } from './core';
+import { triggerMessage, v } from './core';
 import { fetchEventSource } from './vendored/fetch-event-source';
+
+function getClientStreamId() {
+    let id = localStorage.getItem('streamId');
+    if (!id) {
+        id = v.genUuid();
+        localStorage.setItem('streamId', id);
+    }
+    return id;
+}
+
+const streamId = getClientStreamId();
+
+document.cookie = `v-sse-stream-id=${streamId}; path=/; SameSite=Strict`;
 
 fetchEventSource('$sse', {
     method: 'GET',
