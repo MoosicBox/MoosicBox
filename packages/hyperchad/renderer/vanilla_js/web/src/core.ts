@@ -228,3 +228,15 @@ onMessage('partial_view', (data, id) => {
 
     triggerHandlers('swapHtml', { html, inner: false, target: `#${id}` });
 });
+
+type V = { genUuid: () => string };
+
+declare global {
+    interface Window {
+        v: V;
+    }
+}
+
+export const v = {} as V;
+
+window.v = v;
