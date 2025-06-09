@@ -886,6 +886,19 @@ pub fn run() {
 
             #[cfg(feature = "moosicbox-app-native")]
             let state = tokio_handle.block_on(async move { moosicbox_app_native::init_app_state(state).await }).unwrap();
+            #[cfg(not(feature = "moosicbox-app-native"))]
+            {
+                ApiSource::register_library();
+
+                #[cfg(feature = "tidal")]
+                ApiSource::register("Tidal", "Tidal");
+
+                #[cfg(feature = "qobuz")]
+                ApiSource::register("Qobuz", "Qobuz");
+
+                #[cfg(feature = "yt")]
+                ApiSource::register("Yt", "YouTube Music");
+            }
 
             STATE_LOCK.set(state).unwrap();
 
