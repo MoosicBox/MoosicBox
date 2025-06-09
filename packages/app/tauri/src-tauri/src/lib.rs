@@ -693,6 +693,7 @@ pub struct HttpRequest {
     pub path: String,
     pub query: std::collections::BTreeMap<String, String>,
     pub headers: std::collections::BTreeMap<String, String>,
+    pub cookies: std::collections::BTreeMap<String, String>,
     pub body: Option<Vec<u8>>,
 }
 
@@ -722,6 +723,7 @@ async fn handle_http_request(
         method: switchy::http::models::Method::from_str(request.method.as_str()).unwrap(),
         query: request.query,
         headers: request.headers,
+        cookies: request.cookies,
         info: RequestInfo {
             client: DEFAULT_CLIENT_INFO.clone(),
         },
@@ -794,6 +796,18 @@ pub fn run() {
         app_builder = app_builder.register_asynchronous_uri_scheme_protocol(
             "tauri",
             move |_app, request, responder| {
+                fn parse_cookies(header: &str) -> Vec<(String, String)> {
+                    header
+                        .split(';')
+                        .filter_map(|part| {
+                            let mut parts = part.trim().splitn(2, '=');
+                            let key = parts.next()?.trim();
+                            let value = parts.next()?.trim();
+                            Some((key.to_string(), value.to_string()))
+                        })
+                        .collect()
+                }
+
                 log::debug!("handle_tauri_request: request={request:?}");
 
                 let path = request.uri().path().to_string();
@@ -807,6 +821,14 @@ pub fn run() {
                             value.to_str().unwrap_or_default().to_string(),
                         )
                     })
+                    .collect();
+
+                let cookies = request
+                    .headers()
+                    .get("Cookie")
+                    .map(|x| parse_cookies(x.to_str().unwrap_or_default()))
+                    .unwrap_or_default()
+                    .into_iter()
                     .collect();
 
                 let query = request
@@ -824,6 +846,7 @@ pub fn run() {
                     path,
                     query,
                     headers,
+                    cookies,
                     body,
                 };
 
