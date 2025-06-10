@@ -308,7 +308,7 @@ chrono = { version = "0.4.41", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.39", features = ["derive"] }
+clap = { version = "4.5.40", features = ["derive"] }
 color-backtrace = { version = "0.7.0", default-features = false, features = [
     "use-btparse-crate",
 ] }
@@ -467,7 +467,7 @@ swc_ecma_transforms_base = "15.1.1"
 swc_ecma_transforms_typescript = "17.0.0"
 swc_ecma_visit = "11.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
-syn = "2.0.101"
+syn = "2.0.102"
 syntect = "5.2.0"
 tantivy = "0.24.1"
 tauri = { version = "2.5.1", features = ["protocol-asset"] }
