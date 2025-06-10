@@ -25,166 +25,166 @@ jobs:
                     #   target: desktop
                     #   tag: debug
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     # - os: ubuntu-latest
                     #   profile: release
-                    #   target: all-formats,all-sources,cpal,desktop
+                    #   target: desktop
                     #   tag: release
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     - os: ubuntu-latest
                       profile: release-lto
                       target: desktop
                       bundled: true
-                      features: all-formats,all-sources,cpal,desktop,bundled
+                      features: desktop,bundled
 
                     # - os: ubuntu-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: release-lto-no-panic
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     # - os: windows-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: debug
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     # - os: windows-latest
                     #   profile: release
                     #   target: desktop
                     #   tag: release
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     - os: windows-latest
                       profile: release-lto
                       target: desktop
                       bundled: true
-                      features: all-formats,all-sources,cpal,desktop,bundled
+                      features: desktop,bundled
 
                     # - os: windows-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: release-lto-no-panic
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     # - os: macos-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: debug
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     # - os: macos-latest
                     #   profile: release
                     #   target: desktop
                     #   tag: release
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     - os: macos-latest
                       profile: release-lto
                       target: desktop
                       bundled: true
-                      features: all-formats,all-sources,cpal,desktop,bundled
+                      features: desktop,bundled
 
                     # - os: macos-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: release-lto-no-panic
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
 
                     # - os: ubuntu-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: debug-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     # - os: ubuntu-latest
                     #   profile: release
                     #   target: desktop
                     #   tag: release-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     - os: ubuntu-latest
                       profile: release-lto
                       target: desktop
                       tag: client
-                      features: all-formats,all-sources,cpal,desktop,client
+                      features: desktop,client
 
                     # - os: ubuntu-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: release-lto-no-panic-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     # - os: windows-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: debug-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     # - os: windows-latest
                     #   profile: release
                     #   target: desktop
                     #   tag: release-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     - os: windows-latest
                       profile: release-lto
                       target: desktop
                       tag: client
-                      features: all-formats,all-sources,cpal,desktop,client
+                      features: desktop,client
 
                     # - os: windows-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: release-lto-no-panic-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     # - os: macos-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: debug-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     # - os: macos-latest
                     #   profile: release
                     #   target: desktop
                     #   tag: release-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     - os: macos-latest
                       profile: release-lto
                       target: desktop
                       tag: client
-                      features: all-formats,all-sources,cpal,desktop,client
+                      features: desktop,client
 
                     # - os: macos-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: release-lto-no-panic-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
 
                     # - os: ubuntu-latest
                     #   profile: debug
                     #   target: android
                     #   tag: debug
                     #   # tag: debug-client
-                    #   features: all-formats,all-sources,cpal,android,client
+                    #   features: android,client
 
                     - os: ubuntu-latest
                       profile: release
                       target: android
                       tag: client
-                      features: all-formats,all-sources,cpal,android,client
+                      features: android,client
 
                     # - os: ubuntu-latest
                     #   profile: debug
@@ -196,14 +196,14 @@ jobs:
                       profile: release
                       target: android
                       bundled: true
-                      features: all-formats,all-sources,cpal,android,bundled
+                      features: android,bundled
 
                     # - os: ubuntu-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: hyperchad-debug
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
@@ -211,7 +211,7 @@ jobs:
                     #   target: desktop
                     #   tag: hyperchad-release
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
@@ -219,7 +219,7 @@ jobs:
                       target: desktop
                       tag: hyperchad
                       bundled: true
-                      features: all-formats,all-sources,cpal,desktop,bundled
+                      features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
@@ -227,7 +227,7 @@ jobs:
                     #   target: desktop
                     #   tag: hyperchad-release-lto-no-panic
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: windows-latest
@@ -235,7 +235,7 @@ jobs:
                     #   target: desktop
                     #   tag: hyperchad-debug
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: windows-latest
@@ -243,7 +243,7 @@ jobs:
                     #   target: desktop
                     #   tag: hyperchad-release
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     - os: windows-latest
@@ -251,7 +251,7 @@ jobs:
                       target: desktop
                       tag: hyperchad
                       bundled: true
-                      features: all-formats,all-sources,cpal,desktop,bundled
+                      features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
                     # - os: windows-latest
@@ -259,7 +259,7 @@ jobs:
                     #   target: desktop
                     #   tag: hyperchad-release-lto-no-panic
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: macos-latest
@@ -267,7 +267,7 @@ jobs:
                     #   target: desktop
                     #   tag: hyperchad-debug
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: macos-latest
@@ -275,7 +275,7 @@ jobs:
                     #   target: desktop
                     #   tag: hyperchad-release
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     - os: macos-latest
@@ -283,7 +283,7 @@ jobs:
                       target: desktop
                       tag: hyperchad
                       bundled: true
-                      features: all-formats,all-sources,cpal,desktop,bundled
+                      features: desktop,bundled
                       config: tauri.hyperchad.conf.json
 
                     # - os: macos-latest
@@ -291,105 +291,105 @@ jobs:
                     #   target: desktop
                     #   tag: hyperchad-release-lto-no-panic
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,desktop,bundled
+                    #   features: desktop,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: hyperchad-debug-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
                     #   profile: release
                     #   target: desktop
                     #   tag: hyperchad-release-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
                       profile: release-lto
                       target: desktop
                       tag: hyperchad-client
-                      features: all-formats,all-sources,cpal,desktop,client
+                      features: desktop,client
                       config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: hyperchad-release-lto-no-panic-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: windows-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: hyperchad-debug-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: windows-latest
                     #   profile: release
                     #   target: desktop
                     #   tag: hyperchad-release-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     - os: windows-latest
                       profile: release-lto
                       target: desktop
                       tag: hyperchad-client
-                      features: all-formats,all-sources,cpal,desktop,client
+                      features: desktop,client
                       config: tauri.hyperchad.conf.json
 
                     # - os: windows-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: hyperchad-release-lto-no-panic-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: macos-latest
                     #   profile: debug
                     #   target: desktop
                     #   tag: hyperchad-debug-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: macos-latest
                     #   profile: release
                     #   target: desktop
                     #   tag: hyperchad-release-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     - os: macos-latest
                       profile: release-lto
                       target: desktop
                       tag: hyperchad-client
-                      features: all-formats,all-sources,cpal,desktop,client
+                      features: desktop,client
                       config: tauri.hyperchad.conf.json
 
                     # - os: macos-latest
                     #   profile: release-lto-no-panic
                     #   target: desktop
                     #   tag: hyperchad-release-lto-no-panic-client
-                    #   features: all-formats,all-sources,cpal,desktop,client
+                    #   features: desktop,client
                     #   config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
                     #   profile: debug
                     #   target: android
                     #   tag: hyperchad-debug
-                    #   features: all-formats,all-sources,cpal,android,client
+                    #   features: android,client
                     #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
                       profile: release
                       target: android
                       tag: hyperchad-client
-                      features: all-formats,all-sources,cpal,android,client
+                      features: android,client
                       config: tauri.hyperchad.conf.json
 
                     # - os: ubuntu-latest
@@ -397,7 +397,7 @@ jobs:
                     #   target: android
                     #   tag: hyperchad
                     #   bundled: true
-                    #   features: all-formats,all-sources,cpal,android,bundled
+                    #   features: android,bundled
                     #   config: tauri.hyperchad.conf.json
 
                     - os: ubuntu-latest
@@ -405,7 +405,7 @@ jobs:
                       target: android
                       tag: hyperchad
                       bundled: true
-                      features: all-formats,all-sources,cpal,android,bundled
+                      features: android,bundled
                       config: tauri.hyperchad.conf.json
 
         steps:
@@ -544,12 +544,8 @@ jobs:
 
             - name: Build Tauri Desktop App
               if: ${{ matrix.release.target == 'desktop' }}
-              shell: bash
               working-directory: MoosicBox/packages/app/tauri
-              run: |
-                  pnpm tauri build ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }} \
-                      ${{ matrix.release.profile == 'debug' && '--debug' || '-- --profile' }} ${{ matrix.release.profile != 'debug' && matrix.release.profile || '' }} \
-                      --no-default-features ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
+              run: pnpm tauri build ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}${{ matrix.release.profile == 'debug' && ' --debug' || ' -- --profile ' }}${{ matrix.release.profile != 'debug' && matrix.release.profile || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
 
             - name: Set up Keystore
               if: ${{ matrix.release.target == 'android' }}

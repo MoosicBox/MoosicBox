@@ -83,7 +83,7 @@ moosicbox_app_native_ui = { workspace = true, optional = true }
 qstring = { workspace = true, optional = true }
 
 [features]
-default = ["all-formats", "all-sources", "cpal", "moosicbox-app-native"]
+default = ["all-formats", "all-sources", "cpal"]
 
 fail-on-warnings = []
 
