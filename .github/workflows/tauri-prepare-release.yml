@@ -567,8 +567,7 @@ jobs:
               working-directory: MoosicBox/packages/app/tauri
               run: |
                   export CPATH="$PWD/src-tauri/include:$CPATH"
-                  pnpm tauri ${{ matrix.release.target }} build ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}${{ matrix.release.profile == 'debug' && ' --debug' || '' }} \
-                      -- --no-default-features ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
+                  pnpm tauri ${{ matrix.release.target }} build ${{ matrix.release.config && format('--config src-tauri/{0}', matrix.release.config) || '' }}${{ matrix.release.profile == 'debug' && ' --debug' || '' }} ${{ matrix.release.features && format('--features {0}', matrix.release.features) || '' }}
 
             - name: Make assets directory
               shell: bash
