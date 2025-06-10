@@ -2,9 +2,7 @@
 
 use hyperchad::{
     actions::ActionType,
-    transformer_models::{
-        AlignItems, LayoutDirection, LayoutOverflow, Position, TextAlign, Visibility,
-    },
+    transformer_models::{AlignItems, LayoutDirection, LayoutOverflow, Position, Visibility},
 };
 use maud::{Markup, html};
 use moosicbox_music_api_models::search::api::{
@@ -21,6 +19,7 @@ use crate::{
 pub fn search<'a>(
     state: &State,
     results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
+    searched: bool,
     open: bool,
 ) -> Markup {
     html! {
@@ -50,10 +49,13 @@ pub fn search<'a>(
                     form
                         hx-post="/search"
                         sx-width="100%"
-                        sx-align-items=(AlignItems::End)
+                        sx-dir=(LayoutDirection::Row)
                         sx-gap=(5)
+                        sx-padding=(10)
                     {
-                        div { "Query: " input type="text" name="query"; }
+                        div sx-flex-grow=(1) {
+                            input sx-flex-grow=(1) type="text" name="query" placeholder="Search...";
+                        }
                         button
                             type="submit"
                             sx-border-radius=(5)
@@ -64,34 +66,25 @@ pub fn search<'a>(
                         {
                             "Search"
                         }
-                    }
-
-                    div sx-width="100%" sx-text-align=(TextAlign::Start) {
-                        h2 { "Search Results" }
+                        button
+                            id="close-search-button"
+                            sx-border-radius=(100)
+                            sx-background="#fff"
+                            sx-border="2, #222"
+                            sx-padding=(10)
+                            fx-click=(ActionType::hide_str_id("search").and(ActionType::show_str_id("search-button")))
+                        {
+                            img
+                                sx-width=(20)
+                                sx-height=(20)
+                                src=(public_img!("cross.svg"));
+                        }
                     }
 
                     @if let Some(host) = state.connection.as_ref().map(|x| x.api_url.as_str()) {
-                        (search_results(host, results))
+                        (search_results(host, results, searched))
                     }
                 }
-            }
-            button
-                id="close-search-button"
-                sx-border-radius=(100)
-                sx-background="#fff"
-                sx-border="2, #222"
-                sx-padding=(10)
-                sx-margin-x=(20)
-                sx-margin-y=(10)
-                sx-position=(Position::Fixed)
-                sx-top=(0)
-                sx-right=(0)
-                fx-click=(ActionType::hide_str_id("search").and(ActionType::show_str_id("search-button")))
-            {
-                img
-                    sx-width=(20)
-                    sx-height=(20)
-                    src=(public_img!("cross.svg"));
             }
         }
         button
@@ -119,9 +112,19 @@ pub fn search<'a>(
 pub fn search_results<'a>(
     host: &str,
     results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
+    searched: bool,
 ) -> Markup {
+    let mut results = results.peekable();
+
     html! {
         div id="search-results" sx-width="100%" sx-gap=(10) sx-overflow-y=(LayoutOverflow::Auto) {
+            @if searched {
+                @if results.peek().is_some() {
+                    h2 { "Search Results" }
+                } @else {
+                    h2 { "No Results" }
+                }
+            }
             @for (source, results) in results {
                 (source.to_string_display())
                 (results_content(host, &results.results))

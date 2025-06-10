@@ -637,7 +637,7 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
             (play_queue(state))
             (audio_zones())
             (playback_sessions())
-            (search(state, std::iter::empty(), false))
+            (search(state, std::iter::empty(), false, false))
         }
     }
 }
