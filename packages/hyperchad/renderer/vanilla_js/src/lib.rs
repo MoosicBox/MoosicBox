@@ -269,6 +269,9 @@ fn element_target_to_js(target: &ElementTarget) -> String {
         ElementTarget::StrId(id) => {
             format!("[document.getElementById('{id}')]")
         }
+        ElementTarget::Class(class) => {
+            format!("Array.from(document.querySelectorAll('.{class}'))")
+        }
         ElementTarget::ChildClass(class) => {
             format!("Array.from(ctx.element.querySelectorAll('.{class}'))")
         }
@@ -277,10 +280,7 @@ fn element_target_to_js(target: &ElementTarget) -> String {
             "(ctx.element.children.length>0?[ctx.element.children[ctx.element.children.length-1]]:[])"
                 .to_string()
         }
-        #[allow(unreachable_patterns)]
-        _ => {
-            unreachable!();
-        }
+        ElementTarget::Id(_) => unreachable!(),
     }
 }
 

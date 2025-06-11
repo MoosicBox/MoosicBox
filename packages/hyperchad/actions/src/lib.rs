@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ElementTarget {
     StrId(String),
+    Class(String),
     ChildClass(String),
     Id(usize),
     SelfTarget,
@@ -265,6 +266,14 @@ impl ActionType {
     }
 
     #[must_use]
+    pub fn set_display_class(display: bool, class_name: &str) -> Self {
+        Self::Style {
+            target: ElementTarget::Class(class_name.to_string()),
+            action: StyleAction::SetDisplay(display),
+        }
+    }
+
+    #[must_use]
     pub fn no_display_str_id(target: &str) -> Self {
         Self::set_display_str_id(false, target)
     }
@@ -272,6 +281,16 @@ impl ActionType {
     #[must_use]
     pub fn display_str_id(target: &str) -> Self {
         Self::set_display_str_id(true, target)
+    }
+
+    #[must_use]
+    pub fn no_display_class(class_name: &str) -> Self {
+        Self::set_display_class(false, class_name)
+    }
+
+    #[must_use]
+    pub fn display_class(class_name: &str) -> Self {
+        Self::set_display_class(true, class_name)
     }
 
     #[must_use]

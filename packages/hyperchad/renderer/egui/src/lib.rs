@@ -174,6 +174,13 @@ fn map_element_target<R>(
 
             log::warn!("Could not find element with str id '{str_id}'");
         }
+        ElementTarget::Class(class) => {
+            if let Some(element) = container.find_element_by_class(class) {
+                return Some(func(element));
+            }
+
+            log::warn!("Could not find element with class '{class}'");
+        }
         ElementTarget::ChildClass(class) => {
             if let Some(container) = container.find_element_by_id(self_id) {
                 if let Some(element) = container.find_element_by_class(class) {
@@ -247,7 +254,8 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                     let id = match target {
                         ElementTarget::Id(id) => Some(*id),
                         ElementTarget::SelfTarget => Some(id),
-                        ElementTarget::ChildClass(..)
+                        ElementTarget::Class(..)
+                        | ElementTarget::ChildClass(..)
                         | ElementTarget::LastChild
                         | ElementTarget::StrId(..) => {
                             map_element_target(target, id, root, |x| x.id)
@@ -3153,6 +3161,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 }
 
                 log::warn!("Could not find element with str id '{str_id}'");
+            }
+            ElementTarget::Class(class) => {
+                if let Some(element) = container.find_element_by_class(class) {
+                    return Some(element.id);
+                }
+
+                log::warn!("Could not find element with class '{class}'");
             }
             ElementTarget::ChildClass(class) => {
                 if let Some(container) = container.find_element_by_id(self_id) {
