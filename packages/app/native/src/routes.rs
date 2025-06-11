@@ -8,7 +8,11 @@ use hyperchad::{
 use maud::Markup;
 use moosicbox_app_models::{Connection, MusicApiSettings};
 use moosicbox_app_native_ui::{
-    downloads::DownloadTab, formatting::classify_name, settings::AuthState, state::State,
+    downloads::DownloadTab,
+    formatting::classify_name,
+    search::{results_content, results_content_id},
+    settings::AuthState,
+    state::State,
 };
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
@@ -17,7 +21,7 @@ use moosicbox_music_api::{SourceToMusicApi as _, profiles::PROFILES};
 use moosicbox_music_api_api::models::{ApiMusicApi, AuthValues};
 use moosicbox_music_api_models::search::api::ApiSearchResultsResponse;
 use moosicbox_music_models::{
-    AlbumSort, AlbumType, ApiSource, TrackApiSource, TryFromStringTrackApiSourceError,
+    API_SOURCES, AlbumSort, AlbumType, ApiSource, TrackApiSource, TryFromStringTrackApiSourceError,
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
@@ -938,7 +942,7 @@ pub struct SearchRequest {
     query: String,
 }
 
-pub async fn search_route(req: RouteRequest) -> Result<Content, RouteError> {
+pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
     let request = req.parse_form::<SearchRequest>()?;
     let query = &request.query;
 
@@ -948,25 +952,52 @@ pub async fn search_route(req: RouteRequest) -> Result<Content, RouteError> {
     };
     let host = &connection.api_url;
 
-    let response = CLIENT
-        .get(&format!(
-            "{host}/music-api/search?moosicboxProfile={PROFILE}&query={query}"
-        ))
-        .send()
-        .await?;
+    let api_sources = API_SOURCES
+        .read()
+        .unwrap()
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
 
-    if !response.status().is_success() {
-        let message = format!("Error: {} {}", response.status(), response.text().await?);
-        log::error!("{message}");
-        return Err(RouteError::RouteFailed(message.into()));
+    for api_source in api_sources {
+        let host = host.clone();
+        let query = query.clone();
+
+        switchy::unsync::task::spawn(async move {
+            let response = CLIENT
+                .get(&format!(
+                    "{host}/music-api/search?moosicboxProfile={PROFILE}&query={query}&apiSource={api_source}"
+                ))
+                .send()
+                .await
+                .unwrap();
+
+            if !response.status().is_success() {
+                let message = format!(
+                    "Error: {} {}",
+                    response.status(),
+                    response.text().await.unwrap()
+                );
+                panic!("Route failed: {message}");
+            }
+
+            let results: BTreeMap<ApiSource, ApiSearchResultsResponse> =
+                response.json().await.unwrap();
+            let results = results.get(&api_source).unwrap().clone();
+            let markup = results_content(&host, &api_source, &results.results);
+
+            let renderer = RENDERER.get().unwrap();
+            renderer
+                .render_partial(PartialView {
+                    target: results_content_id(&api_source),
+                    container: markup.into_string().try_into().unwrap(),
+                })
+                .await
+                .unwrap();
+
+            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+        });
     }
 
-    let results: BTreeMap<ApiSource, ApiSearchResultsResponse> = response.json().await?;
-
-    log::trace!("search_route: results={results:?}");
-
-    Ok(Content::try_partial_view(
-        "search-results",
-        moosicbox_app_native_ui::search::search_results(host, results.iter(), None, true),
-    )?)
+    Ok(())
 }

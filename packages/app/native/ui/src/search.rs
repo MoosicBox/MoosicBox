@@ -1,31 +1,23 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
-    actions::{
-        ActionType,
-        logic::{Value, get_display_str_id},
-    },
+    actions::ActionType,
     transformer_models::{AlignItems, LayoutDirection, LayoutOverflow, Position, Visibility},
 };
 use maud::{Markup, html};
 use moosicbox_music_api_models::search::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
-    ApiGlobalTrackSearchResult, ApiSearchResultsResponse,
+    ApiGlobalTrackSearchResult,
 };
 use moosicbox_music_models::ApiSource;
 
 use crate::{
-    DARK_BACKGROUND, albums::album_cover_url, artists::artist_cover_url, formatting::classify_name,
+    BACKGROUND, albums::album_cover_url, artists::artist_cover_url, formatting::classify_name,
     pre_escaped, public_img, state::State,
 };
 
 #[must_use]
-pub fn search<'a>(
-    state: &State,
-    results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
-    searched: bool,
-    open: bool,
-) -> Markup {
+pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bool) -> Markup {
     html! {
         div
             id="search"
@@ -86,7 +78,7 @@ pub fn search<'a>(
                     }
 
                     @if let Some(host) = state.connection.as_ref().map(|x| x.api_url.as_str()) {
-                        (search_results(host, results, None, searched))
+                        (search_results(host, api_sources, None, searched))
                     }
                 }
             }
@@ -113,56 +105,43 @@ pub fn search<'a>(
     }
 }
 
-pub fn search_results<'a>(
+#[must_use]
+pub fn search_results(
     host: &str,
-    results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
+    api_sources: &[ApiSource],
     selected: Option<&ApiSource>,
-    searched: bool,
+    _searched: bool,
 ) -> Markup {
-    let results = results.collect::<Vec<_>>();
-    let selected = selected.or_else(|| results.first().map(|x| x.0));
+    let selected = selected.or_else(|| api_sources.first());
 
     html! {
         div id="search-results" sx-width="100%" sx-gap=(10) sx-overflow-y=(LayoutOverflow::Auto) {
-            @if searched {
-                div {
-                    div sx-dir=(LayoutDirection::Row) sx-gap=(10) {
-                        @for (source, _) in &results {
-                            @let id = format!("search-results-{}", classify_name(source));
+            div {
+                div sx-dir=(LayoutDirection::Row) sx-gap=(10) {
+                    @for source in api_sources {
+                        @let id = results_content_container_id(source);
 
-                            div
-                                sx-border-top-left-radius=(5)
-                                sx-border-top-right-radius=(5)
-                                sx-padding=(10)
-                                sx-background=(DARK_BACKGROUND)
-                                fx-click=(
-                                    get_display_str_id(&id)
-                                        .eq(Value::Display(true))
-                                        .then(ActionType::no_display_str_id(&id))
-                                        .or_else(ActionType::display_str_id(&id))
-                                )
-                            {
-                                (source.to_string_display())
-                            }
+                        div
+                            sx-border-top-left-radius=(5)
+                            sx-border-top-right-radius=(5)
+                            sx-padding=(10)
+                            sx-background=(BACKGROUND)
+                            fx-click=(ActionType::Multi(vec![
+                                ActionType::no_display_class("search-results-container"),
+                                ActionType::display_str_id(&id)
+                            ]))
+                        {
+                            (source.to_string_display())
                         }
                     }
-                    div sx-background=(DARK_BACKGROUND) {
-                        @for (source, results) in results {
-                            @let id = format!("search-results-{}", classify_name(source));
+                }
+                div sx-background=(BACKGROUND) {
+                    @for source in api_sources {
+                        @let id = results_content_container_id(source);
+                        @let selected = selected.is_some_and(|x| x == source);
 
-                            div
-                                sx-hidden=(selected.is_none_or(|x| x != source))
-                                id=(id)
-                                sx-width="100%"
-                                sx-gap=(10)
-                                sx-overflow-y=(LayoutOverflow::Auto)
-                            {
-                                @if results.results.is_empty() {
-                                    h2 { "No Results" }
-                                } @else {
-                                    (results_content(host, &results.results))
-                                }
-                            }
+                        div id=(id) class="search-results-container" sx-hidden=(!selected) {
+                            (results_content(host, source, &[]))
                         }
                     }
                 }
@@ -172,18 +151,41 @@ pub fn search_results<'a>(
 }
 
 #[must_use]
-pub fn results_content(host: &str, results: &[ApiGlobalSearchResult]) -> Markup {
+pub fn results_content_container_id(api_source: &ApiSource) -> String {
+    format!("search-results-container-{}", classify_name(api_source))
+}
+
+#[must_use]
+pub fn results_content_id(api_source: &ApiSource) -> String {
+    format!("search-results-{}", classify_name(api_source))
+}
+
+#[must_use]
+pub fn results_content(
+    host: &str,
+    api_source: &ApiSource,
+    results: &[ApiGlobalSearchResult],
+) -> Markup {
     html! {
-        @for result in results {
-            @match result {
-                ApiGlobalSearchResult::Artist(artist) => {
-                    (artist_result(host, artist))
-                }
-                ApiGlobalSearchResult::Album(album) => {
-                    (album_result(host, album))
-                }
-                ApiGlobalSearchResult::Track(track) => {
-                    (track_result(host, track))
+        @let id = results_content_id(api_source);
+
+        div
+            id=(id)
+            sx-width="100%"
+            sx-gap=(10)
+            sx-overflow-y=(LayoutOverflow::Auto)
+        {
+            @for result in results {
+                @match result {
+                    ApiGlobalSearchResult::Artist(artist) => {
+                        (artist_result(host, artist))
+                    }
+                    ApiGlobalSearchResult::Album(album) => {
+                        (album_result(host, album))
+                    }
+                    ApiGlobalSearchResult::Track(track) => {
+                        (track_result(host, track))
+                    }
                 }
             }
         }

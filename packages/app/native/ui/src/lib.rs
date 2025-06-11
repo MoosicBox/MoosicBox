@@ -27,7 +27,9 @@ use hyperchad::{
     transformer_models::{AlignItems, JustifyContent, LayoutOverflow, Position, Visibility},
 };
 use maud::{Markup, html};
-use moosicbox_music_models::{AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id};
+use moosicbox_music_models::{
+    API_SOURCES, AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id,
+};
 use moosicbox_session_models::{ApiSession, ApiUpdateSession};
 use play_queue::play_queue;
 use search::search;
@@ -625,8 +627,18 @@ pub fn downloads(state: &State) -> Markup {
     )
 }
 
+/// # Panics
+///
+/// * If the `API_SOURCES` `RwLock` is poisoned
 #[must_use]
 pub fn page(state: &State, slot: &Markup) -> Markup {
+    let api_sources = API_SOURCES
+        .read()
+        .unwrap()
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+
     html! {
         div id="root" class="dark" sx-width="100%" sx-height="100%" sx-position="relative" sx-color="#fff" {
             section class="navigation-bar-and-main-content" sx-dir="row" sx-height=(format!("calc(100% - {FOOTER_HEIGHT})")) {
@@ -637,7 +649,7 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
             (play_queue(state))
             (audio_zones())
             (playback_sessions())
-            (search(state, std::iter::empty(), false, false))
+            (search(state, &api_sources, false, false))
         }
     }
 }

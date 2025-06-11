@@ -287,6 +287,7 @@ pub async fn enable_scan_origin_music_api_endpoint(
 #[serde(rename_all = "camelCase")]
 pub struct SearchMusicApis {
     query: String,
+    api_source: Option<String>,
     offset: Option<u32>,
     limit: Option<u32>,
 }
@@ -300,6 +301,7 @@ pub struct SearchMusicApis {
         params(
             ("moosicbox-profile" = String, Header, description = "MoosicBox profile"),
             ("query" = String, Query, description = "The search query"),
+            ("apiSource" = Option<String>, Query, description = "The ApiSource(s) to search"),
             ("offset" = Option<u32>, Query, description = "Page offset"),
             ("limit" = Option<u32>, Query, description = "Page limit"),
         ),
@@ -317,6 +319,16 @@ pub async fn search_music_apis_endpoint(
     query: web::Query<SearchMusicApis>,
     profile_name: ProfileName,
 ) -> Result<Json<BTreeMap<ApiSource, ApiSearchResultsResponse>>> {
+    let api_sources = query
+        .api_source
+        .as_ref()
+        .map(|x| {
+            x.split(',')
+                .map(|x| x.try_into())
+                .collect::<Result<Vec<ApiSource>, _>>()
+                .map_err(|e| ErrorBadRequest(format!("Invalid apiSource: {e:?}")))
+        })
+        .transpose()?;
     let profile_name: String = profile_name.into();
     let music_apis = moosicbox_music_api::profiles::PROFILES
         .get(&profile_name)
@@ -324,6 +336,11 @@ pub async fn search_music_apis_endpoint(
     let music_apis = music_apis
         .iter()
         .filter(|x| x.supports_search())
+        .filter(|x| {
+            api_sources
+                .as_ref()
+                .is_none_or(|sources| sources.contains(x.source()))
+        })
         .collect::<Vec<_>>();
 
     let search_results = music_apis
