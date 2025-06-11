@@ -326,13 +326,11 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             let all_actions = actions
                 .iter()
                 .map(|(action, _)| action.as_str())
-                .collect::<Vec<_>>()
-                .join("");
+                .collect::<String>();
             let all_reset = actions
                 .iter()
                 .filter_map(|(_, reset)| reset.as_ref().map(String::as_str))
-                .collect::<Vec<_>>()
-                .join("");
+                .collect::<String>();
 
             (
                 all_actions,
@@ -365,14 +363,12 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             let true_reset = if_true
                 .iter()
                 .filter_map(|(_, reset)| reset.as_ref().map(String::as_str))
-                .collect::<Vec<_>>()
-                .join("");
+                .collect::<String>();
 
             let if_true = if_true
                 .iter()
                 .map(|(action, _)| action.as_str())
-                .collect::<Vec<_>>()
-                .join("");
+                .collect::<String>();
 
             let if_false = logic
                 .else_actions
@@ -384,14 +380,12 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             let false_reset = if_false
                 .iter()
                 .filter_map(|(_, reset)| reset.as_ref().map(String::as_str))
-                .collect::<Vec<_>>()
-                .join("");
+                .collect::<String>();
 
             let if_false = if_false
                 .iter()
                 .map(|(action, _)| action.as_str())
-                .collect::<Vec<_>>()
-                .join("");
+                .collect::<String>();
 
             (
                 format!("if({expr}){{{if_true}}}else{{{if_false}}}"),

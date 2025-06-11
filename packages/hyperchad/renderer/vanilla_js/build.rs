@@ -87,8 +87,7 @@ fn main() {
             plugins
                 .into_iter()
                 .map(|x| format!("import './{x}';\n"))
-                .collect::<Vec<String>>()
-                .join(""),
+                .collect::<String>()
         ),
     )
     .unwrap();
