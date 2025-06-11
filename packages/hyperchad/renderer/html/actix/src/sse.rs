@@ -101,7 +101,7 @@ impl Event {
     }
 }
 
-#[allow(clippy::future_not_send)]
+#[allow(clippy::future_not_send, clippy::too_many_lines)]
 pub async fn handle_sse<
     T: Send + Sync + Clone + 'static,
     R: ActixResponseProcessor<T> + Send + Sync + Clone + 'static,
@@ -179,6 +179,10 @@ pub async fn handle_sse<
         .map(move |x| {
             x.map(crate::sse::Event::Data)
                 .map(crate::sse::Event::into_bytes)
+                .inspect(|x| {
+                    assert!(x.len() > 2);
+                    assert!(x.ends_with(b"\n\n"));
+                })
                 .map(|x| match encoding {
                     ContentEncoding::Gzip => {
                         let mut encoder = GzEncoder::new(vec![], Compression::default());
