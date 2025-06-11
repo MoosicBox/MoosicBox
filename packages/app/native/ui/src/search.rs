@@ -1,7 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
-    actions::ActionType,
+    actions::{
+        ActionType,
+        logic::{Value, get_display_str_id},
+    },
     transformer_models::{AlignItems, LayoutDirection, LayoutOverflow, Position, Visibility},
 };
 use maud::{Markup, html};
@@ -12,7 +15,8 @@ use moosicbox_music_api_models::search::api::{
 use moosicbox_music_models::ApiSource;
 
 use crate::{
-    albums::album_cover_url, artists::artist_cover_url, pre_escaped, public_img, state::State,
+    DARK_BACKGROUND, albums::album_cover_url, artists::artist_cover_url, formatting::classify_name,
+    pre_escaped, public_img, state::State,
 };
 
 #[must_use]
@@ -82,7 +86,7 @@ pub fn search<'a>(
                     }
 
                     @if let Some(host) = state.connection.as_ref().map(|x| x.api_url.as_str()) {
-                        (search_results(host, results, searched))
+                        (search_results(host, results, None, searched))
                     }
                 }
             }
@@ -112,22 +116,56 @@ pub fn search<'a>(
 pub fn search_results<'a>(
     host: &str,
     results: impl Iterator<Item = (&'a ApiSource, &'a ApiSearchResultsResponse)>,
+    selected: Option<&ApiSource>,
     searched: bool,
 ) -> Markup {
-    let mut results = results.peekable();
+    let results = results.collect::<Vec<_>>();
+    let selected = selected.or_else(|| results.first().map(|x| x.0));
 
     html! {
         div id="search-results" sx-width="100%" sx-gap=(10) sx-overflow-y=(LayoutOverflow::Auto) {
             @if searched {
-                @if results.peek().is_some() {
-                    h2 { "Search Results" }
-                } @else {
-                    h2 { "No Results" }
+                div {
+                    div sx-dir=(LayoutDirection::Row) sx-gap=(10) {
+                        @for (source, _) in &results {
+                            @let id = format!("search-results-{}", classify_name(source));
+
+                            div
+                                sx-border-top-left-radius=(5)
+                                sx-border-top-right-radius=(5)
+                                sx-padding=(10)
+                                sx-background=(DARK_BACKGROUND)
+                                fx-click=(
+                                    get_display_str_id(&id)
+                                        .eq(Value::Display(true))
+                                        .then(ActionType::no_display_str_id(&id))
+                                        .or_else(ActionType::display_str_id(&id))
+                                )
+                            {
+                                (source.to_string_display())
+                            }
+                        }
+                    }
+                    div sx-background=(DARK_BACKGROUND) {
+                        @for (source, results) in results {
+                            @let id = format!("search-results-{}", classify_name(source));
+
+                            div
+                                sx-hidden=(selected.is_none_or(|x| x != source))
+                                id=(id)
+                                sx-width="100%"
+                                sx-gap=(10)
+                                sx-overflow-y=(LayoutOverflow::Auto)
+                            {
+                                @if results.results.is_empty() {
+                                    h2 { "No Results" }
+                                } @else {
+                                    (results_content(host, &results.results))
+                                }
+                            }
+                        }
+                    }
                 }
-            }
-            @for (source, results) in results {
-                (source.to_string_display())
-                (results_content(host, &results.results))
             }
         }
     }

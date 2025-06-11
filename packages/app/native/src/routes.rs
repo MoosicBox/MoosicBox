@@ -967,6 +967,6 @@ pub async fn search_route(req: RouteRequest) -> Result<Content, RouteError> {
 
     Ok(Content::try_partial_view(
         "search-results",
-        moosicbox_app_native_ui::search::search_results(host, results.iter(), true),
+        moosicbox_app_native_ui::search::search_results(host, results.iter(), None, true),
     )?)
 }
