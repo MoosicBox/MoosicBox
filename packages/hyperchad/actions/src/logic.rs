@@ -8,6 +8,7 @@ use crate::{Action, ActionType, ElementTarget};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CalcValue {
     Visibility { target: ElementTarget },
+    Display { target: ElementTarget },
     Id { target: ElementTarget },
     DataAttrValue { attr: String, target: ElementTarget },
     EventValue,
@@ -72,10 +73,12 @@ impl CalcValue {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize))]
 pub enum Value {
+    // IF YOU ADD A NEW VALUE TYPE, ADD IT TO THE DESERIALIZE IMPL BELOW
     Calc(CalcValue),
     Arithmetic(Box<Arithmetic>),
     Real(f32),
     Visibility(Visibility),
+    Display(bool),
     LayoutDirection(LayoutDirection),
     String(String),
 }
@@ -95,6 +98,7 @@ impl<'de> Deserialize<'de> for Value {
             Arithmetic(Box<Arithmetic>),
             Real(f32),
             Visibility(Visibility),
+            Display(bool),
             LayoutDirection(LayoutDirection),
             String(String),
         }
@@ -106,6 +110,7 @@ impl<'de> Deserialize<'de> for Value {
                     ValueInner::Arithmetic(x) => Self::Arithmetic(x),
                     ValueInner::Real(x) => Self::Real(x),
                     ValueInner::Visibility(x) => Self::Visibility(x),
+                    ValueInner::Display(x) => Self::Display(x),
                     ValueInner::LayoutDirection(x) => Self::LayoutDirection(x),
                     ValueInner::String(x) => Self::String(x),
                 }
@@ -148,6 +153,7 @@ impl Value {
             | Self::Calc(..)
             | Self::Real(..)
             | Self::Visibility(..)
+            | Self::Display(..)
             | Self::LayoutDirection(..) => None,
         }
     }
@@ -160,7 +166,10 @@ impl Value {
                 .and_then(|func| func(x))
                 .and_then(|x| x.as_f32(calc_func)),
             Self::Real(x) => Some(*x),
-            Self::Visibility(..) | Self::String(..) | Self::LayoutDirection(..) => None,
+            Self::Visibility(..)
+            | Self::Display(..)
+            | Self::String(..)
+            | Self::LayoutDirection(..) => None,
         }
     }
 }
@@ -468,6 +477,27 @@ pub const fn get_visibility_id(id: usize) -> CalcValue {
 #[must_use]
 pub const fn get_visibility_self() -> CalcValue {
     CalcValue::Visibility {
+        target: ElementTarget::SelfTarget,
+    }
+}
+
+#[must_use]
+pub fn get_display_str_id(str_id: impl Into<String>) -> CalcValue {
+    CalcValue::Display {
+        target: ElementTarget::StrId(str_id.into()),
+    }
+}
+
+#[must_use]
+pub const fn get_display_id(id: usize) -> CalcValue {
+    CalcValue::Display {
+        target: ElementTarget::Id(id),
+    }
+}
+
+#[must_use]
+pub const fn get_display_self() -> CalcValue {
+    CalcValue::Display {
         target: ElementTarget::SelfTarget,
     }
 }

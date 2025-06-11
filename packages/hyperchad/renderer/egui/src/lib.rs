@@ -228,6 +228,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
         ) {
             match calc {
                 hyperchad_actions::logic::CalcValue::Visibility { .. }
+                | hyperchad_actions::logic::CalcValue::Display { .. }
                 | hyperchad_actions::logic::CalcValue::Id { .. }
                 | hyperchad_actions::logic::CalcValue::DataAttrValue { .. }
                 | hyperchad_actions::logic::CalcValue::EventValue
@@ -292,6 +293,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
             }
             Value::Real(..)
             | Value::Visibility(..)
+            | Value::Display(..)
             | Value::String(..)
             | Value::LayoutDirection(..) => {}
         }
@@ -2736,6 +2738,16 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 })
                 .unwrap_or_default(),
             )),
+            CalcValue::Display { target } => Some(Value::Display(
+                map_element_target(target, id, render_context.container, |element| {
+                    render_context
+                        .displays
+                        .get(&element.id)
+                        .copied()
+                        .unwrap_or_else(|| element.hidden.unwrap_or_default())
+                })
+                .unwrap_or_default(),
+            )),
             CalcValue::Id { target } => {
                 map_element_target(target, id, render_context.container, |element| {
                     element.str_id.clone()
@@ -2823,6 +2835,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             Value::Arithmetic(x) => x.as_f32(Some(&calc_func)).map(Value::Real),
             Value::Real(..)
             | Value::Visibility(..)
+            | Value::Display(..)
             | Value::String(..)
             | Value::LayoutDirection(..) => Some(x.clone()),
         }

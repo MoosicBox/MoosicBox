@@ -104,21 +104,27 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
 
 fn arithmetic_to_js(value: &Arithmetic) -> String {
     match value {
-        Arithmetic::Plus(a, b) => format!("{}+{}", value_to_js(a, false), value_to_js(b, false)),
-        Arithmetic::Minus(a, b) => format!("{}-{}", value_to_js(a, false), value_to_js(b, false)),
-        Arithmetic::Multiply(a, b) => {
-            format!("{}*{}", value_to_js(a, false), value_to_js(b, false))
+        Arithmetic::Plus(a, b) => {
+            format!("{}+{}", value_to_js(a, false).0, value_to_js(b, false).0)
         }
-        Arithmetic::Divide(a, b) => format!("{}/{}", value_to_js(a, false), value_to_js(b, false)),
+        Arithmetic::Minus(a, b) => {
+            format!("{}-{}", value_to_js(a, false).0, value_to_js(b, false).0)
+        }
+        Arithmetic::Multiply(a, b) => {
+            format!("{}*{}", value_to_js(a, false).0, value_to_js(b, false).0)
+        }
+        Arithmetic::Divide(a, b) => {
+            format!("{}/{}", value_to_js(a, false).0, value_to_js(b, false).0)
+        }
         Arithmetic::Min(a, b) => format!(
             "Math.min({},{})",
-            value_to_js(a, false),
-            value_to_js(b, false)
+            value_to_js(a, false).0,
+            value_to_js(b, false).0
         ),
         Arithmetic::Max(a, b) => format!(
             "Math.max({},{})",
-            value_to_js(a, false),
-            value_to_js(b, false)
+            value_to_js(a, false).0,
+            value_to_js(b, false).0
         ),
         Arithmetic::Grouping(x) => format!("({})", arithmetic_to_js(x)),
     }
@@ -136,6 +142,7 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
         CalcValue::MouseX { target: None } => return "ctx.event.clientX".to_string(),
         CalcValue::MouseY { target: None } => return "ctx.event.clientY".to_string(),
         CalcValue::Visibility { target }
+        | CalcValue::Display { target }
         | CalcValue::Id { target }
         | CalcValue::DataAttrValue { target, .. }
         | CalcValue::WidthPx { target }
@@ -158,6 +165,9 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
             | CalcValue::MouseY { target: None } => unreachable!(),
             CalcValue::Visibility { .. } => {
                 format!("{target}[0]?.style.visibility")
+            }
+            CalcValue::Display { .. } => {
+                format!("{target}[0]?.style.display")
             }
             CalcValue::Id { .. } => {
                 format!("{target}[0]?.id")
@@ -190,26 +200,34 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
     )
 }
 
-fn value_to_js(value: &Value, serializable: bool) -> String {
+fn value_to_js(value: &Value, serializable: bool) -> (String, bool) {
     match value {
-        Value::Calc(calc_value) => calc_value_to_js(calc_value, serializable),
-        Value::Arithmetic(arithmetic) => arithmetic_to_js(arithmetic),
-        Value::Real(x) => x.to_string(),
-        Value::Visibility(visibility) => match visibility {
-            Visibility::Visible => "'visible'".to_string(),
-            Visibility::Hidden => "'hidden'".to_string(),
-        },
-        Value::LayoutDirection(layout_direction) => match layout_direction {
-            LayoutDirection::Row => "'row'".to_string(),
-            LayoutDirection::Column => "'column'".to_string(),
-        },
-        Value::String(x) => {
+        Value::Calc(calc_value) => (calc_value_to_js(calc_value, serializable), true),
+        Value::Arithmetic(arithmetic) => (arithmetic_to_js(arithmetic), true),
+        Value::Real(x) => (x.to_string(), true),
+        Value::Visibility(visibility) => (
+            match visibility {
+                Visibility::Visible => "'visible'".to_string(),
+                Visibility::Hidden => "'hidden'".to_string(),
+            },
+            true,
+        ),
+        Value::Display(display) => ("'none'".to_string(), !*display),
+        Value::LayoutDirection(layout_direction) => (
+            match layout_direction {
+                LayoutDirection::Row => "'row'".to_string(),
+                LayoutDirection::Column => "'column'".to_string(),
+            },
+            true,
+        ),
+        Value::String(x) => (
             if serializable {
                 format!("{{String:'{x}'}}")
             } else {
                 format!("'{x}'")
-            }
-        }
+            },
+            true,
+        ),
     }
 }
 
@@ -285,10 +303,11 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
                     Some(format!("ctx.rs({target},'visibility');")),
                 ),
                 StyleAction::SetDisplay(display) => (
-                    format!(
-                        "ctx.ss({target},'display',{});",
-                        if *display { "'initial'" } else { "null" }
-                    ),
+                    if *display {
+                        format!("ctx.rs({target},'display');")
+                    } else {
+                        format!("ctx.ss({target},'display','none');")
+                    },
                     Some(format!("ctx.rs({target},'display');")),
                 ),
                 StyleAction::SetBackground(background) => (
@@ -331,7 +350,9 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
         ActionType::Logic(logic) => {
             let expr = match &logic.condition {
                 Condition::Eq(a, b) => {
-                    format!("{}==={}", value_to_js(a, false), value_to_js(b, false))
+                    let (a, a_eq) = value_to_js(a, false);
+                    let (b, b_eq) = value_to_js(b, false);
+                    format!("{}{}{}", a, if a_eq == b_eq { "===" } else { "!==" }, b)
                 }
             };
             let if_true = logic
@@ -394,7 +415,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
                 .replace('\n', "&#10;");
 
             (
-                format!("{{action:{action},value:{}}}", value_to_js(value, true)),
+                format!("{{action:{action},value:{}}}", value_to_js(value, true).0),
                 reset,
             )
         }
