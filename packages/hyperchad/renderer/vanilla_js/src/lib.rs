@@ -304,7 +304,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
                 ),
                 StyleAction::SetDisplay(display) => (
                     if *display {
-                        format!("ctx.rs({target},'display');")
+                        format!("ctx.ss({target},'display','initial');")
                     } else {
                         format!("ctx.ss({target},'display','none');")
                     },
