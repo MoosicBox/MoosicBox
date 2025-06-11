@@ -11,7 +11,7 @@ use flate2::{
     Compression,
     write::{DeflateEncoder, GzEncoder, ZlibEncoder},
 };
-use futures_util::StreamExt as _;
+use futures_util::{StreamExt as _, TryStreamExt};
 use hyperchad_renderer::{Content, RendererEvent};
 
 use crate::{ActixApp, ActixResponseProcessor};
@@ -197,7 +197,9 @@ pub async fn handle_sse<
                     }
                     ContentEncoding::Identity | ContentEncoding::Brotli | _ => x,
                 })
-        });
+        })
+        .inspect_ok(|_| log::debug!("handle_sse: sending data"))
+        .inspect_err(|e| log::error!("handle_sse: error: {e:?}"));
 
     Ok::<_, actix_web::Error>(
         HttpResponse::Ok()
