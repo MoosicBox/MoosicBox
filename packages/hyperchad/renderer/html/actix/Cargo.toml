@@ -17,6 +17,7 @@ group = "hyperchad"
 hyperchad_renderer   = { workspace = true, features = ["canvas"] }
 moosicbox_assert     = { workspace = true }
 moosicbox_env_utils  = { workspace = true }
+moosicbox_logging    = { workspace = true }
 moosicbox_middleware = { workspace = true }
 
 actix-cors   = { workspace = true }

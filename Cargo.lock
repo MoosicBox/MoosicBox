@@ -5390,6 +5390,7 @@ dependencies = [
  "log 0.4.27",
  "moosicbox_assert",
  "moosicbox_env_utils",
+ "moosicbox_logging",
  "moosicbox_middleware",
  "serde",
  "serde_json",

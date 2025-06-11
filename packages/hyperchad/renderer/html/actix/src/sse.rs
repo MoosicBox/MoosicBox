@@ -129,13 +129,22 @@ pub async fn handle_sse<
                 log::debug!("handle_sse: received renderer_event_rx event");
                 Ok::<_, actix_web::Error>(match event {
                     RendererEvent::View(view) => {
-                        log::debug!("handle_sse: SSE sending view={view:?}");
+                        moosicbox_logging::debug_or_trace!(
+                            ("handle_sse: SSE sending view"),
+                            ("handle_sse: SSE sending view={view:?}")
+                        );
                         let body = app.processor.to_body(Content::View(view), data).await?;
 
                         crate::sse::EventData::new(body).event("view")
                     }
                     RendererEvent::Partial(partial_view) => {
-                        log::debug!("handle_sse: SSE sending partial_view={partial_view:?}");
+                        moosicbox_logging::debug_or_trace!(
+                            (
+                                "handle_sse: SSE sending partial_view target={}",
+                                partial_view.target
+                            ),
+                            ("handle_sse: SSE sending partial_view={partial_view:?}")
+                        );
                         let id = partial_view.target.to_string();
                         let body = app
                             .processor
@@ -147,14 +156,20 @@ pub async fn handle_sse<
                             .event("partial_view")
                     }
                     RendererEvent::CanvasUpdate(canvas_update) => {
-                        log::debug!("handle_sse: SSE sending canvas_update");
+                        moosicbox_logging::debug_or_trace!(
+                            ("handle_sse: SSE sending canvas_update"),
+                            ("handle_sse: SSE sending canvas_update={canvas_update:?}")
+                        );
                         let id = canvas_update.target.clone();
                         crate::sse::EventData::new(serde_json::to_string(&canvas_update).unwrap())
                             .id(id)
                             .event("canvas_update")
                     }
                     RendererEvent::Event { name, value } => {
-                        log::debug!("handle_sse: SSE sending event name={name} value={value:?}");
+                        moosicbox_logging::debug_or_trace!(
+                            ("handle_sse: SSE sending event name={name}"),
+                            ("handle_sse: SSE sending event name={name} value={value:?}")
+                        );
                         crate::sse::EventData::new(format!("{name}:{}", value.unwrap_or_default()))
                             .event("event")
                     }
