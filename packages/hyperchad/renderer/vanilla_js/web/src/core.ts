@@ -233,10 +233,10 @@ type V = { genUuid: () => string };
 
 declare global {
     interface Window {
-        v: V;
+        globalV: V;
     }
 }
 
 export const v = {} as V;
 
-window.v = v;
+window['globalV'] = v;
