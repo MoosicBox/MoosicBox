@@ -116,7 +116,7 @@ pub fn music_api_settings_content(settings: &MusicApiSettings, auth_state: AuthS
             @if settings.auth_method.is_none() || settings.logged_in {
                 div sx-gap=(10) {
                     @if settings.logged_in {
-                        p { "Logged in!" }
+                        div { "Logged in!" }
                     }
                     @if settings.supports_scan {
                         @if settings.scan_enabled {
