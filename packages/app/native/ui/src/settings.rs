@@ -111,7 +111,6 @@ pub enum AuthState {
 #[must_use]
 pub fn music_api_settings_content(settings: &MusicApiSettings, auth_state: AuthState) -> Markup {
     html! {
-        // FIXME: HTML encode settings.id
         @let id = format!("settings-{}", classify_name(&settings.id));
         div id=(id) {
             @if settings.auth_method.is_none() || settings.logged_in {
