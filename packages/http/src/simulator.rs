@@ -47,6 +47,12 @@ pub struct RequestBuilder;
 impl GenericRequestBuilder<crate::SimulatorResponse> for RequestBuilder {
     fn header(&mut self, _name: &str, _value: &str) {}
 
+    fn query_param(&mut self, _name: &str, _value: &str) {}
+
+    fn query_param_opt(&mut self, _name: &str, _value: Option<&str>) {}
+
+    fn query_params(&mut self, _params: &[(&str, &str)]) {}
+
     fn body(&mut self, _body: Bytes) {}
 
     #[cfg(feature = "json")]

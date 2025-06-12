@@ -44,6 +44,9 @@ pub enum Header {
 #[async_trait]
 pub trait GenericRequestBuilder<R>: Send + Sync {
     fn header(&mut self, name: &str, value: &str);
+    fn query_param(&mut self, name: &str, value: &str);
+    fn query_param_opt(&mut self, name: &str, value: Option<&str>);
+    fn query_params(&mut self, params: &[(&str, &str)]);
     #[allow(unused)]
     fn body(&mut self, body: Bytes);
     #[cfg(feature = "json")]
@@ -145,6 +148,24 @@ macro_rules! impl_http {
                     self
                 }
 
+                #[must_use]
+                pub fn query_param(mut self, name: &str, value: &str) -> Self {
+                    self.0.query_param(name, value);
+                    self
+                }
+
+                #[must_use]
+                pub fn query_param_opt(mut self, name: &str, value: Option<&str>) -> Self {
+                    self.0.query_param_opt(name, value);
+                    self
+                }
+
+                #[must_use]
+                pub fn query_params(mut self, params: &[(&str, &str)]) -> Self {
+                    self.0.query_params(params);
+                    self
+                }
+
                 /// # Errors
                 ///
                 /// * If there was an error while sending request, redirect loop was
@@ -158,6 +179,18 @@ macro_rules! impl_http {
             impl GenericRequestBuilder<ModuleResponse> for ModuleRequestBuilder {
                 fn header(&mut self, name: &str, value: &str) {
                     self.0.header(name, value);
+                }
+
+                fn query_param(&mut self, name: &str, value: &str) {
+                    self.0.query_param(name, value);
+                }
+
+                fn query_param_opt(&mut self, name: &str, value: Option<&str>) {
+                    self.0.query_param_opt(name, value);
+                }
+
+                fn query_params(&mut self, params: &[(&str, &str)]) {
+                    self.0.query_params(params);
                 }
 
                 fn body(&mut self, body: Bytes) {

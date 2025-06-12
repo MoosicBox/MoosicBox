@@ -53,6 +53,23 @@ impl GenericRequestBuilder<crate::ReqwestResponse> for RequestBuilder {
         self.0 = Some(builder.header(name, value));
     }
 
+    fn query_param(&mut self, name: &str, value: &str) {
+        let builder = self.0.take().unwrap();
+        self.0 = Some(builder.query(&[(name, value)]));
+    }
+
+    fn query_param_opt(&mut self, name: &str, value: Option<&str>) {
+        if let Some(value) = value {
+            self.query_param(name, value);
+        }
+    }
+
+    fn query_params(&mut self, params: &[(&str, &str)]) {
+        for (key, value) in params {
+            self.query_param(key, value);
+        }
+    }
+
     fn body(&mut self, body: Bytes) {
         let builder = self.0.take().unwrap();
         self.0 = Some(builder.body(body));
