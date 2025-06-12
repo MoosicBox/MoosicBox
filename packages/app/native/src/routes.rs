@@ -1094,10 +1094,13 @@ pub async fn download(req: RouteRequest) -> Result<(), RouteError> {
     };
     let host = &connection.api_url;
 
-    let url = format!(
-        "{host}/downloader/download?moosicboxProfile={PROFILE}&source={source}&albumId={album_id}",
-    );
-    let response = CLIENT.post(&url).send().await?;
+    let response = CLIENT
+        .post(&format!("{host}/downloader/download"))
+        .header("moosicbox-profile", PROFILE)
+        .query_param("albumId", album_id)
+        .query_param("source", source.as_ref())
+        .send()
+        .await?;
 
     if !response.status().is_success() {
         let message = format!("Error: {} {}", response.status(), response.text().await?);
