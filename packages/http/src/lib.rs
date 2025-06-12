@@ -166,6 +166,12 @@ macro_rules! impl_http {
                     self
                 }
 
+                #[must_use]
+                pub fn body(mut self, body: Bytes) -> Self {
+                    self.0.body(body);
+                    self
+                }
+
                 /// # Errors
                 ///
                 /// * If there was an error while sending request, redirect loop was
