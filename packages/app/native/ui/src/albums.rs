@@ -286,6 +286,44 @@ pub fn album_page_content(
                             {
                                 "Download"
                             }
+
+                            @if album.album_sources.iter().any(|x| x.source.is_library()) {
+                                button
+                                    sx-dir="row"
+                                    sx-width=(130)
+                                    sx-height=(40)
+                                    sx-background="#fff"
+                                    sx-border-radius=(5)
+                                    sx-justify-content=(JustifyContent::Center)
+                                    sx-align-items=(AlignItems::Center)
+                                    sx-gap=(8)
+                                    hx-delete={
+                                        (pre_escaped!("/library"))
+                                            (pre_escaped!("?source="))(api_source)
+                                            (pre_escaped!("&albumId="))(album_id)
+                                    }
+                                {
+                                    "Remove from Library"
+                                }
+                            } @else {
+                                button
+                                    sx-dir="row"
+                                    sx-width=(130)
+                                    sx-height=(40)
+                                    sx-background="#fff"
+                                    sx-border-radius=(5)
+                                    sx-justify-content=(JustifyContent::Center)
+                                    sx-align-items=(AlignItems::Center)
+                                    sx-gap=(8)
+                                    hx-post={
+                                        (pre_escaped!("/library"))
+                                            (pre_escaped!("?source="))(api_source)
+                                            (pre_escaped!("&albumId="))(album_id)
+                                    }
+                                {
+                                    "Add to Library"
+                                }
+                            }
                         }
                     }
                 }

@@ -1110,3 +1110,44 @@ pub async fn download(req: RouteRequest) -> Result<(), RouteError> {
 
     Ok(())
 }
+
+pub async fn library_route(req: RouteRequest) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Post | Method::Delete) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
+    let Some(source) = req.query.get("source") else {
+        return Err(RouteError::MissingQueryParam("source"));
+    };
+    let source = ApiSource::from_str(source)
+        .inspect_err(|e| {
+            moosicbox_assert::die_or_error!("Invalid source: {e:?}");
+        })
+        .map_err(|e| RouteError::RouteFailed(e.into()))?;
+
+    let Some(album_id) = req.query.get("albumId") else {
+        return Err(RouteError::MissingQueryParam("albumId"));
+    };
+
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let response = CLIENT
+        .request(req.method, &format!("{host}/menu/album"))
+        .header("moosicbox-profile", PROFILE)
+        .query_param("albumId", album_id)
+        .query_param("source", source.as_ref())
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    Ok(Content::try_view("Success!")?)
+}

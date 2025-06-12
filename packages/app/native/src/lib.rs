@@ -158,6 +158,10 @@ pub fn init() -> Router {
         .with_no_content_result(
             "/download",
             |req| async move { routes::download(req).await },
+        )
+        .with_route_result(
+            "/library",
+            |req| async move { routes::library_route(req).await },
         );
 
     moosicbox_assert::assert_or_panic!(ROUTER.set(router.clone()).is_ok(), "Already set ROUTER");
