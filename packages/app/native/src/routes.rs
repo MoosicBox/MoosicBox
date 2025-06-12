@@ -40,6 +40,8 @@ pub enum RouteError {
     MissingQueryParam(&'static str),
     #[error("Missing connection")]
     MissingConnection,
+    #[error("Unsupported method")]
+    UnsupportedMethod,
     #[error("Failed to parse markup")]
     ParseMarkup,
     #[error("Failed to parse body")]
