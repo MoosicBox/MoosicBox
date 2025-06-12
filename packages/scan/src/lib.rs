@@ -218,6 +218,27 @@ impl Scanner {
     ///
     /// * If the scan fails
     /// * If a tokio task fails to join
+    #[allow(clippy::uninhabited_references)]
+    #[cfg(feature = "local")]
+    pub async fn scan_all_local(&self, db: &LibraryDatabase) -> Result<(), ScanError> {
+        self.scanned.store(0, std::sync::atomic::Ordering::SeqCst);
+        self.total.store(0, std::sync::atomic::Ordering::SeqCst);
+
+        match &*self.task {
+            #[cfg(feature = "local")]
+            ScanTask::Local { paths } => self.scan_local(db, paths).await?,
+            ScanTask::Api { .. } => {}
+        }
+
+        self.on_scan_finished().await;
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If the scan fails
+    /// * If a tokio task fails to join
     #[cfg(feature = "local")]
     pub async fn scan_local(
         &self,
