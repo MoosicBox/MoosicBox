@@ -64,6 +64,7 @@ members = [
     "packages/json_utils",
     "packages/library",
     "packages/library/models",
+    "packages/library/music_api",
     "packages/load_balancer",
     "packages/logging",
     "packages/marketing_site",
@@ -193,6 +194,7 @@ moosicbox_image              = { version = "0.1.1", default-features = false, pa
 moosicbox_json_utils         = { version = "0.1.1", default-features = false, path = "packages/json_utils" }
 moosicbox_library            = { version = "0.1.1", default-features = false, path = "packages/library" }
 moosicbox_library_models     = { version = "0.1.1", default-features = false, path = "packages/library/models" }
+moosicbox_library_music_api  = { version = "0.1.1", default-features = false, path = "packages/library/music_api" }
 moosicbox_load_balancer      = { version = "0.1.1", default-features = false, path = "packages/load_balancer" }
 moosicbox_logging            = { version = "0.1.1", default-features = false, path = "packages/logging" }
 moosicbox_marketing_site     = { version = "0.1.1", default-features = false, path = "packages/marketing_site" }

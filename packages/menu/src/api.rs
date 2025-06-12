@@ -7,10 +7,8 @@ use actix_web::{
     get, post,
     web::{self, Json},
 };
-use moosicbox_library::{
-    LibraryMusicApi,
-    db::{get_album_tracks, get_tracks},
-};
+use moosicbox_library::db::{get_album_tracks, get_tracks};
+use moosicbox_library_music_api::LibraryMusicApi;
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_api::{
     MusicApis, SourceToMusicApi as _,

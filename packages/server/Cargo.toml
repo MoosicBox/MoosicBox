@@ -57,6 +57,7 @@ switchy_telemetry = { workspace = true, features = ["actix"], optional = true }
 moosicbox_admin_htmx = { workspace = true, optional = true }
 moosicbox_downloader = { workspace = true, features = ["api"], optional = true }
 moosicbox_library = { workspace = true, features = ["api"], optional = true }
+moosicbox_library_music_api = { workspace = true, optional = true }
 moosicbox_menu = { workspace = true, features = ["api"], optional = true }
 moosicbox_music_api_api = { workspace = true, features = [
     "api",
@@ -171,6 +172,7 @@ encoder-aac = [
     "format-aac",
     "moosicbox_files/encoder-aac",
     "moosicbox_library?/encoder-aac",
+    "moosicbox_library_music_api?/encoder-aac",
     "moosicbox_player?/encoder-aac",
     "moosicbox_tunnel_sender?/encoder-aac",
 ]
@@ -178,6 +180,7 @@ encoder-flac = [
     "format-flac",
     "moosicbox_files/encoder-flac",
     "moosicbox_library?/encoder-flac",
+    "moosicbox_library_music_api?/encoder-flac",
     "moosicbox_player?/encoder-flac",
     "moosicbox_tunnel_sender?/encoder-flac",
 ]
@@ -185,6 +188,7 @@ encoder-mp3 = [
     "format-mp3",
     "moosicbox_files/encoder-mp3",
     "moosicbox_library?/encoder-mp3",
+    "moosicbox_library_music_api?/encoder-mp3",
     "moosicbox_player?/encoder-mp3",
     "moosicbox_tunnel_sender?/encoder-mp3",
 ]
@@ -192,6 +196,7 @@ encoder-opus = [
     "format-opus",
     "moosicbox_files/encoder-opus",
     "moosicbox_library?/encoder-opus",
+    "moosicbox_library_music_api?/encoder-opus",
     "moosicbox_player?/encoder-opus",
     "moosicbox_tunnel_sender?/encoder-opus",
 ]
@@ -231,6 +236,7 @@ format-aac = [
     "moosicbox_downloader?/format-aac",
     "moosicbox_files/format-aac",
     "moosicbox_library?/format-aac",
+    "moosicbox_library_music_api?/format-aac",
     "moosicbox_music_models/aac",
     "moosicbox_player?/format-aac",
     "moosicbox_scan?/aac",
@@ -241,6 +247,7 @@ format-flac = [
     "moosicbox_downloader?/format-flac",
     "moosicbox_files/format-flac",
     "moosicbox_library?/format-flac",
+    "moosicbox_library_music_api?/format-flac",
     "moosicbox_music_models/flac",
     "moosicbox_player?/format-flac",
     "moosicbox_scan?/flac",
@@ -251,6 +258,7 @@ format-mp3 = [
     "moosicbox_downloader?/format-mp3",
     "moosicbox_files/format-mp3",
     "moosicbox_library?/format-mp3",
+    "moosicbox_library_music_api?/format-mp3",
     "moosicbox_music_models/mp3",
     "moosicbox_player?/format-mp3",
     "moosicbox_scan?/mp3",
@@ -261,6 +269,7 @@ format-opus = [
     "moosicbox_downloader?/format-opus",
     "moosicbox_files/format-opus",
     "moosicbox_library?/format-opus",
+    "moosicbox_library_music_api?/format-opus",
     "moosicbox_music_models/opus",
     "moosicbox_player?/format-opus",
     "moosicbox_scan?/opus",
@@ -305,7 +314,7 @@ sqlite-sqlx = [
 
 admin-htmx = ["admin-htmx-api"]
 downloader = ["dep:throttle", "moosicbox_downloader/api"]
-library = ["moosicbox_library/api"]
+library = ["moosicbox_library/api", "moosicbox_library_music_api/api"]
 player = ["dep:moosicbox_library", "dep:moosicbox_player"]
 scan = [
     "dep:throttle",

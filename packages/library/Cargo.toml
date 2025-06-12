@@ -15,20 +15,16 @@ ignored = ["strum"]
 
 [dependencies]
 moosicbox_assert = { workspace = true }
-moosicbox_audio_output = { workspace = true, optional = true }
-moosicbox_files = { workspace = true }
 moosicbox_json_utils = { workspace = true, features = [
     "database",
     "serde_json",
 ] }
 moosicbox_library_models = { workspace = true, features = ["db"] }
 moosicbox_menu_models = { workspace = true }
-moosicbox_music_api = { workspace = true, features = ["models-api-search"] }
+moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging = { workspace = true }
-moosicbox_profiles = { workspace = true }
 moosicbox_search = { workspace = true, features = ["api", "db"] }
-moosicbox_stream_utils = { workspace = true, optional = true }
 switchy_database = { workspace = true }
 switchy_time = { workspace = true, features = ["std"] }
 
@@ -37,11 +33,9 @@ actix-web = { workspace = true, optional = true }
 utoipa    = { workspace = true, optional = true }
 
 async-recursion = { workspace = true }
-async-trait     = { workspace = true }
 enum-as-inner   = { workspace = true }
 futures         = { workspace = true }
 log             = { workspace = true }
-regex           = { workspace = true }
 serde           = { workspace = true, features = ["derive", "rc"] }
 serde_json      = { workspace = true }
 strum           = { workspace = true }
@@ -54,12 +48,7 @@ default = ["all-encoders", "api", "openapi"]
 
 fail-on-warnings = []
 
-api = [
-    "dep:actix-web",
-    "moosicbox_library_models/api",
-    "moosicbox_profiles/api",
-    "switchy_database/api",
-]
+api = ["dep:actix-web", "moosicbox_library_models/api", "switchy_database/api"]
 openapi = [
     "dep:utoipa",
     "moosicbox_library_models/openapi",
@@ -69,55 +58,15 @@ openapi = [
 all-encoders    = ["all-os-encoders", "encoder-mp3"]
 all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]
 
-encoder-aac = [
-    "dep:moosicbox_audio_output",
-    "dep:moosicbox_stream_utils",
-    "format-aac",
-    "moosicbox_audio_output/aac",
-    "moosicbox_files/encoder-aac",
-]
-encoder-flac = [
-    "dep:moosicbox_audio_output",
-    "dep:moosicbox_stream_utils",
-    "format-flac",
-    "moosicbox_audio_output/flac",
-    "moosicbox_files/encoder-flac",
-]
-encoder-mp3 = [
-    "dep:moosicbox_audio_output",
-    "dep:moosicbox_stream_utils",
-    "format-mp3",
-    "moosicbox_audio_output/mp3",
-    "moosicbox_files/encoder-mp3",
-]
-encoder-opus = [
-    "dep:moosicbox_audio_output",
-    "dep:moosicbox_stream_utils",
-    "format-opus",
-    "moosicbox_audio_output/opus",
-    "moosicbox_files/encoder-opus",
-]
+encoder-aac  = ["format-aac"]
+encoder-flac = ["format-flac"]
+encoder-mp3  = ["format-mp3"]
+encoder-opus = ["format-opus"]
 
 all-formats    = ["all-os-formats", "format-mp3"]
 all-os-formats = ["format-aac", "format-flac", "format-opus"]
 
-format-aac = [
-    "moosicbox_files/format-aac",
-    "moosicbox_library_models/aac",
-    "moosicbox_music_models/aac",
-]
-format-flac = [
-    "moosicbox_files/format-flac",
-    "moosicbox_library_models/flac",
-    "moosicbox_music_models/flac",
-]
-format-mp3 = [
-    "moosicbox_files/format-mp3",
-    "moosicbox_library_models/mp3",
-    "moosicbox_music_models/mp3",
-]
-format-opus = [
-    "moosicbox_files/format-opus",
-    "moosicbox_library_models/opus",
-    "moosicbox_music_models/opus",
-]
+format-aac  = ["moosicbox_library_models/aac", "moosicbox_music_models/aac"]
+format-flac = ["moosicbox_library_models/flac", "moosicbox_music_models/flac"]
+format-mp3  = ["moosicbox_library_models/mp3", "moosicbox_music_models/mp3"]
+format-opus = ["moosicbox_library_models/opus", "moosicbox_music_models/opus"]

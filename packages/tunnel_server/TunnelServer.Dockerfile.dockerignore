@@ -7,6 +7,7 @@
 !/packages/audio_encoder
 !/packages/audio_output
 !/packages/audio_zone
+!/packages/auth
 !/packages/config
 !/packages/database
 !/packages/database_connection
@@ -30,6 +31,8 @@
 !/packages/profiles
 !/packages/random
 !/packages/resampler
+!/packages/scan
+!/packages/schema
 !/packages/search
 !/packages/session
 !/packages/simvar

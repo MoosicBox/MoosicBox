@@ -2,38 +2,24 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{
-    cmp::Ordering,
-    fs::File,
-    sync::{Arc, LazyLock},
-};
+use std::{cmp::Ordering, sync::Arc};
 
-use db::{SetTrackSize, get_artist_by_album_id};
 use models::{LibraryAlbum, LibraryArtist, LibraryTrack};
 
 use async_recursion::async_recursion;
-use async_trait::async_trait;
-use moosicbox_files::get_content_length;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library_models::LibraryAlbumType;
 use moosicbox_menu_models::AlbumVersion;
-use moosicbox_music_api::{
-    MusicApi, TrackOrId,
-    models::{
-        AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection,
-        ImageCoverSize, ImageCoverSource, TrackAudioQuality, TrackOrder, TrackOrderDirection,
-        TrackSource, search::api::ApiSearchResultsResponse,
-    },
+use moosicbox_music_api_models::{
+    AlbumOrder, AlbumOrderDirection, AlbumsRequest, ArtistOrder, ArtistOrderDirection, TrackOrder,
+    TrackOrderDirection, TrackSource, search::api::ApiSearchResultsResponse,
 };
-use moosicbox_music_models::{
-    Album, AlbumSort, AlbumType, ApiSource, Artist, AudioFormat, LIBRARY_API_SOURCE,
-    PlaybackQuality, Track, id::Id,
-};
+use moosicbox_music_models::{Album, AlbumSort, ApiSource, Artist, AudioFormat, Track, id::Id};
 use moosicbox_paging::{Page, PagingRequest, PagingResponse, PagingResult};
 use moosicbox_search::{
-    PopulateIndexError, RecreateIndexError, data::AsDataValues as _, populate_global_search_index,
+    PopulateIndexError, RecreateIndexError, SearchIndexError, data::AsDataValues as _,
+    populate_global_search_index,
 };
-use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumString};
 use switchy_database::profiles::LibraryDatabase;
@@ -45,7 +31,6 @@ pub mod api;
 
 pub mod cache;
 pub mod db;
-pub mod profiles;
 
 pub mod models {
     pub use moosicbox_library_models::*;
@@ -806,6 +791,14 @@ pub enum LibrarySearchType {
     UserProfiles,
 }
 
+#[derive(Debug, Error)]
+pub enum SearchError {
+    #[error(transparent)]
+    SearchIndex(#[from] SearchIndexError),
+    #[error(transparent)]
+    DatabaseFetch(#[from] DatabaseFetchError),
+}
+
 /// # Errors
 ///
 /// * If there was a database error
@@ -815,9 +808,8 @@ pub fn search(
     offset: Option<u32>,
     limit: Option<u32>,
     _types: Option<&[LibrarySearchType]>,
-) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
-    let results = moosicbox_search::global_search(query, offset, limit)
-        .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
+) -> Result<ApiSearchResultsResponse, SearchError> {
+    let results = moosicbox_search::global_search(query, offset, limit)?;
     log::trace!("Received search response: results={results:?}");
 
     Ok(results)
@@ -916,609 +908,12 @@ pub enum TryFromAlbumTypeError {
     UnsupportedAlbumType,
 }
 
-impl From<LibraryFavoriteArtistsError> for moosicbox_music_api::Error {
-    fn from(err: LibraryFavoriteArtistsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryArtistError> for moosicbox_music_api::Error {
-    fn from(err: LibraryArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryAddFavoriteArtistError> for moosicbox_music_api::Error {
-    fn from(err: LibraryAddFavoriteArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryRemoveFavoriteArtistError> for moosicbox_music_api::Error {
-    fn from(err: LibraryRemoveFavoriteArtistError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryFavoriteAlbumsError> for moosicbox_music_api::Error {
-    fn from(err: LibraryFavoriteAlbumsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryAlbumError> for moosicbox_music_api::Error {
-    fn from(err: LibraryAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryArtistAlbumsError> for moosicbox_music_api::Error {
-    fn from(err: LibraryArtistAlbumsError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<TryFromAlbumTypeError> for moosicbox_music_api::Error {
-    fn from(err: TryFromAlbumTypeError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryAddFavoriteAlbumError> for moosicbox_music_api::Error {
-    fn from(err: LibraryAddFavoriteAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryRemoveFavoriteAlbumError> for moosicbox_music_api::Error {
-    fn from(err: LibraryRemoveFavoriteAlbumError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryFavoriteTracksError> for moosicbox_music_api::Error {
-    fn from(err: LibraryFavoriteTracksError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryAlbumTracksError> for moosicbox_music_api::Error {
-    fn from(err: LibraryAlbumTracksError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryTrackError> for moosicbox_music_api::Error {
-    fn from(err: LibraryTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryAddFavoriteTrackError> for moosicbox_music_api::Error {
-    fn from(err: LibraryAddFavoriteTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
-impl From<LibraryRemoveFavoriteTrackError> for moosicbox_music_api::Error {
-    fn from(err: LibraryRemoveFavoriteTrackError) -> Self {
-        Self::Other(Box::new(err))
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum TrackSizeError {
     #[error("Unsupported audio format: {0:?}")]
     UnsupportedFormat(AudioFormat),
     #[error("Unsupported track source: {0:?}")]
     UnsupportedSource(TrackSource),
-}
-
-#[derive(Clone)]
-pub struct LibraryMusicApi {
-    db: LibraryDatabase,
-}
-
-impl From<&LibraryMusicApi> for LibraryDatabase {
-    fn from(value: &LibraryMusicApi) -> Self {
-        value.db.clone()
-    }
-}
-
-impl From<LibraryMusicApi> for LibraryDatabase {
-    fn from(value: LibraryMusicApi) -> Self {
-        value.db
-    }
-}
-
-impl From<LibraryDatabase> for LibraryMusicApi {
-    fn from(value: LibraryDatabase) -> Self {
-        Self { db: value }
-    }
-}
-
-impl LibraryMusicApi {
-    #[must_use]
-    pub const fn new(db: LibraryDatabase) -> Self {
-        Self { db }
-    }
-
-    /// # Errors
-    ///
-    /// * If failed to get the library artist
-    pub async fn library_artist(
-        &self,
-        artist_id: &Id,
-    ) -> Result<Option<LibraryArtist>, moosicbox_music_api::Error> {
-        Ok(Some(artist(&self.db, artist_id).await?))
-    }
-
-    /// # Errors
-    ///
-    /// * If failed to get the library album artist
-    pub async fn library_album_artist(
-        &self,
-        album_id: &Id,
-    ) -> Result<Option<LibraryArtist>, moosicbox_music_api::Error> {
-        get_artist_by_album_id(
-            &self.db,
-            album_id
-                .try_into()
-                .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?,
-        )
-        .await
-        .map_err(|e| moosicbox_music_api::Error::Other(e.into()))
-    }
-
-    /// # Errors
-    ///
-    /// * If failed to get the library album from source
-    pub async fn library_album_from_source(
-        &self,
-        album_id: &Id,
-        source: &ApiSource,
-    ) -> Result<Option<LibraryAlbum>, moosicbox_music_api::Error> {
-        Ok(album_from_source(&self.db, album_id, source).await?)
-    }
-
-    /// # Errors
-    ///
-    /// * If failed to get the library album
-    pub async fn library_album(
-        &self,
-        album_id: &Id,
-    ) -> Result<Option<LibraryAlbum>, moosicbox_music_api::Error> {
-        Ok(album(&self.db, album_id).await?)
-    }
-
-    /// # Errors
-    ///
-    /// * If failed to get the library album versions
-    pub async fn library_album_versions(
-        &self,
-        album_id: &Id,
-    ) -> Result<Vec<AlbumVersion>, LibraryAlbumTracksError> {
-        album_versions(&self.db, album_id).await
-    }
-
-    /// # Errors
-    ///
-    /// * If failed to get the library albums
-    pub async fn library_albums(
-        &self,
-        request: &AlbumsRequest,
-    ) -> PagingResult<LibraryAlbum, LibraryFavoriteAlbumsError> {
-        favorite_albums(&self.db, request).await
-    }
-
-    /// # Errors
-    ///
-    /// * If failed to get the library track
-    pub async fn library_track(
-        &self,
-        track_id: &Id,
-    ) -> Result<Option<LibraryTrack>, moosicbox_music_api::Error> {
-        Ok(track(&self.db, track_id).await?)
-    }
-
-    /// # Errors
-    ///
-    /// * If failed to get the library album tracks
-    pub async fn library_album_tracks(
-        &self,
-        album_id: &Id,
-        offset: Option<u32>,
-        limit: Option<u32>,
-        _order: Option<TrackOrder>,
-        _order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<LibraryTrack, LibraryAlbumTracksError> {
-        album_tracks(&self.db, album_id, offset, limit).await
-    }
-}
-
-#[async_trait]
-impl MusicApi for LibraryMusicApi {
-    fn source(&self) -> &ApiSource {
-        &LIBRARY_API_SOURCE
-    }
-
-    async fn artists(
-        &self,
-        offset: Option<u32>,
-        limit: Option<u32>,
-        order: Option<ArtistOrder>,
-        order_direction: Option<ArtistOrderDirection>,
-    ) -> PagingResult<Artist, moosicbox_music_api::Error> {
-        Ok(favorite_artists(
-            &self.db,
-            offset,
-            limit,
-            order.map(Into::into),
-            order_direction.map(Into::into),
-        )
-        .await?
-        .inner_into())
-    }
-
-    async fn artist(&self, artist_id: &Id) -> Result<Option<Artist>, moosicbox_music_api::Error> {
-        Ok(self.library_artist(artist_id).await?.map(Into::into))
-    }
-
-    async fn add_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        Ok(add_favorite_artist(&self.db, artist_id)?)
-    }
-
-    async fn remove_artist(&self, artist_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        Ok(remove_favorite_artist(&self.db, artist_id)?)
-    }
-
-    async fn album_artist(
-        &self,
-        album_id: &Id,
-    ) -> Result<Option<Artist>, moosicbox_music_api::Error> {
-        Ok(self.library_album_artist(album_id).await?.map(Into::into))
-    }
-
-    async fn artist_cover_source(
-        &self,
-        artist: &Artist,
-        _size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, moosicbox_music_api::Error> {
-        Ok(artist.cover.clone().map(ImageCoverSource::LocalFilePath))
-    }
-
-    async fn albums(
-        &self,
-        request: &AlbumsRequest,
-    ) -> PagingResult<Album, moosicbox_music_api::Error> {
-        Ok(self
-            .library_albums(request)
-            .await?
-            .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
-    }
-
-    async fn album(&self, album_id: &Id) -> Result<Option<Album>, moosicbox_music_api::Error> {
-        Ok(self
-            .library_album(album_id)
-            .await?
-            .map(TryInto::try_into)
-            .transpose()
-            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?)
-    }
-
-    async fn album_versions(
-        &self,
-        album_id: &Id,
-        offset: Option<u32>,
-        limit: Option<u32>,
-    ) -> PagingResult<AlbumVersion, moosicbox_music_api::Error> {
-        let offset = offset.unwrap_or(0);
-        let limit = limit.unwrap_or(50);
-
-        let value = self.library_album_versions(album_id).await?;
-
-        let total = u32::try_from(value.len()).unwrap();
-        let items = value
-            .into_iter()
-            .skip(offset as usize)
-            .take(std::cmp::min(total - offset, limit) as usize)
-            .collect();
-
-        let page = PagingResponse::new(
-            Page::WithTotal {
-                items,
-                offset,
-                limit,
-                total,
-            },
-            {
-                let api = self.clone();
-                let album_id = album_id.clone();
-
-                move |offset, limit| {
-                    let api = api.clone();
-                    let album_id = album_id.clone();
-                    Box::pin(async move {
-                        api.album_versions(&album_id, Some(offset), Some(limit))
-                            .await
-                    })
-                }
-            },
-        );
-
-        Ok(page)
-    }
-
-    async fn artist_albums(
-        &self,
-        artist_id: &Id,
-        album_type: Option<AlbumType>,
-        offset: Option<u32>,
-        limit: Option<u32>,
-        _order: Option<AlbumOrder>,
-        _order_direction: Option<AlbumOrderDirection>,
-    ) -> PagingResult<Album, moosicbox_music_api::Error> {
-        let offset = offset.unwrap_or(0);
-        let limit = limit.unwrap_or(100);
-
-        Ok(if let Some(album_type) = album_type {
-            artist_albums(
-                &self.db,
-                artist_id,
-                Some(offset),
-                Some(limit),
-                Some(album_type.into()),
-            )
-            .await?
-            .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
-        } else {
-            let pages = futures::future::join_all(
-                vec![
-                    LibraryAlbumType::Lp,
-                    LibraryAlbumType::EpsAndSingles,
-                    LibraryAlbumType::Compilations,
-                ]
-                .into_iter()
-                .map(|album_type| {
-                    artist_albums(
-                        &self.db,
-                        artist_id,
-                        Some(offset),
-                        Some(limit),
-                        Some(album_type),
-                    )
-                }),
-            )
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-
-            let total = pages.iter().map(|page| page.total().unwrap()).sum();
-
-            let db = self.db.clone();
-            let artist_id = artist_id.clone();
-
-            PagingResponse {
-                page: Page::WithTotal {
-                    items: pages
-                        .into_iter()
-                        .flat_map(PagingResponse::into_items)
-                        .collect::<Vec<_>>(),
-                    offset,
-                    limit,
-                    total,
-                },
-                fetch: Arc::new(Mutex::new(Box::new(move |offset, limit| {
-                    let db = db.clone();
-                    let artist_id = artist_id.clone();
-
-                    Box::pin(async move {
-                        artist_albums(&db, &artist_id, Some(offset), Some(limit), None).await
-                    })
-                }))),
-            }
-            .inner_try_into_map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
-        })
-    }
-
-    async fn add_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        Ok(add_favorite_album(&self.db, album_id)?)
-    }
-
-    async fn remove_album(&self, album_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        Ok(remove_favorite_album(&self.db, album_id)?)
-    }
-
-    async fn album_cover_source(
-        &self,
-        album: &Album,
-        _size: ImageCoverSize,
-    ) -> Result<Option<ImageCoverSource>, moosicbox_music_api::Error> {
-        Ok(album.artwork.clone().map(ImageCoverSource::LocalFilePath))
-    }
-
-    async fn tracks(
-        &self,
-        track_ids: Option<&[Id]>,
-        offset: Option<u32>,
-        limit: Option<u32>,
-        order: Option<TrackOrder>,
-        order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, moosicbox_music_api::Error> {
-        Ok(favorite_tracks(
-            &self.db,
-            track_ids,
-            offset,
-            limit,
-            order.map(Into::into),
-            order_direction.map(Into::into),
-        )
-        .await?
-        .inner_into())
-    }
-
-    async fn album_tracks(
-        &self,
-        album_id: &Id,
-        offset: Option<u32>,
-        limit: Option<u32>,
-        order: Option<TrackOrder>,
-        order_direction: Option<TrackOrderDirection>,
-    ) -> PagingResult<Track, moosicbox_music_api::Error> {
-        Ok(self
-            .library_album_tracks(album_id, offset, limit, order, order_direction)
-            .await?
-            .inner_into())
-    }
-
-    async fn track(&self, track_id: &Id) -> Result<Option<Track>, moosicbox_music_api::Error> {
-        Ok(self.library_track(track_id).await?.map(Into::into))
-    }
-
-    async fn add_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        Ok(add_favorite_track(&self.db, track_id)?)
-    }
-
-    async fn remove_track(&self, track_id: &Id) -> Result<(), moosicbox_music_api::Error> {
-        Ok(remove_favorite_track(&self.db, track_id)?)
-    }
-
-    async fn track_source(
-        &self,
-        track: TrackOrId,
-        _quality: TrackAudioQuality,
-    ) -> Result<Option<TrackSource>, moosicbox_music_api::Error> {
-        let Some(track) = track.track(self).await? else {
-            return Ok(None);
-        };
-        let mut path = if let Some(file) = &track.file {
-            file.to_string()
-        } else {
-            return Ok(None);
-        };
-
-        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
-
-        if std::env::consts::OS == "windows" {
-            path = REGEX
-                .replace(&path, |caps: &Captures| {
-                    format!("{}:", caps[1].to_uppercase())
-                })
-                .replace('/', "\\");
-        }
-
-        Ok(Some(TrackSource::LocalFilePath {
-            path,
-            format: track.format.unwrap_or(AudioFormat::Source),
-            track_id: Some(track.id.clone()),
-            source: track.track_source,
-        }))
-    }
-
-    async fn track_size(
-        &self,
-        track: TrackOrId,
-        source: &TrackSource,
-        quality: PlaybackQuality,
-    ) -> Result<Option<u64>, moosicbox_music_api::Error> {
-        log::debug!(
-            "track_size: track_id={} source={source:?} quality={quality:?}",
-            track.id()
-        );
-
-        if let Some(size) = db::get_track_size(&self.db, track.id(), &quality)
-            .await
-            .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
-        {
-            return Ok(Some(size));
-        }
-
-        let bytes = match source {
-            TrackSource::LocalFilePath { path, .. } => match &quality.format {
-                #[cfg(feature = "encoder-aac")]
-                AudioFormat::Aac => {
-                    let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_audio_output::encoder::aac::encode_aac_spawn(path, writer.clone())
-                        .await
-                        .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
-                    writer.bytes_written()
-                }
-                #[cfg(feature = "encoder-flac")]
-                AudioFormat::Flac => {
-                    return Err(moosicbox_music_api::Error::Other(Box::new(
-                        TrackSizeError::UnsupportedFormat(quality.format),
-                    )));
-                }
-                #[cfg(feature = "encoder-mp3")]
-                AudioFormat::Mp3 => {
-                    let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_audio_output::encoder::mp3::encode_mp3_spawn(path, writer.clone())
-                        .await
-                        .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
-                    writer.bytes_written()
-                }
-                #[cfg(feature = "encoder-opus")]
-                AudioFormat::Opus => {
-                    let writer = moosicbox_stream_utils::ByteWriter::default();
-                    moosicbox_audio_output::encoder::opus::encode_opus_spawn(path, writer.clone())
-                        .await
-                        .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
-                    writer.bytes_written()
-                }
-                AudioFormat::Source => File::open(path).unwrap().metadata().unwrap().len(),
-                #[allow(unreachable_patterns)]
-                _ => {
-                    moosicbox_assert::die_or_panic!("Invalid library state");
-                }
-            },
-            TrackSource::RemoteUrl { url, .. } => {
-                if let Some(bytes) = get_content_length(url, None, None)
-                    .await
-                    .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?
-                {
-                    bytes
-                } else {
-                    return Ok(None);
-                }
-            }
-        };
-
-        db::set_track_size(
-            &self.db,
-            SetTrackSize {
-                track_id: track
-                    .id()
-                    .try_into()
-                    .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?,
-                quality,
-                bytes: Some(Some(bytes)),
-                bit_depth: Some(None),
-                audio_bitrate: Some(None),
-                overall_bitrate: Some(None),
-                sample_rate: Some(None),
-                channels: Some(None),
-            },
-        )
-        .await
-        .map_err(|e| moosicbox_music_api::Error::Other(Box::new(e)))?;
-
-        Ok(Some(bytes))
-    }
-
-    fn supports_search(&self) -> bool {
-        true
-    }
-
-    async fn search(
-        &self,
-        query: &str,
-        offset: Option<u32>,
-        limit: Option<u32>,
-    ) -> Result<ApiSearchResultsResponse, moosicbox_music_api::Error> {
-        let results = search(query, offset, limit, None)?;
-
-        Ok(results)
-    }
 }
 
 #[derive(Debug, Error)]
@@ -1589,7 +984,7 @@ pub async fn reindex_global_search_index(db: &LibraryDatabase) -> Result<(), Rei
 
 #[cfg(test)]
 mod test {
-    use moosicbox_music_api::models::AlbumFilters;
+    use moosicbox_music_api_models::AlbumFilters;
     use moosicbox_music_models::AlbumSource;
 
     use super::*;

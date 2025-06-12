@@ -7,8 +7,7 @@ use actix_web::{
     route,
     web::{self, Json},
 };
-use moosicbox_music_api::models::AlbumsRequest;
-use moosicbox_music_api::models::search::api::ApiSearchResultsResponse;
+use moosicbox_music_api_models::{AlbumsRequest, search::api::ApiSearchResultsResponse};
 use moosicbox_music_models::{AlbumSort, api::ApiAlbum, id::parse_integer_ranges_to_ids};
 use moosicbox_paging::{Page, PagingRequest};
 use serde::{Deserialize, Serialize};
@@ -89,10 +88,10 @@ pub fn bind_services<
         ApiLibraryAlbum,
         ApiLibraryTrack,
         ApiSearchResultsResponse,
-        moosicbox_music_api::models::search::api::ApiGlobalSearchResult,
-        moosicbox_music_api::models::search::api::ApiGlobalArtistSearchResult,
-        moosicbox_music_api::models::search::api::ApiGlobalAlbumSearchResult,
-        moosicbox_music_api::models::search::api::ApiGlobalTrackSearchResult,
+        moosicbox_music_api_models::search::api::ApiGlobalSearchResult,
+        moosicbox_music_api_models::search::api::ApiGlobalArtistSearchResult,
+        moosicbox_music_api_models::search::api::ApiGlobalAlbumSearchResult,
+        moosicbox_music_api_models::search::api::ApiGlobalTrackSearchResult,
         LibraryArtistOrder,
         LibraryArtistOrderDirection,
         LibraryAlbumOrder,

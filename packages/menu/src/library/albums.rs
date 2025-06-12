@@ -3,10 +3,11 @@ use std::sync::{Arc, PoisonError};
 use moosicbox_date_utils::chrono;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_library::{
-    LibraryAlbumTracksError, LibraryMusicApi,
+    LibraryAlbumTracksError,
     db::{delete_track_sizes_by_track_id, delete_tracks},
     models::LibraryAlbum,
 };
+use moosicbox_library_music_api::LibraryMusicApi;
 use moosicbox_menu_models::AlbumVersion;
 use moosicbox_music_api::{MusicApi, SourceToMusicApi as _, models::AlbumsRequest};
 use moosicbox_music_models::{

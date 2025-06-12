@@ -63,7 +63,8 @@ async fn add_profile(
 
     #[allow(clippy::redundant_clone)]
     #[cfg(feature = "library")]
-    let library_music_api = moosicbox_library::LibraryMusicApi::new(library_database.clone());
+    let library_music_api =
+        moosicbox_library_music_api::LibraryMusicApi::new(library_database.clone());
 
     #[allow(unused_mut)]
     let mut apis_map: BTreeMap<ApiSource, Arc<Box<dyn MusicApi>>> = BTreeMap::new();
@@ -111,7 +112,7 @@ async fn add_profile(
     moosicbox_music_api::profiles::PROFILES.add(profile.to_string(), Arc::new(apis_map));
 
     #[cfg(feature = "library")]
-    moosicbox_library::profiles::PROFILES.add(profile.to_string(), library_database);
+    moosicbox_library_music_api::profiles::PROFILES.add(profile.to_string(), library_database);
 
     Ok(())
 }
@@ -126,7 +127,7 @@ async fn remove_profile(
     switchy_database::profiles::PROFILES.remove(profile);
     moosicbox_music_api::profiles::PROFILES.remove(profile);
     #[cfg(feature = "library")]
-    moosicbox_library::profiles::PROFILES.remove(profile);
+    moosicbox_library_music_api::profiles::PROFILES.remove(profile);
 
     #[cfg(all(not(feature = "postgres"), feature = "sqlite"))]
     if let Some(path) = moosicbox_config::get_profile_dir_path(app_type, profile) {

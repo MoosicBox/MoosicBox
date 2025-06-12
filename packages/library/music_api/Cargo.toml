@@ -1,0 +1,79 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["multimedia", "network-programming"]
+description = "MoosicBox Library Music API package"
+edition     = "2024"
+keywords    = ["audio", "library"]
+license     = "MPL-2.0"
+name        = "moosicbox_library_music_api"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.1"
+
+[dependencies]
+moosicbox_assert       = { workspace = true }
+moosicbox_audio_output = { workspace = true, optional = true }
+moosicbox_files        = { workspace = true }
+moosicbox_library      = { workspace = true }
+moosicbox_menu_models  = { workspace = true }
+moosicbox_music_api    = { workspace = true }
+moosicbox_music_models = { workspace = true }
+moosicbox_paging       = { workspace = true }
+moosicbox_profiles     = { workspace = true }
+moosicbox_scan         = { workspace = true, features = ["local"] }
+moosicbox_stream_utils = { workspace = true, optional = true }
+switchy_async          = { workspace = true, features = ["sync"] }
+switchy_database       = { workspace = true }
+
+actix-web   = { workspace = true, optional = true }
+async-trait = { workspace = true }
+futures     = { workspace = true }
+log         = { workspace = true }
+regex       = { workspace = true }
+
+[features]
+default = ["all-encoders", "api"]
+
+fail-on-warnings = []
+
+api = ["dep:actix-web", "moosicbox_profiles/api", "switchy_database/api"]
+
+all-encoders    = ["all-os-encoders", "encoder-mp3"]
+all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]
+
+encoder-aac = [
+    "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
+    "format-aac",
+    "moosicbox_audio_output/aac",
+    "moosicbox_files/encoder-aac",
+]
+encoder-flac = [
+    "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
+    "format-flac",
+    "moosicbox_audio_output/flac",
+    "moosicbox_files/encoder-flac",
+]
+encoder-mp3 = [
+    "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
+    "format-mp3",
+    "moosicbox_audio_output/mp3",
+    "moosicbox_files/encoder-mp3",
+]
+encoder-opus = [
+    "dep:moosicbox_audio_output",
+    "dep:moosicbox_stream_utils",
+    "format-opus",
+    "moosicbox_audio_output/opus",
+    "moosicbox_files/encoder-opus",
+]
+
+all-formats    = ["all-os-formats", "format-mp3"]
+all-os-formats = ["format-aac", "format-flac", "format-opus"]
+
+format-aac  = ["moosicbox_files/format-aac", "moosicbox_music_models/aac"]
+format-flac = ["moosicbox_files/format-flac", "moosicbox_music_models/flac"]
+format-mp3  = ["moosicbox_files/format-mp3", "moosicbox_music_models/mp3"]
+format-opus = ["moosicbox_files/format-opus", "moosicbox_music_models/opus"]
