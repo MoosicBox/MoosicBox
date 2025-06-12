@@ -905,7 +905,7 @@ impl Default for ScanOutput {
 mod test {
     use moosicbox_json_utils::ToValueType;
     use moosicbox_library::models::LibraryAlbumType;
-    use moosicbox_music_models::{AlbumSource, ApiSources, id::ApiId};
+    use moosicbox_music_models::{ApiSources, id::ApiId};
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -1176,7 +1176,7 @@ mod test {
     });
 
     #[test_log::test(tokio::test)]
-    async fn can_scan_singe_artist_with_single_album_with_single_track() {
+    async fn can_scan_single_artist_with_single_album_with_single_track() {
         static API_SOURCE: LazyLock<ApiSource> =
             LazyLock::new(|| ApiSource::register("MockApi", "MockApi"));
 
@@ -1274,10 +1274,10 @@ mod test {
             vec![LibraryArtist {
                 id: 1,
                 title: "artist1".to_string(),
-                cover: None,
                 api_sources: ApiSources::default()
                     .with_source(ApiSource::library(), 1.into())
                     .with_source(api_source.clone(), "1".into()),
+                ..Default::default()
             }]
         );
 
@@ -1286,20 +1286,14 @@ mod test {
             vec![LibraryAlbum {
                 id: 1,
                 title: "album1".to_string(),
-                artist: String::new(),
                 artist_id: 1,
-                album_type: LibraryAlbumType::default(),
                 date_released: Some("2022-01-01".to_string()),
                 date_added: albums.first().and_then(|x| x.date_added.clone()),
-                artwork: None,
-                directory: None,
-                source: AlbumSource::Local,
-                blur: false,
-                versions: vec![],
                 album_sources: ApiSources::default()
                     .with_source(ApiSource::library(), 1.into())
                     .with_source(api_source.clone(), "1".into()),
                 artist_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                ..Default::default()
             }]
         );
 
@@ -1310,29 +1304,802 @@ mod test {
                 number: 1,
                 title: "track1".to_string(),
                 duration: 10.0,
-                album: String::new(),
                 album_id: 1,
-                album_type: LibraryAlbumType::default(),
-                date_released: None,
-                date_added: None,
-                artist: String::new(),
-                artist_id: 0,
-                file: None,
-                artwork: None,
-                blur: false,
-                bytes: 0,
                 format: Some(AudioFormat::Source),
-                bit_depth: None,
-                audio_bitrate: None,
-                overall_bitrate: None,
-                sample_rate: None,
-                channels: None,
                 source: TrackApiSource::Api(api_source.clone()),
                 api_source: ApiSource::library(),
                 api_sources: ApiSources::default()
                     .with_source(ApiSource::library(), 1.into())
                     .with_source(api_source.clone(), "1".into()),
+                ..Default::default()
             }]
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn should_merge_artists_with_same_id_and_name_in_different_api_sources() {
+        let api_source1 = ApiSource::register("MockApi1", "MockApi1");
+        let api_source2 = ApiSource::register("MockApi2", "MockApi2");
+
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let artist_name = "artist1";
+        let artist_id = "1".into();
+
+        let artist = output
+            .add_artist(artist_name, &Some(&artist_id), api_source1.clone())
+            .await;
+
+        let album_name = "album1";
+        let album_id = "1".into();
+        let album_date_released = "2022-01-01".to_string();
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                album_name,
+                &Some(album_date_released.clone()),
+                None,
+                &Some(&album_id),
+                api_source1.clone(),
+            )
+            .await;
+
+        let track_name = "track1";
+        let track_id = "1".into();
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                track_name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source1.clone().into(),
+                &Some(&track_id),
+                api_source1.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let artist = output
+            .add_artist(artist_name, &Some(&artist_id), api_source2.clone())
+            .await;
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                album_name,
+                &Some(album_date_released),
+                None,
+                &Some(&album_id),
+                api_source2.clone(),
+            )
+            .await;
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                track_name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source2.clone().into(),
+                &Some(&track_id),
+                api_source2.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let artists: Vec<LibraryArtist> = db
+            .select("artists")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let albums: Vec<LibraryAlbum> = db
+            .select("albums")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let tracks: Vec<LibraryTrack> = db
+            .select("tracks")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        assert_eq!(
+            artists,
+            vec![LibraryArtist {
+                id: 1,
+                title: "artist1".to_string(),
+                api_sources: ApiSources::default()
+                    .with_source(ApiSource::library(), 1.into())
+                    .with_source(api_source1.clone(), "1".into())
+                    .with_source(api_source2.clone(), "1".into()),
+                ..Default::default()
+            }]
+        );
+
+        assert_eq!(
+            albums,
+            vec![LibraryAlbum {
+                id: 1,
+                title: "album1".to_string(),
+                artist_id: 1,
+                date_released: Some("2022-01-01".to_string()),
+                date_added: albums.first().and_then(|x| x.date_added.clone()),
+                album_sources: ApiSources::default()
+                    .with_source(ApiSource::library(), 1.into())
+                    .with_source(api_source1.clone(), "1".into())
+                    .with_source(api_source2.clone(), "1".into()),
+                artist_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                ..Default::default()
+            }]
+        );
+
+        assert_eq!(
+            tracks,
+            vec![
+                LibraryTrack {
+                    id: 1,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source1.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default()
+                        .with_source(ApiSource::library(), 1.into())
+                        .with_source(api_source1.clone(), "1".into()),
+                    ..Default::default()
+                },
+                LibraryTrack {
+                    id: 2,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source2.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default()
+                        .with_source(ApiSource::library(), 2.into())
+                        .with_source(api_source2.clone(), "1".into()),
+                    ..Default::default()
+                }
+            ]
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn should_merge_artists_with_different_id_and_same_name_in_different_api_sources() {
+        let api_source1 = ApiSource::register("MockApi1", "MockApi1");
+        let api_source2 = ApiSource::register("MockApi2", "MockApi2");
+
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let artist_name = "artist1";
+        let artist_id = "1".into();
+
+        let artist = output
+            .add_artist(artist_name, &Some(&artist_id), api_source1.clone())
+            .await;
+
+        let album_name = "album1";
+        let album_id = "1".into();
+        let album_date_released = "2022-01-01".to_string();
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                album_name,
+                &Some(album_date_released.clone()),
+                None,
+                &Some(&album_id),
+                api_source1.clone(),
+            )
+            .await;
+
+        let track_name = "track1";
+        let track_id = "1".into();
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                track_name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source1.clone().into(),
+                &Some(&track_id),
+                api_source1.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let artist_id = "10".into();
+
+        let artist = output
+            .add_artist(artist_name, &Some(&artist_id), api_source2.clone())
+            .await;
+
+        let album_id = "10".into();
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                album_name,
+                &Some(album_date_released),
+                None,
+                &Some(&album_id),
+                api_source2.clone(),
+            )
+            .await;
+
+        let track_id = "10".into();
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                track_name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source2.clone().into(),
+                &Some(&track_id),
+                api_source2.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let artists: Vec<LibraryArtist> = db
+            .select("artists")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let albums: Vec<LibraryAlbum> = db
+            .select("albums")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let tracks: Vec<LibraryTrack> = db
+            .select("tracks")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        assert_eq!(
+            artists,
+            vec![LibraryArtist {
+                id: 1,
+                title: "artist1".to_string(),
+                api_sources: ApiSources::default()
+                    .with_source(ApiSource::library(), 1.into())
+                    .with_source(api_source1.clone(), "1".into())
+                    .with_source(api_source2.clone(), "10".into()),
+                ..Default::default()
+            }]
+        );
+
+        assert_eq!(
+            albums,
+            vec![LibraryAlbum {
+                id: 1,
+                title: "album1".to_string(),
+                artist_id: 1,
+                date_released: Some("2022-01-01".to_string()),
+                date_added: albums.first().and_then(|x| x.date_added.clone()),
+                album_sources: ApiSources::default()
+                    .with_source(ApiSource::library(), 1.into())
+                    .with_source(api_source1.clone(), "1".into())
+                    .with_source(api_source2.clone(), "10".into()),
+                artist_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                ..Default::default()
+            }]
+        );
+
+        assert_eq!(
+            tracks,
+            vec![
+                LibraryTrack {
+                    id: 1,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    album_type: LibraryAlbumType::default(),
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source1.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default()
+                        .with_source(ApiSource::library(), 1.into())
+                        .with_source(api_source1.clone(), "1".into()),
+                    ..Default::default()
+                },
+                LibraryTrack {
+                    id: 2,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source2.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default()
+                        .with_source(ApiSource::library(), 2.into())
+                        .with_source(api_source2.clone(), "10".into()),
+                    ..Default::default()
+                }
+            ]
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn should_merge_artists_with_no_id_and_same_name_in_different_api_sources() {
+        let api_source1 = ApiSource::register("MockApi1", "MockApi1");
+        let api_source2 = ApiSource::register("MockApi2", "MockApi2");
+
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let artist_name = "artist1";
+
+        let artist = output
+            .add_artist(artist_name, &None, api_source1.clone())
+            .await;
+
+        let album_name = "album1";
+        let album_date_released = "2022-01-01".to_string();
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                album_name,
+                &Some(album_date_released.clone()),
+                None,
+                &None,
+                api_source1.clone(),
+            )
+            .await;
+
+        let track_name = "track1";
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                track_name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source1.clone().into(),
+                &None,
+                api_source1.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let artist = output
+            .add_artist(artist_name, &None, api_source2.clone())
+            .await;
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                album_name,
+                &Some(album_date_released),
+                None,
+                &None,
+                api_source2.clone(),
+            )
+            .await;
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                track_name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source2.clone().into(),
+                &None,
+                api_source2.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let artists: Vec<LibraryArtist> = db
+            .select("artists")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let albums: Vec<LibraryAlbum> = db
+            .select("albums")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let tracks: Vec<LibraryTrack> = db
+            .select("tracks")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        assert_eq!(
+            artists,
+            vec![LibraryArtist {
+                id: 1,
+                title: "artist1".to_string(),
+                api_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                ..Default::default()
+            }]
+        );
+
+        assert_eq!(
+            albums,
+            vec![LibraryAlbum {
+                id: 1,
+                title: "album1".to_string(),
+                artist_id: 1,
+                date_released: Some("2022-01-01".to_string()),
+                date_added: albums.first().and_then(|x| x.date_added.clone()),
+                album_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                artist_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                ..Default::default()
+            }]
+        );
+
+        assert_eq!(
+            tracks,
+            vec![
+                LibraryTrack {
+                    id: 1,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    album_type: LibraryAlbumType::default(),
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source1.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                    ..Default::default()
+                },
+                LibraryTrack {
+                    id: 2,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source2.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default().with_source(ApiSource::library(), 2.into()),
+                    ..Default::default()
+                }
+            ]
+        );
+    }
+
+    #[test_log::test(tokio::test)]
+    async fn should_merge_multiple_artists_with_same_name_in_different_api_sources() {
+        let api_source1 = ApiSource::register("MockApi1", "MockApi1");
+        let api_source2 = ApiSource::register("MockApi2", "MockApi2");
+
+        let db = switchy::database_connection::init_sqlite_sqlx(None)
+            .await
+            .unwrap();
+        let db = LibraryDatabase {
+            database: Arc::new(db),
+        };
+
+        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+            .run(&*db)
+            .await
+            .unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let artist_name = "artist1";
+
+        let artist = output
+            .add_artist(artist_name, &None, api_source1.clone())
+            .await;
+
+        let album_name = "album1";
+        let album_date_released = "2022-01-01".to_string();
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                album_name,
+                &Some(album_date_released.clone()),
+                None,
+                &None,
+                api_source1.clone(),
+            )
+            .await;
+
+        let track_name = "track1";
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                track_name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source1.clone().into(),
+                &None,
+                api_source1.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let mut output = ScanOutput::new();
+
+        let _artist2 = output
+            .add_artist("artist2", &None, api_source2.clone())
+            .await;
+
+        let artist = output
+            .add_artist(artist_name, &None, api_source2.clone())
+            .await;
+
+        let album = artist
+            .write()
+            .await
+            .add_album(
+                album_name,
+                &Some(album_date_released),
+                None,
+                &None,
+                api_source2.clone(),
+            )
+            .await;
+
+        let _ = album
+            .write()
+            .await
+            .add_track(
+                &None,
+                1,
+                track_name,
+                10.0,
+                &None,
+                AudioFormat::Source,
+                &None,
+                &None,
+                &None,
+                &None,
+                &None,
+                api_source2.clone().into(),
+                &None,
+                api_source2.clone(),
+            )
+            .await;
+
+        output.update_database(&db).await.unwrap();
+
+        let artists: Vec<LibraryArtist> = db
+            .select("artists")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let albums: Vec<LibraryAlbum> = db
+            .select("albums")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        let tracks: Vec<LibraryTrack> = db
+            .select("tracks")
+            .execute(&*db)
+            .await
+            .unwrap()
+            .to_value_type()
+            .unwrap();
+
+        assert_eq!(
+            artists,
+            vec![
+                LibraryArtist {
+                    id: 1,
+                    title: "artist1".to_string(),
+                    api_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                    ..Default::default()
+                },
+                LibraryArtist {
+                    id: 2,
+                    title: "artist2".to_string(),
+                    api_sources: ApiSources::default().with_source(ApiSource::library(), 2.into()),
+                    ..Default::default()
+                }
+            ]
+        );
+
+        assert_eq!(
+            albums,
+            vec![LibraryAlbum {
+                id: 1,
+                title: "album1".to_string(),
+                artist_id: 1,
+                date_released: Some("2022-01-01".to_string()),
+                date_added: albums.first().and_then(|x| x.date_added.clone()),
+                album_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                artist_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                ..Default::default()
+            }]
+        );
+
+        assert_eq!(
+            tracks,
+            vec![
+                LibraryTrack {
+                    id: 1,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    album_type: LibraryAlbumType::default(),
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source1.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default().with_source(ApiSource::library(), 1.into()),
+                    ..Default::default()
+                },
+                LibraryTrack {
+                    id: 2,
+                    number: 1,
+                    title: "track1".to_string(),
+                    duration: 10.0,
+                    album_id: 1,
+                    format: Some(AudioFormat::Source),
+                    source: TrackApiSource::Api(api_source2.clone()),
+                    api_source: ApiSource::library(),
+                    api_sources: ApiSources::default().with_source(ApiSource::library(), 2.into()),
+                    ..Default::default()
+                }
+            ]
         );
     }
 }

@@ -613,25 +613,16 @@ pub async fn add_artist_maps_and_get_artists(
 ) -> Result<Vec<LibraryArtist>, DatabaseFetchError> {
     let mut results = vec![];
 
-    let title = artists
-        .iter()
-        .find_map(|artist| {
-            artist
-                .iter()
-                .find(|(key, _)| *key == "title")
-                .map(|(_, value)| {
-                    value
-                        .as_str()
-                        .map(ToString::to_string)
-                        .ok_or(DatabaseFetchError::InvalidRequest)
-                })
-        })
-        .ok_or(DatabaseFetchError::InvalidRequest)??;
-
     for artist in artists {
+        let title = artist
+            .iter()
+            .find(|(key, _)| *key == "title")
+            .and_then(|(_, value)| value.as_str().map(ToString::to_string))
+            .ok_or(DatabaseFetchError::InvalidRequest)?;
+
         let row: LibraryArtist = db
             .upsert("artists")
-            .where_eq("title", title.clone())
+            .where_eq("title", title)
             .values(artist.into_iter().collect::<Vec<_>>())
             .execute_first(&**db)
             .await?
