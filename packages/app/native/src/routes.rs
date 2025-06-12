@@ -1001,3 +1001,37 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
 
     Ok(())
 }
+
+pub async fn download(req: RouteRequest) -> Result<(), RouteError> {
+    let Some(source) = req.query.get("source") else {
+        return Err(RouteError::MissingQueryParam("source"));
+    };
+    let source = ApiSource::from_str(source)
+        .inspect_err(|e| {
+            moosicbox_assert::die_or_error!("Invalid source: {e:?}");
+        })
+        .map_err(|e| RouteError::RouteFailed(e.into()))?;
+
+    let Some(album_id) = req.query.get("albumId") else {
+        return Err(RouteError::MissingQueryParam("albumId"));
+    };
+
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let url = format!(
+        "{host}/downloader/download?moosicboxProfile={PROFILE}&source={source}&albumId={album_id}",
+    );
+    let response = CLIENT.post(&url).send().await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    Ok(())
+}

@@ -165,6 +165,7 @@ pub fn album_page_content(
     let Some(connection) = &state.connection else {
         return html! {};
     };
+    let host = &connection.api_url;
 
     let selected_version = versions
         .iter()
@@ -176,7 +177,7 @@ pub fn album_page_content(
             div sx-dir="row" {
                 @let size = 200;
                 div sx-width=(size) sx-height=(size) sx-padding-right=(15) {
-                    (album_cover_img_from_album(&connection.api_url, &album, size))
+                    (album_cover_img_from_album(host, &album, size))
                 }
                 div {
                     h1 { (album.title) }
@@ -257,6 +258,36 @@ pub fn album_page_content(
                         sx-height=(icon_size)
                         src=(public_img!("more-options.svg"));
                     "Options"
+                }
+                @if let Some(selected) = selected_version {
+                    @let source = &selected.source;
+
+                    @if let TrackApiSource::Api(api_source) = source {
+                        @let album_id = album.album_sources
+                            .iter()
+                            .find(|x| &x.source == api_source)
+                            .map(|x| x.id.clone());
+
+                        @if let Some(album_id) = album_id {
+                            button
+                                sx-dir="row"
+                                sx-width=(130)
+                                sx-height=(40)
+                                sx-background="#fff"
+                                sx-border-radius=(5)
+                                sx-justify-content=(JustifyContent::Center)
+                                sx-align-items=(AlignItems::Center)
+                                sx-gap=(8)
+                                hx-post={
+                                    (pre_escaped!("/download"))
+                                        (pre_escaped!("?source="))(api_source)
+                                        (pre_escaped!("&albumId="))(album_id)
+                                }
+                            {
+                                "Download"
+                            }
+                        }
+                    }
                 }
             }
             @if let Some(version) = selected_version {
@@ -492,8 +523,10 @@ pub fn albums_list_start(
         html! {}
     };
 
+    let host = &connection.api_url;
+
     html! {
-        (show_albums(&connection.api_url, albums.iter(), size))
+        (show_albums(host, albums.iter(), size))
         (remaining)
     }
 }
