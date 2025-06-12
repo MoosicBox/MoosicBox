@@ -24,8 +24,10 @@ on('swapHtml', ({ target, html, inner }) => {
         if (!element) return;
         target = element as HTMLElement;
     }
+
     const elements: HTMLElement[] = [];
-    const returned: HTMLElement[] = Idiomorph.morph(target, html, {
+
+    Idiomorph.morph(target, html, {
         morphStyle: inner ? 'innerHTML' : 'outerHTML',
         callbacks: {
             afterNodeAdded(node: Node) {
@@ -34,12 +36,9 @@ on('swapHtml', ({ target, html, inner }) => {
                 }
             },
         },
-    }).filter((x) => x instanceof HTMLElement) as HTMLElement[];
+    });
 
     if (elements.length > 0) {
-        if (returned.length > 0) {
-            elements.push(...returned);
-        }
         triggerHandlers('domLoad', {
             initial: false,
             navigation: false,
