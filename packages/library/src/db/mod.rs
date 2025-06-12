@@ -2,7 +2,9 @@ use moosicbox_json_utils::{
     ParseError, ToValueType,
     database::{AsModelResultMapped as _, DatabaseFetchError, ToValue as _},
 };
-use moosicbox_music_models::{AudioFormat, PlaybackQuality, TrackApiSource, TrackSize, id::Id};
+use moosicbox_music_models::{
+    ApiSource, AudioFormat, PlaybackQuality, TrackApiSource, TrackSize, id::Id,
+};
 use switchy_database::{
     DatabaseError, DatabaseValue, Row, boxed,
     profiles::LibraryDatabase,
@@ -162,16 +164,29 @@ pub async fn get_albums(db: &LibraryDatabase) -> Result<Vec<LibraryAlbum>, Datab
 /// * If there was a database error
 pub async fn get_artist(
     db: &LibraryDatabase,
-    column: &str,
+    api_source: &ApiSource,
     id: &Id,
 ) -> Result<Option<LibraryArtist>, DatabaseFetchError> {
-    Ok(db
-        .select("artists")
-        .where_eq(column.to_string(), id)
-        .execute_first(&**db)
-        .await?
-        .as_ref()
-        .to_value_type()?)
+    Ok(if api_source.is_library() {
+        db.select("artists")
+            .where_eq("id", id)
+            .execute_first(&**db)
+            .await?
+            .as_ref()
+            .to_value_type()?
+    } else {
+        db.select("artists")
+            .join(
+                "api_sources",
+                "api_sources.entity_type='artists' AND api_sources.entity_id = artists.id",
+            )
+            .where_eq("api_sources.source", api_source.as_ref())
+            .where_eq("api_sources.source_id", id)
+            .execute_first(&**db)
+            .await?
+            .as_ref()
+            .to_value_type()?
+    })
 }
 
 /// # Errors
@@ -230,22 +245,41 @@ pub async fn get_album_artist(
 /// * If there was a database error
 pub async fn get_album(
     db: &LibraryDatabase,
-    column: &str,
+    api_source: &ApiSource,
     id: &Id,
 ) -> Result<Option<LibraryAlbum>, DatabaseFetchError> {
-    Ok(db
-        .select("albums")
-        .columns(&[
-            "albums.*",
-            "artists.title as artist",
-            "artists.api_sources as artist_api_sources",
-        ])
-        .where_eq(format!("albums.{column}"), id)
-        .join("artists", "artists.id = albums.artist_id")
-        .execute_first(&**db)
-        .await?
-        .as_ref()
-        .to_value_type()?)
+    Ok(if api_source.is_library() {
+        db.select("albums")
+            .columns(&[
+                "albums.*",
+                "artists.title as artist",
+                "artists.api_sources as artist_api_sources",
+            ])
+            .join("artists", "artists.id = albums.artist_id")
+            .where_eq("albums.id", id)
+            .execute_first(&**db)
+            .await?
+            .as_ref()
+            .to_value_type()?
+    } else {
+        db.select("albums")
+            .columns(&[
+                "albums.*",
+                "artists.title as artist",
+                "artists.api_sources as artist_api_sources",
+            ])
+            .join("artists", "artists.id = albums.artist_id")
+            .join(
+                "api_sources",
+                "api_sources.entity_type='albums' AND api_sources.entity_id = albums.id",
+            )
+            .where_eq("api_sources.source", api_source.as_ref())
+            .where_eq("api_sources.source_id", id)
+            .execute_first(&**db)
+            .await?
+            .as_ref()
+            .to_value_type()?
+    })
 }
 
 /// # Errors

@@ -623,12 +623,7 @@ pub async fn album_from_source(
     album_id: &Id,
     source: &ApiSource,
 ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-    Ok(db::get_album(
-        db,
-        &format!("{}_id", source.to_string().to_lowercase()),
-        album_id,
-    )
-    .await?)
+    Ok(db::get_album(db, source, album_id).await?)
 }
 
 /// # Errors
@@ -638,7 +633,7 @@ pub async fn album(
     db: &LibraryDatabase,
     album_id: &Id,
 ) -> Result<Option<LibraryAlbum>, LibraryAlbumError> {
-    Ok(db::get_album(db, "id", album_id).await?)
+    Ok(db::get_album(db, ApiSource::library_ref(), album_id).await?)
 }
 
 pub fn sort_album_versions(versions: &mut [AlbumVersion]) {
@@ -729,7 +724,7 @@ pub async fn artist(
     db: &LibraryDatabase,
     artist_id: &Id,
 ) -> Result<LibraryArtist, LibraryArtistError> {
-    db::get_artist(db, "id", artist_id)
+    db::get_artist(db, ApiSource::library_ref(), artist_id)
         .await?
         .ok_or(LibraryArtistError::NotFound)
 }
