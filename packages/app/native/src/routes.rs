@@ -74,6 +74,10 @@ fn parse_track_sources(value: &str) -> Result<Vec<TrackApiSource>, RouteError> {
 }
 
 pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let Some(limit) = req.query.get("limit") else {
         return Err(RouteError::MissingQueryParam("limit"));
     };
@@ -157,6 +161,10 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
 }
 
 pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let Some(offset) = req.query.get("offset") else {
         return Err(RouteError::MissingQueryParam("offset"));
     };
@@ -233,6 +241,10 @@ pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
 }
 
 pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let Some(artist_id) = req.query.get("artistId") else {
         return Err(RouteError::MissingQueryParam("artistId"));
     };
@@ -287,7 +299,11 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
         })
 }
 
-pub async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
+pub async fn audio_zones_route(req: RouteRequest) -> Result<View, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let state = convert_state(&STATE).await;
     let Some(connection) = &state.connection else {
         return Err(RouteError::MissingConnection);
@@ -314,7 +330,11 @@ pub async fn audio_zones_route(_req: RouteRequest) -> Result<View, RouteError> {
         })
 }
 
-pub async fn playback_sessions_route(_req: RouteRequest) -> Result<View, RouteError> {
+pub async fn playback_sessions_route(req: RouteRequest) -> Result<View, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let state = convert_state(&STATE).await;
     let Some(connection) = &state.connection else {
         return Err(RouteError::MissingConnection);
@@ -342,6 +362,10 @@ pub async fn playback_sessions_route(_req: RouteRequest) -> Result<View, RouteEr
 }
 
 pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     Ok(if let Some(album_id) = req.query.get("albumId") {
         let source: ApiSource = req
             .query
@@ -446,6 +470,10 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
 }
 
 pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let state = convert_state(&STATE).await;
     let Some(connection) = &state.connection else {
         return Err(RouteError::MissingConnection);
@@ -509,6 +537,10 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
 }
 
 pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let offset = req
         .query
         .get("offset")
@@ -577,7 +609,11 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
         })
 }
 
-pub async fn settings_route(_req: RouteRequest) -> Result<Container, RouteError> {
+pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let state = convert_state(&STATE).await;
 
     switchy::unsync::task::spawn({
@@ -621,6 +657,10 @@ struct ConnectionName {
 }
 
 pub async fn settings_connection_name_route(req: RouteRequest) -> Result<(), RouteError> {
+    if !matches!(req.method, Method::Post) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     log::debug!("settings_connection_name_route: req={req:?}");
     let ConnectionName { name } = req
         .parse_form::<ConnectionName>()
@@ -701,13 +741,15 @@ pub async fn settings_connections_route(req: RouteRequest) -> Result<View, Route
         | Method::Head
         | Method::Options
         | Method::Trace
-        | Method::Connect => {
-            unreachable!()
-        }
+        | Method::Connect => Err(RouteError::UnsupportedMethod),
     }
 }
 
-pub async fn settings_new_connection_route(_req: RouteRequest) -> Result<View, RouteError> {
+pub async fn settings_new_connection_route(req: RouteRequest) -> Result<View, RouteError> {
+    if !matches!(req.method, Method::Post) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let connections = STATE.get_connections().await?;
     let mut name = "New connection".to_string();
     let mut i = 2;
@@ -739,6 +781,10 @@ pub async fn settings_new_connection_route(_req: RouteRequest) -> Result<View, R
 }
 
 pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View, RouteError> {
+    if !matches!(req.method, Method::Post) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let Some(name) = req.query.get("name") else {
         return Err(RouteError::MissingQueryParam("name"));
     };
@@ -762,7 +808,11 @@ pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View,
         })
 }
 
-pub async fn settings_music_api_settings_route(_req: RouteRequest) -> Result<Content, RouteError> {
+pub async fn settings_music_api_settings_route(req: RouteRequest) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let state = convert_state(&STATE).await;
 
     Ok(Content::try_partial_view(
@@ -802,6 +852,10 @@ async fn settings_music_api_settings_markup(state: &State) -> Result<Markup, Rou
 }
 
 pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Post) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let Some(api_source) = req.query.get("apiSource") else {
         return Err(RouteError::MissingQueryParam("apiSource"));
     };
@@ -845,6 +899,10 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
 }
 
 pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Post) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let Some(api_source) = req.query.get("apiSource") else {
         return Err(RouteError::MissingQueryParam("apiSource"));
     };
@@ -888,6 +946,10 @@ pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Con
 }
 
 pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Post) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let auth_values = req.parse_form::<AuthValues>()?;
 
     log::debug!("music_api_auth_route: auth_type={auth_values:#?}");
@@ -945,6 +1007,10 @@ pub struct SearchRequest {
 }
 
 pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let request = req.parse_form::<SearchRequest>()?;
     let query = &request.query;
 
@@ -1005,6 +1071,10 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
 }
 
 pub async fn download(req: RouteRequest) -> Result<(), RouteError> {
+    if !matches!(req.method, Method::Post) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
     let Some(source) = req.query.get("source") else {
         return Err(RouteError::MissingQueryParam("source"));
     };
