@@ -1009,7 +1009,7 @@ pub struct SearchRequest {
 }
 
 pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
-    if !matches!(req.method, Method::Get) {
+    if !matches!(req.method, Method::Post) {
         return Err(RouteError::UnsupportedMethod);
     }
 
