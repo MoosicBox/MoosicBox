@@ -46,7 +46,8 @@ jobs:
                                       "toolchains": (.toolchains),
                                       "ciSteps": (.ciSteps),
                                       "ciToolchains": (.ciToolchains),
-                                      "env": (if .env != null then .env | gsub("\n";" ") else null end)
+                                      "env": (if .env != null then .env | gsub("\n";" ") else null end),
+                                      "nightly": true
                                   }
                                   | del(.. | nulls)
                               ]'
@@ -82,6 +83,9 @@ jobs:
               run: git pull
 
             - uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
+                  components: rustfmt, clippy
 
             - name: Install cargo-edit
               shell: bash
@@ -119,11 +123,11 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo clippy ${{ runner.debug && '-vv ' }}--no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo clippy \
+                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
                               ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
@@ -141,11 +145,11 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo test \
+                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
                               ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
@@ -161,7 +165,7 @@ jobs:
               if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo ${{ runner.debug && '-vv' }} fmt --all -- --check)
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
             - name: Install cargo-machete
               if: ${{ steps.upgrade.outputs.upgraded == 'true' }}

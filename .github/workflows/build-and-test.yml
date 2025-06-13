@@ -175,7 +175,8 @@ jobs:
                                       "toolchains": (.toolchains),
                                       "ciSteps": (.ciSteps),
                                       "ciToolchains": (.ciToolchains),
-                                      "env": (if .env != null then .env | gsub("\n";" ") else null end)
+                                      "env": (if .env != null then .env | gsub("\n";" ") else null end),
+                                      "nightly": true
                                   }
                                   | del(.. | nulls)
                               ]'
@@ -236,6 +237,9 @@ jobs:
                   git rebase master
 
             - uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
+                  components: rustfmt, clippy
 
             - name: Install winget
               if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
@@ -273,11 +277,11 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo clippy ${{ runner.debug && '-vv ' }}--no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo clippy \
+                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
                               ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
@@ -294,11 +298,11 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo test \
+                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
                               ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
@@ -313,7 +317,7 @@ jobs:
             - name: Format ${{ matrix.package.name }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo ${{ runner.debug && '-vv' }} fmt --all -- --check)
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
             - uses: actions/download-artifact@master
               if: ${{ matrix.package.os == 'macos-latest' }}
