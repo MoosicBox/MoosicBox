@@ -72,11 +72,10 @@ fn parse_children(children: &[NodeHandle], parser: &Parser<'_>) -> Vec<crate::Co
     let mut elements = vec![];
 
     for node in children {
-        if let Some(node) = node.get(parser) {
-            if let Some(element) = parse_child(node, parser) {
+        if let Some(node) = node.get(parser)
+            && let Some(element) = parse_child(node, parser) {
                 elements.push(element);
             }
-        }
     }
 
     elements

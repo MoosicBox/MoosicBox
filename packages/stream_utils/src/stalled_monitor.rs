@@ -88,15 +88,14 @@ impl<T, R: futures::Stream<Item = T>> futures::Stream for StalledReadMonitor<T, 
                 }
             }
             Poll::Pending => {
-                if let Some(sleeper) = this.sleeper {
-                    if let Poll::Ready(instant) = sleeper.poll_tick(cx) {
+                if let Some(sleeper) = this.sleeper
+                    && let Poll::Ready(instant) = sleeper.poll_tick(cx) {
                         log::debug!("StalledReadMonitor timed out at {instant:?}");
                         return Poll::Ready(Some(Err(std::io::Error::new(
                             ErrorKind::TimedOut,
                             StalledReadMonitorError::Stalled,
                         ))));
                     }
-                }
             }
         }
 

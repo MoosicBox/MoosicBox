@@ -92,9 +92,7 @@ impl MusicApisProfiles {
     pub fn names(&self) -> Vec<String> {
         self.profiles
             .read()
-            .unwrap()
-            .iter()
-            .map(|(profile, _)| profile.clone())
+            .unwrap().keys().map(|profile| profile.clone())
             .collect()
     }
 }

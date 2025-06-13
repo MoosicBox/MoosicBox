@@ -174,8 +174,8 @@ pub fn run_simulation<B: SimBootstrap>(
     }
 
     #[cfg(feature = "tui")]
-    if USE_TUI {
-        if let Ok(results) = &resp {
+    if USE_TUI
+        && let Ok(results) = &resp {
             eprintln!(
                 "{}",
                 results
@@ -186,7 +186,6 @@ pub fn run_simulation<B: SimBootstrap>(
                     .join("\n"),
             );
         }
-    }
 
     resp
 }

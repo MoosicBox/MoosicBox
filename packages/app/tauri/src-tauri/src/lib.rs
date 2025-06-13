@@ -430,8 +430,8 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
 async fn propagate_state_to_plugin(update: ApiUpdateSession) {
     let current_session_id = { *STATE.current_session_id.read().await };
 
-    if current_session_id.is_some_and(|id| update.session_id == id) {
-        if let Some((url, query)) = get_url_and_query().await {
+    if current_session_id.is_some_and(|id| update.session_id == id)
+        && let Some((url, query)) = get_url_and_query().await {
             use app_tauri_plugin_player::PlayerExt;
 
             let player = APP.get().unwrap().player();
@@ -456,7 +456,6 @@ async fn propagate_state_to_plugin(update: ApiUpdateSession) {
                 log::error!("Failed to update_state: {e:?}");
             }
         }
-    }
 }
 
 fn album_cover_url(album_id: &str, source: &ApiSource, url: &str, query: &str) -> String {

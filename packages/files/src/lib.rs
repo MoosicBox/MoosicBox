@@ -457,9 +457,9 @@ pub async fn search_for_cover(
             }
         }
     }
-    if let Some(save_path) = save_path {
-        if let Some(tag) = tag {
-            if let Some(tag_cover) = tag.album_cover() {
+    if let Some(save_path) = save_path
+        && let Some(tag) = tag
+            && let Some(tag_cover) = tag.album_cover() {
                 let cover_file_path = match tag_cover.mime_type {
                     moosicbox_audiotags::MimeType::Png => save_path.join(format!("{filename}.png")),
                     moosicbox_audiotags::MimeType::Jpeg => {
@@ -474,8 +474,6 @@ pub async fn search_for_cover(
                 save_bytes_to_file(tag_cover.data, &cover_file_path, None)?;
                 return Ok(Some(cover_file_path));
             }
-        }
-    }
 
     Ok(None)
 }

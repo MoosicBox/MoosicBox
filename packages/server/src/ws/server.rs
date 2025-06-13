@@ -213,12 +213,11 @@ impl WsServer {
             let msg = msg.into();
 
             for conn_id in sessions {
-                if *conn_id != skip {
-                    if let Some(Connection { sender, .. }) = self.connections.get(conn_id) {
+                if *conn_id != skip
+                    && let Some(Connection { sender, .. }) = self.connections.get(conn_id) {
                         // errors if client disconnected abruptly and hasn't been timed-out yet
                         let _ = sender.send(msg.clone());
                     }
-                }
             }
         }
     }

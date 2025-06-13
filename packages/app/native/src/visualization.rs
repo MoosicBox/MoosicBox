@@ -331,8 +331,8 @@ async fn tick_visualization() {
 pub async fn check_visualization_update() {
     let session = STATE.get_current_session_ref().await;
     if let Some(session) = session {
-        if let Some(position) = session.position {
-            if let Some(track) = session.playlist.tracks.get(position as usize) {
+        if let Some(position) = session.position
+            && let Some(track) = session.playlist.tracks.get(position as usize) {
                 let track_id = track.track_id.clone();
                 let duration = track.duration;
                 let api_source = track.api_source.clone();
@@ -381,7 +381,6 @@ pub async fn check_visualization_update() {
 
                 tick_visualization().await;
             }
-        }
     } else {
         drop(session);
     }

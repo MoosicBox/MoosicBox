@@ -542,9 +542,9 @@ pub async fn update_session(
     );
     moosicbox_session::update_session(db, payload).await?;
 
-    if let Some(actions) = context.map(|x| &x.player_actions) {
-        if payload.playback_updated() {
-            if let Some(session) = moosicbox_session::get_session(db, payload.session_id).await? {
+    if let Some(actions) = context.map(|x| &x.player_actions)
+        && payload.playback_updated()
+            && let Some(session) = moosicbox_session::get_session(db, payload.session_id).await? {
                 let funcs = if let Some(PlaybackTarget::AudioZone { audio_zone_id }) =
                     session.playback_target
                 {
@@ -587,8 +587,6 @@ pub async fn update_session(
                     func(payload).await;
                 }
             }
-        }
-    }
 
     let playlist = if payload.playlist.is_some() {
         get_session_playlist(db, payload.session_id)

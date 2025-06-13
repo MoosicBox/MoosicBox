@@ -445,8 +445,8 @@ fn scan_album_cover(
     _scanner: Scanner,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        if let Some(album) = album {
-            if let Some(path_str) = path.to_str() {
+        if let Some(album) = album
+            && let Some(path_str) = path.to_str() {
                 let artist = output
                     .write()
                     .await
@@ -469,7 +469,6 @@ fn scan_album_cover(
 
                 return Ok(());
             }
-        }
 
         unimplemented!("scan album cover without Album info");
         // search in current directory for audio files
@@ -488,8 +487,8 @@ fn scan_artist_cover(
     _scanner: Scanner,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        if let Some(artist) = artist {
-            if let Some(path_str) = path.to_str() {
+        if let Some(artist) = artist
+            && let Some(path_str) = path.to_str() {
                 let output_artist = output
                     .write()
                     .await
@@ -500,7 +499,6 @@ fn scan_artist_cover(
 
                 return Ok(());
             }
-        }
 
         unimplemented!("scan artist cover without Artist info");
     })

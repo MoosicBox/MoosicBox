@@ -182,11 +182,10 @@ fn map_element_target<R>(
             log::warn!("Could not find element with class '{class}'");
         }
         ElementTarget::ChildClass(class) => {
-            if let Some(container) = container.find_element_by_id(self_id) {
-                if let Some(element) = container.find_element_by_class(class) {
+            if let Some(container) = container.find_element_by_id(self_id)
+                && let Some(element) = container.find_element_by_class(class) {
                     return Some(func(element));
                 }
-            }
 
             log::warn!("Could not find element with class '{class}'");
         }
@@ -1945,11 +1944,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         container: &'a Container,
         overrides: &'a HashMap<usize, Vec<StyleOverride<T>>>,
     ) -> Option<&'a T> {
-        if let Some(overrides) = overrides.get(&container.id) {
-            if let Some(StyleOverride { value, .. }) = overrides.last() {
+        if let Some(overrides) = overrides.get(&container.id)
+            && let Some(StyleOverride { value, .. }) = overrides.last() {
                 return Some(value);
             }
-        }
 
         None
     }
@@ -2286,8 +2284,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         self.handle_custom_event_side_effects(container);
 
-        if let Some(ui) = ui {
-            if let Element::Image {
+        if let Some(ui) = ui
+            && let Element::Image {
                 source: Some(source),
                 ..
             } = &container.element
@@ -2340,7 +2338,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     }
                 }
             }
-        }
 
         if recurse {
             for container in &container.children {
@@ -2706,13 +2703,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     self.trigger_side_effect(move |_render_context| {
                         if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                             && pointer.primary_released()
-                        {
-                            if let Some(href) = href.clone() {
-                                if let Err(e) = sender.send(href) {
+                            && let Some(href) = href.clone()
+                                && let Err(e) = sender.send(href) {
                                     log::error!("Failed to send href event: {e:?}");
                                 }
-                            }
-                        }
 
                         if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {
                             ctx.output_mut(|x| x.cursor_icon = CursorIcon::PointingHand);
@@ -2872,8 +2866,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         if let Some(ActionEffect {
             throttle: Some(..), ..
         }) = effect
-        {
-            if let Some((instant, throttle)) = render_context.action_throttle.get(&id) {
+            && let Some((instant, throttle)) = render_context.action_throttle.get(&id) {
                 let ms = Instant::now().duration_since(*instant).as_millis();
                 if ms < u128::from(*throttle) {
                     log::debug!("handle_action: throttle={throttle} not past throttle yet ms={ms}");
@@ -2881,7 +2874,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     return true;
                 }
             }
-        }
 
         let response = match &action {
             ActionType::NoOp => true,
@@ -2890,15 +2882,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     delay_off: Some(delay),
                     ..
                 }) = effect
-                {
-                    if let Some(id) =
+                    && let Some(id) =
                         Self::get_element_target_id(target, id, render_context.container)
                     {
                         render_context
                             .action_delay_off
                             .insert(id, (std::time::Instant::now(), *delay));
                     }
-                }
 
                 Self::handle_style_action(
                     action,
@@ -3076,8 +3066,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         match &action {
             ActionType::Style { target, action } => {
                 if let Some(id) = Self::get_element_target_id(target, id, render_context.container)
-                {
-                    if let Some((instant, delay)) = render_context.action_delay_off.get(&id) {
+                    && let Some((instant, delay)) = render_context.action_delay_off.get(&id) {
                         let ms = Instant::now().duration_since(*instant).as_millis();
                         if ms < u128::from(*delay) {
                             log::debug!(
@@ -3087,14 +3076,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             return;
                         }
                     }
-                }
 
                 match action {
                     StyleAction::SetVisibility { .. } => {
                         if let Some(id) =
                             Self::get_element_target_id(target, id, render_context.container)
-                        {
-                            if let Some(overrides) = render_context.visibilities.get_mut(&id) {
+                            && let Some(overrides) = render_context.visibilities.get_mut(&id) {
                                 overrides.retain(|x| x.trigger != trigger);
 
                                 // TODO: don't delete the corresponding entry. just check for if it
@@ -3103,22 +3090,18 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     render_context.visibilities.remove(&id);
                                 }
                             }
-                        }
                     }
                     StyleAction::SetDisplay { .. } => {
                         if let Some(id) =
                             Self::get_element_target_id(target, id, render_context.container)
-                        {
-                            if render_context.displays.contains_key(&id) {
+                            && render_context.displays.contains_key(&id) {
                                 render_context.displays.remove(&id);
                             }
-                        }
                     }
                     StyleAction::SetBackground(..) => {
                         if let Some(id) =
                             Self::get_element_target_id(target, id, render_context.container)
-                        {
-                            if let Some(overrides) = render_context.backgrounds.get_mut(&id) {
+                            && let Some(overrides) = render_context.backgrounds.get_mut(&id) {
                                 overrides.retain(|x| x.trigger != trigger);
 
                                 // TODO: don't delete the corresponding entry. just check for if it
@@ -3127,7 +3110,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     render_context.backgrounds.remove(&id);
                                 }
                             }
-                        }
                     }
                 }
             }
@@ -3170,11 +3152,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 log::warn!("Could not find element with class '{class}'");
             }
             ElementTarget::ChildClass(class) => {
-                if let Some(container) = container.find_element_by_id(self_id) {
-                    if let Some(element) = container.find_element_by_class(class) {
+                if let Some(container) = container.find_element_by_id(self_id)
+                    && let Some(element) = container.find_element_by_class(class) {
                         return Some(element.id);
                     }
-                }
 
                 log::warn!("Could not find element with class '{class}'");
             }

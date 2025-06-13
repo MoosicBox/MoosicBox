@@ -219,8 +219,8 @@ impl FltkRenderer {
         };
         log::debug!("trigger_load_image: image={image:?}");
 
-        if let Some(image) = image {
-            if let Some(sender) = &self.event_sender {
+        if let Some(image) = image
+            && let Some(sender) = &self.event_sender {
                 sender.send(AppEvent::LoadImage {
                     source: image.source,
                     width: image.width,
@@ -228,7 +228,6 @@ impl FltkRenderer {
                     frame: frame.to_owned(),
                 })?;
             }
-        }
 
         Ok(())
     }
@@ -983,9 +982,8 @@ impl FltkRenderer {
                                 .parent()
                                 .and_then(|x| x.parent())
                                 .map(|x| x.join("app-website").join("public").join(source))
-                            {
-                                if let Ok(path) = path.canonicalize() {
-                                    if path.is_file() {
+                                && let Ok(path) = path.canonicalize()
+                                    && path.is_file() {
                                         let image = SharedImage::load(path)?;
 
                                         // FIXME: Need to handle aspect ratio if either width or
@@ -1035,8 +1033,6 @@ impl FltkRenderer {
 
                                         frame.set_image_scaled(Some(image));
                                     }
-                                }
-                            }
                         }
                     }
                 }
@@ -1089,8 +1085,8 @@ impl FltkRenderer {
         }
 
         #[cfg(feature = "debug")]
-        if let Some(flex_element) = &mut flex_element {
-            if *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
+        if let Some(flex_element) = &mut flex_element
+            && *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
                 let mut element_info = vec![];
 
                 let mut child = Some(container);
@@ -1145,7 +1141,6 @@ impl FltkRenderer {
                     }
                 });
             }
-        }
 
         Ok(flex_element.map(|x| x.as_base_widget()).or(other_element))
     }

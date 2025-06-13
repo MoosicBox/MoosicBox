@@ -493,15 +493,14 @@ fn player_current_album(host: &str, track: &ApiTrack, size: u16) -> Markup {
 }
 
 fn player_current_album_from_state(state: &State, size: u16) -> Markup {
-    if let Some(connection) = &state.connection {
-        if let Some(playback) = &state.player.playback {
+    if let Some(connection) = &state.connection
+        && let Some(playback) = &state.player.playback {
             let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
 
             if let Some(track) = track {
                 return player_current_album(&connection.api_url, track, size);
             }
         }
-    }
 
     html! {
         div id="player-current-playing" sx-dir="row" {}
@@ -545,15 +544,14 @@ pub fn session_updated(
             .tracks
             .get(session.position.unwrap_or(0) as usize);
 
-        if let Some(connection) = &state.connection {
-            if let Some(track) = track {
+        if let Some(connection) = &state.connection
+            && let Some(track) = track {
                 log::debug!("session_updated: rendering current playing");
                 partials.push((
                     "player-current-playing".to_string(),
                     player_current_album(&connection.api_url, track, CURRENT_ALBUM_SIZE),
                 ));
             }
-        }
 
         partials.push(("play-queue".to_string(), play_queue(state)));
     }

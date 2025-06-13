@@ -937,11 +937,9 @@ async fn download_track_inner(
                 bytes_read,
                 ref source,
             } = e
-            {
-                if source.kind() == tokio::io::ErrorKind::TimedOut {
+                && source.kind() == tokio::io::ErrorKind::TimedOut {
                     return Err(DownloadTrackInnerError::Timeout(Some(bytes_read)));
                 }
-            }
 
             return Err(DownloadTrackInnerError::SaveBytesStreamToFile(e));
         }
@@ -987,11 +985,10 @@ pub fn tag_track_file(track_path: &Path, track: &Track) -> Result<(), TagTrackFi
     tag.set_artist(&track.artist);
     tag.set_album_artist(&track.artist);
 
-    if let Some(date) = &track.date_released {
-        if let Ok(timestamp) = Timestamp::from_str(date) {
+    if let Some(date) = &track.date_released
+        && let Ok(timestamp) = Timestamp::from_str(date) {
             tag.set_date(timestamp);
         }
-    }
 
     tag.write_to_path(track_path.to_str().unwrap())?;
 

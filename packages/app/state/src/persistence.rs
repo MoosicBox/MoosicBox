@@ -245,11 +245,10 @@ impl AppState {
             .await?
             .unwrap_or_default();
 
-        if let Some(current_connection) = self.get_current_connection().await? {
-            if current_connection.name == name {
+        if let Some(current_connection) = self.get_current_connection().await?
+            && current_connection.name == name {
                 self.remove_current_connection().await?;
             }
-        }
 
         connections.retain(|x| x.name != name);
         persistence
@@ -274,11 +273,10 @@ impl AppState {
             .await?
             .unwrap_or_default();
 
-        if let Some(current_connection) = self.get_current_connection().await? {
-            if current_connection.name == name {
+        if let Some(current_connection) = self.get_current_connection().await?
+            && current_connection.name == name {
                 self.set_current_connection(connection.clone()).await?;
             }
-        }
 
         for existing in &mut connections {
             if existing.name == name {

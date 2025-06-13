@@ -711,11 +711,10 @@ fn build_and_measure_rlib(
     let prefix = format!("lib{}-", crate_name.replace('-', "_"));
     for entry in glob(&format!("{deps}/*.rlib"))? {
         let path = entry?;
-        if let Some(fname) = path.file_name().and_then(|f| f.to_str()) {
-            if fname.starts_with(&prefix) {
+        if let Some(fname) = path.file_name().and_then(|f| f.to_str())
+            && fname.starts_with(&prefix) {
                 return Ok(fs::metadata(&path)?.len());
             }
-        }
     }
     Err(anyhow::anyhow!("rlib for {} not found", crate_name))
 }

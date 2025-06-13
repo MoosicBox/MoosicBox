@@ -218,11 +218,10 @@ impl DownloadQueue {
         moosicbox_task::spawn("downloader: queue - process", async move {
             let mut handle = join_handle.lock().await;
 
-            if let Some(handle) = handle.as_mut() {
-                if !handle.is_finished() {
+            if let Some(handle) = handle.as_mut()
+                && !handle.is_finished() {
                     handle.await??;
                 }
-            }
 
             handle.replace(moosicbox_task::spawn(
                 "downloader: queue - process_inner",
@@ -537,13 +536,11 @@ impl Drop for DownloadQueue {
 
         moosicbox_task::spawn("downloader: queue - drop", async move {
             let mut handle = handle.lock().await;
-            if let Some(handle) = handle.as_mut() {
-                if !handle.is_finished() {
-                    if let Err(err) = handle.await {
+            if let Some(handle) = handle.as_mut()
+                && !handle.is_finished()
+                    && let Err(err) = handle.await {
                         log::error!("Failed to drop DownloadQueue: {err:?}");
                     }
-                }
-            }
         });
     }
 }

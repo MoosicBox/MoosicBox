@@ -56,8 +56,7 @@ impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
         if !self
             .ready_to_send
             .swap(false, std::sync::atomic::Ordering::SeqCst)
-        {
-            if let Some(priority) = &self.priority {
+            && let Some(priority) = &self.priority {
                 let priority = priority(&msg);
 
                 let mut buffer = self.buffer.write().unwrap();
@@ -77,7 +76,6 @@ impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
 
                 return Ok(());
             }
-        }
 
         self.unbounded_send(msg)?;
 
@@ -141,11 +139,10 @@ impl<T: Send> Stream for PrioritizedReceiver<T> {
         let stream = pin!(inner);
         let poll = stream.poll_next(cx);
 
-        if let std::task::Poll::Ready(Some(_)) = &poll {
-            if let Err(e) = this.sender.flush() {
+        if let std::task::Poll::Ready(Some(_)) = &poll
+            && let Err(e) = this.sender.flush() {
                 moosicbox_assert::die_or_error!("Failed to flush sender: {e:?}");
             }
-        }
 
         poll
     }

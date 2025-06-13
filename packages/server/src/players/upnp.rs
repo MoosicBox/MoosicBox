@@ -188,8 +188,8 @@ fn handle_upnp_playback_update(
                         let output = output.clone();
                         drop(binding);
 
-                        if let Some(db) = PROFILES.get(&update.profile) {
-                            if let Ok(Some(session)) = get_session(&db, update.session_id).await {
+                        if let Some(db) = PROFILES.get(&update.profile)
+                            && let Ok(Some(session)) = get_session(&db, update.session_id).await {
                                 if let Err(e) = player
                                     .init_from_session(update.profile.clone(), session, &update)
                                     .await
@@ -204,7 +204,6 @@ fn handle_upnp_playback_update(
                                     .await
                                     .insert(update.session_id, (output, player.clone()));
                             }
-                        }
 
                         player
                     } else {
