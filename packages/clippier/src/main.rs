@@ -338,7 +338,7 @@ fn process_configs(
 
     log::debug!("{} conf={conf:?}", path.display());
 
-    let configs = conf.as_ref().map(|x| x.config.clone()).map_or_else(
+    let configs = conf.as_ref().map_or_else(
         || {
             vec![ClippierConfiguration {
                 os: "ubuntu".to_string(),
@@ -349,9 +349,10 @@ fn process_configs(
                 ci_steps: None,
                 skip_features: None,
                 required_features: None,
+                nightly: None,
             }]
         },
-        |config| config,
+        |x| x.config.clone(),
     );
 
     let mut packages = vec![];
@@ -426,6 +427,14 @@ fn create_map(
     );
     map.insert("features".to_string(), features.into());
     map.insert("requiredFeatures".to_string(), required_features.into());
+    map.insert(
+        "nightly".to_string(),
+        config
+            .nightly
+            .or_else(|| conf.as_ref().and_then(|x| x.nightly))
+            .unwrap_or_default()
+            .into(),
+    );
 
     if let Some(dependencies) = &config.dependencies {
         let matches = dependencies
@@ -742,6 +751,7 @@ pub struct ClippierConfiguration {
     skip_features: Option<Vec<String>>,
     required_features: Option<Vec<String>>,
     name: Option<String>,
+    nightly: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -758,4 +768,5 @@ pub struct ClippierConf {
     config: Vec<ClippierConfiguration>,
     env: Option<HashMap<String, ClippierEnv>>,
     parallelization: Option<ParallelizationConfig>,
+    nightly: Option<bool>,
 }

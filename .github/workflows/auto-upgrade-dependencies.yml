@@ -47,7 +47,7 @@ jobs:
                                       "ciSteps": (.ciSteps),
                                       "ciToolchains": (.ciToolchains),
                                       "env": (if .env != null then .env | gsub("\n";" ") else null end),
-                                      "nightly": true
+                                      "nightly": (.nightly)
                                   }
                                   | del(.. | nulls)
                               ]'
