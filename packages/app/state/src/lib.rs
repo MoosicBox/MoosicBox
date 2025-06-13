@@ -1476,8 +1476,8 @@ impl AppState {
                 .map(|x| x.session_id)
         };
 
-        if let Some(session_id) = session_id
-            && session_id != update.session_id {
+        if let Some(session_id) = session_id {
+            if session_id != update.session_id {
                 let session = {
                     self.current_sessions
                         .read()
@@ -1507,6 +1507,7 @@ impl AppState {
                     }
                 }
             }
+        }
 
         update
     }

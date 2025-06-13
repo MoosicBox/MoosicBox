@@ -154,10 +154,11 @@ impl RouteRequest {
                                 .parameters
                                 .iter()
                                 .find_map(|param| {
-                                    if let DispositionParam::Ext(key, val) = param
-                                        && key.eq_ignore_ascii_case("name") {
+                                    if let DispositionParam::Ext(key, val) = param {
+                                        if key.eq_ignore_ascii_case("name") {
                                             return Some(val.clone());
                                         }
+                                    }
                                     None
                                 })
                                 .ok_or(ParseError::InvalidContentDisposition)?;
@@ -175,10 +176,11 @@ impl RouteRequest {
                                 .parameters
                                 .iter()
                                 .find_map(|param| {
-                                    if let DispositionParam::Ext(key, val) = param
-                                        && key.eq_ignore_ascii_case("name") {
+                                    if let DispositionParam::Ext(key, val) = param {
+                                        if key.eq_ignore_ascii_case("name") {
                                             return Some(val.clone());
                                         }
+                                    }
                                     None
                                 })
                                 .ok_or(ParseError::InvalidContentDisposition)?;

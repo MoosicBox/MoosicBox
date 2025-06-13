@@ -4,11 +4,13 @@ pub use chrono::*;
 ///
 /// * If the datetime fails to parse
 pub fn parse_date_time(value: &str) -> Result<NaiveDateTime, chrono::ParseError> {
-    if value.len() <= 4
-        && let Ok(year) = value.parse::<u16>()
-            && let Some(date) = NaiveDate::default().with_year(i32::from(year)) {
+    if value.len() <= 4 {
+        if let Ok(year) = value.parse::<u16>() {
+            if let Some(date) = NaiveDate::default().with_year(i32::from(year)) {
                 return Ok(date.into());
             }
+        }
+    }
     if value.len() == 10 {
         return NaiveDate::parse_from_str(value, "%Y-%m-%d")
             .inspect_err(|&e| {

@@ -146,10 +146,11 @@ impl FromRequest for NonTunnelRequestAuthorized {
 }
 
 fn is_authorized(req: &HttpRequest) -> bool {
-    if let Some(user_agent) = req.headers().get(http::header::USER_AGENT)
-        && let Ok(user_agent) = user_agent.to_str() {
+    if let Some(user_agent) = req.headers().get(http::header::USER_AGENT) {
+        if let Ok(user_agent) = user_agent.to_str() {
             return user_agent != "MOOSICBOX_TUNNEL";
         }
+    }
 
     true
 }

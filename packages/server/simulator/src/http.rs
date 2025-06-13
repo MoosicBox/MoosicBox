@@ -109,8 +109,8 @@ pub fn parse_http_response(raw_response: &str) -> Result<HttpResponse, &'static 
         } else {
             None
         }
-    })
-        && let Ok(content_length) = content_length_str.parse::<usize>() {
+    }) {
+        if let Ok(content_length) = content_length_str.parse::<usize>() {
             // Ensure we don't read beyond the specified content length
             // This is a simplification; actual HTTP might have complex encoding
             if body.len() >= content_length {
@@ -122,6 +122,7 @@ pub fn parse_http_response(raw_response: &str) -> Result<HttpResponse, &'static 
                 });
             }
         }
+    }
 
     Ok(HttpResponse {
         status_code,

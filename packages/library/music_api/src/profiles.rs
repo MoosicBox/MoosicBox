@@ -64,7 +64,9 @@ impl LibraryMusicApiProfiles {
     pub fn names(&self) -> Vec<String> {
         self.profiles
             .read()
-            .unwrap().keys().map(|profile| profile.clone())
+            .unwrap()
+            .iter()
+            .map(|(profile, _)| profile.clone())
             .collect()
     }
 }

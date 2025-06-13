@@ -99,13 +99,14 @@ pub fn start(sim: &mut impl Sim, service_port: Option<u16>) {
 
             log::info!("moosicbox server closed");
 
-            if let Some(join_handle) = join_handle
-                && let Err(e) = join_handle?
+            if let Some(join_handle) = join_handle {
+                if let Err(e) = join_handle?
                     .await
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?
                 {
                     log::error!("moosicbox_server error: {e:?}");
                 }
+            }
 
             log::info!("moosicbox server read loop closed");
 

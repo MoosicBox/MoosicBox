@@ -32,10 +32,11 @@ pub(crate) fn run_command(binaries: impl Iterator<Item = String>, arguments: &[&
     for ref binary in binaries
         .map(|x| PathBuf::from_str(&x).unwrap())
         .map(|x| {
-            if x.file_name().is_some_and(|x| x == "pnpm")
-                && let Ok(var) = env::var("PNPM_HOME") {
+            if x.file_name().is_some_and(|x| x == "pnpm") {
+                if let Ok(var) = env::var("PNPM_HOME") {
                     return PathBuf::from_str(&var).unwrap().join(x);
                 }
+            }
 
             x
         })

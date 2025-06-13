@@ -150,11 +150,12 @@ pub fn get_value_type<'a, T>(value: &'a NamedFieldDocument, index: &str) -> Resu
 where
     &'a OwnedValue: ToValueType<T>,
 {
-    if let Some(inner) = value.0.get(index)
-        && let Some(inner) = inner.first() {
+    if let Some(inner) = value.0.get(index) {
+        if let Some(inner) = inner.first() {
             let inner = inner.to_value_type()?;
             return Ok(inner);
         }
+    }
 
     Err(ParseError::Parse(format!("Missing value: '{index}'")))
 }

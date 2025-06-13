@@ -280,11 +280,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             packages
                         };
 
-                        if let (Some(max_parallel), Some(chunked)) = (max_parallel, &mut chunked)
-                            && packages.len() > max_parallel as usize {
+                        if let (Some(max_parallel), Some(chunked)) = (max_parallel, &mut chunked) {
+                            if packages.len() > max_parallel as usize {
                                 *chunked += 1;
                                 continue;
                             }
+                        }
 
                         break packages;
                     };

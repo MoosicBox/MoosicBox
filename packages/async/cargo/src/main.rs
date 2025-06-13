@@ -49,14 +49,15 @@ impl<'ast> Visit<'ast> for Checker<'_> {
             }
             Item::Impl(item_impl) => {
                 for member in &item_impl.items {
-                    if let ImplItem::Fn(ImplItemFn { sig, attrs, .. }) = member
-                        && sig.asyncness.is_some() && !has_inject_attr(attrs) {
+                    if let ImplItem::Fn(ImplItemFn { sig, attrs, .. }) = member {
+                        if sig.asyncness.is_some() && !has_inject_attr(attrs) {
                             let name = &sig.ident;
                             self.warnings.push(format!(
                                 "{}: async method `{}` in impl is missing #[inject_yields]",
                                 self.file, name
                             ));
                         }
+                    }
                 }
             }
             _ => {}

@@ -1077,11 +1077,12 @@ impl PlaybackHandler {
             None
         };
 
-        if should_seek
-            && let Some(seek) = seek {
+        if should_seek {
+            if let Some(seek) = seek {
                 log::debug!("update_playback: Seeking track to seek={seek}");
                 self.seek(seek, Some(DEFAULT_SEEK_RETRY_OPTIONS)).await?;
             }
+        }
         if should_stop {
             self.stop(retry_options).await?;
         } else if should_resume {
@@ -1331,10 +1332,11 @@ async fn track_to_playable_file(
     let path = Path::new(&file);
 
     // Provide the file extension as a hint.
-    if let Some(extension) = path.extension()
-        && let Some(extension_str) = extension.to_str() {
+    if let Some(extension) = path.extension() {
+        if let Some(extension_str) = extension.to_str() {
             hint.with_extension(extension_str);
         }
+    }
 
     #[allow(clippy::match_wildcard_for_single_variants)]
     let same_source = match format.format {

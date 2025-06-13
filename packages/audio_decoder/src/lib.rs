@@ -239,10 +239,11 @@ pub fn decode_file_path_str(
     let path = Path::new(path_str);
 
     // Provide the file extension as a hint.
-    if let Some(extension) = path.extension()
-        && let Some(extension_str) = extension.to_str() {
+    if let Some(extension) = path.extension() {
+        if let Some(extension_str) = extension.to_str() {
             hint.with_extension(extension_str);
         }
+    }
 
     let source = Box::new(File::open(path)?);
 

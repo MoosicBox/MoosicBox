@@ -52,11 +52,12 @@ impl<P: StatePersistence> StateStore<P> {
     ) -> Result<Option<T>, Error> {
         let key = key.as_ref();
 
-        if let Ok(cache) = self.cache.read()
-            && let Some(data) = cache.get(key) {
+        if let Ok(cache) = self.cache.read() {
+            if let Some(data) = cache.get(key) {
                 let data = serde_json::from_value(data.clone())?;
                 return Ok(Some(data));
             }
+        }
 
         let Some(data) = self.persistence.get::<T>(key).await? else {
             return Ok(None);

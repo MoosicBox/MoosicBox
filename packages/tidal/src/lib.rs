@@ -2193,10 +2193,11 @@ impl MusicApi for TidalMusicApi {
             {
                 Ok(artist) => Some(artist.into()),
                 Err(e) => {
-                    if let Error::HttpRequestFailed(status, _) = &e
-                        && *status == 404 {
+                    if let Error::HttpRequestFailed(status, _) = &e {
+                        if *status == 404 {
                             return Ok(None);
                         }
+                    }
 
                     return Err(e.into());
                 }

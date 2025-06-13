@@ -65,10 +65,11 @@ pub async fn index_endpoint(
         .or_else(|| profiles.first())
         .cloned();
 
-    if htmx.is_htmx
-        && let Some(profile) = &profile {
+    if htmx.is_htmx {
+        if let Some(profile) = &profile {
             htmx.push_url(format!("/admin?moosicboxProfile={profile}"));
         }
+    }
 
     let main = html! {
         main

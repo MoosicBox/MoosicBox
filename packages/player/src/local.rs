@@ -119,7 +119,8 @@ impl Player for LocalPlayer {
                             if let Some(playback) = binding.as_mut() {
                                 if !sent_playback_start_event
                                     .load(std::sync::atomic::Ordering::SeqCst)
-                                    && let Some(playback_target) = playback.playback_target.clone() {
+                                {
+                                    if let Some(playback_target) = playback.playback_target.clone() {
                                         sent_playback_start_event
                                             .store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -144,6 +145,7 @@ impl Player for LocalPlayer {
                                         };
                                         send_playback_event(&update, playback);
                                     }
+                                }
 
                                 let old = playback.clone();
                                 playback.progress = secs;

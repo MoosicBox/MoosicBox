@@ -938,16 +938,18 @@ mod pass_widths {
                 },
             );
 
-            if self.margin_top.is_none()
-                && let Element::Heading { size } = self.element {
+            if self.margin_top.is_none() {
+                if let Element::Heading { size } = self.element {
                     self.calculated_margin_top = Some(default_heading_prop!(size, font_margin_top));
                 }
+            }
 
-            if self.margin_bottom.is_none()
-                && let Element::Heading { size } = self.element {
+            if self.margin_bottom.is_none() {
+                if let Element::Heading { size } = self.element {
                     self.calculated_margin_bottom =
                         Some(default_heading_prop!(size, font_margin_bottom));
                 }
+            }
         }
 
         fn calc_fixed_properties(&mut self, view_width: f32, view_height: f32) -> bool {
@@ -1533,8 +1535,8 @@ mod pass_positioning {
                             }
                         }
 
-                        if let Some(text_align) = relative_container.text_align
-                            && visible_elements!().all(|x| matches!(x.element, Element::Raw { .. }))
+                        if let Some(text_align) = relative_container.text_align {
+                            if visible_elements!().all(|x| matches!(x.element, Element::Raw { .. }))
                             {
                                 match text_align {
                                     TextAlign::Start => {}
@@ -1560,6 +1562,7 @@ mod pass_positioning {
                                     }
                                 }
                             }
+                        }
 
                         for (i, child) in visible_elements_mut!().enumerate()
                         {

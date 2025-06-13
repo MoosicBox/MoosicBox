@@ -190,8 +190,8 @@ pub async fn scan_albums(
                 }
             }
 
-            if read_album.cover.is_none() && !read_album.searched_cover
-                && let Some(url) = album.artwork.clone() {
+            if read_album.cover.is_none() && !read_album.searched_cover {
+                if let Some(url) = album.artwork.clone() {
                     scan_album
                         .write()
                         .await
@@ -199,6 +199,7 @@ pub async fn scan_albums(
                         .search_cover(url, None, api.source())
                         .await?;
                 }
+            }
         }
 
         let limit = 100;

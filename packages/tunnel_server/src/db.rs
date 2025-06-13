@@ -164,8 +164,8 @@ where
         match exec().await {
             Ok(value) => return Ok(value),
             Err(err) => {
-                if let DatabaseError::Db(db_err) = &err
-                    && db_err.is_connection_error() {
+                if let DatabaseError::Db(db_err) = &err {
+                    if db_err.is_connection_error() {
                         if retries >= MAX_RETRY {
                             return Err(err);
                         }
@@ -180,6 +180,7 @@ where
                         retries += 1;
                         continue;
                     }
+                }
                 return Err(err);
             }
         }
