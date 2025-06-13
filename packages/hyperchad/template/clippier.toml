@@ -1,0 +1,3 @@
+[[config]]
+nightly = true
+os      = 'ubuntu'
