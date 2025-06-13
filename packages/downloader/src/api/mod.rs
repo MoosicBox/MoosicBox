@@ -280,6 +280,12 @@ pub async fn retry_download_endpoint(
     Ok(Json(serde_json::json!({"success": true})))
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteDownloadTaskQuery {
+    task_id: u64,
+}
+
 #[cfg_attr(
     feature = "openapi", utoipa::path(
         tags = ["Downloader"],
@@ -301,7 +307,7 @@ pub async fn retry_download_endpoint(
 )]
 #[route("/delete-download", method = "POST")]
 pub async fn delete_download_endpoint(
-    query: web::Query<RetryDownloadQuery>,
+    query: web::Query<DeleteDownloadTaskQuery>,
     db: LibraryDatabase,
 ) -> Result<Json<ApiDownloadTask>> {
     Ok(Json(
