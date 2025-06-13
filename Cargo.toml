@@ -89,6 +89,7 @@ members = [
     "packages/remote_library",
     "packages/resampler",
     "packages/scan",
+    "packages/scan/models",
     "packages/schema",
     "packages/search",
     "packages/server",
@@ -215,6 +216,7 @@ moosicbox_qobuz              = { version = "0.1.1", default-features = false, pa
 moosicbox_remote_library     = { version = "0.1.1", default-features = false, path = "packages/remote_library" }
 moosicbox_resampler          = { version = "0.1.1", default-features = false, path = "packages/resampler" }
 moosicbox_scan               = { version = "0.1.1", default-features = false, path = "packages/scan" }
+moosicbox_scan_models        = { version = "0.1.1", default-features = false, path = "packages/scan/models" }
 moosicbox_schema             = { version = "0.1.1", default-features = false, path = "packages/schema" }
 moosicbox_search             = { version = "0.1.1", default-features = false, path = "packages/search" }
 moosicbox_server             = { version = "0.1.1", default-features = false, path = "packages/server" }

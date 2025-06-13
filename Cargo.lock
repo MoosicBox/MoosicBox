@@ -7146,6 +7146,7 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_paging",
  "moosicbox_player",
+ "moosicbox_scan_models",
  "moosicbox_session_models",
  "moosicbox_task",
  "moosicbox_ws",
@@ -8046,6 +8047,7 @@ dependencies = [
  "moosicbox_music_api",
  "moosicbox_music_models",
  "moosicbox_paging",
+ "moosicbox_scan_models",
  "moosicbox_schema",
  "moosicbox_search",
  "moosicbox_task",
@@ -8066,6 +8068,16 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-util",
+ "utoipa",
+]
+
+[[package]]
+name = "moosicbox_scan_models"
+version = "0.1.1"
+dependencies = [
+ "log 0.4.27",
+ "moosicbox_assert",
+ "serde",
  "utoipa",
 ]
 

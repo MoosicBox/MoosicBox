@@ -23,6 +23,7 @@ moosicbox_library      = { workspace = true }
 moosicbox_music_api    = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_paging       = { workspace = true }
+moosicbox_scan_models  = { workspace = true }
 moosicbox_search       = { workspace = true }
 moosicbox_task         = { workspace = true }
 switchy_database       = { workspace = true }
@@ -67,14 +68,23 @@ default = ["all-formats", "api", "local", "openapi"]
 
 fail-on-warnings = []
 
-api = ["dep:actix-web", "dep:moosicbox_auth", "moosicbox_music_api/api"]
+api = [
+    "dep:actix-web",
+    "dep:moosicbox_auth",
+    "moosicbox_music_api/api",
+    "moosicbox_scan_models/api",
+]
 local = [
     "dep:async-recursion",
     "dep:moosicbox_audiotags",
     "dep:moosicbox_lofty",
     "dep:mp3-duration",
 ]
-openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
+openapi = [
+    "dep:utoipa",
+    "moosicbox_music_models/openapi",
+    "moosicbox_scan_models/openapi",
+]
 
 all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]

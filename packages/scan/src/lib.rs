@@ -26,6 +26,8 @@ pub mod event;
 pub mod music_api;
 pub mod output;
 
+pub use moosicbox_scan_models as models;
+
 static CACHE_DIR: LazyLock<PathBuf> =
     LazyLock::new(|| get_cache_dir_path().expect("Could not get cache directory"));
 

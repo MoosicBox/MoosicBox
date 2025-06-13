@@ -1,0 +1,28 @@
+[package]
+authors     = ["Braden Steffaniak"]
+categories  = ["development-tools", "multimedia", "network-programming"]
+description = "MoosicBox scan models package"
+edition     = "2024"
+keywords    = ["audio", "files", "local", "models", "scan"]
+license     = "MPL-2.0"
+name        = "moosicbox_scan_models"
+readme      = "README.md"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.1"
+
+[dependencies]
+moosicbox_assert = { workspace = true }
+
+# API Dependencies
+utoipa = { workspace = true, optional = true }
+
+log   = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[features]
+default = ["api", "openapi"]
+
+fail-on-warnings = []
+
+api     = []
+openapi = ["dep:utoipa"]
