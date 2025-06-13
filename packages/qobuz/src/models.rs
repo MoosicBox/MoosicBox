@@ -261,7 +261,7 @@ impl From<QobuzAlbum> for ApiGlobalSearchResult {
             artist_id: value.artist_id.into(),
             artist: value.artist,
             album_id: value.id.into(),
-            title: value.title,
+            title: format_title(&value.title, value.version.as_deref()),
             contains_cover: value.image.is_some(),
             blur: false,
             date_released: Some(value.release_date_original),
