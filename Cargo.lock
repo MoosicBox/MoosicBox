@@ -3206,6 +3206,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dissimilar"
+version = "1.0.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8975ffdaa0ef3661bfe02dbdcc06c9f829dfafe6a3c474de366a8d5e44276921"
+
+[[package]]
 name = "dlib"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5212,6 +5218,7 @@ dependencies = [
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
  "hyperchad_state",
+ "hyperchad_template",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
 ]
@@ -5291,9 +5298,9 @@ dependencies = [
  "async-trait",
  "bytes",
  "hyperchad_color",
+ "hyperchad_template",
  "hyperchad_transformer",
  "log 0.4.27",
- "maud",
  "serde",
  "serde_json",
  "switchy_async",
@@ -5361,9 +5368,9 @@ dependencies = [
  "hyperchad_renderer_html_actix",
  "hyperchad_renderer_html_lambda",
  "hyperchad_router",
+ "hyperchad_template",
  "hyperchad_transformer",
  "log 0.4.27",
- "maud",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -5445,9 +5452,9 @@ dependencies = [
  "hyperchad_renderer",
  "hyperchad_renderer_html",
  "hyperchad_renderer_vanilla_js_hash",
+ "hyperchad_template",
  "hyperchad_transformer",
  "log 0.4.27",
- "maud",
  "md5",
 ]
 
@@ -5501,6 +5508,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_template"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "hyperchad_template_macros",
+ "itoa 1.0.15",
+ "trybuild",
+]
+
+[[package]]
+name = "hyperchad_template_macros"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.27",
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
+ "syn 2.0.102",
+]
+
+[[package]]
 name = "hyperchad_transformer"
 version = "0.1.0"
 dependencies = [
@@ -5508,9 +5536,9 @@ dependencies = [
  "html-escape",
  "hyperchad_actions",
  "hyperchad_color",
+ "hyperchad_template",
  "hyperchad_transformer_models",
  "log 0.4.27",
- "maud",
  "moosicbox_arb",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -6768,30 +6796,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 
 [[package]]
-name = "maud"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8156733e27020ea5c684db5beac5d1d611e1272ab17901a49466294b84fc217e"
-dependencies = [
- "actix-web",
- "futures-util",
- "itoa 1.0.15",
- "maud_macros",
-]
-
-[[package]]
-name = "maud_macros"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7261b00f3952f617899bc012e3dbd56e4f0110a038175929fa5d18e5a19913ca"
-dependencies = [
- "proc-macro2",
- "proc-macro2-diagnostics",
- "quote",
- "syn 2.0.102",
-]
-
-[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7031,8 +7035,8 @@ dependencies = [
  "actix-htmx",
  "actix-web",
  "base64 0.22.1",
+ "hyperchad_template",
  "log 0.4.27",
- "maud",
  "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_json_utils",
@@ -7128,8 +7132,8 @@ dependencies = [
  "console-subscriber",
  "flume",
  "hyperchad",
+ "hyperchad_template",
  "log 0.4.27",
- "maud",
  "moosicbox_app_models",
  "moosicbox_app_native_bundled",
  "moosicbox_app_native_ui",
@@ -7189,8 +7193,8 @@ version = "0.1.1"
 dependencies = [
  "bytesize",
  "hyperchad",
+ "hyperchad_template",
  "log 0.4.27",
- "maud",
  "moosicbox_app_models",
  "moosicbox_audio_zone_models",
  "moosicbox_date_utils",
@@ -7749,9 +7753,9 @@ dependencies = [
  "bytesize",
  "chrono",
  "hyperchad_actions",
+ "hyperchad_template",
  "hyperchad_transformer_models",
  "log 0.4.27",
- "maud",
  "regex",
 ]
 
@@ -14231,6 +14235,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
+name = "target-triple"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ac9aa371f599d22256307c24a9d748c041e548cbf599f35d890f9d365361790"
+
+[[package]]
 name = "tauri"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15353,6 +15363,22 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "trybuild"
+version = "1.0.105"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c9bf9513a2f4aeef5fdac8677d7d349c79fdbcc03b9c86da6e9d254f1e43be2"
+dependencies = [
+ "dissimilar",
+ "glob",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "target-triple",
+ "termcolor",
+ "toml",
+]
 
 [[package]]
 name = "ttf-parser"

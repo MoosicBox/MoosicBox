@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::transformer_models::{ImageLoading, LayoutOverflow};
-use maud::{Markup, PreEscaped, html};
+use hyperchad_template::{Markup, PreEscaped, html};
 use moosicbox_music_models::{
     AlbumType, ApiSource,
     api::{ApiAlbum, ApiArtist},

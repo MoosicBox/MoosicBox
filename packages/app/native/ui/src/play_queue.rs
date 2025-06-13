@@ -4,7 +4,7 @@ use hyperchad::{
     actions::{ActionType, logic::get_visibility_self},
     transformer_models::{AlignItems, LayoutDirection, Visibility},
 };
-use maud::{Markup, html};
+use hyperchad_template::{Markup, html};
 use moosicbox_music_models::api::ApiTrack;
 
 use crate::{public_img, state::State};

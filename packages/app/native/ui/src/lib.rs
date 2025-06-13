@@ -26,7 +26,7 @@ use hyperchad::{
     },
     transformer_models::{AlignItems, JustifyContent, LayoutOverflow, Position, Visibility},
 };
-use maud::{Markup, html};
+use hyperchad_template::{Markup, html};
 use moosicbox_music_models::{
     API_SOURCES, AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id,
 };
@@ -56,7 +56,7 @@ macro_rules! public_img {
 #[macro_export]
 macro_rules! pre_escaped {
     ($($message:tt)+) => {
-        maud::PreEscaped(format!($($message)*))
+        hyperchad_template::PreEscaped(format!($($message)*))
     };
 }
 

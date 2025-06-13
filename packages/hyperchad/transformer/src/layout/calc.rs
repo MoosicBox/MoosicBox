@@ -1759,8 +1759,8 @@ impl Container {
 
 #[cfg(test)]
 mod test {
+    use hyperchad_template::html;
     use hyperchad_transformer_models::AlignItems;
-    use maud::html;
     use paste::paste;
     use pretty_assertions::assert_eq;
 

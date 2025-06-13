@@ -26,13 +26,13 @@ hyperchad_renderer      = { workspace = true, features = ["canvas", "html"] }
 hyperchad_renderer_html = { workspace = true, features = ["assets", "extend"] }
 hyperchad_transformer   = { workspace = true, features = ["html", "logic"] }
 
-async-trait  = { workspace = true }
-const_format = { workspace = true }
-convert_case = { workspace = true }
-html-escape  = { workspace = true }
-log          = { workspace = true }
-maud         = { workspace = true }
-md5          = { workspace = true, optional = true }
+async-trait        = { workspace = true }
+const_format       = { workspace = true }
+convert_case       = { workspace = true }
+html-escape        = { workspace = true }
+hyperchad_template = { workspace = true }
+log                = { workspace = true }
+md5                = { workspace = true, optional = true }
 
 [features]
 default = ["all-plugins", "debug"]

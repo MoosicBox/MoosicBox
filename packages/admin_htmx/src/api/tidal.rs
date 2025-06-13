@@ -8,7 +8,7 @@ use actix_web::{
     route, web,
 };
 use base64::{Engine as _, engine::general_purpose};
-use maud::{Markup, html};
+use hyperchad_template::{Markup, html};
 #[cfg(feature = "scan")]
 use moosicbox_music_api::MusicApis;
 #[cfg(feature = "scan")]

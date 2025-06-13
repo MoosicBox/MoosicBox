@@ -58,6 +58,8 @@ members = [
     "packages/hyperchad/renderer/vanilla_js/hash",
     "packages/hyperchad/router",
     "packages/hyperchad/state",
+    "packages/hyperchad/template",
+    "packages/hyperchad/template/macros",
     "packages/hyperchad/transformer",
     "packages/hyperchad/transformer/models",
     "packages/image",
@@ -266,6 +268,8 @@ hyperchad_renderer_vanilla_js      = { version = "0.1.0", default-features = fal
 hyperchad_renderer_vanilla_js_hash = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/vanilla_js/hash" }
 hyperchad_router                   = { version = "0.1.0", default-features = false, path = "packages/hyperchad/router" }
 hyperchad_state                    = { version = "0.1.0", default-features = false, path = "packages/hyperchad/state" }
+hyperchad_template                 = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template" }
+hyperchad_template_macros          = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template/macros" }
 hyperchad_transformer              = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer" }
 hyperchad_transformer_models       = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer/models" }
 
@@ -359,6 +363,7 @@ image = "0.25.6"
 include_dir = "0.7.4"
 io-streams = "0.16.3"
 itertools = "0.14.0"
+itoa = "1.0.15"
 jni = "0.21.1"
 kanal = "0.1.1"
 lambda_http = "0.15.1"
@@ -368,7 +373,6 @@ libpulse-simple-binding = "2.29.0"
 libvips = { version = "1.7.1" }
 local-ip-address = "0.6.5"
 log = { version = "0.4", features = ["release_max_level_trace"] }
-maud = "0.27.0"
 md5 = "0.7.0"
 mdns-sd = "0.13.9"
 mime = "0.3.17"
@@ -410,6 +414,8 @@ postgres-openssl = "0.5.1"
 postgres-protocol = "0.6.8"
 pretty_assertions = "1.4.1"
 pretty_env_logger = "0.5"
+proc-macro2 = "1.0.95"
+proc-macro2-diagnostics = { version = "0.10.1", default-features = false }
 profiling = "1.0.16"
 prometheus = "0.14.0"
 puffin = "0.19.1"
@@ -497,6 +503,7 @@ tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.31.0" }
 tracing-subscriber = "0.3.19"
 tracy-client = { version = "0.18.1", default-features = false }
+trybuild = "1.0.105"
 turmoil = "0.6.6"
 uaparser = "0.6.4"
 url = "2.5.4"

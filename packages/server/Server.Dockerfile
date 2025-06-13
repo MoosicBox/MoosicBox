@@ -30,6 +30,8 @@ RUN cat Cargo.toml | \
     \"packages\/fs\",\r\
     \"packages\/http\",\r\
     \"packages\/http\/models\",\r\
+    \"packages\/hyperchad\/template\",\r\
+    \"packages\/hyperchad\/template\/macros\",\r\
     \"packages\/image\",\r\
     \"packages\/json_utils\",\r\
     \"packages\/library\",\r\
@@ -102,6 +104,8 @@ COPY packages/files/Cargo.toml packages/files/Cargo.toml
 COPY packages/fs/Cargo.toml packages/fs/Cargo.toml
 COPY packages/http/Cargo.toml packages/http/Cargo.toml
 COPY packages/http/models/Cargo.toml packages/http/models/Cargo.toml
+COPY packages/hyperchad/template/Cargo.toml packages/hyperchad/template/Cargo.toml
+COPY packages/hyperchad/template/macros/Cargo.toml packages/hyperchad/template/macros/Cargo.toml
 COPY packages/image/Cargo.toml packages/image/Cargo.toml
 COPY packages/json_utils/Cargo.toml packages/json_utils/Cargo.toml
 COPY packages/library/Cargo.toml packages/library/Cargo.toml
@@ -222,8 +226,16 @@ path=\"..\/..\/temp_lib.rs\"/" | \
     tr '\r' '\n' \
     > "packages/async/macros/Cargo2.toml" && \
     mv "packages/async/macros/Cargo2.toml" "packages/async/macros/Cargo.toml" && \
+    cat "packages/hyperchad/template/macros/Cargo.toml" | \
+    tr '\n' '\r' | \
+    sed -E "s/\[lib\]/[lib]\r\
+path=\"..\/..\/..\/..\/temp_lib.rs\"/" | \
+    tr '\r' '\n' \
+    > "packages/hyperchad/template/macros/Cargo2.toml" && \
+    mv "packages/hyperchad/template/macros/Cargo2.toml" "packages/hyperchad/template/macros/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/audio_zone/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/http/models/Cargo.toml" && \
+    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/hyperchad/template/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/library/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/library/music_api/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/menu/models/Cargo.toml" && \

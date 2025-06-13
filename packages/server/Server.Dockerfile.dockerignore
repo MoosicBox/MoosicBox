@@ -19,6 +19,7 @@
 !/packages/files
 !/packages/fs
 !/packages/http
+!/packages/hyperchad/template
 !/packages/image
 !/packages/json_utils
 !/packages/library

@@ -5,7 +5,7 @@ use hyperchad::{
     router::{Container, RouteRequest},
     transformer::html::ParseError,
 };
-use maud::Markup;
+use hyperchad_template::Markup;
 use moosicbox_app_models::{Connection, DownloadSettings, MusicApiSettings, ScanSettings};
 use moosicbox_app_native_ui::{
     downloads::DownloadTab,

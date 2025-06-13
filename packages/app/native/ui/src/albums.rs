@@ -9,7 +9,7 @@ use hyperchad::{
     },
     transformer_models::{AlignItems, ImageLoading, JustifyContent, LayoutOverflow, Visibility},
 };
-use maud::{Markup, PreEscaped, html};
+use hyperchad_template::{Markup, PreEscaped, html};
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_models::{
     AlbumSort, AlbumVersionQuality, ApiSource, TrackApiSource,

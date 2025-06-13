@@ -12,6 +12,7 @@ use hyperchad_renderer_html::{
     extend::{ExtendHtmlRenderer, HtmlRendererEventPub},
     html::write_attr,
 };
+use hyperchad_template::{DOCTYPE, PreEscaped, html};
 use hyperchad_transformer::{
     Container, ResponsiveTrigger,
     actions::{
@@ -20,7 +21,6 @@ use hyperchad_transformer::{
     },
     models::{LayoutDirection, Route, Visibility},
 };
-use maud::{DOCTYPE, PreEscaped, html};
 
 static INSECURE_WARNING: LazyLock<()> = LazyLock::new(|| {
     #[cfg(all(not(debug_assertions), feature = "plugin-uuid-insecure"))]

@@ -14,11 +14,11 @@ version     = "0.1.1"
 hyperchad_actions            = { workspace = true, features = ["logic", "serde"] }
 hyperchad_transformer_models = { workspace = true, features = ["serde"] }
 
-bytesize = { workspace = true }
-chrono   = { workspace = true }
-log      = { workspace = true }
-maud     = { workspace = true }
-regex    = { workspace = true }
+bytesize           = { workspace = true }
+chrono             = { workspace = true }
+hyperchad_template = { workspace = true }
+log                = { workspace = true }
+regex              = { workspace = true }
 
 [features]
 default = []

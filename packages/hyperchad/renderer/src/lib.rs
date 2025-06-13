@@ -102,11 +102,11 @@ impl TryFrom<serde_json::Value> for Content {
     }
 }
 
-#[cfg(feature = "maud")]
-impl TryFrom<maud::Markup> for Content {
+#[cfg(feature = "template")]
+impl TryFrom<hyperchad_template::Markup> for Content {
     type Error = ParseError;
 
-    fn try_from(value: maud::Markup) -> Result<Self, Self::Error> {
+    fn try_from(value: hyperchad_template::Markup) -> Result<Self, Self::Error> {
         Ok(Self::View(value.into_string().try_into()?))
     }
 }
@@ -154,11 +154,11 @@ impl From<PartialView> for Content {
     }
 }
 
-#[cfg(feature = "maud")]
-impl TryFrom<maud::Markup> for View {
+#[cfg(feature = "template")]
+impl TryFrom<hyperchad_template::Markup> for View {
     type Error = ParseError;
 
-    fn try_from(value: maud::Markup) -> Result<Self, Self::Error> {
+    fn try_from(value: hyperchad_template::Markup) -> Result<Self, Self::Error> {
         value.into_string().try_into()
     }
 }

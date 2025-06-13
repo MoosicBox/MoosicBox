@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use maud::{Markup, html};
+use hyperchad_template::{Markup, html};
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
 use moosicbox_session_models::ApiConnection;
 

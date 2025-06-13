@@ -6,10 +6,10 @@
 pub mod download;
 
 use hyperchad_actions::logic::if_responsive;
+use hyperchad_template::{Markup, html};
 use hyperchad_transformer_models::{
     AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
 };
-use maud::{Markup, html};
 
 #[macro_export]
 macro_rules! public_img {
@@ -21,7 +21,7 @@ macro_rules! public_img {
 #[macro_export]
 macro_rules! pre_escaped {
     ($($message:tt)+) => {
-        maud::PreEscaped(format!($($message)*))
+        hyperchad_template::PreEscaped(format!($($message)*))
     };
 }
 

@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::transformer_models::{AlignItems, Cursor};
-use maud::{Markup, html};
+use hyperchad_template::{Markup, html};
 use moosicbox_downloader::api::models::{ApiDownloadItem, ApiDownloadTask, ApiDownloadTaskState};
 use strum::{AsRefStr, EnumString};
 

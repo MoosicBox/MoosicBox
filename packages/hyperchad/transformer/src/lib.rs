@@ -1677,11 +1677,11 @@ impl BfsPaths {
     }
 }
 
-#[cfg(any(test, feature = "maud"))]
-impl TryFrom<maud::Markup> for Container {
+#[cfg(any(test, feature = "template"))]
+impl TryFrom<hyperchad_template::Markup> for Container {
     type Error = tl::ParseError;
 
-    fn try_from(value: maud::Markup) -> Result<Self, Self::Error> {
+    fn try_from(value: hyperchad_template::Markup) -> Result<Self, Self::Error> {
         value.into_string().try_into()
     }
 }

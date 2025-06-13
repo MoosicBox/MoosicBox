@@ -1,0 +1,1 @@
+# HyperChad template crate

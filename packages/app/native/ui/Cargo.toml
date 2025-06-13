@@ -28,8 +28,8 @@ moosicbox_paging = { workspace = true }
 moosicbox_session_models = { workspace = true }
 
 bytesize            = { workspace = true }
+hyperchad_template  = { workspace = true }
 log                 = { workspace = true }
-maud                = { workspace = true }
 rust_decimal        = { workspace = true }
 rust_decimal_macros = { workspace = true }
 serde               = { workspace = true }

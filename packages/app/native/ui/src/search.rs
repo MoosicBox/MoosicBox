@@ -4,7 +4,7 @@ use hyperchad::{
     actions::ActionType,
     transformer_models::{AlignItems, LayoutDirection, LayoutOverflow, Position, Visibility},
 };
-use maud::{Markup, html};
+use hyperchad_template::{Markup, html};
 use moosicbox_music_api_models::search::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
     ApiGlobalTrackSearchResult,

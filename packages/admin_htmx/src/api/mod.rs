@@ -7,7 +7,7 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web,
 };
-use maud::{DOCTYPE, Markup, PreEscaped, html};
+use hyperchad_template::{DOCTYPE, Markup, PreEscaped, html};
 use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;
 use switchy_database::{
