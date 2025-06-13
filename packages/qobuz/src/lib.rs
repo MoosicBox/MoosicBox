@@ -1378,7 +1378,20 @@ pub async fn track(
     )
     .await?;
 
-    Ok(value.to_value_type()?)
+    log::debug!("Received track response: {value:#?}");
+
+    let album: QobuzAlbum = value.to_value("album")?;
+
+    Ok(QobuzTrack::from_value(
+        &value,
+        &album.artist,
+        album.artist_id,
+        &album.title,
+        album.id.as_ref(),
+        album.album_type,
+        album.version.as_deref(),
+        album.image,
+    )?)
 }
 
 #[allow(clippy::too_many_arguments)]
