@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.175.0
-        version: 3.175.0(typescript@5.8.3)
+        specifier: ^3.176.0
+        version: 3.176.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -48,8 +48,8 @@ importers:
         specifier: ^0.13.0
         version: 0.13.0
       sst:
-        specifier: ^3.17.4
-        version: 3.17.4
+        specifier: ^3.17.5
+        version: 3.17.5
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
@@ -310,8 +310,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.175.0':
-    resolution: {integrity: sha512-15d34B01pkacNiMwX5pXKzo+jSls2UMQV9A754/Hudujml/zp1MDxEeTtgfRYX4r5WDppswoFvNK93RnbHCTWA==}
+  '@pulumi/pulumi@3.176.0':
+    resolution: {integrity: sha512-uQ93+JvqAs+YhesczFb4t6gz0uivAKNu3ZkaUvlkHYxJxaLgKsyDBstKWqItKg7k+P+bqfqzyOuE6nW+GgfLcA==}
     engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -2186,48 +2186,48 @@ packages:
     resolution: {integrity: sha512-MGrFH9Z4NP9Iyhqn16sDtBpRRNJ0Y2hNa6D65h736fVSaPCHr4DM4sWUNvVaSuC+0OBGhwsrydQwmgfg5LncqQ==}
     engines: {node: ^14.17.0 || ^16.13.0 || >=18.0.0}
 
-  sst-darwin-arm64@3.17.4:
-    resolution: {integrity: sha512-IJansQWlPdiaQNsJw3FQ+Q/ZXN1hzrq2Q31xG4l2HhA1doj1C3y+6s57vu4cTRDFo2OwBlC4+zlQBJHsOYGhrA==}
+  sst-darwin-arm64@3.17.5:
+    resolution: {integrity: sha512-rBjQgUR0YHe1IqfbEjpCTj6Ut58gp1ObL8sIYPwT9KMBYuBiGGv7VjTXvpK2PcrQvFnF75A2MppqBHT7l2Z2sA==}
     cpu: [arm64]
     os: [darwin]
 
-  sst-darwin-x64@3.17.4:
-    resolution: {integrity: sha512-mHd26/AtaQ79ajqzsutRhgEjkCxX+bXgW4KJIN0AGT3110fo2OL0x2UXmfX+sxSWOFHvJQsjFjFm4CLtQSxyBg==}
+  sst-darwin-x64@3.17.5:
+    resolution: {integrity: sha512-3G41wTqk2hrs1xRcSPcGakhNEp0rwy54DYVnfGEwyPc/fhLTRmWWxFYUJ02p4WcICOzHymwNnCoCjTxxT/LbfQ==}
     cpu: [x64]
     os: [darwin]
 
-  sst-linux-arm64@3.17.4:
-    resolution: {integrity: sha512-unaNWOY3oEI/jUUG47/2Gbreaoi/D/rLsTPeKyYEWhWEBWCojns7LfMQs1bgW0qjBGmazB2IJD4NVYhYqYQxqQ==}
+  sst-linux-arm64@3.17.5:
+    resolution: {integrity: sha512-dUHq6zkltogMLXcjrjPHjsLhTiPPizg5d//rSUwHBDLd7btDtzx8iHlLCwZydw9mIrFUvb81i/zmN9L+wI63uQ==}
     cpu: [arm64]
     os: [linux]
 
-  sst-linux-x64@3.17.4:
-    resolution: {integrity: sha512-zoErI6dVoRxWcmoVVrzNJWKEqfUF/MyQInEkGROGY2YsFFzOM5RD5Dsdm9q6oDGwx+NxFAhQWc8/8C+OmoW1nA==}
+  sst-linux-x64@3.17.5:
+    resolution: {integrity: sha512-si2vIIbg3eZA5EBT1CUPze+M3qG+0zYP2NqrG0o77HKZxc/mKK/CSyY2KzgZJuktzVXpFh0bLxs6oBN4CEkm8Q==}
     cpu: [x64]
     os: [linux]
 
-  sst-linux-x86@3.17.4:
-    resolution: {integrity: sha512-7ZHS2rxzxVAxMFW3u5+GMRGGACaBMuLht8JYxqruD8mFVqk9UaPQgrFKIHGKWHLBJLVnF2AdwmlHOcEKP+UJWA==}
+  sst-linux-x86@3.17.5:
+    resolution: {integrity: sha512-mr1v3sxkkabVvhZPLoiWNwMkszp7Z5WcIM9fHrEPu3ZfmKS1Ko1nk2Sqm1qTl/DV6RwOMqrgtnVkrxmMOd8A8w==}
     cpu: [x86]
     os: [linux]
 
-  sst-win32-arm64@3.17.4:
-    resolution: {integrity: sha512-q4cedr6WD3NqeQkDvmAsIgMgPIjziIWy81wA3ZmnY6UT0jFgFus23ppLIi6F4BFJfOygvAP2PeGrRR3o8giclw==}
+  sst-win32-arm64@3.17.5:
+    resolution: {integrity: sha512-LDxaofS+7qYimC6vVCVFrIO0coc+Qdc5Ud/uWGHtYp+VwnhZ92Jjzsz44qflbfRC/vIYKEoMUpsmgfaNyS3aYQ==}
     cpu: [arm64]
     os: [win32]
 
-  sst-win32-x64@3.17.4:
-    resolution: {integrity: sha512-sSQL041YCusZ8/0ynYGe9DCmPYVZOFsemXKUA9tX4IGSDqXae1FN0Sj7HQ17JyY24UUirY1zR7LFk+7KrP6wiA==}
+  sst-win32-x64@3.17.5:
+    resolution: {integrity: sha512-G32vV3fBbTmEkfYAtoChdkzcZuLMiEfADR6OZ9IrkXnnaku55Xd9efEAa9hUbKJw/yI16/903ovK6vaO+nnJaw==}
     cpu: [x64]
     os: [win32]
 
-  sst-win32-x86@3.17.4:
-    resolution: {integrity: sha512-WhjsD2dkA2fbQ03CgwIJb+2p0osll2PTXlr7HC3L+H8wG2DgLFPjoE+6N8n6r2dVMVaDzuNwy/7J8hRB29blaw==}
+  sst-win32-x86@3.17.5:
+    resolution: {integrity: sha512-oimBphFoMIEKAKwGWMP0+uKrJdUPJb+i6IIbvuAuwBsChfe4LwUT+W1TvQLNykxpSw43ioXJSXHzjJmo1mI0BA==}
     cpu: [x86]
     os: [win32]
 
-  sst@3.17.4:
-    resolution: {integrity: sha512-WpAws1ASJIilKC9/DGBhZ5wk2I4gtlzHXKpuwPC25bHWjqllv1jZiehIYhhN0PpV2pV8xCvqzyN8Gdm3J4EWQg==}
+  sst@3.17.5:
+    resolution: {integrity: sha512-NhnJ4OJPlSBLUZhI3bj3uUdyXlw7qWi94KjbuFwlavtQszg9jOu/L70xZUFAO+S5qj9rSuRdzevL07tgon/V2w==}
     hasBin: true
 
   statuses@2.0.1:
@@ -2846,7 +2846,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.175.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.176.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.4
       '@logdna/tail-file': 2.2.0
@@ -5022,31 +5022,31 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  sst-darwin-arm64@3.17.4:
+  sst-darwin-arm64@3.17.5:
     optional: true
 
-  sst-darwin-x64@3.17.4:
+  sst-darwin-x64@3.17.5:
     optional: true
 
-  sst-linux-arm64@3.17.4:
+  sst-linux-arm64@3.17.5:
     optional: true
 
-  sst-linux-x64@3.17.4:
+  sst-linux-x64@3.17.5:
     optional: true
 
-  sst-linux-x86@3.17.4:
+  sst-linux-x86@3.17.5:
     optional: true
 
-  sst-win32-arm64@3.17.4:
+  sst-win32-arm64@3.17.5:
     optional: true
 
-  sst-win32-x64@3.17.4:
+  sst-win32-x64@3.17.5:
     optional: true
 
-  sst-win32-x86@3.17.4:
+  sst-win32-x86@3.17.5:
     optional: true
 
-  sst@3.17.4:
+  sst@3.17.5:
     dependencies:
       aws-sdk: 2.1692.0
       aws4fetch: 1.0.18
@@ -5054,14 +5054,14 @@ snapshots:
       opencontrol: 0.0.6
       openid-client: 5.6.4
     optionalDependencies:
-      sst-darwin-arm64: 3.17.4
-      sst-darwin-x64: 3.17.4
-      sst-linux-arm64: 3.17.4
-      sst-linux-x64: 3.17.4
-      sst-linux-x86: 3.17.4
-      sst-win32-arm64: 3.17.4
-      sst-win32-x64: 3.17.4
-      sst-win32-x86: 3.17.4
+      sst-darwin-arm64: 3.17.5
+      sst-darwin-x64: 3.17.5
+      sst-linux-arm64: 3.17.5
+      sst-linux-x64: 3.17.5
+      sst-linux-x86: 3.17.5
+      sst-win32-arm64: 3.17.5
+      sst-win32-x64: 3.17.5
+      sst-win32-x86: 3.17.5
     transitivePeerDependencies:
       - supports-color
 
