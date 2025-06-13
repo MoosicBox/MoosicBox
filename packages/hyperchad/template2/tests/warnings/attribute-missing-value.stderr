@@ -1,0 +1,9 @@
+error: unexpected end of input, expected one of: curly braces, literal, parentheses, `@`, `;`
+ --> tests/warnings/attribute-missing-value.rs:4:5
+  |
+4 | /     container! {
+5 | |         a href=
+6 | |     };
+  | |_____^
+  |
+  = note: this error originates in the macro `container` (in Nightly builds, run with -Z macro-backtrace for more info)

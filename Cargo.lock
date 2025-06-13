@@ -5518,6 +5518,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_template2"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "hyperchad_template2_macros",
+ "itoa 1.0.15",
+ "trybuild",
+]
+
+[[package]]
+name = "hyperchad_template2_macros"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.27",
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
+ "syn 2.0.102",
+]
+
+[[package]]
 name = "hyperchad_template_macros"
 version = "0.1.0"
 dependencies = [
