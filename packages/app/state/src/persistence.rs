@@ -13,6 +13,7 @@ pub enum PersistenceKey {
     ConnectionName,
     Connection,
     Connections,
+    DefaultDownloadLocation,
 }
 
 impl From<PersistenceKey> for String {
@@ -290,5 +291,17 @@ impl AppState {
         }
 
         Ok(connections)
+    }
+
+    pub(crate) async fn persist_default_download_location(
+        &self,
+        path: impl AsRef<str>,
+    ) -> Result<(), AppStateError> {
+        let path = path.as_ref();
+        let persistence = self.persistence().await;
+        persistence
+            .set(PersistenceKey::DefaultDownloadLocation, &path.to_string())
+            .await?;
+        Ok(())
     }
 }

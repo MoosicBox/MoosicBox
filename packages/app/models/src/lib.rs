@@ -61,3 +61,26 @@ pub mod music_api_api {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DownloadSettings {
+    pub download_locations: Vec<(u64, String)>,
+    pub default_download_location: Option<String>,
+}
+
+impl AsRef<Self> for DownloadSettings {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScanSettings {
+    pub scan_paths: Vec<String>,
+}
+
+impl AsRef<Self> for ScanSettings {
+    fn as_ref(&self) -> &Self {
+        self
+    }
+}

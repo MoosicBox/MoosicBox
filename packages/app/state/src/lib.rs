@@ -5,7 +5,6 @@
 use std::{
     collections::HashMap,
     future::Future,
-    path::PathBuf,
     pin::Pin,
     sync::{Arc, LazyLock},
 };
@@ -233,7 +232,7 @@ pub struct AppState {
     pub current_connections: Arc<RwLock<Vec<ApiConnection>>>,
     pub pending_player_sessions: Arc<RwLock<HashMap<u64, u64>>>,
     pub current_sessions: Arc<RwLock<Vec<ApiSession>>>,
-    pub default_download_location: Arc<std::sync::RwLock<Option<PathBuf>>>,
+    pub default_download_location: Arc<std::sync::RwLock<Option<String>>>,
     #[allow(clippy::type_complexity)]
     pub on_current_sessions_updated_listeners: Vec<
         Arc<Box<dyn Fn(&[ApiSession]) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>>,
@@ -531,18 +530,27 @@ impl AppState {
         Some(binding)
     }
 
+    /// # Errors
+    ///
+    /// * If the persistence fails
+    ///
     /// # Panics
     ///
     /// * If the `default_download_location` `RwLock` is poisoned
-    pub fn set_default_download_location(&self, path: PathBuf) {
+    pub async fn set_default_download_location(&self, path: String) -> Result<(), AppStateError> {
+        self.persist_default_download_location(path.as_str())
+            .await?;
+
         *self.default_download_location.write().unwrap() = Some(path);
+
+        Ok(())
     }
 
     /// # Panics
     ///
     /// * If the `default_download_location` `RwLock` is poisoned
     #[must_use]
-    pub fn get_default_download_location(&self) -> Option<PathBuf> {
+    pub fn get_default_download_location(&self) -> Option<String> {
         self.default_download_location.read().unwrap().clone()
     }
 

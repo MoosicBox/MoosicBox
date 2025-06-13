@@ -94,75 +94,91 @@ pub async fn convert_state(app_state: &moosicbox_app_state::AppState) -> state::
 pub fn init() -> Router {
     moosicbox_player::on_playback_event(events::on_playback_event);
 
-    let router = Router::new()
-        .with_static_route(&["/", "/home"], |_| async {
-            moosicbox_app_native_ui::home(&convert_state(&STATE).await)
-        })
-        .with_route_result("/downloads", |req| async {
-            routes::downloads_route(req).await
-        })
-        .with_route_result("/settings", |req| async {
-            routes::settings_route(req).await
-        })
-        .with_route_result("/settings/connections", |req| async {
-            routes::settings_connections_route(req).await
-        })
-        .with_route_result("/settings/new-connection", |req| async {
-            routes::settings_new_connection_route(req).await
-        })
-        .with_route_result("/settings/select-connection", |req| async {
-            routes::settings_select_connection_route(req).await
-        })
-        .with_no_content_result("/settings/connection-name", |req| async {
-            routes::settings_connection_name_route(req).await
-        })
-        .with_route_result("/settings/music-api-settings", |req| async {
-            routes::settings_music_api_settings_route(req).await
-        })
-        .with_route_result("/audio-zones", |req| async {
-            routes::audio_zones_route(req).await
-        })
-        .with_route_result("/playback-sessions", |req| async {
-            routes::playback_sessions_route(req).await
-        })
-        .with_static_route_result(
-            "/albums",
-            |req| async move { routes::albums_route(req).await },
-        )
-        .with_route_result("/albums-list-start", |req| async move {
-            routes::albums_list_start_route(req).await
-        })
-        .with_route_result("/albums-list", |req| async move {
-            routes::albums_list_route(req).await
-        })
-        .with_route_result(
-            "/artists",
-            |req| async move { routes::artist_route(req).await },
-        )
-        .with_route_result("/artists/albums-list", |req| async move {
-            routes::artist_albums_list_route(req).await
-        })
-        .with_route_result("/music-api/scan", |req| async move {
-            routes::music_api_scan_route(req).await
-        })
-        .with_route_result("/music-api/enable-scan-origin", |req| async move {
-            routes::music_api_enable_scan_origin_route(req).await
-        })
-        .with_route_result("/music-api/auth", |req| async move {
-            routes::music_api_auth_route(req).await
-        })
-        .with_no_content_result(
-            "/search",
-            |req| async move { routes::search_route(req).await },
-        )
-        .with_no_content_result(
-            "/download",
-            |req| async move { routes::download(req).await },
-        )
-        .with_route_result(
-            "/library",
-            |req| async move { routes::library_route(req).await },
-        );
+    let router =
+        Router::new()
+            .with_static_route(&["/", "/home"], |_| async {
+                moosicbox_app_native_ui::home(&convert_state(&STATE).await)
+            })
+            .with_route_result("/downloads", |req| async {
+                routes::downloads_route(req).await
+            })
+            .with_route_result("/settings", |req| async {
+                routes::settings_route(req).await
+            })
+            .with_route_result("/settings/connections", |req| async {
+                routes::settings_connections_route(req).await
+            })
+            .with_route_result("/settings/new-connection", |req| async {
+                routes::settings_new_connection_route(req).await
+            })
+            .with_route_result("/settings/select-connection", |req| async {
+                routes::settings_select_connection_route(req).await
+            })
+            .with_no_content_result("/settings/connection-name", |req| async {
+                routes::settings_connection_name_route(req).await
+            })
+            .with_route_result("/settings/music-api-settings", |req| async {
+                routes::settings_music_api_settings_route(req).await
+            })
+            .with_route_result("/settings/download-settings", |req| async {
+                routes::settings_download_settings_route(req).await
+            })
+            .with_route_result("/settings/downloads/download-location", |req| async move {
+                routes::settings_downloads_download_location_route(req).await
+            })
+            .with_route_result(
+                "/settings/downloads/default-download-location",
+                |req| async move {
+                    routes::settings_downloads_default_download_location_route(req).await
+                },
+            )
+            .with_route_result("/settings/scan-settings", |req| async {
+                routes::settings_scan_settings_route(req).await
+            })
+            .with_route_result("/audio-zones", |req| async {
+                routes::audio_zones_route(req).await
+            })
+            .with_route_result("/playback-sessions", |req| async {
+                routes::playback_sessions_route(req).await
+            })
+            .with_static_route_result(
+                "/albums",
+                |req| async move { routes::albums_route(req).await },
+            )
+            .with_route_result("/albums-list-start", |req| async move {
+                routes::albums_list_start_route(req).await
+            })
+            .with_route_result("/albums-list", |req| async move {
+                routes::albums_list_route(req).await
+            })
+            .with_route_result(
+                "/artists",
+                |req| async move { routes::artist_route(req).await },
+            )
+            .with_route_result("/artists/albums-list", |req| async move {
+                routes::artist_albums_list_route(req).await
+            })
+            .with_route_result("/music-api/scan", |req| async move {
+                routes::music_api_scan_route(req).await
+            })
+            .with_route_result("/music-api/enable-scan-origin", |req| async move {
+                routes::music_api_enable_scan_origin_route(req).await
+            })
+            .with_route_result("/music-api/auth", |req| async move {
+                routes::music_api_auth_route(req).await
+            })
+            .with_no_content_result(
+                "/search",
+                |req| async move { routes::search_route(req).await },
+            )
+            .with_no_content_result(
+                "/download",
+                |req| async move { routes::download(req).await },
+            )
+            .with_route_result(
+                "/library",
+                |req| async move { routes::library_route(req).await },
+            );
 
     moosicbox_assert::assert_or_panic!(ROUTER.set(router.clone()).is_ok(), "Already set ROUTER");
 

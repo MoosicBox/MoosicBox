@@ -6,17 +6,17 @@ use hyperchad::{
     transformer::html::ParseError,
 };
 use maud::Markup;
-use moosicbox_app_models::{Connection, MusicApiSettings};
+use moosicbox_app_models::{Connection, DownloadSettings, MusicApiSettings, ScanSettings};
 use moosicbox_app_native_ui::{
     downloads::DownloadTab,
     formatting::classify_name,
     search::{results_content, results_content_id},
-    settings::AuthState,
+    settings::{AuthState, download_settings_content, scan_settings_content},
     state::State,
 };
 use moosicbox_app_state::AppStateError;
 use moosicbox_audio_zone_models::ApiAudioZoneWithSession;
-use moosicbox_downloader::api::models::ApiDownloadTask;
+use moosicbox_downloader::api::models::{ApiDownloadLocation, ApiDownloadTask};
 use moosicbox_music_api::{SourceToMusicApi as _, profiles::PROFILES};
 use moosicbox_music_api_api::models::{ApiMusicApi, AuthValues};
 use moosicbox_music_api_models::search::api::ApiSearchResultsResponse;
@@ -25,6 +25,7 @@ use moosicbox_music_models::{
     api::{ApiAlbum, ApiArtist},
 };
 use moosicbox_paging::Page;
+use moosicbox_scan_models::api::ApiScanPath;
 use moosicbox_session_models::ApiSession;
 use serde::Deserialize;
 use switchy::http::models::Method;
@@ -1002,6 +1003,7 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct SearchRequest {
     query: String,
 }
@@ -1150,4 +1152,143 @@ pub async fn library_route(req: RouteRequest) -> Result<Content, RouteError> {
     }
 
     Ok(Content::try_view("Success!")?)
+}
+
+pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let response = CLIENT
+        .get(&format!("{host}/downloader/download-locations"))
+        .header("moosicbox-profile", PROFILE)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    let locations: Page<ApiDownloadLocation> = response.json().await?;
+
+    let locations = locations.into_items();
+    let locations = locations
+        .into_iter()
+        .map(|x| (x.id, x.path))
+        .collect::<Vec<_>>();
+
+    let settings = DownloadSettings {
+        download_locations: locations,
+        default_download_location: STATE.get_default_download_location(),
+    };
+
+    let markup = download_settings_content(&settings);
+
+    Ok(Content::try_partial_view(
+        "settings-download-settings-section",
+        markup,
+    )?)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ScanDownloadLocationRequest {
+    location: String,
+}
+
+pub async fn settings_downloads_download_location_route(
+    req: RouteRequest,
+) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Delete) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
+    let request = req.parse_form::<ScanDownloadLocationRequest>()?;
+    let location = &request.location;
+
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let response = CLIENT
+        .delete(&format!("{host}/downloader/download-locations"))
+        .header("moosicbox-profile", PROFILE)
+        .query_param("path", location)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    Ok(Content::try_view("Success!")?)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ScanDefaultDownloadLocationRequest {
+    location: String,
+}
+
+pub async fn settings_downloads_default_download_location_route(
+    req: RouteRequest,
+) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Post) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
+    let request = req.parse_form::<ScanDefaultDownloadLocationRequest>()?;
+    let location = request.location;
+
+    STATE.set_default_download_location(location).await?;
+
+    Ok(Content::try_view("Success!")?)
+}
+
+pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Get) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let response = CLIENT
+        .get(&format!("{host}/scan/scan-paths"))
+        .header("moosicbox-profile", PROFILE)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    let paths: Vec<ApiScanPath> = response.json().await?;
+    let paths = paths.into_iter().map(|x| x.path).collect::<Vec<_>>();
+
+    let settings = ScanSettings { scan_paths: paths };
+
+    let markup = scan_settings_content(&settings);
+
+    Ok(Content::try_partial_view(
+        "settings-scan-settings-section",
+        markup,
+    )?)
 }

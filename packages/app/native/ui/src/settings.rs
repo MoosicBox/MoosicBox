@@ -2,7 +2,9 @@
 
 use hyperchad::transformer_models::{AlignItems, JustifyContent, LayoutDirection, TextAlign};
 use maud::{Markup, html};
-use moosicbox_app_models::{AuthMethod, Connection, MusicApiSettings};
+use moosicbox_app_models::{
+    AuthMethod, Connection, DownloadSettings, MusicApiSettings, ScanSettings,
+};
 use strum::{AsRefStr, EnumString};
 
 use crate::{formatting::classify_name, page, pre_escaped, state::State};
@@ -66,20 +68,105 @@ pub fn settings_page_content(
 
             hr;
 
-            section {
-                h2 { "Scan Settings" }
-                div { "Scan settings content will go here" }
+            section hx-get=(pre_escaped!("/settings/download-settings")) hx-trigger="load" {
+                div id="settings-download-settings-section" {}
             }
 
             hr;
 
-            section {
-                h2 { "Download Settings" }
-                div { "Download settings content will go here" }
+            section hx-get=(pre_escaped!("/settings/scan-settings")) hx-trigger="load" {
+                div id="settings-scan-settings-section" {}
             }
 
-            div hx-get=(pre_escaped!("/settings/music-api-settings")) hx-trigger="load" {
+            hr;
+
+            section hx-get=(pre_escaped!("/settings/music-api-settings")) hx-trigger="load" {
                 (music_api_settings_section(&music_api_settings))
+            }
+        }
+    }
+}
+
+#[must_use]
+pub fn scan_settings_content(scan_settings: &ScanSettings) -> Markup {
+    html! {
+        div id="settings-scan-settings-section" {
+            h2 { "Scan Settings" }
+            h3 { "Scan paths:" }
+            @if scan_settings.scan_paths.is_empty() {
+                "No scan paths"
+            } @else {
+                ul {
+                    @for path in &scan_settings.scan_paths {
+                        li {
+                            (path)
+                            form hx-delete=(pre_escaped!("/settings/scan/download-location")) {
+                                input type="hidden" name="location" value=(path);
+                                button
+                                    type="submit"
+                                    sx-border-radius=(5)
+                                    sx-background="#111"
+                                    sx-border="2, #222"
+                                    sx-padding-x=(10)
+                                    sx-padding-y=(5)
+                                {
+                                    "Delete"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[must_use]
+pub fn download_settings_content(download_settings: &DownloadSettings) -> Markup {
+    html! {
+        div id="settings-download-settings-section" {
+            h2 { "Scan Settings" }
+            h3 { "Download locations:" }
+            @if download_settings.download_locations.is_empty() {
+                "No download locations"
+            } @else {
+                ul {
+                    @for (_id, location) in &download_settings.download_locations {
+                        @let is_default = download_settings.default_download_location.as_ref().is_some_and(|x| x == location);
+
+                        li {
+                            (location)
+                            form hx-delete=(pre_escaped!("/settings/download/download-location")) {
+                                input type="hidden" name="location" value=(location);
+                                button
+                                    type="submit"
+                                    sx-border-radius=(5)
+                                    sx-background="#111"
+                                    sx-border="2, #222"
+                                    sx-padding-x=(10)
+                                    sx-padding-y=(5)
+                                {
+                                    "Delete"
+                                }
+                            }
+                            @if !is_default {
+                                form hx-post=(pre_escaped!("/settings/download/default-download-location")) {
+                                    input type="hidden" name="location" value=(location);
+                                    button
+                                        type="submit"
+                                        sx-border-radius=(5)
+                                        sx-background="#111"
+                                        sx-border="2, #222"
+                                        sx-padding-x=(10)
+                                        sx-padding-y=(5)
+                                    {
+                                        "Set as default"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
