@@ -1200,7 +1200,7 @@ pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Conte
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct ScanDownloadLocationRequest {
+pub struct DownloadsDownloadLocationRequest {
     location: String,
 }
 
@@ -1211,7 +1211,7 @@ pub async fn settings_downloads_download_location_route(
         return Err(RouteError::UnsupportedMethod);
     }
 
-    let request = req.parse_form::<ScanDownloadLocationRequest>()?;
+    let request = req.parse_form::<DownloadsDownloadLocationRequest>()?;
     let location = &request.location;
 
     let state = convert_state(&STATE).await;
@@ -1238,7 +1238,7 @@ pub async fn settings_downloads_download_location_route(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct ScanDefaultDownloadLocationRequest {
+pub struct DownloadsDefaultDownloadLocationRequest {
     location: String,
 }
 
@@ -1249,7 +1249,7 @@ pub async fn settings_downloads_default_download_location_route(
         return Err(RouteError::UnsupportedMethod);
     }
 
-    let request = req.parse_form::<ScanDefaultDownloadLocationRequest>()?;
+    let request = req.parse_form::<DownloadsDefaultDownloadLocationRequest>()?;
     let location = request.location;
 
     STATE.set_default_download_location(location).await?;
@@ -1291,4 +1291,40 @@ pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, 
         "settings-scan-settings-section",
         markup,
     )?)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ScanScanPathRequest {
+    path: String,
+}
+
+pub async fn settings_scan_scan_path_route(req: RouteRequest) -> Result<Content, RouteError> {
+    if !matches!(req.method, Method::Delete) {
+        return Err(RouteError::UnsupportedMethod);
+    }
+
+    let request = req.parse_form::<ScanScanPathRequest>()?;
+    let path = &request.path;
+
+    let state = convert_state(&STATE).await;
+    let Some(connection) = &state.connection else {
+        return Err(RouteError::MissingConnection);
+    };
+    let host = &connection.api_url;
+
+    let response = CLIENT
+        .delete(&format!("{host}/scan/scan-paths"))
+        .header("moosicbox-profile", PROFILE)
+        .query_param("path", path)
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let message = format!("Error: {} {}", response.status(), response.text().await?);
+        log::error!("{message}");
+        return Err(RouteError::RouteFailed(message.into()));
+    }
+
+    Ok(Content::try_view("Success!")?)
 }

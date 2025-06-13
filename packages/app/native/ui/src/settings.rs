@@ -100,8 +100,8 @@ pub fn scan_settings_content(scan_settings: &ScanSettings) -> Markup {
                     @for path in &scan_settings.scan_paths {
                         li {
                             (path)
-                            form hx-delete=(pre_escaped!("/settings/scan/download-location")) {
-                                input type="hidden" name="location" value=(path);
+                            form hx-delete=(pre_escaped!("/settings/scan/scan-path")) {
+                                input type="hidden" name="path" value=(path);
                                 button
                                     type="submit"
                                     sx-border-radius=(5)

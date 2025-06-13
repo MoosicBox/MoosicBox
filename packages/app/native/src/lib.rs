@@ -135,6 +135,9 @@ pub fn init() -> Router {
             .with_route_result("/settings/scan-settings", |req| async {
                 routes::settings_scan_settings_route(req).await
             })
+            .with_route_result("/settings/scan/scan-path", |req| async move {
+                routes::settings_scan_scan_path_route(req).await
+            })
             .with_route_result("/audio-zones", |req| async {
                 routes::audio_zones_route(req).await
             })
