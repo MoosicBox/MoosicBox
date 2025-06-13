@@ -450,9 +450,7 @@ export namespace Api {
         path: string;
     }
 
-    export interface ScanPaths {
-        paths: string[];
-    }
+    export type ScanPaths = { path: string }[];
 
     export interface Profile {
         name: string;

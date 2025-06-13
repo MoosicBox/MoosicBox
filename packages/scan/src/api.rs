@@ -54,6 +54,7 @@ pub fn bind_services<
     ),
     components(schemas(
         ScanOrigin,
+        crate::models::api::ApiScanPath,
     ))
 )]
 pub struct Api;
@@ -346,7 +347,7 @@ pub struct GetScanPathsQuery {}
             (
                 status = 200,
                 description = "The enabled local scan paths",
-                body = Value,
+                body = Vec<crate::models::api::ApiScanPath>,
             )
         )
     )
@@ -356,12 +357,15 @@ pub async fn get_scan_paths_endpoint(
     _query: web::Query<GetScanPathsQuery>,
     db: LibraryDatabase,
     _: NonTunnelRequestAuthorized,
-) -> Result<Json<Value>> {
+) -> Result<Json<Vec<crate::models::api::ApiScanPath>>> {
     let paths = crate::get_scan_paths(&db)
         .await
-        .map_err(|e| ErrorInternalServerError(format!("Failed to get scan paths: {e:?}")))?;
+        .map_err(|e| ErrorInternalServerError(format!("Failed to get scan paths: {e:?}")))?
+        .into_iter()
+        .map(|x| crate::models::api::ApiScanPath { path: x })
+        .collect();
 
-    Ok(Json(serde_json::json!({"paths": paths})))
+    Ok(Json(paths))
 }
 
 #[cfg(feature = "local")]

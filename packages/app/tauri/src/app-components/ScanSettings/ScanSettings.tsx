@@ -33,14 +33,16 @@ export function bundledScanSettingsRender() {
         await Promise.all([
             api.startScan(['LOCAL']),
             (async () => {
-                const { paths } = await api.getScanPaths();
+                const pathsResponse = await api.getScanPaths();
+                const paths = pathsResponse.map((x) => x.path);
                 setFolders(paths);
             })(),
         ]);
     }
 
     onMount(async () => {
-        const { paths } = await api.getScanPaths();
+        const pathsResponse = await api.getScanPaths();
+        const paths = pathsResponse.map((x) => x.path);
         setFolders(paths);
     });
 
