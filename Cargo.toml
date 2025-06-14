@@ -165,7 +165,10 @@ inherits  = "dev"
 opt-level = 0
 
 [workspace.package]
-edition = "2024"
+authors    = ["Braden Steffaniak"]
+edition    = "2024"
+license    = "MPL-2.0"
+repository = "https://github.com/MoosicBox/MoosicBox"
 
 [workspace.dependencies]
 # Internal MoosicBox

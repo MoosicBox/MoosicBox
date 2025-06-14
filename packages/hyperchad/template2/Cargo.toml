@@ -1,14 +1,14 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["development-tools", "gui", "web-programming"]
 description = "HyperChad template package"
-edition     = "2024"
+edition     = { workspace = true }
 include     = ["src", "tests"]
 keywords    = ["hyperchad"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "hyperchad_template2"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.0"
 
 [package.metadata.workspaces]
