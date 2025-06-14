@@ -493,6 +493,68 @@ impl std::fmt::Display for Number {
     }
 }
 
+impl From<f32> for Number {
+    fn from(x: f32) -> Self {
+        Self::Real(x)
+    }
+}
+
+impl From<f64> for Number {
+    fn from(x: f64) -> Self {
+        #[allow(clippy::cast_possible_truncation)]
+        Self::Real(x as f32)
+    }
+}
+
+impl From<i8> for Number {
+    fn from(x: i8) -> Self {
+        Self::Integer(x.into())
+    }
+}
+
+impl From<i16> for Number {
+    fn from(x: i16) -> Self {
+        Self::Integer(x.into())
+    }
+}
+
+impl From<i32> for Number {
+    fn from(x: i32) -> Self {
+        Self::Integer(x.into())
+    }
+}
+
+impl From<i64> for Number {
+    fn from(x: i64) -> Self {
+        Self::Integer(x)
+    }
+}
+
+impl From<u8> for Number {
+    fn from(x: u8) -> Self {
+        Self::Integer(x.into())
+    }
+}
+
+impl From<u16> for Number {
+    fn from(x: u16) -> Self {
+        Self::Integer(x.into())
+    }
+}
+
+impl From<u32> for Number {
+    fn from(x: u32) -> Self {
+        Self::Integer(x.into())
+    }
+}
+
+#[allow(clippy::fallible_impl_from)]
+impl From<u64> for Number {
+    fn from(x: u64) -> Self {
+        Self::Integer(x.try_into().unwrap())
+    }
+}
+
 impl Default for Number {
     fn default() -> Self {
         Self::Integer(0)
@@ -1683,6 +1745,16 @@ impl TryFrom<hyperchad_template::Markup> for Container {
 
     fn try_from(value: hyperchad_template::Markup) -> Result<Self, Self::Error> {
         value.into_string().try_into()
+    }
+}
+
+impl From<Vec<Self>> for Container {
+    fn from(value: Vec<Self>) -> Self {
+        Self {
+            element: Element::Div,
+            children: value,
+            ..Default::default()
+        }
     }
 }
 

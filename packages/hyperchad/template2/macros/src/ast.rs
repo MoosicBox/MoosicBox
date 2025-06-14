@@ -45,8 +45,15 @@ impl<E: ToTokens> ToTokens for Markups<E> {
 #[derive(Debug, Clone)]
 pub enum Markup<E> {
     Block(Block<E>),
-    Lit(HtmlLit),
-    Splice { paren_token: Paren, expr: Expr },
+    Lit(ContainerLit),
+    Splice {
+        paren_token: Paren,
+        expr: Expr,
+    },
+    BraceSplice {
+        brace_token: Brace,
+        items: Vec<Markup<NoElement>>,
+    },
     Element(E),
     ControlFlow(ControlFlow<E>),
     Semi(Semi),
@@ -75,6 +82,117 @@ impl<E: MaybeElement> Markup<E> {
         let lookahead = input.lookahead1();
 
         if lookahead.peek(Brace) {
+            // Check if this is a brace-wrapped expression {expr} or a regular block
+            let fork = input.fork();
+            let content;
+            let _brace_token = braced!(content in fork);
+
+            // First check if this looks like a block with control flow or multiple statements
+            // by looking for @ symbols or semicolons
+            let mut is_block = false;
+            let temp_fork = content.fork();
+            while !temp_fork.is_empty() {
+                if temp_fork.peek(At) || temp_fork.peek(Semi) {
+                    is_block = true;
+                    break;
+                }
+                // Try to advance past one token to continue checking
+                if temp_fork.parse::<proc_macro2::TokenTree>().is_err() {
+                    break;
+                }
+            }
+
+            if is_block {
+                // This is a regular block (contains control flow or multiple statements)
+                return input.diagnostic_parse(diagnostics).map(Self::Block);
+            }
+
+            // Try to parse as a single expression first
+            if let Ok(expr) = content.parse::<Expr>() {
+                if content.is_empty() {
+                    // Successfully parsed as a single expression
+                    // Check if it's a function call pattern like "literal"(expression)
+                    if let syn::Expr::Call(call) = &expr {
+                        if let syn::Expr::Lit(syn::ExprLit {
+                            lit: syn::Lit::Str(_),
+                            ..
+                        }) = call.func.as_ref()
+                        {
+                            // This is a "literal"(args...) pattern - break it down for concatenation
+                            let content;
+                            let brace_token = braced!(content in input);
+                            let expr = content.parse::<Expr>()?;
+
+                            if let syn::Expr::Call(call) = expr {
+                                let mut items = vec![];
+
+                                // Add the function (string literal) as a literal item
+                                if let syn::Expr::Lit(lit_expr) = call.func.as_ref() {
+                                    items.push(Markup::Lit(ContainerLit {
+                                        lit: lit_expr.lit.clone(),
+                                    }));
+                                }
+
+                                // Add each argument as an expression item
+                                for arg in call.args {
+                                    items.push(Markup::Splice {
+                                        paren_token: Paren::default(),
+                                        expr: arg,
+                                    });
+                                }
+
+                                return Ok(Self::BraceSplice { brace_token, items });
+                            }
+                        }
+                    }
+
+                    // Regular single expression - wrap as BraceSplice with one item
+                    let content;
+                    let brace_token = braced!(content in input);
+                    let expr = content.parse::<Expr>()?;
+
+                    return Ok(Self::BraceSplice {
+                        brace_token,
+                        items: vec![Markup::Splice {
+                            paren_token: Paren::default(),
+                            expr,
+                        }],
+                    });
+                }
+            }
+
+            // If single expression parsing failed, try to parse as a sequence of literals and expressions
+            // This handles patterns like "literal1"(expr1)"literal2"(expr2)
+            let content;
+            let brace_token = braced!(content in input);
+            let mut items = vec![];
+
+            while !content.is_empty() {
+                if content.peek(syn::Lit) {
+                    // Parse a literal
+                    let lit: syn::Lit = content.parse()?;
+                    items.push(Markup::Lit(ContainerLit { lit }));
+                } else if content.peek(Paren) {
+                    // Parse a parenthesized expression
+                    let inner_content;
+                    let _paren_token = parenthesized!(inner_content in content);
+                    let expr = inner_content.parse()?;
+                    items.push(Markup::Splice {
+                        paren_token: Paren::default(),
+                        expr,
+                    });
+                } else {
+                    // If we can't parse as literal or parenthesized expression,
+                    // this might be a complex block - fall back to block parsing
+                    return input.diagnostic_parse(diagnostics).map(Self::Block);
+                }
+            }
+
+            if !items.is_empty() {
+                return Ok(Self::BraceSplice { brace_token, items });
+            }
+
+            // This is a regular block (multiple statements, control flow, etc.)
             input.diagnostic_parse(diagnostics).map(Self::Block)
         } else if lookahead.peek(Lit) {
             input.diagnostic_parse(diagnostics).map(Self::Lit)
@@ -129,6 +247,13 @@ impl<E: ToTokens> ToTokens for Markup<E> {
                     expr.to_tokens(tokens);
                 });
             }
+            Self::BraceSplice { brace_token, items } => {
+                brace_token.surround(tokens, |tokens| {
+                    for item in items {
+                        item.to_tokens(tokens);
+                    }
+                });
+            }
             Self::Element(element) => element.to_tokens(tokens),
             Self::ControlFlow(control_flow) => control_flow.to_tokens(tokens),
             Self::Semi(semi) => semi.to_tokens(tokens),
@@ -168,31 +293,31 @@ impl ToTokens for NoElement {
 }
 
 #[derive(Debug, Clone)]
-pub struct Element {
-    pub name: Option<HtmlName>,
-    pub attrs: Vec<Attribute>,
+pub struct ContainerElement {
+    pub name: Option<ElementName>,
+    pub attrs: Vec<ContainerAttribute>,
     pub body: ElementBody,
 }
 
-impl From<NoElement> for Element {
+impl From<NoElement> for ContainerElement {
     fn from(value: NoElement) -> Self {
         match value {}
     }
 }
 
-impl MaybeElement for Element {
+impl MaybeElement for ContainerElement {
     fn should_parse(
         lookahead: &Lookahead1<'_>,
     ) -> Option<fn(ParseStream, &mut Vec<Diagnostic>) -> syn::Result<Self>> {
         if lookahead.peek(Ident::peek_any) || lookahead.peek(Dot) || lookahead.peek(Pound) {
-            Some(Element::diagnostic_parse)
+            Some(ContainerElement::diagnostic_parse)
         } else {
             None
         }
     }
 }
 
-impl DiagnosticParse for Element {
+impl DiagnosticParse for ContainerElement {
     fn diagnostic_parse(
         input: ParseStream,
         diagnostics: &mut Vec<Diagnostic>,
@@ -214,7 +339,7 @@ impl DiagnosticParse for Element {
                 {
                     let attr = input.diagnostic_parse(diagnostics)?;
 
-                    if let Attribute::Id { .. } = attr {
+                    if let ContainerAttribute::Id { .. } = attr {
                         if id_pushed {
                             return Err(Error::new_spanned(
                                 attr,
@@ -248,7 +373,7 @@ impl DiagnosticParse for Element {
     }
 }
 
-impl ToTokens for Element {
+impl ToTokens for ContainerElement {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         if let Some(name) = &self.name {
             name.to_tokens(tokens);
@@ -260,10 +385,13 @@ impl ToTokens for Element {
     }
 }
 
+// Re-export as Element for compatibility
+pub type Element = ContainerElement;
+
 #[derive(Debug, Clone)]
 pub enum ElementBody {
     Void(Semi),
-    Block(Block<Element>),
+    Block(Block<ContainerElement>),
 }
 
 impl DiagnosticParse for ElementBody {
@@ -331,23 +459,23 @@ impl<E: ToTokens> ToTokens for Block<E> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Attribute {
+pub enum ContainerAttribute {
     Class {
         dot_token: Dot,
-        name: HtmlNameOrMarkup,
+        name: ContainerNameOrMarkup,
         toggler: Option<Toggler>,
     },
     Id {
         pound_token: Pound,
-        name: HtmlNameOrMarkup,
+        name: ContainerNameOrMarkup,
     },
     Named {
-        name: HtmlName,
+        name: AttributeName,
         attr_type: AttributeType,
     },
 }
 
-impl DiagnosticParse for Attribute {
+impl DiagnosticParse for ContainerAttribute {
     fn diagnostic_parse(
         input: ParseStream,
         diagnostics: &mut Vec<Diagnostic>,
@@ -374,7 +502,7 @@ impl DiagnosticParse for Attribute {
                 name: input.diagnostic_parse(diagnostics)?,
             })
         } else {
-            let name = input.diagnostic_parse::<HtmlName>(diagnostics)?;
+            let name = input.diagnostic_parse::<AttributeName>(diagnostics)?;
 
             if input.peek(Question) {
                 input.parse::<Question>()?;
@@ -401,7 +529,7 @@ impl DiagnosticParse for Attribute {
     }
 }
 
-impl ToTokens for Attribute {
+impl ToTokens for ContainerAttribute {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Class {
@@ -428,43 +556,43 @@ impl ToTokens for Attribute {
 }
 
 #[derive(Debug, Clone)]
-pub enum HtmlNameOrMarkup {
-    HtmlName(HtmlName),
+pub enum ContainerNameOrMarkup {
+    Name(AttributeName),
     Markup(Markup<NoElement>),
 }
 
-impl DiagnosticParse for HtmlNameOrMarkup {
+impl DiagnosticParse for ContainerNameOrMarkup {
     fn diagnostic_parse(
         input: ParseStream,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> syn::Result<Self> {
         if input.peek(Ident::peek_any) || input.peek(Lit) {
-            input.diagnostic_parse(diagnostics).map(Self::HtmlName)
+            input.diagnostic_parse(diagnostics).map(Self::Name)
         } else {
             input.diagnostic_parse(diagnostics).map(Self::Markup)
         }
     }
 }
 
-impl Parse for HtmlNameOrMarkup {
+impl Parse for ContainerNameOrMarkup {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Self::diagnostic_parse(input, &mut Vec::new())
     }
 }
 
-impl ToTokens for HtmlNameOrMarkup {
+impl ToTokens for ContainerNameOrMarkup {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            Self::HtmlName(name) => name.to_tokens(tokens),
+            Self::Name(name) => name.to_tokens(tokens),
             Self::Markup(markup) => markup.to_tokens(tokens),
         }
     }
 }
 
-impl Display for HtmlNameOrMarkup {
+impl Display for ContainerNameOrMarkup {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::HtmlName(name) => name.fmt(f),
+            Self::Name(name) => name.fmt(f),
             Self::Markup(markup) => markup.to_token_stream().fmt(f),
         }
     }
@@ -533,11 +661,45 @@ impl ToTokens for AttributeType {
 }
 
 #[derive(Debug, Clone)]
-pub struct HtmlName {
-    pub name: Punctuated<HtmlNameFragment, HtmlNamePunct>,
+pub struct ElementName {
+    pub name: Ident,
 }
 
-impl DiagnosticParse for HtmlName {
+impl DiagnosticParse for ElementName {
+    fn diagnostic_parse(
+        input: ParseStream,
+        _diagnostics: &mut Vec<Diagnostic>,
+    ) -> syn::Result<Self> {
+        Ok(Self {
+            name: input.call(Ident::parse_any)?,
+        })
+    }
+}
+
+impl Parse for ElementName {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Self::diagnostic_parse(input, &mut Vec::new())
+    }
+}
+
+impl ToTokens for ElementName {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.name.to_tokens(tokens);
+    }
+}
+
+impl Display for ElementName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.name.fmt(f)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AttributeName {
+    pub name: Punctuated<AttributeNameFragment, AttributeNamePunct>,
+}
+
+impl DiagnosticParse for AttributeName {
     fn diagnostic_parse(
         input: ParseStream,
         diagnostics: &mut Vec<Diagnostic>,
@@ -563,19 +725,19 @@ impl DiagnosticParse for HtmlName {
     }
 }
 
-impl Parse for HtmlName {
+impl Parse for AttributeName {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         Self::diagnostic_parse(input, &mut Vec::new())
     }
 }
 
-impl ToTokens for HtmlName {
+impl ToTokens for AttributeName {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.name.to_tokens(tokens);
     }
 }
 
-impl Display for HtmlName {
+impl Display for AttributeName {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for pair in self.name.pairs() {
             match pair {
@@ -594,14 +756,14 @@ impl Display for HtmlName {
 }
 
 #[derive(Debug, Clone)]
-pub enum HtmlNameFragment {
+pub enum AttributeNameFragment {
     Ident(Ident),
     LitInt(LitInt),
     LitStr(LitStr),
     Empty,
 }
 
-impl DiagnosticParse for HtmlNameFragment {
+impl DiagnosticParse for AttributeNameFragment {
     fn diagnostic_parse(
         input: ParseStream,
         _diagnostics: &mut Vec<Diagnostic>,
@@ -622,7 +784,7 @@ impl DiagnosticParse for HtmlNameFragment {
     }
 }
 
-impl ToTokens for HtmlNameFragment {
+impl ToTokens for AttributeNameFragment {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Ident(ident) => ident.to_tokens(tokens),
@@ -633,7 +795,7 @@ impl ToTokens for HtmlNameFragment {
     }
 }
 
-impl Display for HtmlNameFragment {
+impl Display for AttributeNameFragment {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Ident(ident) => ident.fmt(f),
@@ -645,11 +807,11 @@ impl Display for HtmlNameFragment {
 }
 
 #[derive(Debug, Clone)]
-pub struct HtmlLit {
-    pub lit: LitStr,
+pub struct ContainerLit {
+    pub lit: syn::Lit,
 }
 
-impl DiagnosticParse for HtmlLit {
+impl DiagnosticParse for ContainerLit {
     fn diagnostic_parse(
         input: ParseStream,
         diagnostics: &mut Vec<Diagnostic>,
@@ -658,45 +820,29 @@ impl DiagnosticParse for HtmlLit {
 
         if lookahead.peek(Lit) {
             let lit = input.parse()?;
-            match lit {
-                Lit::Str(lit) => Ok(Self { lit }),
-                Lit::Int(lit) => {
-                    diagnostics.push(
-                        lit.span()
-                            .error(format!(r#"literal must be double-quoted: `"{lit}"`"#)),
-                    );
-                    Ok(Self {
-                        lit: LitStr::new("", lit.span()),
-                    })
-                }
-                Lit::Float(lit) => {
-                    diagnostics.push(
-                        lit.span()
-                            .error(format!(r#"literal must be double-quoted: `"{lit}"`"#)),
-                    );
-                    Ok(Self {
-                        lit: LitStr::new("", lit.span()),
-                    })
-                }
-                Lit::Char(lit) => {
-                    diagnostics.push(lit.span().error(format!(
+            match &lit {
+                Lit::Str(_) => Ok(Self { lit }),
+                Lit::Int(_) => Ok(Self { lit }),
+                Lit::Float(_) => Ok(Self { lit }),
+                Lit::Char(lit_char) => {
+                    diagnostics.push(lit_char.span().error(format!(
                         r#"literal must be double-quoted: `"{}"`"#,
-                        lit.value()
+                        lit_char.value()
                     )));
                     Ok(Self {
-                        lit: LitStr::new("", lit.span()),
+                        lit: Lit::Str(LitStr::new("", lit_char.span())),
                     })
                 }
                 Lit::Bool(_) => {
                     // diagnostic handled earlier with more information
                     Ok(Self {
-                        lit: LitStr::new("", lit.span()),
+                        lit: Lit::Str(LitStr::new("", lit.span())),
                     })
                 }
                 _ => {
-                    diagnostics.push(lit.span().error("expected string"));
+                    diagnostics.push(lit.span().error("expected string, integer, or float"));
                     Ok(Self {
-                        lit: LitStr::new("", lit.span()),
+                        lit: Lit::Str(LitStr::new("", lit.span())),
                     })
                 }
             }
@@ -706,25 +852,30 @@ impl DiagnosticParse for HtmlLit {
     }
 }
 
-impl ToTokens for HtmlLit {
+impl ToTokens for ContainerLit {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.lit.to_tokens(tokens);
     }
 }
 
-impl Display for HtmlLit {
+impl Display for ContainerLit {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.lit.value().fmt(f)
+        match &self.lit {
+            Lit::Str(lit) => lit.value().fmt(f),
+            Lit::Int(lit) => lit.fmt(f),
+            Lit::Float(lit) => lit.fmt(f),
+            _ => self.lit.to_token_stream().fmt(f),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum HtmlNamePunct {
+pub enum AttributeNamePunct {
     Colon(Colon),
     Hyphen(Minus),
 }
 
-impl DiagnosticParse for HtmlNamePunct {
+impl DiagnosticParse for AttributeNamePunct {
     fn diagnostic_parse(input: ParseStream, _: &mut Vec<Diagnostic>) -> syn::Result<Self> {
         let lookahead = input.lookahead1();
 
@@ -738,7 +889,7 @@ impl DiagnosticParse for HtmlNamePunct {
     }
 }
 
-impl ToTokens for HtmlNamePunct {
+impl ToTokens for AttributeNamePunct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Colon(token) => token.to_tokens(tokens),
@@ -747,7 +898,7 @@ impl ToTokens for HtmlNamePunct {
     }
 }
 
-impl Display for HtmlNamePunct {
+impl Display for AttributeNamePunct {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Colon(_) => f.write_str(":"),
@@ -843,9 +994,39 @@ pub enum ControlFlowKind<E> {
 #[derive(Debug, Clone)]
 pub struct IfExpr<E> {
     pub if_token: If,
-    pub cond: Expr,
+    pub cond: IfCondition,
     pub then_branch: Block<E>,
     pub else_branch: Option<(At, Else, Box<IfOrBlock<E>>)>,
+}
+
+#[derive(Debug, Clone)]
+pub enum IfCondition {
+    Expr(Expr),
+    Let {
+        let_token: Let,
+        pat: Pat,
+        eq_token: syn::token::Eq,
+        expr: Expr,
+    },
+}
+
+impl ToTokens for IfCondition {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::Expr(expr) => expr.to_tokens(tokens),
+            Self::Let {
+                let_token,
+                pat,
+                eq_token,
+                expr,
+            } => {
+                let_token.to_tokens(tokens);
+                pat.to_tokens(tokens);
+                eq_token.to_tokens(tokens);
+                expr.to_tokens(tokens);
+            }
+        }
+    }
 }
 
 impl<E: MaybeElement> DiagnosticParse for IfExpr<E> {
@@ -853,9 +1034,30 @@ impl<E: MaybeElement> DiagnosticParse for IfExpr<E> {
         input: ParseStream,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> syn::Result<Self> {
+        let if_token: If = input.parse()?;
+
+        // Parse the condition - this could be a regular expression or a let pattern
+        let cond = if input.peek(Let) {
+            // Handle "if let" patterns
+            let let_token: Let = input.parse()?;
+            let pat: Pat = input.call(Pat::parse_multi_with_leading_vert)?;
+            let eq_token: syn::token::Eq = input.parse()?;
+            let expr: Expr = input.call(Expr::parse_without_eager_brace)?;
+
+            IfCondition::Let {
+                let_token,
+                pat,
+                eq_token,
+                expr,
+            }
+        } else {
+            // Regular if condition
+            IfCondition::Expr(input.call(Expr::parse_without_eager_brace)?)
+        };
+
         Ok(Self {
-            if_token: input.parse()?,
-            cond: input.call(Expr::parse_without_eager_brace)?,
+            if_token,
+            cond,
             then_branch: input.diagnostic_parse(diagnostics)?,
             else_branch: {
                 if input.peek(At) && input.peek2(Else) {

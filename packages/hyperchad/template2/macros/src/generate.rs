@@ -1,13 +1,14 @@
-use proc_macro2::{Ident, Span, TokenStream};
-use quote::{ToTokens, quote};
-use syn::{Expr, Local, parse_quote, token::Brace};
+use proc_macro2::{Ident, TokenStream};
+use quote::{ToTokens, format_ident, quote};
+use syn::{Expr, Local};
 
 use crate::ast::*;
 
-pub fn generate(markups: Markups<Element>, output_ident: Ident) -> TokenStream {
+pub fn generate(markups: Markups<Element>, output_ident: Ident) -> Result<TokenStream, String> {
     let mut build = Builder::new(output_ident.clone());
-    Generator::new(output_ident).markups(markups, &mut build);
-    build.finish()
+    let generator = Generator::new(output_ident);
+    generator.markups(markups, &mut build)?;
+    Ok(build.finish())
 }
 
 struct Generator {
@@ -23,13 +24,22 @@ impl Generator {
         Builder::new(self.output_ident.clone())
     }
 
-    fn markups<E: Into<Element>>(&self, markups: Markups<E>, build: &mut Builder) {
+    fn markups<E: Into<Element>>(
+        &self,
+        markups: Markups<E>,
+        build: &mut Builder,
+    ) -> Result<(), String> {
         for markup in markups.markups {
-            self.markup(markup, build);
+            self.markup(markup, build)?;
         }
+        Ok(())
     }
 
-    fn markup<E: Into<Element>>(&self, markup: Markup<E>, build: &mut Builder) {
+    fn markup<E: Into<Element>>(
+        &self,
+        markup: Markup<E>,
+        build: &mut Builder,
+    ) -> Result<(), String> {
         match markup {
             Markup::Block(block) => {
                 if block.markups.markups.iter().any(|markup| {
@@ -41,281 +51,1665 @@ impl Generator {
                         })
                     )
                 }) {
-                    self.block(block, build);
+                    self.block(block, build)?;
                 } else {
-                    self.markups(block.markups, build);
+                    self.markups(block.markups, build)?;
                 }
             }
-            Markup::Lit(lit) => build.push_str(&lit.to_string()),
-            Markup::Splice { expr, .. } => self.splice(expr, build),
-            Markup::Element(element) => self.element(element.into(), build),
-            Markup::ControlFlow(control_flow) => self.control_flow(control_flow, build),
+            Markup::Lit(lit) => {
+                // For literals, create a Raw element with the content
+                let value = match &lit.lit {
+                    syn::Lit::Str(lit_str) => lit_str.value(),
+                    syn::Lit::Int(lit_int) => lit_int.to_string(),
+                    syn::Lit::Float(lit_float) => lit_float.to_string(),
+                    syn::Lit::Char(lit_char) => lit_char.value().to_string(),
+                    syn::Lit::Bool(lit_bool) => lit_bool.value.to_string(),
+                    _ => lit.lit.to_token_stream().to_string(),
+                };
+                build.push_container(quote! {
+                    hyperchad_transformer::Container {
+                        element: hyperchad_transformer::Element::Raw { value: #value.to_string() },
+                        ..Default::default()
+                    }
+                });
+            }
+            Markup::Splice { expr, .. } => {
+                // For spliced expressions, use RenderContainer trait to convert to containers
+                let output_ident = &self.output_ident;
+                build.push_tokens(quote! {
+                    {
+                        use hyperchad_template2::RenderContainer;
+                        let mut splice_containers = Vec::new();
+                        (#expr).render_to(&mut splice_containers).unwrap();
+                        for container in splice_containers {
+                            #output_ident.push(container);
+                        }
+                    }
+                });
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items {item1 item2 ...}, process each item in order
+                // This handles mixed content like {"Name: " (some_function())} properly
+                for item in items {
+                    self.markup(item, build)?;
+                }
+            }
+            Markup::Element(element) => self.element(element.into(), build)?,
+            Markup::ControlFlow(control_flow) => self.control_flow(control_flow, build)?,
             Markup::Semi(_) => {}
         }
+        Ok(())
     }
 
-    fn block<E: Into<Element>>(&self, block: Block<E>, build: &mut Builder) {
+    fn block<E: Into<Element>>(&self, block: Block<E>, build: &mut Builder) -> Result<(), String> {
         let markups = {
             let mut build = self.builder();
-            self.markups(block.markups, &mut build);
+            self.markups(block.markups, &mut build)?;
             build.finish()
         };
 
         build.push_tokens(quote!({ #markups }));
+        Ok(())
     }
 
-    fn splice(&self, expr: Expr, build: &mut Builder) {
-        let output_ident = &self.output_ident;
-        build.push_tokens(
-            quote!(hyperchad_template2::macro_private::render_to!(&(#expr), &mut #output_ident);),
-        );
-    }
+    fn element(&self, element: Element, build: &mut Builder) -> Result<(), String> {
+        let element_name = element.name.clone().unwrap_or_else(|| ElementName {
+            name: format_ident!("Div"),
+        });
 
-    fn element(&self, element: Element, build: &mut Builder) {
-        let element_name = element.name.clone().unwrap_or_else(|| parse_quote!(div));
-        build.push_str("<");
-        self.name(element_name.clone(), build);
-        self.attrs(element.attrs, build);
-        build.push_str(">");
-        if let ElementBody::Block(block) = element.body {
-            self.markups(block.markups, build);
-            build.push_str("</");
-            self.name(element_name, build);
-            build.push_str(">");
-        }
-    }
+        // Generate attribute assignments
+        let mut attr_assignments = Vec::new();
+        let (classes, id, named_attrs) = split_attrs(element.attrs);
 
-    fn name(&self, name: HtmlName, build: &mut Builder) {
-        build.push_str(&name.to_string());
-    }
-
-    fn name_or_markup(&self, name: HtmlNameOrMarkup, build: &mut Builder) {
-        match name {
-            HtmlNameOrMarkup::HtmlName(name) => self.name(name, build),
-            HtmlNameOrMarkup::Markup(markup) => self.markup(markup, build),
-        }
-    }
-
-    fn attr(&self, name: HtmlName, value: AttributeType, build: &mut Builder) {
-        match value {
-            AttributeType::Normal { value, .. } => {
-                build.push_str(" ");
-                self.name(name, build);
-                build.push_str("=\"");
-                self.markup(value, build);
-                build.push_str("\"");
-            }
-            AttributeType::Optional {
-                toggler: Toggler { cond, .. },
-                ..
-            } => {
-                let inner_value: Expr = parse_quote!(inner_value);
-
-                let body = {
-                    let mut build = self.builder();
-                    build.push_str(" ");
-                    self.name(name, &mut build);
-                    build.push_str("=\"");
-                    self.splice(inner_value.clone(), &mut build);
-                    build.push_str("\"");
-                    build.finish()
-                };
-                build.push_tokens(quote!(if let Some(#inner_value) = (#cond) { #body }));
-            }
-            AttributeType::Empty(None) => {
-                build.push_str(" ");
-                self.name(name, build);
-            }
-            AttributeType::Empty(Some(Toggler { cond, .. })) => {
-                let body = {
-                    let mut build = self.builder();
-                    build.push_str(" ");
-                    self.name(name, &mut build);
-                    build.finish()
-                };
-                build.push_tokens(quote!(if (#cond) { #body }));
-            }
-        }
-    }
-
-    fn attrs(&self, attrs: Vec<Attribute>, build: &mut Builder) {
-        let (classes, id, named_attrs) = split_attrs(attrs);
-
-        if !classes.is_empty() {
-            let mut toggle_class_exprs = vec![];
-
-            build.push_str(" ");
-            self.name(parse_quote!(class), build);
-            build.push_str("=\"");
-            for (i, (name, toggler)) in classes.into_iter().enumerate() {
-                if let Some(toggler) = toggler {
-                    toggle_class_exprs.push((i > 0, name, toggler));
-                } else {
-                    if i > 0 {
-                        build.push_str(" ");
-                    }
-                    self.name_or_markup(name, build);
+        // Handle ID
+        if let Some(id) = id {
+            match id {
+                ContainerNameOrMarkup::Name(name) => {
+                    let id_str = name.to_string();
+                    attr_assignments.push(quote! { str_id: Some(#id_str.to_string()) });
+                }
+                ContainerNameOrMarkup::Markup(markup) => {
+                    // For dynamic IDs, use markup_to_string_tokens to handle concatenation
+                    let id_tokens = Self::markup_to_string_tokens(markup);
+                    attr_assignments.push(quote! { str_id: Some(#id_tokens) });
                 }
             }
+        }
 
-            for (not_first, name, toggler) in toggle_class_exprs {
-                let body = {
-                    let mut build = self.builder();
-                    if not_first {
-                        build.push_str(" ");
+        // Handle classes
+        if !classes.is_empty() {
+            let class_strings: Vec<_> = classes
+                .into_iter()
+                .map(|(name, _toggler)| {
+                    match name {
+                        ContainerNameOrMarkup::Name(name) => {
+                            let class_str = name.to_string();
+                            quote! { #class_str.to_string() }
+                        }
+                        ContainerNameOrMarkup::Markup(_) => {
+                            // For dynamic classes, we'd need special handling
+                            quote! { String::new() }
+                        }
                     }
-                    self.name_or_markup(name, &mut build);
-                    build.finish()
-                };
-                build.push_tokens(quote!(if (#toggler) { #body }));
+                })
+                .collect();
+
+            if !class_strings.is_empty() {
+                attr_assignments.push(quote! { classes: vec![#(#class_strings),*] });
             }
-
-            build.push_str("\"");
         }
 
-        if let Some(id) = id {
-            build.push_str(" ");
-            self.name(parse_quote!(id), build);
-            build.push_str("=\"");
-            self.name_or_markup(id, build);
-            build.push_str("\"");
+        // Handle special case: id attribute as named attribute
+        let mut filtered_named_attrs = Vec::new();
+        for (name, attr_type) in named_attrs {
+            if name.to_string() == "id" {
+                // Handle id attribute specially
+                if let AttributeType::Normal { value, .. } = attr_type {
+                    let id_tokens = Self::markup_to_string_tokens(value);
+                    attr_assignments.push(quote! { str_id: Some(#id_tokens) });
+                }
+            } else {
+                filtered_named_attrs.push((name, attr_type));
+            }
         }
+
+        // Extract HTMX routing attributes
+        let route_assignment = self.extract_route_from_attributes(&filtered_named_attrs);
+        if let Some(route) = route_assignment {
+            attr_assignments.push(route);
+        }
+
+        // Separate element-specific attributes from container-level attributes
+        let (element_attrs, container_attrs) =
+            self.separate_element_and_container_attributes(&element_name, filtered_named_attrs);
+
+        // Generate the element type with element-specific attributes
+        let element_type = self.element_name_to_type_with_attributes(&element_name, element_attrs);
+
+        // Process container-level attributes (styling, layout, etc.)
+        let processed_attrs = self.process_attributes(container_attrs)?;
+        for assignment in processed_attrs {
+            attr_assignments.push(assignment);
+        }
+
+        // Generate children
+        let children = if let ElementBody::Block(block) = element.body {
+            // Create a unique identifier for children to avoid borrowing conflicts
+            let children_ident = format_ident!("__children_{}", self.output_ident);
+            let child_generator = Generator::new(children_ident.clone());
+            let mut child_build = child_generator.builder();
+            child_generator.markups(block.markups, &mut child_build)?;
+            let children_tokens = child_build.finish();
+            quote! { children: { let mut #children_ident = Vec::new(); #children_tokens #children_ident } }
+        } else {
+            quote! { children: Vec::new() }
+        };
+
+        // Generate the complete container
+        build.push_container(quote! {
+            hyperchad_transformer::Container {
+                element: #element_type,
+                #(#attr_assignments,)*
+                #children,
+                ..Default::default()
+            }
+        });
+        Ok(())
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn separate_element_and_container_attributes(
+        &self,
+        element_name: &ElementName,
+        named_attrs: Vec<(AttributeName, AttributeType)>,
+    ) -> (
+        Vec<(AttributeName, AttributeType)>,
+        Vec<(AttributeName, AttributeType)>,
+    ) {
+        let element_name_str = element_name.name.to_string();
+        let mut element_attrs = Vec::new();
+        let mut container_attrs = Vec::new();
 
         for (name, attr_type) in named_attrs {
-            self.attr(name, attr_type, build);
+            let name_str = name.to_string();
+
+            // Skip routing attributes as they're handled separately
+            if matches!(
+                name_str.as_str(),
+                "hx-get"
+                    | "hx-post"
+                    | "hx-put"
+                    | "hx-delete"
+                    | "hx-patch"
+                    | "hx-trigger"
+                    | "hx-swap"
+            ) {
+                continue;
+            }
+
+            // Determine if this attribute belongs to the element or container
+            let is_element_attr = match element_name_str.as_str() {
+                "Input" => matches!(
+                    name_str.as_str(),
+                    "value"
+                        | "placeholder"
+                        | "name"
+                        | "type"
+                        | "checked"
+                        | "disabled"
+                        | "readonly"
+                        | "multiple"
+                        | "required"
+                ),
+                "Button" => matches!(name_str.as_str(), "type" | "disabled"),
+                "Anchor" => matches!(name_str.as_str(), "href" | "target"),
+                "Image" => matches!(
+                    name_str.as_str(),
+                    "src" | "alt" | "srcset" | "sizes" | "loading" | "fit"
+                ),
+                _ => false,
+            };
+
+            if is_element_attr {
+                element_attrs.push((name, attr_type));
+            } else {
+                container_attrs.push((name, attr_type));
+            }
+        }
+
+        (element_attrs, container_attrs)
+    }
+
+    fn element_name_to_type_with_attributes(
+        &self,
+        name: &ElementName,
+        element_attrs: Vec<(AttributeName, AttributeType)>,
+    ) -> TokenStream {
+        let name_str = name.name.to_string();
+
+        match name_str.as_str() {
+            "Input" => self.generate_input_element(element_attrs),
+            "Button" => self.generate_button_element(element_attrs),
+            "Anchor" => self.generate_anchor_element(element_attrs),
+            "Image" => self.generate_image_element(element_attrs),
+            _ => self.element_name_to_type(name), // Fallback to simple element generation
         }
     }
 
-    fn control_flow<E: Into<Element>>(&self, control_flow: ControlFlow<E>, build: &mut Builder) {
-        match control_flow.kind {
-            ControlFlowKind::If(if_) => self.control_flow_if(if_, build),
-            ControlFlowKind::Let(let_) => self.control_flow_let(let_, build),
-            ControlFlowKind::For(for_) => self.control_flow_for(for_, build),
-            ControlFlowKind::While(while_) => self.control_flow_while(while_, build),
-            ControlFlowKind::Match(match_) => self.control_flow_match(match_, build),
+    fn generate_input_element(
+        &self,
+        element_attrs: Vec<(AttributeName, AttributeType)>,
+    ) -> TokenStream {
+        let mut input_type = None;
+        let mut value = None;
+        let mut placeholder = None;
+        let mut name = None;
+        let mut checked = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            match attr_type {
+                AttributeType::Normal {
+                    value: attr_value, ..
+                } => match name_str.as_str() {
+                    "type" => {
+                        input_type = Some(Self::markup_to_string_tokens(attr_value));
+                    }
+                    "value" => {
+                        let value_tokens = Self::markup_to_string_tokens(attr_value);
+                        value = Some(quote! { Some(#value_tokens) });
+                    }
+                    "placeholder" => {
+                        let placeholder_tokens = Self::markup_to_string_tokens(attr_value);
+                        placeholder = Some(quote! { Some(#placeholder_tokens) });
+                    }
+                    "name" => {
+                        let name_tokens = Self::markup_to_string_tokens(attr_value);
+                        name = Some(quote! { Some(#name_tokens) });
+                    }
+                    "checked" => {
+                        checked = Some(Self::markup_to_bool_tokens(attr_value));
+                    }
+                    _ => {}
+                },
+                AttributeType::Optional { toggler, .. } => {
+                    let cond = &toggler.cond;
+                    match name_str.as_str() {
+                        "value" => {
+                            value = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "placeholder" => {
+                            placeholder = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "name" => {
+                            name = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
+                            );
+                        }
+                        "checked" => {
+                            checked = Some(
+                                quote! { if let Some(val) = (#cond) { val.into() } else { false } },
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                AttributeType::Empty(_) => {
+                    if name_str.as_str() == "checked" {
+                        checked = Some(quote! { true });
+                    }
+                }
+            }
         }
+
+        let name_field = name.unwrap_or_else(|| quote! { None });
+        let value_field = value.unwrap_or_else(|| quote! { None });
+        let placeholder_field = placeholder.unwrap_or_else(|| quote! { None });
+        let checked_field = checked.unwrap_or_else(|| quote! { false });
+
+        // Generate runtime matching for input type
+        let input_variant = if let Some(input_type_tokens) = input_type {
+            quote! {
+                {
+                    let input_type = #input_type_tokens;
+                    match input_type.as_str() {
+                        "checkbox" => hyperchad_transformer::Input::Checkbox {
+                            checked: Some(#checked_field)
+                        },
+                        "password" => hyperchad_transformer::Input::Password {
+                            value: #value_field,
+                            placeholder: #placeholder_field
+                        },
+                        "hidden" => hyperchad_transformer::Input::Hidden {
+                            value: #value_field
+                        },
+                        _ => hyperchad_transformer::Input::Text {
+                            value: #value_field,
+                            placeholder: #placeholder_field
+                        },
+                    }
+                }
+            }
+        } else {
+            // Default to text input if no type specified
+            quote! {
+                hyperchad_transformer::Input::Text {
+                    value: #value_field,
+                    placeholder: #placeholder_field
+                }
+            }
+        };
+
+        quote! {
+            hyperchad_transformer::Element::Input {
+                input: #input_variant,
+                name: #name_field
+            }
+        }
+    }
+
+    fn generate_button_element(
+        &self,
+        element_attrs: Vec<(AttributeName, AttributeType)>,
+    ) -> TokenStream {
+        let mut button_type = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            if let AttributeType::Normal {
+                value: attr_value, ..
+            } = attr_type
+            {
+                if name_str == "type" {
+                    button_type = Some(Self::markup_to_string_tokens(attr_value));
+                }
+            }
+        }
+
+        let type_field = button_type
+            .map(|t| quote! { Some(#t) })
+            .unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::Button {
+                r#type: #type_field
+            }
+        }
+    }
+
+    fn generate_anchor_element(
+        &self,
+        element_attrs: Vec<(AttributeName, AttributeType)>,
+    ) -> TokenStream {
+        let mut href = None;
+        let mut target = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            if let AttributeType::Normal {
+                value: attr_value, ..
+            } = attr_type
+            {
+                match name_str.as_str() {
+                    "href" => {
+                        href = Some(Self::markup_to_string_tokens(attr_value));
+                    }
+                    "target" => {
+                        target = Some(self.markup_to_link_target_tokens(attr_value));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let href_field = href
+            .map(|h| quote! { Some(#h) })
+            .unwrap_or_else(|| quote! { None });
+        let target_field = target
+            .map(|t| quote! { Some(#t) })
+            .unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::Anchor {
+                href: #href_field,
+                target: #target_field
+            }
+        }
+    }
+
+    fn generate_image_element(
+        &self,
+        element_attrs: Vec<(AttributeName, AttributeType)>,
+    ) -> TokenStream {
+        let mut src = None;
+        let mut alt = None;
+        let mut srcset = None;
+        let mut sizes = None;
+        let mut loading = None;
+        let mut fit = None;
+
+        for (attr_name, attr_type) in element_attrs {
+            let name_str = attr_name.to_string();
+            if let AttributeType::Normal {
+                value: attr_value, ..
+            } = attr_type
+            {
+                match name_str.as_str() {
+                    "src" => {
+                        src = Some(Self::markup_to_string_tokens(attr_value));
+                    }
+                    "alt" => {
+                        alt = Some(Self::markup_to_string_tokens(attr_value));
+                    }
+                    "srcset" => {
+                        srcset = Some(Self::markup_to_string_tokens(attr_value));
+                    }
+                    "sizes" => {
+                        sizes = Some(Self::markup_to_number_tokens(attr_value));
+                    }
+                    "loading" => {
+                        loading = Some(self.markup_to_image_loading_tokens(attr_value));
+                    }
+                    "fit" => {
+                        fit = Some(self.markup_to_image_fit_tokens(attr_value));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let src_field = src
+            .map(|s| quote! { Some(#s) })
+            .unwrap_or_else(|| quote! { None });
+        let alt_field = alt
+            .map(|a| quote! { Some(#a) })
+            .unwrap_or_else(|| quote! { None });
+        let srcset_field = srcset
+            .map(|s| quote! { Some(#s) })
+            .unwrap_or_else(|| quote! { None });
+        let sizes_field = sizes
+            .map(|s| quote! { Some(#s) })
+            .unwrap_or_else(|| quote! { None });
+        let loading_field = loading
+            .map(|l| quote! { Some(#l) })
+            .unwrap_or_else(|| quote! { None });
+        let fit_field = fit
+            .map(|f| quote! { Some(#f) })
+            .unwrap_or_else(|| quote! { None });
+
+        quote! {
+            hyperchad_transformer::Element::Image {
+                source: #src_field,
+                alt: #alt_field,
+                srcset: #srcset_field,
+                sizes: #sizes_field,
+                loading: #loading_field,
+                fit: #fit_field
+            }
+        }
+    }
+
+    fn markup_to_link_target_tokens(&self, value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => match &lit.lit {
+                syn::Lit::Str(lit_str) => {
+                    let value_str = lit_str.value();
+                    match value_str.as_str() {
+                        "_self" => quote! { hyperchad_transformer_models::LinkTarget::SelfTarget },
+                        "_blank" => quote! { hyperchad_transformer_models::LinkTarget::Blank },
+                        "_parent" => quote! { hyperchad_transformer_models::LinkTarget::Parent },
+                        "_top" => quote! { hyperchad_transformer_models::LinkTarget::Top },
+                        target => {
+                            quote! { hyperchad_transformer_models::LinkTarget::Custom(#target.to_string()) }
+                        }
+                    }
+                }
+                _ => {
+                    let lit = &lit.lit;
+                    quote! { hyperchad_transformer_models::LinkTarget::Custom((#lit).to_string()) }
+                }
+            },
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr).into() }
+            }
+            _ => quote! { hyperchad_transformer_models::LinkTarget::default() },
+        }
+    }
+
+    fn markup_to_image_loading_tokens(&self, value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => match &lit.lit {
+                syn::Lit::Str(lit_str) => {
+                    let value_str = lit_str.value();
+                    match value_str.as_str() {
+                        "eager" => quote! { hyperchad_transformer_models::ImageLoading::Eager },
+                        "lazy" => quote! { hyperchad_transformer_models::ImageLoading::Lazy },
+                        _ => quote! { hyperchad_transformer_models::ImageLoading::default() },
+                    }
+                }
+                _ => {
+                    let lit = &lit.lit;
+                    quote! { (#lit).into() }
+                }
+            },
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr).into() }
+            }
+            _ => quote! { hyperchad_transformer_models::ImageLoading::default() },
+        }
+    }
+
+    fn markup_to_image_fit_tokens(&self, value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => match &lit.lit {
+                syn::Lit::Str(lit_str) => {
+                    let value_str = lit_str.value();
+                    match value_str.as_str() {
+                        "default" => quote! { hyperchad_transformer_models::ImageFit::Default },
+                        "contain" => quote! { hyperchad_transformer_models::ImageFit::Contain },
+                        "cover" => quote! { hyperchad_transformer_models::ImageFit::Cover },
+                        "fill" => quote! { hyperchad_transformer_models::ImageFit::Fill },
+                        "none" => quote! { hyperchad_transformer_models::ImageFit::None },
+                        _ => quote! { hyperchad_transformer_models::ImageFit::default() },
+                    }
+                }
+                _ => {
+                    let lit = &lit.lit;
+                    quote! { (#lit).into() }
+                }
+            },
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr).into() }
+            }
+            _ => quote! { hyperchad_transformer_models::ImageFit::default() },
+        }
+    }
+
+    fn extract_route_from_attributes(
+        &self,
+        named_attrs: &[(AttributeName, AttributeType)],
+    ) -> Option<TokenStream> {
+        let mut route_method = None;
+        let mut route_url = None;
+        let mut trigger = None;
+        let mut swap = None;
+
+        // Find HTMX attributes
+        for (name, attr_type) in named_attrs {
+            let name_str = name.to_string();
+            if let AttributeType::Normal { value, .. } = attr_type {
+                match name_str.as_str() {
+                    "hx-get" => {
+                        route_method = Some("Get");
+                        route_url = Some(Self::markup_to_string_tokens(value.clone()));
+                    }
+                    "hx-post" => {
+                        route_method = Some("Post");
+                        route_url = Some(Self::markup_to_string_tokens(value.clone()));
+                    }
+                    "hx-put" => {
+                        route_method = Some("Put");
+                        route_url = Some(Self::markup_to_string_tokens(value.clone()));
+                    }
+                    "hx-delete" => {
+                        route_method = Some("Delete");
+                        route_url = Some(Self::markup_to_string_tokens(value.clone()));
+                    }
+                    "hx-patch" => {
+                        route_method = Some("Patch");
+                        route_url = Some(Self::markup_to_string_tokens(value.clone()));
+                    }
+                    "hx-trigger" => {
+                        trigger = Some(Self::markup_to_string_tokens(value.clone()));
+                    }
+                    "hx-swap" => {
+                        swap = Some(Self::markup_to_swap_target_tokens(value.clone()));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // If we found a route method and URL, generate the route
+        if let (Some(method), Some(url)) = (route_method, route_url) {
+            let method_ident = format_ident!("{}", method);
+            let trigger_field = if let Some(trigger) = trigger {
+                quote! { trigger: Some(#trigger) }
+            } else {
+                quote! { trigger: None }
+            };
+            let swap_field = if let Some(swap) = swap {
+                quote! { swap: #swap }
+            } else {
+                quote! { swap: hyperchad_transformer_models::SwapTarget::default() }
+            };
+
+            Some(quote! {
+                route: Some(hyperchad_transformer_models::Route::#method_ident {
+                    route: #url,
+                    #trigger_field,
+                    #swap_field,
+                })
+            })
+        } else {
+            None
+        }
+    }
+
+    fn markup_to_string_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => match &lit.lit {
+                syn::Lit::Str(lit_str) => {
+                    let value_str = lit_str.value();
+                    quote! { #value_str.to_string() }
+                }
+                _ => {
+                    let lit = &lit.lit;
+                    quote! { #lit.to_string() }
+                }
+            },
+            Markup::Splice { expr, .. } => {
+                // For expressions, handle them directly - this allows any Rust expression to be evaluated
+                quote! { (#expr).to_string() }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle concatenation
+                if items.len() == 1 {
+                    // Single item - handle like regular markup
+                    Self::markup_to_string_tokens(items[0].clone())
+                } else {
+                    // Multiple items - concatenate as strings
+                    let item_tokens: Vec<_> = items
+                        .iter()
+                        .map(|item| Self::markup_to_string_tokens(item.clone()))
+                        .collect();
+                    quote! { vec![#(#item_tokens),*].join("") }
+                }
+            }
+            _ => quote! { String::new() },
+        }
+    }
+
+    fn markup_to_swap_target_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => match &lit.lit {
+                syn::Lit::Str(lit_str) => {
+                    let value_str = lit_str.value();
+                    match value_str.as_str() {
+                        "this" | "self" => {
+                            quote! { hyperchad_transformer_models::SwapTarget::This }
+                        }
+                        "children" => quote! { hyperchad_transformer_models::SwapTarget::Children },
+                        value if value.starts_with('#') => {
+                            let id = &value[1..];
+                            quote! { hyperchad_transformer_models::SwapTarget::Id(#id.to_string()) }
+                        }
+                        _ => quote! { hyperchad_transformer_models::SwapTarget::default() },
+                    }
+                }
+                _ => {
+                    let lit = &lit.lit;
+                    quote! { (#lit).into() }
+                }
+            },
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr).into() }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_swap_target_tokens(items[0].clone())
+                } else {
+                    quote! { hyperchad_transformer_models::SwapTarget::default() }
+                }
+            }
+            _ => quote! { hyperchad_transformer_models::SwapTarget::default() },
+        }
+    }
+
+    fn process_attributes(
+        &self,
+        named_attrs: Vec<(AttributeName, AttributeType)>,
+    ) -> Result<Vec<TokenStream>, String> {
+        let mut assignments = Vec::new();
+
+        // Separate shorthand and individual properties
+        let mut shorthand_attrs = std::collections::HashMap::new();
+        let mut individual_attrs = Vec::new();
+
+        for (name, attr_type) in named_attrs {
+            let name_str = name.to_string();
+            match name_str.as_str() {
+                // Shorthand properties
+                "padding"
+                | "padding-x"
+                | "padding-y"
+                | "margin"
+                | "margin-x"
+                | "margin-y"
+                | "border"
+                | "border-x"
+                | "border-y"
+                | "border-radius"
+                | "border-top-radius"
+                | "border-right-radius"
+                | "border-bottom-radius"
+                | "border-left-radius"
+                | "gap" => {
+                    shorthand_attrs.insert(name_str, (name, attr_type));
+                }
+                _ => {
+                    individual_attrs.push((name, attr_type));
+                }
+            }
+        }
+
+        // Handle shorthand properties first
+        self.handle_shorthand_properties(&shorthand_attrs, &mut assignments);
+
+        // Handle individual properties (these override shorthand)
+        for (name, attr_type) in individual_attrs {
+            if let Some(assignment) = self.attr_to_assignment(name.clone(), attr_type) {
+                assignments.push(assignment);
+            } else {
+                let name_str = name.to_string();
+                let error_msg = format!(
+                    "Unknown attribute '{}'. Supported attributes include: width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, direction, position, cursor, visibility, overflow-x, overflow-y, font-size, opacity, border-radius, gap, hidden, debug, and HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap)",
+                    name_str
+                );
+                return Err(error_msg);
+                // assignments.push(quote! { compile_error!(#error_msg) });
+            }
+        }
+
+        Ok(assignments)
+    }
+
+    fn handle_shorthand_properties(
+        &self,
+        shorthand_attrs: &std::collections::HashMap<String, (AttributeName, AttributeType)>,
+        assignments: &mut Vec<TokenStream>,
+    ) {
+        // Handle padding shortcuts
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding") {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { padding_top: Some(#value_tokens.clone()) });
+            assignments.push(quote! { padding_right: Some(#value_tokens.clone()) });
+            assignments.push(quote! { padding_bottom: Some(#value_tokens.clone()) });
+            assignments.push(quote! { padding_left: Some(#value_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding-x") {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { padding_left: Some(#value_tokens.clone()) });
+            assignments.push(quote! { padding_right: Some(#value_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding-y") {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { padding_top: Some(#value_tokens.clone()) });
+            assignments.push(quote! { padding_bottom: Some(#value_tokens) });
+        }
+
+        // Handle margin shortcuts
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("margin") {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { margin_top: Some(#value_tokens.clone()) });
+            assignments.push(quote! { margin_right: Some(#value_tokens.clone()) });
+            assignments.push(quote! { margin_bottom: Some(#value_tokens.clone()) });
+            assignments.push(quote! { margin_left: Some(#value_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("margin-x") {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { margin_left: Some(#value_tokens.clone()) });
+            assignments.push(quote! { margin_right: Some(#value_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("margin-y") {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { margin_top: Some(#value_tokens.clone()) });
+            assignments.push(quote! { margin_bottom: Some(#value_tokens) });
+        }
+
+        // Handle border shortcuts
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border") {
+            let border_tokens = Self::markup_to_border_tokens(value.clone());
+            assignments.push(quote! { border_top: Some(#border_tokens.clone()) });
+            assignments.push(quote! { border_right: Some(#border_tokens.clone()) });
+            assignments.push(quote! { border_bottom: Some(#border_tokens.clone()) });
+            assignments.push(quote! { border_left: Some(#border_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-x") {
+            let border_tokens = Self::markup_to_border_tokens(value.clone());
+            assignments.push(quote! { border_left: Some(#border_tokens.clone()) });
+            assignments.push(quote! { border_right: Some(#border_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-y") {
+            let border_tokens = Self::markup_to_border_tokens(value.clone());
+            assignments.push(quote! { border_top: Some(#border_tokens.clone()) });
+            assignments.push(quote! { border_bottom: Some(#border_tokens) });
+        }
+
+        // Handle border-radius shortcuts
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-radius")
+        {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_top_left_radius: Some(#value_tokens.clone()) });
+            assignments.push(quote! { border_top_right_radius: Some(#value_tokens.clone()) });
+            assignments.push(quote! { border_bottom_left_radius: Some(#value_tokens.clone()) });
+            assignments.push(quote! { border_bottom_right_radius: Some(#value_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) =
+            shorthand_attrs.get("border-top-radius")
+        {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_top_left_radius: Some(#value_tokens.clone()) });
+            assignments.push(quote! { border_top_right_radius: Some(#value_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) =
+            shorthand_attrs.get("border-right-radius")
+        {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_top_right_radius: Some(#value_tokens.clone()) });
+            assignments.push(quote! { border_bottom_right_radius: Some(#value_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) =
+            shorthand_attrs.get("border-bottom-radius")
+        {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_bottom_left_radius: Some(#value_tokens.clone()) });
+            assignments.push(quote! { border_bottom_right_radius: Some(#value_tokens) });
+        }
+
+        if let Some((_, AttributeType::Normal { value, .. })) =
+            shorthand_attrs.get("border-left-radius")
+        {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_top_left_radius: Some(#value_tokens.clone()) });
+            assignments.push(quote! { border_bottom_left_radius: Some(#value_tokens) });
+        }
+
+        // Handle gap shortcut
+        if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("gap") {
+            let value_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { column_gap: Some(#value_tokens.clone()) });
+            assignments.push(quote! { row_gap: Some(#value_tokens) });
+        }
+    }
+
+    fn element_name_to_type(&self, name: &ElementName) -> TokenStream {
+        let name_str = name.name.to_string();
+        match name_str.as_str() {
+            "Div" => quote! { hyperchad_transformer::Element::Div },
+            "Section" => quote! { hyperchad_transformer::Element::Section },
+            "Aside" => quote! { hyperchad_transformer::Element::Aside },
+            "Main" => quote! { hyperchad_transformer::Element::Main },
+            "Header" => quote! { hyperchad_transformer::Element::Header },
+            "Footer" => quote! { hyperchad_transformer::Element::Footer },
+            "Form" => quote! { hyperchad_transformer::Element::Form },
+            "Span" => quote! { hyperchad_transformer::Element::Span },
+            "Button" => quote! { hyperchad_transformer::Element::Button { r#type: None } },
+            "Anchor" => {
+                quote! { hyperchad_transformer::Element::Anchor { target: None, href: None } }
+            }
+            "Image" => quote! { hyperchad_transformer::Element::Image {
+                source: None,
+                alt: None,
+                fit: None,
+                source_set: None,
+                sizes: None,
+                loading: None
+            } },
+            "Input" => quote! { hyperchad_transformer::Element::Input {
+                input: hyperchad_transformer::Input::Text { value: None, placeholder: None },
+                name: None
+            } },
+            "H1" => {
+                quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H1 } }
+            }
+            "H2" => {
+                quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H2 } }
+            }
+            "H3" => {
+                quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H3 } }
+            }
+            "H4" => {
+                quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H4 } }
+            }
+            "H5" => {
+                quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H5 } }
+            }
+            "H6" => {
+                quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H6 } }
+            }
+            "UnorderedList" | "Ul" => quote! { hyperchad_transformer::Element::UnorderedList },
+            "OrderedList" | "Ol" => quote! { hyperchad_transformer::Element::OrderedList },
+            "ListItem" | "Li" => quote! { hyperchad_transformer::Element::ListItem },
+            "Table" => quote! { hyperchad_transformer::Element::Table },
+            "THead" => quote! { hyperchad_transformer::Element::THead },
+            "TH" => quote! { hyperchad_transformer::Element::TH },
+            "TBody" => quote! { hyperchad_transformer::Element::TBody },
+            "TR" => quote! { hyperchad_transformer::Element::TR },
+            "TD" => quote! { hyperchad_transformer::Element::TD },
+            _ => {
+                let error_msg = format!(
+                    "Unknown element type '{name_str}'. Supported elements are: Div, Section, Aside, Main, Header, Footer, Form, Span, Button, Anchor, Image, Input, H1, H2, H3, H4, H5, H6, UnorderedList (Ul), OrderedList (Ol), ListItem (Li), Table, THead, TH, TBody, TR, TD",
+                );
+                quote! { compile_error!(#error_msg) }
+            }
+        }
+    }
+
+    fn attr_to_assignment(
+        &self,
+        name: AttributeName,
+        attr_type: AttributeType,
+    ) -> Option<TokenStream> {
+        let name_str = name.to_string();
+
+        match attr_type {
+            AttributeType::Normal { value, .. } => match name_str.as_str() {
+                // Number properties
+                "width" => Some(self.number_attr("width", value)),
+                "height" => Some(self.number_attr("height", value)),
+                "min-width" => Some(self.number_attr("min_width", value)),
+                "max-width" => Some(self.number_attr("max_width", value)),
+                "min-height" => Some(self.number_attr("min_height", value)),
+                "max-height" => Some(self.number_attr("max_height", value)),
+                "padding-left" => Some(self.number_attr("padding_left", value)),
+                "padding-right" => Some(self.number_attr("padding_right", value)),
+                "padding-top" => Some(self.number_attr("padding_top", value)),
+                "padding-bottom" => Some(self.number_attr("padding_bottom", value)),
+                "margin-left" => Some(self.number_attr("margin_left", value)),
+                "margin-right" => Some(self.number_attr("margin_right", value)),
+                "margin-top" => Some(self.number_attr("margin_top", value)),
+                "margin-bottom" => Some(self.number_attr("margin_bottom", value)),
+                "font-size" => Some(self.number_attr("font_size", value)),
+                "opacity" => Some(self.number_attr("opacity", value)),
+                "left" => Some(self.number_attr("left", value)),
+                "right" => Some(self.number_attr("right", value)),
+                "top" => Some(self.number_attr("top", value)),
+                "bottom" => Some(self.number_attr("bottom", value)),
+                "translate-x" => Some(self.number_attr("translate_x", value)),
+                "translate-y" => Some(self.number_attr("translate_y", value)),
+                "column-gap" | "col-gap" => Some(self.number_attr("column_gap", value)),
+                "row-gap" => Some(self.number_attr("row_gap", value)),
+                "grid-cell-size" => Some(self.number_attr("grid_cell_size", value)),
+                "border-top-left-radius" => Some(self.number_attr("border_top_left_radius", value)),
+                "border-top-right-radius" => {
+                    Some(self.number_attr("border_top_right_radius", value))
+                }
+                "border-bottom-left-radius" => {
+                    Some(self.number_attr("border_bottom_left_radius", value))
+                }
+                "border-bottom-right-radius" => {
+                    Some(self.number_attr("border_bottom_right_radius", value))
+                }
+
+                // Border properties
+                "border-top" => Some(self.border_attr("border_top", value)),
+                "border-right" => Some(self.border_attr("border_right", value)),
+                "border-bottom" => Some(self.border_attr("border_bottom", value)),
+                "border-left" => Some(self.border_attr("border_left", value)),
+
+                // Enum properties
+                "align-items" => Some(self.enum_attr("align_items", "AlignItems", value)),
+                "justify-content" => {
+                    Some(self.enum_attr("justify_content", "JustifyContent", value))
+                }
+                "text-align" => Some(self.enum_attr("text_align", "TextAlign", value)),
+                "direction" => Some(self.direct_enum_attr("direction", "LayoutDirection", value)),
+                "position" => Some(self.enum_attr("position", "Position", value)),
+                "cursor" => Some(self.enum_attr("cursor", "Cursor", value)),
+                "visibility" => Some(self.enum_attr("visibility", "Visibility", value)),
+                "overflow-x" => Some(self.direct_enum_attr("overflow_x", "LayoutOverflow", value)),
+                "overflow-y" => Some(self.direct_enum_attr("overflow_y", "LayoutOverflow", value)),
+
+                // Color properties
+                "background" => Some(self.color_attr("background", value)),
+                "color" => Some(self.color_attr("color", value)),
+
+                // Boolean properties
+                "hidden" => Some(self.bool_attr("hidden", value)),
+                "debug" => Some(self.bool_attr("debug", value)),
+
+                _ => None,
+            },
+            AttributeType::Optional { toggler, .. } => {
+                // Handle optional attributes with togglers
+                let cond = &toggler.cond;
+                let name_str = name.to_string();
+
+                // Generate conditional attribute assignment based on the field type
+                // Skip input-specific attributes as they're handled by generate_input_element
+                match name_str.as_str() {
+                    // Skip input-specific attributes - these are handled by generate_input_element
+                    "placeholder" | "value" | "name" | "type" | "checked" => None,
+
+                    // String properties - generate Option<String>
+                    "id" | "href" | "src" | "alt" | "srcset" => {
+                        let field_ident = format_ident!("{}", name_str.replace('-', "_"));
+                        Some(quote! {
+                            #field_ident: if let Some(val) = (#cond) { Some(val.to_string()) } else { None }
+                        })
+                    }
+                    // Number properties - generate Option<Number>
+                    "width"
+                    | "height"
+                    | "min-width"
+                    | "max-width"
+                    | "min-height"
+                    | "max-height"
+                    | "padding-left"
+                    | "padding-right"
+                    | "padding-top"
+                    | "padding-bottom"
+                    | "margin-left"
+                    | "margin-right"
+                    | "margin-top"
+                    | "margin-bottom"
+                    | "font-size"
+                    | "opacity"
+                    | "left"
+                    | "right"
+                    | "top"
+                    | "bottom"
+                    | "translate-x"
+                    | "translate-y"
+                    | "column-gap"
+                    | "col-gap"
+                    | "row-gap"
+                    | "grid-cell-size"
+                    | "border-top-left-radius"
+                    | "border-top-right-radius"
+                    | "border-bottom-left-radius"
+                    | "border-bottom-right-radius" => {
+                        let field_ident = format_ident!("{}", name_str.replace('-', "_"));
+                        Some(quote! {
+                            #field_ident: if let Some(val) = (#cond) {
+                                Some(<hyperchad_transformer::Number as std::convert::From<_>>::from(val))
+                            } else { None }
+                        })
+                    }
+                    // Boolean properties - generate Option<bool>
+                    "hidden" | "debug" => {
+                        let field_ident = format_ident!("{}", name_str);
+                        Some(quote! {
+                            #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
+                        })
+                    }
+                    // Border properties - generate Option<(Color, Number)>
+                    "border-top" | "border-right" | "border-bottom" | "border-left" => {
+                        let field_ident = format_ident!("{}", name_str.replace('-', "_"));
+                        Some(quote! {
+                            #field_ident: if let Some(val) = (#cond) {
+                                Some(val.into())
+                            } else { None }
+                        })
+                    }
+                    _ => None,
+                }
+            }
+            AttributeType::Empty(_) => {
+                // Handle empty attributes (boolean flags)
+                match name_str.as_str() {
+                    "hidden" => Some(quote! { hidden: Some(true) }),
+                    "debug" => Some(quote! { debug: Some(true) }),
+
+                    _ => None,
+                }
+            }
+        }
+    }
+
+    fn number_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let value_tokens = Self::markup_to_number_tokens(value);
+        quote! { #field_ident: Some(#value_tokens) }
+    }
+
+    fn enum_attr(&self, field: &str, enum_name: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let value_tokens = Self::markup_to_enum_tokens(enum_name, value);
+        quote! { #field_ident: Some(#value_tokens) }
+    }
+
+    fn direct_enum_attr(
+        &self,
+        field: &str,
+        enum_name: &str,
+        value: Markup<NoElement>,
+    ) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let value_tokens = Self::markup_to_enum_tokens(enum_name, value);
+        quote! { #field_ident: #value_tokens }
+    }
+
+    fn color_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let value_tokens = Self::markup_to_color_tokens(value);
+        quote! { #field_ident: Some(#value_tokens) }
+    }
+
+    fn bool_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let value_tokens = Self::markup_to_bool_tokens(value);
+        quote! { #field_ident: Some(#value_tokens) }
+    }
+
+    fn border_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let border_tokens = Self::markup_to_border_tokens(value);
+        quote! { #field_ident: Some(#border_tokens) }
+    }
+
+    fn markup_to_number_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        // Try to parse different number formats from strings
+                        if value_str.ends_with('%') {
+                            let num_str = &value_str[..value_str.len() - 1];
+                            if let Ok(num) = num_str.parse::<f32>() {
+                                quote! { hyperchad_transformer::Number::RealPercent(#num) }
+                            } else if let Ok(num) = num_str.parse::<i64>() {
+                                quote! { hyperchad_transformer::Number::IntegerPercent(#num) }
+                            } else {
+                                quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+                            }
+                        } else if value_str.ends_with("vw") {
+                            let num_str = &value_str[..value_str.len() - 2];
+                            if let Ok(num) = num_str.parse::<f32>() {
+                                quote! { hyperchad_transformer::Number::RealVw(#num) }
+                            } else if let Ok(num) = num_str.parse::<i64>() {
+                                quote! { hyperchad_transformer::Number::IntegerVw(#num) }
+                            } else {
+                                quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+                            }
+                        } else if value_str.ends_with("vh") {
+                            let num_str = &value_str[..value_str.len() - 2];
+                            if let Ok(num) = num_str.parse::<f32>() {
+                                quote! { hyperchad_transformer::Number::RealVh(#num) }
+                            } else if let Ok(num) = num_str.parse::<i64>() {
+                                quote! { hyperchad_transformer::Number::IntegerVh(#num) }
+                            } else {
+                                quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+                            }
+                        } else if let Ok(num) = value_str.parse::<f32>() {
+                            quote! { hyperchad_transformer::Number::Real(#num) }
+                        } else if let Ok(num) = value_str.parse::<i64>() {
+                            quote! { hyperchad_transformer::Number::Integer(#num) }
+                        } else {
+                            quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+                        }
+                    }
+                    syn::Lit::Int(lit_int) => {
+                        // For integer literals, convert directly to Number::Integer
+                        quote! { hyperchad_transformer::Number::Integer(#lit_int) }
+                    }
+                    syn::Lit::Float(lit_float) => {
+                        // For float literals, convert directly to Number::Real
+                        quote! { hyperchad_transformer::Number::Real(#lit_float) }
+                    }
+                    _ => {
+                        // For other literal types, try to convert using .into()
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                // For expressions, we need to handle different cases to avoid type inference issues
+                // Check if the expression is a simple literal that we can handle directly
+                match expr {
+                    syn::Expr::Lit(ref expr_lit) => {
+                        // Handle literal expressions directly like we do for Markup::Lit
+                        match &expr_lit.lit {
+                            syn::Lit::Int(lit_int) => {
+                                quote! { hyperchad_transformer::Number::Integer(#lit_int) }
+                            }
+                            syn::Lit::Float(lit_float) => {
+                                quote! { hyperchad_transformer::Number::Real(#lit_float) }
+                            }
+                            _ => {
+                                // For other literals in expressions, use the expression directly with explicit typing
+                                quote! {
+                                    {
+                                        let val = #expr;
+                                        <hyperchad_transformer::Number as std::convert::From<_>>::from(val)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // For complex expressions (variables, function calls, Number::Integer(5), etc.)
+                        // Use explicit typing to help with inference but allow explicit Number types to pass through
+                        quote! {
+                            {
+                                let val = #expr;
+                                <hyperchad_transformer::Number as std::convert::From<_>>::from(val)
+                            }
+                        }
+                    }
+                }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_number_tokens(items[0].clone())
+                } else {
+                    quote! { hyperchad_transformer::Number::Integer(0) }
+                }
+            }
+            _ => quote! { hyperchad_transformer::Number::Integer(0) },
+        }
+    }
+
+    fn markup_to_enum_tokens(enum_name: &str, value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        let enum_ident = format_ident!("{}", enum_name);
+
+                        // Convert kebab-case to PascalCase for enum variants
+                        let variant_name = kebab_to_pascal_case(&value_str);
+                        let variant_ident = format_ident!("{}", variant_name);
+
+                        quote! { hyperchad_transformer_models::#enum_ident::#variant_ident }
+                    }
+                    _ => {
+                        // For non-string literals, use the literal directly as an expression
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                // For expressions, just use them directly - they should already be the correct enum type
+                // or implement Into<EnumType> if needed
+                quote! { #expr }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_enum_tokens(enum_name, items[0].clone())
+                } else {
+                    let enum_ident = format_ident!("{}", enum_name);
+                    quote! { hyperchad_transformer_models::#enum_ident::default() }
+                }
+            }
+            _ => {
+                let enum_ident = format_ident!("{}", enum_name);
+                quote! { hyperchad_transformer_models::#enum_ident::default() }
+            }
+        }
+    }
+
+    fn markup_to_color_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+
+                        // Handle common color names
+                        match value_str.to_lowercase().as_str() {
+                            "black" => quote! { hyperchad_color::Color::BLACK },
+                            "white" => quote! { hyperchad_color::Color::WHITE },
+                            "red" => quote! { hyperchad_color::Color::from_hex("#FF0000") },
+                            "green" => quote! { hyperchad_color::Color::from_hex("#00FF00") },
+                            "blue" => quote! { hyperchad_color::Color::from_hex("#0000FF") },
+                            "gray" | "grey" => {
+                                quote! { hyperchad_color::Color::from_hex("#808080") }
+                            }
+                            "yellow" => quote! { hyperchad_color::Color::from_hex("#FFFF00") },
+                            "cyan" => quote! { hyperchad_color::Color::from_hex("#00FFFF") },
+                            "magenta" => quote! { hyperchad_color::Color::from_hex("#FF00FF") },
+                            "orange" => quote! { hyperchad_color::Color::from_hex("#FFA500") },
+                            "purple" => quote! { hyperchad_color::Color::from_hex("#800080") },
+                            "pink" => quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
+                            "brown" => quote! { hyperchad_color::Color::from_hex("#A52A2A") },
+                            // Try to parse as hex if it starts with # or looks like hex
+                            _ if value_str.starts_with('#')
+                                || value_str.chars().all(|c| c.is_ascii_hexdigit()) =>
+                            {
+                                quote! { hyperchad_color::Color::from_hex(#value_str) }
+                            }
+                            // Default fallback
+                            _ => quote! { hyperchad_color::Color::BLACK },
+                        }
+                    }
+                    _ => {
+                        // For non-string literals, use the literal directly as an expression
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr).into() }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_color_tokens(items[0].clone())
+                } else {
+                    quote! { hyperchad_color::Color::BLACK }
+                }
+            }
+            _ => quote! { hyperchad_color::Color::BLACK },
+        }
+    }
+
+    fn markup_to_bool_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        let bool_val =
+                            matches!(value_str.to_lowercase().as_str(), "true" | "1" | "yes");
+                        quote! { #bool_val }
+                    }
+                    syn::Lit::Bool(lit_bool) => {
+                        let bool_val = lit_bool.value;
+                        quote! { #bool_val }
+                    }
+                    syn::Lit::Int(lit_int) => {
+                        // Convert integer to bool (0 = false, anything else = true)
+                        quote! { (#lit_int != 0) }
+                    }
+                    _ => {
+                        // For other literal types, use the literal directly as an expression
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr).into() }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_bool_tokens(items[0].clone())
+                } else {
+                    quote! { false }
+                }
+            }
+            _ => quote! { false },
+        }
+    }
+
+    fn control_flow<E: Into<Element>>(
+        &self,
+        control_flow: ControlFlow<E>,
+        build: &mut Builder,
+    ) -> Result<(), String> {
+        match control_flow.kind {
+            ControlFlowKind::If(if_) => self.control_flow_if(if_, build)?,
+            ControlFlowKind::Let(let_) => self.control_flow_let(let_, build)?,
+            ControlFlowKind::For(for_) => self.control_flow_for(for_, build)?,
+            ControlFlowKind::While(while_) => self.control_flow_while(while_, build)?,
+            ControlFlowKind::Match(match_) => self.control_flow_match(match_, build)?,
+        }
+        Ok(())
     }
 
     fn control_flow_if<E: Into<Element>>(
         &self,
         IfExpr {
-            if_token,
+            if_token: _,
             cond,
             then_branch,
             else_branch,
         }: IfExpr<E>,
         build: &mut Builder,
-    ) {
-        build.push_tokens(quote!(#if_token #cond));
-        self.block(then_branch, build);
+    ) -> Result<(), String> {
+        let then_body = {
+            let mut build = self.builder();
+            self.markups(then_branch.markups, &mut build)?;
+            build.finish()
+        };
 
-        if let Some((_, else_token, if_or_block)) = else_branch {
-            build.push_tokens(quote!(#else_token));
-            self.control_flow_if_or_block(*if_or_block, build);
+        // Generate the condition based on its type
+        let condition_tokens = match &cond {
+            IfCondition::Expr(expr) => quote! { (#expr) },
+            IfCondition::Let {
+                let_token,
+                pat,
+                eq_token,
+                expr,
+            } => {
+                quote! { #let_token #pat #eq_token #expr }
+            }
+        };
+
+        match else_branch {
+            Some((_, _, else_branch)) => {
+                let else_body = {
+                    let mut build = self.builder();
+                    self.control_flow_if_or_block(*else_branch, &mut build)?;
+                    build.finish()
+                };
+                build.push_tokens(quote! {
+                    if #condition_tokens {
+                        #then_body
+                    } else {
+                        #else_body
+                    }
+                });
+            }
+            None => {
+                build.push_tokens(quote! {
+                    if #condition_tokens {
+                        #then_body
+                    }
+                });
+            }
         }
+        Ok(())
     }
 
     fn control_flow_if_or_block<E: Into<Element>>(
         &self,
         if_or_block: IfOrBlock<E>,
         build: &mut Builder,
-    ) {
+    ) -> Result<(), String> {
         match if_or_block {
-            IfOrBlock::If(if_) => self.control_flow_if(if_, build),
-            IfOrBlock::Block(block) => self.block(block, build),
+            IfOrBlock::If(if_) => self.control_flow_if(if_, build)?,
+            IfOrBlock::Block(block) => self.markups(block.markups, build)?,
         }
+        Ok(())
     }
 
-    fn control_flow_let(&self, let_: Local, build: &mut Builder) {
-        build.push_tokens(let_.to_token_stream());
+    fn control_flow_let(&self, let_: Local, build: &mut Builder) -> Result<(), String> {
+        build.push_tokens(quote!(#let_;));
+        Ok(())
     }
 
     fn control_flow_for<E: Into<Element>>(
         &self,
         ForExpr {
-            for_token,
+            for_token: _,
             pat,
-            in_token,
+            in_token: _,
             expr,
             body,
         }: ForExpr<E>,
         build: &mut Builder,
-    ) {
-        build.push_tokens(quote!(#for_token #pat #in_token (#expr)));
-        self.block(body, build);
+    ) -> Result<(), String> {
+        let body_tokens = {
+            let mut build = self.builder();
+            self.markups(body.markups, &mut build)?;
+            build.finish()
+        };
+
+        build.push_tokens(quote! {
+            for #pat in (#expr) {
+                #body_tokens
+            }
+        });
+        Ok(())
     }
 
     fn control_flow_while<E: Into<Element>>(
         &self,
         WhileExpr {
-            while_token,
+            while_token: _,
             cond,
             body,
         }: WhileExpr<E>,
         build: &mut Builder,
-    ) {
-        build.push_tokens(quote!(#while_token #cond));
-        self.block(body, build);
+    ) -> Result<(), String> {
+        let body_tokens = {
+            let mut build = self.builder();
+            self.markups(body.markups, &mut build)?;
+            build.finish()
+        };
+
+        build.push_tokens(quote! {
+            while (#cond) {
+                #body_tokens
+            }
+        });
+        Ok(())
     }
 
     fn control_flow_match<E: Into<Element>>(
         &self,
         MatchExpr {
-            match_token,
+            match_token: _,
             expr,
-            brace_token,
+            brace_token: _,
             arms,
         }: MatchExpr<E>,
         build: &mut Builder,
-    ) {
-        let arms = {
-            let mut build = self.builder();
-            for MatchArm {
-                pat,
-                guard,
-                fat_arrow_token,
-                body,
-                comma_token,
-            } in arms
-            {
-                build.push_tokens(quote!(#pat));
-                if let Some((if_token, cond)) = guard {
-                    build.push_tokens(quote!(#if_token #cond));
-                }
-                build.push_tokens(quote!(#fat_arrow_token));
-                self.block(
-                    Block {
-                        brace_token: Brace(Span::call_site()),
-                        markups: Markups {
-                            markups: vec![body],
-                        },
-                    },
-                    &mut build,
-                );
-                build.push_tokens(quote!(#comma_token));
+    ) -> Result<(), String> {
+        let mut arm_tokens = Vec::new();
+        for arm in arms {
+            let pat = &arm.pat;
+            let guard = arm.guard.as_ref().map(|(if_token, guard_expr)| {
+                quote! { #if_token #guard_expr }
+            });
+            let body = {
+                let mut build = self.builder();
+                self.markup(arm.body, &mut build)?;
+                build.finish()
+            };
+
+            arm_tokens.push(quote! {
+                #pat #guard => { #body }
+            });
+        }
+
+        build.push_tokens(quote! {
+            match (#expr) {
+                #(#arm_tokens,)*
             }
-            build.finish()
-        };
-
-        let mut arm_block = TokenStream::new();
-
-        brace_token.surround(&mut arm_block, |tokens| {
-            arms.to_tokens(tokens);
         });
+        Ok(())
+    }
 
-        build.push_tokens(quote!(#match_token #expr #arm_block));
+    fn markup_to_border_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        // Parse border format: "width, color" (e.g., "2, #222")
+                        if let Some((width_str, color_str)) = value_str.split_once(',') {
+                            let width_str = width_str.trim();
+                            let color_str = color_str.trim();
+
+                            // Parse width
+                            let width_tokens = if let Ok(num) = width_str.parse::<f32>() {
+                                quote! { hyperchad_transformer::Number::Real(#num) }
+                            } else if let Ok(num) = width_str.parse::<i64>() {
+                                quote! { hyperchad_transformer::Number::Integer(#num) }
+                            } else {
+                                quote! { hyperchad_transformer::parse::parse_number(#width_str).unwrap_or_default() }
+                            };
+
+                            // Parse color
+                            let color_tokens = match color_str {
+                                "black" => quote! { hyperchad_color::Color::BLACK },
+                                "white" => quote! { hyperchad_color::Color::WHITE },
+                                "red" => quote! { hyperchad_color::Color::from_hex("#FF0000") },
+                                "green" => quote! { hyperchad_color::Color::from_hex("#00FF00") },
+                                "blue" => quote! { hyperchad_color::Color::from_hex("#0000FF") },
+                                "gray" | "grey" => {
+                                    quote! { hyperchad_color::Color::from_hex("#808080") }
+                                }
+                                "yellow" => quote! { hyperchad_color::Color::from_hex("#FFFF00") },
+                                "cyan" => quote! { hyperchad_color::Color::from_hex("#00FFFF") },
+                                "magenta" => quote! { hyperchad_color::Color::from_hex("#FF00FF") },
+                                "orange" => quote! { hyperchad_color::Color::from_hex("#FFA500") },
+                                "purple" => quote! { hyperchad_color::Color::from_hex("#800080") },
+                                "pink" => quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
+                                "brown" => quote! { hyperchad_color::Color::from_hex("#A52A2A") },
+                                _ if color_str.starts_with('#')
+                                    || color_str.chars().all(|c| c.is_ascii_hexdigit()) =>
+                                {
+                                    quote! { hyperchad_color::Color::from_hex(#color_str) }
+                                }
+                                _ => quote! { hyperchad_color::Color::from_hex(#color_str) },
+                            };
+
+                            quote! { (#color_tokens, #width_tokens) }
+                        } else {
+                            // Invalid format, return default
+                            quote! { (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1)) }
+                        }
+                    }
+                    _ => {
+                        // For non-string literals, assume it's a border tuple expression
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                // For expressions, assume they evaluate to a (Color, Number) tuple
+                quote! { (#expr) }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_border_tokens(items[0].clone())
+                } else {
+                    quote! { (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1)) }
+                }
+            }
+            _ => {
+                quote! { (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1)) }
+            }
+        }
     }
 }
 
-////////////////////////////////////////////////////////
-
 #[allow(clippy::type_complexity)]
 fn split_attrs(
-    attrs: Vec<Attribute>,
+    attrs: Vec<ContainerAttribute>,
 ) -> (
-    Vec<(HtmlNameOrMarkup, Option<Expr>)>,
-    Option<HtmlNameOrMarkup>,
-    Vec<(HtmlName, AttributeType)>,
+    Vec<(ContainerNameOrMarkup, Option<Expr>)>,
+    Option<ContainerNameOrMarkup>,
+    Vec<(AttributeName, AttributeType)>,
 ) {
     let mut classes = vec![];
     let mut id = None;
@@ -323,58 +1717,75 @@ fn split_attrs(
 
     for attr in attrs {
         match attr {
-            Attribute::Class { name, toggler, .. } => {
+            ContainerAttribute::Class { name, toggler, .. } => {
                 classes.push((name, toggler.map(|toggler| toggler.cond)))
             }
-            Attribute::Id { name, .. } => id = Some(name),
-            Attribute::Named { name, attr_type } => named_attrs.push((name, attr_type)),
+            ContainerAttribute::Id { name, .. } => id = Some(name),
+            ContainerAttribute::Named { name, attr_type } => named_attrs.push((name, attr_type)),
         }
     }
 
     (classes, id, named_attrs)
 }
 
-////////////////////////////////////////////////////////
+enum BuilderItem {
+    Container(TokenStream),
+    Tokens(TokenStream),
+}
 
 struct Builder {
     output_ident: Ident,
-    tokens: TokenStream,
-    tail: String,
+    items: Vec<BuilderItem>,
 }
 
 impl Builder {
     fn new(output_ident: Ident) -> Builder {
         Builder {
             output_ident,
-            tokens: TokenStream::new(),
-            tail: String::new(),
+            items: Vec::new(),
         }
     }
 
-    fn push_str(&mut self, string: &str) {
-        self.tail.push_str(string);
+    fn push_container(&mut self, container: TokenStream) {
+        self.items.push(BuilderItem::Container(container));
     }
 
     fn push_tokens(&mut self, tokens: TokenStream) {
-        self.cut();
-        self.tokens.extend(tokens);
+        self.items.push(BuilderItem::Tokens(tokens));
     }
 
-    fn cut(&mut self) {
-        if self.tail.is_empty() {
-            return;
+    fn finish(self) -> TokenStream {
+        let output_ident = &self.output_ident;
+        let mut result = TokenStream::new();
+
+        for item in self.items {
+            match item {
+                BuilderItem::Container(container) => {
+                    result.extend(quote! {
+                        #output_ident.push(#container);
+                    });
+                }
+                BuilderItem::Tokens(tokens) => {
+                    result.extend(tokens);
+                }
+            }
         }
-        let push_str_expr = {
-            let output_ident = self.output_ident.clone();
-            let tail = &self.tail;
-            quote!(#output_ident.push_str(#tail);)
-        };
-        self.tail.clear();
-        self.tokens.extend(push_str_expr);
-    }
 
-    fn finish(mut self) -> TokenStream {
-        self.cut();
-        self.tokens
+        result
     }
+}
+
+// Helper function to convert kebab-case to PascalCase
+fn kebab_to_pascal_case(s: &str) -> String {
+    s.split('-')
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => {
+                    first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase()
+                }
+            }
+        })
+        .collect()
 }

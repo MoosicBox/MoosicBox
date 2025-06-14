@@ -1,6 +1,7 @@
 /packages/*
 
 !/packages/admin_htmx
+!/packages/arb
 !/packages/assert
 !/packages/async
 !/packages/async_service
@@ -19,7 +20,11 @@
 !/packages/files
 !/packages/fs
 !/packages/http
+!/packages/hyperchad/actions
+!/packages/hyperchad/color
 !/packages/hyperchad/template
+!/packages/hyperchad/template2
+!/packages/hyperchad/transformer
 !/packages/image
 !/packages/json_utils
 !/packages/library

@@ -15,9 +15,15 @@ version     = "0.1.0"
 group = "hyperchad"
 
 [dependencies]
-actix-web                  = { workspace = true, optional = true }
-hyperchad_template2_macros = { workspace = true }
-itoa                       = { workspace = true }
+hyperchad_actions            = { workspace = true }
+hyperchad_color              = { workspace = true }
+hyperchad_template2_macros   = { workspace = true }
+hyperchad_transformer        = { workspace = true }
+hyperchad_transformer_models = { workspace = true }
+
+actix-web = { workspace = true, optional = true }
+itoa      = { workspace = true }
+ryu       = "1.0"
 
 [dev-dependencies]
 trybuild = { workspace = true, features = ["diff"] }

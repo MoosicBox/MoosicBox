@@ -5522,8 +5522,13 @@ name = "hyperchad_template2"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "hyperchad_actions",
+ "hyperchad_color",
  "hyperchad_template2_macros",
+ "hyperchad_transformer",
+ "hyperchad_transformer_models",
  "itoa 1.0.15",
+ "ryu",
  "trybuild",
 ]
 
@@ -5531,6 +5536,9 @@ dependencies = [
 name = "hyperchad_template2_macros"
 version = "0.1.0"
 dependencies = [
+ "hyperchad_color",
+ "hyperchad_transformer",
+ "hyperchad_transformer_models",
  "log 0.4.27",
  "proc-macro2",
  "proc-macro2-diagnostics",
@@ -7214,7 +7222,12 @@ version = "0.1.1"
 dependencies = [
  "bytesize",
  "hyperchad",
+ "hyperchad_actions",
+ "hyperchad_color",
  "hyperchad_template",
+ "hyperchad_template2",
+ "hyperchad_transformer",
+ "hyperchad_transformer_models",
  "log 0.4.27",
  "moosicbox_app_models",
  "moosicbox_audio_zone_models",

@@ -194,6 +194,15 @@ impl From<Container> for View {
     }
 }
 
+impl From<Vec<Container>> for View {
+    fn from(value: Vec<Container>) -> Self {
+        Self {
+            future: None,
+            immediate: value.into(),
+        }
+    }
+}
+
 pub trait RenderRunner: Send + Sync {
     /// # Errors
     ///

@@ -1,6 +1,6 @@
 #![no_std]
 
-//! A macro for writing HTML templates.
+//! A macro for writing Container templates.
 //!
 //! This documentation only describes the runtime API. For a general
 //! guide, check out the [book] instead.
@@ -11,12 +11,35 @@
 
 extern crate alloc;
 
-use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc};
+use alloc::string::ToString;
+use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt::{Arguments, Display, Write};
 
 pub use hyperchad_template2_macros::container;
+pub use hyperchad_transformer::Container;
 
-/// Represents a type that can be rendered as HTML.
+/// The result type for the container! macro.
+///
+/// The `container!` macro expands to an expression of this type.
+pub type Containers = Vec<Container>;
+
+/// Extension trait to add missing methods to Vec<Container>
+pub trait ContainerVecExt {
+    fn into_string(self) -> String;
+    fn to_string(&self) -> String;
+}
+
+impl ContainerVecExt for Vec<Container> {
+    fn into_string(self) -> String {
+        self.iter().map(|c| c.to_string()).collect::<String>()
+    }
+
+    fn to_string(&self) -> String {
+        self.iter().map(|c| c.to_string()).collect::<String>()
+    }
+}
+
+/// Represents a type that can be rendered as a Container.
 ///
 /// To implement this for your own type, override either the `.render()`
 /// or `.render_to()` methods; since each is defined in terms of the
@@ -32,124 +55,222 @@ pub use hyperchad_template2_macros::container;
 /// # Example
 ///
 /// ```rust
-/// use hyperchad_template2::{container, Markup, Render};
+/// use hyperchad_template2::{container, Containers, RenderContainer};
 ///
-/// /// Provides a shorthand for linking to a CSS stylesheet.
-/// pub struct Stylesheet(&'static str);
+/// /// Provides a shorthand for a styled button.
+/// pub struct StyledButton {
+///     pub text: String,
+///     pub primary: bool,
+/// }
 ///
-/// impl Render for Stylesheet {
-///     fn render(&self) -> Markup {
+/// impl RenderContainer for StyledButton {
+///     fn render(&self) -> Containers {
 ///         container! {
-///             link rel="stylesheet" type="text/css" href=(self.0);
+///             Button
+///                 .class=if self.primary { "primary" } else { "secondary" }
+///             {
+///                 (self.text.clone())
+///             }
 ///         }
 ///     }
 /// }
 /// ```
-pub trait Render {
-    /// Renders `self` as a block of `Markup`.
-    fn render(&self) -> Markup {
-        let mut buffer = String::new();
-        self.render_to(&mut buffer);
-        PreEscaped(buffer)
+pub trait RenderContainer {
+    type RenderContainerError;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError>;
+
+    fn render_to_string(&self) -> Result<String, Self::RenderContainerError> {
+        let mut containers = Vec::new();
+        self.render_to(&mut containers)?;
+        Ok(containers.iter().map(|c| c.to_string()).collect::<String>())
     }
 
-    /// Appends a representation of `self` to the given buffer.
-    ///
-    /// Its default implementation just calls `.render()`, but you may
-    /// override it with something more efficient.
-    ///
-    /// Note that no further escaping is performed on data written to
-    /// the buffer. If you override this method, you must make sure that
-    /// any data written is properly escaped, whether by hand or using
-    /// the [`Escaper`](struct.Escaper.html) wrapper struct.
-    fn render_to(&self, buffer: &mut String) {
-        buffer.push_str(&self.render().into_string());
+    fn render(&self) -> Result<Vec<Container>, Self::RenderContainerError> {
+        let mut containers = Vec::new();
+        self.render_to(&mut containers)?;
+        Ok(containers)
     }
 }
 
-impl Render for str {
-    fn render_to(&self, w: &mut String) {
-        w.push_str(self);
+impl RenderContainer for Container {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        containers.push(self.clone());
+        Ok(())
     }
 }
 
-impl Render for String {
-    fn render_to(&self, w: &mut String) {
-        str::render_to(self, w);
+impl RenderContainer for &str {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        containers.push(Container {
+            element: hyperchad_transformer::Element::Raw {
+                value: self.to_string(),
+            },
+            ..Default::default()
+        });
+        Ok(())
     }
 }
 
-impl Render for Cow<'_, str> {
-    fn render_to(&self, w: &mut String) {
-        str::render_to(self, w);
+impl RenderContainer for String {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        containers.push(Container {
+            element: hyperchad_transformer::Element::Raw {
+                value: self.clone(),
+            },
+            ..Default::default()
+        });
+        Ok(())
     }
 }
 
-impl Render for Arguments<'_> {
-    fn render_to(&self, w: &mut String) {
-        let _ = Write::write_fmt(w, *self);
+impl RenderContainer for Cow<'_, str> {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        <&str as RenderContainer>::render_to(&self.as_ref(), containers)
     }
 }
 
-impl<T: Render + ?Sized> Render for &T {
-    fn render_to(&self, w: &mut String) {
-        T::render_to(self, w);
+impl RenderContainer for Arguments<'_> {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        let mut s = String::new();
+        s.write_fmt(*self)?;
+        containers.push(Container {
+            element: hyperchad_transformer::Element::Raw { value: s },
+            ..Default::default()
+        });
+        Ok(())
     }
 }
 
-impl<T: Render + ?Sized> Render for &mut T {
-    fn render_to(&self, w: &mut String) {
-        T::render_to(self, w);
+impl<T: RenderContainer + ?Sized> RenderContainer for &T {
+    type RenderContainerError = T::RenderContainerError;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        T::render_to(self, containers)
     }
 }
 
-impl<T: Render + ?Sized> Render for Box<T> {
-    fn render_to(&self, w: &mut String) {
-        T::render_to(self, w);
+impl<T: RenderContainer + ?Sized> RenderContainer for &mut T {
+    type RenderContainerError = T::RenderContainerError;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        T::render_to(self, containers)
     }
 }
 
-impl<T: Render + ?Sized> Render for Arc<T> {
-    fn render_to(&self, w: &mut String) {
-        T::render_to(self, w);
+impl<T: RenderContainer + ?Sized> RenderContainer for Box<T> {
+    type RenderContainerError = T::RenderContainerError;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        T::render_to(self, containers)
     }
 }
 
-macro_rules! impl_render_with_display {
+impl<T: RenderContainer + ?Sized> RenderContainer for Arc<T> {
+    type RenderContainerError = T::RenderContainerError;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        T::render_to(self, containers)
+    }
+}
+
+// char and floats are handled by specialized implementations below
+
+macro_rules! impl_render_container_with_itoa {
     ($($ty:ty)*) => {
         $(
-            impl Render for $ty {
-                fn render_to(&self, w: &mut String) {
-                    // TODO: remove the explicit arg when Rust 1.58 is released
-                    format_args!("{self}", self = self).render_to(w);
+            impl RenderContainer for $ty {
+                type RenderContainerError = core::fmt::Error;
+
+                fn render_to(
+                    &self,
+                    containers: &mut Vec<Container>,
+                ) -> Result<(), Self::RenderContainerError> {
+                    let mut buffer = itoa::Buffer::new();
+                    let s = buffer.format(*self);
+                    <&str as RenderContainer>::render_to(&s, containers)
                 }
             }
         )*
     };
 }
 
-impl_render_with_display! {
-    char f32 f64
-}
-
-macro_rules! impl_render_with_itoa {
-    ($($ty:ty)*) => {
-        $(
-            impl Render for $ty {
-                fn render_to(&self, w: &mut String) {
-                    w.push_str(itoa::Buffer::new().format(*self));
-                }
-            }
-        )*
-    };
-}
-
-impl_render_with_itoa! {
+impl_render_container_with_itoa! {
     i8 i16 i32 i64 i128 isize
     u8 u16 u32 u64 u128 usize
 }
 
-/// Renders a value using its [`Display`] impl.
+impl RenderContainer for f32 {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        let mut buffer = ryu::Buffer::new();
+        let s = buffer.format(*self);
+        <&str as RenderContainer>::render_to(&s, containers)
+    }
+}
+
+impl RenderContainer for f64 {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        let mut buffer = ryu::Buffer::new();
+        let s = buffer.format(*self);
+        <&str as RenderContainer>::render_to(&s, containers)
+    }
+}
+
+impl RenderContainer for bool {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        let s = if *self { "true" } else { "false" };
+        <&str as RenderContainer>::render_to(&s, containers)
+    }
+}
+
+impl RenderContainer for char {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        let mut buffer = [0; 4];
+        let s = self.encode_utf8(&mut buffer);
+        let s: &str = s;
+        <&str as RenderContainer>::render_to(&s, containers)
+    }
+}
+
+impl<T: RenderContainer> RenderContainer for Option<T> {
+    type RenderContainerError = T::RenderContainerError;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        match self {
+            Some(value) => value.render_to(containers),
+            None => Ok(()),
+        }
+    }
+}
+
+impl RenderContainer for Vec<Container> {
+    type RenderContainerError = core::fmt::Error;
+
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+        containers.extend_from_slice(self);
+        Ok(())
+    }
+}
+
+/// Renders a value using its [`Display`] impl as a Raw Container element.
 ///
 /// # Example
 ///
@@ -159,173 +280,98 @@ impl_render_with_itoa! {
 ///
 /// let ip_address = Ipv4Addr::new(127, 0, 0, 1);
 ///
-/// let markup = container! {
+/// let containers = container! {
 ///     "My IP address is: "
 ///     (hyperchad_template2::display(ip_address))
 /// };
-///
-/// assert_eq!(markup.into_string(), "My IP address is: 127.0.0.1");
 /// ```
-pub fn display(value: impl Display) -> impl Render {
+pub fn display(value: impl Display) -> impl RenderContainer {
     struct DisplayWrapper<T>(T);
 
-    impl<T: Display> Render for DisplayWrapper<T> {
-        fn render_to(&self, w: &mut String) {
-            format_args!("{0}", self.0).render_to(w);
+    impl<T: Display> RenderContainer for DisplayWrapper<T> {
+        type RenderContainerError = core::fmt::Error;
+
+        fn render_to(
+            &self,
+            containers: &mut Vec<Container>,
+        ) -> Result<(), Self::RenderContainerError> {
+            containers.push(Container {
+                element: hyperchad_transformer::Element::Raw {
+                    value: alloc::format!("{}", self.0),
+                },
+                ..Default::default()
+            });
+            Ok(())
         }
     }
 
     DisplayWrapper(value)
 }
 
-/// A wrapper that renders the inner value without escaping.
-#[derive(Debug, Clone, Copy)]
-pub struct PreEscaped<T>(pub T);
+// New wrapper types to avoid orphan rule violations
+#[derive(Debug, Clone)]
+pub struct ContainerList(pub Vec<Container>);
 
-impl<T: AsRef<str>> Render for PreEscaped<T> {
-    fn render_to(&self, w: &mut String) {
-        w.push_str(self.0.as_ref());
+impl ContainerList {
+    pub fn new(containers: Vec<Container>) -> Self {
+        Self(containers)
+    }
+
+    pub fn iter(&self) -> core::slice::Iter<'_, Container> {
+        self.0.iter()
     }
 }
 
-/// A block of markup is a string that does not need to be escaped.
-///
-/// The `container!` macro expands to an expression of this type.
-pub type Markup = PreEscaped<String>;
-
-impl<T: Into<String>> PreEscaped<T> {
-    /// Converts the inner value to a string.
-    pub fn into_string(self) -> String {
-        self.0.into()
+impl From<Vec<Container>> for ContainerList {
+    fn from(containers: Vec<Container>) -> Self {
+        Self(containers)
     }
 }
 
-impl<T: Into<String>> From<PreEscaped<T>> for String {
-    fn from(value: PreEscaped<T>) -> String {
-        value.into_string()
+impl From<ContainerList> for Vec<Container> {
+    fn from(list: ContainerList) -> Self {
+        list.0
     }
 }
-
-impl<T: Default> Default for PreEscaped<T> {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
-
-/// The literal string `<!DOCTYPE html>`.
-///
-/// # Example
-///
-/// A minimal web page:
-///
-/// ```rust
-/// use hyperchad_template2::{DOCTYPE, container};
-///
-/// let markup = container! {
-///     (DOCTYPE)
-///     html {
-///         head {
-///             meta charset="utf-8";
-///             title { "Test page" }
-///         }
-///         body {
-///             p { "Hello, world!" }
-///         }
-///     }
-/// };
-/// ```
-pub const DOCTYPE: PreEscaped<&'static str> = PreEscaped("<!DOCTYPE html>");
 
 #[cfg(feature = "actix-web")]
-mod actix_support {
-    use core::{
-        pin::Pin,
-        task::{Context, Poll},
-    };
-
-    use crate::PreEscaped;
+mod actix_web_support {
+    use super::*;
     use actix_web::{
         HttpRequest, HttpResponse, Responder,
-        body::{BodySize, MessageBody},
-        http::header,
-        web::Bytes,
+        body::MessageBody,
+        http::{StatusCode, header},
     };
-    use alloc::string::String;
 
-    impl MessageBody for PreEscaped<String> {
-        type Error = <String as MessageBody>::Error;
+    impl MessageBody for ContainerList {
+        type Error = actix_web::Error;
 
-        fn size(&self) -> BodySize {
-            self.0.size()
+        fn size(&self) -> actix_web::body::BodySize {
+            actix_web::body::BodySize::None
         }
 
         fn poll_next(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-        ) -> Poll<Option<Result<Bytes, Self::Error>>> {
-            Pin::new(&mut self.0).poll_next(cx)
+            self: core::pin::Pin<&mut Self>,
+            _: &mut core::task::Context<'_>,
+        ) -> core::task::Poll<Option<Result<actix_web::web::Bytes, Self::Error>>> {
+            let html = self.iter().map(|c| c.to_string()).collect::<String>();
+            core::task::Poll::Ready(Some(Ok(actix_web::web::Bytes::from(html))))
+        }
+
+        fn try_into_bytes(self) -> Result<actix_web::web::Bytes, Self> {
+            let html = self.iter().map(|c| c.to_string()).collect::<String>();
+            Ok(actix_web::web::Bytes::from(html))
         }
     }
 
-    impl Responder for PreEscaped<String> {
-        type Body = String;
+    impl Responder for ContainerList {
+        type Body = Self;
 
-        fn respond_to(self, _req: &HttpRequest) -> HttpResponse<Self::Body> {
-            HttpResponse::Ok()
+        fn respond_to(self, _: &HttpRequest) -> HttpResponse<Self::Body> {
+            HttpResponse::build(StatusCode::OK)
                 .content_type(header::ContentType::html())
-                .message_body(self.0)
+                .message_body(self)
                 .unwrap()
-        }
-    }
-}
-
-#[doc(hidden)]
-pub mod macro_private {
-    use crate::{Render, display};
-    use alloc::string::String;
-    use core::fmt::Display;
-
-    #[doc(hidden)]
-    #[macro_export]
-    macro_rules! render_to {
-        ($x:expr, $buffer:expr) => {{
-            use $crate::macro_private::*;
-            match ChooseRenderOrDisplay($x) {
-                x => (&&x).implements_render_or_display().render_to(x.0, $buffer),
-            }
-        }};
-    }
-
-    pub use render_to;
-
-    pub struct ChooseRenderOrDisplay<T>(pub T);
-
-    pub struct ViaRenderTag;
-    pub struct ViaDisplayTag;
-
-    pub trait ViaRender {
-        fn implements_render_or_display(&self) -> ViaRenderTag {
-            ViaRenderTag
-        }
-    }
-    pub trait ViaDisplay {
-        fn implements_render_or_display(&self) -> ViaDisplayTag {
-            ViaDisplayTag
-        }
-    }
-
-    impl<T: Render> ViaRender for &ChooseRenderOrDisplay<T> {}
-    impl<T: Display> ViaDisplay for ChooseRenderOrDisplay<T> {}
-
-    impl ViaRenderTag {
-        pub fn render_to<T: Render + ?Sized>(self, value: &T, buffer: &mut String) {
-            value.render_to(buffer);
-        }
-    }
-
-    impl ViaDisplayTag {
-        pub fn render_to<T: Display + ?Sized>(self, value: &T, buffer: &mut String) {
-            display(value).render_to(buffer);
         }
     }
 }

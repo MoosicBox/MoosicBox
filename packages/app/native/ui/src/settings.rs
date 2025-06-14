@@ -1,7 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::transformer_models::{AlignItems, JustifyContent, LayoutDirection, TextAlign};
-use hyperchad_template::{Markup, html};
+use hyperchad_template::Markup;
+use hyperchad_template2::{Containers, container};
+use hyperchad_transformer_models::SwapTarget;
 use moosicbox_app_models::{
     AuthMethod, Connection, DownloadSettings, MusicApiSettings, ScanSettings,
 };
@@ -15,48 +17,48 @@ pub fn settings_page_content(
     connections: &[Connection],
     selected: Option<&Connection>,
     music_api_settings: &[MusicApiSettings],
-) -> Markup {
-    html! {
-        div sx-padding=(20) sx-gap=(10) {
-            section sx-align-items=(AlignItems::Start) {
-                div sx-align-items=(AlignItems::End) sx-gap=(10) {
-                    form
+) -> Containers {
+    container! {
+        Div padding=(20) gap=(10) {
+            Section align-items=(AlignItems::Start) {
+                Div align-items=(AlignItems::End) gap=(10) {
+                    Form
                         hx-post="/settings/connection-name"
-                        sx-width="100%"
-                        sx-align-items=(AlignItems::End)
-                        sx-gap=(5)
+                        width="100%"
+                        align-items=(AlignItems::End)
+                        gap=(5)
                     {
-                        div { "Name: " input type="text" name="name" value=(connection_name); }
-                        button
+                        Div { "Name: " Input type="text" name="name" value=(connection_name); }
+                        Button
                             type="submit"
-                            sx-border-radius=(5)
-                            sx-background="#111"
-                            sx-border="2, #222"
-                            sx-padding-x=(10)
-                            sx-padding-y=(5)
+                            border-radius=(5)
+                            background="#111"
+                            border="2, #222"
+                            padding-x=(10)
+                            padding-y=(5)
                         {
                             "Save"
                         }
                     }
 
-                    div sx-width="100%" sx-text-align=(TextAlign::Start) {
-                        h2 { "Connections" }
+                    Div width="100%" text-align=(TextAlign::Start) {
+                        H2 { "Connections" }
                     }
 
                     (connections_content(connections, selected))
 
-                    div
-                        sx-dir=(LayoutDirection::Row)
-                        sx-justify-content=(JustifyContent::Center)
-                        sx-width="100%"
-                        sx-gap=(5)
+                    Div
+                        direction=(LayoutDirection::Row)
+                        justify-content=(JustifyContent::Center)
+                        width="100%"
+                        gap=(5)
                     {
-                        button
-                            sx-border-radius=(5)
-                            sx-background="#111"
-                            sx-border="2, #222"
-                            sx-padding-x=(10)
-                            sx-padding-y=(5)
+                        Button
+                            border-radius=(5)
+                            background="#111"
+                            border="2, #222"
+                            padding-x=(10)
+                            padding-y=(5)
                             hx-post="/settings/new-connection"
                             hx-swap="#settings-connections"
                         {
@@ -66,21 +68,15 @@ pub fn settings_page_content(
                 }
             }
 
-            hr;
-
-            section hx-get=(pre_escaped!("/settings/download-settings")) hx-trigger="load" {
-                div id="settings-download-settings-section" {}
+            Section hx-get="/settings/download-settings" hx-trigger="load" {
+                Div id="settings-download-settings-section" {}
             }
 
-            hr;
-
-            section hx-get=(pre_escaped!("/settings/scan-settings")) hx-trigger="load" {
-                div id="settings-scan-settings-section" {}
+            Section hx-get="/settings/scan-settings" hx-trigger="load" {
+                Div id="settings-scan-settings-section" {}
             }
 
-            hr;
-
-            section hx-get=(pre_escaped!("/settings/music-api-settings")) hx-trigger="load" {
+            Section hx-get="/settings/music-api-settings" hx-trigger="load" {
                 (music_api_settings_section(&music_api_settings))
             }
         }
@@ -88,27 +84,27 @@ pub fn settings_page_content(
 }
 
 #[must_use]
-pub fn scan_settings_content(scan_settings: &ScanSettings) -> Markup {
-    html! {
-        div id="settings-scan-settings-section" {
-            h2 { "Scan Settings" }
-            h3 { "Scan paths:" }
+pub fn scan_settings_content(scan_settings: &ScanSettings) -> Containers {
+    container! {
+        Div id="settings-scan-settings-section" {
+            H2 { "Scan Settings" }
+            H3 { "Scan paths:" }
             @if scan_settings.scan_paths.is_empty() {
                 "No scan paths"
             } @else {
-                ul {
+                Ul {
                     @for path in &scan_settings.scan_paths {
-                        li {
+                        Li {
                             (path)
-                            form hx-delete=(pre_escaped!("/settings/scan/scan-path")) {
-                                input type="hidden" name="path" value=(path);
-                                button
+                            Form hx-delete="/settings/scan/scan-path" {
+                                Input type="hidden" name="path" value=(path);
+                                Button
                                     type="submit"
-                                    sx-border-radius=(5)
-                                    sx-background="#111"
-                                    sx-border="2, #222"
-                                    sx-padding-x=(10)
-                                    sx-padding-y=(5)
+                                    border-radius=(5)
+                                    background="#111"
+                                    border="2, #222"
+                                    padding-x=(10)
+                                    padding-y=(5)
                                 {
                                     "Delete"
                                 }
@@ -122,43 +118,43 @@ pub fn scan_settings_content(scan_settings: &ScanSettings) -> Markup {
 }
 
 #[must_use]
-pub fn download_settings_content(download_settings: &DownloadSettings) -> Markup {
-    html! {
-        div id="settings-download-settings-section" {
-            h2 { "Scan Settings" }
-            h3 { "Download locations:" }
+pub fn download_settings_content(download_settings: &DownloadSettings) -> Containers {
+    container! {
+        Div id="settings-download-settings-section" {
+            H2 { "Scan Settings" }
+            H3 { "Download locations:" }
             @if download_settings.download_locations.is_empty() {
                 "No download locations"
             } @else {
-                ul {
+                Ul {
                     @for (_id, location) in &download_settings.download_locations {
                         @let is_default = download_settings.default_download_location.as_ref().is_some_and(|x| x == location);
 
-                        li {
+                        Li {
                             (location)
-                            form hx-delete=(pre_escaped!("/settings/download/download-location")) {
-                                input type="hidden" name="location" value=(location);
-                                button
+                            Form hx-delete="/settings/download/download-location" {
+                                Input type="hidden" name="location" value=(location);
+                                Button
                                     type="submit"
-                                    sx-border-radius=(5)
-                                    sx-background="#111"
-                                    sx-border="2, #222"
-                                    sx-padding-x=(10)
-                                    sx-padding-y=(5)
+                                    border-radius=(5)
+                                    background="#111"
+                                    // border="2, #222"
+                                    padding-x=(10)
+                                    padding-y=(5)
                                 {
                                     "Delete"
                                 }
                             }
                             @if !is_default {
-                                form hx-post=(pre_escaped!("/settings/download/default-download-location")) {
-                                    input type="hidden" name="location" value=(location);
-                                    button
+                                Form hx-post="/settings/download/default-download-location" {
+                                    Input type="hidden" name="location" value=(location);
+                                    Button
                                         type="submit"
-                                        sx-border-radius=(5)
-                                        sx-background="#111"
-                                        sx-border="2, #222"
-                                        sx-padding-x=(10)
-                                        sx-padding-y=(5)
+                                        border-radius=(5)
+                                        background="#111"
+                                        // border="2, #222"
+                                        padding-x=(10)
+                                        padding-y=(5)
                                     {
                                         "Set as default"
                                     }
@@ -173,14 +169,12 @@ pub fn download_settings_content(download_settings: &DownloadSettings) -> Markup
 }
 
 #[must_use]
-pub fn music_api_settings_section(settings: &[MusicApiSettings]) -> Markup {
-    html! {
-        div id="settings-music-api-settings-section" {
+pub fn music_api_settings_section(settings: &[MusicApiSettings]) -> Containers {
+    container! {
+        Div id="settings-music-api-settings-section" {
             @for settings in settings {
-                hr;
-
-                section {
-                    h2 { (settings.name) }
+                Section {
+                    H2 { (settings.name) }
                     (music_api_settings_content(settings, AuthState::Initial))
                 }
             }
@@ -196,41 +190,44 @@ pub enum AuthState {
 }
 
 #[must_use]
-pub fn music_api_settings_content(settings: &MusicApiSettings, auth_state: AuthState) -> Markup {
-    html! {
+pub fn music_api_settings_content(
+    settings: &MusicApiSettings,
+    auth_state: AuthState,
+) -> Containers {
+    container! {
         @let id = format!("settings-{}", classify_name(&settings.id));
-        div id=(id) {
+        Div id=(id) {
             @if settings.auth_method.is_none() || settings.logged_in {
-                div sx-gap=(10) {
+                Div gap=(10) {
                     @if settings.logged_in {
-                        div { "Logged in!" }
+                        Div { "Logged in!" }
                     }
                     @if settings.supports_scan {
                         @if settings.scan_enabled {
-                            button
+                            Button
                                 type="button"
-                                hx-post={(pre_escaped!("/music-api/scan?apiSource="))(settings.id)}
-                                hx-swap={"#"(id)}
+                                hx-post={"/music-api/scan?apiSource="(settings.id)}
+                                hx-swap=(SwapTarget::Id(id))
                                 id="run-scan-button"
-                                sx-border-radius=(5)
-                                sx-background="#111"
-                                sx-border="2, #222"
-                                sx-padding-x=(10)
-                                sx-padding-y=(5)
+                                border-radius=(5)
+                                background="#111"
+                                border="2, #222"
+                                padding-x=(10)
+                                padding-y=(5)
                             {
                                 "Run Scan"
                             }
                         } @else {
-                            button
+                            Button
                                 type="button"
-                                hx-post={(pre_escaped!("/music-api/enable-scan-origin?apiSource="))(settings.id)}
-                                hx-swap={"#"(id)}
+                                hx-post={"/music-api/enable-scan-origin?apiSource="(settings.id)}
+                                hx-swap=(SwapTarget::Id(id))
                                 id="run-scan-button"
-                                sx-border-radius=(5)
-                                sx-background="#111"
-                                sx-border="2, #222"
-                                sx-padding-x=(10)
-                                sx-padding-y=(5)
+                                border-radius=(5)
+                                background="#111"
+                                border="2, #222"
+                                padding-x=(10)
+                                padding-y=(5)
                             {
                                 "Enable scan origin"
                             }
@@ -239,22 +236,22 @@ pub fn music_api_settings_content(settings: &MusicApiSettings, auth_state: AuthS
                     }
                 }
             } @else if let Some(auth_method) = &settings.auth_method {
-                form
-                    hx-post={(pre_escaped!("/music-api/auth?apiSource="))(settings.id)}
-                    hx-swap={"#"(id)}
+                Form
+                    hx-post={"/music-api/auth?apiSource="(settings.id)}
+                    hx-swap=(SwapTarget::Id(id))
                 {
                     @match auth_method {
                         AuthMethod::UsernamePassword => {
-                            input type="hidden" name="type" value="username-password";
-                            input type="text" name="username" placeholder="Username";
-                            input type="password" name="password" placeholder="Password";
-                            button
+                            Input type="hidden" name="type" value="username-password";
+                            Input type="text" name="username" placeholder="Username";
+                            Input type="password" name="password" placeholder="Password";
+                            Button
                                 type="submit"
-                                sx-border-radius=(5)
-                                sx-background="#111"
-                                sx-border="2, #222"
-                                sx-padding-x=(10)
-                                sx-padding-y=(5)
+                                border-radius=(5)
+                                background="#111"
+                                border="2, #222"
+                                padding-x=(10)
+                                padding-y=(5)
                             {
                                 "Login"
                             }
@@ -262,14 +259,14 @@ pub fn music_api_settings_content(settings: &MusicApiSettings, auth_state: AuthS
                         AuthMethod::Poll => {
                             @match auth_state {
                                 AuthState::Initial => {
-                                    input type="hidden" name="type" value="poll";
-                                    button
+                                    Input type="hidden" name="type" value="poll";
+                                    Button
                                         type="submit"
-                                        sx-border-radius=(5)
-                                        sx-background="#111"
-                                        sx-border="2, #222"
-                                        sx-padding-x=(10)
-                                        sx-padding-y=(5)
+                                        border-radius=(5)
+                                        background="#111"
+                                        border="2, #222"
+                                        padding-x=(10)
+                                        padding-y=(5)
                                     {
                                         "Start web authentication"
                                     }
@@ -288,10 +285,10 @@ pub fn music_api_settings_content(settings: &MusicApiSettings, auth_state: AuthS
 }
 
 #[must_use]
-pub fn scan_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Markup {
+pub fn scan_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Containers {
     let id = id.as_ref();
-    html! {
-        div id={"settings-scan-error-"(classify_name(id))} {
+    container! {
+        Div id={"settings-scan-error-"(classify_name(id))} {
             @if let Some(message) = message {
                 (message)
             }
@@ -300,10 +297,10 @@ pub fn scan_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Markup
 }
 
 #[must_use]
-pub fn auth_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Markup {
+pub fn auth_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Containers {
     let id = id.as_ref();
-    html! {
-        div id={"settings-auth-error-"(classify_name(id))} {
+    container! {
+        Div id={"settings-auth-error-"(classify_name(id))} {
             @if let Some(message) = message {
                 (message)
             }
@@ -315,63 +312,63 @@ pub fn auth_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Markup
 pub fn connections_content(
     connections: &[Connection],
     current_connection: Option<&Connection>,
-) -> Markup {
-    html! {
-        div id="settings-connections" sx-gap=(10) {
+) -> Containers {
+    container! {
+        Div id="settings-connections" gap=(10) {
             @for connection in connections {
                 @let current_connection = current_connection.is_some_and(|x| x == connection);
                 @let connection_input = |input, placeholder| connection_input(connection, input, placeholder);
 
-                form
-                    hx-patch={(pre_escaped!("/settings/connections?name="))(connection.name)}
-                    hx-swap="#settings-connections"
-                    sx-width="100%"
-                    sx-gap=(5)
+                Form
+                    hx-patch={"/settings/connections?name="(connection.name)}
+                    hx-swap=(SwapTarget::Id("settings-connections".to_string()))
+                    width="100%"
+                    gap=(5)
                 {
                     @if current_connection {
-                        div { "(Selected)" }
+                        Div { "(Selected)" }
                     }
-                    div sx-text-align=(TextAlign::End) {
-                        div { "Name: " (connection_input(ConnectionInput::Name, Some("New connection"))) }
-                        div { "API URL: " (connection_input(ConnectionInput::ApiUrl, None)) }
+                    Div text-align=(TextAlign::End) {
+                        Div { "Name: " (connection_input(ConnectionInput::Name, Some("New connection"))) }
+                        Div { "API URL: " (connection_input(ConnectionInput::ApiUrl, None)) }
                     }
-                    div
-                        sx-dir=(LayoutDirection::Row)
-                        sx-justify-content=(JustifyContent::End)
-                        sx-gap=(5)
-                        sx-width="100%"
+                    Div
+                        direction=(LayoutDirection::Row)
+                        justify-content=(JustifyContent::End)
+                        gap=(5)
+                        width="100%"
                     {
                         @if !current_connection {
-                            button
-                                sx-border-radius=(5)
-                                sx-background="#111"
-                                sx-border="2, #222"
-                                sx-padding-x=(10)
-                                sx-padding-y=(5)
-                                hx-post={(pre_escaped!("/settings/select-connection?name="))(connection.name)}
+                            Button
+                                border-radius=(5)
+                                background="#111"
+                                border="2, #222"
+                                padding-x=(10)
+                                padding-y=(5)
+                                hx-post={"/settings/select-connection?name="(connection.name)}
                                 hx-swap="#settings-connections"
                             {
                                 "Select"
                             }
                         }
-                        button
-                            sx-border-radius=(5)
-                            sx-background="#111"
-                            sx-border="2, #222"
-                            sx-padding-x=(10)
-                            sx-padding-y=(5)
-                            hx-delete={(pre_escaped!("/settings/connections?name="))(connection.name)}
+                        Button
+                            border-radius=(5)
+                            background="#111"
+                            border="2, #222"
+                            padding-x=(10)
+                            padding-y=(5)
+                            hx-delete={"/settings/connections?name="(connection.name)}
                             hx-swap="#settings-connections"
                         {
                             "Delete"
                         }
-                        button
+                        Button
                             type="submit"
-                            sx-border-radius=(5)
-                            sx-background="#111"
-                            sx-border="2, #222"
-                            sx-padding-x=(10)
-                            sx-padding-y=(5)
+                            border-radius=(5)
+                            background="#111"
+                            border="2, #222"
+                            padding-x=(10)
+                            padding-y=(5)
                         {
                             "Save"
                         }
@@ -393,14 +390,14 @@ fn connection_input(
     connection: &Connection,
     input: ConnectionInput,
     placeholder: Option<&str>,
-) -> Markup {
-    html! {
+) -> Containers {
+    container! {
         @let name = input.as_ref();
         @let value = match input {
             ConnectionInput::Name => connection.name.clone(),
             ConnectionInput::ApiUrl => connection.api_url.clone(),
         };
-        input
+        Input
             type="text"
             placeholder=[placeholder]
             value=(value)
@@ -419,6 +416,12 @@ pub fn settings(
 ) -> Markup {
     page(
         state,
-        &settings_page_content(connection_name, connections, selected, music_api_settings),
+        &pre_escaped!(
+            "{}",
+            settings_page_content(connection_name, connections, selected, music_api_settings)
+                .into_iter()
+                .map(|c| c.to_string())
+                .collect::<String>()
+        ),
     )
 }

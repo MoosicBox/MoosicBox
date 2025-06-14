@@ -5,7 +5,6 @@ use hyperchad::{
     router::{Container, RouteRequest},
     transformer::html::ParseError,
 };
-use hyperchad_template::Markup;
 use moosicbox_app_models::{Connection, DownloadSettings, MusicApiSettings, ScanSettings};
 use moosicbox_app_native_ui::{
     downloads::DownloadTab,
@@ -620,12 +619,12 @@ pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> 
     switchy::unsync::task::spawn({
         let state = state.clone();
         async move {
-            let markup = settings_music_api_settings_markup(&state).await.unwrap();
+            let container = settings_music_api_settings_markup(&state).await.unwrap();
             let renderer = RENDERER.get().unwrap();
             renderer
                 .render_partial(PartialView {
                     target: "settings-music-api-settings-section".to_string(),
-                    container: markup.into_string().try_into().unwrap(),
+                    container,
                 })
                 .await?;
 
@@ -691,16 +690,11 @@ pub async fn settings_connections_route(req: RouteRequest) -> Result<View, Route
 
             let current_connection = STATE.get_current_connection().await?;
 
-            moosicbox_app_native_ui::settings::connections_content(
+            Ok(moosicbox_app_native_ui::settings::connections_content(
                 &connections,
                 current_connection.as_ref(),
             )
-            .into_string()
-            .try_into()
-            .map_err(|e| {
-                moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-                RouteError::ParseMarkup
-            })
+            .into())
         }
         Method::Patch => {
             let name = req
@@ -725,16 +719,11 @@ pub async fn settings_connections_route(req: RouteRequest) -> Result<View, Route
 
             let current_connection = STATE.get_current_connection().await?;
 
-            moosicbox_app_native_ui::settings::connections_content(
+            Ok(moosicbox_app_native_ui::settings::connections_content(
                 &connections,
                 current_connection.as_ref(),
             )
-            .into_string()
-            .try_into()
-            .map_err(|e| {
-                moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-                RouteError::ParseMarkup
-            })
+            .into())
         }
         Method::Get
         | Method::Post
@@ -769,16 +758,11 @@ pub async fn settings_new_connection_route(req: RouteRequest) -> Result<View, Ro
 
     let current_connection = STATE.get_current_connection().await?;
 
-    moosicbox_app_native_ui::settings::connections_content(
+    Ok(moosicbox_app_native_ui::settings::connections_content(
         &connections,
         current_connection.as_ref(),
     )
-    .into_string()
-    .try_into()
-    .map_err(|e| {
-        moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-        RouteError::ParseMarkup
-    })
+    .into())
 }
 
 pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View, RouteError> {
@@ -800,13 +784,10 @@ pub async fn settings_select_connection_route(req: RouteRequest) -> Result<View,
 
     STATE.set_current_connection(connection.clone()).await?;
 
-    moosicbox_app_native_ui::settings::connections_content(&connections, Some(&connection))
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            RouteError::ParseMarkup
-        })
+    Ok(
+        moosicbox_app_native_ui::settings::connections_content(&connections, Some(&connection))
+            .into(),
+    )
 }
 
 pub async fn settings_music_api_settings_route(req: RouteRequest) -> Result<Content, RouteError> {
@@ -816,13 +797,13 @@ pub async fn settings_music_api_settings_route(req: RouteRequest) -> Result<Cont
 
     let state = convert_state(&STATE).await;
 
-    Ok(Content::try_partial_view(
+    Ok(Content::partial_view(
         "settings-music-api-settings-section",
         settings_music_api_settings_markup(&state).await?,
-    )?)
+    ))
 }
 
-async fn settings_music_api_settings_markup(state: &State) -> Result<Markup, RouteError> {
+async fn settings_music_api_settings_markup(state: &State) -> Result<Container, RouteError> {
     let mut music_api_settings: Vec<MusicApiSettings> = vec![];
 
     if let Some(connection) = &state.connection {
@@ -849,7 +830,7 @@ async fn settings_music_api_settings_markup(state: &State) -> Result<Markup, Rou
         log::debug!("No connection");
     }
 
-    Ok(moosicbox_app_native_ui::settings::music_api_settings_section(&music_api_settings))
+    Ok(moosicbox_app_native_ui::settings::music_api_settings_section(&music_api_settings).into())
 }
 
 pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteError> {
@@ -885,18 +866,18 @@ pub async fn music_api_scan_route(req: RouteRequest) -> Result<Content, RouteErr
 
         let settings = music_api.into();
 
-        return Ok(Content::try_view(
+        return Ok(Content::view(
             moosicbox_app_native_ui::settings::music_api_settings_content(
                 &settings,
                 AuthState::Initial,
             ),
-        )?);
+        ));
     }
 
-    Ok(Content::try_partial_view(
+    Ok(Content::partial_view(
         format!("settings-scan-error-{}", classify_name(&api_source)),
         moosicbox_app_native_ui::settings::scan_error_message(&api_source, Some("Failed to scan")),
-    )?)
+    ))
 }
 
 pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Content, RouteError> {
@@ -929,21 +910,21 @@ pub async fn music_api_enable_scan_origin_route(req: RouteRequest) -> Result<Con
 
         let settings = music_api.into();
 
-        return Ok(Content::try_view(
+        return Ok(Content::view(
             moosicbox_app_native_ui::settings::music_api_settings_content(
                 &settings,
                 AuthState::Initial,
             ),
-        )?);
+        ));
     }
 
-    Ok(Content::try_partial_view(
+    Ok(Content::partial_view(
         format!("settings-scan-error-{}", classify_name(&api_source)),
         moosicbox_app_native_ui::settings::scan_error_message(
             &api_source,
             Some("Failed to enable scan origin"),
         ),
-    )?)
+    ))
 }
 
 pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteError> {
@@ -988,18 +969,18 @@ pub async fn music_api_auth_route(req: RouteRequest) -> Result<Content, RouteErr
             AuthValues::Poll => AuthState::Polling,
         };
 
-        return Ok(Content::try_view(
+        return Ok(Content::view(
             moosicbox_app_native_ui::settings::music_api_settings_content(&settings, auth_state),
-        )?);
+        ));
     }
 
-    Ok(Content::try_partial_view(
+    Ok(Content::partial_view(
         format!("settings-auth-error-{}", classify_name(&api_source)),
         moosicbox_app_native_ui::settings::auth_error_message(
             &api_source,
             Some("Failed to authenticate"),
         ),
-    )?)
+    ))
 }
 
 #[derive(Deserialize)]
@@ -1192,10 +1173,10 @@ pub async fn settings_download_settings_route(req: RouteRequest) -> Result<Conte
 
     let markup = download_settings_content(&settings);
 
-    Ok(Content::try_partial_view(
+    Ok(Content::partial_view(
         "settings-download-settings-section",
         markup,
-    )?)
+    ))
 }
 
 #[derive(Deserialize)]
@@ -1287,10 +1268,10 @@ pub async fn settings_scan_settings_route(req: RouteRequest) -> Result<Content, 
 
     let markup = scan_settings_content(&settings);
 
-    Ok(Content::try_partial_view(
+    Ok(Content::partial_view(
         "settings-scan-settings-section",
         markup,
-    )?)
+    ))
 }
 
 #[derive(Deserialize)]
