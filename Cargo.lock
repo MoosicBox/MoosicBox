@@ -5521,7 +5521,6 @@ dependencies = [
 name = "hyperchad_template2"
 version = "0.1.0"
 dependencies = [
- "actix-web",
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_template2_macros",

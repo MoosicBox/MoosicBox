@@ -21,16 +21,13 @@ hyperchad_template2_macros   = { workspace = true }
 hyperchad_transformer        = { workspace = true }
 hyperchad_transformer_models = { workspace = true }
 
-actix-web = { workspace = true, optional = true }
-itoa      = { workspace = true }
-ryu       = "1.0"
+itoa = { workspace = true }
+ryu  = "1.0"
 
 [dev-dependencies]
 trybuild = { workspace = true, features = ["diff"] }
 
 [features]
-default = ["actix-web"]
+default = []
 
 fail-on-warnings = []
-
-actix-web = ["dep:actix-web"]
