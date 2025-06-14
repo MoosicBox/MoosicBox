@@ -7221,12 +7221,8 @@ version = "0.1.1"
 dependencies = [
  "bytesize",
  "hyperchad",
- "hyperchad_actions",
- "hyperchad_color",
  "hyperchad_template",
  "hyperchad_template2",
- "hyperchad_transformer",
- "hyperchad_transformer_models",
  "log 0.4.27",
  "moosicbox_app_models",
  "moosicbox_audio_zone_models",

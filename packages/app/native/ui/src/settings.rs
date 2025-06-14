@@ -1,9 +1,10 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::transformer_models::{AlignItems, JustifyContent, LayoutDirection, TextAlign};
+use hyperchad::transformer_models::{
+    AlignItems, JustifyContent, LayoutDirection, SwapTarget, TextAlign,
+};
 use hyperchad_template::Markup;
 use hyperchad_template2::{Containers, container};
-use hyperchad_transformer_models::SwapTarget;
 use moosicbox_app_models::{
     AuthMethod, Connection, DownloadSettings, MusicApiSettings, ScanSettings,
 };

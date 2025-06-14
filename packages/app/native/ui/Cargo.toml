@@ -17,6 +17,7 @@ hyperchad = { workspace = true, features = [
     "serde",
     "transformer-models",
 ] }
+hyperchad_template2 = { workspace = true }
 moosicbox_app_models = { workspace = true, features = ["music-api-api"] }
 moosicbox_audio_zone_models = { workspace = true }
 moosicbox_date_utils = { workspace = true, features = ["chrono"] }
@@ -26,12 +27,6 @@ moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models = { workspace = true, features = ["api"] }
 moosicbox_paging = { workspace = true }
 moosicbox_session_models = { workspace = true }
-
-hyperchad_actions            = { workspace = true }
-hyperchad_color              = { workspace = true }
-hyperchad_template2          = { workspace = true }
-hyperchad_transformer        = { workspace = true }
-hyperchad_transformer_models = { workspace = true }
 
 bytesize            = { workspace = true }
 hyperchad_template  = { workspace = true }

@@ -18,6 +18,11 @@ use core::fmt::{Arguments, Display, Write};
 pub use hyperchad_template2_macros::container;
 pub use hyperchad_transformer::Container;
 
+pub use hyperchad_actions as actions;
+pub use hyperchad_color as color;
+pub use hyperchad_transformer as transformer;
+pub use hyperchad_transformer_models as transformer_models;
+
 /// The result type for the container! macro.
 ///
 /// The `container!` macro expands to an expression of this type.

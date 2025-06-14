@@ -97,9 +97,9 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
     };
 
     Ok(quote! {{
-        extern crate hyperchad_transformer;
-        extern crate hyperchad_transformer_models;
-        extern crate hyperchad_color;
+        use hyperchad_template2::transformer as hyperchad_transformer;
+        use hyperchad_template2::transformer_models as hyperchad_transformer_models;
+        use hyperchad_template2::color as hyperchad_color;
         let mut #output_ident: Vec<hyperchad_transformer::Container> = Vec::new();
         #stmts
         #(#diag_tokens)*
