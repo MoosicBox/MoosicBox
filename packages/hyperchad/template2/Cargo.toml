@@ -22,7 +22,7 @@ hyperchad_transformer        = { workspace = true }
 hyperchad_transformer_models = { workspace = true }
 
 itoa = { workspace = true }
-ryu  = "1.0"
+ryu  = { workspace = true }
 
 [dev-dependencies]
 trybuild = { workspace = true, features = ["diff"] }

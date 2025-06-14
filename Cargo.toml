@@ -447,6 +447,7 @@ rust-embed = "8.7.2"
 rust_decimal = { version = "1.37.1", default-features = false }
 rust_decimal_macros = { version = "1.37.1", default-features = false }
 rustls = "0.23"
+ryu = "1.0.20"
 scoped-tls = "1.0.1"
 serde = { version = "1", features = ["derive"] }
 serde-aux = "4.7.0"
