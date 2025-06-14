@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.176.0
-        version: 3.176.0(typescript@5.8.3)
+        specifier: ^3.177.0
+        version: 3.177.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -310,8 +310,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.176.0':
-    resolution: {integrity: sha512-uQ93+JvqAs+YhesczFb4t6gz0uivAKNu3ZkaUvlkHYxJxaLgKsyDBstKWqItKg7k+P+bqfqzyOuE6nW+GgfLcA==}
+  '@pulumi/pulumi@3.177.0':
+    resolution: {integrity: sha512-Ye6y3iJ2XAHsYBmy6bynPAYo0CdLzkb+854vgac0Iruancxn5FLNejgkW7gKMXKUFcFeWb5sy2NdwZFj1585Pw==}
     engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -1277,8 +1277,8 @@ packages:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
     engines: {node: '>=6'}
 
-  import-in-the-middle@1.14.0:
-    resolution: {integrity: sha512-g5zLT0HaztRJWysayWYiUq/7E5H825QIiecMD2pI5QO7Wzr847l6GDvPvmZaDIdrDtS2w7qRczywxiK6SL5vRw==}
+  import-in-the-middle@1.14.2:
+    resolution: {integrity: sha512-5tCuY9BV8ujfOpwtAGgsTx9CGUapcFMEEyByLv1B+v2+6DhAcw+Zr0nhQT7uwaZ7DiourxFEscghOR8e1aPLQw==}
 
   imurmurhash@0.1.4:
     resolution: {integrity: sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==}
@@ -2774,7 +2774,7 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/api-logs': 0.55.0
       '@types/shimmer': 1.2.0
-      import-in-the-middle: 1.14.0
+      import-in-the-middle: 1.14.2
       require-in-the-middle: 7.5.2
       semver: 7.7.2
       shimmer: 1.2.1
@@ -2846,7 +2846,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.176.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.177.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.4
       '@logdna/tail-file': 2.2.0
@@ -4069,7 +4069,7 @@ snapshots:
       parent-module: 1.0.1
       resolve-from: 4.0.0
 
-  import-in-the-middle@1.14.0:
+  import-in-the-middle@1.14.2:
     dependencies:
       acorn: 8.15.0
       acorn-import-attributes: 1.9.5(acorn@8.15.0)
