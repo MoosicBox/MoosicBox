@@ -43,7 +43,6 @@ hyperchad = { workspace = true, features = [
     "logic",
     "renderer",
     "renderer-canvas",
-    "renderer-template",
     "router",
     "router-form",
     "router-serde",
@@ -87,7 +86,6 @@ moosicbox_app_native_bundled = { workspace = true, optional = true }
 
 console-subscriber = { workspace = true, optional = true }
 flume              = { workspace = true }
-hyperchad_template = { workspace = true }
 log                = { workspace = true }
 serde              = { workspace = true }
 serde_json         = { workspace = true }

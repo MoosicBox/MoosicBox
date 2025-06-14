@@ -7161,7 +7161,6 @@ dependencies = [
  "console-subscriber",
  "flume",
  "hyperchad",
- "hyperchad_template",
  "log 0.4.27",
  "moosicbox_app_models",
  "moosicbox_app_native_bundled",
