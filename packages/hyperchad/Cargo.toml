@@ -29,6 +29,7 @@ hyperchad_renderer_vanilla_js  = { workspace = true, optional = true }
 hyperchad_router               = { workspace = true, optional = true }
 hyperchad_state                = { workspace = true, optional = true }
 hyperchad_template             = { workspace = true, optional = true }
+hyperchad_template2            = { workspace = true, optional = true }
 hyperchad_transformer          = { workspace = true, optional = true }
 hyperchad_transformer_models   = { workspace = true, optional = true }
 
@@ -53,6 +54,7 @@ all = [
     "router",
     "state",
     "template",
+    "template2",
     "transformer",
     "transformer-models",
 ]
@@ -270,8 +272,14 @@ router-syntax-highlighting = [
     "hyperchad_router?/syntax-highlighting",
 ]
 
-template           = ["dep:hyperchad_template"]
+template = [
+    "dep:hyperchad_template",
+    "hyperchad_renderer?/template",
+    "hyperchad_transformer?/template",
+]
 template-actix-web = ["hyperchad_template?/actix-web", "template"]
+
+template2 = ["dep:hyperchad_template2"]
 
 transformer = ["dep:hyperchad_transformer"]
 

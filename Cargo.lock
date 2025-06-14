@@ -5219,6 +5219,7 @@ dependencies = [
  "hyperchad_router",
  "hyperchad_state",
  "hyperchad_template",
+ "hyperchad_template2",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
 ]
