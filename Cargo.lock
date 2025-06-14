@@ -5536,6 +5536,7 @@ name = "hyperchad_template2_macros"
 version = "0.1.0"
 dependencies = [
  "hyperchad_color",
+ "hyperchad_template2",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
  "log 0.4.27",

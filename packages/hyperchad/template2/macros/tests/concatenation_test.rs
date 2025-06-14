@@ -2,11 +2,10 @@ use hyperchad_template2_macros::container;
 
 #[test]
 fn test_string_literal_concatenation() {
-    let base_url = "https://api.example.com";
     let item_id = "123";
 
     let containers = container! {
-        div hx-get={"/api/items/"(item_id)} {
+        Div hx-get={"/api/items/"(item_id)} {
             "Item details"
         }
     };
@@ -33,7 +32,7 @@ fn test_multiple_concatenation() {
     let action = "scan";
 
     let containers = container! {
-        button hx-post={"/music-api/"(action)"?apiSource="(api_source)} {
+        Button hx-post={"/music-api/"(action)"?apiSource="(api_source)} {
             "Execute"
         }
     };
@@ -60,7 +59,7 @@ fn test_id_concatenation() {
     let suffix = "error";
 
     let containers = container! {
-        div id={(prefix)"-"(suffix)} {
+        Div id={(prefix)"-"(suffix)} {
             "Error message"
         }
     };
