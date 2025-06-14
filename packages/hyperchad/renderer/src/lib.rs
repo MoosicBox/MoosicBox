@@ -142,6 +142,16 @@ impl From<Container> for Content {
     }
 }
 
+impl From<Vec<Container>> for Content {
+    fn from(value: Vec<Container>) -> Self {
+        Container {
+            children: value,
+            ..Default::default()
+        }
+        .into()
+    }
+}
+
 impl From<View> for Content {
     fn from(value: View) -> Self {
         Self::View(value)

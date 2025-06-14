@@ -28,6 +28,7 @@ ryu  = { workspace = true }
 trybuild = { workspace = true, features = ["diff"] }
 
 [features]
-default = []
+default = ["logic"]
+logic = ["hyperchad_actions/logic", "hyperchad_transformer/logic"]
 
 fail-on-warnings = []

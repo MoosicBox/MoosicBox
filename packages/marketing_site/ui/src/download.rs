@@ -1,20 +1,24 @@
 use std::sync::LazyLock;
 
 use chrono::NaiveDateTime;
-use hyperchad_actions::logic::if_responsive;
-use hyperchad_template::{Markup, html};
-use hyperchad_transformer_models::{AlignItems, LayoutDirection};
+use hyperchad::{
+    actions::logic::if_responsive,
+    template2::{Containers, container},
+    transformer::models::{AlignItems, LayoutDirection},
+};
 use regex::Regex;
 
 use crate::page;
 
+pub use hyperchad::template2 as hyperchad_template2;
+
 #[must_use]
-pub fn download() -> Markup {
-    page(&html! {
-        div sx-align-items=(AlignItems::Center) sx-padding-x=(20) {
-            div sx-width="100%" sx-max-width=(1000) sx-padding-y=(20) {
-                h1 sx-border-bottom="2, #ccc" sx-padding-bottom=(20) sx-margin-bottom=(10) { "Downloads" }
-                div id="releases" sx-hidden=(true) hx-get="/releases" hx-trigger="load" {}
+pub fn download() -> Containers {
+    page(&container! {
+        Div align-items=(AlignItems::Center) padding-x=(20) {
+            Div width="100%" max-width=(1000) padding-y=(20) {
+                H1 border-bottom="2, #ccc" padding-bottom=(20) margin-bottom=(10) { "Downloads" }
+                Div id="releases" hidden=(true) hx-get="/releases" hx-trigger="load" {}
             }
         }
     })
@@ -76,50 +80,50 @@ fn format_date(date: &NaiveDateTime) -> String {
 }
 
 #[must_use]
-pub fn releases(releases: &[OsRelease], os: &Os) -> Markup {
-    html! {
-        div id="releases" {
+pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
+    container! {
+        Div id="releases" {
             @for release in releases {
-                div id=(format_class_name(release.version)) sx-padding-y=(20) {
-                    h2
+                Div id=(format_class_name(release.version)) padding-y=(20) {
+                    H2
                         id={(format_class_name(release.version))"-header"}
-                        sx-dir=(
+                        direction=(
                             if_responsive("mobile")
                                 .then::<LayoutDirection>(LayoutDirection::Column)
                                 .or_else(LayoutDirection::Row)
                         )
-                        sx-align-items=(
+                        align-items=(
                             if_responsive("mobile")
                                 .then::<AlignItems>(AlignItems::Start)
                                 .or_else(AlignItems::End)
                         )
-                        sx-col-gap=(10)
+                        col-gap=(10)
                     {
-                        div { "Release " (release.version) }
-                        div sx-font-size=(16) sx-margin-bottom=(2) sx-color="#ccc" {
+                        Div { "Release " (release.version) }
+                        Div font-size=(16) margin-bottom=(2) color="#ccc" {
                             (format_date(&release.published_at))
                         }
-                        div sx-font-size=(16) sx-margin-bottom=(2) {
-                            "[" a sx-color="#fff" target="_blank" href=(release.url) { "GitHub" } "]"
+                        Div font-size=(16) margin-bottom=(2) {
+                            "[" Anchor color="#fff" target="_blank" href=(release.url) { "GitHub" } "]"
                         }
                     }
                     @for release_asset in &release.assets {
                         @if let Some(asset) = &release_asset.asset {
-                            div {
+                            Div {
                                 @if os.lower_name == release_asset.name {
-                                    div sx-color="#888" {
+                                    Div color="#888" {
                                         "// We think you are running " (os.header)
                                     }
                                 }
-                                h3 { (get_os_header(release_asset.name)) }
+                                H3 { (get_os_header(release_asset.name)) }
                                 "Download "
-                                a sx-color="#fff" href=(asset.browser_download_url) { (asset.name) }
-                                span sx-color="#ccc" sx-font-size=(12) { " (" (format_size(asset.size)) ")" }
-                                ul sx-margin=(0) {
+                                Anchor color="#fff" href=(asset.browser_download_url) { (asset.name) }
+                                Span color="#ccc" font-size=(12) { " (" (format_size(asset.size)) ")" }
+                                Ul margin=(0) {
                                     @for other_asset in &release_asset.other_formats {
-                                        li {
-                                            a sx-color="#fff" href=(other_asset.browser_download_url) { (other_asset.name) }
-                                            span sx-color="#ccc" sx-font-size=(12) { " (" (format_size(other_asset.size)) ")" }
+                                        Li {
+                                            Anchor color="#fff" href=(other_asset.browser_download_url) { (other_asset.name) }
+                                            Span color="#ccc" font-size=(12) { " (" (format_size(other_asset.size)) ")" }
                                         }
                                     }
                                 }

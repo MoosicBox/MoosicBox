@@ -174,13 +174,7 @@ pub async fn releases_route(req: RouteRequest) -> Result<View, Box<dyn std::erro
         .map(|x| github_release_into_os_release(x, &os))
         .collect::<Result<Vec<_>, _>>()?;
 
-    moosicbox_marketing_site_ui::download::releases(&releases, &os)
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            Box::new(e) as Box<dyn std::error::Error>
-        })
+    Ok(moosicbox_marketing_site_ui::download::releases(&releases, &os).into())
 }
 
 async fn with_retry<T: Sized, E, F: Future<Output = Result<T, E>> + Send, U: (Fn() -> F) + Send>(

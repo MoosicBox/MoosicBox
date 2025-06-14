@@ -4,11 +4,14 @@
 #![allow(clippy::branches_sharing_code)]
 
 pub mod download;
+pub use hyperchad::template2 as hyperchad_template2;
 
-use hyperchad_actions::logic::if_responsive;
-use hyperchad_template::{Markup, html};
-use hyperchad_transformer_models::{
-    AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
+use hyperchad::{
+    actions::logic::if_responsive,
+    template2::{Containers, container},
+    transformer::models::{
+        AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
+    },
 };
 
 #[macro_export]
@@ -26,58 +29,58 @@ macro_rules! pre_escaped {
 }
 
 #[must_use]
-pub fn header() -> Markup {
-    html! {
-        header
-            sx-dir=(LayoutDirection::Row)
-            sx-align-items=(AlignItems::Center)
-            sx-background="#080a0b"
+pub fn header() -> Containers {
+    container! {
+        Header
+            direction=(LayoutDirection::Row)
+            align-items=(AlignItems::Center)
+            background="#080a0b"
         {
-            div id="header-logo" sx-padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
-                a
-                    sx-color="#fff"
-                    sx-dir=(LayoutDirection::Row)
-                    sx-align-items=(AlignItems::Center)
-                    sx-text-decoration="none"
+            Div id="header-logo" padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
+                Anchor
+                    color="#fff"
+                    direction=(LayoutDirection::Row)
+                    align-items=(AlignItems::Center)
+                    text-decoration="none"
                     href="/"
                 {
                     @let icon_size = 40;
-                    img
+                    Image
                         alt="MoosicBox logo"
-                        sx-width=(icon_size)
-                        sx-height=(icon_size)
-                        sx-margin-right=(5)
+                        width=(icon_size)
+                        height=(icon_size)
+                        margin-right=(5)
                         src=(public_img!("icon128.png"));
 
-                    h1 sx-font-size=(20) { "MoosicBox" }
+                    H1 font-size=(20) { "MoosicBox" }
                 }
             }
-            div
+            Div
                 id="header-menu-items"
-                sx-dir=(LayoutDirection::Row)
-                sx-align-items=(AlignItems::Center)
-                sx-justify-content=(JustifyContent::End)
-                sx-flex=(1)
-                sx-padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20))
-                sx-col-gap=(if_responsive("mobile").then::<i32>(10).or_else(20))
+                direction=(LayoutDirection::Row)
+                align-items=(AlignItems::Center)
+                justify-content=(JustifyContent::End)
+                flex=(1)
+                padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20))
+                col-gap=(if_responsive("mobile").then::<i32>(10).or_else(20))
             {
-                a sx-color="#fff" href="/download" {
+                Anchor color="#fff" href="/download" {
                     "Download"
                 }
-                a sx-color="#fff" href="https://app.moosicbox.com/login" {
+                Anchor color="#fff" href="https://app.moosicbox.com/login" {
                     "Log in"
                 }
-                a
-                    sx-color="#fff"
-                    sx-background="#282a2b"
-                    sx-border-radius=(5)
-                    sx-padding=(8)
+                Anchor
+                    color="#fff"
+                    background="#282a2b"
+                    border-radius=(5)
+                    padding=(8)
                     href="/try-now"
                 {
-                    span id="try-desktop" sx-hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
+                    Span id="try-desktop" hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
                         "Start Free Trial"
                     }
-                    span id="try-mobile" sx-hidden=(if_responsive("mobile").then::<bool>(false).or_else(true)) {
+                    Span id="try-mobile" hidden=(if_responsive("mobile").then::<bool>(false).or_else(true)) {
                         "Try"
                     }
                 }
@@ -87,52 +90,52 @@ pub fn header() -> Markup {
 }
 
 #[must_use]
-pub fn main(slot: &Markup) -> Markup {
-    html! {
-        main sx-flex-grow=(1) sx-min-height=(0) {
+pub fn main(slot: &Containers) -> Containers {
+    container! {
+        Main flex-grow=(1) min-height=(0) {
             (slot)
         }
     }
 }
 
 #[must_use]
-pub fn try_now() -> Markup {
-    page(&html! {
+pub fn try_now() -> Containers {
+    page(&container! {
         "Try now"
     })
 }
 
 #[must_use]
-pub fn not_found() -> Markup {
-    page(&html! {
+pub fn not_found() -> Containers {
+    page(&container! {
         "Page not found"
     })
 }
 
 #[must_use]
-pub fn home() -> Markup {
-    page(&html! {
-        div
-            sx-min-height="100%"
-            sx-justify-content=(JustifyContent::Center)
+pub fn home() -> Containers {
+    page(&container! {
+        Div
+            min-height="100%"
+            justify-content=(JustifyContent::Center)
         {
-            div
+            Div
                 id="pics"
-                sx-dir=(
+                direction=(
                     if_responsive("mobile-large")
                         .then::<LayoutDirection>(LayoutDirection::Column)
                         .or_else(LayoutDirection::Row)
                 )
-                sx-align-items=(AlignItems::Center)
-                sx-max-height="1000px"
-                sx-padding-x=(50)
-                sx-gap="calc(min(100, 5%))"
+                align-items=(AlignItems::Center)
+                max-height="1000px"
+                padding-x=(50)
+                gap="calc(min(100, 5%))"
             {
-                div sx-flex-grow=(2) {
-                    h1
+                Div flex-grow=(2) {
+                    H1
                         id="splashscreen-motto"
-                        sx-font-size=(50)
-                        sx-text-align=(
+                        font-size=(50)
+                        text-align=(
                             if_responsive("mobile-large")
                                 .then::<TextAlign>(TextAlign::Center)
                                 .or_else(TextAlign::End)
@@ -141,19 +144,19 @@ pub fn home() -> Markup {
                         "Listen to your HiFi music anywhere"
                     }
                 }
-                div
-                    sx-dir=(LayoutDirection::Row)
-                    sx-position=(Position::Relative)
-                    sx-height="100%"
-                    sx-flex-grow=(3)
+                Div
+                    direction=(LayoutDirection::Row)
+                    position=(Position::Relative)
+                    height="100%"
+                    flex-grow=(3)
                 {
-                    div
-                        sx-margin-left="calc(10% - (100% / 30))"
-                        sx-height="100%"
-                        sx-max-height="100%"
-                        sx-max-width="calc(100% - calc(10% - (100% / 30)))"
+                    Div
+                        margin-left="calc(10% - (100% / 30))"
+                        height="100%"
+                        max-height="100%"
+                        max-width="calc(100% - calc(10% - (100% / 30)))"
                     {
-                        img
+                        Image
                             src=(public_img!("showcase-1.webp"))
                             srcset={
                                 (public_img!("showcase-1x240.webp"))" 240w, "
@@ -161,19 +164,19 @@ pub fn home() -> Markup {
                                 (public_img!("showcase-1.webp"))" 1080w"
                             }
                             sizes="70vw"
-                            sx-width="100%"
-                            sx-height="100%"
+                            width="100%"
+                            height="100%"
                             alt="MoosicBox showcase desktop"
-                            sx-fit="contain";
+                            fit="contain";
                     }
-                    div
-                        sx-position="absolute"
-                        sx-bottom="50%"
-                        sx-translate-y="50%"
-                        sx-height="calc(min(65%, 50dvw))"
-                        sx-max-height="80%"
+                    Div
+                        position="absolute"
+                        bottom="50%"
+                        translate-y="50%"
+                        height="calc(min(65%, 50dvw))"
+                        max-height="80%"
                     {
-                        img
+                        Image
                             src=(public_img!("showcase-2.webp"))
                             srcset={
                                 (public_img!("showcase-2x240.webp"))" 240w, "
@@ -181,10 +184,10 @@ pub fn home() -> Markup {
                                 (public_img!("showcase-2.webp"))" 1080w"
                             }
                             sizes="30vw"
-                            sx-width="100%"
-                            sx-height="100%"
+                            width="100%"
+                            height="100%"
                             alt="MoosicBox showcase android"
-                            sx-fit="contain";
+                            fit="contain";
                     }
                 }
             }
@@ -193,17 +196,17 @@ pub fn home() -> Markup {
 }
 
 #[must_use]
-pub fn page(slot: &Markup) -> Markup {
-    html! {
-        div
-            sx-width="100%"
-            sx-height="100%"
-            sx-position="relative"
-            sx-color="#fff"
-            sx-font-family="Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif"
-            sx-overflow-x=(LayoutOverflow::Hidden)
-            sx-overflow-y=(LayoutOverflow::Auto)
-            sx-justify-content=(JustifyContent::Center)
+pub fn page(slot: &Containers) -> Containers {
+    container! {
+        Div
+            width="100%"
+            height="100%"
+            position="relative"
+            color="#fff"
+            font-family="Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif"
+            overflow-x=(LayoutOverflow::Hidden)
+            overflow-y=(LayoutOverflow::Auto)
+            justify-content=(JustifyContent::Center)
         {
             (header())
             (main(&slot))

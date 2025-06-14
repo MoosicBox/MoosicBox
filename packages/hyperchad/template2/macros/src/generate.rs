@@ -515,7 +515,7 @@ impl Generator {
                         loading = Some(self.markup_to_image_loading_tokens(attr_value));
                     }
                     "fit" => {
-                        fit = Some(self.markup_to_image_fit_tokens(attr_value));
+                        fit = Some(Self::markup_to_image_fit_tokens(attr_value));
                     }
                     _ => {}
                 }
@@ -545,7 +545,7 @@ impl Generator {
             hyperchad_transformer::Element::Image {
                 source: #src_field,
                 alt: #alt_field,
-                srcset: #srcset_field,
+                source_set: #srcset_field,
                 sizes: #sizes_field,
                 loading: #loading_field,
                 fit: #fit_field
@@ -603,7 +603,7 @@ impl Generator {
         }
     }
 
-    fn markup_to_image_fit_tokens(&self, value: Markup<NoElement>) -> TokenStream {
+    fn markup_to_image_fit_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => match &lit.lit {
                 syn::Lit::Str(lit_str) => {
@@ -624,6 +624,20 @@ impl Generator {
             },
             Markup::Splice { expr, .. } => {
                 quote! { (#expr).into() }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_image_fit_tokens(items[0].clone())
+                } else {
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            result.into()
+                        }
+                    }
+                }
             }
             _ => quote! { hyperchad_transformer_models::ImageFit::default() },
         }
@@ -764,7 +778,13 @@ impl Generator {
                 if items.len() == 1 {
                     Self::markup_to_swap_target_tokens(items[0].clone())
                 } else {
-                    quote! { hyperchad_transformer_models::SwapTarget::default() }
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            result.into()
+                        }
+                    }
                 }
             }
             _ => quote! { hyperchad_transformer_models::SwapTarget::default() },
@@ -799,7 +819,12 @@ impl Generator {
                 | "border-right-radius"
                 | "border-bottom-radius"
                 | "border-left-radius"
-                | "gap" => {
+                | "gap"
+                | "flex"
+                | "flex-grow"
+                | "flex-shrink"
+                | "flex-basis"
+                | "text-decoration" => {
                     shorthand_attrs.insert(name_str, (name, attr_type));
                 }
                 _ => {
@@ -818,7 +843,7 @@ impl Generator {
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
-                    "Unknown attribute '{}'. Supported attributes include: width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, direction, position, cursor, visibility, overflow-x, overflow-y, font-size, opacity, border-radius, gap, hidden, debug, and HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap)",
+                    "Unknown attribute '{}'. Supported attributes include: width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, and HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap)",
                     name_str
                 );
                 return Err(error_msg);
@@ -900,50 +925,103 @@ impl Generator {
         // Handle border-radius shortcuts
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-radius")
         {
-            let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_top_left_radius: Some(#value_tokens.clone()) });
-            assignments.push(quote! { border_top_right_radius: Some(#value_tokens.clone()) });
-            assignments.push(quote! { border_bottom_left_radius: Some(#value_tokens.clone()) });
-            assignments.push(quote! { border_bottom_right_radius: Some(#value_tokens) });
+            let radius_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_top_left_radius: Some(#radius_tokens.clone()) });
+            assignments.push(quote! { border_top_right_radius: Some(#radius_tokens.clone()) });
+            assignments.push(quote! { border_bottom_left_radius: Some(#radius_tokens.clone()) });
+            assignments.push(quote! { border_bottom_right_radius: Some(#radius_tokens) });
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
             shorthand_attrs.get("border-top-radius")
         {
-            let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_top_left_radius: Some(#value_tokens.clone()) });
-            assignments.push(quote! { border_top_right_radius: Some(#value_tokens) });
+            let radius_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_top_left_radius: Some(#radius_tokens.clone()) });
+            assignments.push(quote! { border_top_right_radius: Some(#radius_tokens) });
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
             shorthand_attrs.get("border-right-radius")
         {
-            let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_top_right_radius: Some(#value_tokens.clone()) });
-            assignments.push(quote! { border_bottom_right_radius: Some(#value_tokens) });
+            let radius_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_top_right_radius: Some(#radius_tokens.clone()) });
+            assignments.push(quote! { border_bottom_right_radius: Some(#radius_tokens) });
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
             shorthand_attrs.get("border-bottom-radius")
         {
-            let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_bottom_left_radius: Some(#value_tokens.clone()) });
-            assignments.push(quote! { border_bottom_right_radius: Some(#value_tokens) });
+            let radius_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_bottom_left_radius: Some(#radius_tokens.clone()) });
+            assignments.push(quote! { border_bottom_right_radius: Some(#radius_tokens) });
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
             shorthand_attrs.get("border-left-radius")
         {
-            let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_top_left_radius: Some(#value_tokens.clone()) });
-            assignments.push(quote! { border_bottom_left_radius: Some(#value_tokens) });
+            let radius_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { border_top_left_radius: Some(#radius_tokens.clone()) });
+            assignments.push(quote! { border_bottom_left_radius: Some(#radius_tokens) });
         }
 
         // Handle gap shortcut
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("gap") {
-            let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { column_gap: Some(#value_tokens.clone()) });
-            assignments.push(quote! { row_gap: Some(#value_tokens) });
+            let gap_tokens = Self::markup_to_number_tokens(value.clone());
+            assignments.push(quote! { column_gap: Some(#gap_tokens.clone()) });
+            assignments.push(quote! { row_gap: Some(#gap_tokens) });
+        }
+
+        // Handle flex shortcuts
+        {
+            // Handle individual flex properties
+            let flex_grow = shorthand_attrs.get("flex-grow");
+            let flex_shrink = shorthand_attrs.get("flex-shrink");
+            let flex_basis = shorthand_attrs.get("flex-basis");
+
+            if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("flex") {
+                let flex_tokens =
+                    Self::markup_to_flex_tokens(value.clone(), flex_grow, flex_shrink, flex_basis);
+                assignments.push(quote! { flex: Some(#flex_tokens) });
+            }
+
+            if flex_grow.is_some() || flex_shrink.is_some() || flex_basis.is_some() {
+                let grow_tokens = if let Some((_, AttributeType::Normal { value, .. })) = flex_grow
+                {
+                    Self::markup_to_number_tokens(value.clone())
+                } else {
+                    quote! { hyperchad_transformer::Number::Integer(1) }
+                };
+
+                let shrink_tokens =
+                    if let Some((_, AttributeType::Normal { value, .. })) = flex_shrink {
+                        Self::markup_to_number_tokens(value.clone())
+                    } else {
+                        quote! { hyperchad_transformer::Number::Integer(1) }
+                    };
+
+                let basis_tokens =
+                    if let Some((_, AttributeType::Normal { value, .. })) = flex_basis {
+                        Self::markup_to_number_tokens(value.clone())
+                    } else {
+                        quote! { hyperchad_transformer::Number::IntegerPercent(0) }
+                    };
+
+                assignments.push(quote! {
+                    flex: Some(hyperchad_transformer::Flex {
+                        grow: #grow_tokens,
+                        shrink: #shrink_tokens,
+                        basis: #basis_tokens,
+                    })
+                });
+            }
+        }
+
+        // Handle text-decoration shortcut (simple implementation for now)
+        if let Some((_, AttributeType::Normal { value, .. })) =
+            shorthand_attrs.get("text-decoration")
+        {
+            let text_decoration_tokens = Self::markup_to_text_decoration_tokens(value.clone());
+            assignments.push(quote! { text_decoration: Some(#text_decoration_tokens) });
         }
     }
 
@@ -1068,6 +1146,7 @@ impl Generator {
                     Some(self.enum_attr("justify_content", "JustifyContent", value))
                 }
                 "text-align" => Some(self.enum_attr("text_align", "TextAlign", value)),
+                "text-decoration" => Some(self.text_decoration_attr("text_decoration", value)),
                 "direction" => Some(self.direct_enum_attr("direction", "LayoutDirection", value)),
                 "position" => Some(self.enum_attr("position", "Position", value)),
                 "cursor" => Some(self.enum_attr("cursor", "Cursor", value)),
@@ -1083,6 +1162,11 @@ impl Generator {
                 "hidden" => Some(self.bool_attr("hidden", value)),
                 "debug" => Some(self.bool_attr("debug", value)),
 
+                // String properties
+                "font-family" => Some(self.font_family_attr("font_family", value)),
+
+                // // Flex properties
+                // "flex" => Some(self.flex_attr("flex", value)),
                 _ => None,
             },
             AttributeType::Optional { toggler, .. } => {
@@ -1097,12 +1181,15 @@ impl Generator {
                     "placeholder" | "value" | "name" | "type" | "checked" => None,
 
                     // String properties - generate Option<String>
-                    "id" | "href" | "src" | "alt" | "srcset" => {
+                    "id" | "href" | "src" | "alt" => {
                         let field_ident = format_ident!("{}", name_str.replace('-', "_"));
                         Some(quote! {
                             #field_ident: if let Some(val) = (#cond) { Some(val.to_string()) } else { None }
                         })
                     }
+                    "srcset" => Some(quote! {
+                        source_set: if let Some(val) = (#cond) { Some(val.to_string()) } else { None }
+                    }),
                     // Number properties - generate Option<Number>
                     "width"
                     | "height"
@@ -1148,6 +1235,7 @@ impl Generator {
                             #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
                         })
                     }
+
                     // Border properties - generate Option<(Color, Number)>
                     "border-top" | "border-right" | "border-bottom" | "border-left" => {
                         let field_ident = format_ident!("{}", name_str.replace('-', "_"));
@@ -1155,6 +1243,12 @@ impl Generator {
                             #field_ident: if let Some(val) = (#cond) {
                                 Some(val.into())
                             } else { None }
+                        })
+                    }
+                    "font-family" => {
+                        let field_ident = format_ident!("{}", name_str.replace('-', "_"));
+                        Some(quote! {
+                            #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
                         })
                     }
                     _ => None,
@@ -1207,10 +1301,22 @@ impl Generator {
         quote! { #field_ident: Some(#value_tokens) }
     }
 
+    fn font_family_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let value_tokens = Self::markup_to_font_family_tokens(value);
+        quote! { #field_ident: Some(#value_tokens) }
+    }
+
     fn border_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let border_tokens = Self::markup_to_border_tokens(value);
         quote! { #field_ident: Some(#border_tokens) }
+    }
+
+    fn text_decoration_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let text_decoration_tokens = Self::markup_to_text_decoration_tokens(value);
+        quote! { #field_ident: Some(#text_decoration_tokens) }
     }
 
     fn markup_to_number_tokens(value: Markup<NoElement>) -> TokenStream {
@@ -1219,6 +1325,7 @@ impl Generator {
                 match &lit.lit {
                     syn::Lit::Str(lit_str) => {
                         let value_str = lit_str.value();
+
                         // Try to parse different number formats from strings
                         if value_str.ends_with('%') {
                             let num_str = &value_str[..value_str.len() - 1];
@@ -1271,50 +1378,33 @@ impl Generator {
                 }
             }
             Markup::Splice { expr, .. } => {
-                // For expressions, we need to handle different cases to avoid type inference issues
-                // Check if the expression is a simple literal that we can handle directly
-                match expr {
-                    syn::Expr::Lit(ref expr_lit) => {
-                        // Handle literal expressions directly like we do for Markup::Lit
-                        match &expr_lit.lit {
-                            syn::Lit::Int(lit_int) => {
-                                quote! { hyperchad_transformer::Number::Integer(#lit_int) }
-                            }
-                            syn::Lit::Float(lit_float) => {
-                                quote! { hyperchad_transformer::Number::Real(#lit_float) }
-                            }
-                            _ => {
-                                // For other literals in expressions, use the expression directly with explicit typing
-                                quote! {
-                                    {
-                                        let val = #expr;
-                                        <hyperchad_transformer::Number as std::convert::From<_>>::from(val)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        // For complex expressions (variables, function calls, Number::Integer(5), etc.)
-                        // Use explicit typing to help with inference but allow explicit Number types to pass through
-                        quote! {
-                            {
-                                let val = #expr;
-                                <hyperchad_transformer::Number as std::convert::From<_>>::from(val)
-                            }
-                        }
-                    }
-                }
+                // Check if this expression might be an IfExpression - let it be handled at runtime
+                Self::handle_potential_if_expression_for_number(&expr)
             }
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, handle like single item if only one
+                // For brace-wrapped items, treat the entire content as a single expression
                 if items.len() == 1 {
                     Self::markup_to_number_tokens(items[0].clone())
                 } else {
-                    quote! { hyperchad_transformer::Number::Integer(0) }
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            <hyperchad_transformer::Number as std::convert::From<_>>::from(result)
+                        }
+                    }
                 }
             }
             _ => quote! { hyperchad_transformer::Number::Integer(0) },
+        }
+    }
+
+    fn handle_potential_if_expression_for_number(expr: &syn::Expr) -> TokenStream {
+        quote! {
+            {
+                let val = #expr;
+                <hyperchad_transformer::Number as std::convert::From<_>>::from(val)
+            }
         }
     }
 
@@ -1340,22 +1430,37 @@ impl Generator {
                 }
             }
             Markup::Splice { expr, .. } => {
-                // For expressions, just use them directly - they should already be the correct enum type
-                // or implement Into<EnumType> if needed
-                quote! { #expr }
+                // Handle potential IfExpression for enums
+                Self::handle_potential_if_expression_for_enum(enum_name, &expr)
             }
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, handle like single item if only one
+                // For brace-wrapped items, treat the entire content as a single expression
                 if items.len() == 1 {
                     Self::markup_to_enum_tokens(enum_name, items[0].clone())
                 } else {
+                    let expr = Self::handle_brace_splice_expression(&items);
                     let enum_ident = format_ident!("{}", enum_name);
-                    quote! { hyperchad_transformer_models::#enum_ident::default() }
+                    quote! {
+                        {
+                            let result = { #expr };
+                            <hyperchad_transformer_models::#enum_ident as std::convert::From<_>>::from(result)
+                        }
+                    }
                 }
             }
             _ => {
                 let enum_ident = format_ident!("{}", enum_name);
                 quote! { hyperchad_transformer_models::#enum_ident::default() }
+            }
+        }
+    }
+
+    fn handle_potential_if_expression_for_enum(enum_name: &str, expr: &syn::Expr) -> TokenStream {
+        let enum_ident = format_ident!("{}", enum_name);
+        quote! {
+            {
+                let val = #expr;
+                <hyperchad_transformer_models::#enum_ident as std::convert::From<_>>::from(val)
             }
         }
     }
@@ -1401,18 +1506,31 @@ impl Generator {
                     }
                 }
             }
-            Markup::Splice { expr, .. } => {
-                quote! { (#expr).into() }
-            }
+            Markup::Splice { expr, .. } => Self::handle_potential_if_expression_for_color(&expr),
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, handle like single item if only one
+                // For brace-wrapped items, treat the entire content as a single expression
                 if items.len() == 1 {
                     Self::markup_to_color_tokens(items[0].clone())
                 } else {
-                    quote! { hyperchad_color::Color::BLACK }
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            <hyperchad_color::Color as std::convert::From<_>>::from(result)
+                        }
+                    }
                 }
             }
             _ => quote! { hyperchad_color::Color::BLACK },
+        }
+    }
+
+    fn handle_potential_if_expression_for_color(expr: &syn::Expr) -> TokenStream {
+        quote! {
+            {
+                let val = #expr;
+                <hyperchad_color::Color as std::convert::From<_>>::from(val)
+            }
         }
     }
 
@@ -1441,19 +1559,60 @@ impl Generator {
                     }
                 }
             }
-            Markup::Splice { expr, .. } => {
-                quote! { (#expr).into() }
-            }
+            Markup::Splice { expr, .. } => Self::handle_potential_if_expression_for_bool(&expr),
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, handle like single item if only one
+                // For brace-wrapped items, treat the entire content as a single expression
                 if items.len() == 1 {
                     Self::markup_to_bool_tokens(items[0].clone())
                 } else {
-                    quote! { false }
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            use hyperchad_template2::ToBool;
+                            let result = { #expr };
+                            result.to_bool()
+                        }
+                    }
                 }
             }
             _ => quote! { false },
         }
+    }
+
+    fn handle_potential_if_expression_for_bool(expr: &syn::Expr) -> TokenStream {
+        quote! {
+            {
+                use hyperchad_template2::ToBool;
+                let val = #expr;
+                val.to_bool()
+            }
+        }
+    }
+
+    /// Helper function to handle BraceSplice by reconstructing the expression as a cohesive unit
+    /// This properly supports if_responsive() and other complex logic patterns
+    fn handle_brace_splice_expression(items: &[Markup<NoElement>]) -> TokenStream {
+        let combined_tokens: Vec<_> = items
+            .iter()
+            .map(|item| match item {
+                Markup::Lit(lit) => quote! { #lit },
+                Markup::Splice { expr, .. } => quote! { #expr },
+                Markup::BraceSplice { items, .. } => {
+                    let nested_tokens: Vec<_> = items
+                        .iter()
+                        .map(|nested_item| match nested_item {
+                            Markup::Lit(lit) => quote! { #lit },
+                            Markup::Splice { expr, .. } => quote! { #expr },
+                            _ => quote! { () },
+                        })
+                        .collect();
+                    quote! { #(#nested_tokens)* }
+                }
+                _ => quote! { () },
+            })
+            .collect();
+
+        quote! { #(#combined_tokens)* }
     }
 
     fn control_flow<E: Into<Element>>(
@@ -1689,11 +1848,17 @@ impl Generator {
                 quote! { (#expr) }
             }
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, handle like single item if only one
+                // For brace-wrapped items, treat the entire content as a single expression
                 if items.len() == 1 {
                     Self::markup_to_border_tokens(items[0].clone())
                 } else {
-                    quote! { (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1)) }
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            result.into()
+                        }
+                    }
                 }
             }
             _ => {
@@ -1701,6 +1866,337 @@ impl Generator {
             }
         }
     }
+
+    fn markup_to_flex_tokens(
+        value: Markup<NoElement>,
+        _grow: Option<&(AttributeName, AttributeType)>,
+        _shrink: Option<&(AttributeName, AttributeType)>,
+        _basis: Option<&(AttributeName, AttributeType)>,
+    ) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        // Parse flex format: "grow shrink basis" (e.g., "1 0 0" or "1" or "1 0")
+                        let parts: Vec<&str> = value_str.split_whitespace().collect();
+
+                        match parts.len() {
+                            1 => {
+                                // Only grow specified
+                                let grow_str = parts[0];
+                                let grow_tokens = if let Ok(num) = grow_str.parse::<f32>() {
+                                    quote! { hyperchad_transformer::Number::Real(#num) }
+                                } else if let Ok(num) = grow_str.parse::<i64>() {
+                                    quote! { hyperchad_transformer::Number::Integer(#num) }
+                                } else {
+                                    quote! { hyperchad_transformer::parse::parse_number(#grow_str).unwrap_or_default() }
+                                };
+
+                                quote! { hyperchad_transformer::Flex {
+                                    grow: #grow_tokens,
+                                    ..Default::default()
+                                } }
+                            }
+                            2 => {
+                                // Grow and shrink specified
+                                let grow_str = parts[0];
+                                let shrink_str = parts[1];
+
+                                let grow_tokens = if let Ok(num) = grow_str.parse::<f32>() {
+                                    quote! { hyperchad_transformer::Number::Real(#num) }
+                                } else if let Ok(num) = grow_str.parse::<i64>() {
+                                    quote! { hyperchad_transformer::Number::Integer(#num) }
+                                } else {
+                                    quote! { hyperchad_transformer::parse::parse_number(#grow_str).unwrap_or_default() }
+                                };
+
+                                let shrink_tokens = if let Ok(num) = shrink_str.parse::<f32>() {
+                                    quote! { hyperchad_transformer::Number::Real(#num) }
+                                } else if let Ok(num) = shrink_str.parse::<i64>() {
+                                    quote! { hyperchad_transformer::Number::Integer(#num) }
+                                } else {
+                                    quote! { hyperchad_transformer::parse::parse_number(#shrink_str).unwrap_or_default() }
+                                };
+
+                                quote! { hyperchad_transformer::Flex {
+                                    grow: #grow_tokens,
+                                    shrink: #shrink_tokens,
+                                    ..Default::default()
+                                } }
+                            }
+                            3 => {
+                                // All three values specified
+                                let grow_str = parts[0];
+                                let shrink_str = parts[1];
+                                let basis_str = parts[2];
+
+                                let grow_tokens = if let Ok(num) = grow_str.parse::<f32>() {
+                                    quote! { hyperchad_transformer::Number::Real(#num) }
+                                } else if let Ok(num) = grow_str.parse::<i64>() {
+                                    quote! { hyperchad_transformer::Number::Integer(#num) }
+                                } else {
+                                    quote! { hyperchad_transformer::parse::parse_number(#grow_str).unwrap_or_default() }
+                                };
+
+                                let shrink_tokens = if let Ok(num) = shrink_str.parse::<f32>() {
+                                    quote! { hyperchad_transformer::Number::Real(#num) }
+                                } else if let Ok(num) = shrink_str.parse::<i64>() {
+                                    quote! { hyperchad_transformer::Number::Integer(#num) }
+                                } else {
+                                    quote! { hyperchad_transformer::parse::parse_number(#shrink_str).unwrap_or_default() }
+                                };
+
+                                let basis_tokens = if let Ok(num) = basis_str.parse::<f32>() {
+                                    quote! { hyperchad_transformer::Number::Real(#num) }
+                                } else if let Ok(num) = basis_str.parse::<i64>() {
+                                    quote! { hyperchad_transformer::Number::Integer(#num) }
+                                } else {
+                                    quote! { hyperchad_transformer::parse::parse_number(#basis_str).unwrap_or_default() }
+                                };
+
+                                quote! { hyperchad_transformer::Flex {
+                                    grow: #grow_tokens,
+                                    shrink: #shrink_tokens,
+                                    basis: #basis_tokens,
+                                } }
+                            }
+                            _ => {
+                                // Invalid format, return default flex
+                                quote! { hyperchad_transformer::Flex::default() }
+                            }
+                        }
+                    }
+                    syn::Lit::Int(lit_int) => {
+                        // For integer literals, treat as flex grow value
+                        quote! { hyperchad_transformer::Flex {
+                            grow: hyperchad_transformer::Number::Integer(#lit_int),
+                            ..Default::default()
+                        } }
+                    }
+                    syn::Lit::Float(lit_float) => {
+                        // For float literals, treat as flex grow value
+                        quote! { hyperchad_transformer::Flex {
+                            grow: hyperchad_transformer::Number::Real(#lit_float),
+                            ..Default::default()
+                        } }
+                    }
+                    _ => {
+                        // For other literal types, assume it's a flex struct expression
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr).into() }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, treat the entire content as a single expression
+                if items.len() == 1 {
+                    Self::markup_to_flex_tokens(items[0].clone(), None, None, None)
+                } else {
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            result.into()
+                        }
+                    }
+                }
+            }
+            _ => {
+                quote! { hyperchad_transformer::Flex::default() }
+            }
+        }
+    }
+
+    fn markup_to_font_family_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        // Parse comma-separated font families, matching html.rs implementation
+                        let families: Vec<String> = value_str
+                            .split(',')
+                            .map(str::trim)
+                            .filter(|x| !x.is_empty())
+                            .map(ToString::to_string)
+                            .collect();
+
+                        quote! { vec![#(#families.to_string()),*] }
+                    }
+                    _ => {
+                        // For non-string literals, assume it's already a Vec<String> or can be converted
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                // For expressions, assume they evaluate to either a String (comma-separated) or Vec<String>
+                quote! {
+                    {
+                        let val = #expr;
+                        // Convert to Vec<String>, handling both String and Vec<String> inputs
+                        match val.to_string().contains(',') {
+                            true => {
+                                // If it contains commas, parse as comma-separated string
+                                val.to_string()
+                                    .split(',')
+                                    .map(str::trim)
+                                    .filter(|x| !x.is_empty())
+                                    .map(ToString::to_string)
+                                    .collect::<Vec<String>>()
+                            }
+                            false => {
+                                // Single value or already Vec<String>
+                                vec![val.to_string()]
+                            }
+                        }
+                    }
+                }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_font_family_tokens(items[0].clone())
+                } else {
+                    // Multiple items - concatenate as comma-separated string then parse
+                    let item_tokens: Vec<_> = items
+                        .iter()
+                        .map(|item| Self::markup_to_string_tokens(item.clone()))
+                        .collect();
+                    quote! {
+                        {
+                            let combined = vec![#(#item_tokens),*].join(",");
+                            combined.split(',')
+                                .map(str::trim)
+                                .filter(|x| !x.is_empty())
+                                .map(ToString::to_string)
+                                .collect::<Vec<String>>()
+                        }
+                    }
+                }
+            }
+            _ => quote! { vec![String::new()] },
+        }
+    }
+
+    fn markup_to_text_decoration_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        // Simple text-decoration parsing - just check for common values
+                        if value_str.contains("underline") {
+                            quote! { hyperchad_transformer::TextDecoration {
+                                color: None,
+                                line: vec![hyperchad_transformer_models::TextDecorationLine::Underline],
+                                style: None,
+                                thickness: None,
+                            } }
+                        } else if value_str.contains("none") {
+                            quote! { hyperchad_transformer::TextDecoration {
+                                color: None,
+                                line: vec![hyperchad_transformer_models::TextDecorationLine::None],
+                                style: None,
+                                thickness: None,
+                            } }
+                        } else {
+                            quote! { hyperchad_transformer::TextDecoration::default() }
+                        }
+                    }
+                    _ => {
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                quote! { (#expr) }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_text_decoration_tokens(items[0].clone())
+                } else {
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            result.into()
+                        }
+                    }
+                }
+            }
+            _ => {
+                quote! { hyperchad_transformer::TextDecoration::default() }
+            }
+        }
+    }
+
+    // fn markup_to_flex_tokens(value: Markup<NoElement>) -> TokenStream {
+    //     match value {
+    //         Markup::Lit(lit) => {
+    //             match &lit.lit {
+    //                 syn::Lit::Str(lit_str) => {
+    //                     let value_str = lit_str.value();
+    //                     // Simple flex parsing - just check for common values
+    //                     if value_str.contains("underline") {
+    //                         quote! { hyperchad_transformer::TextDecoration {
+    //                             color: None,
+    //                             line: vec![hyperchad_transformer_models::TextDecorationLine::Underline],
+    //                             style: None,
+    //                             thickness: None,
+    //                         } }
+    //                     } else if value_str.contains("none") {
+    //                         quote! { hyperchad_transformer::TextDecoration {
+    //                             color: None,
+    //                             line: vec![hyperchad_transformer_models::TextDecorationLine::None],
+    //                             style: None,
+    //                             thickness: None,
+    //                         } }
+    //                     } else {
+    //                         quote! { hyperchad_transformer::TextDecoration::default() }
+    //                     }
+    //                 }
+    //                 _ => {
+    //                     let lit = &lit.lit;
+    //                     quote! { (#lit).into() }
+    //                 }
+    //             }
+    //         }
+    //         Markup::Splice { expr, .. } => {
+    //             quote! { (#expr) }
+    //         }
+    //         Markup::BraceSplice { items, .. } => {
+    //             // For brace-wrapped items, handle like single item if only one
+    //             if items.len() == 1 {
+    //                 Self::markup_to_text_decoration_tokens(items[0].clone())
+    //             } else {
+    //                 let expr = Self::handle_brace_splice_expression(&items);
+    //                 quote! {
+    //                     {
+    //                         let result = { #expr };
+    //                         result.into()
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         _ => {
+    //             quote! { hyperchad_transformer::TextDecoration::default() }
+    //         }
+    //     }
+    // }
+
+    // fn flex_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    //     let field_ident = format_ident!("{}", field);
+    //     let value_tokens = Self::markup_to_flex_tokens(value);
+    //     quote! { #field_ident: Some(#value_tokens) }
+    // }
 }
 
 #[allow(clippy::type_complexity)]

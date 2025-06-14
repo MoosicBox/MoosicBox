@@ -71,7 +71,12 @@ actions = [
     "hyperchad_app?/actions",
     "hyperchad_renderer_html_http?/actions",
 ]
-actions-logic = ["hyperchad_actions?/logic", "hyperchad_app?/logic"]
+actions-logic = [
+    "hyperchad_actions?/logic",
+    "hyperchad_app?/logic",
+    "hyperchad_template2?/logic",
+    "transformer-logic",
+]
 actions-serde = ["hyperchad_actions?/serde"]
 
 color = ["dep:hyperchad_color"]
@@ -281,7 +286,8 @@ template-actix-web = ["hyperchad_template?/actix-web", "template"]
 
 template2 = ["dep:hyperchad_template2"]
 
-transformer = ["dep:hyperchad_transformer"]
+transformer       = ["dep:hyperchad_transformer"]
+transformer-logic = ["hyperchad_transformer?/logic"]
 
 transformer-models       = ["dep:hyperchad_transformer_models"]
 transformer-models-serde = ["hyperchad_transformer_models?/serde"]
@@ -309,4 +315,4 @@ profiling-tracing = [
 ]
 profiling-tracy = ["renderer-egui-profiling-tracy", "renderer-profiling-tracy"]
 
-logic = ["actions-logic", "renderer-logic"]
+logic = ["actions-logic", "renderer-logic", "transformer-logic"]

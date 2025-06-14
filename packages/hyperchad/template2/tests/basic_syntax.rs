@@ -100,3 +100,30 @@ fn button_element() {
     let result = container! { Button { "Click me" } };
     assert_eq!(result.to_string(), "<button>Click me</button>");
 }
+
+#[test]
+fn flex_attributes() {
+    // Test shorthand flex attribute
+    let result = container! { Div flex="1 0 auto" { "Flex container" } };
+    let container = &result[0];
+    assert!(container.flex.is_some());
+
+    // Test individual flex attributes
+    let result =
+        container! { Div flex-grow="2" flex-shrink="0" flex-basis="100px" { "Individual flex" } };
+    let container = &result[0];
+    assert!(container.flex.is_some());
+}
+
+#[test]
+fn text_decoration_attributes() {
+    // Test basic text-decoration attribute
+    let result = container! { Div text-decoration="underline" { "Decorated text" } };
+    let container = &result[0];
+    assert!(container.text_decoration.is_some());
+
+    // Test text-decoration none
+    let result = container! { Div text-decoration="none" { "No decoration" } };
+    let container = &result[0];
+    assert!(container.text_decoration.is_some());
+}

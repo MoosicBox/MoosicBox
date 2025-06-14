@@ -338,3 +338,30 @@ impl From<ContainerList> for Vec<Container> {
         list.0
     }
 }
+
+// Re-export for convenience
+pub use hyperchad_transformer_models::*;
+
+// Add responsive support infrastructure
+#[cfg(feature = "logic")]
+pub use hyperchad_actions::logic::{IfExpression, Responsive, if_responsive};
+
+/// Trait for converting values to bool (to handle IfExpression<bool, Responsive>)
+pub trait ToBool {
+    fn to_bool(self) -> bool;
+}
+
+// Implement ToBool trait
+impl ToBool for bool {
+    fn to_bool(self) -> bool {
+        self
+    }
+}
+
+#[cfg(feature = "logic")]
+impl ToBool for IfExpression<bool, Responsive> {
+    fn to_bool(self) -> bool {
+        self.default
+            .unwrap_or_else(|| self.value.unwrap_or_default())
+    }
+}

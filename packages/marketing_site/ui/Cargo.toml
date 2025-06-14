@@ -11,14 +11,21 @@ repository  = "https://github.com/MoosicBox/MoosicBox"
 version     = "0.1.1"
 
 [dependencies]
-hyperchad_actions            = { workspace = true, features = ["logic", "serde"] }
-hyperchad_transformer_models = { workspace = true, features = ["serde"] }
+hyperchad = { workspace = true, features = [
+    "actions",
+    "actions-logic",
+    "actions-serde",
+    "color",
+    "renderer",
+    "router",
+    "template2",
+    "transformer",
+] }
 
-bytesize           = { workspace = true }
-chrono             = { workspace = true }
-hyperchad_template = { workspace = true }
-log                = { workspace = true }
-regex              = { workspace = true }
+bytesize = { workspace = true }
+chrono   = { workspace = true }
+log      = { workspace = true }
+regex    = { workspace = true }
 
 [features]
 default = []

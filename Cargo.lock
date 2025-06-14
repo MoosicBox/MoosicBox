@@ -7782,9 +7782,7 @@ version = "0.1.1"
 dependencies = [
  "bytesize",
  "chrono",
- "hyperchad_actions",
- "hyperchad_template",
- "hyperchad_transformer_models",
+ "hyperchad",
  "log 0.4.27",
  "regex",
 ]

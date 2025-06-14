@@ -693,6 +693,54 @@ pub fn if_responsive(target: impl Into<String>) -> Responsive {
 
 #[must_use]
 pub fn if_responsive_any<T: Into<String>>(targets: impl Into<Vec<T>>) -> Responsive {
-    let targets = targets.into();
-    Responsive::Targets(targets.into_iter().map(Into::into).collect())
+    Responsive::Targets(targets.into().into_iter().map(Into::into).collect())
+}
+
+// Add From implementations for specific enum types to handle responsive expressions
+impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::LayoutDirection {
+    fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
+        if_expr
+            .default
+            .unwrap_or_else(|| if_expr.value.unwrap_or_default())
+    }
+}
+
+impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::TextAlign {
+    fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
+        if_expr
+            .default
+            .unwrap_or_else(|| if_expr.value.unwrap_or_default())
+    }
+}
+
+impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::AlignItems {
+    fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
+        if_expr
+            .default
+            .unwrap_or_else(|| if_expr.value.unwrap_or_default())
+    }
+}
+
+impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::JustifyContent {
+    fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
+        if_expr
+            .default
+            .unwrap_or_else(|| if_expr.value.unwrap_or_default())
+    }
+}
+
+impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::Position {
+    fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
+        if_expr
+            .default
+            .unwrap_or_else(|| if_expr.value.unwrap_or_default())
+    }
+}
+
+impl From<IfExpression<Self, Responsive>> for hyperchad_transformer_models::LayoutOverflow {
+    fn from(if_expr: IfExpression<Self, Responsive>) -> Self {
+        if_expr
+            .default
+            .unwrap_or_else(|| if_expr.value.unwrap_or_default())
+    }
 }

@@ -561,6 +561,110 @@ impl Default for Number {
     }
 }
 
+#[cfg(feature = "logic")]
+impl From<hyperchad_actions::logic::IfExpression<i32, hyperchad_actions::logic::Responsive>>
+    for Number
+{
+    fn from(
+        if_expr: hyperchad_actions::logic::IfExpression<i32, hyperchad_actions::logic::Responsive>,
+    ) -> Self {
+        if let Some(default) = if_expr.default {
+            Self::Integer(i64::from(default))
+        } else if let Some(value) = if_expr.value {
+            Self::Integer(i64::from(value))
+        } else {
+            Self::Integer(0)
+        }
+    }
+}
+
+#[cfg(feature = "logic")]
+impl From<hyperchad_actions::logic::IfExpression<i64, hyperchad_actions::logic::Responsive>>
+    for Number
+{
+    fn from(
+        if_expr: hyperchad_actions::logic::IfExpression<i64, hyperchad_actions::logic::Responsive>,
+    ) -> Self {
+        if let Some(default) = if_expr.default {
+            Self::Integer(default)
+        } else if let Some(value) = if_expr.value {
+            Self::Integer(value)
+        } else {
+            Self::Integer(0)
+        }
+    }
+}
+
+#[cfg(feature = "logic")]
+impl From<hyperchad_actions::logic::IfExpression<f32, hyperchad_actions::logic::Responsive>>
+    for Number
+{
+    fn from(
+        if_expr: hyperchad_actions::logic::IfExpression<f32, hyperchad_actions::logic::Responsive>,
+    ) -> Self {
+        if let Some(default) = if_expr.default {
+            Self::Real(default)
+        } else if let Some(value) = if_expr.value {
+            Self::Real(value)
+        } else {
+            Self::Real(0.0)
+        }
+    }
+}
+
+#[cfg(feature = "logic")]
+pub struct BoolWrapper(pub bool);
+
+#[cfg(feature = "logic")]
+impl From<bool> for BoolWrapper {
+    fn from(value: bool) -> Self {
+        Self(value)
+    }
+}
+
+#[cfg(feature = "logic")]
+impl From<BoolWrapper> for bool {
+    fn from(wrapper: BoolWrapper) -> Self {
+        wrapper.0
+    }
+}
+
+#[cfg(feature = "logic")]
+impl From<hyperchad_actions::logic::IfExpression<bool, hyperchad_actions::logic::Responsive>>
+    for BoolWrapper
+{
+    fn from(
+        if_expr: hyperchad_actions::logic::IfExpression<bool, hyperchad_actions::logic::Responsive>,
+    ) -> Self {
+        if let Some(default) = if_expr.default {
+            Self(default)
+        } else if let Some(value) = if_expr.value {
+            Self(value)
+        } else {
+            Self(false)
+        }
+    }
+}
+
+#[cfg(feature = "logic")]
+impl<T> From<hyperchad_actions::logic::IfExpression<T, hyperchad_actions::logic::Responsive>>
+    for Flex
+where
+    T: Into<Self>,
+{
+    fn from(
+        if_expr: hyperchad_actions::logic::IfExpression<T, hyperchad_actions::logic::Responsive>,
+    ) -> Self {
+        if let Some(default) = if_expr.default {
+            default.into()
+        } else if let Some(value) = if_expr.value {
+            value.into()
+        } else {
+            Self::default()
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct TextDecoration {
     pub color: Option<Color>,
@@ -582,6 +686,15 @@ impl Default for Flex {
             grow: Number::Integer(1),
             shrink: Number::Integer(1),
             basis: Number::IntegerPercent(0),
+        }
+    }
+}
+
+impl From<i64> for Flex {
+    fn from(i: i64) -> Self {
+        Self {
+            grow: Number::Integer(i),
+            ..Default::default()
         }
     }
 }
@@ -3497,6 +3610,19 @@ impl From<HeaderSize> for u8 {
             HeaderSize::H5 => 5,
             HeaderSize::H6 => 6,
         }
+    }
+}
+
+impl From<HeaderSize> for Number {
+    fn from(value: HeaderSize) -> Self {
+        Self::Integer(match value {
+            HeaderSize::H1 => 1,
+            HeaderSize::H2 => 2,
+            HeaderSize::H3 => 3,
+            HeaderSize::H4 => 4,
+            HeaderSize::H5 => 5,
+            HeaderSize::H6 => 6,
+        })
     }
 }
 

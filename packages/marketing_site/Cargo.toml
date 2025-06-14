@@ -29,7 +29,6 @@ hyperchad = { workspace = true, features = [
     "color",
     "json",
     "renderer",
-    "renderer-template",
     "router",
 ] }
 moosicbox_assert = { workspace = true }
