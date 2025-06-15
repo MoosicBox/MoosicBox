@@ -13,7 +13,7 @@ extern crate alloc;
 
 use alloc::string::ToString;
 use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
-use core::fmt::{Arguments, Display, Write};
+use core::fmt::{Arguments, Write};
 
 pub use hyperchad_template2_macros::container;
 pub use hyperchad_transformer::Container;
@@ -62,6 +62,8 @@ impl ContainerVecExt for Vec<Container> {
 /// ```rust
 /// use hyperchad_template2::{container, Containers, RenderContainer};
 ///
+/// use core::convert::Infallible;
+///
 /// /// Provides a shorthand for a styled button.
 /// pub struct StyledButton {
 ///     pub text: String,
@@ -69,29 +71,30 @@ impl ContainerVecExt for Vec<Container> {
 /// }
 ///
 /// impl RenderContainer for StyledButton {
-///     fn render(&self) -> Containers {
-///         container! {
-///             Button
-///                 .class=if self.primary { "primary" } else { "secondary" }
-///             {
+///     type Error = Infallible;
+///
+///     fn render_to(&self, containers: &mut Containers) -> Result<(), Self::Error> {
+///         *containers = container! {
+///             Button id=(if self.primary { "primary" } else { "secondary" }) {
 ///                 (self.text.clone())
 ///             }
-///         }
+///         };
+///         Ok(())
 ///     }
 /// }
 /// ```
 pub trait RenderContainer {
-    type RenderContainerError;
+    type Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError>;
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error>;
 
-    fn render_to_string(&self) -> Result<String, Self::RenderContainerError> {
+    fn render_to_string(&self) -> Result<String, Self::Error> {
         let mut containers = Vec::new();
         self.render_to(&mut containers)?;
         Ok(containers.iter().map(|c| c.to_string()).collect::<String>())
     }
 
-    fn render(&self) -> Result<Vec<Container>, Self::RenderContainerError> {
+    fn render(&self) -> Result<Vec<Container>, Self::Error> {
         let mut containers = Vec::new();
         self.render_to(&mut containers)?;
         Ok(containers)
@@ -99,18 +102,18 @@ pub trait RenderContainer {
 }
 
 impl RenderContainer for Container {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         containers.push(self.clone());
         Ok(())
     }
 }
 
 impl RenderContainer for &str {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         containers.push(Container {
             element: hyperchad_transformer::Element::Raw {
                 value: self.to_string(),
@@ -122,9 +125,9 @@ impl RenderContainer for &str {
 }
 
 impl RenderContainer for String {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         containers.push(Container {
             element: hyperchad_transformer::Element::Raw {
                 value: self.clone(),
@@ -136,17 +139,17 @@ impl RenderContainer for String {
 }
 
 impl RenderContainer for Cow<'_, str> {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         <&str as RenderContainer>::render_to(&self.as_ref(), containers)
     }
 }
 
 impl RenderContainer for Arguments<'_> {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         let mut s = String::new();
         s.write_fmt(*self)?;
         containers.push(Container {
@@ -158,33 +161,33 @@ impl RenderContainer for Arguments<'_> {
 }
 
 impl<T: RenderContainer + ?Sized> RenderContainer for &T {
-    type RenderContainerError = T::RenderContainerError;
+    type Error = T::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         T::render_to(self, containers)
     }
 }
 
 impl<T: RenderContainer + ?Sized> RenderContainer for &mut T {
-    type RenderContainerError = T::RenderContainerError;
+    type Error = T::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         T::render_to(self, containers)
     }
 }
 
 impl<T: RenderContainer + ?Sized> RenderContainer for Box<T> {
-    type RenderContainerError = T::RenderContainerError;
+    type Error = T::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         T::render_to(self, containers)
     }
 }
 
 impl<T: RenderContainer + ?Sized> RenderContainer for Arc<T> {
-    type RenderContainerError = T::RenderContainerError;
+    type Error = T::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         T::render_to(self, containers)
     }
 }
@@ -195,12 +198,12 @@ macro_rules! impl_render_container_with_itoa {
     ($($ty:ty)*) => {
         $(
             impl RenderContainer for $ty {
-                type RenderContainerError = core::fmt::Error;
+                type Error = core::fmt::Error;
 
                 fn render_to(
                     &self,
                     containers: &mut Vec<Container>,
-                ) -> Result<(), Self::RenderContainerError> {
+                ) -> Result<(), Self::Error> {
                     let mut buffer = itoa::Buffer::new();
                     let s = buffer.format(*self);
                     <&str as RenderContainer>::render_to(&s, containers)
@@ -216,9 +219,9 @@ impl_render_container_with_itoa! {
 }
 
 impl RenderContainer for f32 {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         let mut buffer = ryu::Buffer::new();
         let s = buffer.format(*self);
         <&str as RenderContainer>::render_to(&s, containers)
@@ -226,9 +229,9 @@ impl RenderContainer for f32 {
 }
 
 impl RenderContainer for f64 {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         let mut buffer = ryu::Buffer::new();
         let s = buffer.format(*self);
         <&str as RenderContainer>::render_to(&s, containers)
@@ -236,18 +239,18 @@ impl RenderContainer for f64 {
 }
 
 impl RenderContainer for bool {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         let s = if *self { "true" } else { "false" };
         <&str as RenderContainer>::render_to(&s, containers)
     }
 }
 
 impl RenderContainer for char {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         let mut buffer = [0; 4];
         let s = self.encode_utf8(&mut buffer);
         let s: &str = s;
@@ -256,9 +259,9 @@ impl RenderContainer for char {
 }
 
 impl<T: RenderContainer> RenderContainer for Option<T> {
-    type RenderContainerError = T::RenderContainerError;
+    type Error = T::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         match self {
             Some(value) => value.render_to(containers),
             None => Ok(()),
@@ -267,50 +270,12 @@ impl<T: RenderContainer> RenderContainer for Option<T> {
 }
 
 impl RenderContainer for Vec<Container> {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
-    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::RenderContainerError> {
+    fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         containers.extend_from_slice(self);
         Ok(())
     }
-}
-
-/// Renders a value using its [`Display`] impl as a Raw Container element.
-///
-/// # Example
-///
-/// ```rust
-/// use hyperchad_template2::container;
-/// use std::net::Ipv4Addr;
-///
-/// let ip_address = Ipv4Addr::new(127, 0, 0, 1);
-///
-/// let containers = container! {
-///     "My IP address is: "
-///     (hyperchad_template2::display(ip_address))
-/// };
-/// ```
-pub fn display(value: impl Display) -> impl RenderContainer {
-    struct DisplayWrapper<T>(T);
-
-    impl<T: Display> RenderContainer for DisplayWrapper<T> {
-        type RenderContainerError = core::fmt::Error;
-
-        fn render_to(
-            &self,
-            containers: &mut Vec<Container>,
-        ) -> Result<(), Self::RenderContainerError> {
-            containers.push(Container {
-                element: hyperchad_transformer::Element::Raw {
-                    value: alloc::format!("{}", self.0),
-                },
-                ..Default::default()
-            });
-            Ok(())
-        }
-    }
-
-    DisplayWrapper(value)
 }
 
 // New wrapper types to avoid orphan rule violations

@@ -27,12 +27,9 @@ fn simple_macro() {
 fn render_impl() {
     struct R(&'static str);
     impl RenderContainer for R {
-        type RenderContainerError = String; // Use String instead of core::fmt::Error
+        type Error = String; // Use String instead of core::fmt::Error
 
-        fn render_to(
-            &self,
-            containers: &mut Vec<Container>,
-        ) -> Result<(), Self::RenderContainerError> {
+        fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
             containers.push(Container {
                 element: hyperchad_transformer::Element::Raw {
                     value: self.0.to_string(),

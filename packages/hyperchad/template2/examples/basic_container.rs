@@ -6,12 +6,12 @@ struct TodoItem {
 }
 
 impl RenderContainer for TodoItem {
-    type RenderContainerError = core::fmt::Error;
+    type Error = core::fmt::Error;
 
     fn render_to(
         &self,
         containers: &mut Vec<hyperchad_transformer::Container>,
-    ) -> Result<(), Self::RenderContainerError> {
+    ) -> Result<(), Self::Error> {
         let rendered = container! {
             Div .todo-item {
                 "Task: "
