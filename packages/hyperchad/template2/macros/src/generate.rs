@@ -1514,15 +1514,35 @@ impl Generator {
                 Self::handle_potential_if_expression_for_number(&expr)
             }
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, treat the entire content as a single expression
+                // For brace-wrapped items, handle both single items and string concatenation
                 if items.len() == 1 {
                     Self::markup_to_number_tokens(items[0].clone())
                 } else {
-                    let expr = Self::handle_brace_splice_expression(&items);
-                    quote! {
-                        {
-                            let result = { #expr };
-                            <hyperchad_transformer::Number as std::convert::From<_>>::from(result)
+                    // Check if this looks like string concatenation (contains string literals)
+                    let has_string_literals = items.iter().any(|item| {
+                        matches!(item, Markup::Lit(lit) if matches!(lit.lit, syn::Lit::Str(_)))
+                    });
+
+                    if has_string_literals {
+                        // Handle as string concatenation, then parse as number
+                        let item_tokens: Vec<_> = items
+                            .iter()
+                            .map(|item| Self::markup_to_string_tokens(item.clone()))
+                            .collect();
+                        quote! {
+                            {
+                                let concatenated = vec![#(#item_tokens),*].join("");
+                                hyperchad_transformer::parse::parse_number(&concatenated).unwrap_or_default()
+                            }
+                        }
+                    } else {
+                        // Handle as direct expression
+                        let expr = Self::handle_brace_splice_expression(&items);
+                        quote! {
+                            {
+                                let result = { #expr };
+                                <hyperchad_transformer::Number as std::convert::From<_>>::from(result)
+                            }
                         }
                     }
                 }
