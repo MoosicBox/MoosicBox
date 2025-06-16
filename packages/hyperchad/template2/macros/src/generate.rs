@@ -274,6 +274,7 @@ impl Generator {
                     name_str.as_str(),
                     "src" | "alt" | "srcset" | "sizes" | "loading" | "fit"
                 ),
+                "Canvas" => matches!(name_str.as_str(), "width" | "height"),
                 _ => false,
             };
 
@@ -1175,9 +1176,10 @@ impl Generator {
             "TBody" => quote! { hyperchad_transformer::Element::TBody },
             "TR" => quote! { hyperchad_transformer::Element::TR },
             "TD" => quote! { hyperchad_transformer::Element::TD },
+            "Canvas" => quote! { hyperchad_transformer::Element::Canvas },
             _ => {
                 let error_msg = format!(
-                    "Unknown element type '{name_str}'. Supported elements are: Div, Section, Aside, Main, Header, Footer, Form, Span, Button, Anchor, Image, Input, H1, H2, H3, H4, H5, H6, UnorderedList (Ul), OrderedList (Ol), ListItem (Li), Table, THead, TH, TBody, TR, TD",
+                    "Unknown element type '{name_str}'. Supported elements are: Div, Section, Aside, Main, Header, Footer, Form, Span, Button, Anchor, Image, Input, H1, H2, H3, H4, H5, H6, UnorderedList (Ul), OrderedList (Ol), ListItem (Li), Table, THead, TH, TBody, TR, TD, Canvas",
                 );
                 quote! { compile_error!(#error_msg) }
             }
