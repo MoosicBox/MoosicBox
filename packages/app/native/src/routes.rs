@@ -42,8 +42,6 @@ pub enum RouteError {
     MissingConnection,
     #[error("Unsupported method")]
     UnsupportedMethod,
-    #[error("Failed to parse markup")]
-    ParseMarkup,
     #[error("Failed to parse body")]
     ParseBody(#[from] hyperchad::router::ParseError),
     #[error(transparent)]
@@ -144,7 +142,7 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
 
     log::trace!("albums_list_start_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::albums::albums_list_start(
+    Ok(moosicbox_app_native_ui::albums::albums_list_start(
         &state,
         &albums,
         &filtered_sources,
@@ -152,12 +150,7 @@ pub async fn albums_list_start_route(req: RouteRequest) -> Result<View, RouteErr
         size,
         search.map_or("", |search| search),
     )
-    .into_string()
-    .try_into()
-    .map_err(|e| {
-        moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-        RouteError::ParseMarkup
-    })
+    .into())
 }
 
 pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
@@ -231,13 +224,7 @@ pub async fn albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
 
     log::trace!("albums_list_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::albums::albums_list(host, &albums, size)
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            RouteError::ParseMarkup
-        })
+    Ok(moosicbox_app_native_ui::albums::albums_list(host, &albums, size).into())
 }
 
 pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteError> {
@@ -290,13 +277,10 @@ pub async fn artist_albums_list_route(req: RouteRequest) -> Result<View, RouteEr
 
     log::trace!("albums_list_route: albums={albums:?}");
 
-    moosicbox_app_native_ui::artists::albums_list(host, &albums, source, album_type, size)
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            RouteError::ParseMarkup
-        })
+    Ok(
+        moosicbox_app_native_ui::artists::albums_list(host, &albums, source, album_type, size)
+            .into(),
+    )
 }
 
 pub async fn audio_zones_route(req: RouteRequest) -> Result<View, RouteError> {
@@ -321,13 +305,7 @@ pub async fn audio_zones_route(req: RouteRequest) -> Result<View, RouteError> {
 
     let zones: Page<ApiAudioZoneWithSession> = response.json().await?;
 
-    moosicbox_app_native_ui::audio_zones::audio_zones(&zones, &[])
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            RouteError::ParseMarkup
-        })
+    Ok(moosicbox_app_native_ui::audio_zones::audio_zones(&zones, &[]).into())
 }
 
 pub async fn playback_sessions_route(req: RouteRequest) -> Result<View, RouteError> {
@@ -352,13 +330,7 @@ pub async fn playback_sessions_route(req: RouteRequest) -> Result<View, RouteErr
 
     let sessions: Page<ApiSession> = response.json().await?;
 
-    moosicbox_app_native_ui::playback_sessions::playback_sessions(host, &sessions)
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            RouteError::ParseMarkup
-        })
+    Ok(moosicbox_app_native_ui::playback_sessions::playback_sessions(host, &sessions).into())
 }
 
 pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
@@ -426,8 +398,7 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
                         && sample_rate.is_none_or(|x| v.sample_rate.is_some_and(|s| s == x))
                 }),
             )
-            .into_string()
-            .try_into()?;
+            .into();
 
             container
         } else {
@@ -439,8 +410,7 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
                 sample_rate,
                 bit_depth,
             )
-            .into_string()
-            .try_into()?;
+            .into();
 
             container
         }
@@ -464,8 +434,7 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
             &filtered_sources,
             sort,
         )
-        .into_string()
-        .try_into()?
+        .into()
     })
 }
 
@@ -507,9 +476,7 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
         log::debug!("artist: {artist:?}");
 
         let container: Container =
-            moosicbox_app_native_ui::artists::artist(&convert_state(&STATE).await, &artist)
-                .into_string()
-                .try_into()?;
+            moosicbox_app_native_ui::artists::artist(&convert_state(&STATE).await, &artist).into();
 
         container
     } else {
@@ -530,9 +497,7 @@ pub async fn artist_route(req: RouteRequest) -> Result<Container, RouteError> {
 
         log::trace!("artists: {artists:?}");
 
-        moosicbox_app_native_ui::artists::artists(&convert_state(&STATE).await, &artists)
-            .into_string()
-            .try_into()?
+        moosicbox_app_native_ui::artists::artists(&convert_state(&STATE).await, &artists).into()
     })
 }
 
@@ -600,13 +565,7 @@ pub async fn downloads_route(req: RouteRequest) -> Result<Container, RouteError>
 
     log::trace!("downloads_route: active_tab={active_tab} tasks={tasks:?}");
 
-    moosicbox_app_native_ui::downloads::downloads(&state, &tasks, active_tab)
-        .into_string()
-        .try_into()
-        .map_err(|e| {
-            moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-            RouteError::ParseMarkup
-        })
+    Ok(moosicbox_app_native_ui::downloads::downloads(&state, &tasks, active_tab).into())
 }
 
 pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> {
@@ -636,19 +595,14 @@ pub async fn settings_route(req: RouteRequest) -> Result<Container, RouteError> 
     let current_connection = STATE.get_current_connection().await?;
     let connection_name = STATE.get_connection_name().await?.unwrap_or_default();
 
-    moosicbox_app_native_ui::settings::settings(
+    Ok(moosicbox_app_native_ui::settings::settings(
         &state,
         &connection_name,
         &connections,
         current_connection.as_ref(),
         &[],
     )
-    .into_string()
-    .try_into()
-    .map_err(|e| {
-        moosicbox_assert::die_or_error!("Failed to parse markup: {e:?}");
-        RouteError::ParseMarkup
-    })
+    .into())
 }
 
 #[derive(Deserialize)]
@@ -1041,7 +995,7 @@ pub async fn search_route(req: RouteRequest) -> Result<(), RouteError> {
             renderer
                 .render_partial(PartialView {
                     target: results_content_id(&api_source),
-                    container: markup.into_string().try_into().unwrap(),
+                    container: markup.into(),
                 })
                 .await
                 .unwrap();

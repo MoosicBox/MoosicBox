@@ -1,7 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::transformer_models::{ImageLoading, LayoutOverflow};
-use hyperchad_template::{Markup, PreEscaped, html};
+use hyperchad::{
+    template2::{self as hyperchad_template2, Containers, container},
+    transformer::models::{ImageLoading, LayoutOverflow},
+};
 use moosicbox_music_models::{
     AlbumType, ApiSource,
     api::{ApiAlbum, ApiArtist},
@@ -10,13 +12,13 @@ use moosicbox_music_models::{
 
 use crate::{
     formatting::{AlbumTypeFormat as _, ApiSourceFormat},
-    page, pre_escaped, public_img,
+    page, public_img,
     state::State,
 };
 
 #[must_use]
-pub fn artist_page_url(artist_id: &str) -> PreEscaped<String> {
-    pre_escaped!("/artists?artistId={artist_id}")
+pub fn artist_page_url(artist_id: &str) -> String {
+    format!("/artists?artistId={artist_id}")
 }
 
 #[must_use]
@@ -54,30 +56,41 @@ pub fn artist_cover_url(
     }
 }
 
-fn artist_cover_img(host: &str, artist: &ApiArtist, size: u16) -> Markup {
+fn artist_cover_img(host: &str, artist: &ApiArtist, size: u16) -> Containers {
     #[allow(clippy::cast_sign_loss)]
     #[allow(clippy::cast_possible_truncation)]
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
-    html! {
-        img loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(host, &artist, request_size, request_size)) sx-width=(size) sx-height=(size);
+    container! {
+        Image loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(host, &artist, request_size, request_size)) width=(size) height=(size);
     }
 }
 
 #[must_use]
-pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Markup {
-    fn source_html(artist_id: &Id, source: &ApiSource, album_type: AlbumType, size: u16) -> Markup {
-        html! {
-            div
-                hx-get=(pre_escaped!("/artists/albums-list?artistId={artist_id}&size={size}&source={source}&albumType={album_type}"))
+pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Containers {
+    fn source_html(
+        artist_id: &Id,
+        source: &ApiSource,
+        album_type: AlbumType,
+        size: u16,
+    ) -> Containers {
+        container! {
+            Div
+                hx-get={
+                    "/artists/albums-list"
+                    "?artistId="(artist_id)
+                    "&size="(size)
+                    "&source="(source)
+                    "&albumType="(album_type)
+                }
                 hx-trigger="load"
-                sx-hidden=(true)
+                hidden=(true)
             {}
         }
     }
 
     let Some(connection) = &state.connection else {
-        return html! {};
+        return container! {};
     };
 
     let size = 200;
@@ -104,17 +117,17 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Markup {
         ]);
     }
 
-    html! {
-        div sx-padding-x=(60) sx-padding-y=(20) {
-            div sx-padding-y=(20) {
+    container! {
+        Div padding-x=(60) padding-y=(20) {
+            Div padding-y=(20) {
                 "Back"
             }
-            div sx-dir="row" {
-                div sx-width=(size) sx-height=(size) sx-padding-right=(15) {
+            Div direction="row" {
+                Div width=(size) height=(size) padding-right=(15) {
                     (artist_cover_img(&connection.api_url, &artist, size))
                 }
-                div {
-                    h1 { (artist.title) }
+                Div {
+                    H1 { (artist.title) }
                 }
             }
             @for source in sources {
@@ -125,14 +138,14 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Markup {
 }
 
 #[must_use]
-pub fn artist(state: &State, artist: &ApiArtist) -> Markup {
+pub fn artist(state: &State, artist: &ApiArtist) -> Containers {
     page(state, &artist_page_content(state, artist))
 }
 
 #[must_use]
-pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Markup {
+pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Containers {
     let Some(connection) = &state.connection else {
-        return html! {};
+        return container! {};
     };
 
     let size: u16 = 200;
@@ -140,24 +153,24 @@ pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Markup {
     #[allow(clippy::cast_possible_truncation)]
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
-    html! {
-        div
-            sx-dir="row"
-            sx-overflow-x=(LayoutOverflow::Wrap { grid: true })
-            sx-grid-cell-size=(size)
-            sx-justify-content="space-evenly"
-            sx-gap=(15)
-            sx-padding-x=(30)
-            sx-padding-y=(15)
+    container! {
+        Div
+            direction="row"
+            overflow-x=(LayoutOverflow::Wrap { grid: true })
+            grid-cell-size=(size)
+            justify-content="space-evenly"
+            gap=(15)
+            padding-x=(30)
+            padding-y=(15)
         {
             @for artist in artists {
-                a href=(artist_page_url(&artist.artist_id.to_string())) sx-width=(size) {
-                    div sx-width=(size) {
-                        img
+                Anchor href=(artist_page_url(&artist.artist_id.to_string())) width=(size) {
+                    Div width=(size) {
+                        Image
                             loading=(ImageLoading::Lazy)
                             src=(artist_cover_url_from_artist(&connection.api_url, artist, request_size, request_size))
-                            sx-width=(size)
-                            sx-height=(size);
+                            width=(size)
+                            height=(size);
 
                         (artist.title)
                     }
@@ -168,7 +181,7 @@ pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Markup {
 }
 
 #[must_use]
-pub fn artists(state: &State, artists: &[ApiArtist]) -> Markup {
+pub fn artists(state: &State, artists: &[ApiArtist]) -> Containers {
     page(state, &artists_page_content(state, artists))
 }
 
@@ -179,14 +192,14 @@ pub fn albums_list(
     source: ApiSource,
     album_type: AlbumType,
     size: u16,
-) -> Markup {
+) -> Containers {
     if albums.is_empty() {
-        return html! {};
+        return container! {};
     }
 
-    html! {
-        div sx-padding-y=(20) {
-            h2 {
+    container! {
+        Div padding-y=(20) {
+            H2 {
                 (album_type.into_formatted())
                 @if source.is_library() {
                     " in "
@@ -195,13 +208,13 @@ pub fn albums_list(
                 }
                 (source.into_formatted())
             }
-            div
-                sx-dir="row"
-                sx-overflow-x=(LayoutOverflow::Wrap { grid: true })
-                sx-grid-cell-size=(size)
-                sx-justify-content="space-evenly"
-                sx-gap=(15)
-                sx-padding-y=(15)
+            Div
+                direction="row"
+                overflow-x=(LayoutOverflow::Wrap { grid: true })
+                grid-cell-size=(size)
+                justify-content="space-evenly"
+                gap=(15)
+                padding-y=(15)
             {
                 (crate::albums::show_albums(host, albums.iter(), size))
             }

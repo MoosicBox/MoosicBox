@@ -1,7 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::transformer_models::{AlignItems, Cursor};
-use hyperchad_template::{Markup, html};
+use hyperchad::{
+    template2::{self as hyperchad_template2, Containers, container},
+    transformer::models::{AlignItems, Cursor},
+};
 use moosicbox_downloader::api::models::{ApiDownloadItem, ApiDownloadTask, ApiDownloadTaskState};
 use strum::{AsRefStr, EnumString};
 
@@ -27,9 +29,9 @@ impl std::fmt::Display for DownloadTab {
     }
 }
 
-fn download_task_progress(task: &ApiDownloadTask) -> Markup {
-    html! {
-        div {
+fn download_task_progress(task: &ApiDownloadTask) -> Containers {
+    container! {
+        Div {
             @if let Some(total_bytes) = task.total_bytes {
                 (format!("{}/{} MiB - ", format_size(task.bytes), format_size(total_bytes)))
             } @else {
@@ -42,51 +44,49 @@ fn download_task_progress(task: &ApiDownloadTask) -> Markup {
                 ""
             }
         }
-        div style=(format!("width: {}%", task.progress)) {}
     }
 }
 
 #[allow(clippy::too_many_lines)]
-fn download_task(host: &str, task: &ApiDownloadTask) -> Markup {
+fn download_task(host: &str, task: &ApiDownloadTask) -> Containers {
     let id = task.id;
     let item = &task.item;
 
-    html! {
-        div
-            sx-dir="row"
-            sx-gap=(20)
-            sx-background="#111"
-            sx-align-items=(AlignItems::Center)
-            sx-padding-x=(18)
-            sx-padding-y=(20)
-            sx-border-radius=(6)
+    container! {
+        Div
+            direction="row"
+            gap=(20)
+            background="#111"
+            align-items=(AlignItems::Center)
+            padding-x=(18)
+            padding-y=(20)
+            border-radius=(6)
         {
             @let cover_width = 80;
             @let cover_height = 80;
             @match item {
                 ApiDownloadItem::Track { source, track_id, album_id, title, contains_cover, .. } => {
-                    div {
-                        a href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
-                            img
+                    Div {
+                        Anchor href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
+                            Image
                                 src=(album_cover_url(host, album_id, &source.into(), *contains_cover, cover_width, cover_height))
-                                sx-width=(cover_width)
-                                sx-height=(cover_height)
-                            {}
+                                width=(cover_width)
+                                height=(cover_height);
                         }
                     }
-                    div sx-gap=(5) {
-                        div {
-                            "Track (" (track_id) ") - " (title) " - " (task.state.to_string()) " - " (source.as_ref())
+                    Div gap=(5) {
+                        Div {
+                            "Track (" (track_id.to_string()) ") - " (title) " - " (task.state.to_string()) " - " (source.as_ref())
                             @if task.state == ApiDownloadTaskState::Error {
-                                button hx-post=(format!("/retry-download?taskId={}", id)) {
+                                Button hx-post=(format!("/retry-download?taskId={}", id)) {
                                     "Retry"
                                 }
                             }
                         }
-                        div {
+                        Div {
                             (task.file_path)
                         }
-                        div {
+                        Div {
                             @if task.state == ApiDownloadTaskState::Started {
                                 (download_task_progress(task))
                             }
@@ -94,28 +94,27 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Markup {
                     }
                 }
                 ApiDownloadItem::AlbumCover { source, album_id, title, contains_cover, .. } => {
-                    div {
-                        a href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
-                            img
+                    Div {
+                        Anchor href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
+                            Image
                                 src=(album_cover_url(host, album_id, &source.into(), *contains_cover, cover_width, cover_height))
-                                sx-width=(cover_width)
-                                sx-height=(cover_height)
-                            {}
+                                width=(cover_width)
+                                height=(cover_height);
                         }
                     }
-                    div sx-gap=(5) {
-                        div {
-                            "Album (" (album_id) ") cover - " (title) " - " (task.state.to_string())
+                    Div gap=(5) {
+                        Div {
+                            "Album (" (album_id.to_string()) ") cover - " (title) " - " (task.state.to_string())
                             @if task.state == ApiDownloadTaskState::Error {
-                                button hx-post=(format!("/retry-download?taskId={}", id)) {
+                                Button hx-post=(format!("/retry-download?taskId={}", id)) {
                                     "Retry"
                                 }
                             }
                         }
-                        div {
+                        Div {
                             (task.file_path)
                         }
-                        div {
+                        Div {
                             @if task.state == ApiDownloadTaskState::Started {
                                 (download_task_progress(task))
                             }
@@ -123,28 +122,27 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Markup {
                     }
                 }
                 ApiDownloadItem::ArtistCover { source, artist_id, album_id, title, contains_cover, .. } => {
-                    div {
-                        a href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
-                            img
+                    Div {
+                        Anchor href=(album_page_url(&album_id.to_string(), false, Some(&source.into()), None, None, None)) {
+                            Image
                                 src=(artist_cover_url(host, artist_id, &source.into(), *contains_cover, cover_width, cover_height))
-                                sx-width=(cover_width)
-                                sx-height=(cover_height)
-                            {}
+                                width=(cover_width)
+                                height=(cover_height);
                         }
                     }
-                    div sx-gap=(5) {
-                        div {
-                            "Artist (" (artist_id) ") (album_id: " (album_id) ") cover - " (title) " - " (task.state.to_string())
+                    Div gap=(5) {
+                        Div {
+                            "Artist (" (artist_id.to_string()) ") (album_id: " (album_id.to_string()) ") cover - " (title) " - " (task.state.to_string())
                             @if task.state == ApiDownloadTaskState::Error {
-                                button hx-post=(format!("/retry-download?taskId={}", id)) {
+                                Button hx-post=(format!("/retry-download?taskId={}", id)) {
                                     "Retry"
                                 }
                             }
                         }
-                        div {
+                        Div {
                             (task.file_path)
                         }
-                        div {
+                        Div {
                             @if task.state == ApiDownloadTaskState::Started {
                                 (download_task_progress(task))
                             }
@@ -161,45 +159,45 @@ pub fn downloads_page_content(
     host: &str,
     tasks: &[ApiDownloadTask],
     active_tab: DownloadTab,
-) -> Markup {
-    html! {
-        div
-            sx-padding-x=(30)
-            sx-padding-y=(15)
-            sx-background=(DARK_BACKGROUND)
-            sx-dir="row"
-            sx-align-items=(AlignItems::Center)
+) -> Containers {
+    container! {
+        Div
+            padding-x=(30)
+            padding-y=(15)
+            background=(DARK_BACKGROUND)
+            direction="row"
+            align-items=(AlignItems::Center)
         {
-            h1 { "Downloads" }
+            H1 { "Downloads" }
         }
-        div sx-padding-x=(30) sx-padding-y=(5) {
-            div sx-dir="row" sx-gap=(5) {
-                a
+        Div padding-x=(30) padding-y=(5) {
+            Div direction="row" gap=(5) {
+                Anchor
                     href={"/downloads?tab="(DownloadTab::Current)}
-                    sx-background=(if active_tab == DownloadTab::Current { "#333" } else { "#282828" })
-                    sx-padding=(10)
-                    sx-cursor=(Cursor::Pointer)
-                    sx-border-top-radius=(10)
+                    background=(if active_tab == DownloadTab::Current { "#333" } else { "#282828" })
+                    padding=(10)
+                    cursor=(Cursor::Pointer)
+                    border-top-radius=(10)
                 {
                     "Current Tasks"
                 }
-                a
+                Anchor
                     href={"/downloads?tab="(DownloadTab::History)}
-                    sx-background=(if active_tab == DownloadTab::History { "#333" } else { "#282828" })
-                    sx-padding=(10)
-                    sx-cursor=(Cursor::Pointer)
-                    sx-border-top-radius=(10)
+                    background=(if active_tab == DownloadTab::History { "#333" } else { "#282828" })
+                    padding=(10)
+                    cursor=(Cursor::Pointer)
+                    border-top-radius=(10)
                 {
                     "History"
                 }
             }
-            div
+            Div
                 id="downloads-content"
-                sx-background="#333"
-                sx-gap=(10)
-                sx-padding=(10)
-                sx-border-radius=(10)
-                sx-border-top-left-radius=(0)
+                background="#333"
+                gap=(10)
+                padding=(10)
+                border-radius=(10)
+                border-top-left-radius=(0)
             {
                 @if tasks.is_empty() {
                     "No download tasks"
@@ -214,9 +212,9 @@ pub fn downloads_page_content(
 }
 
 #[must_use]
-pub fn downloads(state: &State, tasks: &[ApiDownloadTask], active_tab: DownloadTab) -> Markup {
+pub fn downloads(state: &State, tasks: &[ApiDownloadTask], active_tab: DownloadTab) -> Containers {
     let Some(connection) = &state.connection else {
-        return html! {};
+        return container! {};
     };
 
     page(

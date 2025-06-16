@@ -18,15 +18,15 @@ use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
 use hyperchad::{
     actions::{
-        ActionType,
+        self as hyperchad_actions, ActionType,
         logic::{
             get_height_px_str_id, get_mouse_x_self, get_mouse_y_str_id, get_visibility_str_id,
             get_width_px_self,
         },
     },
-    transformer_models::{AlignItems, JustifyContent, LayoutOverflow, Position, Visibility},
+    template2::{self as hyperchad_template2, Containers, IntoActionEffect, container},
+    transformer::models::{AlignItems, JustifyContent, LayoutOverflow, Position, Visibility},
 };
-use hyperchad_template::{Markup, html};
 use moosicbox_music_models::{
     API_SOURCES, AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id,
 };
@@ -50,13 +50,6 @@ pub const BACKGROUND: &str = "#181a1b";
 macro_rules! public_img {
     ($path:expr $(,)?) => {
         concat!("/public/img/", $path)
-    };
-}
-
-#[macro_export]
-macro_rules! pre_escaped {
-    ($($message:tt)+) => {
-        hyperchad_template::PreEscaped(format!($($message)*))
     };
 }
 
@@ -99,6 +92,15 @@ pub enum Action {
         track_ids: Vec<Id>,
         api_source: ApiSource,
     },
+}
+
+impl IntoActionEffect for Action {
+    fn into_action_effect(self) -> hyperchad_actions::ActionEffect {
+        ActionType::Custom {
+            action: self.to_string(),
+        }
+        .into()
+    }
 }
 
 impl From<Action> for hyperchad::actions::Action {
@@ -149,62 +151,62 @@ impl<'a> TryFrom<&'a str> for Action {
 }
 
 #[must_use]
-pub fn sidebar_navigation() -> Markup {
-    html! {
-        aside sx-width="calc(max(240, min(280, 15%)))" sx-background=(DARK_BACKGROUND) {
-            div class="navigation-bar" sx-padding=(20) {
+pub fn sidebar_navigation() -> Containers {
+    container! {
+        Aside width="calc(max(240, min(280, 15%)))" background=(DARK_BACKGROUND) {
+            Div class="navigation-bar" padding=(20) {
                 @let size = 36;
-                div class="navigation-bar-header" sx-dir="row" sx-align-items="center" sx-height=(size) {
+                Div class="navigation-bar-header" direction="row" align-items="center" height=(size) {
                     @let icon_size = 36;
-                    a href="/" sx-dir="row" sx-height=(icon_size) {
-                        img
-                            sx-width=(icon_size)
-                            sx-height=(icon_size)
+                    Anchor href="/" direction="row" height=(icon_size) {
+                        Image
+                            width=(icon_size)
+                            height=(icon_size)
                             src=(public_img!("icon128.png"));
 
-                        h1 class="navigation-bar-header-home-link-text" sx-font-size=(20) {
+                        H1 class="navigation-bar-header-home-link-text" font-size=(20) {
                             "MoosicBox"
                         }
                     }
                     @let size = 22;
-                    div sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-height=(size) {
-                        a href="/settings" sx-dir="row" sx-width=(size + 10) {
-                            img
-                                sx-width=(size)
-                                sx-height=(size)
+                    Div direction="row" justify-content="end" align-items="center" height=(size) {
+                        Anchor href="/settings" direction="row" width=(size + 10) {
+                            Image
+                                width=(size)
+                                height=(size)
                                 src=(public_img!("settings-gear-white.svg"));
                         }
-                        div sx-width=(size + 10) {
-                            img
-                                sx-width=(size)
-                                sx-height=(size)
+                        Div width=(size + 10) {
+                            Image
+                                width=(size)
+                                height=(size)
                                 src=(public_img!("chevron-left-white.svg"));
                         }
                     }
                 }
-                ul {
-                    li {
-                        a href="/" {
+                Ul {
+                    Li {
+                        Anchor href="/" {
                             "Home"
                         }
                     }
-                    li {
-                        a href="/downloads" {
+                    Li {
+                        Anchor href="/downloads" {
                             "Downloads"
                         }
                     }
                 }
-                h1 class="my-collection-header" sx-font-size=(20) {
+                H1 class="my-collection-header" font-size=(20) {
                     "My Collection"
                 }
-                ul {
-                    li {
-                        a href="/albums" {
+                Ul {
+                    Li {
+                        Anchor href="/albums" {
                             "Albums"
                         }
                     }
-                    li {
-                        a href="/artists" {
+                    Li {
+                        Anchor href="/artists" {
                             "Artists"
                         }
                     }
@@ -216,74 +218,74 @@ pub fn sidebar_navigation() -> Markup {
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
-pub fn player(state: &State) -> Markup {
-    html! {
-        div sx-height=(FOOTER_HEIGHT) sx-border-top={(FOOTER_BORDER_SIZE)", #222"} {
-            div sx-height=(VIZ_HEIGHT) sx-padding-y=(VIZ_PADDING) sx-dir="row" {
-                canvas
+pub fn player(state: &State) -> Containers {
+    container! {
+        Div height=(FOOTER_HEIGHT) border-top=((FOOTER_BORDER_SIZE, "#222")) {
+            Div height=(VIZ_HEIGHT) padding-y=(VIZ_PADDING) direction="row" {
+                Canvas
                     id="visualization"
-                    sx-cursor="pointer"
-                    sx-width="100%"
-                    sx-height=(VIZ_HEIGHT)
+                    cursor="pointer"
+                    width="100%"
+                    height=(VIZ_HEIGHT)
                     fx-click=(get_mouse_x_self().divide(get_width_px_self()).then_pass_to(Action::SeekCurrentTrackPercent))
                     fx-resize=(get_width_px_self().then_pass_to(Action::RefreshVisualization))
                     fx-immediate=(get_width_px_self().then_pass_to(Action::RefreshVisualization))
                 {}
             }
-            div sx-height=(100) sx-dir="row" {
-                div sx-flex=(1) sx-justify-content="center" {
+            Div height=(100) direction="row" {
+                Div flex=(1) justify-content="center" {
                     (player_current_album_from_state(state, 70))
                 }
-                div sx-flex=(2) sx-align-items="center" sx-justify-content="center" {
+                Div flex=(2) align-items="center" justify-content="center" {
                     @let button_size = 40;
                     @let progress_size = 20;
-                    div sx-height=(button_size) sx-dir="row" sx-justify-content="center" {
-                        button
-                            sx-width=(button_size)
-                            sx-height=(button_size)
-                            sx-margin-x=(5)
-                            sx-dir="row"
-                            sx-justify-content="center"
-                            sx-align-items="center"
-                            sx-background=(BACKGROUND)
-                            sx-border-radius="100%"
+                    Div height=(button_size) direction="row" justify-content="center" {
+                        Button
+                            width=(button_size)
+                            height=(button_size)
+                            margin-x=(5)
+                            direction="row"
+                            justify-content="center"
+                            align-items="center"
+                            background=(BACKGROUND)
+                            border-radius="100%"
                             fx-click=(Action::PreviousTrack)
                         {
                             @let icon_size = 18;
-                            img
-                                sx-width=(icon_size)
-                                sx-height=(icon_size)
+                            Image
+                                width=(icon_size)
+                                height=(icon_size)
                                 src=(public_img!("previous-button-white.svg"));
                         }
                         (player_play_button_from_state(state))
-                        button
-                            sx-width=(button_size)
-                            sx-height=(button_size)
-                            sx-margin-x=(5)
-                            sx-dir="row"
-                            sx-justify-content="center"
-                            sx-align-items="center"
-                            sx-background=(BACKGROUND)
-                            sx-border-radius="100%"
+                        Button
+                            width=(button_size)
+                            height=(button_size)
+                            margin-x=(5)
+                            direction="row"
+                            justify-content="center"
+                            align-items="center"
+                            background=(BACKGROUND)
+                            border-radius="100%"
                             fx-click=(Action::NextTrack)
                         {
                             @let icon_size = 18;
-                            img
-                                sx-width=(icon_size)
-                                sx-height=(icon_size)
+                            Image
+                                width=(icon_size)
+                                height=(icon_size)
                                 src=(public_img!("next-button-white.svg"));
                         }
                     }
-                    div sx-height=(progress_size) sx-margin-top=(10) {
+                    Div height=(progress_size) margin-top=(10) {
                         (player_current_progress_from_state(state))
                     }
                 }
-                div sx-flex=(1) sx-dir="row" sx-justify-content="end" sx-align-items="center" sx-padding-right=(20) {
+                Div flex=(1) direction="row" justify-content="end" align-items="center" padding-right=(20) {
                     (volume(state, FOOTER_ICON_SIZE))
-                    button
-                        sx-width=(FOOTER_ICON_SIZE)
-                        sx-height=(FOOTER_ICON_SIZE)
-                        sx-margin-left=(10)
+                    Button
+                        width=(FOOTER_ICON_SIZE)
+                        height=(FOOTER_ICON_SIZE)
+                        margin-left=(10)
                         fx-click=(
                             get_visibility_str_id(AUDIO_ZONES_ID)
                                 .eq(Visibility::Hidden)
@@ -291,15 +293,15 @@ pub fn player(state: &State) -> Markup {
                                 .or_else(ActionType::hide_str_id(AUDIO_ZONES_ID))
                         )
                     {
-                        img
-                            sx-width=(FOOTER_ICON_SIZE)
-                            sx-height=(FOOTER_ICON_SIZE)
+                        Image
+                            width=(FOOTER_ICON_SIZE)
+                            height=(FOOTER_ICON_SIZE)
                             src=(public_img!("speaker-white.svg"));
                     }
-                    button
-                        sx-width=(FOOTER_ICON_SIZE)
-                        sx-height=(FOOTER_ICON_SIZE)
-                        sx-margin-left=(10)
+                    Button
+                        width=(FOOTER_ICON_SIZE)
+                        height=(FOOTER_ICON_SIZE)
+                        margin-left=(10)
                         fx-click=(
                             get_visibility_str_id(PLAYBACK_SESSIONS_ID)
                                 .eq(Visibility::Hidden)
@@ -307,25 +309,25 @@ pub fn player(state: &State) -> Markup {
                                 .or_else(ActionType::hide_str_id(PLAYBACK_SESSIONS_ID))
                         )
                     {
-                        img
-                            sx-width=(FOOTER_ICON_SIZE)
-                            sx-height=(FOOTER_ICON_SIZE)
+                        Image
+                            width=(FOOTER_ICON_SIZE)
+                            height=(FOOTER_ICON_SIZE)
                             src=(public_img!("sessions-white.svg"));
                     }
-                    button
+                    Button
                         fx-click=(
                             get_visibility_str_id("play-queue")
                                 .eq(Visibility::Hidden)
                                 .then(ActionType::show_str_id("play-queue"))
                                 .or_else(ActionType::hide_str_id("play-queue"))
                         )
-                        sx-width=(FOOTER_ICON_SIZE)
-                        sx-height=(FOOTER_ICON_SIZE)
-                        sx-margin-left=(10)
+                        width=(FOOTER_ICON_SIZE)
+                        height=(FOOTER_ICON_SIZE)
+                        margin-left=(10)
                     {
-                        img
-                            sx-width=(FOOTER_ICON_SIZE)
-                            sx-height=(FOOTER_ICON_SIZE)
+                        Image
+                            width=(FOOTER_ICON_SIZE)
+                            height=(FOOTER_ICON_SIZE)
                             src=(public_img!("playlist-white.svg"));
                     }
                 }
@@ -339,20 +341,20 @@ pub const VOLUME_SLIDER_ID: &str = "volume-slider";
 pub const VOLUME_SLIDER_VALUE_CONTAINER_ID: &str = "volume-slider-value-container";
 pub const VOLUME_SLIDER_VALUE_ID: &str = "volume-slider-value";
 
-fn volume(state: &State, size: u16) -> Markup {
+fn volume(state: &State, size: u16) -> Containers {
     let volume_percent = state.player.playback.as_ref().map_or(1.0, |x| x.volume);
-    html! {
-        div
+    container! {
+        Div
             id=(VOLUME_SLIDER_CONTAINER_ID)
-            sx-width=(size)
-            sx-height=(size)
-            sx-position="relative"
+            width=(size)
+            height=(size)
+            position="relative"
             fx-hover=(ActionType::show_str_id(VOLUME_SLIDER_ID).delay_off(400))
         {
-            button {
-                img
-                    sx-width=(size)
-                    sx-height=(size)
+            Button {
+                Image
+                    width=(size)
+                    height=(size)
                     src=(public_img!("audio-white.svg"));
             }
             (volume_slider(size, volume_percent))
@@ -360,23 +362,23 @@ fn volume(state: &State, size: u16) -> Markup {
     }
 }
 
-fn volume_slider(size: u16, volume_percent: f64) -> Markup {
-    html! {
-        div
+fn volume_slider(size: u16, volume_percent: f64) -> Containers {
+    container! {
+        Div
             id=(VOLUME_SLIDER_ID)
-            sx-visibility=(Visibility::Hidden)
-            sx-width=(30)
-            sx-height=(130)
-            sx-padding-y=(15)
-            sx-position="absolute"
-            sx-bottom=(size)
-            sx-left=(0)
-            sx-margin-y=(5)
-            sx-align-items="center"
-            sx-justify-content="center"
-            sx-border-radius=(30)
-            sx-background=(BACKGROUND)
-            sx-cursor="pointer"
+            visibility=(Visibility::Hidden)
+            width=(30)
+            height=(130)
+            padding-y=(15)
+            position="absolute"
+            bottom=(size)
+            left=(0)
+            margin-y=(5)
+            align-items="center"
+            justify-content="center"
+            border-radius=(30)
+            background=(BACKGROUND)
+            cursor="pointer"
             fx-mouse-down=(
                 hyperchad::actions::logic::Arithmetic::group(
                     get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
@@ -389,13 +391,13 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
             )
             fx-hover=(ActionType::show_self().delay_off(400))
         {
-            div
+            Div
                 id=(VOLUME_SLIDER_VALUE_CONTAINER_ID)
-                sx-position="relative"
-                sx-width=(3)
-                sx-height="100%"
-                sx-border-radius=(30)
-                sx-background="#444"
+                position="relative"
+                width=(3)
+                height="100%"
+                border-radius=(30)
+                background="#444"
             {
                 (volume_slider_value(size, volume_percent))
             }
@@ -403,54 +405,54 @@ fn volume_slider(size: u16, volume_percent: f64) -> Markup {
     }
 }
 
-fn volume_slider_value(size: u16, volume_percent: f64) -> Markup {
+fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
     let height_percent = volume_percent * 100.0;
-    html! {
-        div
+    container! {
+        Div
             id=(VOLUME_SLIDER_VALUE_ID)
-            sx-position="absolute"
-            sx-bottom=(0)
-            sx-left=(0)
-            sx-width="100%"
-            sx-height=(format!("{height_percent}%"))
-            sx-border-radius=(30)
-            sx-background="#fff"
+            position="absolute"
+            bottom=(0)
+            left=(0)
+            width="100%"
+            height=(format!("{height_percent}%"))
+            border-radius=(30)
+            background="#fff"
         {
-            div sx-position="relative" {
+            Div position="relative" {
                 @let slider_top_width = f32::from(size) / 2.5;
-                div
-                    sx-position="absolute"
-                    sx-top=(0)
-                    sx-left=(format!("calc(50% - {})", slider_top_width / 2.0))
-                    sx-width=(slider_top_width)
-                    sx-height=(3)
-                    sx-border-radius=(30)
-                    sx-background="#fff"
+                Div
+                    position="absolute"
+                    top=(0)
+                    left=(format!("calc(50% - {})", slider_top_width / 2.0))
+                    width=(slider_top_width)
+                    height=(3)
+                    border-radius=(30)
+                    background="#fff"
                 {}
             }
         }
     }
 }
 
-fn player_play_button(playing: bool) -> Markup {
-    html! {
+fn player_play_button(playing: bool) -> Containers {
+    container! {
         @let button_size = 40;
-        button
+        Button
             id="player-play-button"
-            sx-width=(button_size)
-            sx-height=(button_size)
-            sx-margin-x=(5)
-            sx-dir="row"
-            sx-justify-content="center"
-            sx-align-items="center"
-            sx-background=(BACKGROUND)
-            sx-border-radius="100%"
+            width=(button_size)
+            height=(button_size)
+            margin-x=(5)
+            direction="row"
+            justify-content="center"
+            align-items="center"
+            background=(BACKGROUND)
+            border-radius="100%"
             fx-click=(Action::TogglePlayback)
         {
             @let icon_size = 16;
-            img
-                sx-width=(icon_size)
-                sx-height=(icon_size)
+            Image
+                width=(icon_size)
+                height=(icon_size)
                 src=(
                     if playing {
                         public_img!("pause-button-white.svg")
@@ -462,37 +464,37 @@ fn player_play_button(playing: bool) -> Markup {
     }
 }
 
-fn player_play_button_from_state(state: &State) -> Markup {
+fn player_play_button_from_state(state: &State) -> Containers {
     state.player.playback.as_ref().map_or_else(
         || player_play_button(false),
         |playback| player_play_button(playback.playing),
     )
 }
 
-fn player_current_album(host: &str, track: &ApiTrack, size: u16) -> Markup {
-    html! {
-        div id="player-current-playing" sx-dir="row" sx-align-items="center" {
-            div sx-width=(size) sx-padding-x=(20) sx-align-items="center" sx-justify-content="center" {
-                a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) sx-width=(size) sx-height=(size) {
+fn player_current_album(host: &str, track: &ApiTrack, size: u16) -> Containers {
+    container! {
+        Div id="player-current-playing" direction="row" align-items="center" {
+            Div width=(size) padding-x=(20) align-items="center" justify-content="center" {
+                Anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) width=(size) height=(size) {
                     (album_cover_img_from_album(host, &track.into(), size))
                 }
             }
-            div sx-justify-content="center" sx-gap=(3) {
-                div {
-                    a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.title) }
+            Div justify-content="center" gap=(3) {
+                Div {
+                    Anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.title) }
                 }
-                div {
-                    a href=(pre_escaped!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
+                Div {
+                    Anchor href=(format!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
                 }
-                div sx-dir="row" {
-                    "Playing from: " a href=(pre_escaped!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
+                Div direction="row" {
+                    "Playing from: " Anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
                 }
             }
         }
     }
 }
 
-fn player_current_album_from_state(state: &State, size: u16) -> Markup {
+fn player_current_album_from_state(state: &State, size: u16) -> Containers {
     if let Some(connection) = &state.connection {
         if let Some(playback) = &state.player.playback {
             let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
@@ -503,20 +505,20 @@ fn player_current_album_from_state(state: &State, size: u16) -> Markup {
         }
     }
 
-    html! {
-        div id="player-current-playing" sx-dir="row" {}
+    container! {
+        Div id="player-current-playing" direction="row" {}
     }
 }
 
-fn player_current_progress(progress: f64, duration: f64) -> Markup {
-    html! {
-        div id="player-current-progress" {
+fn player_current_progress(progress: f64, duration: f64) -> Containers {
+    container! {
+        Div id="player-current-progress" {
             (progress.into_formatted()) " // " (duration.into_formatted())
         }
     }
 }
 
-fn player_current_progress_from_state(state: &State) -> Markup {
+fn player_current_progress_from_state(state: &State) -> Containers {
     if let Some(playback) = &state.player.playback {
         let track: Option<&ApiTrack> = playback.tracks.get(playback.position as usize);
 
@@ -525,8 +527,8 @@ fn player_current_progress_from_state(state: &State) -> Markup {
         }
     }
 
-    html! {
-        div id="player-current-progress" {}
+    container! {
+        Div id="player-current-progress" {}
     }
 }
 
@@ -535,7 +537,7 @@ pub fn session_updated(
     state: &State,
     update: &ApiUpdateSession,
     session: &ApiSession,
-) -> Vec<(String, Markup)> {
+) -> Vec<(String, Containers)> {
     let mut partials = vec![];
 
     if update.position.is_some() || update.playlist.is_some() {
@@ -590,38 +592,38 @@ pub fn session_updated(
 }
 
 #[must_use]
-pub fn footer(state: &State) -> Markup {
-    html! {
-        footer sx-height=(FOOTER_HEIGHT) sx-background=(DARK_BACKGROUND) {
+pub fn footer(state: &State) -> Containers {
+    container! {
+        Footer height=(FOOTER_HEIGHT) background=(DARK_BACKGROUND) {
             (player(state))
         }
     }
 }
 
 #[must_use]
-pub fn main(slot: &Markup) -> Markup {
-    html! {
-        main class="main-content" sx-overflow-y="auto" sx-flex-grow=(1) {
+pub fn main(slot: &Containers) -> Containers {
+    container! {
+        Main class="main-content" overflow-y="auto" flex-grow=(1) {
             (slot)
         }
     }
 }
 
 #[must_use]
-pub fn home(state: &State) -> Markup {
+pub fn home(state: &State) -> Containers {
     page(
         state,
-        &html! {
+        &container! {
             "home"
         },
     )
 }
 
 #[must_use]
-pub fn downloads(state: &State) -> Markup {
+pub fn downloads(state: &State) -> Containers {
     page(
         state,
-        &html! {
+        &container! {
             "downloads"
         },
     )
@@ -631,7 +633,7 @@ pub fn downloads(state: &State) -> Markup {
 ///
 /// * If the `API_SOURCES` `RwLock` is poisoned
 #[must_use]
-pub fn page(state: &State, slot: &Markup) -> Markup {
+pub fn page(state: &State, slot: &Containers) -> Containers {
     let api_sources = API_SOURCES
         .read()
         .unwrap()
@@ -639,9 +641,20 @@ pub fn page(state: &State, slot: &Markup) -> Markup {
         .cloned()
         .collect::<Vec<_>>();
 
-    html! {
-        div id="root" class="dark" sx-width="100%" sx-height="100%" sx-position="relative" sx-color="#fff" {
-            section class="navigation-bar-and-main-content" sx-dir="row" sx-height=(format!("calc(100% - {FOOTER_HEIGHT})")) {
+    container! {
+        Div
+            id="root"
+            class="dark"
+            width="100%"
+            height="100%"
+            position="relative"
+            color="#fff"
+        {
+            Section
+                class="navigation-bar-and-main-content"
+                direction="row"
+                height={"calc(100% - "(FOOTER_HEIGHT)")"}
+            {
                 (sidebar_navigation())
                 (main(&slot))
             }
@@ -658,15 +671,15 @@ pub static AUDIO_ZONES_ID: &str = "audio-zones";
 pub static AUDIO_ZONES_CONTENT_ID: &str = "audio-zones-content";
 
 #[must_use]
-pub fn audio_zones() -> Markup {
+pub fn audio_zones() -> Containers {
     modal(
         AUDIO_ZONES_ID,
-        &html! {
-            h1 { "Audio Zones" }
-            button { "New" }
+        &container! {
+            H1 { "Audio Zones" }
+            Button { "New" }
         },
-        &html! {
-            div hx-get=(pre_escaped!("/audio-zones")) hx-trigger="load" {
+        &container! {
+            Div hx-get="/audio-zones" hx-trigger="load" {
                 "Loading..."
             }
         },
@@ -677,15 +690,15 @@ pub static PLAYBACK_SESSIONS_ID: &str = "playback-sessions";
 pub static PLAYBACK_SESSIONS_CONTENT_ID: &str = "playback-sessions-content";
 
 #[must_use]
-pub fn playback_sessions() -> Markup {
+pub fn playback_sessions() -> Containers {
     modal(
         PLAYBACK_SESSIONS_ID,
-        &html! {
-            h1 { "Playback Sessions" }
-            button { "New" }
+        &container! {
+            H1 { "Playback Sessions" }
+            Button { "New" }
         },
-        &html! {
-            div hx-get=(pre_escaped!("/playback-sessions")) hx-trigger="load" {
+        &container! {
+            Div hx-get="/playback-sessions" hx-trigger="load" {
                 "Loading..."
             }
         },
@@ -693,63 +706,63 @@ pub fn playback_sessions() -> Markup {
 }
 
 #[must_use]
-pub fn modal(id: &str, header: &Markup, content: &Markup) -> Markup {
-    html! {
-        div
+pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers {
+    container! {
+        Div
             id=(id)
-            sx-visibility=(Visibility::Hidden)
-            sx-dir="row"
-            sx-position="fixed"
-            sx-width="100%"
-            sx-height="100%"
-            sx-align-items=(AlignItems::Center)
+            visibility=(Visibility::Hidden)
+            direction="row"
+            position="fixed"
+            width="100%"
+            height="100%"
+            align-items=(AlignItems::Center)
         {
-            div
-                sx-flex=(1)
-                sx-background=(DARK_BACKGROUND)
-                sx-margin-x="calc(20vw)"
-                sx-min-height="calc(min(90vh, 300))"
-                sx-max-height="90vh"
-                sx-border-radius=(15)
+            Div
+                flex=(1)
+                background=(DARK_BACKGROUND)
+                margin-x="calc(20vw)"
+                min-height="calc(min(90vh, 300))"
+                max-height="90vh"
+                border-radius=(15)
                 fx-click-outside=(
                     get_visibility_str_id(id)
                         .eq(Visibility::Visible)
                         .then(ActionType::hide_str_id(id))
                 )
-                sx-overflow-y=(LayoutOverflow::Auto)
+                overflow-y=(LayoutOverflow::Auto)
             {
-                div
-                    sx-dir="row"
-                    sx-background=(DARK_BACKGROUND)
-                    sx-padding-x=(30)
-                    sx-padding-top=(20)
-                    sx-border-top-radius=(15)
-                    sx-justify-content=(JustifyContent::SpaceBetween)
-                    sx-position=(Position::Sticky)
-                    sx-top=(0)
+                Div
+                    direction="row"
+                    background=(DARK_BACKGROUND)
+                    padding-x=(30)
+                    padding-top=(20)
+                    border-top-radius=(15)
+                    justify-content=(JustifyContent::SpaceBetween)
+                    position=(Position::Sticky)
+                    top=(0)
                 {
-                    div sx-dir="row" { (header) }
-                    div sx-dir="row" sx-justify-content=(JustifyContent::End) {
+                    Div direction="row" { (header) }
+                    Div direction="row" justify-content=(JustifyContent::End) {
                         @let icon_size = 20;
-                        button
-                            sx-width=(icon_size)
-                            sx-height=(icon_size)
+                        Button
+                            width=(icon_size)
+                            height=(icon_size)
                             fx-click=(
                                 get_visibility_str_id(id)
                                     .eq(Visibility::Visible)
                                     .then(ActionType::hide_str_id(id))
                             )
                         {
-                            img
-                                sx-width=(icon_size)
-                                sx-height=(icon_size)
+                            Image
+                                width=(icon_size)
+                                height=(icon_size)
                                 src=(public_img!("cross-white.svg"));
                         }
                     }
                 }
-                div
-                    sx-padding-x=(30)
-                    sx-padding-bottom=(20)
+                Div
+                    padding-x=(30)
+                    padding-bottom=(20)
                 {
                     (content)
                 }

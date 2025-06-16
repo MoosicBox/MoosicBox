@@ -14,11 +14,12 @@ version     = "0.1.1"
 hyperchad = { workspace = true, features = [
     "actions",
     "actions-logic",
+    "actions-serde",
+    "color",
     "serde",
-    "transformer-models",
+    "template2",
+    "transformer",
 ] }
-hyperchad_template = { workspace = true }
-hyperchad_template2 = { workspace = true }
 moosicbox_app_models = { workspace = true, features = ["music-api-api"] }
 moosicbox_audio_zone_models = { workspace = true }
 moosicbox_date_utils = { workspace = true, features = ["chrono"] }

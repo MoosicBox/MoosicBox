@@ -1,17 +1,17 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
-    actions::{ActionType, logic::get_visibility_self},
-    transformer_models::{AlignItems, LayoutDirection, Visibility},
+    actions::{self as hyperchad_actions, ActionType, logic::get_visibility_self},
+    template2::{self as hyperchad_template2, Containers, container},
+    transformer::models::{AlignItems, LayoutDirection, Visibility},
 };
-use hyperchad_template::{Markup, html};
 use moosicbox_music_models::api::ApiTrack;
 
 use crate::{public_img, state::State};
 
-fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> Markup {
+fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> Containers {
     let Some(connection) = &state.connection else {
-        return html! {};
+        return container! {};
     };
 
     let album_page_url = crate::albums::album_page_url(
@@ -23,34 +23,34 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
         track.bit_depth,
     );
     let artist_page_url = crate::artists::artist_page_url(&track.artist_id.to_string());
-    html! {
-        div
-            sx-dir=(LayoutDirection::Row)
-            sx-gap=(10)
-            sx-opacity=[if is_history { Some(0.5) } else { None }]
+    container! {
+        Div
+            direction=(LayoutDirection::Row)
+            gap=(10)
+            opacity=[if is_history { Some(0.5) } else { None }]
         {
-            div {
+            Div {
                 @let icon_size = 50;
-                a href=(album_page_url) sx-width=(icon_size) sx-height=(icon_size) {
+                Anchor href=(album_page_url) width=(icon_size) height=(icon_size) {
                     (crate::albums::album_cover_img_from_track(&connection.api_url, track, icon_size))
                 }
             }
-            div flex=(1) {
-                div {
-                    a href=(album_page_url) {
+            Div flex=(1) {
+                Div {
+                    Anchor href=(album_page_url) {
                         (track.title) " - " (track.album)
                     }
                 }
-                div {
-                    a href=(artist_page_url) { (track.artist) }
+                Div {
+                    Anchor href=(artist_page_url) { (track.artist) }
                 }
             }
-            div sx-align-items=(AlignItems::End) sx-background="#000" {
+            Div align-items=(AlignItems::End) background="#000" {
                 @let icon_size = 20;
-                button sx-width=(icon_size) sx-height=(icon_size) {
-                    img
-                        sx-width=(icon_size)
-                        sx-height=(icon_size)
+                Button width=(icon_size) height=(icon_size) {
+                    Image
+                        width=(icon_size)
+                        height=(icon_size)
                         src=(public_img!("cross-white.svg"));
                 }
             }
@@ -59,7 +59,7 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
 }
 
 #[must_use]
-pub fn play_queue(state: &State) -> Markup {
+pub fn play_queue(state: &State) -> Containers {
     static EMPTY_QUEUE: Vec<ApiTrack> = vec![];
 
     let position = state.player.playback.as_ref().map_or(0, |x| x.position);
@@ -87,36 +87,36 @@ pub fn play_queue(state: &State) -> Markup {
 
     log::debug!("state: {state:?}");
 
-    html! {
-        div
+    container! {
+        Div
             id="play-queue"
-            sx-width="calc(min(500, 30%))"
-            sx-height="calc(100% - 200)"
-            sx-visibility="hidden"
-            sx-background="#282a2b"
-            sx-border-top-left-radius=(10)
-            sx-border-bottom-left-radius=(10)
-            sx-position="absolute"
-            sx-bottom=(170)
-            sx-right=(0)
+            width="calc(min(500, 30%))"
+            height="calc(100% - 200)"
+            visibility="hidden"
+            background="#282a2b"
+            border-top-left-radius=(10)
+            border-bottom-left-radius=(10)
+            position="absolute"
+            bottom=(170)
+            right=(0)
             fx-click-outside=(
                 get_visibility_self()
                     .eq(Visibility::Visible)
                     .then(ActionType::hide_self())
             )
         {
-            div sx-overflow-y="auto" {
-                div sx-padding=(20) {
-                    h1 sx-height=(30) { "Play queue" }
-                    div sx-gap=(10) {
+            Div overflow-y="auto" {
+                Div padding=(20) {
+                    H1 height=(30) { "Play queue" }
+                    Div gap=(10) {
                         @for track in history {
                             (render_play_queue_item(state, track, true))
                         }
                     }
                     @if let Some(track) = current {
-                        div sx-dir="row" {
+                        Div direction="row" {
                             "Playing from: "
-                            a href=(
+                            Anchor href=(
                                 crate::albums::album_page_url(
                                     &track.album_id.to_string(),
                                     false,
@@ -132,7 +132,7 @@ pub fn play_queue(state: &State) -> Markup {
                         (render_play_queue_item(state, track, false))
                     }
                     @if future.peek().is_some() {
-                        div { "Next up:" }
+                        Div { "Next up:" }
                     }
                     @for track in future {
                         (render_play_queue_item(state, track, false))

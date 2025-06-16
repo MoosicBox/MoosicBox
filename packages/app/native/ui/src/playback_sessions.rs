@@ -1,22 +1,24 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::transformer_models::AlignItems;
-use hyperchad_template::{Markup, html};
+use hyperchad::{
+    template2::{self as hyperchad_template2, Containers, container},
+    transformer::models::AlignItems,
+};
 use moosicbox_session_models::ApiSession;
 
 use crate::PLAYBACK_SESSIONS_CONTENT_ID;
 
 #[must_use]
-pub fn playback_sessions(host: &str, sessions: &[ApiSession]) -> Markup {
-    html! {
-        div id=(PLAYBACK_SESSIONS_CONTENT_ID) {
+pub fn playback_sessions(host: &str, sessions: &[ApiSession]) -> Containers {
+    container! {
+        Div id=(PLAYBACK_SESSIONS_CONTENT_ID) {
             @for session in sessions {
                 @let future_tracks = session.playlist.tracks.iter().skip(session.position.unwrap_or(0) as usize);
-                div {
-                    h1 { (session.name) }
-                    div {
+                Div {
+                    H1 { (session.name) }
+                    Div {
                         @for track in future_tracks {
-                            div sx-dir="row" {
+                            Div direction="row" {
                                 @let icon_size = 50;
                                 @let album_page_url = crate::albums::album_page_url(
                                     &track.album_id.to_string(),
@@ -26,11 +28,11 @@ pub fn playback_sessions(host: &str, sessions: &[ApiSession]) -> Markup {
                                     track.sample_rate,
                                     track.bit_depth,
                                 );
-                                a
+                                Anchor
                                     href=(album_page_url)
-                                    sx-align-items=(AlignItems::Center)
-                                    sx-width=(icon_size)
-                                    sx-height=(icon_size)
+                                    align-items=(AlignItems::Center)
+                                    width=(icon_size)
+                                    height=(icon_size)
                                 {
                                     (crate::albums::album_cover_img_from_track(host, track, icon_size))
                                 }

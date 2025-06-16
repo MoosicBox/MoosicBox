@@ -1,16 +1,15 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::transformer_models::{
-    AlignItems, JustifyContent, LayoutDirection, SwapTarget, TextAlign,
+use hyperchad::{
+    template2::{self as hyperchad_template2, Containers, container},
+    transformer::models::{AlignItems, JustifyContent, LayoutDirection, SwapTarget, TextAlign},
 };
-use hyperchad_template::Markup;
-use hyperchad_template2::{Containers, container};
 use moosicbox_app_models::{
     AuthMethod, Connection, DownloadSettings, MusicApiSettings, ScanSettings,
 };
 use strum::{AsRefStr, EnumString};
 
-use crate::{formatting::classify_name, page, pre_escaped, state::State};
+use crate::{formatting::classify_name, page, state::State};
 
 #[must_use]
 pub fn settings_page_content(
@@ -139,7 +138,7 @@ pub fn download_settings_content(download_settings: &DownloadSettings) -> Contai
                                     type="submit"
                                     border-radius=(5)
                                     background="#111"
-                                    // border="2, #222"
+                                    border="2, #222"
                                     padding-x=(10)
                                     padding-y=(5)
                                 {
@@ -153,7 +152,7 @@ pub fn download_settings_content(download_settings: &DownloadSettings) -> Contai
                                         type="submit"
                                         border-radius=(5)
                                         background="#111"
-                                        // border="2, #222"
+                                        border="2, #222"
                                         padding-x=(10)
                                         padding-y=(5)
                                     {
@@ -414,15 +413,9 @@ pub fn settings(
     connections: &[Connection],
     selected: Option<&Connection>,
     music_api_settings: &[MusicApiSettings],
-) -> Markup {
+) -> Containers {
     page(
         state,
-        &pre_escaped!(
-            "{}",
-            settings_page_content(connection_name, connections, selected, music_api_settings)
-                .into_iter()
-                .map(|c| c.to_string())
-                .collect::<String>()
-        ),
+        &settings_page_content(connection_name, connections, selected, music_api_settings),
     )
 }

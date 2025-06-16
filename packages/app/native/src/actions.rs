@@ -430,9 +430,7 @@ pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), A
 
             let view = PartialView {
                 target: "albums".to_string(),
-                container: load_albums(size, *sort, filtered_sources, filter)
-                    .try_into()
-                    .unwrap(),
+                container: load_albums(size, *sort, filtered_sources, filter).into(),
             };
             let response = RENDERER.get().unwrap().render_partial(view).await;
             if let Err(e) = response {

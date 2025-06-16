@@ -72,9 +72,7 @@ async fn refresh_audio_zone_with_sessions() {
 async fn update_audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnection]) {
     let view = PartialView {
         target: AUDIO_ZONES_CONTENT_ID.to_string(),
-        container: moosicbox_app_native_ui::audio_zones::audio_zones(zones, connections)
-            .try_into()
-            .unwrap(),
+        container: moosicbox_app_native_ui::audio_zones::audio_zones(zones, connections).into(),
     };
     let response = RENDERER.get().unwrap().render_partial(view).await;
     if let Err(e) = response {
@@ -155,7 +153,7 @@ async fn handle_session_update(state: &State, update: &ApiUpdateSession, session
     for (id, markup) in moosicbox_app_native_ui::session_updated(state, update, session) {
         let view = PartialView {
             target: id,
-            container: markup.try_into().unwrap(),
+            container: markup.into(),
         };
         let response = renderer.render_partial(view).await;
         if let Err(e) = response {
@@ -198,8 +196,7 @@ async fn update_playlist_sessions() {
             &connection.api_url,
             &STATE.current_sessions.read().await,
         )
-        .try_into()
-        .unwrap(),
+        .into(),
     };
     let response = RENDERER.get().unwrap().render_partial(view).await;
     if let Err(e) = response {
