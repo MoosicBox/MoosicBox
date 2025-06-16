@@ -221,14 +221,26 @@ impl<E: MaybeElement> Markup<E> {
         } else if lookahead.peek(Semi) {
             input.parse().map(Self::Semi)
         } else if lookahead.peek(Ident::peek_any) {
-            // Handle bare identifiers as splice expressions for attribute values
-            // This enables syntax like: visibility=Hidden
-            let ident: Ident = input.call(Ident::parse_any)?;
-            let expr: Expr = parse_quote!(#ident);
-            Ok(Self::Splice {
-                paren_token: Paren::default(),
-                expr,
-            })
+            // Handle bare identifiers (including kebab-case) as splice expressions for attribute values
+            // This enables syntax like: visibility=hidden, align-items=center, justify-content=space-between
+
+            // Try to parse as AttributeName first (supports kebab-case like space-evenly)
+            if let Ok(attr_name) = input.parse::<AttributeName>() {
+                let name_str = attr_name.to_string();
+                let expr: Expr = parse_quote!(#name_str);
+                Ok(Self::Splice {
+                    paren_token: Paren::default(),
+                    expr,
+                })
+            } else {
+                // Fallback to simple identifier
+                let ident: Ident = input.call(Ident::parse_any)?;
+                let expr: Expr = parse_quote!(#ident);
+                Ok(Self::Splice {
+                    paren_token: Paren::default(),
+                    expr,
+                })
+            }
         } else {
             Err(lookahead.error())
         }

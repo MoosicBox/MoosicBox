@@ -3,67 +3,67 @@ use hyperchad_transformer_models::*;
 
 #[test]
 fn test_bare_identifier_enum_attributes() {
-    // Test visibility with bare identifiers (new syntax)
+    // Test visibility with kebab-case bare identifiers (new syntax)
     let containers = container! {
-        Div visibility=Hidden { "Hidden div" }
+        Div visibility=hidden { "Hidden div" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].visibility, Some(Visibility::Hidden));
 
     let containers = container! {
-        Div visibility=Visible { "Visible div" }
+        Div visibility=visible { "Visible div" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].visibility, Some(Visibility::Visible));
 
-    // Test layout direction with bare identifiers
+    // Test layout direction with kebab-case bare identifiers
     let containers = container! {
-        Div direction=Row { "Row layout" }
+        Div direction=row { "Row layout" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].direction, LayoutDirection::Row);
 
     let containers = container! {
-        Div direction=Column { "Column layout" }
+        Div direction=column { "Column layout" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].direction, LayoutDirection::Column);
 
-    // Test position with bare identifiers
+    // Test position with kebab-case bare identifiers
     let containers = container! {
-        Div position=Fixed { "Fixed position" }
+        Div position=fixed { "Fixed position" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].position, Some(Position::Fixed));
 
     let containers = container! {
-        Div position=Relative { "Relative position" }
+        Div position=relative { "Relative position" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].position, Some(Position::Relative));
 
-    // Test align-items with bare identifiers
+    // Test align-items with kebab-case bare identifiers
     let containers = container! {
-        Div align-items=Center { "Centered items" }
+        Div align-items=center { "Centered items" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].align_items, Some(AlignItems::Center));
 
     let containers = container! {
-        Div align-items=Start { "Start alignment" }
+        Div align-items=start { "Start alignment" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].align_items, Some(AlignItems::Start));
 
-    // Test justify-content with bare identifiers
+    // Test justify-content with kebab-case bare identifiers
     let containers = container! {
-        Div justify-content=Center { "Centered content" }
+        Div justify-content=center { "Centered content" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].justify_content, Some(JustifyContent::Center));
 
     let containers = container! {
-        Div justify-content=SpaceBetween { "Space between" }
+        Div justify-content=space-between { "Space between" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(
@@ -71,15 +71,15 @@ fn test_bare_identifier_enum_attributes() {
         Some(JustifyContent::SpaceBetween)
     );
 
-    // Test cursor with bare identifiers
+    // Test cursor with kebab-case bare identifiers
     let containers = container! {
-        Div cursor=Pointer { "Pointer cursor" }
+        Div cursor=pointer { "Pointer cursor" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].cursor, Some(Cursor::Pointer));
 
     let containers = container! {
-        Div cursor=Auto { "Auto cursor" }
+        Div cursor=auto { "Auto cursor" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].cursor, Some(Cursor::Auto));

@@ -1779,8 +1779,48 @@ impl Generator {
                 // Check if this is a simple identifier that should be converted to an enum variant
                 if let syn::Expr::Path(expr_path) = &expr {
                     if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
-                        // This is a simple identifier, convert it directly to enum variant
-                        let variant_name = expr_path.path.segments[0].ident.to_string();
+                        let identifier_name = expr_path.path.segments[0].ident.to_string();
+
+                        // Only accept kebab-case identifiers (lowercase, may contain hyphens)
+                        // Reject PascalCase identifiers to enforce kebab-case convention
+                        if identifier_name
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_uppercase())
+                        {
+                            // This is PascalCase - don't convert, let it fall through to normal expression handling
+                            // This will cause a compile error, enforcing kebab-case usage
+                        } else {
+                            // Convert kebab-case to PascalCase
+                            let variant_name = kebab_to_pascal_case(&identifier_name);
+                            let enum_ident = format_ident!("{}", enum_name);
+                            let variant_ident = format_ident!("{}", variant_name);
+
+                            return quote! { hyperchad_transformer_models::#enum_ident::#variant_ident };
+                        }
+                    }
+                }
+
+                // Check if this is a string literal that should be converted to an enum variant
+                if let syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(lit_str),
+                    ..
+                }) = &expr
+                {
+                    let identifier_name = lit_str.value();
+
+                    // Only accept kebab-case identifiers (lowercase, may contain hyphens)
+                    // Reject PascalCase identifiers to enforce kebab-case convention
+                    if identifier_name
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_uppercase())
+                    {
+                        // This is PascalCase - don't convert, let it fall through to normal expression handling
+                        // This will cause a compile error, enforcing kebab-case usage
+                    } else {
+                        // Convert kebab-case to PascalCase
+                        let variant_name = kebab_to_pascal_case(&identifier_name);
                         let enum_ident = format_ident!("{}", enum_name);
                         let variant_ident = format_ident!("{}", variant_name);
 
@@ -2674,6 +2714,17 @@ impl Builder {
 
 // Helper function to convert kebab-case to PascalCase
 fn kebab_to_pascal_case(s: &str) -> String {
+    // Handle special cases first
+    match s {
+        "space-between" => return "SpaceBetween".to_string(),
+        "space-evenly" => return "SpaceEvenly".to_string(),
+        "flex-start" => return "FlexStart".to_string(),
+        "flex-end" => return "FlexEnd".to_string(),
+        "line-through" => return "LineThrough".to_string(),
+        _ => {}
+    }
+
+    // General case: split on hyphens and capitalize each word
     s.split('-')
         .map(|word| {
             let mut chars = word.chars();
