@@ -843,7 +843,7 @@ impl Generator {
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
-                    "Unknown attribute '{}'. Supported attributes include: width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, and HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap)",
+                    "Unknown attribute '{}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, and HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap)",
                     name_str
                 );
                 return Err(error_msg);
@@ -1163,7 +1163,8 @@ impl Generator {
                 "debug" => Some(self.bool_attr("debug", value)),
 
                 // String properties
-                "font-family" => Some(self.font_family_attr("font_family", value)),
+                "font-family" => Some(self.string_vec_attr_opt("font_family", value)),
+                "class" => Some(self.string_vec_attr("classes", value)),
 
                 // // Flex properties
                 // "flex" => Some(self.flex_attr("flex", value)),
@@ -1251,6 +1252,12 @@ impl Generator {
                             #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
                         })
                     }
+                    "class" => {
+                        let field_ident = format_ident!("{}", name_str.replace('-', "_"));
+                        Some(quote! {
+                            #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
+                        })
+                    }
                     _ => None,
                 }
             }
@@ -1301,9 +1308,15 @@ impl Generator {
         quote! { #field_ident: Some(#value_tokens) }
     }
 
-    fn font_family_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    fn string_vec_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
-        let value_tokens = Self::markup_to_font_family_tokens(value);
+        let value_tokens = Self::markup_to_string_vec_tokens(value);
+        quote! { #field_ident: #value_tokens }
+    }
+
+    fn string_vec_attr_opt(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let value_tokens = Self::markup_to_string_vec_tokens(value);
         quote! { #field_ident: Some(#value_tokens) }
     }
 
@@ -2011,7 +2024,7 @@ impl Generator {
         }
     }
 
-    fn markup_to_font_family_tokens(value: Markup<NoElement>) -> TokenStream {
+    fn markup_to_string_vec_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => {
                 match &lit.lit {
@@ -2061,7 +2074,7 @@ impl Generator {
             Markup::BraceSplice { items, .. } => {
                 // For brace-wrapped items, handle like single item if only one
                 if items.len() == 1 {
-                    Self::markup_to_font_family_tokens(items[0].clone())
+                    Self::markup_to_string_vec_tokens(items[0].clone())
                 } else {
                     // Multiple items - concatenate as comma-separated string then parse
                     let item_tokens: Vec<_> = items
