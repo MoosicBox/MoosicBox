@@ -18,7 +18,7 @@ pub fn download() -> Containers {
         Div align-items=center padding-x=20 {
             Div width="100%" max-width=1000 padding-y=20 {
                 H1 border-bottom="2, #ccc" padding-bottom=20 margin-bottom=10 { "Downloads" }
-                Div id="releases" hidden=(true) hx-get="/releases" hx-trigger=load {}
+                Div #releases hidden=(true) hx-get="/releases" hx-trigger=load {}
             }
         }
     })
@@ -82,7 +82,7 @@ fn format_date(date: &NaiveDateTime) -> String {
 #[must_use]
 pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
     container! {
-        Div id="releases" {
+        Div #releases {
             @for release in releases {
                 Div id=(format_class_name(release.version)) padding-y=20 {
                     H2

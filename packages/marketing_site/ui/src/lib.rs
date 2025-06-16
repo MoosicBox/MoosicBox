@@ -34,7 +34,7 @@ pub fn header() -> Containers {
             align-items=center
             background="#080a0b"
         {
-            Div id="header-logo" padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
+            Div #header-logo padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
                 Anchor
                     color="#fff"
                     direction=row
@@ -54,7 +54,7 @@ pub fn header() -> Containers {
                 }
             }
             Div
-                id="header-menu-items"
+                #header-menu-items
                 direction=row
                 align-items=center
                 justify-content=end
@@ -75,10 +75,10 @@ pub fn header() -> Containers {
                     padding=8
                     href="/try-now"
                 {
-                    Span id="try-desktop" hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
+                    Span #try-desktop hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
                         "Start Free Trial"
                     }
-                    Span id="try-mobile" hidden=(if_responsive("mobile").then::<bool>(false).or_else(true)) {
+                    Span #try-mobile hidden=(if_responsive("mobile").then::<bool>(false).or_else(true)) {
                         "Try"
                     }
                 }
@@ -118,7 +118,7 @@ pub fn home() -> Containers {
             justify-content=center
         {
             Div
-                id="pics"
+                #pics
                 direction=(
                     if_responsive("mobile-large")
                         .then::<LayoutDirection>(LayoutDirection::Column)
@@ -131,7 +131,7 @@ pub fn home() -> Containers {
             {
                 Div flex-grow=2 {
                     H1
-                        id="splashscreen-motto"
+                        #splashscreen-motto
                         font-size=50
                         text-align=(
                             if_responsive("mobile-large")
