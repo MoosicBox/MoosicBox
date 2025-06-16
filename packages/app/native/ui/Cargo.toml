@@ -16,6 +16,7 @@ hyperchad = { workspace = true, features = [
     "actions-logic",
     "actions-serde",
     "color",
+    "renderer-canvas",
     "serde",
     "template2",
     "transformer",
