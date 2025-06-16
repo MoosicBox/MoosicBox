@@ -1776,6 +1776,18 @@ impl Generator {
                 }
             }
             Markup::Splice { expr, .. } => {
+                // Check if this is a simple identifier that should be converted to an enum variant
+                if let syn::Expr::Path(expr_path) = &expr {
+                    if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
+                        // This is a simple identifier, convert it directly to enum variant
+                        let variant_name = expr_path.path.segments[0].ident.to_string();
+                        let enum_ident = format_ident!("{}", enum_name);
+                        let variant_ident = format_ident!("{}", variant_name);
+
+                        return quote! { hyperchad_transformer_models::#enum_ident::#variant_ident };
+                    }
+                }
+
                 // Handle potential IfExpression for enums
                 Self::handle_potential_if_expression_for_enum(enum_name, &expr)
             }

@@ -8,6 +8,7 @@ use syn::{
     ext::IdentExt,
     parenthesized,
     parse::{Lookahead1, Parse, ParseStream},
+    parse_quote,
     punctuated::{Pair, Punctuated},
     spanned::Spanned,
     token::{
@@ -219,6 +220,15 @@ impl<E: MaybeElement> Markup<E> {
             input.diagnostic_parse(diagnostics).map(Self::ControlFlow)
         } else if lookahead.peek(Semi) {
             input.parse().map(Self::Semi)
+        } else if lookahead.peek(Ident::peek_any) {
+            // Handle bare identifiers as splice expressions for attribute values
+            // This enables syntax like: visibility=Hidden
+            let ident: Ident = input.call(Ident::parse_any)?;
+            let expr: Expr = parse_quote!(#ident);
+            Ok(Self::Splice {
+                paren_token: Paren::default(),
+                expr,
+            })
         } else {
             Err(lookahead.error())
         }
