@@ -968,7 +968,8 @@ impl Generator {
         &self,
         named_attrs: Vec<(AttributeName, AttributeType)>,
     ) -> Result<Vec<TokenStream>, String> {
-        let mut assignments = Vec::new();
+        // Use BTreeMap to track field assignments with precedence
+        let mut field_assignments = std::collections::BTreeMap::new();
 
         // Separate shorthand and individual properties
         let mut shorthand_attrs = std::collections::BTreeMap::new();
@@ -1006,13 +1007,15 @@ impl Generator {
             }
         }
 
-        // Handle shorthand properties first
-        self.handle_shorthand_properties(&shorthand_attrs, &mut assignments);
+        // Handle shorthand properties first (lower precedence)
+        self.handle_shorthand_properties(&shorthand_attrs, &mut field_assignments);
 
-        // Handle individual properties (these override shorthand)
+        // Handle individual properties (higher precedence - these override shorthand)
         for (name, attr_type) in individual_attrs {
             if let Some(assignment) = self.attr_to_assignment(name.clone(), attr_type) {
-                assignments.push(assignment);
+                // Extract field name from the assignment and store it
+                let field_name = self.extract_field_name_from_assignment(&assignment);
+                field_assignments.insert(field_name, assignment);
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
@@ -1020,128 +1023,239 @@ impl Generator {
                     name_str
                 );
                 return Err(error_msg);
-                // assignments.push(quote! { compile_error!(#error_msg) });
             }
         }
 
-        Ok(assignments)
+        // Convert the final field assignments to a Vec
+        Ok(field_assignments.into_values().collect())
     }
 
     fn handle_shorthand_properties(
         &self,
         shorthand_attrs: &std::collections::BTreeMap<String, (AttributeName, AttributeType)>,
-        assignments: &mut Vec<TokenStream>,
+        field_assignments: &mut std::collections::BTreeMap<String, TokenStream>,
     ) {
         // Handle padding shortcuts
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding") {
             let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { padding_top: Some(#value_tokens.clone()) });
-            assignments.push(quote! { padding_right: Some(#value_tokens.clone()) });
-            assignments.push(quote! { padding_bottom: Some(#value_tokens.clone()) });
-            assignments.push(quote! { padding_left: Some(#value_tokens) });
+            field_assignments.insert(
+                "padding_top".to_string(),
+                quote! { padding_top: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "padding_right".to_string(),
+                quote! { padding_right: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "padding_bottom".to_string(),
+                quote! { padding_bottom: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "padding_left".to_string(),
+                quote! { padding_left: Some(#value_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding-x") {
             let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { padding_left: Some(#value_tokens.clone()) });
-            assignments.push(quote! { padding_right: Some(#value_tokens) });
+            field_assignments.insert(
+                "padding_left".to_string(),
+                quote! { padding_left: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "padding_right".to_string(),
+                quote! { padding_right: Some(#value_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("padding-y") {
             let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { padding_top: Some(#value_tokens.clone()) });
-            assignments.push(quote! { padding_bottom: Some(#value_tokens) });
+            field_assignments.insert(
+                "padding_top".to_string(),
+                quote! { padding_top: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "padding_bottom".to_string(),
+                quote! { padding_bottom: Some(#value_tokens) },
+            );
         }
 
         // Handle margin shortcuts
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("margin") {
             let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { margin_top: Some(#value_tokens.clone()) });
-            assignments.push(quote! { margin_right: Some(#value_tokens.clone()) });
-            assignments.push(quote! { margin_bottom: Some(#value_tokens.clone()) });
-            assignments.push(quote! { margin_left: Some(#value_tokens) });
+            field_assignments.insert(
+                "margin_top".to_string(),
+                quote! { margin_top: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "margin_right".to_string(),
+                quote! { margin_right: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "margin_bottom".to_string(),
+                quote! { margin_bottom: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "margin_left".to_string(),
+                quote! { margin_left: Some(#value_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("margin-x") {
             let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { margin_left: Some(#value_tokens.clone()) });
-            assignments.push(quote! { margin_right: Some(#value_tokens) });
+            field_assignments.insert(
+                "margin_left".to_string(),
+                quote! { margin_left: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "margin_right".to_string(),
+                quote! { margin_right: Some(#value_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("margin-y") {
             let value_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { margin_top: Some(#value_tokens.clone()) });
-            assignments.push(quote! { margin_bottom: Some(#value_tokens) });
+            field_assignments.insert(
+                "margin_top".to_string(),
+                quote! { margin_top: Some(#value_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "margin_bottom".to_string(),
+                quote! { margin_bottom: Some(#value_tokens) },
+            );
         }
 
         // Handle border shortcuts
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border") {
             let border_tokens = Self::markup_to_border_tokens(value.clone());
-            assignments.push(quote! { border_top: Some(#border_tokens.clone()) });
-            assignments.push(quote! { border_right: Some(#border_tokens.clone()) });
-            assignments.push(quote! { border_bottom: Some(#border_tokens.clone()) });
-            assignments.push(quote! { border_left: Some(#border_tokens) });
+            field_assignments.insert(
+                "border_top".to_string(),
+                quote! { border_top: Some(#border_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_right".to_string(),
+                quote! { border_right: Some(#border_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_bottom".to_string(),
+                quote! { border_bottom: Some(#border_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_left".to_string(),
+                quote! { border_left: Some(#border_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-x") {
             let border_tokens = Self::markup_to_border_tokens(value.clone());
-            assignments.push(quote! { border_left: Some(#border_tokens.clone()) });
-            assignments.push(quote! { border_right: Some(#border_tokens) });
+            field_assignments.insert(
+                "border_left".to_string(),
+                quote! { border_left: Some(#border_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_right".to_string(),
+                quote! { border_right: Some(#border_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-y") {
             let border_tokens = Self::markup_to_border_tokens(value.clone());
-            assignments.push(quote! { border_top: Some(#border_tokens.clone()) });
-            assignments.push(quote! { border_bottom: Some(#border_tokens) });
+            field_assignments.insert(
+                "border_top".to_string(),
+                quote! { border_top: Some(#border_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_bottom".to_string(),
+                quote! { border_bottom: Some(#border_tokens) },
+            );
         }
 
         // Handle border-radius shortcuts
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("border-radius")
         {
             let radius_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_top_left_radius: Some(#radius_tokens.clone()) });
-            assignments.push(quote! { border_top_right_radius: Some(#radius_tokens.clone()) });
-            assignments.push(quote! { border_bottom_left_radius: Some(#radius_tokens.clone()) });
-            assignments.push(quote! { border_bottom_right_radius: Some(#radius_tokens) });
+            field_assignments.insert(
+                "border_top_left_radius".to_string(),
+                quote! { border_top_left_radius: Some(#radius_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_top_right_radius".to_string(),
+                quote! { border_top_right_radius: Some(#radius_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_bottom_left_radius".to_string(),
+                quote! { border_bottom_left_radius: Some(#radius_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_bottom_right_radius".to_string(),
+                quote! { border_bottom_right_radius: Some(#radius_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
             shorthand_attrs.get("border-top-radius")
         {
             let radius_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_top_left_radius: Some(#radius_tokens.clone()) });
-            assignments.push(quote! { border_top_right_radius: Some(#radius_tokens) });
+            field_assignments.insert(
+                "border_top_left_radius".to_string(),
+                quote! { border_top_left_radius: Some(#radius_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_top_right_radius".to_string(),
+                quote! { border_top_right_radius: Some(#radius_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
             shorthand_attrs.get("border-right-radius")
         {
             let radius_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_top_right_radius: Some(#radius_tokens.clone()) });
-            assignments.push(quote! { border_bottom_right_radius: Some(#radius_tokens) });
+            field_assignments.insert(
+                "border_top_right_radius".to_string(),
+                quote! { border_top_right_radius: Some(#radius_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_bottom_right_radius".to_string(),
+                quote! { border_bottom_right_radius: Some(#radius_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
             shorthand_attrs.get("border-bottom-radius")
         {
             let radius_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_bottom_left_radius: Some(#radius_tokens.clone()) });
-            assignments.push(quote! { border_bottom_right_radius: Some(#radius_tokens) });
+            field_assignments.insert(
+                "border_bottom_left_radius".to_string(),
+                quote! { border_bottom_left_radius: Some(#radius_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_bottom_right_radius".to_string(),
+                quote! { border_bottom_right_radius: Some(#radius_tokens) },
+            );
         }
 
         if let Some((_, AttributeType::Normal { value, .. })) =
             shorthand_attrs.get("border-left-radius")
         {
             let radius_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { border_top_left_radius: Some(#radius_tokens.clone()) });
-            assignments.push(quote! { border_bottom_left_radius: Some(#radius_tokens) });
+            field_assignments.insert(
+                "border_top_left_radius".to_string(),
+                quote! { border_top_left_radius: Some(#radius_tokens.clone()) },
+            );
+            field_assignments.insert(
+                "border_bottom_left_radius".to_string(),
+                quote! { border_bottom_left_radius: Some(#radius_tokens) },
+            );
         }
 
         // Handle gap shortcut
         if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("gap") {
             let gap_tokens = Self::markup_to_number_tokens(value.clone());
-            assignments.push(quote! { column_gap: Some(#gap_tokens.clone()) });
-            assignments.push(quote! { row_gap: Some(#gap_tokens) });
+            field_assignments.insert(
+                "column_gap".to_string(),
+                quote! { column_gap: Some(#gap_tokens.clone()) },
+            );
+            field_assignments.insert("row_gap".to_string(), quote! { row_gap: Some(#gap_tokens) });
         }
 
         // Handle flex shortcuts
@@ -1154,7 +1268,7 @@ impl Generator {
             if let Some((_, AttributeType::Normal { value, .. })) = shorthand_attrs.get("flex") {
                 let flex_tokens =
                     Self::markup_to_flex_tokens(value.clone(), flex_grow, flex_shrink, flex_basis);
-                assignments.push(quote! { flex: Some(#flex_tokens) });
+                field_assignments.insert("flex".to_string(), quote! { flex: Some(#flex_tokens) });
             }
 
             if flex_grow.is_some() || flex_shrink.is_some() || flex_basis.is_some() {
@@ -1179,13 +1293,16 @@ impl Generator {
                         quote! { hyperchad_transformer::Number::IntegerPercent(0) }
                     };
 
-                assignments.push(quote! {
-                    flex: Some(hyperchad_transformer::Flex {
-                        grow: #grow_tokens,
-                        shrink: #shrink_tokens,
-                        basis: #basis_tokens,
-                    })
-                });
+                field_assignments.insert(
+                    "flex".to_string(),
+                    quote! {
+                        flex: Some(hyperchad_transformer::Flex {
+                            grow: #grow_tokens,
+                            shrink: #shrink_tokens,
+                            basis: #basis_tokens,
+                        })
+                    },
+                );
             }
         }
 
@@ -1194,7 +1311,10 @@ impl Generator {
             shorthand_attrs.get("text-decoration")
         {
             let text_decoration_tokens = Self::markup_to_text_decoration_tokens(value.clone());
-            assignments.push(quote! { text_decoration: Some(#text_decoration_tokens) });
+            field_assignments.insert(
+                "text_decoration".to_string(),
+                quote! { text_decoration: Some(#text_decoration_tokens) },
+            );
         }
     }
 
@@ -2118,6 +2238,21 @@ impl Generator {
                 quote! { hyperchad_color::Color::from_hex(#color_str) }
             }
             _ => quote! { hyperchad_color::Color::from_hex(#color_str) },
+        }
+    }
+
+    fn extract_field_name_from_assignment(&self, assignment: &TokenStream) -> String {
+        // Extract the field name from assignments like "field_name: Some(value)"
+        let assignment_str = assignment.to_string();
+        if let Some(colon_pos) = assignment_str.find(':') {
+            assignment_str[..colon_pos].trim().to_string()
+        } else {
+            // Fallback - try to extract identifier from start
+            assignment_str
+                .split_whitespace()
+                .next()
+                .unwrap_or("unknown")
+                .to_string()
         }
     }
 
