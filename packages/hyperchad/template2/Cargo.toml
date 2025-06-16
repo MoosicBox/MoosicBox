@@ -25,10 +25,12 @@ itoa = { workspace = true }
 ryu  = { workspace = true }
 
 [dev-dependencies]
-trybuild = { workspace = true, features = ["diff"] }
+hyperchad_actions   = { workspace = true, features = ["logic"] }
+hyperchad_template2 = { workspace = true, features = ["logic"] }
+trybuild            = { workspace = true, features = ["diff"] }
 
 [features]
 default = ["logic"]
-logic = ["hyperchad_actions/logic", "hyperchad_transformer/logic"]
+logic   = ["hyperchad_actions/logic", "hyperchad_transformer/logic"]
 
 fail-on-warnings = []

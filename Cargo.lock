@@ -5524,6 +5524,7 @@ version = "0.1.0"
 dependencies = [
  "hyperchad_actions",
  "hyperchad_color",
+ "hyperchad_template2",
  "hyperchad_template2_macros",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
