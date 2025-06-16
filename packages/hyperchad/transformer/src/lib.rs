@@ -561,6 +561,25 @@ impl Default for Number {
     }
 }
 
+impl From<String> for Number {
+    fn from(x: String) -> Self {
+        x.as_str().into()
+    }
+}
+
+impl From<&String> for Number {
+    fn from(x: &String) -> Self {
+        x.as_str().into()
+    }
+}
+
+#[allow(clippy::fallible_impl_from)]
+impl From<&str> for Number {
+    fn from(x: &str) -> Self {
+        parse_number(x).unwrap()
+    }
+}
+
 #[cfg(feature = "logic")]
 impl From<hyperchad_actions::logic::IfExpression<i32, hyperchad_actions::logic::Responsive>>
     for Number
