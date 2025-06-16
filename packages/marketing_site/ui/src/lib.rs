@@ -9,9 +9,7 @@ pub use hyperchad::template2 as hyperchad_template2;
 use hyperchad::{
     actions::logic::if_responsive,
     template2::{Containers, container},
-    transformer::models::{
-        AlignItems, JustifyContent, LayoutDirection, LayoutOverflow, Position, TextAlign,
-    },
+    transformer::models::{LayoutDirection, TextAlign},
 };
 
 #[macro_export]
@@ -32,15 +30,15 @@ macro_rules! pre_escaped {
 pub fn header() -> Containers {
     container! {
         Header
-            direction=(LayoutDirection::Row)
-            align-items=(AlignItems::Center)
+            direction=row
+            align-items=center
             background="#080a0b"
         {
             Div id="header-logo" padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
                 Anchor
                     color="#fff"
-                    direction=(LayoutDirection::Row)
-                    align-items=(AlignItems::Center)
+                    direction=row
+                    align-items=center
                     text-decoration="none"
                     href="/"
                 {
@@ -49,18 +47,18 @@ pub fn header() -> Containers {
                         alt="MoosicBox logo"
                         width=(icon_size)
                         height=(icon_size)
-                        margin-right=(5)
+                        margin-right=5
                         src=(public_img!("icon128.png"));
 
-                    H1 font-size=(20) { "MoosicBox" }
+                    H1 font-size=20 { "MoosicBox" }
                 }
             }
             Div
                 id="header-menu-items"
-                direction=(LayoutDirection::Row)
-                align-items=(AlignItems::Center)
-                justify-content=(JustifyContent::End)
-                flex=(1)
+                direction=row
+                align-items=center
+                justify-content=end
+                flex=1
                 padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20))
                 col-gap=(if_responsive("mobile").then::<i32>(10).or_else(20))
             {
@@ -73,8 +71,8 @@ pub fn header() -> Containers {
                 Anchor
                     color="#fff"
                     background="#282a2b"
-                    border-radius=(5)
-                    padding=(8)
+                    border-radius=5
+                    padding=8
                     href="/try-now"
                 {
                     Span id="try-desktop" hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
@@ -92,7 +90,7 @@ pub fn header() -> Containers {
 #[must_use]
 pub fn main(slot: &Containers) -> Containers {
     container! {
-        Main flex-grow=(1) min-height=(0) {
+        Main flex-grow=1 min-height=0 {
             (slot)
         }
     }
@@ -117,7 +115,7 @@ pub fn home() -> Containers {
     page(&container! {
         Div
             min-height="100%"
-            justify-content=(JustifyContent::Center)
+            justify-content=center
         {
             Div
                 id="pics"
@@ -126,15 +124,15 @@ pub fn home() -> Containers {
                         .then::<LayoutDirection>(LayoutDirection::Column)
                         .or_else(LayoutDirection::Row)
                 )
-                align-items=(AlignItems::Center)
+                align-items=center
                 max-height="1000px"
-                padding-x=(50)
+                padding-x=50
                 gap="calc(min(100, 5%))"
             {
-                Div flex-grow=(2) {
+                Div flex-grow=2 {
                     H1
                         id="splashscreen-motto"
-                        font-size=(50)
+                        font-size=50
                         text-align=(
                             if_responsive("mobile-large")
                                 .then::<TextAlign>(TextAlign::Center)
@@ -145,10 +143,10 @@ pub fn home() -> Containers {
                     }
                 }
                 Div
-                    direction=(LayoutDirection::Row)
-                    position=(Position::Relative)
+                    direction=row
+                    position=relative
                     height="100%"
-                    flex-grow=(3)
+                    flex-grow=3
                 {
                     Div
                         margin-left="calc(10% - (100% / 30))"
@@ -170,7 +168,7 @@ pub fn home() -> Containers {
                             fit="contain";
                     }
                     Div
-                        position="absolute"
+                        position=absolute
                         bottom="50%"
                         translate-y="50%"
                         height="calc(min(65%, 50dvw))"
@@ -201,12 +199,12 @@ pub fn page(slot: &Containers) -> Containers {
         Div
             width="100%"
             height="100%"
-            position="relative"
+            position=relative
             color="#fff"
             font-family="Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif"
-            overflow-x=(LayoutOverflow::Hidden)
-            overflow-y=(LayoutOverflow::Auto)
-            justify-content=(JustifyContent::Center)
+            overflow-x=hidden
+            overflow-y=auto
+            justify-content=center
         {
             (header())
             (main(&slot))

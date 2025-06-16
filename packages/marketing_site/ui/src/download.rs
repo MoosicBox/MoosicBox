@@ -15,10 +15,10 @@ pub use hyperchad::template2 as hyperchad_template2;
 #[must_use]
 pub fn download() -> Containers {
     page(&container! {
-        Div align-items=(AlignItems::Center) padding-x=(20) {
-            Div width="100%" max-width=(1000) padding-y=(20) {
-                H1 border-bottom="2, #ccc" padding-bottom=(20) margin-bottom=(10) { "Downloads" }
-                Div id="releases" hidden=(true) hx-get="/releases" hx-trigger="load" {}
+        Div align-items=center padding-x=20 {
+            Div width="100%" max-width=1000 padding-y=20 {
+                H1 border-bottom="2, #ccc" padding-bottom=20 margin-bottom=10 { "Downloads" }
+                Div id="releases" hidden=(true) hx-get="/releases" hx-trigger=load {}
             }
         }
     })
@@ -84,7 +84,7 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
     container! {
         Div id="releases" {
             @for release in releases {
-                Div id=(format_class_name(release.version)) padding-y=(20) {
+                Div id=(format_class_name(release.version)) padding-y=20 {
                     H2
                         id={(format_class_name(release.version))"-header"}
                         direction=(
@@ -97,13 +97,13 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
                                 .then::<AlignItems>(AlignItems::Start)
                                 .or_else(AlignItems::End)
                         )
-                        col-gap=(10)
+                        col-gap=10
                     {
                         Div { "Release " (release.version) }
-                        Div font-size=(16) margin-bottom=(2) color="#ccc" {
+                        Div font-size=16 margin-bottom=2 color="#ccc" {
                             (format_date(&release.published_at))
                         }
-                        Div font-size=(16) margin-bottom=(2) {
+                        Div font-size=16 margin-bottom=2 {
                             "[" Anchor color="#fff" target="_blank" href=(release.url) { "GitHub" } "]"
                         }
                     }
@@ -118,12 +118,12 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
                                 H3 { (get_os_header(release_asset.name)) }
                                 "Download "
                                 Anchor color="#fff" href=(asset.browser_download_url) { (asset.name) }
-                                Span color="#ccc" font-size=(12) { " (" (format_size(asset.size)) ")" }
-                                Ul margin=(0) {
+                                Span color="#ccc" font-size=12 { " (" (format_size(asset.size)) ")" }
+                                Ul margin=0 {
                                     @for other_asset in &release_asset.other_formats {
                                         Li {
                                             Anchor color="#fff" href=(other_asset.browser_download_url) { (other_asset.name) }
-                                            Span color="#ccc" font-size=(12) { " (" (format_size(other_asset.size)) ")" }
+                                            Span color="#ccc" font-size=12 { " (" (format_size(other_asset.size)) ")" }
                                         }
                                     }
                                 }
