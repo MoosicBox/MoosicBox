@@ -179,6 +179,12 @@ impl Generator {
             attr_assignments.push(route);
         }
 
+        // Extract action attributes
+        let actions_assignment = self.extract_actions_from_attributes(&filtered_named_attrs);
+        if let Some(actions) = actions_assignment {
+            attr_assignments.push(actions);
+        }
+
         // Separate element-specific attributes from container-level attributes
         let (element_attrs, container_attrs) =
             self.separate_element_and_container_attributes(&element_name, filtered_named_attrs);
@@ -233,7 +239,7 @@ impl Generator {
         for (name, attr_type) in named_attrs {
             let name_str = name.to_string();
 
-            // Skip routing attributes as they're handled separately
+            // Skip routing and action attributes as they're handled separately
             if matches!(
                 name_str.as_str(),
                 "hx-get"
@@ -243,7 +249,8 @@ impl Generator {
                     | "hx-patch"
                     | "hx-trigger"
                     | "hx-swap"
-            ) {
+            ) || name_str.starts_with("fx-")
+            {
                 continue;
             }
 
@@ -714,6 +721,95 @@ impl Generator {
         }
     }
 
+    fn extract_actions_from_attributes(
+        &self,
+        named_attrs: &[(AttributeName, AttributeType)],
+    ) -> Option<TokenStream> {
+        let mut actions = Vec::new();
+
+        // Find fx- attributes
+        for (name, attr_type) in named_attrs {
+            let name_str = name.to_string();
+            if let Some(trigger_name) = name_str.strip_prefix("fx-") {
+                if let AttributeType::Normal { value, .. } = attr_type {
+                    let trigger_ident = self.action_trigger_name_to_ident(trigger_name);
+                    let action_effect = Self::markup_to_action_effect_tokens(value.clone());
+
+                    actions.push(quote! {
+                        hyperchad_actions::Action {
+                            trigger: #trigger_ident,
+                            action: #action_effect,
+                        }
+                    });
+                }
+            }
+        }
+
+        if actions.is_empty() {
+            None
+        } else {
+            Some(quote! {
+                actions: vec![#(#actions),*]
+            })
+        }
+    }
+
+    fn action_trigger_name_to_ident(&self, trigger_name: &str) -> TokenStream {
+        match trigger_name {
+            "click" => quote! { hyperchad_actions::ActionTrigger::Click },
+            "click-outside" => quote! { hyperchad_actions::ActionTrigger::ClickOutside },
+            "resize" => quote! { hyperchad_actions::ActionTrigger::Resize },
+            "immediate" => quote! { hyperchad_actions::ActionTrigger::Immediate },
+            "hover" => quote! { hyperchad_actions::ActionTrigger::Hover },
+            "change" => quote! { hyperchad_actions::ActionTrigger::Change },
+            "mousedown" => quote! { hyperchad_actions::ActionTrigger::MouseDown },
+            // For all other triggers, use the Event variant
+            _ => {
+                quote! { hyperchad_actions::ActionTrigger::Event(#trigger_name.to_string()) }
+            }
+        }
+    }
+
+    fn markup_to_action_effect_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                // Handle literal action effects - this might be a string representation
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        quote! {
+                            hyperchad_actions::ActionType::Custom {
+                                action: #value_str.to_string()
+                            }.into()
+                        }
+                    }
+                    _ => {
+                        let lit = &lit.lit;
+                        quote! { hyperchad_template2::IntoActionEffect::into_action_effect(#lit) }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                // For expressions, handle them directly using our helper trait
+                quote! { hyperchad_template2::IntoActionEffect::into_action_effect(#expr) }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, handle like single item if only one
+                if items.len() == 1 {
+                    Self::markup_to_action_effect_tokens(items[0].clone())
+                } else {
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        hyperchad_template2::IntoActionEffect::into_action_effect({ #expr })
+                    }
+                }
+            }
+            _ => quote! {
+                hyperchad_actions::ActionType::NoOp.into()
+            },
+        }
+    }
+
     fn markup_to_string_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => match &lit.lit {
@@ -843,7 +939,7 @@ impl Generator {
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
-                    "Unknown attribute '{}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, and HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap)",
+                    "Unknown attribute '{}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, and any other fx-* event)",
                     name_str
                 );
                 return Err(error_msg);
@@ -1175,6 +1271,11 @@ impl Generator {
                 let cond = &toggler.cond;
                 let name_str = name.to_string();
 
+                // Skip action attributes as they don't support optional syntax in this implementation
+                if name_str.starts_with("fx-") {
+                    return None;
+                }
+
                 // Generate conditional attribute assignment based on the field type
                 // Skip input-specific attributes as they're handled by generate_input_element
                 match name_str.as_str() {
@@ -1229,6 +1330,15 @@ impl Generator {
                             } else { None }
                         })
                     }
+
+                    // Color properties
+                    "background" | "color" => {
+                        let field_ident = format_ident!("{}", name_str);
+                        Some(quote! {
+                            #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
+                        })
+                    }
+
                     // Boolean properties - generate Option<bool>
                     "hidden" | "debug" => {
                         let field_ident = format_ident!("{}", name_str);
@@ -1263,6 +1373,13 @@ impl Generator {
             }
             AttributeType::Empty(_) => {
                 // Handle empty attributes (boolean flags)
+                let name_str = name.to_string();
+
+                // Skip action attributes as they require values
+                if name_str.starts_with("fx-") {
+                    return None;
+                }
+
                 match name_str.as_str() {
                     "hidden" => Some(quote! { hidden: Some(true) }),
                     "debug" => Some(quote! { debug: Some(true) }),
@@ -1492,9 +1609,7 @@ impl Generator {
                             "red" => quote! { hyperchad_color::Color::from_hex("#FF0000") },
                             "green" => quote! { hyperchad_color::Color::from_hex("#00FF00") },
                             "blue" => quote! { hyperchad_color::Color::from_hex("#0000FF") },
-                            "gray" | "grey" => {
-                                quote! { hyperchad_color::Color::from_hex("#808080") }
-                            }
+                            "gray" => quote! { hyperchad_color::Color::from_hex("#808080") },
                             "yellow" => quote! { hyperchad_color::Color::from_hex("#FFFF00") },
                             "cyan" => quote! { hyperchad_color::Color::from_hex("#00FFFF") },
                             "magenta" => quote! { hyperchad_color::Color::from_hex("#FF00FF") },

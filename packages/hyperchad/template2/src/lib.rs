@@ -330,3 +330,34 @@ impl ToBool for IfExpression<bool, Responsive> {
             .unwrap_or_else(|| self.value.unwrap_or_default())
     }
 }
+
+/// Trait for converting various types to ActionEffect.
+/// This handles the conversion chain properly without violating the orphan rule.
+pub trait IntoActionEffect {
+    fn into_action_effect(self) -> actions::ActionEffect;
+}
+
+impl IntoActionEffect for actions::Action {
+    fn into_action_effect(self) -> actions::ActionEffect {
+        self.action
+    }
+}
+
+impl IntoActionEffect for actions::ActionEffect {
+    fn into_action_effect(self) -> actions::ActionEffect {
+        self
+    }
+}
+
+impl IntoActionEffect for actions::ActionType {
+    fn into_action_effect(self) -> actions::ActionEffect {
+        self.into()
+    }
+}
+
+#[cfg(feature = "logic")]
+impl IntoActionEffect for actions::logic::If {
+    fn into_action_effect(self) -> actions::ActionEffect {
+        actions::ActionType::Logic(self).into()
+    }
+}

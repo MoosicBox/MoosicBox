@@ -87,12 +87,23 @@ impl<E: MaybeElement> Markup<E> {
             let content;
             let _brace_token = braced!(content in fork);
 
-            // First check if this looks like a block with control flow or multiple statements
-            // by looking for @ symbols or semicolons
+            // Handle empty braces {} as blocks
+            if content.is_empty() {
+                return input.diagnostic_parse(diagnostics).map(Self::Block);
+            }
+
+            // First check if this looks like a block with control flow, multiple statements, or elements
+            // by looking for @ symbols, semicolons, or elements
             let mut is_block = false;
             let temp_fork = content.fork();
             while !temp_fork.is_empty() {
                 if temp_fork.peek(At) || temp_fork.peek(Semi) {
+                    is_block = true;
+                    break;
+                }
+                // Also check if this looks like an element
+                let lookahead = temp_fork.lookahead1();
+                if E::should_parse(&lookahead).is_some() {
                     is_block = true;
                     break;
                 }
