@@ -33,18 +33,18 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
         {
             Section
                 align-items=start
-                width="100%"
-                height="100%"
+                width=100%
+                height=100%
             {
                 Div
                     align-items=end
                     gap=10
-                    width="100%"
-                    height="100%"
+                    width=100%
+                    height=100%
                 {
                     Form
                         hx-post="/search"
-                        width="100%"
+                        width=100%
                         direction=row
                         gap=5
                         padding=10
@@ -115,7 +115,7 @@ pub fn search_results(
     let selected = selected.or_else(|| api_sources.first());
 
     container! {
-        Div #search-results width="100%" gap=10 overflow-y=auto {
+        Div #search-results width=100% gap=10 overflow-y=auto {
             Div {
                 Div direction=row gap=10 {
                     @for source in api_sources {
@@ -171,7 +171,7 @@ pub fn results_content(
 
         Div
             id=(id)
-            width="100%"
+            width=100%
             gap=10
             overflow-y=auto
         {

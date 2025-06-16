@@ -114,7 +114,7 @@ pub fn not_found() -> Containers {
 pub fn home() -> Containers {
     page(&container! {
         Div
-            min-height="100%"
+            min-height=100%
             justify-content=center
         {
             Div
@@ -145,13 +145,13 @@ pub fn home() -> Containers {
                 Div
                     direction=row
                     position=relative
-                    height="100%"
+                    height=100%
                     flex-grow=3
                 {
                     Div
                         margin-left="calc(10% - (100% / 30))"
-                        height="100%"
-                        max-height="100%"
+                        height=100%
+                        max-height=100%
                         max-width="calc(100% - calc(10% - (100% / 30)))"
                     {
                         Image
@@ -162,17 +162,17 @@ pub fn home() -> Containers {
                                 (public_img!("showcase-1.webp"))" 1080w"
                             }
                             sizes="70vw"
-                            width="100%"
-                            height="100%"
+                            width=100%
+                            height=100%
                             alt="MoosicBox showcase desktop"
                             fit="contain";
                     }
                     Div
                         position=absolute
-                        bottom="50%"
-                        translate-y="50%"
+                        bottom=50%
+                        translate-y=50%
                         height="calc(min(65%, 50dvw))"
-                        max-height="80%"
+                        max-height=80%
                     {
                         Image
                             src=(public_img!("showcase-2.webp"))
@@ -182,8 +182,8 @@ pub fn home() -> Containers {
                                 (public_img!("showcase-2.webp"))" 1080w"
                             }
                             sizes="30vw"
-                            width="100%"
-                            height="100%"
+                            width=100%
+                            height=100%
                             alt="MoosicBox showcase android"
                             fit="contain";
                     }
@@ -197,8 +197,8 @@ pub fn home() -> Containers {
 pub fn page(slot: &Containers) -> Containers {
     container! {
         Div
-            width="100%"
-            height="100%"
+            width=100%
+            height=100%
             position=relative
             color="#fff"
             font-family="Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif"

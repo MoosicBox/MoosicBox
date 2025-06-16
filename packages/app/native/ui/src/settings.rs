@@ -24,7 +24,7 @@ pub fn settings_page_content(
                 Div align-items=end gap=10 {
                     Form
                         hx-post="/settings/connection-name"
-                        width="100%"
+                        width=100%
                         align-items=end
                         gap=5
                     {
@@ -41,7 +41,7 @@ pub fn settings_page_content(
                         }
                     }
 
-                    Div width="100%" text-align=start {
+                    Div width=100% text-align=start {
                         H2 { "Connections" }
                     }
 
@@ -50,7 +50,7 @@ pub fn settings_page_content(
                     Div
                         direction=row
                         justify-content=center
-                        width="100%"
+                        width=100%
                         gap=5
                     {
                         Button
@@ -322,7 +322,7 @@ pub fn connections_content(
                 Form
                     hx-patch={"/settings/connections?name="(connection.name)}
                     hx-swap=(SwapTarget::Id("settings-connections".to_string()))
-                    width="100%"
+                    width=100%
                     gap=5
                 {
                     @if current_connection {
@@ -336,7 +336,7 @@ pub fn connections_content(
                         direction=row
                         justify-content=end
                         gap=5
-                        width="100%"
+                        width=100%
                     {
                         @if !current_connection {
                             Button

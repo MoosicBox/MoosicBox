@@ -225,7 +225,7 @@ pub fn player(state: &State) -> Containers {
                 Canvas
                     #visualization
                     cursor="pointer"
-                    width="100%"
+                    width=100%
                     height=(VIZ_HEIGHT)
                     fx-click=(get_mouse_x_self().divide(get_width_px_self()).then_pass_to(Action::SeekCurrentTrackPercent))
                     fx-resize=(get_width_px_self().then_pass_to(Action::RefreshVisualization))
@@ -248,7 +248,7 @@ pub fn player(state: &State) -> Containers {
                             justify-content=center
                             align-items=center
                             background=(BACKGROUND)
-                            border-radius="100%"
+                            border-radius=100%
                             fx-click=(Action::PreviousTrack)
                         {
                             @let icon_size = 18;
@@ -266,7 +266,7 @@ pub fn player(state: &State) -> Containers {
                             justify-content=center
                             align-items=center
                             background=(BACKGROUND)
-                            border-radius="100%"
+                            border-radius=100%
                             fx-click=(Action::NextTrack)
                         {
                             @let icon_size = 18;
@@ -395,7 +395,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
                 id=(VOLUME_SLIDER_VALUE_CONTAINER_ID)
                 position=relative
                 width=3
-                height="100%"
+                height=100%
                 border-radius=30
                 background="#444"
             {
@@ -413,7 +413,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
             position=absolute
             bottom=0
             left=0
-            width="100%"
+            width=100%
             height=(format!("{height_percent}%"))
             border-radius=30
             background="#fff"
@@ -446,7 +446,7 @@ fn player_play_button(playing: bool) -> Containers {
             justify-content=center
             align-items=center
             background=(BACKGROUND)
-            border-radius="100%"
+            border-radius=100%
             fx-click=(Action::TogglePlayback)
         {
             @let icon_size = 16;
@@ -645,8 +645,8 @@ pub fn page(state: &State, slot: &Containers) -> Containers {
         Div
             #root
             .dark
-            width="100%"
-            height="100%"
+            width=100%
+            height=100%
             position=relative
             color="#fff"
         {
@@ -713,8 +713,8 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
             visibility=hidden
             direction=row
             position=fixed
-            width="100%"
-            height="100%"
+            width=100%
+            height=100%
             align-items=center
         {
             Div

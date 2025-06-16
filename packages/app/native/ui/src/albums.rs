@@ -643,8 +643,8 @@ pub fn album_display(
                     Button
                         direction=row
                         position="absolute"
-                        bottom="5%"
-                        left="5%"
+                        bottom=5%
+                        left=5%
                         width=(button_size)
                         height=(button_size)
                         justify-content="center"
@@ -668,8 +668,8 @@ pub fn album_display(
                     Button
                         direction=row
                         position="absolute"
-                        bottom="5%"
-                        right="5%"
+                        bottom=5%
+                        right=5%
                         width=(button_size)
                         height=(button_size)
                         justify-content="center"
@@ -814,7 +814,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             #albums-menu
                             width=300
                             position="absolute"
-                            top="100%"
+                            top=100%
                             visibility="hidden"
                             background=(DARK_BACKGROUND)
                             border-radius=5

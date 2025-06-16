@@ -73,6 +73,16 @@ impl Generator {
                     }
                 });
             }
+            Markup::NumericLit(numeric_lit) => {
+                // For numeric literals, create a Raw element with the value
+                let value = &numeric_lit.value;
+                build.push_container(quote! {
+                    hyperchad_transformer::Container {
+                        element: hyperchad_transformer::Element::Raw { value: #value.to_string() },
+                        ..Default::default()
+                    }
+                });
+            }
             Markup::Splice { expr, .. } => {
                 // For spliced expressions, use RenderContainer trait to convert to containers
                 let output_ident = &self.output_ident;
@@ -889,6 +899,11 @@ impl Generator {
 
     fn markup_to_string_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
+            Markup::NumericLit(numeric_lit) => {
+                // For numeric literals, just use the value as a string
+                let value = &numeric_lit.value;
+                quote! { #value.to_string() }
+            }
             Markup::Lit(lit) => match &lit.lit {
                 syn::Lit::Str(lit_str) => {
                     let value_str = lit_str.value();
@@ -1647,6 +1662,70 @@ impl Generator {
 
     fn markup_to_number_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
+            Markup::NumericLit(numeric_lit) => {
+                // Handle the new NumericLit variant for compile-time numeric parsing
+                use crate::ast::NumericType;
+                match numeric_lit.number_type {
+                    NumericType::IntegerPercent => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 1];
+                        let num: i64 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::IntegerPercent(#num) }
+                    }
+                    NumericType::RealPercent => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 1];
+                        let num: f32 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::RealPercent(#num) }
+                    }
+                    NumericType::IntegerVw => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 2];
+                        let num: i64 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::IntegerVw(#num) }
+                    }
+                    NumericType::RealVw => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 2];
+                        let num: f32 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::RealVw(#num) }
+                    }
+                    NumericType::IntegerVh => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 2];
+                        let num: i64 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::IntegerVh(#num) }
+                    }
+                    NumericType::RealVh => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 2];
+                        let num: f32 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::RealVh(#num) }
+                    }
+                    NumericType::IntegerDvw => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 3];
+                        let num: i64 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::IntegerDvw(#num) }
+                    }
+                    NumericType::RealDvw => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 3];
+                        let num: f32 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::RealDvw(#num) }
+                    }
+                    NumericType::IntegerDvh => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 3];
+                        let num: i64 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::IntegerDvh(#num) }
+                    }
+                    NumericType::RealDvh => {
+                        let num_str = &numeric_lit.value[..numeric_lit.value.len() - 3];
+                        let num: f32 = num_str.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::RealDvh(#num) }
+                    }
+                    NumericType::Integer => {
+                        let num: i64 = numeric_lit.value.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::Integer(#num) }
+                    }
+                    NumericType::Real => {
+                        let num: f32 = numeric_lit.value.parse().unwrap();
+                        quote! { hyperchad_transformer::Number::Real(#num) }
+                    }
+                }
+            }
             Markup::Lit(lit) => {
                 match &lit.lit {
                     syn::Lit::Str(lit_str) => {

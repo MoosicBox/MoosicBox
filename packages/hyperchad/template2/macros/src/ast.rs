@@ -47,6 +47,7 @@ impl<E: ToTokens> ToTokens for Markups<E> {
 pub enum Markup<E> {
     Block(Block<E>),
     Lit(ContainerLit),
+    NumericLit(NumericLit),
     Splice {
         paren_token: Paren,
         expr: Expr,
@@ -220,6 +221,70 @@ impl<E: MaybeElement> Markup<E> {
             input.diagnostic_parse(diagnostics).map(Self::ControlFlow)
         } else if lookahead.peek(Semi) {
             input.parse().map(Self::Semi)
+        } else if lookahead.peek(syn::LitInt) || lookahead.peek(syn::LitFloat) {
+            // Handle numeric literals that might be followed by unit tokens
+            let mut result = String::new();
+
+            // Parse the numeric part
+            if lookahead.peek(syn::LitInt) {
+                let lit_int: syn::LitInt = input.parse()?;
+                result.push_str(&lit_int.to_string());
+            } else {
+                let lit_float: syn::LitFloat = input.parse()?;
+                result.push_str(&lit_float.to_string());
+            }
+
+            // Now check what follows the number
+            let lookahead2 = input.lookahead1();
+
+            // Check for percentage token (%)
+            if lookahead2.peek(syn::Token![%]) {
+                let _percent: syn::Token![%] = input.parse()?;
+                result.push('%');
+                if let Some(numeric_lit) = NumericLit::try_parse(&result) {
+                    return Ok(Self::NumericLit(numeric_lit));
+                }
+            }
+            // Check for identifier units (vw, vh, dvw, dvh, etc.)
+            else if lookahead2.peek(Ident) {
+                let ident: syn::Ident = input.parse()?;
+                let unit = ident.to_string();
+                match unit.as_str() {
+                    "vw" | "vh" | "dvw" | "dvh" | "px" | "em" | "rem" | "ch" | "ex" => {
+                        result.push_str(&unit);
+                        if let Some(numeric_lit) = NumericLit::try_parse(&result) {
+                            return Ok(Self::NumericLit(numeric_lit));
+                        }
+                    }
+                    _ => {
+                        // This is not a unit we recognize, so we need to "put back" the identifier
+                        // Since we already consumed it, we'll create a new parsing context
+                        // For now, let's just treat as plain number and ignore the identifier
+                        // The identifier will be parsed in the next iteration
+                        if NumericLit::try_parse(&result).is_some() {
+                            // We consumed an identifier that we shouldn't have
+                            // This is a parsing challenge - for now, error out
+                            return Err(Error::new(
+                                ident.span(),
+                                format!("Unexpected identifier '{}' after number", unit),
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // No unit suffix, treat as plain number
+            if let Some(numeric_lit) = NumericLit::try_parse(&result) {
+                Ok(Self::NumericLit(numeric_lit))
+            } else {
+                // Fallback to regular literal
+                let lit = if result.contains('.') {
+                    syn::Lit::Float(syn::LitFloat::new(&result, input.span()))
+                } else {
+                    syn::Lit::Int(syn::LitInt::new(&result, input.span()))
+                };
+                Ok(Self::Lit(ContainerLit { lit }))
+            }
         } else if lookahead.peek(Ident::peek_any) {
             // Handle bare identifiers (including kebab-case) as splice expressions for attribute values
             // This enables syntax like: visibility=hidden, align-items=center, justify-content=space-between
@@ -227,6 +292,8 @@ impl<E: MaybeElement> Markup<E> {
             // Try to parse as AttributeName first (supports kebab-case like space-evenly)
             if let Ok(attr_name) = input.parse::<AttributeName>() {
                 let name_str = attr_name.to_string();
+
+                // Handle as regular string identifier for enums
                 let expr: Expr = parse_quote!(#name_str);
                 Ok(Self::Splice {
                     paren_token: Paren::default(),
@@ -235,6 +302,9 @@ impl<E: MaybeElement> Markup<E> {
             } else {
                 // Fallback to simple identifier
                 let ident: Ident = input.call(Ident::parse_any)?;
+                let _ident_str = ident.to_string();
+
+                // Handle as regular identifier
                 let expr: Expr = parse_quote!(#ident);
                 Ok(Self::Splice {
                     paren_token: Paren::default(),
@@ -275,6 +345,7 @@ impl<E: ToTokens> ToTokens for Markup<E> {
         match self {
             Self::Block(block) => block.to_tokens(tokens),
             Self::Lit(lit) => lit.to_tokens(tokens),
+            Self::NumericLit(numeric_lit) => numeric_lit.to_tokens(tokens),
             Self::Splice { paren_token, expr } => {
                 paren_token.surround(tokens, |tokens| {
                     expr.to_tokens(tokens);
@@ -899,6 +970,145 @@ impl Display for ContainerLit {
             Lit::Float(lit) => lit.fmt(f),
             _ => self.lit.to_token_stream().fmt(f),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NumericLit {
+    pub value: String,
+    pub number_type: NumericType,
+}
+
+#[derive(Debug, Clone)]
+pub enum NumericType {
+    Integer,
+    Real,
+    IntegerPercent,
+    RealPercent,
+    IntegerVw,
+    RealVw,
+    IntegerVh,
+    RealVh,
+    IntegerDvw,
+    RealDvw,
+    IntegerDvh,
+    RealDvh,
+}
+
+impl NumericLit {
+    fn try_parse(input: &str) -> Option<Self> {
+        // Check for percentage values
+        if let Some(num_str) = input.strip_suffix('%') {
+            if num_str.parse::<f32>().is_ok() {
+                return Some(NumericLit {
+                    value: input.to_string(),
+                    number_type: if num_str.contains('.') {
+                        NumericType::RealPercent
+                    } else {
+                        NumericType::IntegerPercent
+                    },
+                });
+            }
+        }
+
+        // Check for viewport width values
+        if let Some(num_str) = input.strip_suffix("vw") {
+            if num_str.parse::<f32>().is_ok() {
+                return Some(NumericLit {
+                    value: input.to_string(),
+                    number_type: if num_str.contains('.') {
+                        NumericType::RealVw
+                    } else {
+                        NumericType::IntegerVw
+                    },
+                });
+            }
+        }
+
+        // Check for viewport height values
+        if let Some(num_str) = input.strip_suffix("vh") {
+            if num_str.parse::<f32>().is_ok() {
+                return Some(NumericLit {
+                    value: input.to_string(),
+                    number_type: if num_str.contains('.') {
+                        NumericType::RealVh
+                    } else {
+                        NumericType::IntegerVh
+                    },
+                });
+            }
+        }
+
+        // Check for device viewport width values
+        if let Some(num_str) = input.strip_suffix("dvw") {
+            if num_str.parse::<f32>().is_ok() {
+                return Some(NumericLit {
+                    value: input.to_string(),
+                    number_type: if num_str.contains('.') {
+                        NumericType::RealDvw
+                    } else {
+                        NumericType::IntegerDvw
+                    },
+                });
+            }
+        }
+
+        // Check for device viewport height values
+        if let Some(num_str) = input.strip_suffix("dvh") {
+            if num_str.parse::<f32>().is_ok() {
+                return Some(NumericLit {
+                    value: input.to_string(),
+                    number_type: if num_str.contains('.') {
+                        NumericType::RealDvh
+                    } else {
+                        NumericType::IntegerDvh
+                    },
+                });
+            }
+        }
+
+        // Check for plain numbers (integer or float)
+        if input.parse::<i64>().is_ok() {
+            return Some(NumericLit {
+                value: input.to_string(),
+                number_type: NumericType::Integer,
+            });
+        }
+
+        if input.parse::<f64>().is_ok() {
+            return Some(NumericLit {
+                value: input.to_string(),
+                number_type: NumericType::Real,
+            });
+        }
+
+        None
+    }
+}
+
+impl ToTokens for NumericLit {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let value_str = &self.value;
+        tokens.extend(quote::quote! { #value_str });
+    }
+}
+
+impl Display for NumericLit {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.value.fmt(f)
+    }
+}
+
+impl DiagnosticParse for NumericLit {
+    fn diagnostic_parse(
+        input: ParseStream,
+        _diagnostics: &mut Vec<Diagnostic>,
+    ) -> syn::Result<Self> {
+        // This should not be called directly - NumericLit is created in the Markup parsing logic
+        Err(Error::new(
+            input.span(),
+            "NumericLit should not be parsed directly",
+        ))
     }
 }
 

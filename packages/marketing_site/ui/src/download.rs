@@ -16,7 +16,7 @@ pub use hyperchad::template2 as hyperchad_template2;
 pub fn download() -> Containers {
     page(&container! {
         Div align-items=center padding-x=20 {
-            Div width="100%" max-width=1000 padding-y=20 {
+            Div width=100% max-width=1000 padding-y=20 {
                 H1 border-bottom="2, #ccc" padding-bottom=20 margin-bottom=10 { "Downloads" }
                 Div #releases hidden=(true) hx-get="/releases" hx-trigger=load {}
             }
