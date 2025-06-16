@@ -1264,8 +1264,6 @@ impl Generator {
                 "font-family" => Some(self.string_vec_attr_opt("font_family", value)),
                 "class" => Some(self.string_vec_attr("classes", value)),
 
-                // // Flex properties
-                // "flex" => Some(self.flex_attr("flex", value)),
                 _ => None,
             },
             AttributeType::Optional { toggler, .. } => {
