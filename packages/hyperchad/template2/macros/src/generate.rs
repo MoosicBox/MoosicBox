@@ -1935,30 +1935,8 @@ impl Generator {
                                 quote! { hyperchad_transformer::parse::parse_number(#width_str).unwrap_or_default() }
                             };
 
-                            // Parse color
-                            let color_tokens = match color_str {
-                                "black" => quote! { hyperchad_color::Color::BLACK },
-                                "white" => quote! { hyperchad_color::Color::WHITE },
-                                "red" => quote! { hyperchad_color::Color::from_hex("#FF0000") },
-                                "green" => quote! { hyperchad_color::Color::from_hex("#00FF00") },
-                                "blue" => quote! { hyperchad_color::Color::from_hex("#0000FF") },
-                                "gray" | "grey" => {
-                                    quote! { hyperchad_color::Color::from_hex("#808080") }
-                                }
-                                "yellow" => quote! { hyperchad_color::Color::from_hex("#FFFF00") },
-                                "cyan" => quote! { hyperchad_color::Color::from_hex("#00FFFF") },
-                                "magenta" => quote! { hyperchad_color::Color::from_hex("#FF00FF") },
-                                "orange" => quote! { hyperchad_color::Color::from_hex("#FFA500") },
-                                "purple" => quote! { hyperchad_color::Color::from_hex("#800080") },
-                                "pink" => quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
-                                "brown" => quote! { hyperchad_color::Color::from_hex("#A52A2A") },
-                                _ if color_str.starts_with('#')
-                                    || color_str.chars().all(|c| c.is_ascii_hexdigit()) =>
-                                {
-                                    quote! { hyperchad_color::Color::from_hex(#color_str) }
-                                }
-                                _ => quote! { hyperchad_color::Color::from_hex(#color_str) },
-                            };
+                            // Parse color using the existing color parsing logic
+                            let color_tokens = Self::parse_color_string(color_str);
 
                             quote! { (#color_tokens, #width_tokens) }
                         } else {
@@ -1969,24 +1947,46 @@ impl Generator {
                     _ => {
                         // For non-string literals, assume it's a border tuple expression
                         let lit = &lit.lit;
-                        quote! { (#lit).into() }
+                        quote! {
+                            {
+                                use hyperchad_template2::IntoBorder;
+                                (#lit).into_border()
+                            }
+                        }
                     }
                 }
             }
             Markup::Splice { expr, .. } => {
-                // For expressions, assume they evaluate to a (Color, Number) tuple
-                quote! { (#expr) }
+                // For expressions, use the IntoBorder trait for flexible conversion
+                quote! {
+                    {
+                        use hyperchad_template2::IntoBorder;
+                        (#expr).into_border()
+                    }
+                }
             }
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, treat the entire content as a single expression
+                // For brace-wrapped items, handle both single items and complex expressions
                 if items.len() == 1 {
                     Self::markup_to_border_tokens(items[0].clone())
+                } else if items.len() == 2 {
+                    // Handle explicit tuple syntax: {width, color} or {(width, color)}
+                    let first_tokens = Self::handle_brace_splice_item(&items[0]);
+                    let second_tokens = Self::handle_brace_splice_item(&items[1]);
+                    quote! {
+                        {
+                            use hyperchad_template2::IntoBorder;
+                            (#first_tokens, #second_tokens).into_border()
+                        }
+                    }
                 } else {
+                    // Complex expression - let the IntoBorder trait handle it
                     let expr = Self::handle_brace_splice_expression(&items);
                     quote! {
                         {
+                            use hyperchad_template2::IntoBorder;
                             let result = { #expr };
-                            result.into()
+                            result.into_border()
                         }
                     }
                 }
@@ -1994,6 +1994,36 @@ impl Generator {
             _ => {
                 quote! { (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1)) }
             }
+        }
+    }
+
+    fn handle_brace_splice_item(item: &Markup<NoElement>) -> TokenStream {
+        match item {
+            Markup::Lit(lit) => quote! { #lit },
+            Markup::Splice { expr, .. } => quote! { #expr },
+            _ => quote! { () },
+        }
+    }
+
+    fn parse_color_string(color_str: &str) -> TokenStream {
+        match color_str {
+            "black" => quote! { hyperchad_color::Color::BLACK },
+            "white" => quote! { hyperchad_color::Color::WHITE },
+            "red" => quote! { hyperchad_color::Color::from_hex("#FF0000") },
+            "green" => quote! { hyperchad_color::Color::from_hex("#00FF00") },
+            "blue" => quote! { hyperchad_color::Color::from_hex("#0000FF") },
+            "gray" | "grey" => quote! { hyperchad_color::Color::from_hex("#808080") },
+            "yellow" => quote! { hyperchad_color::Color::from_hex("#FFFF00") },
+            "cyan" => quote! { hyperchad_color::Color::from_hex("#00FFFF") },
+            "magenta" => quote! { hyperchad_color::Color::from_hex("#FF00FF") },
+            "orange" => quote! { hyperchad_color::Color::from_hex("#FFA500") },
+            "purple" => quote! { hyperchad_color::Color::from_hex("#800080") },
+            "pink" => quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
+            "brown" => quote! { hyperchad_color::Color::from_hex("#A52A2A") },
+            _ if color_str.starts_with('#') || color_str.chars().all(|c| c.is_ascii_hexdigit()) => {
+                quote! { hyperchad_color::Color::from_hex(#color_str) }
+            }
+            _ => quote! { hyperchad_color::Color::from_hex(#color_str) },
         }
     }
 

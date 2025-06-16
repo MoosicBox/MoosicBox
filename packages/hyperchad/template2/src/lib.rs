@@ -361,3 +361,219 @@ impl IntoActionEffect for actions::logic::If {
         actions::ActionType::Logic(self).into()
     }
 }
+
+/// Trait for converting various types to border tuples (Color, Number).
+/// This handles flexible border specification in templates.
+pub trait IntoBorder {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number);
+}
+
+impl IntoBorder for (hyperchad_color::Color, hyperchad_transformer::Number) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        self
+    }
+}
+
+impl IntoBorder for (hyperchad_color::Color, i32) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            self.0,
+            hyperchad_transformer::Number::Integer(self.1 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (hyperchad_color::Color, u16) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            self.0,
+            hyperchad_transformer::Number::Integer(self.1 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (hyperchad_color::Color, f32) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (self.0, hyperchad_transformer::Number::Real(self.1))
+    }
+}
+
+impl IntoBorder for (hyperchad_color::Color, f64) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (self.0, hyperchad_transformer::Number::Real(self.1 as f32))
+    }
+}
+
+impl IntoBorder for (i32, hyperchad_color::Color) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            self.1,
+            hyperchad_transformer::Number::Integer(self.0 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (u16, hyperchad_color::Color) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            self.1,
+            hyperchad_transformer::Number::Integer(self.0 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (f32, hyperchad_color::Color) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (self.1, hyperchad_transformer::Number::Real(self.0))
+    }
+}
+
+impl IntoBorder for (f64, hyperchad_color::Color) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (self.1, hyperchad_transformer::Number::Real(self.0 as f32))
+    }
+}
+
+impl IntoBorder for (i32, &str) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(self.1),
+            hyperchad_transformer::Number::Integer(self.0 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (u16, &str) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(self.1),
+            hyperchad_transformer::Number::Integer(self.0 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (f32, &str) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(self.1),
+            hyperchad_transformer::Number::Real(self.0),
+        )
+    }
+}
+
+impl IntoBorder for (f64, &str) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(self.1),
+            hyperchad_transformer::Number::Real(self.0 as f32),
+        )
+    }
+}
+
+impl IntoBorder for (&str, i32) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(self.0),
+            hyperchad_transformer::Number::Integer(self.1 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (&str, u16) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(self.0),
+            hyperchad_transformer::Number::Integer(self.1 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (&str, f32) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(self.0),
+            hyperchad_transformer::Number::Real(self.1),
+        )
+    }
+}
+
+impl IntoBorder for (&str, f64) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(self.0),
+            hyperchad_transformer::Number::Real(self.1 as f32),
+        )
+    }
+}
+
+impl IntoBorder for (i32, String) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(&self.1),
+            hyperchad_transformer::Number::Integer(self.0 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (u16, String) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(&self.1),
+            hyperchad_transformer::Number::Integer(self.0 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (f32, String) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(&self.1),
+            hyperchad_transformer::Number::Real(self.0),
+        )
+    }
+}
+
+impl IntoBorder for (f64, String) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(&self.1),
+            hyperchad_transformer::Number::Real(self.0 as f32),
+        )
+    }
+}
+
+impl IntoBorder for (String, i32) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(&self.0),
+            hyperchad_transformer::Number::Integer(self.1 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (String, u16) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(&self.0),
+            hyperchad_transformer::Number::Integer(self.1 as i64),
+        )
+    }
+}
+
+impl IntoBorder for (String, f32) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(&self.0),
+            hyperchad_transformer::Number::Real(self.1),
+        )
+    }
+}
+
+impl IntoBorder for (String, f64) {
+    fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
+        (
+            hyperchad_color::Color::from_hex(&self.0),
+            hyperchad_transformer::Number::Real(self.1 as f32),
+        )
+    }
+}
