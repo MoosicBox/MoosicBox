@@ -185,6 +185,12 @@ impl Generator {
             attr_assignments.push(actions);
         }
 
+        // Extract data attributes
+        let data_assignment = self.extract_data_attributes(&filtered_named_attrs);
+        if let Some(data) = data_assignment {
+            attr_assignments.push(data);
+        }
+
         // Separate element-specific attributes from container-level attributes
         let (element_attrs, container_attrs) =
             self.separate_element_and_container_attributes(&element_name, filtered_named_attrs);
@@ -239,7 +245,7 @@ impl Generator {
         for (name, attr_type) in named_attrs {
             let name_str = name.to_string();
 
-            // Skip routing and action attributes as they're handled separately
+            // Skip routing, action, and data attributes as they're handled separately
             if matches!(
                 name_str.as_str(),
                 "hx-get"
@@ -250,6 +256,7 @@ impl Generator {
                     | "hx-trigger"
                     | "hx-swap"
             ) || name_str.starts_with("fx-")
+                || name_str.starts_with("data-")
             {
                 continue;
             }
@@ -755,6 +762,75 @@ impl Generator {
         }
     }
 
+    fn extract_data_attributes(
+        &self,
+        named_attrs: &[(AttributeName, AttributeType)],
+    ) -> Option<TokenStream> {
+        let mut data_entries = Vec::new();
+
+        // Find data- attributes
+        for (name, attr_type) in named_attrs {
+            let name_str = name.to_string();
+            if let Some(data_key) = name_str.strip_prefix("data-") {
+                match attr_type {
+                    AttributeType::Normal { value, .. } => {
+                        let value_tokens = Self::markup_to_string_tokens(value.clone());
+                        data_entries.push(quote! {
+                            (#data_key.to_string(), #value_tokens)
+                        });
+                    }
+                    AttributeType::Optional { toggler, .. } => {
+                        let cond = &toggler.cond;
+                        data_entries.push(quote! {
+                            {
+                                if let Some(val) = (#cond) {
+                                    Some((#data_key.to_string(), val.to_string()))
+                                } else {
+                                    None
+                                }
+                            }
+                        });
+                    }
+                    AttributeType::Empty(_) => {
+                        // For empty data attributes, set value to empty string
+                        data_entries.push(quote! {
+                            (#data_key.to_string(), String::new())
+                        });
+                    }
+                }
+            }
+        }
+
+        if data_entries.is_empty() {
+            None
+        } else {
+            // Check if we have any optional entries that need special handling
+            let has_optional = named_attrs.iter().any(|(name, attr_type)| {
+                name.to_string().starts_with("data-")
+                    && matches!(attr_type, AttributeType::Optional { .. })
+            });
+
+            if has_optional {
+                // Use a more complex construction to handle optional data attributes
+                Some(quote! {
+                    data: {
+                        let mut data_map = std::collections::BTreeMap::new();
+                        let entries: Vec<Option<(String, String)>> = vec![#(#data_entries),*];
+                        for entry in entries.into_iter().flatten() {
+                            data_map.insert(entry.0, entry.1);
+                        }
+                        data_map
+                    }
+                })
+            } else {
+                // Simple case - all data attributes are present
+                Some(quote! {
+                    data: std::collections::BTreeMap::from([#(#data_entries),*])
+                })
+            }
+        }
+    }
+
     fn action_trigger_name_to_ident(&self, trigger_name: &str) -> TokenStream {
         match trigger_name {
             "click" => quote! { hyperchad_actions::ActionTrigger::Click },
@@ -895,7 +971,7 @@ impl Generator {
         let mut assignments = Vec::new();
 
         // Separate shorthand and individual properties
-        let mut shorthand_attrs = std::collections::HashMap::new();
+        let mut shorthand_attrs = std::collections::BTreeMap::new();
         let mut individual_attrs = Vec::new();
 
         for (name, attr_type) in named_attrs {
@@ -953,7 +1029,7 @@ impl Generator {
 
     fn handle_shorthand_properties(
         &self,
-        shorthand_attrs: &std::collections::HashMap<String, (AttributeName, AttributeType)>,
+        shorthand_attrs: &std::collections::BTreeMap<String, (AttributeName, AttributeType)>,
         assignments: &mut Vec<TokenStream>,
     ) {
         // Handle padding shortcuts
