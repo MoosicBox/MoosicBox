@@ -288,10 +288,38 @@ impl<E: MaybeElement> Markup<E> {
         } else if lookahead.peek(Ident::peek_any) {
             // Handle bare identifiers (including kebab-case) as splice expressions for attribute values
             // This enables syntax like: visibility=hidden, align-items=center, justify-content=space-between
+            // PLUS unit+number patterns like: vw50, px16, em1
+
+            // Check for function call patterns first (approach 1): vw(expr), vh(expr), etc.
+            let fork = input.fork();
+            if let Ok(ident) = fork.call(Ident::parse_any) {
+                let ident_str = ident.to_string();
+                if fork.peek(Paren) && NumericLit::is_unit_identifier(&ident_str) {
+                    // This is a function-style unit call like vw(50) or vh(expr)
+                    let unit_ident: Ident = input.call(Ident::parse_any)?;
+                    let content;
+                    let _paren_token = parenthesized!(content in input);
+                    let expr: Expr = content.parse()?;
+
+                    // Create a function call expression that our generate.rs can handle
+                    let call_expr: Expr =
+                        parse_quote!(hyperchad_template2::unit_functions::#unit_ident(#expr));
+
+                    return Ok(Self::Splice {
+                        paren_token: Paren::default(),
+                        expr: call_expr,
+                    });
+                }
+            }
 
             // Try to parse as AttributeName first (supports kebab-case like space-evenly)
             if let Ok(attr_name) = input.parse::<AttributeName>() {
                 let name_str = attr_name.to_string();
+
+                // Check for identifier-based unit patterns (approach 2): vw50, px16, em1
+                if let Some(numeric_lit) = NumericLit::try_parse_identifier_unit(&name_str) {
+                    return Ok(Self::NumericLit(numeric_lit));
+                }
 
                 // Handle as regular string identifier for enums
                 let expr: Expr = parse_quote!(#name_str);
@@ -302,7 +330,12 @@ impl<E: MaybeElement> Markup<E> {
             } else {
                 // Fallback to simple identifier
                 let ident: Ident = input.call(Ident::parse_any)?;
-                let _ident_str = ident.to_string();
+                let ident_str = ident.to_string();
+
+                // Check for identifier-based unit patterns (approach 2): vw50, px16, em1
+                if let Some(numeric_lit) = NumericLit::try_parse_identifier_unit(&ident_str) {
+                    return Ok(Self::NumericLit(numeric_lit));
+                }
 
                 // Handle as regular identifier
                 let expr: Expr = parse_quote!(#ident);
@@ -1011,7 +1044,7 @@ impl NumericLit {
             }
         }
 
-        // Check for viewport width values
+        // Check for viewport units (vw, vh, dvw, dvh)
         if let Some(num_str) = input.strip_suffix("vw") {
             if num_str.parse::<f32>().is_ok() {
                 return Some(NumericLit {
@@ -1025,7 +1058,6 @@ impl NumericLit {
             }
         }
 
-        // Check for viewport height values
         if let Some(num_str) = input.strip_suffix("vh") {
             if num_str.parse::<f32>().is_ok() {
                 return Some(NumericLit {
@@ -1039,7 +1071,6 @@ impl NumericLit {
             }
         }
 
-        // Check for device viewport width values
         if let Some(num_str) = input.strip_suffix("dvw") {
             if num_str.parse::<f32>().is_ok() {
                 return Some(NumericLit {
@@ -1053,7 +1084,6 @@ impl NumericLit {
             }
         }
 
-        // Check for device viewport height values
         if let Some(num_str) = input.strip_suffix("dvh") {
             if num_str.parse::<f32>().is_ok() {
                 return Some(NumericLit {
@@ -1083,6 +1113,40 @@ impl NumericLit {
         }
 
         None
+    }
+
+    /// Try to parse identifier-based unit patterns like vw50, vh100, dvw90, dvh60, etc.
+    fn try_parse_identifier_unit(input: &str) -> Option<Self> {
+        // Define supported units (only viewport units that are actually supported)
+        let units = [
+            "vw", "vh", "dvw", "dvh", // Viewport units only
+        ];
+
+        for unit in &units {
+            if let Some(number_part) = input.strip_prefix(unit) {
+                if !number_part.is_empty()
+                    && number_part.chars().all(|c| c.is_ascii_digit() || c == '.')
+                {
+                    // Construct the unit+number string
+                    let full_unit_string = format!("{}{}", number_part, unit);
+
+                    // Try to parse using the existing logic
+                    if let Some(numeric_lit) = Self::try_parse(&full_unit_string) {
+                        return Some(numeric_lit);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Check if an identifier is a CSS unit that supports function syntax
+    fn is_unit_identifier(input: &str) -> bool {
+        matches!(
+            input,
+            "vw" | "vh" | "dvw" | "dvh" // Viewport units only
+        )
     }
 }
 

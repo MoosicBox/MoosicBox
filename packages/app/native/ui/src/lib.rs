@@ -720,9 +720,9 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
             Div
                 flex=1
                 background=(DARK_BACKGROUND)
-                margin-x="calc(20vw)"
+                margin-x=vw20
                 min-height="calc(min(90vh, 300))"
-                max-height="90vh"
+                max-height=vh90
                 border-radius=15
                 fx-click-outside=(
                     get_visibility_str_id(id)

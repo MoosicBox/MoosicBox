@@ -18,13 +18,13 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
     let mut output = Vec::new();
     let tokens: Vec<proc_macro2::TokenTree> = input.into_iter().collect();
     let mut i = 0;
-    
+
     while i < tokens.len() {
         match &tokens[i] {
             // Look for numeric literal followed by % or unit identifier
             proc_macro2::TokenTree::Literal(lit) => {
                 let lit_str = lit.to_string();
-                
+
                 // Check if this is a numeric literal (integer or float)
                 if lit_str.parse::<f64>().is_ok() || lit_str.parse::<i64>().is_ok() {
                     // Look ahead to see if the next token is % or a unit identifier
@@ -33,7 +33,8 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
                             // Handle percentage: 100%
                             proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '%' => {
                                 // Create a string literal for the combined value
-                                let combined_lit = proc_macro2::Literal::string(&format!("{}%", lit_str));
+                                let combined_lit =
+                                    proc_macro2::Literal::string(&format!("{}%", lit_str));
                                 output.push(proc_macro2::TokenTree::Literal(combined_lit));
                                 i += 2; // Skip both tokens
                                 continue;
@@ -42,9 +43,13 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
                             proc_macro2::TokenTree::Ident(ident) => {
                                 let unit = ident.to_string();
                                 match unit.as_str() {
-                                    "vw" | "vh" | "dvw" | "dvh" | "px" | "em" | "rem" | "ch" | "ex" | "pt" | "pc" | "in" | "cm" | "mm" => {
+                                    "vw" | "vh" | "dvw" | "dvh" | "px" | "em" | "rem" | "ch"
+                                    | "ex" | "pt" | "pc" | "in" | "cm" | "mm" => {
                                         // Create a string literal for the combined value
-                                        let combined_lit = proc_macro2::Literal::string(&format!("{}{}", lit_str, unit));
+                                        let combined_lit = proc_macro2::Literal::string(&format!(
+                                            "{}{}",
+                                            lit_str, unit
+                                        ));
                                         output.push(proc_macro2::TokenTree::Literal(combined_lit));
                                         i += 2; // Skip both tokens
                                         continue;
@@ -60,7 +65,7 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
                         }
                     }
                 }
-                
+
                 // Default: just add the literal as-is
                 output.push(tokens[i].clone());
                 i += 1;
@@ -79,14 +84,14 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
             }
         }
     }
-    
+
     output.into_iter().collect()
 }
 
 #[proc_macro]
 pub fn container(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input2 = proc_macro2::TokenStream::from(input);
-    
+
     // Preprocess to handle numeric + unit combinations
     let preprocessed = preprocess_numeric_units(input2);
 
@@ -170,9 +175,7 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
     };
 
     Ok(quote! {{
-        use hyperchad_template2::transformer as hyperchad_transformer;
-        use hyperchad_template2::transformer_models as hyperchad_transformer_models;
-        use hyperchad_template2::color as hyperchad_color;
+        use hyperchad_template2::prelude::*;
         let mut #output_ident: Vec<hyperchad_transformer::Container> = Vec::new();
         #stmts
         #(#diag_tokens)*

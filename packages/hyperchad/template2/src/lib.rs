@@ -23,10 +23,77 @@ pub use hyperchad_color as color;
 pub use hyperchad_transformer as transformer;
 pub use hyperchad_transformer_models as transformer_models;
 
+/// Prelude module that re-exports commonly used traits.
+///
+/// This module is automatically imported when you use `hyperchad_template2::container`,
+/// so you don't need to manually import these traits.
+pub mod prelude {
+    pub use crate::{
+        ContainerVecExt, ContainerVecMethods, IntoActionEffect, IntoBorder, ToBool,
+        color as hyperchad_color, transformer as hyperchad_transformer,
+        transformer_models as hyperchad_transformer_models,
+    };
+}
+
 /// The result type for the container! macro.
 ///
 /// The `container!` macro expands to an expression of this type.
 pub type Containers = Vec<Container>;
+
+/// Extension methods for Vec<Container> that are automatically available.
+///
+/// This trait is automatically implemented and in scope, so you can call
+/// these methods on any Vec<Container> without importing anything.
+pub trait ContainerVecMethods {
+    /// Convert the containers to an HTML string
+    fn to_string(&self) -> String;
+    /// Convert the containers to an HTML string, consuming self
+    fn into_string(self) -> String;
+}
+
+impl ContainerVecMethods for Vec<Container> {
+    fn to_string(&self) -> String {
+        self.iter().map(|c| c.to_string()).collect::<String>()
+    }
+
+    fn into_string(self) -> String {
+        self.iter().map(|c| c.to_string()).collect::<String>()
+    }
+}
+
+/// Convert a Vec<Container> to an HTML string without requiring trait imports.
+///
+/// This is a convenience function that works with the result of the `container!` macro.
+///
+/// # Example
+/// ```rust
+/// use hyperchad_template2::{container, to_html};
+///
+/// let containers = container! {
+///     Div { "Hello World" }
+/// };
+/// let html = to_html(&containers);
+/// ```
+pub fn to_html(containers: &[Container]) -> String {
+    containers.iter().map(|c| c.to_string()).collect::<String>()
+}
+
+/// Convert a Vec<Container> to an HTML string, consuming the vector.
+///
+/// This is a convenience function that works with the result of the `container!` macro.
+///
+/// # Example
+/// ```rust
+/// use hyperchad_template2::{container, into_html};
+///
+/// let containers = container! {
+///     Div { "Hello World" }
+/// };
+/// let html = into_html(containers);
+/// ```
+pub fn into_html(containers: Vec<Container>) -> String {
+    containers.iter().map(|c| c.to_string()).collect::<String>()
+}
 
 /// Extension trait to add missing methods to Vec<Container>
 pub trait ContainerVecExt {
@@ -278,17 +345,43 @@ impl RenderContainer for Vec<Container> {
     }
 }
 
-// New wrapper types to avoid orphan rule violations
+/// A wrapper around Vec<Container> that provides convenient methods without requiring trait imports.
+///
+/// This is what the `container!` macro returns, providing `to_string()` and other
+/// methods without needing to import `ContainerVecExt`.
 #[derive(Debug, Clone)]
 pub struct ContainerList(pub Vec<Container>);
+
+impl core::fmt::Display for ContainerList {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.0
+            .iter()
+            .try_for_each(|c| f.write_fmt(format_args!("{c}")))
+    }
+}
 
 impl ContainerList {
     pub fn new(containers: Vec<Container>) -> Self {
         Self(containers)
     }
 
+    /// Convert into a String representation (HTML)
+    pub fn into_string(self) -> String {
+        self.0.iter().map(|c| c.to_string()).collect::<String>()
+    }
+
     pub fn iter(&self) -> core::slice::Iter<'_, Container> {
         self.0.iter()
+    }
+
+    /// Get the inner Vec<Container>
+    pub fn into_inner(self) -> Vec<Container> {
+        self.0
+    }
+
+    /// Get a reference to the inner Vec<Container>
+    pub fn as_inner(&self) -> &Vec<Container> {
+        &self.0
     }
 }
 
@@ -301,6 +394,20 @@ impl From<Vec<Container>> for ContainerList {
 impl From<ContainerList> for Vec<Container> {
     fn from(list: ContainerList) -> Self {
         list.0
+    }
+}
+
+impl core::ops::Deref for ContainerList {
+    type Target = Vec<Container>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl core::ops::DerefMut for ContainerList {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -575,5 +682,55 @@ impl IntoBorder for (String, f64) {
             hyperchad_color::Color::from_hex(&self.0),
             hyperchad_transformer::Number::Real(self.1 as f32),
         )
+    }
+}
+
+/// Helper module for function-style unit syntax like vw(50), vh(100), dvw(90), dvh(60)
+pub mod unit_functions {
+    use hyperchad_transformer::Number;
+
+    // Helper function to convert Number to f32 for fallback cases
+    fn number_to_f32(num: &Number) -> f32 {
+        // Use calc with dummy values to get the numeric value
+        // For non-percentage/viewport units, this will return the raw value
+        num.calc(0.0, 100.0, 100.0)
+    }
+
+    // Viewport units
+    pub fn vw<T: Into<Number>>(value: T) -> Number {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerVw(n),
+            Number::Real(n) => Number::RealVw(n),
+            // For other number types, convert to real vw
+            _ => Number::RealVw(number_to_f32(&num)),
+        }
+    }
+
+    pub fn vh<T: Into<Number>>(value: T) -> Number {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerVh(n),
+            Number::Real(n) => Number::RealVh(n),
+            _ => Number::RealVh(number_to_f32(&num)),
+        }
+    }
+
+    pub fn dvw<T: Into<Number>>(value: T) -> Number {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerDvw(n),
+            Number::Real(n) => Number::RealDvw(n),
+            _ => Number::RealDvw(number_to_f32(&num)),
+        }
+    }
+
+    pub fn dvh<T: Into<Number>>(value: T) -> Number {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerDvh(n),
+            Number::Real(n) => Number::RealDvh(n),
+            _ => Number::RealDvh(number_to_f32(&num)),
+        }
     }
 }
