@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, iter::once};
+use std::{borrow::Cow, collections::BTreeMap, iter::once};
 
 use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use hyperchad_color::{Color, ParseHexError};
@@ -397,7 +397,7 @@ fn parse_position(value: &str) -> Result<Position, ParseAttrError> {
     })
 }
 
-fn get_data_attrs(tag: &HTMLTag) -> HashMap<String, String> {
+fn get_data_attrs(tag: &HTMLTag) -> BTreeMap<String, String> {
     tag.attributes()
         .iter()
         .filter_map(|(k, v)| v.map(|v| (k, v)))
@@ -409,7 +409,7 @@ fn get_data_attrs(tag: &HTMLTag) -> HashMap<String, String> {
                 )
             })
         })
-        .collect::<HashMap<_, _>>()
+        .collect::<BTreeMap<_, _>>()
 }
 
 fn parse_text_decoration_lines(value: &str) -> Result<Vec<TextDecorationLine>, ParseAttrError> {

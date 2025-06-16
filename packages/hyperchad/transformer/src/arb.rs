@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use moosicbox_arb::{
     css::CssIdentifierString,
@@ -310,8 +310,8 @@ fn half_g_max(g: &Gen, max: usize) -> Gen {
     Gen::new(std::cmp::min(max, g.size() / 2))
 }
 
-fn xml_hashmap(g: &mut Gen) -> HashMap<String, String> {
-    let map: HashMap<XmlAttrNameString, XmlString> = Arbitrary::arbitrary(g);
+fn xml_btreemap(g: &mut Gen) -> BTreeMap<String, String> {
+    let map: BTreeMap<XmlAttrNameString, XmlString> = Arbitrary::arbitrary(g);
 
     map.into_iter().map(|(k, v)| (k.0, v.0)).collect()
 }
@@ -444,7 +444,7 @@ impl Arbitrary for Container {
                 },
                 Option::unwrap_or_default,
             ),
-            data: xml_hashmap(g),
+            data: xml_btreemap(g),
             element,
             children,
             direction: default_value_or_arbitrary(g, &overrides, |x| {

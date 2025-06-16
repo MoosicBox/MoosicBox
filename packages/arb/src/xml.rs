@@ -35,7 +35,7 @@ pub const fn is_valid_xml_char(c: char) -> bool {
     !is_invalid_xml_char(c)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct XmlAttrNameString(pub String);
 
 impl Arbitrary for XmlAttrNameString {

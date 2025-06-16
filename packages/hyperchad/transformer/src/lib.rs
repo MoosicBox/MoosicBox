@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{any::Any, collections::HashMap, io::Write};
+use std::{any::Any, collections::BTreeMap, io::Write};
 
 use hyperchad_actions::Action;
 use hyperchad_color::Color;
@@ -1259,7 +1259,7 @@ pub struct Container {
     pub id: usize,
     pub str_id: Option<String>,
     pub classes: Vec<String>,
-    pub data: HashMap<String, String>,
+    pub data: BTreeMap<String, String>,
     pub element: Element,
     pub children: Vec<Container>,
     pub direction: LayoutDirection,
