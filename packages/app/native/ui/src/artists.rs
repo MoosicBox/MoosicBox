@@ -118,12 +118,12 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Containers {
     }
 
     container! {
-        Div padding-x=(60) padding-y=(20) {
-            Div padding-y=(20) {
+        Div padding-x=60 padding-y=20 {
+            Div padding-y=20 {
                 "Back"
             }
-            Div direction="row" {
-                Div width=(size) height=(size) padding-right=(15) {
+            Div direction=row {
+                Div width=(size) height=(size) padding-right=15 {
                     (artist_cover_img(&connection.api_url, &artist, size))
                 }
                 Div {
@@ -155,13 +155,13 @@ pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Containers 
 
     container! {
         Div
-            direction="row"
+            direction=row
             overflow-x=(LayoutOverflow::Wrap { grid: true })
             grid-cell-size=(size)
-            justify-content="space-evenly"
-            gap=(15)
-            padding-x=(30)
-            padding-y=(15)
+            justify-content=space-evenly
+            gap=15
+            padding-x=30
+            padding-y=15
         {
             @for artist in artists {
                 Anchor href=(artist_page_url(&artist.artist_id.to_string())) width=(size) {
@@ -198,7 +198,7 @@ pub fn albums_list(
     }
 
     container! {
-        Div padding-y=(20) {
+        Div padding-y=20 {
             H2 {
                 (album_type.into_formatted())
                 @if source.is_library() {
@@ -209,12 +209,12 @@ pub fn albums_list(
                 (source.into_formatted())
             }
             Div
-                direction="row"
+                direction=row
                 overflow-x=(LayoutOverflow::Wrap { grid: true })
                 grid-cell-size=(size)
-                justify-content="space-evenly"
-                gap=(15)
-                padding-y=(15)
+                justify-content=space-evenly
+                gap=15
+                padding-y=15
             {
                 (crate::albums::show_albums(host, albums.iter(), size))
             }

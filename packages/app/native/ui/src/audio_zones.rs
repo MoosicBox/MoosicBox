@@ -11,13 +11,13 @@ pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnecti
     container! {
         Div id=(AUDIO_ZONES_CONTENT_ID) {
             @for connection in connections {
-                Div padding-y=(10) {
-                    H1 direction="row" {
+                Div padding-y=10 {
+                    H1 direction=row {
                         @let icon_size = 20;
                         Div
                             width=(icon_size)
                             height=(icon_size)
-                            margin-right=(5)
+                            margin-right=5
                         {
                             Image
                                 width=(icon_size)
@@ -29,12 +29,12 @@ pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnecti
                     }
                     Div {
                         @for player in &connection.players {
-                            Div direction="row" {
+                            Div direction=row {
                                 @let icon_size = 20;
                                 Div
                                     width=(icon_size)
                                     height=(icon_size)
-                                    margin-right=(5)
+                                    margin-right=5
                                 {
                                     Image
                                         width=(icon_size)
@@ -49,13 +49,13 @@ pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnecti
                 }
             }
             @for zone in zones {
-                Div padding-y=(10) {
-                    H1 direction="row" {
+                Div padding-y=10 {
+                    H1 direction=row {
                         @let icon_size = 20;
                         Div
                             width=(icon_size)
                             height=(icon_size)
-                            margin-right=(5)
+                            margin-right=5
                         {
                             Image
                                 width=(icon_size)
@@ -67,12 +67,12 @@ pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnecti
                     }
                     Div {
                         @for player in &zone.players {
-                            Div direction="row" {
+                            Div direction=row {
                                 @let icon_size = 20;
                                 Div
                                     width=(icon_size)
                                     height=(icon_size)
-                                    margin-right=(5)
+                                    margin-right=5
                                 {
                                     Image
                                         width=(icon_size)

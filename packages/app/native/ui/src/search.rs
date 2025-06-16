@@ -3,7 +3,7 @@
 use hyperchad::{
     actions::{self as hyperchad_actions, ActionType},
     template2::{self as hyperchad_template2, Containers, container},
-    transformer::models::{AlignItems, LayoutDirection, LayoutOverflow, Position, Visibility},
+    transformer::models::Visibility,
 };
 use moosicbox_music_api_models::search::api::{
     ApiGlobalAlbumSearchResult, ApiGlobalArtistSearchResult, ApiGlobalSearchResult,
@@ -20,59 +20,59 @@ use crate::{
 pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bool) -> Containers {
     container! {
         Div
-            id="search"
+            #search
             visibility=(if open { Visibility::Visible } else { Visibility::Hidden })
-            padding=(20)
-            gap=(10)
-            position=(Position::Fixed)
-            top=(0)
-            left=(0)
-            right=(0)
-            bottom=(0)
+            padding=20
+            gap=10
+            position=fixed
+            top=0
+            left=0
+            right=0
+            bottom=0
             background="#00000088"
         {
             Section
-                align-items=(AlignItems::Start)
+                align-items=start
                 width="100%"
                 height="100%"
             {
                 Div
-                    align-items=(AlignItems::End)
-                    gap=(10)
+                    align-items=end
+                    gap=10
                     width="100%"
                     height="100%"
                 {
                     Form
                         hx-post="/search"
                         width="100%"
-                        direction=(LayoutDirection::Row)
-                        gap=(5)
-                        padding=(10)
+                        direction=row
+                        gap=5
+                        padding=10
                     {
-                        Div flex-grow=(1) {
-                            Input flex-grow=(1) type="text" name="query" placeholder="Search...";
+                        Div flex-grow=1 {
+                            Input flex-grow=1 type=text name="query" placeholder="Search...";
                         }
                         Button
-                            type="submit"
-                            border-radius=(5)
+                            type=submit
+                            border-radius=5
                             background="#111"
                             border="2, #222"
-                            padding-x=(10)
-                            padding-y=(5)
+                            padding-x=10
+                            padding-y=5
                         {
                             "Search"
                         }
                         Button
-                            id="close-search-button"
-                            border-radius=(100)
+                            #close-search-button
+                            border-radius=100
                             background="#fff"
                             border="2, #222"
-                            padding=(10)
+                            padding=10
                             fx-click=(ActionType::hide_str_id("search").and(ActionType::show_str_id("search-button")))
                         {
                             Image
-                                width=(20)
-                                height=(20)
+                                width=20
+                                height=20
                                 src=(public_img!("cross.svg"));
                         }
                     }
@@ -84,22 +84,22 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             }
         }
         Button
-            id="search-button"
+            #search-button
             visibility=(if open { Visibility::Hidden } else { Visibility::Visible })
-            border-radius=(100)
+            border-radius=100
             background="#fff"
             border="2, #222"
-            padding=(10)
-            margin-x=(20)
-            margin-y=(10)
-            position=(Position::Fixed)
-            top=(0)
-            right=(0)
+            padding=10
+            margin-x=20
+            margin-y=10
+            position=fixed
+            top=0
+            right=0
             fx-click=(ActionType::hide_self().and(ActionType::show_str_id("search")))
         {
             Image
-                width=(20)
-                height=(20)
+                width=20
+                height=20
                 src=(public_img!("magnifying-glass.svg"));
         }
     }
@@ -115,16 +115,16 @@ pub fn search_results(
     let selected = selected.or_else(|| api_sources.first());
 
     container! {
-        Div id="search-results" width="100%" gap=(10) overflow-y=(LayoutOverflow::Auto) {
+        Div #search-results width="100%" gap=10 overflow-y=auto {
             Div {
-                Div direction=(LayoutDirection::Row) gap=(10) {
+                Div direction=row gap=10 {
                     @for source in api_sources {
                         @let id = results_content_container_id(source);
 
                         Div
-                            border-top-left-radius=(5)
-                            border-top-right-radius=(5)
-                            padding=(10)
+                            border-top-left-radius=5
+                            border-top-right-radius=5
+                            padding=10
                             background=(BACKGROUND)
                             fx-click=(ActionType::Multi(vec![
                                 ActionType::no_display_class("search-results-container"),
@@ -140,7 +140,7 @@ pub fn search_results(
                         @let id = results_content_container_id(source);
                         @let selected = selected.is_some_and(|x| x == source);
 
-                        Div id=(id) class="search-results-container" hidden=(!selected) {
+                        Div id=(id) .search-results-container hidden=(!selected) {
                             (results_content(host, source, &[]))
                         }
                     }
@@ -172,8 +172,8 @@ pub fn results_content(
         Div
             id=(id)
             width="100%"
-            gap=(10)
-            overflow-y=(LayoutOverflow::Auto)
+            gap=10
+            overflow-y=auto
         {
             @for result in results {
                 @match result {
@@ -197,7 +197,7 @@ fn artist_result(host: &str, artist: &ApiGlobalArtistSearchResult) -> Containers
     let artist_id = artist.artist_id.clone();
     let source = artist.api_source.clone();
     container! {
-        Div direction=(LayoutDirection::Row) {
+        Div direction=row {
             @let size = 70;
             Image
                 src=(artist_cover_url(host, &artist_id, &source, artist.contains_cover, size, size))
@@ -215,7 +215,7 @@ fn album_result(host: &str, album: &ApiGlobalAlbumSearchResult) -> Containers {
     let album_id = album.album_id.clone();
     let source = album.api_source.clone();
     container! {
-        Div direction=(LayoutDirection::Row) {
+        Div direction=row {
             @let size = 70;
             Image
                 src=(album_cover_url(host, &album_id, &source, album.contains_cover, size, size))
@@ -234,7 +234,7 @@ fn track_result(host: &str, track: &ApiGlobalTrackSearchResult) -> Containers {
     let title = track.title.clone();
     let source = track.api_source.clone();
     container! {
-        Div direction=(LayoutDirection::Row) {
+        Div direction=row {
             @let size = 70;
             Image
                 src=(album_cover_url(host, &album_id, &source, track.contains_cover, size, size))

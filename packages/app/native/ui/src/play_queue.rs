@@ -3,7 +3,7 @@
 use hyperchad::{
     actions::{self as hyperchad_actions, ActionType, logic::get_visibility_self},
     template2::{self as hyperchad_template2, Containers, container},
-    transformer::models::{AlignItems, LayoutDirection, Visibility},
+    transformer::models::Visibility,
 };
 use moosicbox_music_models::api::ApiTrack;
 
@@ -25,8 +25,8 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
     let artist_page_url = crate::artists::artist_page_url(&track.artist_id.to_string());
     container! {
         Div
-            direction=(LayoutDirection::Row)
-            gap=(10)
+            direction=row
+            gap=10
             opacity=[if is_history { Some(0.5) } else { None }]
         {
             Div {
@@ -35,7 +35,7 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
                     (crate::albums::album_cover_img_from_track(&connection.api_url, track, icon_size))
                 }
             }
-            Div flex=(1) {
+            Div flex=1 {
                 Div {
                     Anchor href=(album_page_url) {
                         (track.title) " - " (track.album)
@@ -45,7 +45,7 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
                     Anchor href=(artist_page_url) { (track.artist) }
                 }
             }
-            Div align-items=(AlignItems::End) background="#000" {
+            Div align-items=end background="#000" {
                 @let icon_size = 20;
                 Button width=(icon_size) height=(icon_size) {
                     Image
@@ -89,32 +89,32 @@ pub fn play_queue(state: &State) -> Containers {
 
     container! {
         Div
-            id="play-queue"
+            #play-queue
             width="calc(min(500, 30%))"
             height="calc(100% - 200)"
-            visibility="hidden"
+            visibility=hidden
             background="#282a2b"
-            border-top-left-radius=(10)
-            border-bottom-left-radius=(10)
-            position="absolute"
-            bottom=(170)
-            right=(0)
+            border-top-left-radius=10
+            border-bottom-left-radius=10
+            position=absolute
+            bottom=170
+            right=0
             fx-click-outside=(
                 get_visibility_self()
                     .eq(Visibility::Visible)
                     .then(ActionType::hide_self())
             )
         {
-            Div overflow-y="auto" {
-                Div padding=(20) {
-                    H1 height=(30) { "Play queue" }
-                    Div gap=(10) {
+            Div overflow-y=auto {
+                Div padding=20 {
+                    H1 height=30 { "Play queue" }
+                    Div gap=10 {
                         @for track in history {
                             (render_play_queue_item(state, track, true))
                         }
                     }
                     @if let Some(track) = current {
-                        Div direction="row" {
+                        Div direction=row {
                             "Playing from: "
                             Anchor href=(
                                 crate::albums::album_page_url(

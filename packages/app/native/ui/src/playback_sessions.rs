@@ -1,9 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::{
-    template2::{self as hyperchad_template2, Containers, container},
-    transformer::models::AlignItems,
-};
+use hyperchad::template2::{self as hyperchad_template2, Containers, container};
 use moosicbox_session_models::ApiSession;
 
 use crate::PLAYBACK_SESSIONS_CONTENT_ID;
@@ -18,7 +15,7 @@ pub fn playback_sessions(host: &str, sessions: &[ApiSession]) -> Containers {
                     H1 { (session.name) }
                     Div {
                         @for track in future_tracks {
-                            Div direction="row" {
+                            Div direction=row {
                                 @let icon_size = 50;
                                 @let album_page_url = crate::albums::album_page_url(
                                     &track.album_id.to_string(),
@@ -30,7 +27,7 @@ pub fn playback_sessions(host: &str, sessions: &[ApiSession]) -> Containers {
                                 );
                                 Anchor
                                     href=(album_page_url)
-                                    align-items=(AlignItems::Center)
+                                    align-items=center
                                     width=(icon_size)
                                     height=(icon_size)
                                 {

@@ -1,9 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::{
-    template2::{self as hyperchad_template2, Containers, container},
-    transformer::models::{AlignItems, Cursor},
-};
+use hyperchad::template2::{self as hyperchad_template2, Containers, container};
 use moosicbox_downloader::api::models::{ApiDownloadItem, ApiDownloadTask, ApiDownloadTaskState};
 use strum::{AsRefStr, EnumString};
 
@@ -54,13 +51,13 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Containers {
 
     container! {
         Div
-            direction="row"
-            gap=(20)
+            direction=row
+            gap=20
             background="#111"
-            align-items=(AlignItems::Center)
-            padding-x=(18)
-            padding-y=(20)
-            border-radius=(6)
+            align-items=center
+            padding-x=18
+            padding-y=20
+            border-radius=6
         {
             @let cover_width = 80;
             @let cover_height = 80;
@@ -74,7 +71,7 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Containers {
                                 height=(cover_height);
                         }
                     }
-                    Div gap=(5) {
+                    Div gap=5 {
                         Div {
                             "Track (" (track_id.to_string()) ") - " (title) " - " (task.state.to_string()) " - " (source.as_ref())
                             @if task.state == ApiDownloadTaskState::Error {
@@ -102,7 +99,7 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Containers {
                                 height=(cover_height);
                         }
                     }
-                    Div gap=(5) {
+                    Div gap=5 {
                         Div {
                             "Album (" (album_id.to_string()) ") cover - " (title) " - " (task.state.to_string())
                             @if task.state == ApiDownloadTaskState::Error {
@@ -130,7 +127,7 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Containers {
                                 height=(cover_height);
                         }
                     }
-                    Div gap=(5) {
+                    Div gap=5 {
                         Div {
                             "Artist (" (artist_id.to_string()) ") (album_id: " (album_id.to_string()) ") cover - " (title) " - " (task.state.to_string())
                             @if task.state == ApiDownloadTaskState::Error {
@@ -162,42 +159,42 @@ pub fn downloads_page_content(
 ) -> Containers {
     container! {
         Div
-            padding-x=(30)
-            padding-y=(15)
+            padding-x=30
+            padding-y=15
             background=(DARK_BACKGROUND)
-            direction="row"
-            align-items=(AlignItems::Center)
+            direction=row
+            align-items=center
         {
             H1 { "Downloads" }
         }
-        Div padding-x=(30) padding-y=(5) {
-            Div direction="row" gap=(5) {
+        Div padding-x=30 padding-y=5 {
+            Div direction=row gap=5 {
                 Anchor
                     href={"/downloads?tab="(DownloadTab::Current)}
                     background=(if active_tab == DownloadTab::Current { "#333" } else { "#282828" })
-                    padding=(10)
-                    cursor=(Cursor::Pointer)
-                    border-top-radius=(10)
+                    padding=10
+                    cursor=pointer
+                    border-top-radius=10
                 {
                     "Current Tasks"
                 }
                 Anchor
                     href={"/downloads?tab="(DownloadTab::History)}
                     background=(if active_tab == DownloadTab::History { "#333" } else { "#282828" })
-                    padding=(10)
-                    cursor=(Cursor::Pointer)
-                    border-top-radius=(10)
+                    padding=10
+                    cursor=pointer
+                    border-top-radius=10
                 {
                     "History"
                 }
             }
             Div
-                id="downloads-content"
+                #downloads-content
                 background="#333"
-                gap=(10)
-                padding=(10)
-                border-radius=(10)
-                border-top-left-radius=(0)
+                gap=10
+                padding=10
+                border-radius=10
+                border-top-left-radius=0
             {
                 @if tasks.is_empty() {
                     "No download tasks"

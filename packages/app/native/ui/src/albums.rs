@@ -8,7 +8,7 @@ use hyperchad::{
         },
     },
     template2::{self as hyperchad_template2, Containers, container},
-    transformer::models::{AlignItems, ImageLoading, JustifyContent, LayoutOverflow, Visibility},
+    transformer::models::{ImageLoading, LayoutOverflow, Visibility},
 };
 use moosicbox_menu_models::api::ApiAlbumVersion;
 use moosicbox_music_models::{
@@ -113,10 +113,10 @@ pub fn album_page_immediate(
         Div
             hx-get=(path)
             hx-trigger="load"
-            padding-x=(60)
-            padding-y=(20)
+            padding-x=60
+            padding-y=20
         {
-            Div direction="row" {
+            Div direction=row {
                 @let size = 200;
                 Div width=(size) height=(size + 30) {
                     Image loading=(ImageLoading::Lazy) src=(public_img!("album.svg")) width=(size) height=(size);
@@ -173,10 +173,10 @@ pub fn album_page_content(
         .or_else(|| versions.first());
 
     container! {
-        Div padding-x=(60) padding-y=(20) {
-            Div direction="row" {
+        Div padding-x=60 padding-y=20 {
+            Div direction=row {
                 @let size = 200;
-                Div width=(size) height=(size) padding-right=(15) {
+                Div width=(size) height=(size) padding-right=15 {
                     (album_cover_img_from_album(host, &album, size))
                 }
                 Div {
@@ -187,7 +187,7 @@ pub fn album_page_content(
                     @if let Some(date_released) = &album.date_released{
                         H2 { (format_date_string(date_released, "%B %d, %Y")) }
                     }
-                    Div direction="row" {
+                    Div direction=row {
                         @for version in album.versions.iter().cloned() {
                             @let selected = selected_version.is_some_and(|x| same_version(&version, &x.into()));
                             Anchor href=(
@@ -210,16 +210,16 @@ pub fn album_page_content(
                     }
                 }
             }
-            Div direction="row" padding-y=(20) gap=(8) {
+            Div direction=row padding-y=20 gap=8 {
                 Button
-                    direction="row"
-                    width=(130)
-                    height=(40)
+                    direction=row
+                    width=130
+                    height=40
                     background="#fff"
-                    border-radius=(5)
-                    justify-content=(JustifyContent::Center)
-                    align-items=(AlignItems::Center)
-                    gap=(8)
+                    border-radius=5
+                    justify-content=center
+                    align-items=center
+                    gap=8
                     fx-click=(Action::PlayAlbum {
                         album_id: album.album_id.clone(),
                         api_source: album.api_source.clone(),
@@ -236,14 +236,14 @@ pub fn album_page_content(
                     "Play"
                 }
                 Button
-                    direction="row"
-                    width=(130)
-                    height=(40)
+                    direction=row
+                    width=130
+                    height=40
                     background="#fff"
-                    border-radius=(5)
-                    justify-content=(JustifyContent::Center)
-                    align-items=(AlignItems::Center)
-                    gap=(8)
+                    border-radius=5
+                    justify-content=center
+                    align-items=center
+                    gap=8
                     fx-click=(Action::AddAlbumToQueue {
                         album_id: album.album_id.clone(),
                         api_source: album.api_source.clone(),
@@ -270,14 +270,14 @@ pub fn album_page_content(
 
                         @if let Some(album_id) = album_id {
                             Button
-                                direction="row"
-                                width=(130)
-                                height=(40)
+                                direction=row
+                                width=130
+                                height=40
                                 background="#fff"
-                                border-radius=(5)
-                                justify-content=(JustifyContent::Center)
-                                align-items=(AlignItems::Center)
-                                gap=(8)
+                                border-radius=5
+                                justify-content=center
+                                align-items=center
+                                gap=8
                                 hx-post={
                                     "/download"
                                         "?source="(api_source)
@@ -289,14 +289,14 @@ pub fn album_page_content(
 
                             @if album.album_sources.iter().any(|x| x.source.is_library()) {
                                 Button
-                                    direction="row"
-                                    width=(130)
-                                    height=(40)
+                                    direction=row
+                                    width=130
+                                    height=40
                                     background="#fff"
-                                    border-radius=(5)
-                                    justify-content=(JustifyContent::Center)
-                                    align-items=(AlignItems::Center)
-                                    gap=(8)
+                                    border-radius=5
+                                    justify-content=center
+                                    align-items=center
+                                    gap=8
                                     hx-delete={
                                         "/library"
                                             "?source="(api_source)
@@ -307,14 +307,14 @@ pub fn album_page_content(
                                 }
                             } @else {
                                 Button
-                                    direction="row"
-                                    width=(130)
-                                    height=(40)
+                                    direction=row
+                                    width=130
+                                    height=40
                                     background="#fff"
-                                    border-radius=(5)
-                                    justify-content=(JustifyContent::Center)
-                                    align-items=(AlignItems::Center)
-                                    gap=(8)
+                                    border-radius=5
+                                    justify-content=center
+                                    align-items=center
+                                    gap=8
                                     hx-post={
                                         "/library"
                                             "?source="(api_source)
@@ -330,11 +330,11 @@ pub fn album_page_content(
             }
             @if let Some(version) = selected_version {
                 Div {
-                    Div direction="row" {
-                        Div padding-x=(10) height=(50) justify-content=(JustifyContent::Center) { "#" }
-                        Div padding-x=(10) height=(50) justify-content=(JustifyContent::Center) { "Title" }
-                        Div padding-x=(10) height=(50) justify-content=(JustifyContent::Center) { "Artist" }
-                        Div padding-x=(10) height=(50) justify-content=(JustifyContent::Center) { "Time" }
+                    Div direction=row {
+                        Div padding-x=10 height=50 justify-content=center { "#" }
+                        Div padding-x=10 height=50 justify-content=center { "Title" }
+                        Div padding-x=10 height=50 justify-content=center { "Artist" }
+                        Div padding-x=10 height=50 justify-content=center { "Time" }
                     }
                     (album_page_tracks_table_body_from_state(state, &version))
                 }
@@ -352,8 +352,8 @@ pub fn album_page_tracks_table_body(
         @for track in &version.tracks {
             @let current_track = track_id.is_some_and(|x| x == &track.track_id);
             Div
-                direction="row"
-                border-radius=(5)
+                direction=row
+                border-radius=5
                 data-track-id=(track.track_id)
                 fx-hover=(
                     ActionType::set_background_self("#444")
@@ -380,15 +380,15 @@ pub fn album_page_tracks_table_body(
                 ))
                 background=[if current_track { Some("#333") } else { None }]
             {
-                Div padding-x=(10) height=(50) justify-content=(JustifyContent::Center) {
+                Div padding-x=10 height=50 justify-content=center {
                     Span
-                        class="track-number"
+                        .track-number
                         visibility=(if current_track { Visibility::Hidden } else { Visibility::Visible })
                     {
                         (track.number)
                     }
                     Span
-                        class="track-playing"
+                        .track-playing
                         visibility=(if current_track { Visibility::Visible } else { Visibility::Hidden })
                     {
                         @let icon_size = 12;
@@ -398,8 +398,8 @@ pub fn album_page_tracks_table_body(
                             src=(public_img!("audio-white.svg"));
                     }
                     Button
-                        class="play-button"
-                        visibility=(Visibility::Hidden)
+                        .play-button
+                        visibility=hidden
                         fx-click=(Action::PlayAlbumStartingAtTrackId {
                             album_id: track.album_id.clone(),
                             start_track_id: track.track_id.clone(),
@@ -416,13 +416,13 @@ pub fn album_page_tracks_table_body(
                             src=(public_img!("play-button-white.svg"));
                     }
                 }
-                Div padding-x=(10) height=(50) justify-content=(JustifyContent::Center) {
+                Div padding-x=10 height=50 justify-content=center {
                     (track.title)
                 }
-                Div padding-x=(10) height=(50) justify-content=(JustifyContent::Center) {
+                Div padding-x=10 height=50 justify-content=center {
                     Anchor href={"/artists?artistId="(track.artist_id)"&source="(track.api_source)} { (track.artist) }
                 }
-                Div padding-x=(10) height=(50) justify-content=(JustifyContent::Center) {
+                Div padding-x=10 height=50 justify-content=center {
                     (track.duration.into_formatted())
                 }
             }
@@ -602,7 +602,7 @@ pub fn album_display(
         let artist_page_url = artist_page_url(&album.artist_id.to_string());
 
         container! {
-            Div align-items=(AlignItems::Center) {
+            Div align-items=center {
                 Div {
                     Anchor href=(album_page_url) { (album.title) }
                 }
@@ -641,7 +641,7 @@ pub fn album_display(
                     @let button_size = size / 4;
                     @let icon_size = size / 10;
                     Button
-                        direction="row"
+                        direction=row
                         position="absolute"
                         bottom="5%"
                         left="5%"
@@ -666,7 +666,7 @@ pub fn album_display(
                     }
                     @let icon_size = size / 7;
                     Button
-                        direction="row"
+                        direction=row
                         position="absolute"
                         bottom="5%"
                         right="5%"
@@ -697,7 +697,7 @@ pub fn album_display(
     };
 
     container! {
-        Div width=(size) gap=(5) {
+        Div width=(size) gap=5 {
             Anchor href=(album_page_url) width=(size) {
                 (album_cover)
             }
@@ -787,14 +787,14 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
 
     container! {
         Div background=(DARK_BACKGROUND) {
-            Div padding-x=(30) padding-y=(15) {
-                Div direction="row" align-items=(AlignItems::Center) {
+            Div padding-x=30 padding-y=15 {
+                Div direction=row align-items=center {
                     H1 { "Albums" }
                     @let button_size = 30;
                     @let icon_size = button_size - 10;
                     Div position="relative" width=(button_size) height=(button_size) {
                         Button
-                            direction="row"
+                            direction=row
                             width=(button_size)
                             height=(button_size)
                             justify-content="center"
@@ -811,14 +811,14 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                 src=(public_img!("more-options-white.svg"));
                         }
                         Div
-                            id="albums-menu"
-                            width=(300)
+                            #albums-menu
+                            width=300
                             position="absolute"
                             top="100%"
                             visibility="hidden"
                             background=(DARK_BACKGROUND)
-                            border-radius=(5)
-                            direction="row"
+                            border-radius=5
+                            direction=row
                             fx-click-outside=(
                                 get_visibility_self()
                                     .eq(Visibility::Visible)
@@ -893,7 +893,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             }
                             Div {
                                 @for source in TrackApiSource::all() {
-                                    Div direction="row" {
+                                    Div direction=row {
                                         @let checked = filtered_sources.iter().any(|x| x == source);
                                         (source.to_string())
                                         Input
@@ -904,7 +904,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                                     [filtered_sources, &[source.clone()]].concat()
                                                 }, sort)
                                             })
-                                            type="checkbox"
+                                            type=checkbox
                                             checked=(checked);
                                     }
                                 }
@@ -913,7 +913,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                     }
                 }
                 Input
-                    type="text"
+                    type=text
                     placeholder="Filter..."
                     fx-change=(
                         get_event_value()
@@ -942,7 +942,7 @@ pub fn load_albums(
 ) -> Containers {
     container! {
         Div
-            id="albums"
+            #albums
             hx-get={
                 "/albums-list-start"
                 (build_query('?', &[
@@ -955,13 +955,13 @@ pub fn load_albums(
             }
             hx-trigger="load"
             hx-swap="children"
-            direction="row"
+            direction=row
             overflow-x=(LayoutOverflow::Wrap { grid: true })
             grid-cell-size=(size)
             justify-content="space-evenly"
-            gap=(15)
-            padding-x=(30)
-            padding-y=(15)
+            gap=15
+            padding-x=30
+            padding-y=15
         {
             @for _ in 0..100 {
                 Div width=(size) height=(size + 30) {
