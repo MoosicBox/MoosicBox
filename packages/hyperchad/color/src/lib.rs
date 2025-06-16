@@ -184,6 +184,24 @@ impl std::fmt::Display for Color {
     }
 }
 
+impl From<&str> for Color {
+    fn from(s: &str) -> Self {
+        Self::from_hex(s)
+    }
+}
+
+impl From<String> for Color {
+    fn from(s: String) -> Self {
+        Self::from_hex(&s)
+    }
+}
+
+impl From<&String> for Color {
+    fn from(s: &String) -> Self {
+        Self::from_hex(s)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
