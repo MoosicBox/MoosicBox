@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["development-tools", "multimedia", "network-programming"]
 description = "MoosicBox scan models package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["audio", "files", "local", "models", "scan"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_scan_models"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]

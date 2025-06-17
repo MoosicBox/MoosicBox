@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["network-programming"]
 description = "Find a free unused port"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["network", "port", "tcp", "udp"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "openport"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [package.metadata.workspaces]

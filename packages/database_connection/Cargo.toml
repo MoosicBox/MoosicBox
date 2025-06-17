@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["database"]
 description = "Switchy database connection package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["database", "mysql", "postgres", "sqlite"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "switchy_database_connection"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.3"
 
 [package.metadata.workspaces]

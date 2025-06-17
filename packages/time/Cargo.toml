@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["date-and-time", "development-tools"]
 description = "Switchy Time package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["time"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "switchy_time"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.3"
 
 [package.metadata.workspaces]

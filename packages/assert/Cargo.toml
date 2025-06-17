@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["development-tools"]
 description = "MoosicBox assert package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["assert", "false", "true", "util", "utils"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_assert"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]

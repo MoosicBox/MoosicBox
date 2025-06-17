@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["encoding", "multimedia", "network-programming"]
 description = "MoosicBox Symphomia player package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["audio", "bytes", "decoder", "file", "stream"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_audio_decoder"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]

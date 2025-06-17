@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["network-programming"]
 description = "MoosicBox tunnel sender package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["api", "tunnel", "websocket"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_tunnel_sender"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]

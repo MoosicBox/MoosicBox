@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["development-tools::testing", "simulation"]
 description = "MoosicBox Server Simulator package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["deterministic", "harness", "simulator", "test"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_server_simulator"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]

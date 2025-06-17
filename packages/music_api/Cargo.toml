@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["development-tools", "multimedia", "network-programming"]
 description = "MoosicBox music API package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["album", "api", "artist", "music", "playlist"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_music_api"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [package.metadata.cargo-machete]

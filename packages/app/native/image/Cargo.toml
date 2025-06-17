@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["gui", "web-programming"]
 description = "MoosicBox App Image package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["gui", "image", "web"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_app_native_image"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]

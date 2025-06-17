@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["database"]
 description = "MoosicBox search package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["api", "database", "search", "tantivy"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_search"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]

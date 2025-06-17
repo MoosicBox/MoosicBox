@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["development-tools"]
 description = "Switchy RNG package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["generator", "number", "random"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "switchy_random"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.3"
 
 [package.metadata.workspaces]

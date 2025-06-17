@@ -1,11 +1,11 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 description = "Simulated cancel async runtime usage example"
-edition     = "2024"
-license     = "MIT"
+edition     = { workspace = true }
+license     = { workspace = true }
 name        = "async_cancel"
 publish     = false
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.0"
 
 [dependencies]

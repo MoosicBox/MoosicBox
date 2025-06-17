@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["development-tools"]
 description = "MoosicBox date utils package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["date", "time"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_date_utils"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]

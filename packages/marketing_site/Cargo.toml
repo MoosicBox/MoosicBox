@@ -1,14 +1,14 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 build       = "build.rs"
 categories  = ["gui"]
 description = "MoosicBox Marketing Website"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["desktop", "gui", "html", "native", "web"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_marketing_site"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [[bin]]

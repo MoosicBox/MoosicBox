@@ -1,13 +1,13 @@
 [package]
-authors     = ["Braden Steffaniak"]
+authors     = { workspace = true }
 categories  = ["gui"]
 description = "MoosicBoxApp bundled package"
-edition     = "2024"
+edition     = { workspace = true }
 keywords    = ["bundled"]
-license     = "MPL-2.0"
+license     = { workspace = true }
 name        = "moosicbox_app_native_bundled"
 readme      = "README.md"
-repository  = "https://github.com/MoosicBox/MoosicBox"
+repository  = { workspace = true }
 version     = "0.1.1"
 
 [package.metadata.cargo-machete]
