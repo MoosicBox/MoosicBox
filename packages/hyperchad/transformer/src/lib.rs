@@ -2491,7 +2491,9 @@ impl Container {
     fn attrs(&self, #[allow(unused)] with_debug_attrs: bool) -> Attrs {
         let mut attrs = Attrs { values: vec![] };
 
-        attrs.add("dbg-id", self.id);
+        if with_debug_attrs {
+            attrs.add("dbg-id", self.id);
+        }
 
         attrs.add_opt("id", self.str_id.as_ref());
 
