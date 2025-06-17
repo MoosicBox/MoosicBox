@@ -24,7 +24,7 @@ use hyperchad::{
             get_width_px_self,
         },
     },
-    template2::{self as hyperchad_template2, Containers, IntoActionEffect, container},
+    template::{self as hyperchad_template, Containers, IntoActionEffect, container},
     transformer::models::Visibility,
 };
 use moosicbox_music_models::{

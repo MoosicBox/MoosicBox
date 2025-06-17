@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::template2::{self as hyperchad_template2, Containers, container};
+use hyperchad::template::{self as hyperchad_template, Containers, container};
 use moosicbox_downloader::api::models::{ApiDownloadItem, ApiDownloadTask, ApiDownloadTaskState};
 use strum::{AsRefStr, EnumString};
 

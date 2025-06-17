@@ -18,7 +18,7 @@ hyperchad = { workspace = true, features = [
     "color",
     "renderer-canvas",
     "serde",
-    "template2",
+    "template",
     "transformer",
 ] }
 moosicbox_app_models = { workspace = true, features = ["music-api-api"] }

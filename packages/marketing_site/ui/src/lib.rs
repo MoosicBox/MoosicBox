@@ -4,11 +4,11 @@
 #![allow(clippy::branches_sharing_code)]
 
 pub mod download;
-pub use hyperchad::template2 as hyperchad_template2;
+pub use hyperchad::template as hyperchad_template;
 
 use hyperchad::{
     actions::logic::if_responsive,
-    template2::{Containers, container},
+    template::{Containers, container},
     transformer::models::{LayoutDirection, TextAlign},
 };
 

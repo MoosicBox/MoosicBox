@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
-    template2::{self as hyperchad_template2, Containers, container},
+    template::{self as hyperchad_template, Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow},
 };
 use moosicbox_music_models::{

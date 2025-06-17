@@ -18,7 +18,7 @@ hyperchad = { workspace = true, features = [
     "color",
     "renderer",
     "router",
-    "template2",
+    "template",
     "transformer",
 ] }
 

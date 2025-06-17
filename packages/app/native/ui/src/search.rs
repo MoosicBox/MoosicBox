@@ -2,7 +2,7 @@
 
 use hyperchad::{
     actions::{self as hyperchad_actions, ActionType},
-    template2::{self as hyperchad_template2, Containers, container},
+    template::{self as hyperchad_template, Containers, container},
     transformer::models::Visibility,
 };
 use moosicbox_music_api_models::search::api::{

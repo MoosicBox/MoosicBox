@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::template2::{self as hyperchad_template2, Containers, container};
+use hyperchad::template::{self as hyperchad_template, Containers, container};
 use moosicbox_session_models::ApiSession;
 
 use crate::PLAYBACK_SESSIONS_CONTENT_ID;

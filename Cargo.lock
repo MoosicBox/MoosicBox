@@ -5218,7 +5218,7 @@ dependencies = [
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
  "hyperchad_state",
- "hyperchad_template2",
+ "hyperchad_template",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
 ]
@@ -5507,13 +5507,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyperchad_template2"
+name = "hyperchad_template"
 version = "0.1.0"
 dependencies = [
  "hyperchad_actions",
  "hyperchad_color",
- "hyperchad_template2",
- "hyperchad_template2_macros",
+ "hyperchad_template",
+ "hyperchad_template_macros",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
  "itoa 1.0.15",
@@ -5522,11 +5522,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyperchad_template2_macros"
+name = "hyperchad_template_macros"
 version = "0.1.0"
 dependencies = [
  "hyperchad_color",
- "hyperchad_template2",
+ "hyperchad_template",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
  "log 0.4.27",

@@ -22,7 +22,7 @@
 !/packages/http
 !/packages/hyperchad/actions
 !/packages/hyperchad/color
-!/packages/hyperchad/template2
+!/packages/hyperchad/template
 !/packages/hyperchad/transformer
 !/packages/image
 !/packages/json_utils

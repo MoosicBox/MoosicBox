@@ -2,7 +2,7 @@
 
 use hyperchad::{
     actions::{self as hyperchad_actions, ActionType, logic::get_visibility_self},
-    template2::{self as hyperchad_template2, Containers, container},
+    template::{self as hyperchad_template, Containers, container},
     transformer::models::Visibility,
 };
 use moosicbox_music_models::api::ApiTrack;

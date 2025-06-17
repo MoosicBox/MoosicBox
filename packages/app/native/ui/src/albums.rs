@@ -7,7 +7,7 @@ use hyperchad::{
             get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
         },
     },
-    template2::{self as hyperchad_template2, Containers, container},
+    template::{self as hyperchad_template, Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow, Visibility},
 };
 use moosicbox_menu_models::api::ApiAlbumVersion;

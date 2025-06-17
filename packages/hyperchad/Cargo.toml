@@ -28,7 +28,7 @@ hyperchad_renderer_html_lambda = { workspace = true, optional = true }
 hyperchad_renderer_vanilla_js  = { workspace = true, optional = true }
 hyperchad_router               = { workspace = true, optional = true }
 hyperchad_state                = { workspace = true, optional = true }
-hyperchad_template2            = { workspace = true, optional = true }
+hyperchad_template             = { workspace = true, optional = true }
 hyperchad_transformer          = { workspace = true, optional = true }
 hyperchad_transformer_models   = { workspace = true, optional = true }
 
@@ -52,7 +52,7 @@ all = [
     "renderer-vanilla-js",
     "router",
     "state",
-    "template2",
+    "template",
     "transformer",
     "transformer-models",
 ]
@@ -72,7 +72,7 @@ actions = [
 actions-logic = [
     "hyperchad_actions?/logic",
     "hyperchad_app?/logic",
-    "hyperchad_template2?/logic",
+    "hyperchad_template?/logic",
     "transformer-logic",
 ]
 actions-serde = ["hyperchad_actions?/serde"]
@@ -274,7 +274,7 @@ router-syntax-highlighting = [
     "hyperchad_router?/syntax-highlighting",
 ]
 
-template2 = ["dep:hyperchad_template2"]
+template = ["dep:hyperchad_template"]
 
 transformer       = ["dep:hyperchad_transformer"]
 transformer-logic = ["hyperchad_transformer?/logic"]
