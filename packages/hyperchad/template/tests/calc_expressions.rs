@@ -141,23 +141,43 @@ fn test_calc_with_all_operations() {
     };
 
     assert_eq!(containers.len(), 1, "Should generate exactly one container");
-    assert_eq!(containers[0].children.len(), 4, "Should have 4 child containers");
+    assert_eq!(
+        containers[0].children.len(),
+        4,
+        "Should have 4 child containers"
+    );
 
     // All operations should be preserved in calc format
     assert_eq!(
-        containers[0].children[0].width.as_ref().unwrap().to_string(),
+        containers[0].children[0]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(50 + 30)"
     );
     assert_eq!(
-        containers[0].children[1].width.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(100 - 20)"
     );
     assert_eq!(
-        containers[0].children[2].width.as_ref().unwrap().to_string(),
+        containers[0].children[2]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(25 * 4)"
     );
     assert_eq!(
-        containers[0].children[3].width.as_ref().unwrap().to_string(),
+        containers[0].children[3]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(200 / 2)"
     );
 }
@@ -259,27 +279,51 @@ fn test_calc_with_helper_functions() {
     };
 
     assert_eq!(containers.len(), 1, "Should generate exactly one container");
-    assert_eq!(containers[0].children.len(), 5, "Should have 5 child containers");
+    assert_eq!(
+        containers[0].children.len(),
+        5,
+        "Should have 5 child containers"
+    );
 
     // Helper functions are evaluated and preserved in calc expressions
     assert_eq!(
-        containers[0].children[0].width.as_ref().unwrap().to_string(),
+        containers[0].children[0]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(50%)"
     );
     assert_eq!(
-        containers[0].children[1].width.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(50vw)"
     );
     assert_eq!(
-        containers[0].children[2].width.as_ref().unwrap().to_string(),
+        containers[0].children[2]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(50vh)"
     );
     assert_eq!(
-        containers[0].children[3].width.as_ref().unwrap().to_string(),
+        containers[0].children[3]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(50dvw)"
     );
     assert_eq!(
-        containers[0].children[4].width.as_ref().unwrap().to_string(),
+        containers[0].children[4]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "calc(50dvh)"
     );
 }
@@ -498,59 +542,111 @@ fn test_raw_percent_values() {
     };
 
     assert_eq!(containers.len(), 1, "Should generate exactly one container");
-    assert_eq!(containers[0].children.len(), 3, "Should have 3 child containers");
+    assert_eq!(
+        containers[0].children.len(),
+        3,
+        "Should have 3 child containers"
+    );
 
     // Test width and height with raw percents
     assert_eq!(
-        containers[0].children[0].width.as_ref().unwrap().to_string(),
+        containers[0].children[0]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "100%"
     );
     assert_eq!(
-        containers[0].children[0].height.as_ref().unwrap().to_string(),
+        containers[0].children[0]
+            .height
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "50%"
     );
 
     // Test margin and padding with raw percents
     assert_eq!(
-        containers[0].children[1].margin_top.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .margin_top
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "25%"
     );
     assert_eq!(
-        containers[0].children[1].margin_right.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .margin_right
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "25%"
     );
     assert_eq!(
-        containers[0].children[1].margin_bottom.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .margin_bottom
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "25%"
     );
     assert_eq!(
-        containers[0].children[1].margin_left.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .margin_left
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "25%"
     );
     assert_eq!(
-        containers[0].children[1].padding_top.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .padding_top
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "10%"
     );
     assert_eq!(
-        containers[0].children[1].padding_right.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .padding_right
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "10%"
     );
     assert_eq!(
-        containers[0].children[1].padding_bottom.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .padding_bottom
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "10%"
     );
     assert_eq!(
-        containers[0].children[1].padding_left.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .padding_left
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "10%"
     );
 
     // Test max-width and min-height with raw percents
     assert_eq!(
-        containers[0].children[2].max_width.as_ref().unwrap().to_string(),
+        containers[0].children[2]
+            .max_width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "75%"
     );
     assert_eq!(
-        containers[0].children[2].min_height.as_ref().unwrap().to_string(),
+        containers[0].children[2]
+            .min_height
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "30%"
     );
 }
@@ -566,23 +662,43 @@ fn test_canvas_percent_values() {
     };
 
     assert_eq!(containers.len(), 1, "Should generate exactly one container");
-    assert_eq!(containers[0].children.len(), 2, "Should have 2 child containers");
+    assert_eq!(
+        containers[0].children.len(),
+        2,
+        "Should have 2 child containers"
+    );
 
     // Canvas width/height should work the same as div width/height
     assert_eq!(
-        containers[0].children[0].width.as_ref().unwrap().to_string(),
+        containers[0].children[0]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "100%"
     );
     assert_eq!(
-        containers[0].children[0].height.as_ref().unwrap().to_string(),
+        containers[0].children[0]
+            .height
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "50%"
     );
     assert_eq!(
-        containers[0].children[1].width.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .width
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "100%"
     );
     assert_eq!(
-        containers[0].children[1].height.as_ref().unwrap().to_string(),
+        containers[0].children[1]
+            .height
+            .as_ref()
+            .unwrap()
+            .to_string(),
         "50%"
     );
 }

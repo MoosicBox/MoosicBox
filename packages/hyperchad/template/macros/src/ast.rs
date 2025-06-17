@@ -288,14 +288,15 @@ impl<E: MaybeElement> Markup<E> {
         } else if lookahead.peek(syn::Token![#]) {
             // Handle hex colors like #fff, #ffffff, #123, #000
             let _pound: syn::Token![#] = input.parse()?;
-            
+
             // Try to parse as identifier first (for values like #fff, #abc)
             if let Ok(hex_ident) = input.call(Ident::parse_any) {
                 let hex_str = hex_ident.to_string();
-                
+
                 // Validate that it's a valid hex color (3 or 6 hex digits)
-                if (hex_str.len() == 3 || hex_str.len() == 6) && 
-                   hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
+                if (hex_str.len() == 3 || hex_str.len() == 6)
+                    && hex_str.chars().all(|c| c.is_ascii_hexdigit())
+                {
                     // Create a string literal with the full hex color
                     let full_hex = format!("#{}", hex_str);
                     let expr: Expr = parse_quote!(#full_hex);
@@ -306,17 +307,21 @@ impl<E: MaybeElement> Markup<E> {
                 } else {
                     return Err(Error::new(
                         hex_ident.span(),
-                        format!("Invalid hex color '{}'. Hex colors must be 3 or 6 hexadecimal digits (0-9, a-f)", hex_str),
+                        format!(
+                            "Invalid hex color '{}'. Hex colors must be 3 or 6 hexadecimal digits (0-9, a-f)",
+                            hex_str
+                        ),
                     ));
                 }
-            } 
+            }
             // Try to parse as integer literal (for values like #123, #000)
             else if let Ok(hex_int) = input.parse::<syn::LitInt>() {
                 let hex_str = hex_int.to_string();
-                
+
                 // Validate that it's a valid hex color (3 or 6 hex digits)
-                if (hex_str.len() == 3 || hex_str.len() == 6) && 
-                   hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
+                if (hex_str.len() == 3 || hex_str.len() == 6)
+                    && hex_str.chars().all(|c| c.is_ascii_hexdigit())
+                {
                     // Create a string literal with the full hex color
                     let full_hex = format!("#{}", hex_str);
                     let expr: Expr = parse_quote!(#full_hex);
@@ -327,7 +332,10 @@ impl<E: MaybeElement> Markup<E> {
                 } else {
                     return Err(Error::new(
                         hex_int.span(),
-                        format!("Invalid hex color '{}'. Hex colors must be 3 or 6 hexadecimal digits (0-9, a-f)", hex_str),
+                        format!(
+                            "Invalid hex color '{}'. Hex colors must be 3 or 6 hexadecimal digits (0-9, a-f)",
+                            hex_str
+                        ),
                     ));
                 }
             } else {
@@ -358,9 +366,16 @@ impl<E: MaybeElement> Markup<E> {
                         parse_quote!(#unit_ident(#expr))
                     } else if matches!(ident_str.as_str(), "min" | "max" | "clamp") {
                         // For CSS math functions, parse comma-separated expressions
-                        let args = syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated(&content)?;
+                        let args =
+                            syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated(
+                                &content,
+                            )?;
                         let args_vec: Vec<Expr> = args.into_iter().collect();
                         parse_quote!(#unit_ident(#(#args_vec),*))
+                    } else if matches!(ident_str.as_str(), "percent") {
+                        // For percent helper function, use calc module
+                        let expr: Expr = content.parse()?;
+                        parse_quote!(hyperchad_template::calc::to_percent_number(#expr))
                     } else {
                         // For unit functions like vw, vh, etc., parse a single expression and use unit_functions module
                         let expr: Expr = content.parse()?;
@@ -1207,7 +1222,7 @@ impl NumericLit {
     fn is_unit_identifier(input: &str) -> bool {
         matches!(
             input,
-            "vw" | "vh" | "dvw" | "dvh" | "calc" | "min" | "max" | "clamp" // Viewport units, calc function, and CSS math functions
+            "vw" | "vh" | "dvw" | "dvh" | "calc" | "min" | "max" | "clamp" | "percent" // Viewport units, calc function, CSS math functions, and helper functions
         )
     }
 }
