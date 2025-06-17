@@ -29,7 +29,7 @@ impl<E: MaybeElement> DiagnosticParse for Markups<E> {
     ) -> syn::Result<Self> {
         let mut markups = Vec::new();
         while !input.is_empty() {
-            markups.push(Markup::diagnostic_parse_in_block(input, diagnostics)?)
+            markups.push(Markup::diagnostic_parse_in_block(input, diagnostics)?);
         }
         Ok(Self { markups })
     }
@@ -49,19 +49,20 @@ pub enum Markup<E> {
     Lit(ContainerLit),
     NumericLit(NumericLit),
     Splice {
-        paren_token: Paren,
-        expr: Expr,
+        paren_token: Box<Paren>,
+        expr: Box<Expr>,
     },
     BraceSplice {
         brace_token: Brace,
         items: Vec<Markup<NoElement>>,
     },
     Element(E),
-    ControlFlow(ControlFlow<E>),
+    ControlFlow(Box<ControlFlow<E>>),
     Semi(Semi),
 }
 
 impl<E: MaybeElement> Markup<E> {
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub fn diagnostic_parse_in_block(
         input: ParseStream,
         diagnostics: &mut Vec<Diagnostic>,
@@ -149,8 +150,8 @@ impl<E: MaybeElement> Markup<E> {
                                 // Add each argument as an expression item
                                 for arg in call.args {
                                     items.push(Markup::Splice {
-                                        paren_token: Paren::default(),
-                                        expr: arg,
+                                        paren_token: Box::new(Paren::default()),
+                                        expr: Box::new(arg),
                                     });
                                 }
 
@@ -167,8 +168,8 @@ impl<E: MaybeElement> Markup<E> {
                     return Ok(Self::BraceSplice {
                         brace_token,
                         items: vec![Markup::Splice {
-                            paren_token: Paren::default(),
-                            expr,
+                            paren_token: Box::new(Paren::default()),
+                            expr: Box::new(expr),
                         }],
                     });
                 }
@@ -191,8 +192,8 @@ impl<E: MaybeElement> Markup<E> {
                     let _paren_token = parenthesized!(inner_content in content);
                     let expr = inner_content.parse()?;
                     items.push(Markup::Splice {
-                        paren_token: Paren::default(),
-                        expr,
+                        paren_token: Box::new(Paren::default()),
+                        expr: Box::new(expr),
                     });
                 } else {
                     // If we can't parse as literal or parenthesized expression,
@@ -221,11 +222,14 @@ impl<E: MaybeElement> Markup<E> {
                 let percent_expr: Expr =
                     parse_quote!(hyperchad_template::calc::to_percent_number(#expr));
                 Ok(Self::Splice {
-                    paren_token: Paren::default(),
-                    expr: percent_expr,
+                    paren_token: Box::new(Paren::default()),
+                    expr: Box::new(percent_expr),
                 })
             } else {
-                Ok(Self::Splice { paren_token, expr })
+                Ok(Self::Splice {
+                    paren_token: Box::new(paren_token),
+                    expr: Box::new(expr),
+                })
             }
         } else if let Some(parse_element) = E::should_parse(&lookahead) {
             parse_element(input, diagnostics).map(Self::Element)
@@ -278,7 +282,7 @@ impl<E: MaybeElement> Markup<E> {
                             // This is a parsing challenge - for now, error out
                             return Err(Error::new(
                                 ident.span(),
-                                format!("Unexpected identifier '{}' after number", unit),
+                                format!("Unexpected identifier '{unit}' after number"),
                             ));
                         }
                     }
@@ -286,17 +290,18 @@ impl<E: MaybeElement> Markup<E> {
             }
 
             // No unit suffix, treat as plain number
-            if let Some(numeric_lit) = NumericLit::try_parse(&result) {
-                Ok(Self::NumericLit(numeric_lit))
-            } else {
-                // Fallback to regular literal
-                let lit = if result.contains('.') {
-                    syn::Lit::Float(syn::LitFloat::new(&result, input.span()))
-                } else {
-                    syn::Lit::Int(syn::LitInt::new(&result, input.span()))
-                };
-                Ok(Self::Lit(ContainerLit { lit }))
-            }
+            NumericLit::try_parse(&result).map_or_else(
+                || {
+                    // Fallback to regular literal
+                    let lit = if result.contains('.') {
+                        syn::Lit::Float(syn::LitFloat::new(&result, input.span()))
+                    } else {
+                        syn::Lit::Int(syn::LitInt::new(&result, input.span()))
+                    };
+                    Ok(Self::Lit(ContainerLit { lit }))
+                },
+                |numeric_lit| Ok(Self::NumericLit(numeric_lit)),
+            )
         } else if lookahead.peek(syn::Token![#]) {
             // Handle hex colors like #fff, #ffffff, #123, #000
             let _pound: syn::Token![#] = input.parse()?;
@@ -310,21 +315,20 @@ impl<E: MaybeElement> Markup<E> {
                     && hex_str.chars().all(|c| c.is_ascii_hexdigit())
                 {
                     // Create a string literal with the full hex color
-                    let full_hex = format!("#{}", hex_str);
+                    let full_hex = format!("#{hex_str}");
                     let expr: Expr = parse_quote!(#full_hex);
                     return Ok(Self::Splice {
-                        paren_token: Paren::default(),
-                        expr,
+                        paren_token: Box::new(Paren::default()),
+                        expr: Box::new(expr),
                     });
-                } else {
-                    return Err(Error::new(
-                        hex_ident.span(),
-                        format!(
-                            "Invalid hex color '{}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)",
-                            hex_str
-                        ),
-                    ));
                 }
+
+                return Err(Error::new(
+                    hex_ident.span(),
+                    format!(
+                        "Invalid hex color '{hex_str}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)"
+                    ),
+                ));
             }
             // Try to parse as integer literal (for values like #123, #000)
             else if let Ok(hex_int) = input.parse::<syn::LitInt>() {
@@ -335,27 +339,26 @@ impl<E: MaybeElement> Markup<E> {
                     && hex_str.chars().all(|c| c.is_ascii_hexdigit())
                 {
                     // Create a string literal with the full hex color
-                    let full_hex = format!("#{}", hex_str);
+                    let full_hex = format!("#{hex_str}");
                     let expr: Expr = parse_quote!(#full_hex);
                     return Ok(Self::Splice {
-                        paren_token: Paren::default(),
-                        expr,
+                        paren_token: Box::new(Paren::default()),
+                        expr: Box::new(expr),
                     });
-                } else {
-                    return Err(Error::new(
-                        hex_int.span(),
-                        format!(
-                            "Invalid hex color '{}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)",
-                            hex_str
-                        ),
-                    ));
                 }
-            } else {
+
                 return Err(Error::new(
-                    input.span(),
-                    "Expected hex digits after '#' for hex color",
+                    hex_int.span(),
+                    format!(
+                        "Invalid hex color '{hex_str}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)"
+                    ),
                 ));
             }
+
+            return Err(Error::new(
+                input.span(),
+                "Expected hex digits after '#' for hex color",
+            ));
         } else if lookahead.peek(Ident::peek_any) {
             // Handle bare identifiers (including kebab-case) as splice expressions for attribute values
             // This enables syntax like: visibility=hidden, align-items=center, justify-content=space-between
@@ -442,8 +445,8 @@ impl<E: MaybeElement> Markup<E> {
                     };
 
                     return Ok(Self::Splice {
-                        paren_token: Paren::default(),
-                        expr: call_expr,
+                        paren_token: Box::new(Paren::default()),
+                        expr: Box::new(call_expr),
                     });
                 }
             }
@@ -460,8 +463,8 @@ impl<E: MaybeElement> Markup<E> {
                     let expr: Expr =
                         parse_quote!(hyperchad_template::calc::to_percent_number(#var_ident));
                     return Ok(Self::Splice {
-                        paren_token: Paren::default(),
-                        expr,
+                        paren_token: Box::new(Paren::default()),
+                        expr: Box::new(expr),
                     });
                 }
             }
@@ -478,8 +481,8 @@ impl<E: MaybeElement> Markup<E> {
                 // Handle as regular string identifier for enums
                 let expr: Expr = parse_quote!(#name_str);
                 Ok(Self::Splice {
-                    paren_token: Paren::default(),
-                    expr,
+                    paren_token: Box::new(Paren::default()),
+                    expr: Box::new(expr),
                 })
             } else {
                 // Fallback to simple identifier
@@ -494,8 +497,8 @@ impl<E: MaybeElement> Markup<E> {
                 // Handle as regular identifier
                 let expr: Expr = parse_quote!(#ident);
                 Ok(Self::Splice {
-                    paren_token: Paren::default(),
-                    expr,
+                    paren_token: Box::new(Paren::default()),
+                    expr: Box::new(expr),
                 })
             }
         } else {
@@ -511,16 +514,14 @@ impl<E: MaybeElement> DiagnosticParse for Markup<E> {
     ) -> syn::Result<Self> {
         let markup = Self::diagnostic_parse_in_block(input, diagnostics)?;
 
-        if let Self::ControlFlow(ControlFlow {
-            kind: ControlFlowKind::Let(_),
-            ..
-        }) = &markup
-        {
-            diagnostics.push(
-                markup
-                    .span()
-                    .error("`@let` bindings are only allowed inside blocks"),
-            )
+        if let Self::ControlFlow(flow) = &markup {
+            if let ControlFlowKind::Let(_) = flow.kind {
+                diagnostics.push(
+                    markup
+                        .span()
+                        .error("`@let` bindings are only allowed inside blocks"),
+                );
+            }
         }
 
         Ok(markup)
@@ -579,6 +580,7 @@ impl MaybeElement for NoElement {
 
 impl ToTokens for NoElement {
     fn to_tokens(&self, _tokens: &mut TokenStream) {
+        #[allow(clippy::uninhabited_references)]
         match *self {}
     }
 }
@@ -601,7 +603,7 @@ impl MaybeElement for ContainerElement {
         lookahead: &Lookahead1<'_>,
     ) -> Option<fn(ParseStream, &mut Vec<Diagnostic>) -> syn::Result<Self>> {
         if lookahead.peek(Ident::peek_any) || lookahead.peek(Dot) || lookahead.peek(Pound) {
-            Some(ContainerElement::diagnostic_parse)
+            Some(Self::diagnostic_parse)
         } else {
             None
         }
@@ -1112,9 +1114,7 @@ impl DiagnosticParse for ContainerLit {
         if lookahead.peek(Lit) {
             let lit = input.parse()?;
             match &lit {
-                Lit::Str(_) => Ok(Self { lit }),
-                Lit::Int(_) => Ok(Self { lit }),
-                Lit::Float(_) => Ok(Self { lit }),
+                Lit::Str(_) | Lit::Int(_) | Lit::Float(_) => Ok(Self { lit }),
                 Lit::Char(lit_char) => {
                     diagnostics.push(lit_char.span().error(format!(
                         r#"literal must be double-quoted: `"{}"`"#,
@@ -1187,7 +1187,7 @@ impl NumericLit {
         // Check for percentage values
         if let Some(num_str) = input.strip_suffix('%') {
             if num_str.parse::<f32>().is_ok() {
-                return Some(NumericLit {
+                return Some(Self {
                     value: input.to_string(),
                     number_type: if num_str.contains('.') {
                         NumericType::RealPercent
@@ -1201,7 +1201,7 @@ impl NumericLit {
         // Check for viewport units (vw, vh, dvw, dvh)
         if let Some(num_str) = input.strip_suffix("vw") {
             if num_str.parse::<f32>().is_ok() {
-                return Some(NumericLit {
+                return Some(Self {
                     value: input.to_string(),
                     number_type: if num_str.contains('.') {
                         NumericType::RealVw
@@ -1214,7 +1214,7 @@ impl NumericLit {
 
         if let Some(num_str) = input.strip_suffix("vh") {
             if num_str.parse::<f32>().is_ok() {
-                return Some(NumericLit {
+                return Some(Self {
                     value: input.to_string(),
                     number_type: if num_str.contains('.') {
                         NumericType::RealVh
@@ -1227,7 +1227,7 @@ impl NumericLit {
 
         if let Some(num_str) = input.strip_suffix("dvw") {
             if num_str.parse::<f32>().is_ok() {
-                return Some(NumericLit {
+                return Some(Self {
                     value: input.to_string(),
                     number_type: if num_str.contains('.') {
                         NumericType::RealDvw
@@ -1240,7 +1240,7 @@ impl NumericLit {
 
         if let Some(num_str) = input.strip_suffix("dvh") {
             if num_str.parse::<f32>().is_ok() {
-                return Some(NumericLit {
+                return Some(Self {
                     value: input.to_string(),
                     number_type: if num_str.contains('.') {
                         NumericType::RealDvh
@@ -1253,14 +1253,14 @@ impl NumericLit {
 
         // Check for plain numbers (integer or float)
         if input.parse::<i64>().is_ok() {
-            return Some(NumericLit {
+            return Some(Self {
                 value: input.to_string(),
                 number_type: NumericType::Integer,
             });
         }
 
         if input.parse::<f64>().is_ok() {
-            return Some(NumericLit {
+            return Some(Self {
                 value: input.to_string(),
                 number_type: NumericType::Real,
             });
@@ -1282,7 +1282,7 @@ impl NumericLit {
                     && number_part.chars().all(|c| c.is_ascii_digit() || c == '.')
                 {
                     // Construct the unit+number string
-                    let full_unit_string = format!("{}{}", number_part, unit);
+                    let full_unit_string = format!("{number_part}{unit}");
 
                     // Try to parse using the existing logic
                     if let Some(numeric_lit) = Self::try_parse(&full_unit_string) {
@@ -1430,7 +1430,7 @@ impl<E: MaybeElement> DiagnosticParse for ControlFlow<E> {
                         unreachable!()
                     };
 
-                    ControlFlowKind::Let(local)
+                    ControlFlowKind::Let(Box::new(local))
                 } else {
                     return Err(lookahead.error());
                 }
@@ -1454,11 +1454,11 @@ impl<E: ToTokens> ToTokens for ControlFlow<E> {
 
 #[derive(Debug, Clone)]
 pub enum ControlFlowKind<E> {
-    Let(Local),
-    If(IfExpr<E>),
-    For(ForExpr<E>),
-    While(WhileExpr<E>),
-    Match(MatchExpr<E>),
+    Let(Box<Local>),
+    If(Box<IfExpr<E>>),
+    For(Box<ForExpr<E>>),
+    While(Box<WhileExpr<E>>),
+    Match(Box<MatchExpr<E>>),
 }
 
 #[derive(Debug, Clone)]
@@ -1471,12 +1471,12 @@ pub struct IfExpr<E> {
 
 #[derive(Debug, Clone)]
 pub enum IfCondition {
-    Expr(Expr),
+    Expr(Box<Expr>),
     Let {
-        let_token: Let,
-        pat: Pat,
-        eq_token: syn::token::Eq,
-        expr: Expr,
+        let_token: Box<Let>,
+        pat: Box<Pat>,
+        eq_token: Box<syn::token::Eq>,
+        expr: Box<Expr>,
     },
 }
 
@@ -1515,14 +1515,14 @@ impl<E: MaybeElement> DiagnosticParse for IfExpr<E> {
             let expr: Expr = input.call(Expr::parse_without_eager_brace)?;
 
             IfCondition::Let {
-                let_token,
-                pat,
-                eq_token,
-                expr,
+                let_token: Box::new(let_token),
+                pat: Box::new(pat),
+                eq_token: Box::new(eq_token),
+                expr: Box::new(expr),
             }
         } else {
             // Regular if condition
-            IfCondition::Expr(input.call(Expr::parse_without_eager_brace)?)
+            IfCondition::Expr(Box::new(input.call(Expr::parse_without_eager_brace)?))
         };
 
         Ok(Self {
@@ -1755,7 +1755,7 @@ impl<T: DiagnosticParse> DiagnosticParse for Box<T> {
         input: ParseStream,
         diagnostics: &mut Vec<Diagnostic>,
     ) -> syn::Result<Self> {
-        Ok(Box::new(input.diagnostic_parse(diagnostics)?))
+        Ok(Self::new(input.diagnostic_parse(diagnostics)?))
     }
 }
 

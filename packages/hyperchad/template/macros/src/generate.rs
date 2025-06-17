@@ -2,7 +2,11 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Expr, Local};
 
-use crate::ast::*;
+use crate::ast::{
+    AttributeName, AttributeType, Block, ContainerAttribute, ContainerNameOrMarkup, ControlFlow,
+    ControlFlowKind, Element, ElementBody, ElementName, ForExpr, IfCondition, IfExpr, IfOrBlock,
+    Markup, Markups, MatchExpr, NoElement, WhileExpr,
+};
 
 pub fn generate(markups: Markups<Element>, output_ident: Ident) -> Result<TokenStream, String> {
     let mut build = Builder::new(output_ident.clone());
@@ -16,8 +20,8 @@ struct Generator {
 }
 
 impl Generator {
-    fn new(output_ident: Ident) -> Generator {
-        Generator { output_ident }
+    const fn new(output_ident: Ident) -> Self {
+        Self { output_ident }
     }
 
     fn builder(&self) -> Builder {
@@ -43,13 +47,12 @@ impl Generator {
         match markup {
             Markup::Block(block) => {
                 if block.markups.markups.iter().any(|markup| {
-                    matches!(
-                        *markup,
-                        Markup::ControlFlow(ControlFlow {
-                            kind: ControlFlowKind::Let(_),
-                            ..
-                        })
-                    )
+                    if let Markup::ControlFlow(flow) = markup {
+                        if let ControlFlowKind::Let(_) = flow.kind {
+                            return true;
+                        }
+                    }
+                    false
                 }) {
                     self.block(block, build)?;
                 } else {
@@ -105,7 +108,7 @@ impl Generator {
                 }
             }
             Markup::Element(element) => self.element(element.into(), build)?,
-            Markup::ControlFlow(control_flow) => self.control_flow(control_flow, build)?,
+            Markup::ControlFlow(control_flow) => self.control_flow(*control_flow, build)?,
             Markup::Semi(_) => {}
         }
         Ok(())
@@ -184,33 +187,33 @@ impl Generator {
         }
 
         // Extract HTMX routing attributes
-        let route_assignment = self.extract_route_from_attributes(&filtered_named_attrs);
+        let route_assignment = Self::extract_route_from_attributes(&filtered_named_attrs);
         if let Some(route) = route_assignment {
             attr_assignments.push(route);
         }
 
         // Extract action attributes
-        let actions_assignment = self.extract_actions_from_attributes(&filtered_named_attrs);
+        let actions_assignment = Self::extract_actions_from_attributes(&filtered_named_attrs);
         if let Some(actions) = actions_assignment {
             attr_assignments.push(actions);
         }
 
         // Extract data attributes
-        let data_assignment = self.extract_data_attributes(&filtered_named_attrs);
+        let data_assignment = Self::extract_data_attributes(&filtered_named_attrs);
         if let Some(data) = data_assignment {
             attr_assignments.push(data);
         }
 
         // Separate element-specific attributes from container-level attributes
         let (element_attrs, container_attrs) =
-            self.separate_element_and_container_attributes(&element_name, filtered_named_attrs);
+            Self::separate_element_and_container_attributes(&element_name, filtered_named_attrs);
 
         // Generate the element type with element-specific attributes
         let element_type =
-            self.element_name_to_type_with_attributes(&element_name, element_attrs)?;
+            Self::element_name_to_type_with_attributes(&element_name, element_attrs)?;
 
         // Process container-level attributes (styling, layout, etc.)
-        let processed_attrs = self.process_attributes(container_attrs)?;
+        let processed_attrs = Self::process_attributes(container_attrs)?;
         for assignment in processed_attrs {
             attr_assignments.push(assignment);
         }
@@ -219,7 +222,7 @@ impl Generator {
         let children = if let ElementBody::Block(block) = element.body {
             // Create a unique identifier for children to avoid borrowing conflicts
             let children_ident = format_ident!("__children_{}", self.output_ident);
-            let child_generator = Generator::new(children_ident.clone());
+            let child_generator = Self::new(children_ident.clone());
             let mut child_build = child_generator.builder();
             child_generator.markups(block.markups, &mut child_build)?;
             let children_tokens = child_build.finish();
@@ -242,7 +245,6 @@ impl Generator {
 
     #[allow(clippy::type_complexity)]
     fn separate_element_and_container_attributes(
-        &self,
         element_name: &ElementName,
         named_attrs: Vec<(AttributeName, AttributeType)>,
     ) -> (
@@ -306,23 +308,22 @@ impl Generator {
     }
 
     fn element_name_to_type_with_attributes(
-        &self,
         name: &ElementName,
         element_attrs: Vec<(AttributeName, AttributeType)>,
     ) -> Result<TokenStream, String> {
         let name_str = name.name.to_string();
 
         Ok(match name_str.as_str() {
-            "input" => self.generate_input_element(element_attrs)?,
-            "button" => self.generate_button_element(element_attrs),
-            "anchor" => self.generate_anchor_element(element_attrs),
-            "image" => self.generate_image_element(element_attrs),
-            _ => self.element_name_to_type(name), // Fallback to simple element generation
+            "input" => Self::generate_input_element(element_attrs)?,
+            "button" => Self::generate_button_element(element_attrs),
+            "anchor" => Self::generate_anchor_element(element_attrs),
+            "image" => Self::generate_image_element(element_attrs),
+            _ => Self::element_name_to_type(name), // Fallback to simple element generation
         })
     }
 
+    #[allow(clippy::too_many_lines)]
     fn generate_input_element(
-        &self,
         element_attrs: Vec<(AttributeName, AttributeType)>,
     ) -> Result<TokenStream, String> {
         let mut input_type = None;
@@ -430,8 +431,7 @@ impl Generator {
             },
             _ => {
                 return Err(format!(
-                    "Unsupported input type '{}'. Supported types are: text, tel, email, checkbox, password, hidden",
-                    input_type
+                    "Unsupported input type '{input_type}'. Supported types are: text, tel, email, checkbox, password, hidden"
                 ));
             }
         };
@@ -444,10 +444,7 @@ impl Generator {
         })
     }
 
-    fn generate_button_element(
-        &self,
-        element_attrs: Vec<(AttributeName, AttributeType)>,
-    ) -> TokenStream {
+    fn generate_button_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
         let mut button_type = None;
 
         for (attr_name, attr_type) in element_attrs {
@@ -462,9 +459,7 @@ impl Generator {
             }
         }
 
-        let type_field = button_type
-            .map(|t| quote! { Some(#t) })
-            .unwrap_or_else(|| quote! { None });
+        let type_field = button_type.map_or_else(|| quote! { None }, |t| quote! { Some(#t) });
 
         quote! {
             hyperchad_transformer::Element::Button {
@@ -473,10 +468,7 @@ impl Generator {
         }
     }
 
-    fn generate_anchor_element(
-        &self,
-        element_attrs: Vec<(AttributeName, AttributeType)>,
-    ) -> TokenStream {
+    fn generate_anchor_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
         let mut href = None;
         let mut target = None;
 
@@ -491,19 +483,15 @@ impl Generator {
                         href = Some(Self::markup_to_string_tokens(attr_value));
                     }
                     "target" => {
-                        target = Some(self.markup_to_link_target_tokens(attr_value));
+                        target = Some(Self::markup_to_link_target_tokens(attr_value));
                     }
                     _ => {}
                 }
             }
         }
 
-        let href_field = href
-            .map(|h| quote! { Some(#h) })
-            .unwrap_or_else(|| quote! { None });
-        let target_field = target
-            .map(|t| quote! { Some(#t) })
-            .unwrap_or_else(|| quote! { None });
+        let href_field = href.map_or_else(|| quote! { None }, |h| quote! { Some(#h) });
+        let target_field = target.map_or_else(|| quote! { None }, |t| quote! { Some(#t) });
 
         quote! {
             hyperchad_transformer::Element::Anchor {
@@ -513,10 +501,7 @@ impl Generator {
         }
     }
 
-    fn generate_image_element(
-        &self,
-        element_attrs: Vec<(AttributeName, AttributeType)>,
-    ) -> TokenStream {
+    fn generate_image_element(element_attrs: Vec<(AttributeName, AttributeType)>) -> TokenStream {
         let mut src = None;
         let mut alt = None;
         let mut srcset = None;
@@ -544,7 +529,7 @@ impl Generator {
                         sizes = Some(Self::markup_to_number_tokens(attr_value));
                     }
                     "loading" => {
-                        loading = Some(self.markup_to_image_loading_tokens(attr_value));
+                        loading = Some(Self::markup_to_image_loading_tokens(attr_value));
                     }
                     "fit" => {
                         fit = Some(Self::markup_to_image_fit_tokens(attr_value));
@@ -554,24 +539,12 @@ impl Generator {
             }
         }
 
-        let src_field = src
-            .map(|s| quote! { Some(#s) })
-            .unwrap_or_else(|| quote! { None });
-        let alt_field = alt
-            .map(|a| quote! { Some(#a) })
-            .unwrap_or_else(|| quote! { None });
-        let srcset_field = srcset
-            .map(|s| quote! { Some(#s) })
-            .unwrap_or_else(|| quote! { None });
-        let sizes_field = sizes
-            .map(|s| quote! { Some(#s) })
-            .unwrap_or_else(|| quote! { None });
-        let loading_field = loading
-            .map(|l| quote! { Some(#l) })
-            .unwrap_or_else(|| quote! { None });
-        let fit_field = fit
-            .map(|f| quote! { Some(#f) })
-            .unwrap_or_else(|| quote! { None });
+        let src_field = src.map_or_else(|| quote! { None }, |s| quote! { Some(#s) });
+        let alt_field = alt.map_or_else(|| quote! { None }, |a| quote! { Some(#a) });
+        let srcset_field = srcset.map_or_else(|| quote! { None }, |s| quote! { Some(#s) });
+        let sizes_field = sizes.map_or_else(|| quote! { None }, |s| quote! { Some(#s) });
+        let loading_field = loading.map_or_else(|| quote! { None }, |l| quote! { Some(#l) });
+        let fit_field = fit.map_or_else(|| quote! { None }, |f| quote! { Some(#f) });
 
         quote! {
             hyperchad_transformer::Element::Image {
@@ -585,10 +558,10 @@ impl Generator {
         }
     }
 
-    fn markup_to_link_target_tokens(&self, value: Markup<NoElement>) -> TokenStream {
+    fn markup_to_link_target_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
-            Markup::Lit(lit) => match &lit.lit {
-                syn::Lit::Str(lit_str) => {
+            Markup::Lit(lit) => {
+                if let syn::Lit::Str(lit_str) = &lit.lit {
                     let value_str = lit_str.value();
                     match value_str.as_str() {
                         "_self" => quote! { hyperchad_transformer_models::LinkTarget::SelfTarget },
@@ -599,12 +572,11 @@ impl Generator {
                             quote! { hyperchad_transformer_models::LinkTarget::Custom(#target.to_string()) }
                         }
                     }
-                }
-                _ => {
+                } else {
                     let lit = &lit.lit;
                     quote! { hyperchad_transformer_models::LinkTarget::Custom((#lit).to_string()) }
                 }
-            },
+            }
             Markup::Splice { expr, .. } => {
                 quote! { (#expr).into() }
             }
@@ -612,22 +584,21 @@ impl Generator {
         }
     }
 
-    fn markup_to_image_loading_tokens(&self, value: Markup<NoElement>) -> TokenStream {
+    fn markup_to_image_loading_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
-            Markup::Lit(lit) => match &lit.lit {
-                syn::Lit::Str(lit_str) => {
+            Markup::Lit(lit) => {
+                if let syn::Lit::Str(lit_str) = &lit.lit {
                     let value_str = lit_str.value();
                     match value_str.as_str() {
                         "eager" => quote! { hyperchad_transformer_models::ImageLoading::Eager },
                         "lazy" => quote! { hyperchad_transformer_models::ImageLoading::Lazy },
                         _ => quote! { hyperchad_transformer_models::ImageLoading::default() },
                     }
-                }
-                _ => {
+                } else {
                     let lit = &lit.lit;
                     quote! { (#lit).into() }
                 }
-            },
+            }
             Markup::Splice { expr, .. } => {
                 quote! { (#expr).into() }
             }
@@ -647,14 +618,14 @@ impl Generator {
             }
             Markup::Splice { expr, .. } => {
                 // Handle raw identifiers like `type=text`
-                if let syn::Expr::Path(expr_path) = &expr {
+                if let syn::Expr::Path(expr_path) = &**expr {
                     if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
                         let identifier_name = expr_path.path.segments[0].ident.to_string();
                         Some(identifier_name)
                     } else {
                         None
                     }
-                } else if let syn::Expr::Lit(expr_lit) = &expr {
+                } else if let syn::Expr::Lit(expr_lit) = &**expr {
                     // Handle literal expressions in splices
                     if let syn::Lit::Str(lit_str) = &expr_lit.lit {
                         Some(lit_str.value())
@@ -671,8 +642,8 @@ impl Generator {
 
     fn markup_to_image_fit_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
-            Markup::Lit(lit) => match &lit.lit {
-                syn::Lit::Str(lit_str) => {
+            Markup::Lit(lit) => {
+                if let syn::Lit::Str(lit_str) = &lit.lit {
                     let value_str = lit_str.value();
                     match value_str.as_str() {
                         "default" => quote! { hyperchad_transformer_models::ImageFit::Default },
@@ -682,12 +653,11 @@ impl Generator {
                         "none" => quote! { hyperchad_transformer_models::ImageFit::None },
                         _ => quote! { hyperchad_transformer_models::ImageFit::default() },
                     }
-                }
-                _ => {
+                } else {
                     let lit = &lit.lit;
                     quote! { (#lit).into() }
                 }
-            },
+            }
             Markup::Splice { expr, .. } => {
                 quote! { (#expr).into() }
             }
@@ -710,7 +680,6 @@ impl Generator {
     }
 
     fn extract_route_from_attributes(
-        &self,
         named_attrs: &[(AttributeName, AttributeType)],
     ) -> Option<TokenStream> {
         let mut route_method = None;
@@ -757,16 +726,14 @@ impl Generator {
         // If we found a route method and URL, generate the route
         if let (Some(method), Some(url)) = (route_method, route_url) {
             let method_ident = format_ident!("{}", method);
-            let trigger_field = if let Some(trigger) = trigger {
-                quote! { trigger: Some(#trigger) }
-            } else {
-                quote! { trigger: None }
-            };
-            let swap_field = if let Some(swap) = swap {
-                quote! { swap: #swap }
-            } else {
-                quote! { swap: hyperchad_transformer_models::SwapTarget::default() }
-            };
+            let trigger_field = trigger.map_or_else(
+                || quote! { trigger: None },
+                |trigger| quote! { trigger: Some(#trigger) },
+            );
+            let swap_field = swap.map_or_else(
+                || quote! { swap: hyperchad_transformer_models::SwapTarget::default() },
+                |swap| quote! { swap: #swap },
+            );
 
             Some(quote! {
                 route: Some(hyperchad_transformer_models::Route::#method_ident {
@@ -781,7 +748,6 @@ impl Generator {
     }
 
     fn extract_actions_from_attributes(
-        &self,
         named_attrs: &[(AttributeName, AttributeType)],
     ) -> Option<TokenStream> {
         let mut actions = Vec::new();
@@ -791,7 +757,7 @@ impl Generator {
             let name_str = name.to_string();
             if let Some(trigger_name) = name_str.strip_prefix("fx-") {
                 if let AttributeType::Normal { value, .. } = attr_type {
-                    let trigger_ident = self.action_trigger_name_to_ident(trigger_name);
+                    let trigger_ident = Self::action_trigger_name_to_ident(trigger_name);
                     let action_effect = Self::markup_to_action_effect_tokens(value.clone());
 
                     actions.push(quote! {
@@ -814,7 +780,6 @@ impl Generator {
     }
 
     fn extract_data_attributes(
-        &self,
         named_attrs: &[(AttributeName, AttributeType)],
     ) -> Option<TokenStream> {
         let mut data_entries = Vec::new();
@@ -882,7 +847,7 @@ impl Generator {
         }
     }
 
-    fn action_trigger_name_to_ident(&self, trigger_name: &str) -> TokenStream {
+    fn action_trigger_name_to_ident(trigger_name: &str) -> TokenStream {
         match trigger_name {
             "click" => quote! { hyperchad_actions::ActionTrigger::Click },
             "click-outside" => quote! { hyperchad_actions::ActionTrigger::ClickOutside },
@@ -902,19 +867,16 @@ impl Generator {
         match value {
             Markup::Lit(lit) => {
                 // Handle literal action effects - this might be a string representation
-                match &lit.lit {
-                    syn::Lit::Str(lit_str) => {
-                        let value_str = lit_str.value();
-                        quote! {
-                            hyperchad_actions::ActionType::Custom {
-                                action: #value_str.to_string()
-                            }.into()
-                        }
+                if let syn::Lit::Str(lit_str) = &lit.lit {
+                    let value_str = lit_str.value();
+                    quote! {
+                        hyperchad_actions::ActionType::Custom {
+                            action: #value_str.to_string()
+                        }.into()
                     }
-                    _ => {
-                        let lit = &lit.lit;
-                        quote! { hyperchad_template::IntoActionEffect::into_action_effect(#lit) }
-                    }
+                } else {
+                    let lit = &lit.lit;
+                    quote! { hyperchad_template::IntoActionEffect::into_action_effect(#lit) }
                 }
             }
             Markup::Splice { expr, .. } => {
@@ -945,16 +907,15 @@ impl Generator {
                 let value = &numeric_lit.value;
                 quote! { #value.to_string() }
             }
-            Markup::Lit(lit) => match &lit.lit {
-                syn::Lit::Str(lit_str) => {
+            Markup::Lit(lit) => {
+                if let syn::Lit::Str(lit_str) = &lit.lit {
                     let value_str = lit_str.value();
                     quote! { #value_str.to_string() }
-                }
-                _ => {
+                } else {
                     let lit = &lit.lit;
                     quote! { #lit.to_string() }
                 }
-            },
+            }
             Markup::Splice { expr, .. } => {
                 // For expressions, handle them directly - this allows any Rust expression to be evaluated
                 quote! { (#expr).to_string() }
@@ -979,8 +940,8 @@ impl Generator {
 
     fn markup_to_swap_target_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
-            Markup::Lit(lit) => match &lit.lit {
-                syn::Lit::Str(lit_str) => {
+            Markup::Lit(lit) => {
+                if let syn::Lit::Str(lit_str) = &lit.lit {
                     let value_str = lit_str.value();
                     match value_str.as_str() {
                         "this" | "self" => {
@@ -993,12 +954,11 @@ impl Generator {
                         }
                         _ => quote! { hyperchad_transformer_models::SwapTarget::default() },
                     }
-                }
-                _ => {
+                } else {
                     let lit = &lit.lit;
                     quote! { (#lit).into() }
                 }
-            },
+            }
             Markup::Splice { expr, .. } => {
                 quote! { (#expr).into() }
             }
@@ -1021,7 +981,6 @@ impl Generator {
     }
 
     fn process_attributes(
-        &self,
         named_attrs: Vec<(AttributeName, AttributeType)>,
     ) -> Result<Vec<TokenStream>, String> {
         // Use BTreeMap to track field assignments with precedence
@@ -1064,19 +1023,18 @@ impl Generator {
         }
 
         // Handle shorthand properties first (lower precedence)
-        self.handle_shorthand_properties(&shorthand_attrs, &mut field_assignments);
+        Self::handle_shorthand_properties(&shorthand_attrs, &mut field_assignments);
 
         // Handle individual properties (higher precedence - these override shorthand)
         for (name, attr_type) in individual_attrs {
-            if let Some(assignment) = self.attr_to_assignment(name.clone(), attr_type) {
+            if let Some(assignment) = Self::attr_to_assignment(&name, attr_type) {
                 // Extract field name from the assignment and store it
-                let field_name = self.extract_field_name_from_assignment(&assignment);
+                let field_name = Self::extract_field_name_from_assignment(&assignment);
                 field_assignments.insert(field_name, assignment);
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
-                    "Unknown attribute '{}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, and any other fx-* event)",
-                    name_str
+                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, and any other fx-* event)"
                 );
                 return Err(error_msg);
             }
@@ -1086,8 +1044,8 @@ impl Generator {
         Ok(field_assignments.into_values().collect())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn handle_shorthand_properties(
-        &self,
         shorthand_attrs: &std::collections::BTreeMap<String, (AttributeName, AttributeType)>,
         field_assignments: &mut std::collections::BTreeMap<String, TokenStream>,
     ) {
@@ -1374,7 +1332,7 @@ impl Generator {
         }
     }
 
-    fn element_name_to_type(&self, name: &ElementName) -> TokenStream {
+    fn element_name_to_type(name: &ElementName) -> TokenStream {
         let name_str = name.name.to_string();
         match name_str.as_str() {
             "div" => quote! { hyperchad_transformer::Element::Div },
@@ -1438,83 +1396,94 @@ impl Generator {
         }
     }
 
-    fn attr_to_assignment(
-        &self,
-        name: AttributeName,
-        attr_type: AttributeType,
-    ) -> Option<TokenStream> {
+    #[allow(clippy::too_many_lines)]
+    fn attr_to_assignment(name: &AttributeName, attr_type: AttributeType) -> Option<TokenStream> {
         let name_str = name.to_string();
 
         match attr_type {
             AttributeType::Normal { value, .. } => match name_str.as_str() {
                 // Number properties
-                "width" => Some(self.number_attr("width", value)),
-                "height" => Some(self.number_attr("height", value)),
-                "min-width" => Some(self.number_attr("min_width", value)),
-                "max-width" => Some(self.number_attr("max_width", value)),
-                "min-height" => Some(self.number_attr("min_height", value)),
-                "max-height" => Some(self.number_attr("max_height", value)),
-                "padding-left" => Some(self.number_attr("padding_left", value)),
-                "padding-right" => Some(self.number_attr("padding_right", value)),
-                "padding-top" => Some(self.number_attr("padding_top", value)),
-                "padding-bottom" => Some(self.number_attr("padding_bottom", value)),
-                "margin-left" => Some(self.number_attr("margin_left", value)),
-                "margin-right" => Some(self.number_attr("margin_right", value)),
-                "margin-top" => Some(self.number_attr("margin_top", value)),
-                "margin-bottom" => Some(self.number_attr("margin_bottom", value)),
-                "font-size" => Some(self.number_attr("font_size", value)),
-                "opacity" => Some(self.number_attr("opacity", value)),
-                "left" => Some(self.number_attr("left", value)),
-                "right" => Some(self.number_attr("right", value)),
-                "top" => Some(self.number_attr("top", value)),
-                "bottom" => Some(self.number_attr("bottom", value)),
-                "translate-x" => Some(self.number_attr("translate_x", value)),
-                "translate-y" => Some(self.number_attr("translate_y", value)),
-                "column-gap" | "col-gap" => Some(self.number_attr("column_gap", value)),
-                "row-gap" => Some(self.number_attr("row_gap", value)),
-                "grid-cell-size" => Some(self.number_attr("grid_cell_size", value)),
-                "border-top-left-radius" => Some(self.number_attr("border_top_left_radius", value)),
+                "width" => Some(Self::number_attr("width", value)),
+                "height" => Some(Self::number_attr("height", value)),
+                "min-width" => Some(Self::number_attr("min_width", value)),
+                "max-width" => Some(Self::number_attr("max_width", value)),
+                "min-height" => Some(Self::number_attr("min_height", value)),
+                "max-height" => Some(Self::number_attr("max_height", value)),
+                "padding-left" => Some(Self::number_attr("padding_left", value)),
+                "padding-right" => Some(Self::number_attr("padding_right", value)),
+                "padding-top" => Some(Self::number_attr("padding_top", value)),
+                "padding-bottom" => Some(Self::number_attr("padding_bottom", value)),
+                "margin-left" => Some(Self::number_attr("margin_left", value)),
+                "margin-right" => Some(Self::number_attr("margin_right", value)),
+                "margin-top" => Some(Self::number_attr("margin_top", value)),
+                "margin-bottom" => Some(Self::number_attr("margin_bottom", value)),
+                "font-size" => Some(Self::number_attr("font_size", value)),
+                "opacity" => Some(Self::number_attr("opacity", value)),
+                "left" => Some(Self::number_attr("left", value)),
+                "right" => Some(Self::number_attr("right", value)),
+                "top" => Some(Self::number_attr("top", value)),
+                "bottom" => Some(Self::number_attr("bottom", value)),
+                "translate-x" => Some(Self::number_attr("translate_x", value)),
+                "translate-y" => Some(Self::number_attr("translate_y", value)),
+                "column-gap" | "col-gap" => Some(Self::number_attr("column_gap", value)),
+                "row-gap" => Some(Self::number_attr("row_gap", value)),
+                "grid-cell-size" => Some(Self::number_attr("grid_cell_size", value)),
+                "border-top-left-radius" => {
+                    Some(Self::number_attr("border_top_left_radius", value))
+                }
                 "border-top-right-radius" => {
-                    Some(self.number_attr("border_top_right_radius", value))
+                    Some(Self::number_attr("border_top_right_radius", value))
                 }
                 "border-bottom-left-radius" => {
-                    Some(self.number_attr("border_bottom_left_radius", value))
+                    Some(Self::number_attr("border_bottom_left_radius", value))
                 }
                 "border-bottom-right-radius" => {
-                    Some(self.number_attr("border_bottom_right_radius", value))
+                    Some(Self::number_attr("border_bottom_right_radius", value))
                 }
 
                 // Border properties
-                "border-top" => Some(self.border_attr("border_top", value)),
-                "border-right" => Some(self.border_attr("border_right", value)),
-                "border-bottom" => Some(self.border_attr("border_bottom", value)),
-                "border-left" => Some(self.border_attr("border_left", value)),
+                "border-top" => Some(Self::border_attr("border_top", value)),
+                "border-right" => Some(Self::border_attr("border_right", value)),
+                "border-bottom" => Some(Self::border_attr("border_bottom", value)),
+                "border-left" => Some(Self::border_attr("border_left", value)),
 
                 // Enum properties
-                "align-items" => Some(self.enum_attr("align_items", "AlignItems", value)),
+                "align-items" => Some(Self::enum_attr("align_items", "AlignItems", value)),
                 "justify-content" => {
-                    Some(self.enum_attr("justify_content", "JustifyContent", value))
+                    Some(Self::enum_attr("justify_content", "JustifyContent", value))
                 }
-                "text-align" => Some(self.enum_attr("text_align", "TextAlign", value)),
-                "text-decoration" => Some(self.text_decoration_attr("text_decoration", value)),
-                "direction" => Some(self.direct_enum_attr("direction", "LayoutDirection", value)),
-                "position" => Some(self.enum_attr("position", "Position", value)),
-                "cursor" => Some(self.enum_attr("cursor", "Cursor", value)),
-                "visibility" => Some(self.enum_attr("visibility", "Visibility", value)),
-                "overflow-x" => Some(self.direct_enum_attr("overflow_x", "LayoutOverflow", value)),
-                "overflow-y" => Some(self.direct_enum_attr("overflow_y", "LayoutOverflow", value)),
+                "text-align" => Some(Self::enum_attr("text_align", "TextAlign", value)),
+                "text-decoration" => Some(Self::text_decoration_attr("text_decoration", value)),
+                "direction" => Some(Self::direct_enum_attr(
+                    "direction",
+                    "LayoutDirection",
+                    value,
+                )),
+                "position" => Some(Self::enum_attr("position", "Position", value)),
+                "cursor" => Some(Self::enum_attr("cursor", "Cursor", value)),
+                "visibility" => Some(Self::enum_attr("visibility", "Visibility", value)),
+                "overflow-x" => Some(Self::direct_enum_attr(
+                    "overflow_x",
+                    "LayoutOverflow",
+                    value,
+                )),
+                "overflow-y" => Some(Self::direct_enum_attr(
+                    "overflow_y",
+                    "LayoutOverflow",
+                    value,
+                )),
 
                 // Color properties
-                "background" => Some(self.color_attr("background", value)),
-                "color" => Some(self.color_attr("color", value)),
+                "background" => Some(Self::color_attr("background", value)),
+                "color" => Some(Self::color_attr("color", value)),
 
                 // Boolean properties
-                "hidden" => Some(self.bool_attr("hidden", value)),
-                "debug" => Some(self.bool_attr("debug", value)),
+                "hidden" => Some(Self::bool_attr("hidden", value)),
+                "debug" => Some(Self::bool_attr("debug", value)),
 
                 // String properties
-                "font-family" => Some(self.string_vec_attr_opt("font_family", value)),
-                "class" => Some(self.string_vec_attr("classes", value)),
+                "font-family" => Some(Self::string_vec_attr_opt("font_family", value)),
+                "class" => Some(Self::string_vec_attr("classes", value)),
 
                 _ => None,
             },
@@ -1531,9 +1500,6 @@ impl Generator {
                 // Generate conditional attribute assignment based on the field type
                 // Skip input-specific attributes as they're handled by generate_input_element
                 match name_str.as_str() {
-                    // Skip input-specific attributes - these are handled by generate_input_element
-                    "placeholder" | "value" | "name" | "type" | "checked" => None,
-
                     // String properties - generate Option<String>
                     "id" | "href" | "src" | "alt" => {
                         let field_ident = format_ident!("{}", name_str.replace('-', "_"));
@@ -1583,41 +1549,15 @@ impl Generator {
                         })
                     }
 
-                    // Color properties
-                    "background" | "color" => {
-                        let field_ident = format_ident!("{}", name_str);
-                        Some(quote! {
-                            #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
-                        })
-                    }
-
-                    // Boolean properties - generate Option<bool>
-                    "hidden" | "debug" => {
-                        let field_ident = format_ident!("{}", name_str);
-                        Some(quote! {
-                            #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
-                        })
-                    }
-
-                    // Border properties - generate Option<(Color, Number)>
-                    "border-top" | "border-right" | "border-bottom" | "border-left" => {
+                    "background" | "color" | "hidden" | "debug" | "border-top" | "border-right"
+                    | "border-bottom" | "border-left" | "font-family" | "class" => {
                         let field_ident = format_ident!("{}", name_str.replace('-', "_"));
                         Some(quote! {
                             #field_ident: if let Some(val) = (#cond) {
                                 Some(val.into())
-                            } else { None }
-                        })
-                    }
-                    "font-family" => {
-                        let field_ident = format_ident!("{}", name_str.replace('-', "_"));
-                        Some(quote! {
-                            #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
-                        })
-                    }
-                    "class" => {
-                        let field_ident = format_ident!("{}", name_str.replace('-', "_"));
-                        Some(quote! {
-                            #field_ident: if let Some(val) = (#cond) { Some(val.into()) } else { None }
+                            } else {
+                                None
+                            }
                         })
                     }
                     _ => None,
@@ -1642,65 +1582,61 @@ impl Generator {
         }
     }
 
-    fn number_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    fn number_attr(field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let value_tokens = Self::markup_to_number_tokens(value);
         quote! { #field_ident: Some(#value_tokens) }
     }
 
-    fn enum_attr(&self, field: &str, enum_name: &str, value: Markup<NoElement>) -> TokenStream {
+    fn enum_attr(field: &str, enum_name: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let value_tokens = Self::markup_to_enum_tokens(enum_name, value);
         quote! { #field_ident: Some(#value_tokens) }
     }
 
-    fn direct_enum_attr(
-        &self,
-        field: &str,
-        enum_name: &str,
-        value: Markup<NoElement>,
-    ) -> TokenStream {
+    fn direct_enum_attr(field: &str, enum_name: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let value_tokens = Self::markup_to_enum_tokens(enum_name, value);
         quote! { #field_ident: #value_tokens }
     }
 
-    fn color_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    fn color_attr(field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let value_tokens = Self::markup_to_color_tokens(value);
         quote! { #field_ident: Some(#value_tokens) }
     }
 
-    fn bool_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    fn bool_attr(field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let value_tokens = Self::markup_to_bool_tokens(value);
         quote! { #field_ident: Some(#value_tokens) }
     }
 
-    fn string_vec_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    fn string_vec_attr(field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let value_tokens = Self::markup_to_string_vec_tokens(value);
         quote! { #field_ident: #value_tokens }
     }
 
-    fn string_vec_attr_opt(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    fn string_vec_attr_opt(field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let value_tokens = Self::markup_to_string_vec_tokens(value);
         quote! { #field_ident: Some(#value_tokens) }
     }
 
-    fn border_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    fn border_attr(field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let border_tokens = Self::markup_to_border_tokens(value);
         quote! { #field_ident: Some(#border_tokens) }
     }
 
-    fn text_decoration_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
+    fn text_decoration_attr(field: &str, value: Markup<NoElement>) -> TokenStream {
         let field_ident = format_ident!("{}", field);
         let text_decoration_tokens = Self::markup_to_text_decoration_tokens(value);
         quote! { #field_ident: Some(#text_decoration_tokens) }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn markup_to_number_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::NumericLit(numeric_lit) => {
@@ -1773,6 +1709,7 @@ impl Generator {
                         let value_str = lit_str.value();
 
                         // Try to parse different number formats from strings
+                        #[allow(clippy::option_if_let_else)]
                         if value_str.ends_with('%') {
                             let num_str = &value_str[..value_str.len() - 1];
                             if let Ok(num) = num_str.parse::<f32>() {
@@ -1865,6 +1802,7 @@ impl Generator {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn handle_potential_if_expression_for_number(expr: &syn::Expr) -> TokenStream {
         // Check if this is a calc() function call
         if let syn::Expr::Call(call_expr) = expr {
@@ -2004,7 +1942,7 @@ impl Generator {
         }
     }
 
-    /// Handle calc() expressions by recursively parsing mathematical operations
+    /// Handle `calc()` expressions by recursively parsing mathematical operations
     /// and building Calculation AST structures
     fn handle_calc_expression(expr: &syn::Expr) -> TokenStream {
         let calculation_tokens = Self::build_calculation_ast(expr);
@@ -2014,6 +1952,7 @@ impl Generator {
     }
 
     /// Build a Calculation AST from a mathematical expression
+    #[allow(clippy::too_many_lines)]
     fn build_calculation_ast(expr: &syn::Expr) -> TokenStream {
         match expr {
             // Handle binary operations: +, -, *, /
@@ -2125,13 +2064,13 @@ impl Generator {
                                         };
                                     }
                                     return result;
-                                } else {
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Number(
-                                            Box::new(hyperchad_transformer::Number::Integer(0))
-                                        )
-                                    };
                                 }
+
+                                return quote! {
+                                    hyperchad_transformer::Calculation::Number(
+                                        Box::new(hyperchad_transformer::Number::Integer(0))
+                                    )
+                                };
                             }
                             "max" => {
                                 if call_expr.args.len() >= 2 {
@@ -2150,13 +2089,13 @@ impl Generator {
                                         };
                                     }
                                     return result;
-                                } else {
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Number(
-                                            Box::new(hyperchad_transformer::Number::Integer(0))
-                                        )
-                                    };
                                 }
+
+                                return quote! {
+                                    hyperchad_transformer::Calculation::Number(
+                                        Box::new(hyperchad_transformer::Number::Integer(0))
+                                    )
+                                };
                             }
                             "clamp" => {
                                 if call_expr.args.len() == 3 {
@@ -2175,13 +2114,13 @@ impl Generator {
                                             ))
                                         )
                                     };
-                                } else {
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Number(
-                                            Box::new(hyperchad_transformer::Number::Integer(0))
-                                        )
-                                    };
                                 }
+
+                                return quote! {
+                                    hyperchad_transformer::Calculation::Number(
+                                        Box::new(hyperchad_transformer::Number::Integer(0))
+                                    )
+                                };
                             }
                             "percent" => {
                                 // Helper function: percent(value) -> Number::*Percent
@@ -2274,6 +2213,7 @@ impl Generator {
 
     /// Parse number literal strings (e.g., "100%", "50vw", "30") into Number tokens
     fn parse_number_literal_string(value_str: &str) -> TokenStream {
+        #[allow(clippy::option_if_let_else)]
         if let Some(num_str) = value_str.strip_suffix('%') {
             if let Ok(num) = num_str.parse::<f32>() {
                 quote! { hyperchad_transformer::Number::RealPercent(#num) }
@@ -2326,27 +2266,24 @@ impl Generator {
     fn markup_to_enum_tokens(enum_name: &str, value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => {
-                match &lit.lit {
-                    syn::Lit::Str(lit_str) => {
-                        let value_str = lit_str.value();
-                        let enum_ident = format_ident!("{}", enum_name);
+                if let syn::Lit::Str(lit_str) = &lit.lit {
+                    let value_str = lit_str.value();
+                    let enum_ident = format_ident!("{}", enum_name);
 
-                        // Convert kebab-case to PascalCase for enum variants
-                        let variant_name = kebab_to_pascal_case(&value_str);
-                        let variant_ident = format_ident!("{}", variant_name);
+                    // Convert kebab-case to PascalCase for enum variants
+                    let variant_name = kebab_to_pascal_case(&value_str);
+                    let variant_ident = format_ident!("{}", variant_name);
 
-                        quote! { hyperchad_transformer_models::#enum_ident::#variant_ident }
-                    }
-                    _ => {
-                        // For non-string literals, use the literal directly as an expression
-                        let lit = &lit.lit;
-                        quote! { (#lit).into() }
-                    }
+                    quote! { hyperchad_transformer_models::#enum_ident::#variant_ident }
+                } else {
+                    // For non-string literals, use the literal directly as an expression
+                    let lit = &lit.lit;
+                    quote! { (#lit).into() }
                 }
             }
             Markup::Splice { expr, .. } => {
                 // Check if this is a simple identifier that should be converted to an enum variant
-                if let syn::Expr::Path(expr_path) = &expr {
+                if let syn::Expr::Path(expr_path) = &*expr {
                     if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
                         let identifier_name = expr_path.path.segments[0].ident.to_string();
 
@@ -2355,7 +2292,7 @@ impl Generator {
                         if identifier_name
                             .chars()
                             .next()
-                            .is_some_and(|c| c.is_uppercase())
+                            .is_some_and(char::is_uppercase)
                         {
                             // This is PascalCase - don't convert, let it fall through to normal expression handling
                             // This will cause a compile error, enforcing kebab-case usage
@@ -2374,7 +2311,7 @@ impl Generator {
                 if let syn::Expr::Lit(syn::ExprLit {
                     lit: syn::Lit::Str(lit_str),
                     ..
-                }) = &expr
+                }) = &*expr
                 {
                     let identifier_name = lit_str.value();
 
@@ -2383,7 +2320,7 @@ impl Generator {
                     if identifier_name
                         .chars()
                         .next()
-                        .is_some_and(|c| c.is_uppercase())
+                        .is_some_and(char::is_uppercase)
                     {
                         // This is PascalCase - don't convert, let it fall through to normal expression handling
                         // This will cause a compile error, enforcing kebab-case usage
@@ -2432,46 +2369,44 @@ impl Generator {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn markup_to_color_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => {
-                match &lit.lit {
-                    syn::Lit::Str(lit_str) => {
-                        let value_str = lit_str.value();
+                if let syn::Lit::Str(lit_str) = &lit.lit {
+                    let value_str = lit_str.value();
 
-                        // Handle common color names
-                        match value_str.to_lowercase().as_str() {
-                            "black" => quote! { hyperchad_color::Color::BLACK },
-                            "white" => quote! { hyperchad_color::Color::WHITE },
-                            "red" => quote! { hyperchad_color::Color::from_hex("#FF0000") },
-                            "green" => quote! { hyperchad_color::Color::from_hex("#00FF00") },
-                            "blue" => quote! { hyperchad_color::Color::from_hex("#0000FF") },
-                            "gray" => quote! { hyperchad_color::Color::from_hex("#808080") },
-                            "yellow" => quote! { hyperchad_color::Color::from_hex("#FFFF00") },
-                            "cyan" => quote! { hyperchad_color::Color::from_hex("#00FFFF") },
-                            "magenta" => quote! { hyperchad_color::Color::from_hex("#FF00FF") },
-                            "orange" => quote! { hyperchad_color::Color::from_hex("#FFA500") },
-                            "purple" => quote! { hyperchad_color::Color::from_hex("#800080") },
-                            "pink" => quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
-                            "brown" => quote! { hyperchad_color::Color::from_hex("#A52A2A") },
-                            // Only parse as hex if it starts with #
-                            _ if value_str.starts_with('#') => {
-                                quote! { hyperchad_color::Color::from_hex(#value_str) }
-                            }
-                            // Default fallback
-                            _ => quote! { hyperchad_color::Color::BLACK },
+                    // Handle common color names
+                    match value_str.to_lowercase().as_str() {
+                        "black" => quote! { hyperchad_color::Color::BLACK },
+                        "white" => quote! { hyperchad_color::Color::WHITE },
+                        "red" => quote! { hyperchad_color::Color::from_hex("#FF0000") },
+                        "green" => quote! { hyperchad_color::Color::from_hex("#00FF00") },
+                        "blue" => quote! { hyperchad_color::Color::from_hex("#0000FF") },
+                        "gray" => quote! { hyperchad_color::Color::from_hex("#808080") },
+                        "yellow" => quote! { hyperchad_color::Color::from_hex("#FFFF00") },
+                        "cyan" => quote! { hyperchad_color::Color::from_hex("#00FFFF") },
+                        "magenta" => quote! { hyperchad_color::Color::from_hex("#FF00FF") },
+                        "orange" => quote! { hyperchad_color::Color::from_hex("#FFA500") },
+                        "purple" => quote! { hyperchad_color::Color::from_hex("#800080") },
+                        "pink" => quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
+                        "brown" => quote! { hyperchad_color::Color::from_hex("#A52A2A") },
+                        // Only parse as hex if it starts with #
+                        _ if value_str.starts_with('#') => {
+                            quote! { hyperchad_color::Color::from_hex(#value_str) }
                         }
+                        // Default fallback
+                        _ => quote! { hyperchad_color::Color::BLACK },
                     }
-                    _ => {
-                        // For non-string literals, use the literal directly as an expression
-                        let lit = &lit.lit;
-                        quote! { (#lit).into() }
-                    }
+                } else {
+                    // For non-string literals, use the literal directly as an expression
+                    let lit = &lit.lit;
+                    quote! { (#lit).into() }
                 }
             }
             Markup::Splice { expr, .. } => {
                 // Check if this is a simple identifier that could be a color name
-                if let syn::Expr::Path(expr_path) = &expr {
+                if let syn::Expr::Path(expr_path) = &*expr {
                     if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
                         let identifier_name = expr_path.path.segments[0].ident.to_string();
 
@@ -2515,7 +2450,7 @@ impl Generator {
                             }
                         }
                     }
-                } else if let syn::Expr::Lit(expr_lit) = &expr {
+                } else if let syn::Expr::Lit(expr_lit) = &*expr {
                     // Check if this is a string literal that looks like a color name
                     if let syn::Lit::Str(lit_str) = &expr_lit.lit {
                         let identifier_name = lit_str.value();
@@ -2530,7 +2465,6 @@ impl Generator {
                             }
                             "blue" => return quote! { hyperchad_color::Color::from_hex("#0000FF") },
                             "gray" => return quote! { hyperchad_color::Color::from_hex("#808080") },
-                            "grey" => return quote! { hyperchad_color::Color::from_hex("#808080") },
                             "yellow" => {
                                 return quote! { hyperchad_color::Color::from_hex("#FFFF00") };
                             }
@@ -2643,8 +2577,8 @@ impl Generator {
         }
     }
 
-    /// Helper function to handle BraceSplice by reconstructing the expression as a cohesive unit
-    /// This properly supports if_responsive() and other complex logic patterns
+    /// Helper function to handle `BraceSplice` by reconstructing the expression as a cohesive unit
+    /// This properly supports `if_responsive()` and other complex logic patterns
     fn handle_brace_splice_expression(items: &[Markup<NoElement>]) -> TokenStream {
         let combined_tokens: Vec<_> = items
             .iter()
@@ -2675,11 +2609,11 @@ impl Generator {
         build: &mut Builder,
     ) -> Result<(), String> {
         match control_flow.kind {
-            ControlFlowKind::If(if_) => self.control_flow_if(if_, build)?,
-            ControlFlowKind::Let(let_) => self.control_flow_let(let_, build)?,
-            ControlFlowKind::For(for_) => self.control_flow_for(for_, build)?,
-            ControlFlowKind::While(while_) => self.control_flow_while(while_, build)?,
-            ControlFlowKind::Match(match_) => self.control_flow_match(match_, build)?,
+            ControlFlowKind::If(if_) => self.control_flow_if(*if_, build)?,
+            ControlFlowKind::Let(let_) => Self::control_flow_let(&let_, build),
+            ControlFlowKind::For(for_) => self.control_flow_for(*for_, build)?,
+            ControlFlowKind::While(while_) => self.control_flow_while(*while_, build)?,
+            ControlFlowKind::Match(match_) => self.control_flow_match(*match_, build)?,
         }
         Ok(())
     }
@@ -2751,9 +2685,8 @@ impl Generator {
         Ok(())
     }
 
-    fn control_flow_let(&self, let_: Local, build: &mut Builder) -> Result<(), String> {
+    fn control_flow_let(let_: &Local, build: &mut Builder) {
         build.push_tokens(quote!(#let_;));
-        Ok(())
     }
 
     fn control_flow_for<E: Into<Element>>(
@@ -2840,42 +2773,40 @@ impl Generator {
     }
 
     fn markup_to_border_tokens(value: Markup<NoElement>) -> TokenStream {
+        #[allow(clippy::option_if_let_else)]
         match value {
             Markup::Lit(lit) => {
-                match &lit.lit {
-                    syn::Lit::Str(lit_str) => {
-                        let value_str = lit_str.value();
-                        // Parse border format: "width, color" (e.g., "2, #222")
-                        if let Some((width_str, color_str)) = value_str.split_once(',') {
-                            let width_str = width_str.trim();
-                            let color_str = color_str.trim();
+                if let syn::Lit::Str(lit_str) = &lit.lit {
+                    let value_str = lit_str.value();
+                    // Parse border format: "width, color" (e.g., "2, #222")
+                    if let Some((width_str, color_str)) = value_str.split_once(',') {
+                        let width_str = width_str.trim();
+                        let color_str = color_str.trim();
 
-                            // Parse width
-                            let width_tokens = if let Ok(num) = width_str.parse::<f32>() {
-                                quote! { hyperchad_transformer::Number::Real(#num) }
-                            } else if let Ok(num) = width_str.parse::<i64>() {
-                                quote! { hyperchad_transformer::Number::Integer(#num) }
-                            } else {
-                                quote! { hyperchad_transformer::parse::parse_number(#width_str).unwrap_or_default() }
-                            };
-
-                            // Parse color using the existing color parsing logic
-                            let color_tokens = Self::parse_color_string(color_str);
-
-                            quote! { (#color_tokens, #width_tokens) }
+                        // Parse width
+                        let width_tokens = if let Ok(num) = width_str.parse::<f32>() {
+                            quote! { hyperchad_transformer::Number::Real(#num) }
+                        } else if let Ok(num) = width_str.parse::<i64>() {
+                            quote! { hyperchad_transformer::Number::Integer(#num) }
                         } else {
-                            // Invalid format, return default
-                            quote! { (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1)) }
-                        }
+                            quote! { hyperchad_transformer::parse::parse_number(#width_str).unwrap_or_default() }
+                        };
+
+                        // Parse color using the existing color parsing logic
+                        let color_tokens = Self::parse_color_string(color_str);
+
+                        quote! { (#color_tokens, #width_tokens) }
+                    } else {
+                        // Invalid format, return default
+                        quote! { (hyperchad_color::Color::BLACK, hyperchad_transformer::Number::Integer(1)) }
                     }
-                    _ => {
-                        // For non-string literals, assume it's a border tuple expression
-                        let lit = &lit.lit;
-                        quote! {
-                            {
-                                use hyperchad_template::IntoBorder;
-                                (#lit).into_border()
-                            }
+                } else {
+                    // For non-string literals, assume it's a border tuple expression
+                    let lit = &lit.lit;
+                    quote! {
+                        {
+                            use hyperchad_template::IntoBorder;
+                            (#lit).into_border()
                         }
                     }
                 }
@@ -2936,7 +2867,7 @@ impl Generator {
             "red" => quote! { hyperchad_color::Color::from_hex("#FF0000") },
             "green" => quote! { hyperchad_color::Color::from_hex("#00FF00") },
             "blue" => quote! { hyperchad_color::Color::from_hex("#0000FF") },
-            "gray" | "grey" => quote! { hyperchad_color::Color::from_hex("#808080") },
+            "gray" => quote! { hyperchad_color::Color::from_hex("#808080") },
             "yellow" => quote! { hyperchad_color::Color::from_hex("#FFFF00") },
             "cyan" => quote! { hyperchad_color::Color::from_hex("#00FFFF") },
             "magenta" => quote! { hyperchad_color::Color::from_hex("#FF00FF") },
@@ -2951,21 +2882,22 @@ impl Generator {
         }
     }
 
-    fn extract_field_name_from_assignment(&self, assignment: &TokenStream) -> String {
+    fn extract_field_name_from_assignment(assignment: &TokenStream) -> String {
         // Extract the field name from assignments like "field_name: Some(value)"
         let assignment_str = assignment.to_string();
-        if let Some(colon_pos) = assignment_str.find(':') {
-            assignment_str[..colon_pos].trim().to_string()
-        } else {
-            // Fallback - try to extract identifier from start
-            assignment_str
-                .split_whitespace()
-                .next()
-                .unwrap_or("unknown")
-                .to_string()
-        }
+        assignment_str.find(':').map_or_else(
+            || {
+                assignment_str
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("unknown")
+                    .to_string()
+            },
+            |colon_pos| assignment_str[..colon_pos].trim().to_string(),
+        )
     }
 
+    #[allow(clippy::too_many_lines)]
     fn markup_to_flex_tokens(
         value: Markup<NoElement>,
         _grow: Option<&(AttributeName, AttributeType)>,
@@ -2980,6 +2912,7 @@ impl Generator {
                         // Parse flex format: "grow shrink basis" (e.g., "1 0 0" or "1" or "1 0")
                         let parts: Vec<&str> = value_str.split_whitespace().collect();
 
+                        #[allow(clippy::option_if_let_else)]
                         match parts.len() {
                             1 => {
                                 // Only grow specified
@@ -3113,24 +3046,21 @@ impl Generator {
     fn markup_to_string_vec_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => {
-                match &lit.lit {
-                    syn::Lit::Str(lit_str) => {
-                        let value_str = lit_str.value();
-                        // Parse comma-separated font families, matching html.rs implementation
-                        let families: Vec<String> = value_str
-                            .split(',')
-                            .map(str::trim)
-                            .filter(|x| !x.is_empty())
-                            .map(ToString::to_string)
-                            .collect();
+                if let syn::Lit::Str(lit_str) = &lit.lit {
+                    let value_str = lit_str.value();
+                    // Parse comma-separated font families, matching html.rs implementation
+                    let families: Vec<String> = value_str
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|x| !x.is_empty())
+                        .map(ToString::to_string)
+                        .collect();
 
-                        quote! { vec![#(#families.to_string()),*] }
-                    }
-                    _ => {
-                        // For non-string literals, assume it's already a Vec<String> or can be converted
-                        let lit = &lit.lit;
-                        quote! { (#lit).into() }
-                    }
+                    quote! { vec![#(#families.to_string()),*] }
+                } else {
+                    // For non-string literals, assume it's already a Vec<String> or can be converted
+                    let lit = &lit.lit;
+                    quote! { (#lit).into() }
                 }
             }
             Markup::Splice { expr, .. } => {
@@ -3186,32 +3116,29 @@ impl Generator {
     fn markup_to_text_decoration_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
             Markup::Lit(lit) => {
-                match &lit.lit {
-                    syn::Lit::Str(lit_str) => {
-                        let value_str = lit_str.value();
-                        // Simple text-decoration parsing - just check for common values
-                        if value_str.contains("underline") {
-                            quote! { hyperchad_transformer::TextDecoration {
-                                color: None,
-                                line: vec![hyperchad_transformer_models::TextDecorationLine::Underline],
-                                style: None,
-                                thickness: None,
-                            } }
-                        } else if value_str.contains("none") {
-                            quote! { hyperchad_transformer::TextDecoration {
-                                color: None,
-                                line: vec![hyperchad_transformer_models::TextDecorationLine::None],
-                                style: None,
-                                thickness: None,
-                            } }
-                        } else {
-                            quote! { hyperchad_transformer::TextDecoration::default() }
-                        }
+                if let syn::Lit::Str(lit_str) = &lit.lit {
+                    let value_str = lit_str.value();
+                    // Simple text-decoration parsing - just check for common values
+                    if value_str.contains("underline") {
+                        quote! { hyperchad_transformer::TextDecoration {
+                            color: None,
+                            line: vec![hyperchad_transformer_models::TextDecorationLine::Underline],
+                            style: None,
+                            thickness: None,
+                        } }
+                    } else if value_str.contains("none") {
+                        quote! { hyperchad_transformer::TextDecoration {
+                            color: None,
+                            line: vec![hyperchad_transformer_models::TextDecorationLine::None],
+                            style: None,
+                            thickness: None,
+                        } }
+                    } else {
+                        quote! { hyperchad_transformer::TextDecoration::default() }
                     }
-                    _ => {
-                        let lit = &lit.lit;
-                        quote! { (#lit).into() }
-                    }
+                } else {
+                    let lit = &lit.lit;
+                    quote! { (#lit).into() }
                 }
             }
             Markup::Splice { expr, .. } => {
@@ -3236,66 +3163,6 @@ impl Generator {
             }
         }
     }
-
-    // fn markup_to_flex_tokens(value: Markup<NoElement>) -> TokenStream {
-    //     match value {
-    //         Markup::Lit(lit) => {
-    //             match &lit.lit {
-    //                 syn::Lit::Str(lit_str) => {
-    //                     let value_str = lit_str.value();
-    //                     // Simple flex parsing - just check for common values
-    //                     if value_str.contains("underline") {
-    //                         quote! { hyperchad_transformer::TextDecoration {
-    //                             color: None,
-    //                             line: vec![hyperchad_transformer_models::TextDecorationLine::Underline],
-    //                             style: None,
-    //                             thickness: None,
-    //                         } }
-    //                     } else if value_str.contains("none") {
-    //                         quote! { hyperchad_transformer::TextDecoration {
-    //                             color: None,
-    //                             line: vec![hyperchad_transformer_models::TextDecorationLine::None],
-    //                             style: None,
-    //                             thickness: None,
-    //                         } }
-    //                     } else {
-    //                         quote! { hyperchad_transformer::TextDecoration::default() }
-    //                     }
-    //                 }
-    //                 _ => {
-    //                     let lit = &lit.lit;
-    //                     quote! { (#lit).into() }
-    //                 }
-    //             }
-    //         }
-    //         Markup::Splice { expr, .. } => {
-    //             quote! { (#expr) }
-    //         }
-    //         Markup::BraceSplice { items, .. } => {
-    //             // For brace-wrapped items, handle like single item if only one
-    //             if items.len() == 1 {
-    //                 Self::markup_to_text_decoration_tokens(items[0].clone())
-    //             } else {
-    //                 let expr = Self::handle_brace_splice_expression(&items);
-    //                 quote! {
-    //                     {
-    //                         let result = { #expr };
-    //                         result.into()
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //         _ => {
-    //             quote! { hyperchad_transformer::TextDecoration::default() }
-    //         }
-    //     }
-    // }
-
-    // fn flex_attr(&self, field: &str, value: Markup<NoElement>) -> TokenStream {
-    //     let field_ident = format_ident!("{}", field);
-    //     let value_tokens = Self::markup_to_flex_tokens(value);
-    //     quote! { #field_ident: Some(#value_tokens) }
-    // }
 }
 
 #[allow(clippy::type_complexity)]
@@ -3313,7 +3180,7 @@ fn split_attrs(
     for attr in attrs {
         match attr {
             ContainerAttribute::Class { name, toggler, .. } => {
-                classes.push((name, toggler.map(|toggler| toggler.cond)))
+                classes.push((name, toggler.map(|toggler| toggler.cond)));
             }
             ContainerAttribute::Id { name, .. } => id = Some(name),
             ContainerAttribute::Named { name, attr_type } => named_attrs.push((name, attr_type)),
@@ -3334,8 +3201,8 @@ struct Builder {
 }
 
 impl Builder {
-    fn new(output_ident: Ident) -> Builder {
-        Builder {
+    const fn new(output_ident: Ident) -> Self {
+        Self {
             output_ident,
             items: Vec::new(),
         }
@@ -3386,12 +3253,9 @@ fn kebab_to_pascal_case(s: &str) -> String {
     s.split('-')
         .map(|word| {
             let mut chars = word.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => {
-                    first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase()
-                }
-            }
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase()
+            })
         })
         .collect()
 }

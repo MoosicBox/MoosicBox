@@ -1,6 +1,6 @@
-#![doc(html_root_url = "https://docs.rs/hyperchad_template_macros/0.27.0")]
-#![allow(clippy::large_enum_variant)]
-#![allow(clippy::needless_pass_by_value)]
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 extern crate proc_macro;
 
@@ -34,7 +34,7 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
                             proc_macro2::TokenTree::Punct(punct) if punct.as_char() == '%' => {
                                 // Create a string literal for the combined value
                                 let combined_lit =
-                                    proc_macro2::Literal::string(&format!("{}%", lit_str));
+                                    proc_macro2::Literal::string(&format!("{lit_str}%"));
                                 output.push(proc_macro2::TokenTree::Literal(combined_lit));
                                 i += 2; // Skip both tokens
                                 continue;
@@ -47,8 +47,7 @@ fn preprocess_numeric_units(input: TokenStream) -> TokenStream {
                                     | "ex" | "pt" | "pc" | "in" | "cm" | "mm" => {
                                         // Create a string literal for the combined value
                                         let combined_lit = proc_macro2::Literal::string(&format!(
-                                            "{}{}",
-                                            lit_str, unit
+                                            "{lit_str}{unit}"
                                         ));
                                         output.push(proc_macro2::TokenTree::Literal(combined_lit));
                                         i += 2; // Skip both tokens
@@ -120,7 +119,7 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
                 return Err(format!(
                     "Template syntax error in container! macro.\n\
                     \n\
-                    Parsing failed: {}\n\
+                    Parsing failed: {err_str}\n\
                     \n\
                     Common issues:\n\
                     - Element names must be lowercase: div, button, h1, h2, etc.\n\
@@ -131,25 +130,23 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
                     - Expressions: (variable_name)\n\
                     - Input elements need semicolons: input type=\"text\";\n\
                     - Check for balanced braces {{ }}\n\
-                    - Make sure all strings are properly quoted",
-                    err_str
-                ));
-            } else {
-                return Err(format!(
-                    "Failed to parse container! template.\n\
-                    \n\
-                    Error: {}\n\
-                    \n\
-                    Common issues:\n\
-                    - Element names must be lowercase (div, button, etc.)\n\
-                    - Check attribute formatting: key=\"value\" or key=(expression)\n\
-                    - Ensure braces {{}} are balanced\n\
-                    - Control flow needs @ prefix: @if, @for, @match\n\
-                    - Variables need @let: @let name = value;\n\
-                    - Check for missing semicolons after Input elements",
-                    err_str
+                    - Make sure all strings are properly quoted"
                 ));
             }
+
+            return Err(format!(
+                "Failed to parse container! template.\n\
+                \n\
+                Error: {err_str}\n\
+                \n\
+                Common issues:\n\
+                - Element names must be lowercase (div, button, etc.)\n\
+                - Check attribute formatting: key=\"value\" or key=(expression)\n\
+                - Ensure braces {{}} are balanced\n\
+                - Control flow needs @ prefix: @if, @for, @match\n\
+                - Variables need @let: @let name = value;\n\
+                - Check for missing semicolons after Input elements"
+            ));
         }
     };
 
@@ -162,14 +159,13 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
             return Err(format!(
                 "Code generation failed in container! macro.\n\
                 \n\
-                Error: {}\n\
+                Error: {gen_error}\n\
                 \n\
                 This usually indicates:\n\
                 - Unknown element types\n\
                 - Invalid attribute combinations\n\
                 - Unsupported template features\n\
-                - Complex nested structures that failed to generate",
-                gen_error
+                - Complex nested structures that failed to generate"
             ));
         }
     };

@@ -1,13 +1,7 @@
 #![no_std]
-
-//! A macro for writing Container templates.
-//!
-//! This documentation only describes the runtime API. For a general
-//! guide, check out the [book] instead.
-//!
-//! [book]: https://hyperchad_template.lambda.xyz/
-
-#![doc(html_root_url = "https://docs.rs/hyperchad_template/0.27.0")]
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 extern crate alloc;
 
@@ -45,12 +39,18 @@ pub type Containers = Vec<Container>;
 /// This trait is automatically implemented and in scope, so you can call
 /// these methods on any Vec<Container> without importing anything.
 pub trait ContainerVecMethods {
+    /// # Errors
+    ///
+    /// * If the container could not be converted to a string.
     fn display_to_string(
         &self,
         with_debug_attrs: bool,
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>>;
 
+    /// # Errors
+    ///
+    /// * If the container could not be converted to a string.
     fn display_to_string_pretty(
         &self,
         with_debug_attrs: bool,
@@ -85,11 +85,11 @@ impl ContainerVecMethods for Vec<Container> {
     }
 
     fn to_string(&self) -> String {
-        self.iter().map(|c| c.to_string()).collect::<String>()
+        self.iter().map(ToString::to_string).collect::<String>()
     }
 
     fn into_string(self) -> String {
-        self.iter().map(|c| c.to_string()).collect::<String>()
+        self.iter().map(ToString::to_string).collect::<String>()
     }
 }
 
@@ -106,8 +106,12 @@ impl ContainerVecMethods for Vec<Container> {
 /// };
 /// let html = to_html(&containers);
 /// ```
+#[must_use]
 pub fn to_html(containers: &[Container]) -> String {
-    containers.iter().map(|c| c.to_string()).collect::<String>()
+    containers
+        .iter()
+        .map(ToString::to_string)
+        .collect::<String>()
 }
 
 /// Convert a Vec<Container> to an HTML string, consuming the vector.
@@ -123,18 +127,27 @@ pub fn to_html(containers: &[Container]) -> String {
 /// };
 /// let html = into_html(containers);
 /// ```
-pub fn into_html(containers: Vec<Container>) -> String {
-    containers.iter().map(|c| c.to_string()).collect::<String>()
+pub fn into_html(containers: &[Container]) -> String {
+    containers
+        .iter()
+        .map(ToString::to_string)
+        .collect::<String>()
 }
 
 /// Extension trait to add missing methods to Vec<Container>
 pub trait ContainerVecExt {
+    /// # Errors
+    ///
+    /// * If the container could not be converted to a string.
     fn display_to_string(
         &self,
         with_debug_attrs: bool,
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>>;
 
+    /// # Errors
+    ///
+    /// * If the container could not be converted to a string.
     fn display_to_string_pretty(
         &self,
         with_debug_attrs: bool,
@@ -167,11 +180,11 @@ impl ContainerVecExt for Vec<Container> {
     }
 
     fn into_string(self) -> String {
-        self.iter().map(|c| c.to_string()).collect::<String>()
+        self.iter().map(ToString::to_string).collect::<String>()
     }
 
     fn to_string(&self) -> String {
-        self.iter().map(|c| c.to_string()).collect::<String>()
+        self.iter().map(ToString::to_string).collect::<String>()
     }
 }
 
@@ -217,14 +230,26 @@ impl ContainerVecExt for Vec<Container> {
 pub trait RenderContainer {
     type Error;
 
+    /// # Errors
+    ///
+    /// * If the value could not be rendered.
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error>;
 
+    /// # Errors
+    ///
+    /// * If the value could not be converted to a string.
     fn render_to_string(&self) -> Result<String, Self::Error> {
         let mut containers = Vec::new();
         self.render_to(&mut containers)?;
-        Ok(containers.iter().map(|c| c.to_string()).collect::<String>())
+        Ok(containers
+            .iter()
+            .map(ToString::to_string)
+            .collect::<String>())
     }
 
+    /// # Errors
+    ///
+    /// * If the value could not be converted to a `Vec<Container>`.
     fn render(&self) -> Result<Vec<Container>, Self::Error> {
         let mut containers = Vec::new();
         self.render_to(&mut containers)?;
@@ -247,7 +272,7 @@ impl RenderContainer for &str {
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         containers.push(Container {
             element: hyperchad_transformer::Element::Raw {
-                value: self.to_string(),
+                value: (*self).to_string(),
             },
             ..Default::default()
         });
@@ -393,10 +418,8 @@ impl<T: RenderContainer> RenderContainer for Option<T> {
     type Error = T::Error;
 
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
-        match self {
-            Some(value) => value.render_to(containers),
-            None => Ok(()),
-        }
+        self.as_ref()
+            .map_or_else(|| Ok(()), |value| value.render_to(containers))
     }
 }
 
@@ -425,13 +448,15 @@ impl core::fmt::Display for ContainerList {
 }
 
 impl ContainerList {
-    pub fn new(containers: Vec<Container>) -> Self {
+    #[must_use]
+    pub const fn new(containers: Vec<Container>) -> Self {
         Self(containers)
     }
 
     /// Convert into a String representation (HTML)
+    #[must_use]
     pub fn into_string(self) -> String {
-        self.0.iter().map(|c| c.to_string()).collect::<String>()
+        self.0.iter().map(ToString::to_string).collect::<String>()
     }
 
     pub fn iter(&self) -> core::slice::Iter<'_, Container> {
@@ -439,13 +464,33 @@ impl ContainerList {
     }
 
     /// Get the inner Vec<Container>
+    #[must_use]
     pub fn into_inner(self) -> Vec<Container> {
         self.0
     }
 
     /// Get a reference to the inner Vec<Container>
-    pub fn as_inner(&self) -> &Vec<Container> {
+    #[must_use]
+    pub const fn as_inner(&self) -> &Vec<Container> {
         &self.0
+    }
+}
+
+impl<'a> IntoIterator for &'a ContainerList {
+    type Item = &'a Container;
+    type IntoIter = core::slice::Iter<'a, Container>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl IntoIterator for ContainerList {
+    type Item = Container;
+    type IntoIter = alloc::vec::IntoIter<Container>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -482,7 +527,7 @@ pub use hyperchad_transformer_models::*;
 #[cfg(feature = "logic")]
 pub use hyperchad_actions::logic::{IfExpression, Responsive, if_responsive};
 
-/// Trait for converting values to bool (to handle IfExpression<bool, Responsive>)
+/// Trait for converting values to bool (to handle `IfExpression<bool, Responsive>`)
 pub trait ToBool {
     fn to_bool(self) -> bool;
 }
@@ -502,7 +547,7 @@ impl ToBool for IfExpression<bool, Responsive> {
     }
 }
 
-/// Trait for converting various types to ActionEffect.
+/// Trait for converting various types to `ActionEffect`.
 /// This handles the conversion chain properly without violating the orphan rule.
 pub trait IntoActionEffect {
     fn into_action_effect(self) -> actions::ActionEffect;
@@ -549,7 +594,7 @@ impl IntoBorder for (hyperchad_color::Color, i32) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             self.0,
-            hyperchad_transformer::Number::Integer(self.1 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.1)),
         )
     }
 }
@@ -558,7 +603,7 @@ impl IntoBorder for (hyperchad_color::Color, u16) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             self.0,
-            hyperchad_transformer::Number::Integer(self.1 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.1)),
         )
     }
 }
@@ -570,6 +615,7 @@ impl IntoBorder for (hyperchad_color::Color, f32) {
 }
 
 impl IntoBorder for (hyperchad_color::Color, f64) {
+    #[allow(clippy::cast_possible_truncation)]
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (self.0, hyperchad_transformer::Number::Real(self.1 as f32))
     }
@@ -579,7 +625,7 @@ impl IntoBorder for (i32, hyperchad_color::Color) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             self.1,
-            hyperchad_transformer::Number::Integer(self.0 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.0)),
         )
     }
 }
@@ -588,7 +634,7 @@ impl IntoBorder for (u16, hyperchad_color::Color) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             self.1,
-            hyperchad_transformer::Number::Integer(self.0 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.0)),
         )
     }
 }
@@ -600,6 +646,7 @@ impl IntoBorder for (f32, hyperchad_color::Color) {
 }
 
 impl IntoBorder for (f64, hyperchad_color::Color) {
+    #[allow(clippy::cast_possible_truncation)]
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (self.1, hyperchad_transformer::Number::Real(self.0 as f32))
     }
@@ -609,7 +656,7 @@ impl IntoBorder for (i32, &str) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(self.1),
-            hyperchad_transformer::Number::Integer(self.0 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.0)),
         )
     }
 }
@@ -618,7 +665,7 @@ impl IntoBorder for (u16, &str) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(self.1),
-            hyperchad_transformer::Number::Integer(self.0 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.0)),
         )
     }
 }
@@ -633,6 +680,7 @@ impl IntoBorder for (f32, &str) {
 }
 
 impl IntoBorder for (f64, &str) {
+    #[allow(clippy::cast_possible_truncation)]
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(self.1),
@@ -645,7 +693,7 @@ impl IntoBorder for (&str, i32) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(self.0),
-            hyperchad_transformer::Number::Integer(self.1 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.1)),
         )
     }
 }
@@ -654,7 +702,7 @@ impl IntoBorder for (&str, u16) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(self.0),
-            hyperchad_transformer::Number::Integer(self.1 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.1)),
         )
     }
 }
@@ -669,6 +717,7 @@ impl IntoBorder for (&str, f32) {
 }
 
 impl IntoBorder for (&str, f64) {
+    #[allow(clippy::cast_possible_truncation)]
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(self.0),
@@ -681,7 +730,7 @@ impl IntoBorder for (i32, String) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(&self.1),
-            hyperchad_transformer::Number::Integer(self.0 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.0)),
         )
     }
 }
@@ -690,7 +739,7 @@ impl IntoBorder for (u16, String) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(&self.1),
-            hyperchad_transformer::Number::Integer(self.0 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.0)),
         )
     }
 }
@@ -705,6 +754,7 @@ impl IntoBorder for (f32, String) {
 }
 
 impl IntoBorder for (f64, String) {
+    #[allow(clippy::cast_possible_truncation)]
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(&self.1),
@@ -717,7 +767,7 @@ impl IntoBorder for (String, i32) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(&self.0),
-            hyperchad_transformer::Number::Integer(self.1 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.1)),
         )
     }
 }
@@ -726,7 +776,7 @@ impl IntoBorder for (String, u16) {
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(&self.0),
-            hyperchad_transformer::Number::Integer(self.1 as i64),
+            hyperchad_transformer::Number::Integer(i64::from(self.1)),
         )
     }
 }
@@ -741,6 +791,7 @@ impl IntoBorder for (String, f32) {
 }
 
 impl IntoBorder for (String, f64) {
+    #[allow(clippy::cast_possible_truncation)]
     fn into_border(self) -> (hyperchad_color::Color, hyperchad_transformer::Number) {
         (
             hyperchad_color::Color::from_hex(&self.0),
@@ -749,7 +800,7 @@ impl IntoBorder for (String, f64) {
     }
 }
 
-/// Helper module for calc() expressions and mathematical operations on Number types
+/// Helper module for `calc()` expressions and mathematical operations on Number types
 ///
 /// # Examples
 ///
@@ -895,10 +946,12 @@ pub mod calc {
     }
 
     /// Add two Number values, handling different Number types appropriately
-    pub fn add_numbers(left: Number, right: Number) -> Number {
+    #[must_use]
+    pub fn add_numbers(left: &Number, right: &Number) -> Number {
         // For now, use a simple approach that converts both to common units if possible
         // or falls back to real numbers for calculations
-        match (&left, &right) {
+        #[allow(clippy::cast_precision_loss)]
+        match (left, right) {
             // Same unit types - direct addition
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a + b),
             (Number::Real(a), Number::Real(b)) => Number::Real(a + b),
@@ -944,8 +997,10 @@ pub mod calc {
     }
 
     /// Subtract two Number values
-    pub fn subtract_numbers(left: Number, right: Number) -> Number {
-        match (&left, &right) {
+    #[must_use]
+    pub fn subtract_numbers(left: &Number, right: &Number) -> Number {
+        #[allow(clippy::cast_precision_loss)]
+        match (left, right) {
             // Same unit types - direct subtraction
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a - b),
             (Number::Real(a), Number::Real(b)) => Number::Real(a - b),
@@ -988,8 +1043,10 @@ pub mod calc {
     }
 
     /// Multiply two Number values
-    pub fn multiply_numbers(left: Number, right: Number) -> Number {
-        match (&left, &right) {
+    #[must_use]
+    pub fn multiply_numbers(left: &Number, right: &Number) -> Number {
+        #[allow(clippy::cast_precision_loss)]
+        match (left, right) {
             // When multiplying, typically one operand should be unitless
             // For now, we'll handle some common cases and fall back to pixel conversion
             (Number::Integer(a), Number::Integer(b)) => Number::Integer(a * b),
@@ -998,11 +1055,10 @@ pub mod calc {
             (Number::Real(a), Number::Integer(b)) => Number::Real(a * *b as f32),
 
             // For units, if one is unitless, preserve the unit of the other
-            (Number::IntegerPercent(a), Number::Integer(b)) => Number::IntegerPercent(a * b),
-            (Number::Integer(a), Number::IntegerPercent(b)) => Number::IntegerPercent(a * b),
-            (Number::RealPercent(a), Number::Real(b)) => Number::RealPercent(a * b),
-            (Number::Real(a), Number::RealPercent(b)) => Number::RealPercent(a * b),
-
+            (Number::IntegerPercent(a), Number::Integer(b))
+            | (Number::Integer(a), Number::IntegerPercent(b)) => Number::IntegerPercent(a * b),
+            (Number::RealPercent(a), Number::Real(b))
+            | (Number::Real(a), Number::RealPercent(b)) => Number::RealPercent(a * b),
             // For more complex cases, convert to pixels and multiply
             _ => {
                 let left_pixels = left.calc(100.0, 1920.0, 1080.0);
@@ -1013,8 +1069,10 @@ pub mod calc {
     }
 
     /// Divide two Number values
-    pub fn divide_numbers(left: Number, right: Number) -> Number {
-        match (&left, &right) {
+    #[must_use]
+    pub fn divide_numbers(left: &Number, right: &Number) -> Number {
+        #[allow(clippy::cast_precision_loss)]
+        match (left, right) {
             // Basic division
             (Number::Integer(a), Number::Integer(b)) => {
                 if *b != 0 {
@@ -1024,17 +1082,17 @@ pub mod calc {
                 }
             }
             (Number::Real(a), Number::Real(b)) => {
-                if *b != 0.0 {
-                    Number::Real(a / b)
-                } else {
+                if *b == 0.0 {
                     Number::Real(0.0)
+                } else {
+                    Number::Real(a / b)
                 }
             }
             (Number::Integer(a), Number::Real(b)) => {
-                if *b != 0.0 {
-                    Number::Real(*a as f32 / b)
-                } else {
+                if *b == 0.0 {
                     Number::Real(0.0)
+                } else {
+                    Number::Real(*a as f32 / b)
                 }
             }
             (Number::Real(a), Number::Integer(b)) => {
@@ -1054,10 +1112,10 @@ pub mod calc {
                 }
             }
             (Number::RealPercent(a), Number::Real(b)) => {
-                if *b != 0.0 {
-                    Number::RealPercent(a / b)
-                } else {
+                if *b == 0.0 {
                     Number::RealPercent(0.0)
+                } else {
+                    Number::RealPercent(a / b)
                 }
             }
 
@@ -1065,10 +1123,10 @@ pub mod calc {
             _ => {
                 let left_pixels = left.calc(100.0, 1920.0, 1080.0);
                 let right_pixels = right.calc(100.0, 1920.0, 1080.0);
-                if right_pixels != 0.0 {
-                    Number::Real(left_pixels / right_pixels)
-                } else {
+                if right_pixels == 0.0 {
                     Number::Real(0.0)
+                } else {
+                    Number::Real(left_pixels / right_pixels)
                 }
             }
         }
@@ -1129,7 +1187,7 @@ pub mod unit_functions {
 ///
 /// # Examples
 ///
-/// The color_functions module enables CSS-style color functions in attributes:
+/// The `color_functions` module enables CSS-style color functions in attributes:
 ///
 /// ```rust
 /// use hyperchad_template::container;
@@ -1195,7 +1253,7 @@ pub mod color_functions {
 
     /// Create an RGBA color using the rgb function with 4 arguments
     ///
-    /// This is an overloaded version of rgb() that accepts an alpha parameter.
+    /// This is an overloaded version of `rgb()` that accepts an alpha parameter.
     /// Alpha can be specified as:
     /// - A float between 0.0 and 1.0 (e.g., 0.5 for 50% opacity)
     /// - An integer between 0 and 255 (e.g., 128 for 50% opacity)
@@ -1209,7 +1267,7 @@ pub mod color_functions {
     /// // Float alpha (0.0 - 1.0)
     /// let semi_transparent_red = rgb_alpha(255, 0, 0, 0.5);
     ///
-    /// // Integer alpha (0 - 255)  
+    /// // Integer alpha (0 - 255)
     /// let semi_transparent_green = rgb_alpha(0, 255, 0, 128);
     ///
     /// // Percentage alpha (0% - 100%)
@@ -1233,7 +1291,7 @@ pub mod color_functions {
 
     /// Create an RGBA color from red, green, blue, and alpha values
     ///
-    /// This is the legacy rgba() function name for compatibility.
+    /// This is the legacy `rgba()` function name for compatibility.
     /// Alpha can be specified as:
     /// - A float between 0.0 and 1.0 (e.g., 0.5 for 50% opacity)
     /// - An integer between 0 and 255 (e.g., 128 for 50% opacity)
@@ -1272,15 +1330,18 @@ pub mod color_functions {
     }
 
     impl AlphaValue {
+        #[must_use]
         pub fn to_u8(self) -> u8 {
             match self {
-                AlphaValue::Float(f) => {
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                Self::Float(f) => {
                     // Clamp to 0.0-1.0 range and convert to 0-255
                     let clamped = f.clamp(0.0, 1.0);
                     (clamped * 255.0).round() as u8
                 }
-                AlphaValue::Integer(i) => i,
-                AlphaValue::Percentage(p) => {
+                Self::Integer(i) => i,
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                Self::Percentage(p) => {
                     // Clamp to 0.0-100.0 range and convert to 0-255
                     let clamped = p.clamp(0.0, 100.0);
                     (clamped / 100.0 * 255.0).round() as u8
@@ -1291,35 +1352,38 @@ pub mod color_functions {
 
     impl From<f32> for AlphaValue {
         fn from(f: f32) -> Self {
-            AlphaValue::Float(f)
+            Self::Float(f)
         }
     }
 
     impl From<f64> for AlphaValue {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         fn from(f: f64) -> Self {
-            AlphaValue::Float(f as f32)
+            Self::Float(f as f32)
         }
     }
 
     impl From<u8> for AlphaValue {
         fn from(i: u8) -> Self {
-            AlphaValue::Integer(i)
+            Self::Integer(i)
         }
     }
 
     impl From<i32> for AlphaValue {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         fn from(i: i32) -> Self {
             // Clamp to 0-255 range
             let clamped = i.clamp(0, 255);
-            AlphaValue::Integer(clamped as u8)
+            Self::Integer(clamped as u8)
         }
     }
 
     impl From<i64> for AlphaValue {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         fn from(i: i64) -> Self {
             // Clamp to 0-255 range
             let clamped = i.clamp(0, 255);
-            AlphaValue::Integer(clamped as u8)
+            Self::Integer(clamped as u8)
         }
     }
 
@@ -1327,7 +1391,7 @@ pub mod color_functions {
         fn from(i: u16) -> Self {
             // Clamp to 0-255 range
             let clamped = i.min(255);
-            AlphaValue::Integer(clamped as u8)
+            Self::Integer(clamped as u8)
         }
     }
 
@@ -1335,7 +1399,7 @@ pub mod color_functions {
         fn from(i: u32) -> Self {
             // Clamp to 0-255 range
             let clamped = i.min(255);
-            AlphaValue::Integer(clamped as u8)
+            Self::Integer(clamped as u8)
         }
     }
 
@@ -1343,34 +1407,30 @@ pub mod color_functions {
         fn from(i: u64) -> Self {
             // Clamp to 0-255 range
             let clamped = i.min(255);
-            AlphaValue::Integer(clamped as u8)
+            Self::Integer(clamped as u8)
         }
     }
 
     impl From<&str> for AlphaValue {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         fn from(s: &str) -> Self {
             let trimmed = s.trim();
-            if let Some(percent_str) = trimmed.strip_suffix('%') {
-                // Parse as percentage
-                if let Ok(percent) = percent_str.parse::<f32>() {
-                    AlphaValue::Percentage(percent)
-                } else {
-                    // Fallback to 0% if parsing fails
-                    AlphaValue::Percentage(0.0)
-                }
-            } else {
-                // Try to parse as float or integer
-                if let Ok(f) = trimmed.parse::<f32>() {
-                    if f <= 1.0 {
-                        AlphaValue::Float(f)
-                    } else {
-                        AlphaValue::Integer(f.clamp(0.0, 255.0) as u8)
-                    }
-                } else {
-                    // Fallback to 0 if parsing fails
-                    AlphaValue::Integer(0)
-                }
-            }
+            trimmed.strip_suffix('%').map_or_else(
+                || {
+                    trimmed.parse::<f32>().map_or(Self::Integer(0), |f| {
+                        if f <= 1.0 {
+                            Self::Float(f)
+                        } else {
+                            Self::Integer(f.clamp(0.0, 255.0) as u8)
+                        }
+                    })
+                },
+                |percent_str| {
+                    percent_str
+                        .parse::<f32>()
+                        .map_or(Self::Percentage(0.0), Self::Percentage)
+                },
+            )
         }
     }
 
@@ -1392,6 +1452,7 @@ pub mod color_functions {
     }
 
     impl ToRgbValue for i32 {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         fn to_rgb_value(self) -> u8 {
             // Clamp to 0-255 range
             self.clamp(0, 255) as u8
@@ -1399,6 +1460,7 @@ pub mod color_functions {
     }
 
     impl ToRgbValue for i64 {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         fn to_rgb_value(self) -> u8 {
             // Clamp to 0-255 range
             self.clamp(0, 255) as u8
@@ -1427,6 +1489,7 @@ pub mod color_functions {
     }
 
     impl ToRgbValue for f32 {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         fn to_rgb_value(self) -> u8 {
             // Clamp to 0-255 range
             self.clamp(0.0, 255.0).round() as u8
@@ -1434,6 +1497,7 @@ pub mod color_functions {
     }
 
     impl ToRgbValue for f64 {
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         fn to_rgb_value(self) -> u8 {
             // Clamp to 0-255 range
             self.clamp(0.0, 255.0).round() as u8
