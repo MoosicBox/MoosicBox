@@ -285,6 +285,57 @@ impl<E: MaybeElement> Markup<E> {
                 };
                 Ok(Self::Lit(ContainerLit { lit }))
             }
+        } else if lookahead.peek(syn::Token![#]) {
+            // Handle hex colors like #fff, #ffffff, #123, #000
+            let _pound: syn::Token![#] = input.parse()?;
+            
+            // Try to parse as identifier first (for values like #fff, #abc)
+            if let Ok(hex_ident) = input.call(Ident::parse_any) {
+                let hex_str = hex_ident.to_string();
+                
+                // Validate that it's a valid hex color (3 or 6 hex digits)
+                if (hex_str.len() == 3 || hex_str.len() == 6) && 
+                   hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
+                    // Create a string literal with the full hex color
+                    let full_hex = format!("#{}", hex_str);
+                    let expr: Expr = parse_quote!(#full_hex);
+                    return Ok(Self::Splice {
+                        paren_token: Paren::default(),
+                        expr,
+                    });
+                } else {
+                    return Err(Error::new(
+                        hex_ident.span(),
+                        format!("Invalid hex color '{}'. Hex colors must be 3 or 6 hexadecimal digits (0-9, a-f)", hex_str),
+                    ));
+                }
+            } 
+            // Try to parse as integer literal (for values like #123, #000)
+            else if let Ok(hex_int) = input.parse::<syn::LitInt>() {
+                let hex_str = hex_int.to_string();
+                
+                // Validate that it's a valid hex color (3 or 6 hex digits)
+                if (hex_str.len() == 3 || hex_str.len() == 6) && 
+                   hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
+                    // Create a string literal with the full hex color
+                    let full_hex = format!("#{}", hex_str);
+                    let expr: Expr = parse_quote!(#full_hex);
+                    return Ok(Self::Splice {
+                        paren_token: Paren::default(),
+                        expr,
+                    });
+                } else {
+                    return Err(Error::new(
+                        hex_int.span(),
+                        format!("Invalid hex color '{}'. Hex colors must be 3 or 6 hexadecimal digits (0-9, a-f)", hex_str),
+                    ));
+                }
+            } else {
+                return Err(Error::new(
+                    input.span(),
+                    "Expected hex digits after '#' for hex color",
+                ));
+            }
         } else if lookahead.peek(Ident::peek_any) {
             // Handle bare identifiers (including kebab-case) as splice expressions for attribute values
             // This enables syntax like: visibility=hidden, align-items=center, justify-content=space-between

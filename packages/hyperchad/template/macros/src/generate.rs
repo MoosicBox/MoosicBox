@@ -1842,7 +1842,9 @@ impl Generator {
                             if call_expr.args.len() >= 2 {
                                 // For multiple arguments, chain binary min operations
                                 // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
-                                let mut result = Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                                let mut result = Self::build_calculation_ast(
+                                    &call_expr.args[call_expr.args.len() - 1],
+                                );
                                 for i in (0..call_expr.args.len() - 1).rev() {
                                     let left = Self::build_calculation_ast(&call_expr.args[i]);
                                     result = quote! {
@@ -1862,7 +1864,9 @@ impl Generator {
                             if call_expr.args.len() >= 2 {
                                 // For multiple arguments, chain binary max operations
                                 // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
-                                let mut result = Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                                let mut result = Self::build_calculation_ast(
+                                    &call_expr.args[call_expr.args.len() - 1],
+                                );
                                 for i in (0..call_expr.args.len() - 1).rev() {
                                     let left = Self::build_calculation_ast(&call_expr.args[i]);
                                     result = quote! {
@@ -2020,9 +2024,7 @@ impl Generator {
             }
 
             // Handle parenthesized expressions
-            syn::Expr::Paren(paren_expr) => {
-                Self::build_calculation_ast(&paren_expr.expr)
-            }
+            syn::Expr::Paren(paren_expr) => Self::build_calculation_ast(&paren_expr.expr),
 
             // Handle numeric literals with units (100%, 50vw, etc.)
             syn::Expr::Lit(expr_lit) => {
@@ -2037,7 +2039,7 @@ impl Generator {
                     syn::Lit::Float(lit_float) => {
                         quote! { hyperchad_transformer::Number::Real(#lit_float) }
                     }
-                    _ => quote! { hyperchad_transformer::Number::Integer(0) }
+                    _ => quote! { hyperchad_transformer::Number::Integer(0) },
                 };
 
                 quote! {
@@ -2067,7 +2069,9 @@ impl Generator {
                                 if call_expr.args.len() >= 2 {
                                     // For multiple arguments, chain binary min operations
                                     // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
-                                    let mut result = Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                                    let mut result = Self::build_calculation_ast(
+                                        &call_expr.args[call_expr.args.len() - 1],
+                                    );
                                     for i in (0..call_expr.args.len() - 1).rev() {
                                         let left = Self::build_calculation_ast(&call_expr.args[i]);
                                         result = quote! {
@@ -2090,7 +2094,9 @@ impl Generator {
                                 if call_expr.args.len() >= 2 {
                                     // For multiple arguments, chain binary max operations
                                     // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
-                                    let mut result = Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                                    let mut result = Self::build_calculation_ast(
+                                        &call_expr.args[call_expr.args.len() - 1],
+                                    );
                                     for i in (0..call_expr.args.len() - 1).rev() {
                                         let left = Self::build_calculation_ast(&call_expr.args[i]);
                                         result = quote! {
@@ -2113,7 +2119,8 @@ impl Generator {
                                 if call_expr.args.len() == 3 {
                                     // clamp(min, preferred, max) = max(min, min(preferred, max))
                                     let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
-                                    let preferred_arg = Self::build_calculation_ast(&call_expr.args[1]);
+                                    let preferred_arg =
+                                        Self::build_calculation_ast(&call_expr.args[1]);
                                     let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
 
                                     return quote! {
@@ -2404,10 +2411,8 @@ impl Generator {
                             "purple" => quote! { hyperchad_color::Color::from_hex("#800080") },
                             "pink" => quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
                             "brown" => quote! { hyperchad_color::Color::from_hex("#A52A2A") },
-                            // Try to parse as hex if it starts with # or looks like hex
-                            _ if value_str.starts_with('#')
-                                || value_str.chars().all(|c| c.is_ascii_hexdigit()) =>
-                            {
+                            // Only parse as hex if it starts with #
+                            _ if value_str.starts_with('#') => {
                                 quote! { hyperchad_color::Color::from_hex(#value_str) }
                             }
                             // Default fallback
@@ -2421,7 +2426,98 @@ impl Generator {
                     }
                 }
             }
-            Markup::Splice { expr, .. } => Self::handle_potential_if_expression_for_color(&expr),
+            Markup::Splice { expr, .. } => {
+                // Check if this is a simple identifier that could be a color name
+                if let syn::Expr::Path(expr_path) = &expr {
+                    if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
+                        let identifier_name = expr_path.path.segments[0].ident.to_string();
+
+                        // Check if it's a known color name (must be lowercase)
+                        match identifier_name.as_str() {
+                            "black" => return quote! { hyperchad_color::Color::BLACK },
+                            "white" => return quote! { hyperchad_color::Color::WHITE },
+                            "red" => return quote! { hyperchad_color::Color::from_hex("#FF0000") },
+                            "green" => {
+                                return quote! { hyperchad_color::Color::from_hex("#00FF00") };
+                            }
+                            "blue" => return quote! { hyperchad_color::Color::from_hex("#0000FF") },
+                            "gray" => return quote! { hyperchad_color::Color::from_hex("#808080") },
+                            "yellow" => {
+                                return quote! { hyperchad_color::Color::from_hex("#FFFF00") };
+                            }
+                            "cyan" => return quote! { hyperchad_color::Color::from_hex("#00FFFF") },
+                            "magenta" => {
+                                return quote! { hyperchad_color::Color::from_hex("#FF00FF") };
+                            }
+                            "orange" => {
+                                return quote! { hyperchad_color::Color::from_hex("#FFA500") };
+                            }
+                            "purple" => {
+                                return quote! { hyperchad_color::Color::from_hex("#800080") };
+                            }
+                            "pink" => return quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
+                            "brown" => {
+                                return quote! { hyperchad_color::Color::from_hex("#A52A2A") };
+                            }
+                            _ => {
+                                // Check if it looks like a raw hex identifier (starts with #)
+                                if let Some(hex_part) = identifier_name.strip_prefix('#') {
+                                    // Remove the # and check if the rest are hex digits
+                                    if (hex_part.len() == 3 || hex_part.len() == 6)
+                                        && hex_part.chars().all(|c| c.is_ascii_hexdigit())
+                                    {
+                                        return quote! { hyperchad_color::Color::from_hex(#identifier_name) };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else if let syn::Expr::Lit(expr_lit) = &expr {
+                    // Check if this is a string literal that looks like a color name
+                    if let syn::Lit::Str(lit_str) = &expr_lit.lit {
+                        let identifier_name = lit_str.value();
+
+                        // Check if it's a known color name (must be lowercase)
+                        match identifier_name.as_str() {
+                            "black" => return quote! { hyperchad_color::Color::BLACK },
+                            "white" => return quote! { hyperchad_color::Color::WHITE },
+                            "red" => return quote! { hyperchad_color::Color::from_hex("#FF0000") },
+                            "green" => {
+                                return quote! { hyperchad_color::Color::from_hex("#00FF00") };
+                            }
+                            "blue" => return quote! { hyperchad_color::Color::from_hex("#0000FF") },
+                            "gray" => return quote! { hyperchad_color::Color::from_hex("#808080") },
+                            "grey" => return quote! { hyperchad_color::Color::from_hex("#808080") },
+                            "yellow" => {
+                                return quote! { hyperchad_color::Color::from_hex("#FFFF00") };
+                            }
+                            "cyan" => return quote! { hyperchad_color::Color::from_hex("#00FFFF") },
+                            "magenta" => {
+                                return quote! { hyperchad_color::Color::from_hex("#FF00FF") };
+                            }
+                            "orange" => {
+                                return quote! { hyperchad_color::Color::from_hex("#FFA500") };
+                            }
+                            "purple" => {
+                                return quote! { hyperchad_color::Color::from_hex("#800080") };
+                            }
+                            "pink" => return quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
+                            "brown" => {
+                                return quote! { hyperchad_color::Color::from_hex("#A52A2A") };
+                            }
+                            _ => {
+                                // Check if it looks like a hex color (starts with #)
+                                if identifier_name.starts_with('#') {
+                                    return quote! { hyperchad_color::Color::from_hex(#identifier_name) };
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback to existing behavior for expressions
+                Self::handle_potential_if_expression_for_color(&expr)
+            }
             Markup::BraceSplice { items, .. } => {
                 // For brace-wrapped items, treat the entire content as a single expression
                 if items.len() == 1 {
@@ -2805,10 +2901,10 @@ impl Generator {
             "purple" => quote! { hyperchad_color::Color::from_hex("#800080") },
             "pink" => quote! { hyperchad_color::Color::from_hex("#FFC0CB") },
             "brown" => quote! { hyperchad_color::Color::from_hex("#A52A2A") },
-            _ if color_str.starts_with('#') || color_str.chars().all(|c| c.is_ascii_hexdigit()) => {
+            _ if color_str.starts_with('#') => {
                 quote! { hyperchad_color::Color::from_hex(#color_str) }
             }
-            _ => quote! { hyperchad_color::Color::from_hex(#color_str) },
+            _ => quote! { hyperchad_color::Color::BLACK }, // Fallback to black for unknown colors
         }
     }
 
