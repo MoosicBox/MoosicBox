@@ -4,7 +4,7 @@ use hyperchad_transformer::Number;
 #[test]
 fn test_raw_number_literals() {
     let result = container! {
-        Div padding=(20) margin=(5) opacity=(0.5) {
+        div padding=(20) margin=(5) opacity=(0.5) {
             "Test content"
         }
     };
@@ -50,7 +50,7 @@ fn test_variable_number_expressions() {
     let margin_value = 10;
 
     let result = container! {
-        Div padding=(padding_value) margin=(margin_value) {
+        div padding=(padding_value) margin=(margin_value) {
             "Test content"
         }
     };
@@ -85,7 +85,7 @@ fn test_computed_number_expressions() {
     let base_padding = 10;
 
     let result = container! {
-        Div padding=(base_padding * 2) margin=(base_padding / 2) {
+        div padding=(base_padding * 2) margin=(base_padding / 2) {
             "Test content"
         }
     };
@@ -120,7 +120,7 @@ fn test_explicit_number_constructors() {
     use hyperchad_transformer::Number;
 
     let result = container! {
-        Div
+        div
             padding=(Number::Integer(25))
             margin=(Number::Real(7.5))
             opacity=(Number::Real(0.8))
@@ -171,7 +171,7 @@ fn test_mixed_raw_and_explicit_numbers() {
     let raw_padding = 12;
 
     let result = container! {
-        Div
+        div
             padding=(raw_padding)                    // Raw variable (Integer)
             margin=(15)                              // Raw literal (Integer)
             width=(Number::Real(100.5))              // Explicit Real

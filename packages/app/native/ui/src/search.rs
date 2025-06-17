@@ -19,7 +19,7 @@ use crate::{
 #[must_use]
 pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bool) -> Containers {
     container! {
-        Div
+        div
             #search
             visibility=(if open { Visibility::Visible } else { Visibility::Hidden })
             padding=20
@@ -31,28 +31,28 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             bottom=0
             background="#00000088"
         {
-            Section
+            section
                 align-items=start
                 width=100%
                 height=100%
             {
-                Div
+                div
                     align-items=end
                     gap=10
                     width=100%
                     height=100%
                 {
-                    Form
+                    form
                         hx-post="/search"
                         width=100%
                         direction=row
                         gap=5
                         padding=10
                     {
-                        Div flex-grow=1 {
-                            Input flex-grow=1 type=text name="query" placeholder="Search...";
+                        div flex-grow=1 {
+                            input flex-grow=1 type=text name="query" placeholder="Search...";
                         }
-                        Button
+                        button
                             type=submit
                             border-radius=5
                             background="#111"
@@ -62,7 +62,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                         {
                             "Search"
                         }
-                        Button
+                        button
                             #close-search-button
                             border-radius=100
                             background="#fff"
@@ -70,7 +70,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                             padding=10
                             fx-click=(ActionType::hide_str_id("search").and(ActionType::show_str_id("search-button")))
                         {
-                            Image
+                            image
                                 width=20
                                 height=20
                                 src=(public_img!("cross.svg"));
@@ -83,7 +83,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                 }
             }
         }
-        Button
+        button
             #search-button
             visibility=(if open { Visibility::Hidden } else { Visibility::Visible })
             border-radius=100
@@ -97,7 +97,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             right=0
             fx-click=(ActionType::hide_self().and(ActionType::show_str_id("search")))
         {
-            Image
+            image
                 width=20
                 height=20
                 src=(public_img!("magnifying-glass.svg"));
@@ -115,13 +115,13 @@ pub fn search_results(
     let selected = selected.or_else(|| api_sources.first());
 
     container! {
-        Div #search-results width=100% gap=10 overflow-y=auto {
-            Div {
-                Div direction=row gap=10 {
+        div #search-results width=100% gap=10 overflow-y=auto {
+            div {
+                div direction=row gap=10 {
                     @for source in api_sources {
                         @let id = results_content_container_id(source);
 
-                        Div
+                        div
                             border-top-left-radius=5
                             border-top-right-radius=5
                             padding=10
@@ -135,12 +135,12 @@ pub fn search_results(
                         }
                     }
                 }
-                Div background=(BACKGROUND) {
+                div background=(BACKGROUND) {
                     @for source in api_sources {
                         @let id = results_content_container_id(source);
                         @let selected = selected.is_some_and(|x| x == source);
 
-                        Div id=(id) .search-results-container hidden=(!selected) {
+                        div id=(id) .search-results-container hidden=(!selected) {
                             (results_content(host, source, &[]))
                         }
                     }
@@ -169,7 +169,7 @@ pub fn results_content(
     container! {
         @let id = results_content_id(api_source);
 
-        Div
+        div
             id=(id)
             width=100%
             gap=10
@@ -197,13 +197,13 @@ fn artist_result(host: &str, artist: &ApiGlobalArtistSearchResult) -> Containers
     let artist_id = artist.artist_id.clone();
     let source = artist.api_source.clone();
     container! {
-        Div direction=row {
+        div direction=row {
             @let size = 70;
-            Image
+            image
                 src=(artist_cover_url(host, &artist_id, &source, artist.contains_cover, size, size))
                 width=(size)
                 height=(size);
-            Anchor href={"/artists?artistId="(artist_id)"&source="(source)} {
+            anchor href={"/artists?artistId="(artist_id)"&source="(source)} {
                 (artist.title)
             }
         }
@@ -215,13 +215,13 @@ fn album_result(host: &str, album: &ApiGlobalAlbumSearchResult) -> Containers {
     let album_id = album.album_id.clone();
     let source = album.api_source.clone();
     container! {
-        Div direction=row {
+        div direction=row {
             @let size = 70;
-            Image
+            image
                 src=(album_cover_url(host, &album_id, &source, album.contains_cover, size, size))
                 width=(size)
                 height=(size);
-            Anchor href={"/albums?albumId="(album_id)"&source="(source)} {
+            anchor href={"/albums?albumId="(album_id)"&source="(source)} {
                 (album.title)
             }
         }
@@ -234,13 +234,13 @@ fn track_result(host: &str, track: &ApiGlobalTrackSearchResult) -> Containers {
     let title = track.title.clone();
     let source = track.api_source.clone();
     container! {
-        Div direction=row {
+        div direction=row {
             @let size = 70;
-            Image
+            image
                 src=(album_cover_url(host, &album_id, &source, track.contains_cover, size, size))
                 width=(size)
                 height=(size);
-            Anchor href={"/albums?albumId="(album_id)"&source="(source)} {
+            anchor href={"/albums?albumId="(album_id)"&source="(source)} {
                 (title)
             }
         }

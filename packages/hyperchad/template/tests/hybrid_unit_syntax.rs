@@ -3,7 +3,7 @@ use hyperchad_template::container;
 #[test]
 fn test_concise_viewport_unit_syntax() {
     let containers = container! {
-        Div width=vw50 height=vh100 max-width=dvw90 min-height=dvh60 {
+        div width=vw50 height=vh100 max-width=dvw90 min-height=dvh60 {
             "Concise syntax test"
         }
     };
@@ -24,7 +24,7 @@ fn test_function_style_viewport_syntax() {
     let base_size = 45;
 
     let containers = container! {
-        Div width=vw(dynamic_width) height=vh(responsive_height)
+        div width=vw(dynamic_width) height=vh(responsive_height)
             max-width=dvw(base_size + 5) min-height=dvh(base_size / 2) {
             "Function syntax test"
         }
@@ -45,7 +45,7 @@ fn test_mixed_unit_syntax() {
     let base_size = 45;
 
     let containers = container! {
-        Div width=vw50 height=vh(responsive_height)
+        div width=vw50 height=vh(responsive_height)
             max-width=dvw90 min-height=dvh(base_size) {
             "Mixed syntax test"
         }
@@ -67,7 +67,7 @@ fn test_complex_expressions_in_function_syntax() {
     let base_size = 45;
 
     let containers = container! {
-        Div width=vw(if dynamic_width > 50 { 100 } else { 50 })
+        div width=vw(if dynamic_width > 50 { 100 } else { 50 })
             height=vh(responsive_height + 20)
             max-width=dvw(base_size * 2)
             min-height=dvh(base_size.min(30)) {
@@ -96,7 +96,7 @@ fn test_complex_expressions_in_function_syntax() {
 #[test]
 fn test_traditional_syntax_still_works() {
     let containers = container! {
-        Div width=800 height=600 padding=20 margin=100% {
+        div width=800 height=600 padding=20 margin=100% {
             "Traditional syntax test"
         }
     };
@@ -117,29 +117,29 @@ fn test_comprehensive_hybrid_syntax() {
     let base_size = 45;
 
     let containers = container! {
-        Div class="demo-container" {
+        div class="demo-container" {
             // Concise syntax
-            Div width=vw50 height=vh100 max-width=dvw90 min-height=dvh60
+            div width=vw50 height=vh100 max-width=dvw90 min-height=dvh60
                 background="blue" padding=20 {
                 "Concise test"
             }
 
             // Function syntax
-            Section width=vw(dynamic_width) height=vh(responsive_height)
+            section width=vw(dynamic_width) height=vh(responsive_height)
                     max-width=dvw(base_size + 5) min-height=dvh(base_size / 2)
                     background="green" margin=10 {
                 "Function test"
             }
 
             // Mixed syntax
-            Div width=vw50 height=vh(responsive_height)
+            div width=vw50 height=vh(responsive_height)
                 max-width=dvw90 min-height=dvh(base_size)
                 background="red" opacity=0.8 {
                 "Mixed test"
             }
 
             // Traditional syntax
-            Div width=800 height=600 padding=20 margin=100%
+            div width=800 height=600 padding=20 margin=100%
                 background="orange" {
                 "Traditional test"
             }

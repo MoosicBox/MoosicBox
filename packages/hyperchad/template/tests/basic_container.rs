@@ -10,9 +10,9 @@ impl RenderContainer for TodoItem {
 
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
         let rendered = container! {
-            Div .todo-item {
+            div .todo-item {
                 "Task: "
-                Span { (self.text.clone()) }
+                span { (self.text.clone()) }
                 @if self.completed {
                     " (completed)"
                 }
@@ -37,8 +37,8 @@ fn test_basic_container_with_render_trait() {
     ];
 
     let containers = container! {
-        Section align-items="Start" width="100%" {
-            H1 { "Todo List" }
+        section align-items="Start" width="100%" {
+            h1 { "Todo List" }
             "Here are your tasks:"
             @for item in items {
                 (item)

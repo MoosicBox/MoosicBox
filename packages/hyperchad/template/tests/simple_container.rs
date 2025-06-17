@@ -3,7 +3,7 @@ use hyperchad_template::container;
 #[test]
 fn test_simple_container_creation() {
     let containers = container! {
-        Div {
+        div {
             "Hello World"
         }
     };
@@ -23,7 +23,7 @@ fn test_simple_container_creation() {
 #[test]
 fn test_empty_container() {
     let containers = container! {
-        Div {}
+        div {}
     };
 
     assert_eq!(containers.len(), 1, "Should generate exactly one container");
@@ -37,9 +37,9 @@ fn test_empty_container() {
 #[test]
 fn test_multiple_containers() {
     let containers = container! {
-        Div { "First" }
-        Div { "Second" }
-        Span { "Third" }
+        div { "First" }
+        div { "Second" }
+        span { "Third" }
     };
 
     assert_eq!(containers.len(), 3, "Should generate three containers");

@@ -8,7 +8,7 @@ fn test_user_example_srcset() {
     }
 
     let containers = container! {
-        Image srcset={
+        image srcset={
             (public_img("showcase-2x240.webp"))" 240w, "
             (public_img("showcase-2x540.webp"))" 540w, "
             (public_img("showcase-2.webp"))" 1080w"

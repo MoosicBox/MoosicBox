@@ -7,7 +7,7 @@ use hyperchad_template::{AlignItems, LayoutDirection, TextAlign, if_responsive};
 #[cfg(feature = "logic")]
 fn test_responsive_number_attributes() {
     let containers = container! {
-        Div padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
+        div padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
             "Test content"
         }
     };
@@ -26,7 +26,7 @@ fn test_responsive_number_attributes() {
 #[cfg(feature = "logic")]
 fn test_responsive_enum_attributes() {
     let containers = container! {
-        Div
+        div
             direction=(
                 if_responsive("mobile-large")
                     .then::<LayoutDirection>(LayoutDirection::Column)
@@ -59,7 +59,7 @@ fn test_responsive_enum_attributes() {
 #[cfg(feature = "logic")]
 fn test_responsive_bool_attributes() {
     let containers = container! {
-        Div hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
+        div hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
             "Test content"
         }
     };
@@ -76,7 +76,7 @@ fn test_responsive_bool_attributes() {
 #[cfg(feature = "logic")]
 fn test_mixed_responsive_and_static_attributes() {
     let containers = container! {
-        Div
+        div
             width=(100)  // Static attribute
             padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20))  // Responsive
             direction=(LayoutDirection::Row)  // Static enum

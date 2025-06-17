@@ -24,31 +24,31 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
     );
     let artist_page_url = crate::artists::artist_page_url(&track.artist_id.to_string());
     container! {
-        Div
+        div
             direction=row
             gap=10
             opacity=[if is_history { Some(0.5) } else { None }]
         {
-            Div {
+            div {
                 @let icon_size = 50;
-                Anchor href=(album_page_url) width=(icon_size) height=(icon_size) {
+                anchor href=(album_page_url) width=(icon_size) height=(icon_size) {
                     (crate::albums::album_cover_img_from_track(&connection.api_url, track, icon_size))
                 }
             }
-            Div flex=1 {
-                Div {
-                    Anchor href=(album_page_url) {
+            div flex=1 {
+                div {
+                    anchor href=(album_page_url) {
                         (track.title) " - " (track.album)
                     }
                 }
-                Div {
-                    Anchor href=(artist_page_url) { (track.artist) }
+                div {
+                    anchor href=(artist_page_url) { (track.artist) }
                 }
             }
-            Div align-items=end background="#000" {
+            div align-items=end background="#000" {
                 @let icon_size = 20;
-                Button width=(icon_size) height=(icon_size) {
-                    Image
+                button width=(icon_size) height=(icon_size) {
+                    image
                         width=(icon_size)
                         height=(icon_size)
                         src=(public_img!("cross-white.svg"));
@@ -88,7 +88,7 @@ pub fn play_queue(state: &State) -> Containers {
     log::debug!("state: {state:?}");
 
     container! {
-        Div
+        div
             #play-queue
             width="calc(min(500, 30%))"
             height="calc(100% - 200)"
@@ -105,18 +105,18 @@ pub fn play_queue(state: &State) -> Containers {
                     .then(ActionType::hide_self())
             )
         {
-            Div overflow-y=auto {
-                Div padding=20 {
-                    H1 height=30 { "Play queue" }
-                    Div gap=10 {
+            div overflow-y=auto {
+                div padding=20 {
+                    h1 height=30 { "Play queue" }
+                    div gap=10 {
                         @for track in history {
                             (render_play_queue_item(state, track, true))
                         }
                     }
                     @if let Some(track) = current {
-                        Div direction=row {
+                        div direction=row {
                             "Playing from: "
-                            Anchor href=(
+                            anchor href=(
                                 crate::albums::album_page_url(
                                     &track.album_id.to_string(),
                                     false,
@@ -132,7 +132,7 @@ pub fn play_queue(state: &State) -> Containers {
                         (render_play_queue_item(state, track, false))
                     }
                     @if future.peek().is_some() {
-                        Div { "Next up:" }
+                        div { "Next up:" }
                     }
                     @for track in future {
                         (render_play_queue_item(state, track, false))

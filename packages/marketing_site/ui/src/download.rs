@@ -15,10 +15,10 @@ pub use hyperchad::template as hyperchad_template;
 #[must_use]
 pub fn download() -> Containers {
     page(&container! {
-        Div align-items=center padding-x=20 {
-            Div width=100% max-width=1000 padding-y=20 {
-                H1 border-bottom="2, #ccc" padding-bottom=20 margin-bottom=10 { "Downloads" }
-                Div #releases hidden=(true) hx-get="/releases" hx-trigger=load {}
+        div align-items=center padding-x=20 {
+            div width=100% max-width=1000 padding-y=20 {
+                h1 border-bottom="2, #ccc" padding-bottom=20 margin-bottom=10 { "Downloads" }
+                div #releases hidden=(true) hx-get="/releases" hx-trigger=load {}
             }
         }
     })
@@ -82,10 +82,10 @@ fn format_date(date: &NaiveDateTime) -> String {
 #[must_use]
 pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
     container! {
-        Div #releases {
+        div #releases {
             @for release in releases {
-                Div id=(format_class_name(release.version)) padding-y=20 {
-                    H2
+                div id=(format_class_name(release.version)) padding-y=20 {
+                    h2
                         id={(format_class_name(release.version))"-header"}
                         direction=(
                             if_responsive("mobile")
@@ -99,31 +99,31 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
                         )
                         col-gap=10
                     {
-                        Div { "Release " (release.version) }
-                        Div font-size=16 margin-bottom=2 color="#ccc" {
+                        div { "Release " (release.version) }
+                        div font-size=16 margin-bottom=2 color="#ccc" {
                             (format_date(&release.published_at))
                         }
-                        Div font-size=16 margin-bottom=2 {
-                            "[" Anchor color="#fff" target="_blank" href=(release.url) { "GitHub" } "]"
+                        div font-size=16 margin-bottom=2 {
+                            "[" anchor color="#fff" target="_blank" href=(release.url) { "GitHub" } "]"
                         }
                     }
                     @for release_asset in &release.assets {
                         @if let Some(asset) = &release_asset.asset {
-                            Div {
+                            div {
                                 @if os.lower_name == release_asset.name {
-                                    Div color="#888" {
+                                    div color="#888" {
                                         "// We think you are running " (os.header)
                                     }
                                 }
-                                H3 { (get_os_header(release_asset.name)) }
+                                h3 { (get_os_header(release_asset.name)) }
                                 "Download "
-                                Anchor color="#fff" href=(asset.browser_download_url) { (asset.name) }
-                                Span color="#ccc" font-size=12 { " (" (format_size(asset.size)) ")" }
-                                Ul margin=0 {
+                                anchor color="#fff" href=(asset.browser_download_url) { (asset.name) }
+                                span color="#ccc" font-size=12 { " (" (format_size(asset.size)) ")" }
+                                ul margin=0 {
                                     @for other_asset in &release_asset.other_formats {
-                                        Li {
-                                            Anchor color="#fff" href=(other_asset.browser_download_url) { (other_asset.name) }
-                                            Span color="#ccc" font-size=12 { " (" (format_size(other_asset.size)) ")" }
+                                        li {
+                                            anchor color="#fff" href=(other_asset.browser_download_url) { (other_asset.name) }
+                                            span color="#ccc" font-size=12 { " (" (format_size(other_asset.size)) ")" }
                                         }
                                     }
                                 }

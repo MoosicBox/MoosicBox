@@ -3,7 +3,7 @@ use hyperchad_template::{ContainerVecExt, container};
 #[test]
 fn htmx_attributes() {
     let result = container! {
-        Div hx-get="/api/data" hx-trigger="click" hx-swap="outerHTML" {
+        div hx-get="/api/data" hx-trigger="click" hx-swap="outerHTML" {
             "Click me for HTMX magic"
         }
     };
@@ -34,7 +34,7 @@ fn htmx_attributes() {
 #[test]
 fn complex_styling() {
     let result = container! {
-        Div
+        div
             width="100%"
             height="200px"
             padding="16px"
@@ -61,16 +61,16 @@ fn complex_styling() {
 #[test]
 fn flexbox_layout() {
     let result = container! {
-        Div
+        div
             direction="row"
             justify-content="space-between"
             align-items="center"
             flex="1"
             gap="16px"
         {
-            Div flex-grow="1" { "Item 1" }
-            Div flex-grow="2" { "Item 2" }
-            Div flex-shrink="0" { "Item 3" }
+            div flex-grow="1" { "Item 1" }
+            div flex-grow="2" { "Item 2" }
+            div flex-shrink="0" { "Item 3" }
         }
     };
 
@@ -89,7 +89,7 @@ fn flexbox_layout() {
 fn responsive_design() {
     let is_mobile = true;
     let result = container! {
-        Div
+        div
             width={if is_mobile { "100%" } else { "800px" }}
             padding={if is_mobile { "8px" } else { "16px" }}
         {
@@ -105,22 +105,22 @@ fn responsive_design() {
 #[test]
 fn form_validation() {
     let result = container! {
-        Form {
-            Div {
-                Input
+        form {
+            div {
+                input
                     type="email"
                     name="email"
                     placeholder="Enter your email"
                     required;
             }
-            Div {
-                Input
+            div {
+                input
                     type="password"
                     name="password"
                     placeholder="Enter your password"
                     required;
             }
-            Button type="submit" { "Submit" }
+            button type="submit" { "Submit" }
         }
     };
 
@@ -182,14 +182,14 @@ fn form_validation() {
 #[test]
 fn accessibility_attributes() {
     let result = container! {
-        Div {
-            Button
+        div {
+            button
                 data-testid="submit-button"
                 data-cy="submit-btn"
             {
                 "Submit"
             }
-            Image
+            image
                 src="logo.png"
                 alt="Company Logo"
                 loading="lazy";
@@ -218,15 +218,15 @@ fn conditional_rendering() {
     let user_name = Some("Alice");
 
     let result = container! {
-        Div {
+        div {
             @if show_alert {
-                Div.alert { "Welcome!" }
+                div.alert { "Welcome!" }
             }
 
             @if let Some(name) = user_name {
-                Div { "Hello, " (name) "!" }
+                div { "Hello, " (name) "!" }
             } @else {
-                Div { "Please log in" }
+                div { "Please log in" }
             }
         }
     };
@@ -259,12 +259,12 @@ fn dynamic_classes() {
     let _theme = "dark";
 
     let result = container! {
-        Button
+        button
             .base-button
             .active
             .theme-dark
         {
-            "Dynamic Button"
+            "Dynamic button"
         }
     };
 
@@ -278,11 +278,11 @@ fn dynamic_classes() {
 fn nested_components() {
     fn card(title: &str, content: &str) -> Vec<hyperchad_transformer::Container> {
         container! {
-            Div.card {
-                Div.card-header {
-                    H3 { (title) }
+            div.card {
+                div.card-header {
+                    h3 { (title) }
                 }
-                Div.card-body {
+                div.card-body {
                     (content)
                 }
             }
@@ -290,7 +290,7 @@ fn nested_components() {
     }
 
     let result = container! {
-        Div.container {
+        div.container {
             (card("Welcome", "This is a card component"))
             (card("About", "This is another card"))
         }
@@ -319,7 +319,7 @@ fn nested_components() {
 #[test]
 fn event_handlers() {
     let result = container! {
-        Div
+        div
             fx-click="alert('Clicked!')"
             fx-hover="console.log('Hovered')"
             fx-resize="handleResize()"
@@ -341,20 +341,20 @@ fn table_with_data() {
     ];
 
     let result = container! {
-        Table {
-            THead {
-                TR {
-                    TH { "Name" }
-                    TH { "Age" }
-                    TH { "Role" }
+        table {
+            thead {
+                tr {
+                    th { "Name" }
+                    th { "Age" }
+                    th { "Role" }
                 }
             }
-            TBody {
+            tbody {
                 @for (name, age, role) in &users {
-                    TR {
-                        TD { (name) }
-                        TD { (age) }
-                        TD { (role) }
+                    tr {
+                        td { (name) }
+                        td { (age) }
+                        td { (role) }
                     }
                 }
             }
@@ -396,8 +396,8 @@ fn table_with_data() {
 #[test]
 fn media_elements() {
     let result = container! {
-        Div {
-            Image
+        div {
+            image
                 src="hero.jpg"
                 alt="Hero image"
                 srcset="hero-small.jpg 480w, hero-large.jpg 800w"
@@ -405,7 +405,7 @@ fn media_elements() {
                 loading="lazy"
                 fit="cover";
 
-            Div { "Canvas placeholder" }
+            div { "Canvas placeholder" }
         }
     };
 
@@ -432,25 +432,25 @@ fn media_elements() {
 #[test]
 fn complex_form() {
     let result = container! {
-        Form {
-            Div.form-group {
-                Input type="text" name="firstName" placeholder="First Name";
-                Input type="text" name="lastName" placeholder="Last Name";
+        form {
+            div.form-group {
+                input type="text" name="firstName" placeholder="First Name";
+                input type="text" name="lastName" placeholder="Last Name";
             }
 
-            Div.form-group {
-                Input type="email" name="email" placeholder="Email";
-                Input type="tel" name="phone" placeholder="Phone";
+            div.form-group {
+                input type="email" name="email" placeholder="Email";
+                input type="tel" name="phone" placeholder="Phone";
             }
 
-            Div.form-group {
-                Input type="checkbox" name="newsletter" checked;
+            div.form-group {
+                input type="checkbox" name="newsletter" checked;
                 " Subscribe to newsletter"
             }
 
-            Div.form-actions {
-                Button type="submit" { "Submit" }
-                Button type="reset" { "Reset" }
+            div.form-actions {
+                button type="submit" { "Submit" }
+                button type="reset" { "Reset" }
             }
         }
     };
@@ -484,8 +484,8 @@ fn complex_form() {
 #[test]
 fn layout_positioning() {
     let result = container! {
-        Div position="relative" width="100%" height="200px" {
-            Div
+        div position="relative" width="100%" height="200px" {
+            div
                 position="absolute"
                 top="10px"
                 left="10px"

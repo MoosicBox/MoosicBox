@@ -123,13 +123,13 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
                     Parsing failed: {}\n\
                     \n\
                     Common issues:\n\
-                    - Element names must be PascalCase: Div, Button, H1, H2, etc.\n\
+                    - Element names must be lowercase: div, button, h1, h2, etc.\n\
                     - Attributes: key=\"value\" or key=(expression)\n\
                     - Control flow: @if condition {{ }} @else {{ }}\n\
                     - Loops: @for item in collection {{ }}\n\
                     - Variables: @let name = value;\n\
                     - Expressions: (variable_name)\n\
-                    - Input elements need semicolons: Input type=\"text\";\n\
+                    - Input elements need semicolons: input type=\"text\";\n\
                     - Check for balanced braces {{ }}\n\
                     - Make sure all strings are properly quoted",
                     err_str
@@ -141,7 +141,7 @@ fn expand(input: TokenStream) -> Result<TokenStream, String> {
                     Error: {}\n\
                     \n\
                     Common issues:\n\
-                    - Element names must be PascalCase (Div, Button, etc.)\n\
+                    - Element names must be lowercase (div, button, etc.)\n\
                     - Check attribute formatting: key=\"value\" or key=(expression)\n\
                     - Ensure braces {{}} are balanced\n\
                     - Control flow needs @ prefix: @if, @for, @match\n\

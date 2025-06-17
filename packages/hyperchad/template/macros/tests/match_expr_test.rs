@@ -45,10 +45,10 @@ fn test_basic_match_with_div_child() {
     let containers = container! {
         @match val {
             Demo::A => {
-                Div { "A" }
+                div { "A" }
             }
             Demo::B => {
-                Div { "B" }
+                div { "B" }
             }
         }
     };
@@ -157,8 +157,8 @@ fn test_basic_match_with_direct_div() {
 
     let containers = container! {
         @match val {
-            Demo::A => Div { "A" }
-            Demo::B => Div { "B" }
+            Demo::A => div { "A" }
+            Demo::B => div { "B" }
         }
     };
 
@@ -199,7 +199,7 @@ fn test_basic_match_with_empty_arms() {
 #[test]
 fn test_empty_braces_in_elements() {
     let containers = container! {
-        Div {}
+        div {}
     };
 
     // Verify that empty element blocks work correctly
@@ -207,7 +207,7 @@ fn test_empty_braces_in_elements() {
     let container = &containers[0];
     assert_eq!(container.children.len(), 0); // Empty div should have no children
 
-    // Verify it's a Div element
+    // Verify it's a div element
     assert!(matches!(
         container.element,
         hyperchad_transformer::Element::Div

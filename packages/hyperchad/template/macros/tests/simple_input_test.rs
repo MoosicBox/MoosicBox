@@ -4,7 +4,7 @@ use hyperchad_transformer::{Element, Input};
 #[test]
 fn test_simple_input() {
     let result = container! {
-        Input type="text" name="test" value="static_value";
+        input type="text" name="test" value="static_value";
     };
 
     assert_eq!(result.len(), 1);
@@ -25,7 +25,7 @@ fn test_simple_input() {
 #[test]
 fn test_input_types() {
     let result = container! {
-        Input type="checkbox" name="check" checked;
+        input type="checkbox" name="check" checked;
     };
 
     assert_eq!(result.len(), 1);
@@ -46,7 +46,7 @@ fn test_input_types() {
 #[test]
 fn test_input_hidden() {
     let result = container! {
-        Input type="hidden" name="hidden_field" value="hidden_value";
+        input type="hidden" name="hidden_field" value="hidden_value";
     };
 
     assert_eq!(result.len(), 1);

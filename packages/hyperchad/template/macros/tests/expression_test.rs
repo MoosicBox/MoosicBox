@@ -6,7 +6,7 @@ fn test_input_value_expression() {
     let connection_name = "test_connection";
 
     let result = container! {
-        Input type="text" name="connection" value=(connection_name);
+        input type="text" name="connection" value=(connection_name);
     };
 
     // Check that we have one container with an Input element
@@ -36,7 +36,7 @@ fn test_input_placeholder_expression() {
     let placeholder_text = "Enter your name";
 
     let result = container! {
-        Input type="text" placeholder=(placeholder_text);
+        input type="text" placeholder=(placeholder_text);
     };
 
     assert_eq!(result.len(), 1);
@@ -61,7 +61,7 @@ fn test_anchor_href_expression() {
     let url = "https://example.com";
 
     let result = container! {
-        Anchor href=(url) {
+        anchor href=(url) {
             "Click here"
         }
     };
@@ -71,7 +71,7 @@ fn test_anchor_href_expression() {
     if let Element::Anchor { href, target: _ } = &result[0].element {
         assert_eq!(href, &Some("https://example.com".to_string()));
     } else {
-        panic!("Expected Anchor element, got: {:?}", result[0].element);
+        panic!("Expected anchor element, got: {:?}", result[0].element);
     }
 }
 
@@ -80,7 +80,7 @@ fn test_button_type_expression() {
     let button_type = "submit";
 
     let result = container! {
-        Button type=(button_type) {
+        button type=(button_type) {
             "Submit"
         }
     };
@@ -99,7 +99,7 @@ fn test_mixed_expressions_and_literals() {
     let dynamic_value = "dynamic";
 
     let result = container! {
-        Input type="text" name="mixed" value=(dynamic_value) placeholder="Static placeholder";
+        input type="text" name="mixed" value=(dynamic_value) placeholder="Static placeholder";
     };
 
     assert_eq!(result.len(), 1);

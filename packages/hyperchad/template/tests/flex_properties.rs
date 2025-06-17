@@ -3,7 +3,7 @@ use hyperchad_template::container;
 #[test]
 fn test_flex_with_single_value() {
     let containers = container! {
-        Div flex=(1) {
+        div flex=(1) {
             "Test"
         }
     };
@@ -18,7 +18,7 @@ fn test_flex_with_single_value() {
 #[test]
 fn test_flex_with_string_value() {
     let containers = container! {
-        Div flex="1 0 auto" {
+        div flex="1 0 auto" {
             "Flex string test"
         }
     };
@@ -35,7 +35,7 @@ fn test_flex_with_string_value() {
 #[test]
 fn test_flex_with_individual_properties() {
     let containers = container! {
-        Div flex-grow=1 flex-shrink=0 flex-basis=200 {
+        div flex-grow=1 flex-shrink=0 flex-basis=200 {
             "Individual flex properties"
         }
     };
@@ -53,7 +53,7 @@ fn test_flex_with_individual_properties() {
 fn test_flex_with_expression() {
     let grow_value = 2;
     let containers = container! {
-        Div flex=(grow_value) {
+        div flex=(grow_value) {
             "Dynamic flex"
         }
     };
@@ -70,13 +70,13 @@ fn test_flex_with_expression() {
 #[test]
 fn test_multiple_flex_containers() {
     let containers = container! {
-        Div flex=1 {
+        div flex=1 {
             "First flex item"
         }
-        Div flex=2 {
+        div flex=2 {
             "Second flex item"
         }
-        Div flex="0 1 auto" {
+        div flex="0 1 auto" {
             "Third flex item"
         }
     };

@@ -41,7 +41,7 @@ fn blocks() {
 
 #[test]
 fn simple_elements() {
-    let result = container! { Div { Span { "pickle" } "barrel" Span { "kumquat" } } };
+    let result = container! { div { span { "pickle" } "barrel" span { "kumquat" } } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div><span>pickle</span>barrel<span>kumquat</span></div>"#
@@ -50,7 +50,7 @@ fn simple_elements() {
 
 #[test]
 fn simple_div() {
-    let result = container! { Div { "Hello World" } };
+    let result = container! { div { "Hello World" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div>Hello World</div>"#
@@ -59,7 +59,7 @@ fn simple_div() {
 
 #[test]
 fn nested_elements() {
-    let result = container! { Div { Span { "pickle" } "barrel" Span { "kumquat" } } };
+    let result = container! { div { span { "pickle" } "barrel" span { "kumquat" } } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div><span>pickle</span>barrel<span>kumquat</span></div>"#
@@ -69,8 +69,8 @@ fn nested_elements() {
 #[test]
 fn multiple_elements() {
     let result = container! {
-        Div { "First" }
-        Div { "Second" }
+        div { "First" }
+        div { "Second" }
     };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
@@ -81,7 +81,7 @@ fn multiple_elements() {
 #[test]
 fn simple_attributes() {
     let result = container! {
-        Anchor href="https://example.com" {
+        anchor href="https://example.com" {
             "Click here"
         }
     };
@@ -93,7 +93,7 @@ fn simple_attributes() {
 
 #[test]
 fn with_styling() {
-    let result = container! { Div width="100" height="50" { "Styled div" } };
+    let result = container! { div width="100" height="50" { "Styled div" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div sx-height="50" sx-width="100">Styled div</div>"#
@@ -102,7 +102,7 @@ fn with_styling() {
 
 #[test]
 fn with_classes() {
-    let result = container! { Div.my-class.another-class { "With classes" } };
+    let result = container! { div.my-class.another-class { "With classes" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div class="my-class another-class">With classes</div>"#
@@ -111,7 +111,7 @@ fn with_classes() {
 
 #[test]
 fn with_id() {
-    let result = container! { Div #my-id { "With ID" } };
+    let result = container! { div #my-id { "With ID" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div id="my-id">With ID</div>"#
@@ -120,7 +120,7 @@ fn with_id() {
 
 #[test]
 fn class_shorthand() {
-    let result = container! { Div.hotpink { "Hello!" } };
+    let result = container! { div.hotpink { "Hello!" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div class="hotpink">Hello!</div>"#
@@ -129,7 +129,7 @@ fn class_shorthand() {
 
 #[test]
 fn multiple_classes() {
-    let result = container! { Div.first.second.third { "Multiple classes" } };
+    let result = container! { div.first.second.third { "Multiple classes" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div class="first second third">Multiple classes</div>"#
@@ -138,7 +138,7 @@ fn multiple_classes() {
 
 #[test]
 fn id_shorthand() {
-    let result = container! { Div #midriff { "With ID" } };
+    let result = container! { div #midriff { "With ID" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div id="midriff">With ID</div>"#
@@ -147,7 +147,7 @@ fn id_shorthand() {
 
 #[test]
 fn classes_attrs_ids_mixed_up() {
-    let result = container! { Div.class1 #my-id width="100" .class2 { "Mixed attributes" } };
+    let result = container! { div.class1 #my-id width="100" .class2 { "Mixed attributes" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div class="class1 class2" id="my-id" sx-width="100">Mixed attributes</div>"#
@@ -157,12 +157,12 @@ fn classes_attrs_ids_mixed_up() {
 #[test]
 fn heading_elements() {
     let result = container! {
-        H1 { "Heading 1" }
-        H2 { "Heading 2" }
-        H3 { "Heading 3" }
-        H4 { "Heading 4" }
-        H5 { "Heading 5" }
-        H6 { "Heading 6" }
+        h1 { "Heading 1" }
+        h2 { "Heading 2" }
+        h3 { "Heading 3" }
+        h4 { "Heading 4" }
+        h5 { "Heading 5" }
+        h6 { "Heading 6" }
     };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
@@ -173,10 +173,10 @@ fn heading_elements() {
 #[test]
 fn list_elements() {
     let result = container! {
-        Ul {
-            Li { "Item 1" }
-            Li { "Item 2" }
-            Li { "Item 3" }
+        ul {
+            li { "Item 1" }
+            li { "Item 2" }
+            li { "Item 3" }
         }
     };
     assert_eq!(
@@ -188,9 +188,9 @@ fn list_elements() {
 #[test]
 fn ordered_list_elements() {
     let result = container! {
-        Ol {
-            Li { "First item" }
-            Li { "Second item" }
+        ol {
+            li { "First item" }
+            li { "Second item" }
         }
     };
     assert_eq!(
@@ -201,7 +201,7 @@ fn ordered_list_elements() {
 
 #[test]
 fn input_element() {
-    let result = container! { Input type=text; };
+    let result = container! { input type=text; };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<input type="text" />"#
@@ -210,7 +210,7 @@ fn input_element() {
 
 #[test]
 fn input_with_attributes() {
-    let result = container! { Input type="text" placeholder="Enter name" value="default"; };
+    let result = container! { input type="text" placeholder="Enter name" value="default"; };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<input type="text" value="default" placeholder="Enter name" />"#
@@ -219,7 +219,7 @@ fn input_with_attributes() {
 
 #[test]
 fn button_element() {
-    let result = container! { Button { "Click me" } };
+    let result = container! { button { "Click me" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<button>Click me</button>"#
@@ -228,7 +228,7 @@ fn button_element() {
 
 #[test]
 fn button_with_type() {
-    let result = container! { Button type="submit" { "Submit" } };
+    let result = container! { button type="submit" { "Submit" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<button type="submit">Submit</button>"#
@@ -237,7 +237,7 @@ fn button_with_type() {
 
 #[test]
 fn image_element() {
-    let result = container! { Image src="image.jpg" alt="An image"; };
+    let result = container! { image src="image.jpg" alt="An image"; };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<img src="image.jpg" alt="An image" />"#
@@ -247,21 +247,21 @@ fn image_element() {
 #[test]
 fn table_elements() {
     let result = container! {
-        Table {
-            THead {
-                TR {
-                    TH { "Header 1" }
-                    TH { "Header 2" }
+        table {
+            thead {
+                tr {
+                    th { "Header 1" }
+                    th { "Header 2" }
                 }
             }
-            TBody {
-                TR {
-                    TD { "Cell 1" }
-                    TD { "Cell 2" }
+            tbody {
+                tr {
+                    td { "Cell 1" }
+                    td { "Cell 2" }
                 }
-                TR {
-                    TD { "Cell 3" }
-                    TD { "Cell 4" }
+                tr {
+                    td { "Cell 3" }
+                    td { "Cell 4" }
                 }
             }
         }
@@ -275,9 +275,9 @@ fn table_elements() {
 #[test]
 fn form_elements() {
     let result = container! {
-        Form {
-            Input type="text" placeholder="Name";
-            Button type="submit" { "Submit" }
+        form {
+            input type="text" placeholder="Name";
+            button type="submit" { "Submit" }
         }
     };
     assert_eq!(
@@ -289,19 +289,19 @@ fn form_elements() {
 #[test]
 fn semantic_elements() {
     let result = container! {
-        Main {
-            Header {
-                H1 { "Site Title" }
+        main {
+            header {
+                h1 { "Site Title" }
             }
-            Section {
-                H2 { "Content Title" }
-                Div { "Content goes here" }
+            section {
+                h2 { "Content Title" }
+                div { "Content goes here" }
             }
-            Aside {
-                Div { "Sidebar content" }
+            aside {
+                div { "Sidebar content" }
             }
-            Footer {
-                Div { "Footer content" }
+            footer {
+                div { "Footer content" }
             }
         }
     };
@@ -314,13 +314,13 @@ fn semantic_elements() {
 #[test]
 fn flex_attributes() {
     // Test shorthand flex attribute
-    let result = container! { Div flex="1 0 auto" { "Flex container" } };
+    let result = container! { div flex="1 0 auto" { "Flex container" } };
     let container = &result[0];
     assert!(container.flex.is_some());
 
     // Test individual flex attributes
     let result =
-        container! { Div flex-grow="2" flex-shrink="0" flex-basis="100px" { "Individual flex" } };
+        container! { div flex-grow="2" flex-shrink="0" flex-basis="100px" { "Individual flex" } };
     let container = &result[0];
     assert!(container.flex.is_some());
 }
@@ -328,12 +328,12 @@ fn flex_attributes() {
 #[test]
 fn text_decoration_attributes() {
     // Test basic text-decoration attribute
-    let result = container! { Div text-decoration="underline" { "Decorated text" } };
+    let result = container! { div text-decoration="underline" { "Decorated text" } };
     let container = &result[0];
     assert!(container.text_decoration.is_some());
 
     // Test text-decoration none
-    let result = container! { Div text-decoration="none" { "No decoration" } };
+    let result = container! { div text-decoration="none" { "No decoration" } };
     let container = &result[0];
     assert!(container.text_decoration.is_some());
 }
@@ -341,9 +341,9 @@ fn text_decoration_attributes() {
 #[test]
 fn mixed_content() {
     let result = container! {
-        Div {
+        div {
             "Text before element "
-            Span { "inside span" }
+            span { "inside span" }
             " text after element"
         }
     };
@@ -355,7 +355,7 @@ fn mixed_content() {
 
 #[test]
 fn data_attributes() {
-    let result = container! { Div data-id="123" data-name="test" { "With data attributes" } };
+    let result = container! { div data-id="123" data-name="test" { "With data attributes" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div data-id="123" data-name="test">With data attributes</div>"#
@@ -365,8 +365,8 @@ fn data_attributes() {
 #[test]
 fn input_variations() {
     let result = container! {
-        Input type="checkbox" checked;
-        Input type="hidden" value="secret";
+        input type="checkbox" checked;
+        input type="hidden" value="secret";
     };
 
     let value = result.display_to_string(false, false).unwrap();

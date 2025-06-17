@@ -3,7 +3,7 @@ use hyperchad_template_macros::container;
 #[test]
 fn test_htmx_get_route() {
     let containers = container! {
-        Div hx-get="/test-route" hx-trigger="load" {
+        div hx-get="/test-route" hx-trigger="load" {
             "Hello World"
         }
     };
@@ -31,7 +31,7 @@ fn test_htmx_get_route() {
 #[test]
 fn test_htmx_post_route_with_swap() {
     let containers = container! {
-        Button hx-post="/submit" hx-swap="children" {
+        button hx-post="/submit" hx-swap="children" {
             "Submit"
         }
     };
@@ -60,7 +60,7 @@ fn test_htmx_post_route_with_swap() {
 #[test]
 fn test_htmx_delete_route_with_id_swap() {
     let containers = container! {
-        Button hx-delete="/delete/item" hx-swap="#item-list" {
+        button hx-delete="/delete/item" hx-swap="#item-list" {
             "Delete"
         }
     };
@@ -95,7 +95,7 @@ fn test_htmx_expression_route() {
     let _item_id = 123;
 
     let containers = container! {
-        Div hx-get={(format!("{}/items/{}", _base_url, _item_id))} hx-trigger="click" {
+        div hx-get={(format!("{}/items/{}", _base_url, _item_id))} hx-trigger="click" {
             "Load Item"
         }
     };
@@ -123,7 +123,7 @@ fn test_htmx_expression_route() {
 #[test]
 fn test_mixed_attributes() {
     let containers = container! {
-        Div
+        div
             hx-post="/submit"
             hx-trigger="submit"
             hx-swap="this"

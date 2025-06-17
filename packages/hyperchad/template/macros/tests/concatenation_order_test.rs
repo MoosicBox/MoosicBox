@@ -6,7 +6,7 @@ fn test_concatenation_order() {
     let item_id = "123";
 
     let result = container! {
-        Div {
+        div {
             {"Name: " (item_id)}
         }
     };
@@ -41,7 +41,7 @@ fn test_multiple_concatenation_order() {
     let suffix = "end";
 
     let result = container! {
-        Div {
+        div {
             {(prefix) ": middle :" (suffix)}
         }
     };

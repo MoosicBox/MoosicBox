@@ -62,7 +62,7 @@ fn artist_cover_img(host: &str, artist: &ApiArtist, size: u16) -> Containers {
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     container! {
-        Image loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(host, &artist, request_size, request_size)) width=(size) height=(size);
+        image loading=(ImageLoading::Lazy) src=(artist_cover_url_from_artist(host, &artist, request_size, request_size)) width=(size) height=(size);
     }
 }
 
@@ -75,7 +75,7 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Containers {
         size: u16,
     ) -> Containers {
         container! {
-            Div
+            div
                 hx-get={
                     "/artists/albums-list"
                     "?artistId="(artist_id)
@@ -118,16 +118,16 @@ pub fn artist_page_content(state: &State, artist: &ApiArtist) -> Containers {
     }
 
     container! {
-        Div padding-x=60 padding-y=20 {
-            Div padding-y=20 {
+        div padding-x=60 padding-y=20 {
+            div padding-y=20 {
                 "Back"
             }
-            Div direction=row {
-                Div width=(size) height=(size) padding-right=15 {
+            div direction=row {
+                div width=(size) height=(size) padding-right=15 {
                     (artist_cover_img(&connection.api_url, &artist, size))
                 }
-                Div {
-                    H1 { (artist.title) }
+                div {
+                    h1 { (artist.title) }
                 }
             }
             @for source in sources {
@@ -154,7 +154,7 @@ pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Containers 
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     container! {
-        Div
+        div
             direction=row
             overflow-x=(LayoutOverflow::Wrap { grid: true })
             grid-cell-size=(size)
@@ -164,9 +164,9 @@ pub fn artists_page_content(state: &State, artists: &[ApiArtist]) -> Containers 
             padding-y=15
         {
             @for artist in artists {
-                Anchor href=(artist_page_url(&artist.artist_id.to_string())) width=(size) {
-                    Div width=(size) {
-                        Image
+                anchor href=(artist_page_url(&artist.artist_id.to_string())) width=(size) {
+                    div width=(size) {
+                        image
                             loading=(ImageLoading::Lazy)
                             src=(artist_cover_url_from_artist(&connection.api_url, artist, request_size, request_size))
                             width=(size)
@@ -198,8 +198,8 @@ pub fn albums_list(
     }
 
     container! {
-        Div padding-y=20 {
-            H2 {
+        div padding-y=20 {
+            h2 {
                 (album_type.into_formatted())
                 @if source.is_library() {
                     " in "
@@ -208,7 +208,7 @@ pub fn albums_list(
                 }
                 (source.into_formatted())
             }
-            Div
+            div
                 direction=row
                 overflow-x=(LayoutOverflow::Wrap { grid: true })
                 grid-cell-size=(size)

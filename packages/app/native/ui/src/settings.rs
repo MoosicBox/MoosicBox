@@ -19,17 +19,17 @@ pub fn settings_page_content(
     music_api_settings: &[MusicApiSettings],
 ) -> Containers {
     container! {
-        Div padding=20 gap=10 {
-            Section align-items=start {
-                Div align-items=end gap=10 {
-                    Form
+        div padding=20 gap=10 {
+            section align-items=start {
+                div align-items=end gap=10 {
+                    form
                         hx-post="/settings/connection-name"
                         width=100%
                         align-items=end
                         gap=5
                     {
-                        Div { "Name: " Input type=text name="name" value=(connection_name); }
-                        Button
+                        div { "Name: " input type=text name="name" value=(connection_name); }
+                        button
                             type=submit
                             border-radius=5
                             background="#111"
@@ -41,19 +41,19 @@ pub fn settings_page_content(
                         }
                     }
 
-                    Div width=100% text-align=start {
-                        H2 { "Connections" }
+                    div width=100% text-align=start {
+                        h2 { "Connections" }
                     }
 
                     (connections_content(connections, selected))
 
-                    Div
+                    div
                         direction=row
                         justify-content=center
                         width=100%
                         gap=5
                     {
-                        Button
+                        button
                             border-radius=5
                             background="#111"
                             border="2, #222"
@@ -68,15 +68,15 @@ pub fn settings_page_content(
                 }
             }
 
-            Section hx-get="/settings/download-settings" hx-trigger="load" {
-                Div #settings-download-settings-section {}
+            section hx-get="/settings/download-settings" hx-trigger="load" {
+                div #settings-download-settings-section {}
             }
 
-            Section hx-get="/settings/scan-settings" hx-trigger="load" {
-                Div #settings-scan-settings-section {}
+            section hx-get="/settings/scan-settings" hx-trigger="load" {
+                div #settings-scan-settings-section {}
             }
 
-            Section hx-get="/settings/music-api-settings" hx-trigger="load" {
+            section hx-get="/settings/music-api-settings" hx-trigger="load" {
                 (music_api_settings_section(&music_api_settings))
             }
         }
@@ -86,19 +86,19 @@ pub fn settings_page_content(
 #[must_use]
 pub fn scan_settings_content(scan_settings: &ScanSettings) -> Containers {
     container! {
-        Div #settings-scan-settings-section {
-            H2 { "Scan Settings" }
-            H3 { "Scan paths:" }
+        div #settings-scan-settings-section {
+            h2 { "Scan Settings" }
+            h3 { "Scan paths:" }
             @if scan_settings.scan_paths.is_empty() {
                 "No scan paths"
             } @else {
-                Ul {
+                ul {
                     @for path in &scan_settings.scan_paths {
-                        Li {
+                        li {
                             (path)
-                            Form hx-delete="/settings/scan/scan-path" {
-                                Input type=hidden name="path" value=(path);
-                                Button
+                            form hx-delete="/settings/scan/scan-path" {
+                                input type=hidden name="path" value=(path);
+                                button
                                     type=submit
                                     border-radius=5
                                     background="#111"
@@ -120,21 +120,21 @@ pub fn scan_settings_content(scan_settings: &ScanSettings) -> Containers {
 #[must_use]
 pub fn download_settings_content(download_settings: &DownloadSettings) -> Containers {
     container! {
-        Div #settings-download-settings-section {
-            H2 { "Scan Settings" }
-            H3 { "Download locations:" }
+        div #settings-download-settings-section {
+            h2 { "Scan Settings" }
+            h3 { "Download locations:" }
             @if download_settings.download_locations.is_empty() {
                 "No download locations"
             } @else {
-                Ul {
+                ul {
                     @for (_id, location) in &download_settings.download_locations {
                         @let is_default = download_settings.default_download_location.as_ref().is_some_and(|x| x == location);
 
-                        Li {
+                        li {
                             (location)
-                            Form hx-delete="/settings/download/download-location" {
-                                Input type=hidden name="location" value=(location);
-                                Button
+                            form hx-delete="/settings/download/download-location" {
+                                input type=hidden name="location" value=(location);
+                                button
                                     type=submit
                                     border-radius=5
                                     background="#111"
@@ -146,9 +146,9 @@ pub fn download_settings_content(download_settings: &DownloadSettings) -> Contai
                                 }
                             }
                             @if !is_default {
-                                Form hx-post="/settings/download/default-download-location" {
-                                    Input type=hidden name="location" value=(location);
-                                    Button
+                                form hx-post="/settings/download/default-download-location" {
+                                    input type=hidden name="location" value=(location);
+                                    button
                                         type=submit
                                         border-radius=5
                                         background="#111"
@@ -171,10 +171,10 @@ pub fn download_settings_content(download_settings: &DownloadSettings) -> Contai
 #[must_use]
 pub fn music_api_settings_section(settings: &[MusicApiSettings]) -> Containers {
     container! {
-        Div #settings-music-api-settings-section {
+        div #settings-music-api-settings-section {
             @for settings in settings {
-                Section {
-                    H2 { (settings.name) }
+                section {
+                    h2 { (settings.name) }
                     (music_api_settings_content(settings, AuthState::Initial))
                 }
             }
@@ -196,15 +196,15 @@ pub fn music_api_settings_content(
 ) -> Containers {
     container! {
         @let id = format!("settings-{}", classify_name(&settings.id));
-        Div id=(id) {
+        div id=(id) {
             @if settings.auth_method.is_none() || settings.logged_in {
-                Div gap=10 {
+                div gap=10 {
                     @if settings.logged_in {
-                        Div { "Logged in!" }
+                        div { "Logged in!" }
                     }
                     @if settings.supports_scan {
                         @if settings.scan_enabled {
-                            Button
+                            button
                                 type=button
                                 hx-post={"/music-api/scan?apiSource="(settings.id)}
                                 hx-swap=(SwapTarget::Id(id))
@@ -218,7 +218,7 @@ pub fn music_api_settings_content(
                                 "Run Scan"
                             }
                         } @else {
-                            Button
+                            button
                                 type=button
                                 hx-post={"/music-api/enable-scan-origin?apiSource="(settings.id)}
                                 hx-swap=(SwapTarget::Id(id))
@@ -236,16 +236,16 @@ pub fn music_api_settings_content(
                     }
                 }
             } @else if let Some(auth_method) = &settings.auth_method {
-                Form
+                form
                     hx-post={"/music-api/auth?apiSource="(settings.id)}
                     hx-swap=(SwapTarget::Id(id))
                 {
                     @match auth_method {
                         AuthMethod::UsernamePassword => {
-                            Input type=hidden name="type" value="username-password";
-                            Input type=text name="username" placeholder="Username";
-                            Input type=password name="password" placeholder="Password";
-                            Button
+                            input type=hidden name="type" value="username-password";
+                            input type=text name="username" placeholder="Username";
+                            input type=password name="password" placeholder="Password";
+                            button
                                 type=submit
                                 border-radius=5
                                 background="#111"
@@ -259,8 +259,8 @@ pub fn music_api_settings_content(
                         AuthMethod::Poll => {
                             @match auth_state {
                                 AuthState::Initial => {
-                                    Input type=hidden name="type" value="poll";
-                                    Button
+                                    input type=hidden name="type" value="poll";
+                                    button
                                         type=submit
                                         border-radius=5
                                         background="#111"
@@ -288,7 +288,7 @@ pub fn music_api_settings_content(
 pub fn scan_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Containers {
     let id = id.as_ref();
     container! {
-        Div id={"settings-scan-error-"(classify_name(id))} {
+        div id={"settings-scan-error-"(classify_name(id))} {
             @if let Some(message) = message {
                 (message)
             }
@@ -300,7 +300,7 @@ pub fn scan_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Contai
 pub fn auth_error_message<T: AsRef<str>>(id: T, message: Option<&str>) -> Containers {
     let id = id.as_ref();
     container! {
-        Div id={"settings-auth-error-"(classify_name(id))} {
+        div id={"settings-auth-error-"(classify_name(id))} {
             @if let Some(message) = message {
                 (message)
             }
@@ -314,32 +314,32 @@ pub fn connections_content(
     current_connection: Option<&Connection>,
 ) -> Containers {
     container! {
-        Div #settings-connections gap=10 {
+        div #settings-connections gap=10 {
             @for connection in connections {
                 @let current_connection = current_connection.is_some_and(|x| x == connection);
                 @let connection_input = |input, placeholder| connection_input(connection, input, placeholder);
 
-                Form
+                form
                     hx-patch={"/settings/connections?name="(connection.name)}
                     hx-swap=(SwapTarget::Id("settings-connections".to_string()))
                     width=100%
                     gap=5
                 {
                     @if current_connection {
-                        Div { "(Selected)" }
+                        div { "(Selected)" }
                     }
-                    Div text-align=end {
-                        Div { "Name: " (connection_input(ConnectionInput::Name, Some("New connection"))) }
-                        Div { "API URL: " (connection_input(ConnectionInput::ApiUrl, None)) }
+                    div text-align=end {
+                        div { "Name: " (connection_input(ConnectionInput::Name, Some("New connection"))) }
+                        div { "API URL: " (connection_input(ConnectionInput::ApiUrl, None)) }
                     }
-                    Div
+                    div
                         direction=row
                         justify-content=end
                         gap=5
                         width=100%
                     {
                         @if !current_connection {
-                            Button
+                            button
                                 border-radius=5
                                 background="#111"
                                 border="2, #222"
@@ -351,7 +351,7 @@ pub fn connections_content(
                                 "Select"
                             }
                         }
-                        Button
+                        button
                             border-radius=5
                             background="#111"
                             border="2, #222"
@@ -362,7 +362,7 @@ pub fn connections_content(
                         {
                             "Delete"
                         }
-                        Button
+                        button
                             type=submit
                             border-radius=5
                             background="#111"
@@ -397,7 +397,7 @@ fn connection_input(
             ConnectionInput::Name => connection.name.clone(),
             ConnectionInput::ApiUrl => connection.api_url.clone(),
         };
-        Input
+        input
             type=text
             placeholder=[placeholder]
             value=(value)

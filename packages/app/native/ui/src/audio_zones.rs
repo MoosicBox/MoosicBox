@@ -9,17 +9,17 @@ use crate::{AUDIO_ZONES_CONTENT_ID, public_img};
 #[must_use]
 pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnection]) -> Containers {
     container! {
-        Div id=(AUDIO_ZONES_CONTENT_ID) {
+        div id=(AUDIO_ZONES_CONTENT_ID) {
             @for connection in connections {
-                Div padding-y=10 {
-                    H1 direction=row {
+                div padding-y=10 {
+                    h1 direction=row {
                         @let icon_size = 20;
-                        Div
+                        div
                             width=(icon_size)
                             height=(icon_size)
                             margin-right=5
                         {
-                            Image
+                            image
                                 width=(icon_size)
                                 height=(icon_size)
                                 src=(public_img!("speaker-white.svg"));
@@ -27,16 +27,16 @@ pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnecti
 
                         (connection.name) " players"
                     }
-                    Div {
+                    div {
                         @for player in &connection.players {
-                            Div direction=row {
+                            div direction=row {
                                 @let icon_size = 20;
-                                Div
+                                div
                                     width=(icon_size)
                                     height=(icon_size)
                                     margin-right=5
                                 {
-                                    Image
+                                    image
                                         width=(icon_size)
                                         height=(icon_size)
                                         src=(public_img!("audio-white.svg"));
@@ -49,15 +49,15 @@ pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnecti
                 }
             }
             @for zone in zones {
-                Div padding-y=10 {
-                    H1 direction=row {
+                div padding-y=10 {
+                    h1 direction=row {
                         @let icon_size = 20;
-                        Div
+                        div
                             width=(icon_size)
                             height=(icon_size)
                             margin-right=5
                         {
-                            Image
+                            image
                                 width=(icon_size)
                                 height=(icon_size)
                                 src=(public_img!("speaker-white.svg"));
@@ -65,16 +65,16 @@ pub fn audio_zones(zones: &[ApiAudioZoneWithSession], connections: &[ApiConnecti
 
                         (zone.name)
                     }
-                    Div {
+                    div {
                         @for player in &zone.players {
-                            Div direction=row {
+                            div direction=row {
                                 @let icon_size = 20;
-                                Div
+                                div
                                     width=(icon_size)
                                     height=(icon_size)
                                     margin-right=5
                                 {
-                                    Image
+                                    image
                                         width=(icon_size)
                                         height=(icon_size)
                                         src=(public_img!("audio-white.svg"));

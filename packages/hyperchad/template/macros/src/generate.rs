@@ -124,7 +124,7 @@ impl Generator {
 
     fn element(&self, element: Element, build: &mut Builder) -> Result<(), String> {
         let element_name = element.name.clone().unwrap_or_else(|| ElementName {
-            name: format_ident!("Div"),
+            name: format_ident!("div"),
         });
 
         // Generate attribute assignments
@@ -274,7 +274,7 @@ impl Generator {
 
             // Determine if this attribute belongs to the element or container
             let is_element_attr = match element_name_str.as_str() {
-                "Input" => matches!(
+                "input" => matches!(
                     name_str.as_str(),
                     "value"
                         | "placeholder"
@@ -286,13 +286,13 @@ impl Generator {
                         | "multiple"
                         | "required"
                 ),
-                "Button" => matches!(name_str.as_str(), "type" | "disabled"),
-                "Anchor" => matches!(name_str.as_str(), "href" | "target"),
-                "Image" => matches!(
+                "button" => matches!(name_str.as_str(), "type" | "disabled"),
+                "anchor" => matches!(name_str.as_str(), "href" | "target"),
+                "image" => matches!(
                     name_str.as_str(),
                     "src" | "alt" | "srcset" | "sizes" | "loading" | "fit"
                 ),
-                "Canvas" => matches!(name_str.as_str(), "width" | "height"),
+                "canvas" => matches!(name_str.as_str(), "width" | "height"),
                 _ => false,
             };
 
@@ -314,10 +314,10 @@ impl Generator {
         let name_str = name.name.to_string();
 
         Ok(match name_str.as_str() {
-            "Input" => self.generate_input_element(element_attrs)?,
-            "Button" => self.generate_button_element(element_attrs),
-            "Anchor" => self.generate_anchor_element(element_attrs),
-            "Image" => self.generate_image_element(element_attrs),
+            "input" => self.generate_input_element(element_attrs)?,
+            "button" => self.generate_button_element(element_attrs),
+            "anchor" => self.generate_anchor_element(element_attrs),
+            "image" => self.generate_image_element(element_attrs),
             _ => self.element_name_to_type(name), // Fallback to simple element generation
         })
     }
@@ -1335,19 +1335,19 @@ impl Generator {
     fn element_name_to_type(&self, name: &ElementName) -> TokenStream {
         let name_str = name.name.to_string();
         match name_str.as_str() {
-            "Div" => quote! { hyperchad_transformer::Element::Div },
-            "Section" => quote! { hyperchad_transformer::Element::Section },
-            "Aside" => quote! { hyperchad_transformer::Element::Aside },
-            "Main" => quote! { hyperchad_transformer::Element::Main },
-            "Header" => quote! { hyperchad_transformer::Element::Header },
-            "Footer" => quote! { hyperchad_transformer::Element::Footer },
-            "Form" => quote! { hyperchad_transformer::Element::Form },
-            "Span" => quote! { hyperchad_transformer::Element::Span },
-            "Button" => quote! { hyperchad_transformer::Element::Button { r#type: None } },
-            "Anchor" => {
+            "div" => quote! { hyperchad_transformer::Element::Div },
+            "section" => quote! { hyperchad_transformer::Element::Section },
+            "aside" => quote! { hyperchad_transformer::Element::Aside },
+            "main" => quote! { hyperchad_transformer::Element::Main },
+            "header" => quote! { hyperchad_transformer::Element::Header },
+            "footer" => quote! { hyperchad_transformer::Element::Footer },
+            "form" => quote! { hyperchad_transformer::Element::Form },
+            "span" => quote! { hyperchad_transformer::Element::Span },
+            "button" => quote! { hyperchad_transformer::Element::Button { r#type: None } },
+            "anchor" => {
                 quote! { hyperchad_transformer::Element::Anchor { target: None, href: None } }
             }
-            "Image" => quote! { hyperchad_transformer::Element::Image {
+            "image" => quote! { hyperchad_transformer::Element::Image {
                 source: None,
                 alt: None,
                 fit: None,
@@ -1355,41 +1355,41 @@ impl Generator {
                 sizes: None,
                 loading: None
             } },
-            "Input" => quote! { hyperchad_transformer::Element::Input {
+            "input" => quote! { hyperchad_transformer::Element::Input {
                 input: hyperchad_transformer::Input::Text { value: None, placeholder: None },
                 name: None
             } },
-            "H1" => {
+            "h1" => {
                 quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H1 } }
             }
-            "H2" => {
+            "h2" => {
                 quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H2 } }
             }
-            "H3" => {
+            "h3" => {
                 quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H3 } }
             }
-            "H4" => {
+            "h4" => {
                 quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H4 } }
             }
-            "H5" => {
+            "h5" => {
                 quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H5 } }
             }
-            "H6" => {
+            "h6" => {
                 quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H6 } }
             }
-            "UnorderedList" | "Ul" => quote! { hyperchad_transformer::Element::UnorderedList },
-            "OrderedList" | "Ol" => quote! { hyperchad_transformer::Element::OrderedList },
-            "ListItem" | "Li" => quote! { hyperchad_transformer::Element::ListItem },
-            "Table" => quote! { hyperchad_transformer::Element::Table },
-            "THead" => quote! { hyperchad_transformer::Element::THead },
-            "TH" => quote! { hyperchad_transformer::Element::TH },
-            "TBody" => quote! { hyperchad_transformer::Element::TBody },
-            "TR" => quote! { hyperchad_transformer::Element::TR },
-            "TD" => quote! { hyperchad_transformer::Element::TD },
-            "Canvas" => quote! { hyperchad_transformer::Element::Canvas },
+            "ul" => quote! { hyperchad_transformer::Element::UnorderedList },
+            "ol" => quote! { hyperchad_transformer::Element::OrderedList },
+            "li" => quote! { hyperchad_transformer::Element::ListItem },
+            "table" => quote! { hyperchad_transformer::Element::Table },
+            "thead" => quote! { hyperchad_transformer::Element::THead },
+            "th" => quote! { hyperchad_transformer::Element::TH },
+            "tbody" => quote! { hyperchad_transformer::Element::TBody },
+            "tr" => quote! { hyperchad_transformer::Element::TR },
+            "td" => quote! { hyperchad_transformer::Element::TD },
+            "canvas" => quote! { hyperchad_transformer::Element::Canvas },
             _ => {
                 let error_msg = format!(
-                    "Unknown element type '{name_str}'. Supported elements are: Div, Section, Aside, Main, Header, Footer, Form, Span, Button, Anchor, Image, Input, H1, H2, H3, H4, H5, H6, UnorderedList (Ul), OrderedList (Ol), ListItem (Li), Table, THead, TH, TBody, TR, TD, Canvas",
+                    "Unknown element type '{name_str}'. Supported elements are: div, section, aside, main, header, footer, form, span, button, anchor, image, input, h1, h2, h3, h4, h5, h6, ul, ol, li, table, thead, th, tbody, tr, td, canvas",
                 );
                 quote! { compile_error!(#error_msg) }
             }

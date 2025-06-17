@@ -14,7 +14,7 @@ fn macro_interaction() {
         () => {{
             let name = "Pinkie Pie";
             container! {
-                Div { "Hello, " (name) "!" }
+                div { "Hello, " (name) "!" }
             }
         }};
     }
@@ -30,7 +30,7 @@ fn macro_with_parameters() {
     macro_rules! greet {
         ($name:expr) => {{
             container! {
-                Div { "Hello, " ($name) "!" }
+                div { "Hello, " ($name) "!" }
             }
         }};
     }
@@ -52,7 +52,7 @@ fn nested_macro_wrapper() {
     }
 
     let name = "Lyra";
-    let result = wrapper!(Div { "Hi, " (name) "!" });
+    let result = wrapper!(div { "Hi, " (name) "!" });
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         "<div>Hi, Lyra!</div>"
@@ -194,9 +194,9 @@ fn unicode_support() {
 #[test]
 fn empty_containers() {
     let result = container! {
-        Div {}
-        Span {}
-        Section {}
+        div {}
+        span {}
+        section {}
     };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
@@ -208,9 +208,9 @@ fn empty_containers() {
 #[test]
 fn whitespace_handling() {
     let result = container! {
-        Div { "   " }
-        Div { "\n\t" }
-        Div { " hello world " }
+        div { "   " }
+        div { "\n\t" }
+        div { " hello world " }
     };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
@@ -235,13 +235,13 @@ fn nested_structures() {
         name: "Alice".to_string(),
         age: 30,
         address: Address {
-            street: "123 Main St".to_string(),
+            street: "123 main St".to_string(),
             city: "Springfield".to_string(),
         },
     };
 
     let result = container! {
-        Div {
+        div {
             "Name: " (person.name) ", Age: " (person.age)
             ", Address: " (person.address.street) ", " (person.address.city)
         }
@@ -249,7 +249,7 @@ fn nested_structures() {
 
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
-        "<div>Name: Alice, Age: 30, Address: 123 Main St, Springfield</div>"
+        "<div>Name: Alice, Age: 30, Address: 123 main St, Springfield</div>"
     );
 }
 
@@ -259,13 +259,13 @@ fn collection_iteration() {
     let array_data = ["one", "two", "three"];
 
     let result = container! {
-        Div {
+        div {
             "Vec: "
             @for item in &vec_data {
                 (item) " "
             }
         }
-        Div {
+        div {
             "Array: "
             @for item in &array_data {
                 (item) " "

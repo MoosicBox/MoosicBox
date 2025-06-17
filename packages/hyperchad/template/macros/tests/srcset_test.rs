@@ -3,7 +3,7 @@ use hyperchad_template::container;
 #[test]
 fn test_srcset_concatenation() {
     let containers = container! {
-        Image srcset={
+        image srcset={
             "showcase-240.webp 240w, "
             "showcase-540.webp 540w, "
             "showcase-1080.webp 1080w"
@@ -34,7 +34,7 @@ fn test_srcset_with_expressions() {
     }
 
     let containers = container! {
-        Image srcset={
+        image srcset={
             (public_img("showcase-2x240.webp"))" 240w, "
             (public_img("showcase-2x540.webp"))" 540w, "
             (public_img("showcase-2.webp"))" 1080w"
@@ -61,7 +61,7 @@ fn test_srcset_with_expressions() {
 #[test]
 fn test_srcset_simple_string() {
     let containers = container! {
-        Image srcset="showcase.webp 1x, showcase-2x.webp 2x" {
+        image srcset="showcase.webp 1x, showcase-2x.webp 2x" {
         }
     };
 
@@ -82,7 +82,7 @@ fn test_srcset_simple_string() {
 fn test_srcset_expression() {
     let srcset_value = "responsive.webp 480w, responsive-hd.webp 1080w".to_string();
     let containers = container! {
-        Image srcset=(srcset_value) {
+        image srcset=(srcset_value) {
         }
     };
 

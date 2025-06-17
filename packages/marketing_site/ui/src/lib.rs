@@ -22,13 +22,13 @@ macro_rules! public_img {
 #[must_use]
 pub fn header() -> Containers {
     container! {
-        Header
+        header
             direction=row
             align-items=center
             background="#080a0b"
         {
-            Div #header-logo padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
-                Anchor
+            div #header-logo padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
+                anchor
                     color="#fff"
                     direction=row
                     align-items=center
@@ -36,17 +36,17 @@ pub fn header() -> Containers {
                     href="/"
                 {
                     @let icon_size = 40;
-                    Image
+                    image
                         alt="MoosicBox logo"
                         width=(icon_size)
                         height=(icon_size)
                         margin-right=5
                         src=(public_img!("icon128.png"));
 
-                    H1 font-size=20 { "MoosicBox" }
+                    h1 font-size=20 { "MoosicBox" }
                 }
             }
-            Div
+            div
                 #header-menu-items
                 direction=row
                 align-items=center
@@ -55,23 +55,23 @@ pub fn header() -> Containers {
                 padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20))
                 col-gap=(if_responsive("mobile").then::<i32>(10).or_else(20))
             {
-                Anchor color="#fff" href="/download" {
+                anchor color="#fff" href="/download" {
                     "Download"
                 }
-                Anchor color="#fff" href="https://app.moosicbox.com/login" {
+                anchor color="#fff" href="https://app.moosicbox.com/login" {
                     "Log in"
                 }
-                Anchor
+                anchor
                     color="#fff"
                     background="#282a2b"
                     border-radius=5
                     padding=8
                     href="/try-now"
                 {
-                    Span #try-desktop hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
+                    span #try-desktop hidden=(if_responsive("mobile").then::<bool>(true).or_else(false)) {
                         "Start Free Trial"
                     }
-                    Span #try-mobile hidden=(if_responsive("mobile").then::<bool>(false).or_else(true)) {
+                    span #try-mobile hidden=(if_responsive("mobile").then::<bool>(false).or_else(true)) {
                         "Try"
                     }
                 }
@@ -83,7 +83,7 @@ pub fn header() -> Containers {
 #[must_use]
 pub fn main(slot: &Containers) -> Containers {
     container! {
-        Main flex-grow=1 min-height=0 {
+        main flex-grow=1 min-height=0 {
             (slot)
         }
     }
@@ -106,11 +106,11 @@ pub fn not_found() -> Containers {
 #[must_use]
 pub fn home() -> Containers {
     page(&container! {
-        Div
+        div
             min-height=100%
             justify-content=center
         {
-            Div
+            div
                 #pics
                 direction=(
                     if_responsive("mobile-large")
@@ -122,8 +122,8 @@ pub fn home() -> Containers {
                 padding-x=50
                 gap="calc(min(100, 5%))"
             {
-                Div flex-grow=2 {
-                    H1
+                div flex-grow=2 {
+                    h1
                         #splashscreen-motto
                         font-size=50
                         text-align=(
@@ -135,19 +135,19 @@ pub fn home() -> Containers {
                         "Listen to your HiFi music anywhere"
                     }
                 }
-                Div
+                div
                     direction=row
                     position=relative
                     height=100%
                     flex-grow=3
                 {
-                    Div
+                    div
                         margin-left="calc(10% - (100% / 30))"
                         height=100%
                         max-height=100%
                         max-width="calc(100% - calc(10% - (100% / 30)))"
                     {
-                        Image
+                        image
                             src=(public_img!("showcase-1.webp"))
                             srcset={
                                 (public_img!("showcase-1x240.webp"))" 240w, "
@@ -160,14 +160,14 @@ pub fn home() -> Containers {
                             alt="MoosicBox showcase desktop"
                             fit="contain";
                     }
-                    Div
+                    div
                         position=absolute
                         bottom=50%
                         translate-y=50%
                         height="calc(min(65%, 50dvw))"
                         max-height=80%
                     {
-                        Image
+                        image
                             src=(public_img!("showcase-2.webp"))
                             srcset={
                                 (public_img!("showcase-2x240.webp"))" 240w, "
@@ -189,7 +189,7 @@ pub fn home() -> Containers {
 #[must_use]
 pub fn page(slot: &Containers) -> Containers {
     container! {
-        Div
+        div
             width=100%
             height=100%
             position=relative

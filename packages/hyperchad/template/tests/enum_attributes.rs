@@ -5,65 +5,65 @@ use hyperchad_transformer_models::*;
 fn test_bare_identifier_enum_attributes() {
     // Test visibility with kebab-case bare identifiers (new syntax)
     let containers = container! {
-        Div visibility=hidden { "Hidden div" }
+        div visibility=hidden { "Hidden div" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].visibility, Some(Visibility::Hidden));
 
     let containers = container! {
-        Div visibility=visible { "Visible div" }
+        div visibility=visible { "Visible div" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].visibility, Some(Visibility::Visible));
 
     // Test layout direction with kebab-case bare identifiers
     let containers = container! {
-        Div direction=row { "Row layout" }
+        div direction=row { "Row layout" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].direction, LayoutDirection::Row);
 
     let containers = container! {
-        Div direction=column { "Column layout" }
+        div direction=column { "Column layout" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].direction, LayoutDirection::Column);
 
     // Test position with kebab-case bare identifiers
     let containers = container! {
-        Div position=fixed { "Fixed position" }
+        div position=fixed { "Fixed position" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].position, Some(Position::Fixed));
 
     let containers = container! {
-        Div position=relative { "Relative position" }
+        div position=relative { "Relative position" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].position, Some(Position::Relative));
 
     // Test align-items with kebab-case bare identifiers
     let containers = container! {
-        Div align-items=center { "Centered items" }
+        div align-items=center { "Centered items" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].align_items, Some(AlignItems::Center));
 
     let containers = container! {
-        Div align-items=start { "Start alignment" }
+        div align-items=start { "Start alignment" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].align_items, Some(AlignItems::Start));
 
     // Test justify-content with kebab-case bare identifiers
     let containers = container! {
-        Div justify-content=center { "Centered content" }
+        div justify-content=center { "Centered content" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].justify_content, Some(JustifyContent::Center));
 
     let containers = container! {
-        Div justify-content=space-between { "Space between" }
+        div justify-content=space-between { "Space between" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(
@@ -73,13 +73,13 @@ fn test_bare_identifier_enum_attributes() {
 
     // Test cursor with kebab-case bare identifiers
     let containers = container! {
-        Div cursor=pointer { "Pointer cursor" }
+        div cursor=pointer { "Pointer cursor" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].cursor, Some(Cursor::Pointer));
 
     let containers = container! {
-        Div cursor=auto { "Auto cursor" }
+        div cursor=auto { "Auto cursor" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].cursor, Some(Cursor::Auto));
@@ -89,43 +89,43 @@ fn test_bare_identifier_enum_attributes() {
 fn test_string_literal_enum_attributes() {
     // Test that string literals work (kebab-case conversion)
     let containers = container! {
-        Div visibility="hidden" { "Hidden with string" }
+        div visibility="hidden" { "Hidden with string" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].visibility, Some(Visibility::Hidden));
 
     let containers = container! {
-        Div visibility="visible" { "Visible with string" }
+        div visibility="visible" { "Visible with string" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].visibility, Some(Visibility::Visible));
 
     let containers = container! {
-        Div direction="row" { "Row layout" }
+        div direction="row" { "Row layout" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].direction, LayoutDirection::Row);
 
     let containers = container! {
-        Div direction="column" { "Column layout" }
+        div direction="column" { "Column layout" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].direction, LayoutDirection::Column);
 
     let containers = container! {
-        Div position="fixed" { "Fixed position" }
+        div position="fixed" { "Fixed position" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].position, Some(Position::Fixed));
 
     let containers = container! {
-        Div position="absolute" { "Absolute position" }
+        div position="absolute" { "Absolute position" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].position, Some(Position::Absolute));
 
     let containers = container! {
-        Div position="relative" { "Relative position" }
+        div position="relative" { "Relative position" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].position, Some(Position::Relative));
@@ -135,32 +135,32 @@ fn test_string_literal_enum_attributes() {
 fn test_alignment_enum_attributes() {
     // Test align-items with string literals - using correct enum variants
     let containers = container! {
-        Div align-items="center" { "Centered items" }
+        div align-items="center" { "Centered items" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].align_items, Some(AlignItems::Center));
 
     let containers = container! {
-        Div align-items="start" { "Start alignment" }
+        div align-items="start" { "Start alignment" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].align_items, Some(AlignItems::Start));
 
     let containers = container! {
-        Div align-items="end" { "End alignment" }
+        div align-items="end" { "End alignment" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].align_items, Some(AlignItems::End));
 
     // Test justify-content with string literals
     let containers = container! {
-        Div justify-content="center" { "Centered content" }
+        div justify-content="center" { "Centered content" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].justify_content, Some(JustifyContent::Center));
 
     let containers = container! {
-        Div justify-content="space-between" { "Space between" }
+        div justify-content="space-between" { "Space between" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(
@@ -169,7 +169,7 @@ fn test_alignment_enum_attributes() {
     );
 
     let containers = container! {
-        Div justify-content="space-evenly" { "Space evenly" }
+        div justify-content="space-evenly" { "Space evenly" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(
@@ -182,25 +182,25 @@ fn test_alignment_enum_attributes() {
 fn test_text_enum_attributes() {
     // Test text-align with string literals - using correct enum variants
     let containers = container! {
-        Div text-align="center" { "Centered text" }
+        div text-align="center" { "Centered text" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].text_align, Some(TextAlign::Center));
 
     let containers = container! {
-        Div text-align="start" { "Start aligned text" }
+        div text-align="start" { "Start aligned text" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].text_align, Some(TextAlign::Start));
 
     let containers = container! {
-        Div text-align="end" { "End aligned text" }
+        div text-align="end" { "End aligned text" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].text_align, Some(TextAlign::End));
 
     let containers = container! {
-        Div text-align="justify" { "Justified text" }
+        div text-align="justify" { "Justified text" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].text_align, Some(TextAlign::Justify));
@@ -210,26 +210,26 @@ fn test_text_enum_attributes() {
 fn test_overflow_enum_attributes() {
     // Test overflow-x with string literals - using correct enum variants
     let containers = container! {
-        Div overflow-x="hidden" { "Hidden overflow-x" }
+        div overflow-x="hidden" { "Hidden overflow-x" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].overflow_x, LayoutOverflow::Hidden);
 
     let containers = container! {
-        Div overflow-x="scroll" { "Scroll overflow-x" }
+        div overflow-x="scroll" { "Scroll overflow-x" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].overflow_x, LayoutOverflow::Scroll);
 
     let containers = container! {
-        Div overflow-x="auto" { "Auto overflow-x" }
+        div overflow-x="auto" { "Auto overflow-x" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].overflow_x, LayoutOverflow::Auto);
 
     // Test overflow-y with string literals
     let containers = container! {
-        Div overflow-y="auto" { "Auto overflow-y" }
+        div overflow-y="auto" { "Auto overflow-y" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].overflow_y, LayoutOverflow::Auto);
@@ -239,25 +239,25 @@ fn test_overflow_enum_attributes() {
 fn test_cursor_enum_attributes() {
     // Test cursor with string literals - using correct enum variants
     let containers = container! {
-        Div cursor="pointer" { "Pointer cursor" }
+        div cursor="pointer" { "Pointer cursor" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].cursor, Some(Cursor::Pointer));
 
     let containers = container! {
-        Div cursor="auto" { "Auto cursor" }
+        div cursor="auto" { "Auto cursor" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].cursor, Some(Cursor::Auto));
 
     let containers = container! {
-        Div cursor="text" { "Text cursor" }
+        div cursor="text" { "Text cursor" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].cursor, Some(Cursor::Text));
 
     let containers = container! {
-        Div cursor="grab" { "Grab cursor" }
+        div cursor="grab" { "Grab cursor" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].cursor, Some(Cursor::Grab));
@@ -267,19 +267,19 @@ fn test_cursor_enum_attributes() {
 fn test_expression_enum_attributes() {
     // Test using expressions with enum values
     let containers = container! {
-        Div visibility=(Visibility::Hidden) { "Hidden with expression" }
+        div visibility=(Visibility::Hidden) { "Hidden with expression" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].visibility, Some(Visibility::Hidden));
 
     let containers = container! {
-        Div align-items=(AlignItems::Center) { "Center with expression" }
+        div align-items=(AlignItems::Center) { "Center with expression" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].align_items, Some(AlignItems::Center));
 
     let containers = container! {
-        Div justify-content=(JustifyContent::SpaceBetween) { "Space between with expression" }
+        div justify-content=(JustifyContent::SpaceBetween) { "Space between with expression" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(
@@ -288,7 +288,7 @@ fn test_expression_enum_attributes() {
     );
 
     let containers = container! {
-        Div text-align=(TextAlign::Center) { "Center with expression" }
+        div text-align=(TextAlign::Center) { "Center with expression" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].text_align, Some(TextAlign::Center));
@@ -298,7 +298,7 @@ fn test_expression_enum_attributes() {
 fn test_image_enum_attributes() {
     // Test image fit with string literals
     let containers = container! {
-        Image fit="cover" { }
+        image fit="cover" { }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Image { fit, .. } = &containers[0].element {
@@ -308,7 +308,7 @@ fn test_image_enum_attributes() {
     }
 
     let containers = container! {
-        Image fit="contain" { }
+        image fit="contain" { }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Image { fit, .. } = &containers[0].element {
@@ -318,7 +318,7 @@ fn test_image_enum_attributes() {
     }
 
     let containers = container! {
-        Image fit="fill" { }
+        image fit="fill" { }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Image { fit, .. } = &containers[0].element {
@@ -329,7 +329,7 @@ fn test_image_enum_attributes() {
 
     // Test image loading with string literals
     let containers = container! {
-        Image loading="lazy" { }
+        image loading="lazy" { }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Image { loading, .. } = &containers[0].element {
@@ -339,7 +339,7 @@ fn test_image_enum_attributes() {
     }
 
     let containers = container! {
-        Image loading="eager" { }
+        image loading="eager" { }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Image { loading, .. } = &containers[0].element {
@@ -353,7 +353,7 @@ fn test_image_enum_attributes() {
 fn test_anchor_enum_attributes() {
     // Test anchor target with string literals
     let containers = container! {
-        Anchor target="_blank" { "Link opens in new tab" }
+        anchor target="_blank" { "Link opens in new tab" }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Anchor { target, .. } = &containers[0].element {
@@ -363,7 +363,7 @@ fn test_anchor_enum_attributes() {
     }
 
     let containers = container! {
-        Anchor target="_self" { "Link opens in same tab" }
+        anchor target="_self" { "Link opens in same tab" }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Anchor { target, .. } = &containers[0].element {
@@ -373,7 +373,7 @@ fn test_anchor_enum_attributes() {
     }
 
     let containers = container! {
-        Anchor target="_parent" { "Link opens in parent frame" }
+        anchor target="_parent" { "Link opens in parent frame" }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Anchor { target, .. } = &containers[0].element {
@@ -383,7 +383,7 @@ fn test_anchor_enum_attributes() {
     }
 
     let containers = container! {
-        Anchor target="_top" { "Link opens in top frame" }
+        anchor target="_top" { "Link opens in top frame" }
     };
     assert_eq!(containers.len(), 1);
     if let hyperchad_transformer::Element::Anchor { target, .. } = &containers[0].element {
@@ -398,7 +398,7 @@ fn test_mixed_enum_attribute_syntax() {
     // Test mixing strings and expressions
     let is_hidden = false;
     let containers = container! {
-        Div
+        div
             visibility="hidden"
             align-items="center"
             justify-content=(if is_hidden { JustifyContent::End } else { JustifyContent::Center })
@@ -420,7 +420,7 @@ fn test_complex_expression_enum_attributes() {
     // Test using complex expressions that evaluate to enum values
     let use_center_alignment = true;
     let containers = container! {
-        Div align-items=(if use_center_alignment { AlignItems::Center } else { AlignItems::Start }) {
+        div align-items=(if use_center_alignment { AlignItems::Center } else { AlignItems::Start }) {
             "Dynamic alignment"
         }
     };
@@ -429,7 +429,7 @@ fn test_complex_expression_enum_attributes() {
 
     // Test with expressions
     let containers = container! {
-        Div position=(Position::Fixed) { "Expression position" }
+        div position=(Position::Fixed) { "Expression position" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].position, Some(Position::Fixed));
@@ -439,7 +439,7 @@ fn test_complex_expression_enum_attributes() {
         TextAlign::End
     }
     let containers = container! {
-        Div text-align=(get_text_alignment()) { "Function-determined alignment" }
+        div text-align=(get_text_alignment()) { "Function-determined alignment" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].text_align, Some(TextAlign::End));
@@ -449,7 +449,7 @@ fn test_complex_expression_enum_attributes() {
 fn test_brace_wrapped_enum_attributes() {
     // Test expressions wrapped in braces
     let containers = container! {
-        Div visibility={Visibility::Hidden} { "Brace-wrapped expression" }
+        div visibility={Visibility::Hidden} { "Brace-wrapped expression" }
     };
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].visibility, Some(Visibility::Hidden));
@@ -457,7 +457,7 @@ fn test_brace_wrapped_enum_attributes() {
     // Test complex expressions in braces
     let should_be_visible = true;
     let containers = container! {
-        Div visibility={if should_be_visible { Visibility::Visible } else { Visibility::Hidden }} {
+        div visibility={if should_be_visible { Visibility::Visible } else { Visibility::Hidden }} {
             "Brace-wrapped expression"
         }
     };
@@ -469,7 +469,7 @@ fn test_brace_wrapped_enum_attributes() {
 fn test_multiple_enum_attributes_on_single_element() {
     // Test an element with multiple enum attributes using different syntax styles
     let containers = container! {
-        Div
+        div
             visibility="visible"
             direction="column"
             align-items="center"
@@ -505,7 +505,7 @@ fn test_multiple_enum_attributes_on_single_element() {
 fn test_default_enum_values() {
     // Test that elements get correct default values when no enum attributes are specified
     let containers = container! {
-        Div { "Default values" }
+        div { "Default values" }
     };
 
     assert_eq!(containers.len(), 1);

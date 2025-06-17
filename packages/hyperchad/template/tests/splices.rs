@@ -43,7 +43,7 @@ fn numeric_interpolation() {
 #[test]
 fn attributes() {
     let alt = "Pinkie Pie";
-    let result = container! { Image src="pinkie.jpg" alt=(alt); };
+    let result = container! { image src="pinkie.jpg" alt=(alt); };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<img src="pinkie.jpg" alt="Pinkie Pie" />"#
@@ -53,7 +53,7 @@ fn attributes() {
 #[test]
 fn class_shorthand() {
     let _pinkie_class = "pinkie";
-    let result = container! { Div.pinkie { "Fun!" } };
+    let result = container! { div.pinkie { "Fun!" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div class="pinkie">Fun!</div>"#
@@ -63,7 +63,7 @@ fn class_shorthand() {
 #[test]
 fn class_shorthand_block() {
     let _class_prefix = "pinkie-";
-    let result = container! { Div.pinkie-123 { "Fun!" } };
+    let result = container! { div.pinkie-123 { "Fun!" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div class="pinkie-123">Fun!</div>"#
@@ -73,7 +73,7 @@ fn class_shorthand_block() {
 #[test]
 fn id_shorthand() {
     let pinkie_id = "pinkie";
-    let result = container! { Div #(pinkie_id) { "Fun!" } };
+    let result = container! { div #(pinkie_id) { "Fun!" } };
     assert_eq!(
         result.display_to_string(false, false).unwrap(),
         r#"<div id="pinkie">Fun!</div>"#

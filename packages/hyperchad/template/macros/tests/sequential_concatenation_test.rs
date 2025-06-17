@@ -8,7 +8,7 @@ fn test_sequential_literal_splice() {
     }
 
     let result = container! {
-        Div { "Name: " (connection_input()) }
+        div { "Name: " (connection_input()) }
     };
 
     assert_eq!(result.len(), 1);
@@ -42,7 +42,7 @@ fn test_multiple_sequential_concatenations() {
     }
 
     let result = container! {
-        Div {
+        div {
             "Before: " (get_first()) " Middle: " (get_second()) " End"
         }
     };
@@ -95,9 +95,9 @@ fn test_mixed_sequential_and_separate() {
     }
 
     let result = container! {
-        Div {
+        div {
             "Label: " (get_value())
-            Span { "Separate element" }
+            span { "Separate element" }
             "Another: " (get_value())
         }
     };

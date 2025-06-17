@@ -3,7 +3,7 @@ use hyperchad_template::container;
 #[test]
 fn test_font_family_parsing() {
     let containers = container! {
-        Div font-family="Arial, sans-serif" {
+        div font-family="Arial, sans-serif" {
             "Test text"
         }
     };
@@ -23,7 +23,7 @@ fn test_font_family_parsing() {
 #[test]
 fn test_font_family_single_font() {
     let containers = container! {
-        Div font-family="Helvetica" {
+        div font-family="Helvetica" {
             "Test text"
         }
     };
@@ -41,7 +41,7 @@ fn test_font_family_single_font() {
 #[test]
 fn test_font_family_with_spaces() {
     let containers = container! {
-        Div font-family="Times New Roman, Georgia, serif" {
+        div font-family="Times New Roman, Georgia, serif" {
             "Test text"
         }
     };
@@ -62,7 +62,7 @@ fn test_font_family_with_spaces() {
 fn test_font_family_expression() {
     let font_list = "Monaco, 'Courier New', monospace".to_string();
     let containers = container! {
-        Div font-family=(font_list) {
+        div font-family=(font_list) {
             "Test text"
         }
     };

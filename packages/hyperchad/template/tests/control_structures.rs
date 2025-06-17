@@ -6,7 +6,7 @@ fn if_statement() {
     let show_content = true;
     let result = container! {
         @if show_content {
-            Div { "Content is shown" }
+            div { "Content is shown" }
         }
     };
     // Just check that it compiles and produces some output
@@ -18,9 +18,9 @@ fn if_statement() {
 fn for_loop() {
     let items = vec!["apple", "banana", "cherry"];
     let result = container! {
-        Ul {
+        ul {
             @for item in &items {
-                Li { (item) }
+                li { (item) }
             }
         }
     };
@@ -33,7 +33,7 @@ fn for_loop() {
 fn let_statement() {
     let result = container! {
         @let x = 42;
-        Div { "I have " (x) " cupcakes!" }
+        div { "I have " (x) " cupcakes!" }
     };
     // Just check that it compiles and produces some output
     assert!(!result.display_to_string(false, false).unwrap().is_empty());
@@ -75,9 +75,9 @@ fn if_let() {
 fn while_expr() {
     let mut numbers = (0..3).peekable();
     let result = container! {
-        Ul {
+        ul {
             @while numbers.peek().is_some() {
-                Li { (numbers.next().unwrap()) }
+                li { (numbers.next().unwrap()) }
             }
         }
     };
@@ -92,10 +92,10 @@ fn while_simple_condition() {
     let mut count = 0;
     #[allow(clippy::let_unit_value)]
     let result = container! {
-        Ul {
+        ul {
             @while count < 3 {
                 @let current = count;
-                Li { "Item " (current) }
+                li { "Item " (current) }
                 @let _ = { count += 1; };
             }
         }
@@ -111,9 +111,9 @@ fn while_simple_condition() {
 fn for_expr() {
     let ponies = ["Apple Bloom", "Scootaloo", "Sweetie Belle"];
     let result = container! {
-        Ul {
+        ul {
             @for pony in &ponies {
-                Li { (pony) }
+                li { (pony) }
             }
         }
     };
@@ -135,7 +135,7 @@ fn match_expr() {
         let result = container! {
             @match input {
                 Some(value) => {
-                    Div { (value) }
+                    div { (value) }
                 },
                 None => {
                     "oh noes"
@@ -152,7 +152,7 @@ fn match_expr_without_delims() {
         let result = container! {
             @match input {
                 Some(value) => (value),
-                None => Span { "oh noes" },
+                None => span { "oh noes" },
             }
         };
         assert_eq!(result.display_to_string(false, false).unwrap(), output);
@@ -165,7 +165,7 @@ fn match_no_trailing_comma() {
         let result = container! {
             @match input {
                 Some(value) => { (value) }
-                None => Span { "oh noes" }
+                None => span { "oh noes" }
             }
         };
         assert_eq!(result.display_to_string(false, false).unwrap(), output);
@@ -227,14 +227,14 @@ fn let_type_ascription() {
 fn nested_control_flow() {
     let items = vec![Some(1), None, Some(2), Some(3)];
     let result = container! {
-        Ul {
+        ul {
             @for item in &items {
                 @match item {
                     Some(value) => {
-                        Li { "Value: " (value) }
+                        li { "Value: " (value) }
                     }
                     None => {
-                        Li { "No value" }
+                        li { "No value" }
                     }
                 }
             }
@@ -269,9 +269,9 @@ fn complex_if_conditions() {
 fn for_with_enumerate() {
     let items = ["apple", "banana", "cherry"];
     let result = container! {
-        Ol {
+        ol {
             @for (i, item) in items.iter().enumerate() {
-                Li { (i + 1) ": " (item) }
+                li { (i + 1) ": " (item) }
             }
         }
     };
@@ -287,10 +287,10 @@ fn match_with_complex_patterns() {
     let result = container! {
         @match data {
             (Some(text), num) if num > 40 => {
-                Div { (text) " - " (num) }
+                div { (text) " - " (num) }
             }
             (Some(text), num) => {
-                Span { (text) " - " (num) }
+                span { (text) " - " (num) }
             }
             (None, num) => {
                 "No text, number: " (num)

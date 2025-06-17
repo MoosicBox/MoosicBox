@@ -102,7 +102,7 @@ impl ContainerVecMethods for Vec<Container> {
 /// use hyperchad_template::{container, to_html};
 ///
 /// let containers = container! {
-///     Div { "Hello World" }
+///     div { "Hello World" }
 /// };
 /// let html = to_html(&containers);
 /// ```
@@ -119,7 +119,7 @@ pub fn to_html(containers: &[Container]) -> String {
 /// use hyperchad_template::{container, into_html};
 ///
 /// let containers = container! {
-///     Div { "Hello World" }
+///     div { "Hello World" }
 /// };
 /// let html = into_html(containers);
 /// ```
@@ -206,7 +206,7 @@ impl ContainerVecExt for Vec<Container> {
 ///
 ///     fn render_to(&self, containers: &mut Containers) -> Result<(), Self::Error> {
 ///         *containers = container! {
-///             Button id=(if self.primary { "primary" } else { "secondary" }) {
+///             button id=(if self.primary { "primary" } else { "secondary" }) {
 ///                 (self.text.clone())
 ///             }
 ///         };

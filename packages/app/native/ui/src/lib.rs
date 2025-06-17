@@ -153,60 +153,60 @@ impl<'a> TryFrom<&'a str> for Action {
 #[must_use]
 pub fn sidebar_navigation() -> Containers {
     container! {
-        Aside width="calc(max(240, min(280, 15%)))" background=(DARK_BACKGROUND) {
-            Div .navigation-bar padding=20 {
+        aside width="calc(max(240, min(280, 15%)))" background=(DARK_BACKGROUND) {
+            div .navigation-bar padding=20 {
                 @let size = 36;
-                Div .navigation-bar-header direction=row align-items=center height=(size) {
+                div .navigation-bar-header direction=row align-items=center height=(size) {
                     @let icon_size = 36;
-                    Anchor href="/" direction=row height=(icon_size) {
-                        Image
+                    anchor href="/" direction=row height=(icon_size) {
+                        image
                             width=(icon_size)
                             height=(icon_size)
                             src=(public_img!("icon128.png"));
 
-                        H1 .navigation-bar-header-home-link-text font-size=20 {
+                        h1 .navigation-bar-header-home-link-text font-size=20 {
                             "MoosicBox"
                         }
                     }
                     @let size = 22;
-                    Div direction=row justify-content=end align-items=center height=(size) {
-                        Anchor href="/settings" direction=row width=(size + 10) {
-                            Image
+                    div direction=row justify-content=end align-items=center height=(size) {
+                        anchor href="/settings" direction=row width=(size + 10) {
+                            image
                                 width=(size)
                                 height=(size)
                                 src=(public_img!("settings-gear-white.svg"));
                         }
-                        Div width=(size + 10) {
-                            Image
+                        div width=(size + 10) {
+                            image
                                 width=(size)
                                 height=(size)
                                 src=(public_img!("chevron-left-white.svg"));
                         }
                     }
                 }
-                Ul {
-                    Li {
-                        Anchor href="/" {
+                ul {
+                    li {
+                        anchor href="/" {
                             "Home"
                         }
                     }
-                    Li {
-                        Anchor href="/downloads" {
+                    li {
+                        anchor href="/downloads" {
                             "Downloads"
                         }
                     }
                 }
-                H1 .my-collection-header font-size=20 {
+                h1 .my-collection-header font-size=20 {
                     "My Collection"
                 }
-                Ul {
-                    Li {
-                        Anchor href="/albums" {
+                ul {
+                    li {
+                        anchor href="/albums" {
                             "Albums"
                         }
                     }
-                    Li {
-                        Anchor href="/artists" {
+                    li {
+                        anchor href="/artists" {
                             "Artists"
                         }
                     }
@@ -220,9 +220,9 @@ pub fn sidebar_navigation() -> Containers {
 #[must_use]
 pub fn player(state: &State) -> Containers {
     container! {
-        Div height=(FOOTER_HEIGHT) border-top=((FOOTER_BORDER_SIZE, "#222")) {
-            Div height=(VIZ_HEIGHT) padding-y=(VIZ_PADDING) direction=row {
-                Canvas
+        div height=(FOOTER_HEIGHT) border-top=((FOOTER_BORDER_SIZE, "#222")) {
+            div height=(VIZ_HEIGHT) padding-y=(VIZ_PADDING) direction=row {
+                canvas
                     #visualization
                     cursor=pointer
                     width=100%
@@ -232,15 +232,15 @@ pub fn player(state: &State) -> Containers {
                     fx-immediate=(get_width_px_self().then_pass_to(Action::RefreshVisualization))
                 {}
             }
-            Div height=100 direction=row {
-                Div flex=1 justify-content=center {
+            div height=100 direction=row {
+                div flex=1 justify-content=center {
                     (player_current_album_from_state(state, 70))
                 }
-                Div flex=2 align-items=center justify-content=center {
+                div flex=2 align-items=center justify-content=center {
                     @let button_size = 40;
                     @let progress_size = 20;
-                    Div height=(button_size) direction=row justify-content=center {
-                        Button
+                    div height=(button_size) direction=row justify-content=center {
+                        button
                             width=(button_size)
                             height=(button_size)
                             margin-x=5
@@ -252,13 +252,13 @@ pub fn player(state: &State) -> Containers {
                             fx-click=(Action::PreviousTrack)
                         {
                             @let icon_size = 18;
-                            Image
+                            image
                                 width=(icon_size)
                                 height=(icon_size)
                                 src=(public_img!("previous-button-white.svg"));
                         }
                         (player_play_button_from_state(state))
-                        Button
+                        button
                             width=(button_size)
                             height=(button_size)
                             margin-x=5
@@ -270,19 +270,19 @@ pub fn player(state: &State) -> Containers {
                             fx-click=(Action::NextTrack)
                         {
                             @let icon_size = 18;
-                            Image
+                            image
                                 width=(icon_size)
                                 height=(icon_size)
                                 src=(public_img!("next-button-white.svg"));
                         }
                     }
-                    Div height=(progress_size) margin-top=10 {
+                    div height=(progress_size) margin-top=10 {
                         (player_current_progress_from_state(state))
                     }
                 }
-                Div flex=1 direction=row justify-content=end align-items=center padding-right=20 {
+                div flex=1 direction=row justify-content=end align-items=center padding-right=20 {
                     (volume(state, FOOTER_ICON_SIZE))
-                    Button
+                    button
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
@@ -293,12 +293,12 @@ pub fn player(state: &State) -> Containers {
                                 .or_else(ActionType::hide_str_id(AUDIO_ZONES_ID))
                         )
                     {
-                        Image
+                        image
                             width=(FOOTER_ICON_SIZE)
                             height=(FOOTER_ICON_SIZE)
                             src=(public_img!("speaker-white.svg"));
                     }
-                    Button
+                    button
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
@@ -309,12 +309,12 @@ pub fn player(state: &State) -> Containers {
                                 .or_else(ActionType::hide_str_id(PLAYBACK_SESSIONS_ID))
                         )
                     {
-                        Image
+                        image
                             width=(FOOTER_ICON_SIZE)
                             height=(FOOTER_ICON_SIZE)
                             src=(public_img!("sessions-white.svg"));
                     }
-                    Button
+                    button
                         fx-click=(
                             get_visibility_str_id("play-queue")
                                 .eq(Visibility::Hidden)
@@ -325,7 +325,7 @@ pub fn player(state: &State) -> Containers {
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
                     {
-                        Image
+                        image
                             width=(FOOTER_ICON_SIZE)
                             height=(FOOTER_ICON_SIZE)
                             src=(public_img!("playlist-white.svg"));
@@ -344,15 +344,15 @@ pub const VOLUME_SLIDER_VALUE_ID: &str = "volume-slider-value";
 fn volume(state: &State, size: u16) -> Containers {
     let volume_percent = state.player.playback.as_ref().map_or(1.0, |x| x.volume);
     container! {
-        Div
+        div
             id=(VOLUME_SLIDER_CONTAINER_ID)
             width=(size)
             height=(size)
             position=relative
             fx-hover=(ActionType::show_str_id(VOLUME_SLIDER_ID).delay_off(400))
         {
-            Button {
-                Image
+            button {
+                image
                     width=(size)
                     height=(size)
                     src=(public_img!("audio-white.svg"));
@@ -364,7 +364,7 @@ fn volume(state: &State, size: u16) -> Containers {
 
 fn volume_slider(size: u16, volume_percent: f64) -> Containers {
     container! {
-        Div
+        div
             id=(VOLUME_SLIDER_ID)
             visibility=hidden
             width=30
@@ -391,7 +391,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
             )
             fx-hover=(ActionType::show_self().delay_off(400))
         {
-            Div
+            div
                 id=(VOLUME_SLIDER_VALUE_CONTAINER_ID)
                 position=relative
                 width=3
@@ -408,7 +408,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
 fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
     let height_percent = volume_percent * 100.0;
     container! {
-        Div
+        div
             id=(VOLUME_SLIDER_VALUE_ID)
             position=absolute
             bottom=0
@@ -418,9 +418,9 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
             border-radius=30
             background="#fff"
         {
-            Div position=relative {
+            div position=relative {
                 @let slider_top_width = f32::from(size) / 2.5;
-                Div
+                div
                     position=absolute
                     top=0
                     left=(format!("calc(50% - {})", slider_top_width / 2.0))
@@ -437,7 +437,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
 fn player_play_button(playing: bool) -> Containers {
     container! {
         @let button_size = 40;
-        Button
+        button
             #player-play-button
             width=(button_size)
             height=(button_size)
@@ -450,7 +450,7 @@ fn player_play_button(playing: bool) -> Containers {
             fx-click=(Action::TogglePlayback)
         {
             @let icon_size = 16;
-            Image
+            image
                 width=(icon_size)
                 height=(icon_size)
                 src=(
@@ -473,21 +473,21 @@ fn player_play_button_from_state(state: &State) -> Containers {
 
 fn player_current_album(host: &str, track: &ApiTrack, size: u16) -> Containers {
     container! {
-        Div #player-current-playing direction=row align-items=center {
-            Div width=(size) padding-x=20 align-items=center justify-content=center {
-                Anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) width=(size) height=(size) {
+        div #player-current-playing direction=row align-items=center {
+            div width=(size) padding-x=20 align-items=center justify-content=center {
+                anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) width=(size) height=(size) {
                     (album_cover_img_from_album(host, &track.into(), size))
                 }
             }
-            Div justify-content=center gap=3 {
-                Div {
-                    Anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.title) }
+            div justify-content=center gap=3 {
+                div {
+                    anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.title) }
                 }
-                Div {
-                    Anchor href=(format!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
+                div {
+                    anchor href=(format!("/artists?artistId={}&source={}", track.artist_id, track.api_source)) { (track.artist) }
                 }
-                Div direction=row {
-                    "Playing from: " Anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
+                div direction=row {
+                    "Playing from: " anchor href=(format!("/albums?albumId={}&source={}", track.album_id, track.api_source)) { (track.album) }
                 }
             }
         }
@@ -506,13 +506,13 @@ fn player_current_album_from_state(state: &State, size: u16) -> Containers {
     }
 
     container! {
-        Div #player-current-playing direction=row {}
+        div #player-current-playing direction=row {}
     }
 }
 
 fn player_current_progress(progress: f64, duration: f64) -> Containers {
     container! {
-        Div #player-current-progress {
+        div #player-current-progress {
             (progress.into_formatted()) " // " (duration.into_formatted())
         }
     }
@@ -528,7 +528,7 @@ fn player_current_progress_from_state(state: &State) -> Containers {
     }
 
     container! {
-        Div #player-current-progress {}
+        div #player-current-progress {}
     }
 }
 
@@ -594,7 +594,7 @@ pub fn session_updated(
 #[must_use]
 pub fn footer(state: &State) -> Containers {
     container! {
-        Footer height=(FOOTER_HEIGHT) background=(DARK_BACKGROUND) {
+        footer height=(FOOTER_HEIGHT) background=(DARK_BACKGROUND) {
             (player(state))
         }
     }
@@ -603,7 +603,7 @@ pub fn footer(state: &State) -> Containers {
 #[must_use]
 pub fn main(slot: &Containers) -> Containers {
     container! {
-        Main .main-content overflow-y=auto flex-grow=1 {
+        main .main-content overflow-y=auto flex-grow=1 {
             (slot)
         }
     }
@@ -642,7 +642,7 @@ pub fn page(state: &State, slot: &Containers) -> Containers {
         .collect::<Vec<_>>();
 
     container! {
-        Div
+        div
             #root
             .dark
             width=100%
@@ -650,7 +650,7 @@ pub fn page(state: &State, slot: &Containers) -> Containers {
             position=relative
             color="#fff"
         {
-            Section
+            section
                 .navigation-bar-and-main-content
                 direction=row
                 height={"calc(100% - "(FOOTER_HEIGHT)")"}
@@ -675,11 +675,11 @@ pub fn audio_zones() -> Containers {
     modal(
         AUDIO_ZONES_ID,
         &container! {
-            H1 { "Audio Zones" }
-            Button { "New" }
+            h1 { "Audio Zones" }
+            button { "New" }
         },
         &container! {
-            Div hx-get="/audio-zones" hx-trigger="load" {
+            div hx-get="/audio-zones" hx-trigger="load" {
                 "Loading..."
             }
         },
@@ -694,11 +694,11 @@ pub fn playback_sessions() -> Containers {
     modal(
         PLAYBACK_SESSIONS_ID,
         &container! {
-            H1 { "Playback Sessions" }
-            Button { "New" }
+            h1 { "Playback Sessions" }
+            button { "New" }
         },
         &container! {
-            Div hx-get="/playback-sessions" hx-trigger="load" {
+            div hx-get="/playback-sessions" hx-trigger="load" {
                 "Loading..."
             }
         },
@@ -708,7 +708,7 @@ pub fn playback_sessions() -> Containers {
 #[must_use]
 pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers {
     container! {
-        Div
+        div
             id=(id)
             visibility=hidden
             direction=row
@@ -717,7 +717,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
             height=100%
             align-items=center
         {
-            Div
+            div
                 flex=1
                 background=(DARK_BACKGROUND)
                 margin-x=vw20
@@ -731,7 +731,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                 )
                 overflow-y=auto
             {
-                Div
+                div
                     direction=row
                     background=(DARK_BACKGROUND)
                     padding-x=30
@@ -741,10 +741,10 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                     position=sticky
                     top=0
                 {
-                    Div direction=row { (header) }
-                    Div direction=row justify-content=end {
+                    div direction=row { (header) }
+                    div direction=row justify-content=end {
                         @let icon_size = 20;
-                        Button
+                        button
                             width=(icon_size)
                             height=(icon_size)
                             fx-click=(
@@ -753,14 +753,14 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                                     .then(ActionType::hide_str_id(id))
                             )
                         {
-                            Image
+                            image
                                 width=(icon_size)
                                 height=(icon_size)
                                 src=(public_img!("cross-white.svg"));
                         }
                     }
                 }
-                Div
+                div
                     padding-x=30
                     padding-bottom=20
                 {

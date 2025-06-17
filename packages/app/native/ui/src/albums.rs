@@ -78,7 +78,7 @@ pub fn album_cover_img_from_album(host: &str, album: &ApiAlbum, size: u16) -> Co
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     container! {
-        Image loading=(ImageLoading::Lazy) src=(album_cover_url_from_album(host, album, request_size, request_size)) width=(size) height=(size);
+        image loading=(ImageLoading::Lazy) src=(album_cover_url_from_album(host, album, request_size, request_size)) width=(size) height=(size);
     }
 }
 
@@ -89,7 +89,7 @@ pub fn album_cover_img_from_track(host: &str, track: &ApiTrack, size: u16) -> Co
     let request_size = (f64::from(size) * 1.33).round() as u16;
 
     container! {
-        Image loading=(ImageLoading::Lazy) src=(album_cover_url_from_track(host, track, request_size, request_size)) width=(size) height=(size);
+        image loading=(ImageLoading::Lazy) src=(album_cover_url_from_track(host, track, request_size, request_size)) width=(size) height=(size);
     }
 }
 
@@ -110,38 +110,38 @@ pub fn album_page_immediate(
         bit_depth,
     );
     container! {
-        Div
+        div
             hx-get=(path)
             hx-trigger="load"
             padding-x=60
             padding-y=20
         {
-            Div direction=row {
+            div direction=row {
                 @let size = 200;
-                Div width=(size) height=(size + 30) {
-                    Image loading=(ImageLoading::Lazy) src=(public_img!("album.svg")) width=(size) height=(size);
+                div width=(size) height=(size + 30) {
+                    image loading=(ImageLoading::Lazy) src=(public_img!("album.svg")) width=(size) height=(size);
                 }
-                Div {
-                    H1 { "loading..." }
-                    H2 { "loading..." }
+                div {
+                    h1 { "loading..." }
+                    h2 { "loading..." }
                 }
             }
-            Div {
-                Table {
-                    THead {
-                        TR {
-                            TH { "#" }
-                            TH { "Title" }
-                            TH { "Artist" }
-                            TH { "Time" }
+            div {
+                table {
+                    thead {
+                        tr {
+                            th { "#" }
+                            th { "Title" }
+                            th { "Artist" }
+                            th { "Time" }
                         }
                     }
-                    TBody {
-                        TR {
-                            TD { "loading..." }
-                            TD { "loading..." }
-                            TD { Anchor { "loading..." } }
-                            TD { "loading..." }
+                    tbody {
+                        tr {
+                            td { "loading..." }
+                            td { "loading..." }
+                            td { anchor { "loading..." } }
+                            td { "loading..." }
                         }
                     }
                 }
@@ -173,24 +173,24 @@ pub fn album_page_content(
         .or_else(|| versions.first());
 
     container! {
-        Div padding-x=60 padding-y=20 {
-            Div direction=row {
+        div padding-x=60 padding-y=20 {
+            div direction=row {
                 @let size = 200;
-                Div width=(size) height=(size) padding-right=15 {
+                div width=(size) height=(size) padding-right=15 {
                     (album_cover_img_from_album(host, &album, size))
                 }
-                Div {
-                    H1 { (album.title) }
-                    Anchor href={"/artists?artistId="(album.artist_id)"&source="(album.api_source)} {
-                        H2 { (album.artist) }
+                div {
+                    h1 { (album.title) }
+                    anchor href={"/artists?artistId="(album.artist_id)"&source="(album.api_source)} {
+                        h2 { (album.artist) }
                     }
                     @if let Some(date_released) = &album.date_released{
-                        H2 { (format_date_string(date_released, "%B %d, %Y")) }
+                        h2 { (format_date_string(date_released, "%B %d, %Y")) }
                     }
-                    Div direction=row {
+                    div direction=row {
                         @for version in album.versions.iter().cloned() {
                             @let selected = selected_version.is_some_and(|x| same_version(&version, &x.into()));
-                            Anchor href=(
+                            anchor href=(
                                 album_page_url(
                                     &album.album_id.to_string(),
                                     false,
@@ -200,7 +200,7 @@ pub fn album_page_content(
                                     version.bit_depth,
                                 )
                             ) {
-                                H3 {
+                                h3 {
                                     (if selected { "*" } else { "" })
                                     (version.into_formatted())
                                     (if selected { "*" } else { "" })
@@ -210,8 +210,8 @@ pub fn album_page_content(
                     }
                 }
             }
-            Div direction=row padding-y=20 gap=8 {
-                Button
+            div direction=row padding-y=20 gap=8 {
+                button
                     direction=row
                     width=130
                     height=40
@@ -229,13 +229,13 @@ pub fn album_page_content(
                     })
                 {
                     @let icon_size = 12;
-                    Image
+                    image
                         width=(icon_size)
                         height=(icon_size)
                         src=(public_img!("play-button.svg"));
                     "Play"
                 }
-                Button
+                button
                     direction=row
                     width=130
                     height=40
@@ -253,7 +253,7 @@ pub fn album_page_content(
                     })
                 {
                     @let icon_size = 20;
-                    Image
+                    image
                         width=(icon_size)
                         height=(icon_size)
                         src=(public_img!("more-options.svg"));
@@ -269,7 +269,7 @@ pub fn album_page_content(
                             .map(|x| x.id.clone());
 
                         @if let Some(album_id) = album_id {
-                            Button
+                            button
                                 direction=row
                                 width=130
                                 height=40
@@ -288,7 +288,7 @@ pub fn album_page_content(
                             }
 
                             @if album.album_sources.iter().any(|x| x.source.is_library()) {
-                                Button
+                                button
                                     direction=row
                                     width=130
                                     height=40
@@ -306,7 +306,7 @@ pub fn album_page_content(
                                     "Remove from Library"
                                 }
                             } @else {
-                                Button
+                                button
                                     direction=row
                                     width=130
                                     height=40
@@ -329,12 +329,12 @@ pub fn album_page_content(
                 }
             }
             @if let Some(version) = selected_version {
-                Div {
-                    Div direction=row {
-                        Div padding-x=10 height=50 justify-content=center { "#" }
-                        Div padding-x=10 height=50 justify-content=center { "Title" }
-                        Div padding-x=10 height=50 justify-content=center { "Artist" }
-                        Div padding-x=10 height=50 justify-content=center { "Time" }
+                div {
+                    div direction=row {
+                        div padding-x=10 height=50 justify-content=center { "#" }
+                        div padding-x=10 height=50 justify-content=center { "Title" }
+                        div padding-x=10 height=50 justify-content=center { "Artist" }
+                        div padding-x=10 height=50 justify-content=center { "Time" }
                     }
                     (album_page_tracks_table_body_from_state(state, &version))
                 }
@@ -351,7 +351,7 @@ pub fn album_page_tracks_table_body(
     container! {
         @for track in &version.tracks {
             @let current_track = track_id.is_some_and(|x| x == &track.track_id);
-            Div
+            div
                 direction=row
                 border-radius=5
                 data-track-id=(track.track_id)
@@ -380,24 +380,24 @@ pub fn album_page_tracks_table_body(
                 ))
                 background=[if current_track { Some("#333") } else { None }]
             {
-                Div padding-x=10 height=50 justify-content=center {
-                    Span
+                div padding-x=10 height=50 justify-content=center {
+                    span
                         .track-number
                         visibility=(if current_track { Visibility::Hidden } else { Visibility::Visible })
                     {
                         (track.number)
                     }
-                    Span
+                    span
                         .track-playing
                         visibility=(if current_track { Visibility::Visible } else { Visibility::Hidden })
                     {
                         @let icon_size = 12;
-                        Image
+                        image
                             width=(icon_size)
                             height=(icon_size)
                             src=(public_img!("audio-white.svg"));
                     }
-                    Button
+                    button
                         .play-button
                         visibility=hidden
                         fx-click=(Action::PlayAlbumStartingAtTrackId {
@@ -410,19 +410,19 @@ pub fn album_page_tracks_table_body(
                         })
                     {
                         @let icon_size = 12;
-                        Image
+                        image
                             width=(icon_size)
                             height=(icon_size)
                             src=(public_img!("play-button-white.svg"));
                     }
                 }
-                Div padding-x=10 height=50 justify-content=center {
+                div padding-x=10 height=50 justify-content=center {
                     (track.title)
                 }
-                Div padding-x=10 height=50 justify-content=center {
-                    Anchor href={"/artists?artistId="(track.artist_id)"&source="(track.api_source)} { (track.artist) }
+                div padding-x=10 height=50 justify-content=center {
+                    anchor href={"/artists?artistId="(track.artist_id)"&source="(track.api_source)} { (track.artist) }
                 }
-                Div padding-x=10 height=50 justify-content=center {
+                div padding-x=10 height=50 justify-content=center {
                     (track.duration.into_formatted())
                 }
             }
@@ -485,7 +485,7 @@ pub fn albums_list_start(
         albums.remaining().map_or_else(
             || {
                 container! {
-                    Div
+                    div
                         hx-get={
                             "/albums-list-start"
                             (build_query('?', &[
@@ -508,7 +508,7 @@ pub fn albums_list_start(
 
                 container! {
                     @if limit < MIN_PAGE_THRESHOLD {
-                        Div
+                        div
                             hx-get={
                                 "/albums-list"
                                 (build_query('?', &[
@@ -526,7 +526,7 @@ pub fn albums_list_start(
                     } @else {
                         @for i in 0..MAX_PARALLEL_REQUESTS {
                             @if i == MAX_PARALLEL_REQUESTS - 1 {
-                                Div
+                                div
                                     hx-get={
                                         "/albums-list"
                                         (build_query('?', &[
@@ -542,7 +542,7 @@ pub fn albums_list_start(
                                     hidden=(true)
                                 {}
                             } @else {
-                                Div
+                                div
                                     hx-get={
                                         "/albums-list"
                                         (build_query('?', &[
@@ -602,19 +602,19 @@ pub fn album_display(
         let artist_page_url = artist_page_url(&album.artist_id.to_string());
 
         container! {
-            Div align-items=center {
-                Div {
-                    Anchor href=(album_page_url) { (album.title) }
+            div align-items=center {
+                div {
+                    anchor href=(album_page_url) { (album.title) }
                 }
-                Div {
-                    Anchor href=(artist_page_url) { (album.artist) }
+                div {
+                    anchor href=(artist_page_url) { (album.artist) }
                 }
                 @if let Some(date_released) = &album.date_released {
-                    Div {
+                    div {
                         (format_date_string(date_released, "%Y"))
                     }
                 }
-                Div {
+                div {
                     (display_album_version_qualities(album.versions.iter().cloned(), Some(25)))
                 }
             }
@@ -625,14 +625,14 @@ pub fn album_display(
 
     let album_cover = if show_media_controls {
         container! {
-            Div
+            div
                 width=(size)
                 height=(size)
                 position=relative
                 fx-hover=(ActionType::show_last_child())
             {
                 (album_cover_img_from_album(host, album, size))
-                Div
+                div
                     width=(size)
                     height=(size)
                     position=absolute
@@ -640,7 +640,7 @@ pub fn album_display(
                 {
                     @let button_size = size / 4;
                     @let icon_size = size / 10;
-                    Button
+                    button
                         direction=row
                         position=absolute
                         bottom=5%
@@ -659,13 +659,13 @@ pub fn album_display(
                             bit_depth: None,
                         })
                     {
-                        Image
+                        image
                             width=(icon_size)
                             height=(icon_size)
                             src=(public_img!("play-button.svg"));
                     }
                     @let icon_size = size / 7;
-                    Button
+                    button
                         direction=row
                         position=absolute
                         bottom=5%
@@ -684,7 +684,7 @@ pub fn album_display(
                             bit_depth: None,
                         })
                     {
-                        Image
+                        image
                             width=(icon_size)
                             height=(icon_size)
                             src=(public_img!("more-options.svg"));
@@ -697,8 +697,8 @@ pub fn album_display(
     };
 
     container! {
-        Div width=(size) gap=5 {
-            Anchor href=(album_page_url) width=(size) {
+        div width=(size) gap=5 {
+            anchor href=(album_page_url) width=(size) {
                 (album_cover)
             }
             (details)
@@ -786,14 +786,14 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
     let size: u16 = 200;
 
     container! {
-        Div background=(DARK_BACKGROUND) {
-            Div padding-x=30 padding-y=15 {
-                Div direction=row align-items=center {
-                    H1 { "Albums" }
+        div background=(DARK_BACKGROUND) {
+            div padding-x=30 padding-y=15 {
+                div direction=row align-items=center {
+                    h1 { "Albums" }
                     @let button_size = 30;
                     @let icon_size = button_size - 10;
-                    Div position=relative width=(button_size) height=(button_size) {
-                        Button
+                    div position=relative width=(button_size) height=(button_size) {
+                        button
                             direction=row
                             width=(button_size)
                             height=(button_size)
@@ -805,12 +805,12 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                     .then(ActionType::show_str_id("albums-menu"))
                             )
                         {
-                            Image
+                            image
                                 width=(icon_size)
                                 height=(icon_size)
                                 src=(public_img!("more-options-white.svg"));
                         }
-                        Div
+                        div
                             #albums-menu
                             width=300
                             position=absolute
@@ -825,9 +825,9 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                     .then(ActionType::hide_self())
                             )
                         {
-                            Div {
-                                Div {
-                                    Button
+                            div {
+                                div {
+                                    button
                                         fx-click=(ActionType::Navigate {
                                             url: albums_page_url(
                                                 filtered_sources,
@@ -842,8 +842,8 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                         "Album Artist"
                                     }
                                 }
-                                Div border-top="1, #222" {
-                                    Button
+                                div border-top="1, #222" {
+                                    button
                                         fx-click=(ActionType::Navigate {
                                             url: albums_page_url(
                                                 filtered_sources,
@@ -858,8 +858,8 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                         "Album Name"
                                     }
                                 }
-                                Div border-top="1, #222" {
-                                    Button
+                                div border-top="1, #222" {
+                                    button
                                         fx-click=(ActionType::Navigate {
                                             url: albums_page_url(
                                                 filtered_sources,
@@ -874,8 +874,8 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                         "Album Release Date"
                                     }
                                 }
-                                Div border-top="1, #222" {
-                                    Button
+                                div border-top="1, #222" {
+                                    button
                                         fx-click=(ActionType::Navigate {
                                             url: albums_page_url(
                                                 filtered_sources,
@@ -891,12 +891,12 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                     }
                                 }
                             }
-                            Div {
+                            div {
                                 @for source in TrackApiSource::all() {
-                                    Div direction=row {
+                                    div direction=row {
                                         @let checked = filtered_sources.iter().any(|x| x == source);
                                         (source.to_string())
-                                        Input
+                                        input
                                             fx-change=(ActionType::Navigate {
                                                 url: albums_page_url(&if checked {
                                                     filtered_sources.iter().filter(|x| *x != source).cloned().collect::<Vec<_>>()
@@ -912,7 +912,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                         }
                     }
                 }
-                Input
+                input
                     type=text
                     placeholder="Filter..."
                     fx-change=(
@@ -941,7 +941,7 @@ pub fn load_albums(
     search: &str,
 ) -> Containers {
     container! {
-        Div
+        div
             #albums
             hx-get={
                 "/albums-list-start"
@@ -964,8 +964,8 @@ pub fn load_albums(
             padding-y=15
         {
             @for _ in 0..100 {
-                Div width=(size) height=(size + 30) {
-                    Image loading=(ImageLoading::Lazy) src=(public_img!("album.svg")) width=(size) height=(size);
+                div width=(size) height=(size + 30) {
+                    image loading=(ImageLoading::Lazy) src=(public_img!("album.svg")) width=(size) height=(size);
                 }
             }
         }

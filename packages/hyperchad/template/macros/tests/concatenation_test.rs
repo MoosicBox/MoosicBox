@@ -5,7 +5,7 @@ fn test_string_literal_concatenation() {
     let item_id = "123";
 
     let containers = container! {
-        Div hx-get={"/api/items/"(item_id)} {
+        div hx-get={"/api/items/"(item_id)} {
             "Item details"
         }
     };
@@ -32,7 +32,7 @@ fn test_multiple_concatenation() {
     let action = "scan";
 
     let containers = container! {
-        Button hx-post={"/music-api/"(action)"?apiSource="(api_source)} {
+        button hx-post={"/music-api/"(action)"?apiSource="(api_source)} {
             "Execute"
         }
     };
@@ -59,7 +59,7 @@ fn test_id_concatenation() {
     let suffix = "error";
 
     let containers = container! {
-        Div id={(prefix)"-"(suffix)} {
+        div id={(prefix)"-"(suffix)} {
             "Error message"
         }
     };

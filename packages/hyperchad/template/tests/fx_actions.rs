@@ -7,7 +7,7 @@ use hyperchad_transformer_models::Visibility;
 #[test]
 fn test_fx_click_with_action_type() {
     let containers = container! {
-        Div fx-click=(ActionType::hide_str_id("test")) {
+        div fx-click=(ActionType::hide_str_id("test")) {
             "Hello"
         }
     };
@@ -31,7 +31,7 @@ fn test_fx_click_with_action_type() {
 fn test_fx_click_with_action_effect() {
     let action_effect = ActionType::show_str_id("test").throttle(100);
     let containers = container! {
-        Div fx-click=(action_effect) {
+        div fx-click=(action_effect) {
             "Hello"
         }
     };
@@ -59,7 +59,7 @@ fn test_fx_click_with_logic_if() {
     let if_action = if_stmt(eq(visible(), visible()), ActionType::hide_str_id("test"));
 
     let containers = container! {
-        Div fx-click=(if_action) {
+        div fx-click=(if_action) {
             "Hello"
         }
     };
@@ -79,7 +79,7 @@ fn test_fx_click_with_logic_if() {
 #[test]
 fn test_fx_click_outside() {
     let containers = container! {
-        Div fx-click-outside=(ActionType::hide_str_id("modal")) {
+        div fx-click-outside=(ActionType::hide_str_id("modal")) {
             "Modal content"
         }
     };
@@ -95,7 +95,7 @@ fn test_fx_click_outside() {
 #[test]
 fn test_fx_resize() {
     let containers = container! {
-        Div fx-resize=(ActionType::Custom { action: "refresh".to_string() }) {
+        div fx-resize=(ActionType::Custom { action: "refresh".to_string() }) {
             "Resizable content"
         }
     };
@@ -115,7 +115,7 @@ fn test_fx_resize() {
 #[test]
 fn test_fx_custom_event() {
     let containers = container! {
-        Div fx-scroll=(ActionType::NoOp) {
+        div fx-scroll=(ActionType::NoOp) {
             "Scrollable content"
         }
     };
@@ -134,7 +134,7 @@ fn test_fx_custom_event() {
 #[test]
 fn test_multiple_fx_actions() {
     let containers = container! {
-        Div
+        div
             fx-click=(ActionType::show_str_id("panel"))
             fx-hover=(ActionType::hide_str_id("tooltip"))
             fx-resize=(ActionType::NoOp)
@@ -171,7 +171,7 @@ fn test_fx_action_with_complex_expression() {
 
     let id = "test-element";
     let containers = container! {
-        Div fx-click=(
+        div fx-click=(
             get_visibility_str_id(id)
                 .eq(visible())
                 .then(ActionType::hide_str_id(id))

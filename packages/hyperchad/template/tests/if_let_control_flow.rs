@@ -12,7 +12,7 @@ fn test_if_let_with_some_value() {
     };
 
     let containers = container! {
-        Div {
+        div {
             @if let Some(auth_method) = &settings.auth_method {
                 "Auth method: " (auth_method)
             } @else {
@@ -39,7 +39,7 @@ fn test_if_let_with_none_value() {
     let settings = Settings { auth_method: None };
 
     let containers = container! {
-        Div {
+        div {
             @if let Some(auth_method) = &settings.auth_method {
                 "Auth method: " (auth_method)
             } @else {
@@ -68,7 +68,7 @@ fn test_complex_if_else_if_let_chain() {
     };
 
     let containers = container! {
-        Div {
+        div {
             @if settings.auth_method.is_none() {
                 "No auth configured"
             } @else if let Some(auth_method) = &settings.auth_method {
@@ -103,7 +103,7 @@ fn test_nested_if_let() {
     });
 
     let containers = container! {
-        Div {
+        div {
             @if let Some(settings) = &outer_option {
                 @if let Some(auth) = &settings.auth_method {
                     "Nested auth: " (auth)
