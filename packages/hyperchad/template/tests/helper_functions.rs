@@ -195,3 +195,67 @@ fn test_integer_vs_real_values() {
         Some(Number::RealVw(100.5))
     );
 }
+
+#[test]
+fn test_variable_percent_suffix() {
+    let value = 50;
+    let containers = container! {
+        div width=value% {
+            "Variable with percent suffix"
+        }
+    };
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].width, Some(Number::IntegerPercent(50)));
+}
+
+#[test]
+fn test_float_variable_percent_suffix() {
+    let value = 75.5;
+    let containers = container! {
+        div width=value% {
+            "Float variable with percent suffix"
+        }
+    };
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].width, Some(Number::RealPercent(75.5)));
+}
+
+#[test]
+fn test_expression_percent_suffix() {
+    let base = 25;
+    let containers = container! {
+        div width=(base * 2)% {
+            "Expression with percent suffix"
+        }
+    };
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].width, Some(Number::IntegerPercent(50)));
+}
+
+#[test]
+fn test_mixed_percent_syntax() {
+    let value = 60;
+    let containers = container! {
+        div width=value% height=percent(40) margin=80% {
+            "Mixed percent syntax"
+        }
+    };
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].width, Some(Number::IntegerPercent(60)));
+    assert_eq!(containers[0].height, Some(Number::IntegerPercent(40)));
+    assert_eq!(containers[0].margin_top, Some(Number::IntegerPercent(80)));
+}
+
+#[test]
+fn test_variable_percent_with_calculation() {
+    let volume_percent = 0.75;
+    let height_percent = volume_percent * 100.0; // 75.0
+
+    let containers = container! {
+        div width=height_percent% {
+            "Variable calculation with percent suffix"
+        }
+    };
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].width, Some(Number::RealPercent(75.0)));
+}

@@ -211,10 +211,22 @@ impl<E: MaybeElement> Markup<E> {
             input.diagnostic_parse(diagnostics).map(Self::Lit)
         } else if lookahead.peek(Paren) {
             let content;
-            Ok(Self::Splice {
-                paren_token: parenthesized!(content in input),
-                expr: content.parse()?,
-            })
+            let paren_token = parenthesized!(content in input);
+            let expr: Expr = content.parse()?;
+
+            // Check if the parenthesized expression is followed by %
+            if input.peek(syn::Token![%]) {
+                let _percent: syn::Token![%] = input.parse()?;
+                // Create a splice expression that converts the expression to percentage
+                let percent_expr: Expr =
+                    parse_quote!(hyperchad_template::calc::to_percent_number(#expr));
+                Ok(Self::Splice {
+                    paren_token: Paren::default(),
+                    expr: percent_expr,
+                })
+            } else {
+                Ok(Self::Splice { paren_token, expr })
+            }
         } else if let Some(parse_element) = E::should_parse(&lookahead) {
             parse_element(input, diagnostics).map(Self::Element)
         } else if lookahead.peek(At) {
@@ -348,6 +360,7 @@ impl<E: MaybeElement> Markup<E> {
             // Handle bare identifiers (including kebab-case) as splice expressions for attribute values
             // This enables syntax like: visibility=hidden, align-items=center, justify-content=space-between
             // PLUS unit+number patterns like: vw50, px16, em1
+            // PLUS variable with % suffix: value%
 
             // Check for function call patterns first (approach 1): vw(expr), vh(expr), etc.
             let fork = input.fork();
@@ -389,11 +402,29 @@ impl<E: MaybeElement> Markup<E> {
                 }
             }
 
+            // Check for identifier followed by % first (approach 2): variable%
+            let fork2 = input.fork();
+            if let Ok(_ident) = fork2.call(Ident::parse_any) {
+                if fork2.peek(syn::Token![%]) {
+                    // This is a variable followed by %, like: value%
+                    let var_ident: Ident = input.call(Ident::parse_any)?;
+                    let _percent: syn::Token![%] = input.parse()?;
+
+                    // Create a splice expression that converts the variable to percentage
+                    let expr: Expr =
+                        parse_quote!(hyperchad_template::calc::to_percent_number(#var_ident));
+                    return Ok(Self::Splice {
+                        paren_token: Paren::default(),
+                        expr,
+                    });
+                }
+            }
+
             // Try to parse as AttributeName first (supports kebab-case like space-evenly)
             if let Ok(attr_name) = input.parse::<AttributeName>() {
                 let name_str = attr_name.to_string();
 
-                // Check for identifier-based unit patterns (approach 2): vw50, px16, em1
+                // Check for identifier-based unit patterns (approach 3): vw50, px16, em1
                 if let Some(numeric_lit) = NumericLit::try_parse_identifier_unit(&name_str) {
                     return Ok(Self::NumericLit(numeric_lit));
                 }
@@ -409,7 +440,7 @@ impl<E: MaybeElement> Markup<E> {
                 let ident: Ident = input.call(Ident::parse_any)?;
                 let ident_str = ident.to_string();
 
-                // Check for identifier-based unit patterns (approach 2): vw50, px16, em1
+                // Check for identifier-based unit patterns (approach 3): vw50, px16, em1
                 if let Some(numeric_lit) = NumericLit::try_parse_identifier_unit(&ident_str) {
                     return Ok(Self::NumericLit(numeric_lit));
                 }
