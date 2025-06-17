@@ -5513,6 +5513,7 @@ dependencies = [
  "hyperchad_actions",
  "hyperchad_color",
  "hyperchad_template",
+ "hyperchad_template_actions_dsl",
  "hyperchad_template_macros",
  "hyperchad_transformer",
  "hyperchad_transformer_models",

@@ -10,6 +10,8 @@ pub mod logic;
 #[cfg(feature = "arb")]
 pub mod arb;
 
+pub mod dsl;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -487,4 +489,15 @@ impl<'a> TryFrom<&'a str> for StyleAction {
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         serde_json::from_str(value)
     }
+}
+
+/// Prelude module that re-exports commonly used items.
+pub mod prelude {
+    pub use crate::{
+        Action, ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
+        dsl::*,
+    };
+
+    #[cfg(feature = "logic")]
+    pub use crate::logic::*;
 }

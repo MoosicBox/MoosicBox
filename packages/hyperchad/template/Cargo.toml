@@ -15,11 +15,12 @@ version     = "0.1.0"
 group = "hyperchad"
 
 [dependencies]
-hyperchad_actions            = { workspace = true }
-hyperchad_color              = { workspace = true }
-hyperchad_template_macros    = { workspace = true }
-hyperchad_transformer        = { workspace = true }
-hyperchad_transformer_models = { workspace = true }
+hyperchad_actions              = { workspace = true }
+hyperchad_color                = { workspace = true }
+hyperchad_template_actions_dsl = { workspace = true }
+hyperchad_template_macros      = { workspace = true }
+hyperchad_transformer          = { workspace = true }
+hyperchad_transformer_models   = { workspace = true }
 
 itoa = { workspace = true }
 ryu  = { workspace = true }
