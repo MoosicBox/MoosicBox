@@ -19,13 +19,6 @@ macro_rules! public_img {
     };
 }
 
-#[macro_export]
-macro_rules! pre_escaped {
-    ($($message:tt)+) => {
-        hyperchad_template::PreEscaped(format!($($message)*))
-    };
-}
-
 #[must_use]
 pub fn header() -> Containers {
     container! {

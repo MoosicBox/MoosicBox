@@ -18,27 +18,23 @@ hyperchad_color       = { workspace = true }
 hyperchad_transformer = { workspace = true, features = ["html"] }
 switchy_async         = { workspace = true, features = ["rt-multi-thread", "tokio"] }
 
-async-trait        = { workspace = true }
-bytes              = { workspace = true, optional = true }
-hyperchad_template = { workspace = true, optional = true }
-log                = { workspace = true }
-serde              = { workspace = true, optional = true }
-serde_json         = { workspace = true, optional = true }
+async-trait = { workspace = true }
+bytes       = { workspace = true, optional = true }
+log         = { workspace = true }
+serde       = { workspace = true, optional = true }
+serde_json  = { workspace = true, optional = true }
 
 [features]
 default = [
     "assets",
     "canvas",
     "html",
-    "template",
     "viewport",
     "viewport-immediate",
     "viewport-retained",
 ]
 
 fail-on-warnings = []
-
-template = ["dep:hyperchad_template", "hyperchad_transformer/template"]
 
 canvas = ["hyperchad_transformer/canvas"]
 

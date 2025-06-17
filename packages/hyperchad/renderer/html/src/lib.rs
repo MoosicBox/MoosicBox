@@ -14,11 +14,11 @@ use hyperchad_renderer::{
     canvas::CanvasUpdate,
 };
 use hyperchad_router::Container;
-use hyperchad_template::{DOCTYPE, PreEscaped, html};
 use hyperchad_transformer::{
     OverrideCondition, OverrideItem, ResponsiveTrigger,
     models::{AlignItems, LayoutDirection, TextAlign, Visibility},
 };
+use maud::{DOCTYPE, PreEscaped, html};
 
 #[cfg(feature = "actix")]
 pub use actix::router_to_actix;

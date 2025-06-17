@@ -29,7 +29,6 @@ on:
             - 'packages/http/**'
             - 'packages/hyperchad/actions/**'
             - 'packages/hyperchad/color/**'
-            - 'packages/hyperchad/template/**'
             - 'packages/hyperchad/template2/**'
             - 'packages/hyperchad/transformer/**'
             - 'packages/image/**'

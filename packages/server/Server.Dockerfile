@@ -33,8 +33,6 @@ RUN cat Cargo.toml | \
     \"packages\/http\/models\",\r\
     \"packages\/hyperchad\/actions\",\r\
     \"packages\/hyperchad\/color\",\r\
-    \"packages\/hyperchad\/template\",\r\
-    \"packages\/hyperchad\/template\/macros\",\r\
     \"packages\/hyperchad\/template2\",\r\
     \"packages\/hyperchad\/template2\/macros\",\r\
     \"packages\/hyperchad\/transformer\",\r\
@@ -114,8 +112,6 @@ COPY packages/http/Cargo.toml packages/http/Cargo.toml
 COPY packages/http/models/Cargo.toml packages/http/models/Cargo.toml
 COPY packages/hyperchad/actions/Cargo.toml packages/hyperchad/actions/Cargo.toml
 COPY packages/hyperchad/color/Cargo.toml packages/hyperchad/color/Cargo.toml
-COPY packages/hyperchad/template/Cargo.toml packages/hyperchad/template/Cargo.toml
-COPY packages/hyperchad/template/macros/Cargo.toml packages/hyperchad/template/macros/Cargo.toml
 COPY packages/hyperchad/template2/Cargo.toml packages/hyperchad/template2/Cargo.toml
 COPY packages/hyperchad/template2/macros/Cargo.toml packages/hyperchad/template2/macros/Cargo.toml
 COPY packages/hyperchad/transformer/Cargo.toml packages/hyperchad/transformer/Cargo.toml
@@ -242,14 +238,6 @@ path=\"..\/..\/temp_lib.rs\"/" | \
     > "packages/async/macros/Cargo2.toml" && \
     mv "packages/async/macros/Cargo2.toml" "packages/async/macros/Cargo.toml" && \
     \
-    cat "packages/hyperchad/template/macros/Cargo.toml" | \
-    tr '\n' '\r' | \
-    sed -E "s/\[lib\]/[lib]\r\
-path=\"..\/..\/..\/..\/temp_lib.rs\"/" | \
-    tr '\r' '\n' \
-    > "packages/hyperchad/template/macros/Cargo2.toml" && \
-    mv "packages/hyperchad/template/macros/Cargo2.toml" "packages/hyperchad/template/macros/Cargo.toml" && \
-    \
     cat "packages/hyperchad/template2/macros/Cargo.toml" | \
     tr '\n' '\r' | \
     sed -E "s/\[lib\]/[lib]\r\
@@ -262,7 +250,6 @@ path=\"..\/..\/..\/..\/temp_lib.rs\"/" | \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/http/models/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/hyperchad/actions/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/hyperchad/color/Cargo.toml" && \
-    printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/hyperchad/template/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/hyperchad/template2/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../temp_lib.rs\"" >> "packages/hyperchad/transformer/Cargo.toml" && \
     printf "\n\n[lib]\npath=\"../../../../temp_lib.rs\"" >> "packages/hyperchad/transformer/models/Cargo.toml" && \

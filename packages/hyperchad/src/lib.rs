@@ -30,8 +30,6 @@ pub use hyperchad_renderer_vanilla_js as renderer_vanilla_js;
 pub use hyperchad_router as router;
 #[cfg(feature = "state")]
 pub use hyperchad_state as state;
-#[cfg(feature = "template")]
-pub use hyperchad_template as template;
 #[cfg(feature = "template2")]
 pub use hyperchad_template2 as template2;
 #[cfg(feature = "transformer")]

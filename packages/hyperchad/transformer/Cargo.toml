@@ -21,25 +21,24 @@ moosicbox_assert             = { workspace = true }
 moosicbox_logging            = { workspace = true, features = ["macros"] }
 switchy_time                 = { workspace = true, features = ["std"] }
 
-bumpalo            = { workspace = true, features = ["collections"], optional = true }
-html-escape        = { workspace = true }
-hyperchad_template = { workspace = true, optional = true }
-log                = { workspace = true }
-paste              = { workspace = true }
-profiling          = { workspace = true, optional = true }
-serde              = { workspace = true }
-serde_json         = { workspace = true }
-strum              = { workspace = true, features = ["derive"] }
-syntect            = { workspace = true, optional = true }
-thiserror          = { workspace = true }
-tl                 = { workspace = true, optional = true }
-xml                = { workspace = true, optional = true }
+bumpalo     = { workspace = true, features = ["collections"], optional = true }
+html-escape = { workspace = true }
+log         = { workspace = true }
+paste       = { workspace = true }
+profiling   = { workspace = true, optional = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+strum       = { workspace = true, features = ["derive"] }
+syntect     = { workspace = true, optional = true }
+thiserror   = { workspace = true }
+tl          = { workspace = true, optional = true }
+xml         = { workspace = true, optional = true }
 
 [dev-dependencies]
 hyperchad_actions            = { workspace = true, features = ["arb", "serde"] }
 hyperchad_color              = { workspace = true, features = ["arb"] }
-hyperchad_template           = { workspace = true }
 hyperchad_transformer_models = { workspace = true, features = ["arb"] }
+maud                         = { workspace = true }
 moosicbox_arb                = { workspace = true, features = ["css", "serde", "xml"] }
 pretty_assertions            = { workspace = true }
 quickcheck                   = { workspace = true }
@@ -57,7 +56,6 @@ default = [
     "layout-offset",
     "logic",
     "syntax-highlighting",
-    "template",
 ]
 
 fail-on-warnings = []
@@ -80,7 +78,6 @@ profiling-tracy = ["profiling", "profiling/profile-with-tracy"]
 layout        = ["dep:bumpalo", "hyperchad_transformer_models/layout"]
 layout-offset = ["layout"]
 logic         = ["hyperchad_actions/logic"]
-template      = ["dep:hyperchad_template", "html"]
 
 html = ["dep:tl", "hyperchad_actions/serde"]
 simd = ["tl?/simd"]

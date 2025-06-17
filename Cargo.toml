@@ -58,8 +58,6 @@ members = [
     "packages/hyperchad/renderer/vanilla_js/hash",
     "packages/hyperchad/router",
     "packages/hyperchad/state",
-    "packages/hyperchad/template",
-    "packages/hyperchad/template/macros",
     "packages/hyperchad/template2",
     "packages/hyperchad/template2/macros",
     "packages/hyperchad/transformer",
@@ -273,10 +271,8 @@ hyperchad_renderer_vanilla_js      = { version = "0.1.0", default-features = fal
 hyperchad_renderer_vanilla_js_hash = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/vanilla_js/hash" }
 hyperchad_router                   = { version = "0.1.0", default-features = false, path = "packages/hyperchad/router" }
 hyperchad_state                    = { version = "0.1.0", default-features = false, path = "packages/hyperchad/state" }
-hyperchad_template                 = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template" }
 hyperchad_template2                = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template2" }
 hyperchad_template2_macros         = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template2/macros" }
-hyperchad_template_macros          = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template/macros" }
 hyperchad_transformer              = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer" }
 hyperchad_transformer_models       = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer/models" }
 
@@ -380,6 +376,7 @@ libpulse-simple-binding = "2.29.0"
 libvips = { version = "1.7.1" }
 local-ip-address = "0.6.5"
 log = { version = "0.4", features = ["release_max_level_trace"] }
+maud = "0.27.0"
 md5 = "0.7.0"
 mdns-sd = "0.13.9"
 mime = "0.3.17"

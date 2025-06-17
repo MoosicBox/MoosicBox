@@ -2,7 +2,7 @@ use actix_web::{
     Scope,
     dev::{ServiceFactory, ServiceRequest},
 };
-use hyperchad_template::{Markup, html};
+use maud::{Markup, html};
 use switchy_database::{DatabaseError, config::ConfigDatabase};
 
 pub const fn bind_services<

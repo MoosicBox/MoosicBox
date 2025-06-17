@@ -1759,8 +1759,8 @@ impl Container {
 
 #[cfg(test)]
 mod test {
-    use hyperchad_template::html;
     use hyperchad_transformer_models::AlignItems;
+    use maud::html;
     use paste::paste;
     use pretty_assertions::assert_eq;
 
@@ -1921,6 +1921,7 @@ mod test {
                     {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -2609,6 +2610,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -2840,6 +2842,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -2870,6 +2873,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -2912,6 +2916,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -2957,6 +2962,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -3009,6 +3015,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -3063,6 +3070,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -3137,6 +3145,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -3179,6 +3188,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -3243,6 +3253,7 @@ mod test {
                 div {} div {}
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -3296,6 +3307,7 @@ mod test {
             }
             div {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -3356,6 +3368,7 @@ mod test {
                 div {}
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -4257,6 +4270,7 @@ mod test {
             div sx-width=(20) {}
             div sx-width=(20) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -4332,6 +4346,7 @@ mod test {
             div sx-width=(20) {}
             div sx-hidden=(true) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7018,6 +7033,7 @@ mod test {
                 }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7058,6 +7074,7 @@ mod test {
                 }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7119,6 +7136,7 @@ mod test {
                 }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7179,6 +7197,7 @@ mod test {
                 sx-right=(0)
             {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7218,6 +7237,7 @@ mod test {
                 sx-bottom=(170)
             {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7258,6 +7278,7 @@ mod test {
                 sx-right=(0)
             {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7306,6 +7327,7 @@ mod test {
                 {}
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7343,6 +7365,7 @@ mod test {
                 }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7400,6 +7423,7 @@ mod test {
                 footer sx-height=(140) {}
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7448,6 +7472,7 @@ mod test {
                 div sx-height=(600) {}
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7486,6 +7511,7 @@ mod test {
                 }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7529,6 +7555,7 @@ mod test {
                 }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7573,6 +7600,7 @@ mod test {
                 }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7611,6 +7639,7 @@ mod test {
         let mut container: Container = html! {
             div sx-border-top-left-radius=(5) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7637,6 +7666,7 @@ mod test {
         let mut container: Container = html! {
             div sx-border-top-right-radius=(5) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7663,6 +7693,7 @@ mod test {
         let mut container: Container = html! {
             div sx-border-bottom-left-radius=(5) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7689,6 +7720,7 @@ mod test {
         let mut container: Container = html! {
             div sx-border-bottom-right-radius=(5) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7715,6 +7747,7 @@ mod test {
         let mut container: Container = html! {
             div sx-border-top-left-radius="100%" {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7741,6 +7774,7 @@ mod test {
         let mut container: Container = html! {
             div sx-border-top-right-radius="100%" {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7767,6 +7801,7 @@ mod test {
         let mut container: Container = html! {
             div sx-border-bottom-left-radius="100%" {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7793,6 +7828,7 @@ mod test {
         let mut container: Container = html! {
             div sx-border-bottom-right-radius="100%" {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7819,6 +7855,7 @@ mod test {
         let mut container: Container = html! {
             div sx-opacity=(0.5) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7845,6 +7882,7 @@ mod test {
         let mut container: Container = html! {
             div sx-opacity="100%" {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7871,6 +7909,7 @@ mod test {
         let mut container: Container = html! {
             div sx-margin-left=(50.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7898,6 +7937,7 @@ mod test {
         let mut container: Container = html! {
             div sx-margin-right=(50.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7925,6 +7965,7 @@ mod test {
         let mut container: Container = html! {
             div sx-margin-top=(50.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7953,6 +7994,7 @@ mod test {
         let mut container: Container = html! {
             div sx-margin-bottom=(50.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -7981,6 +8023,7 @@ mod test {
         let mut container: Container = html! {
             div sx-margin-left=(50.0) sx-width=(25.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8009,6 +8052,7 @@ mod test {
         let mut container: Container = html! {
             div sx-margin-right=(50.0) sx-width=(25.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8037,6 +8081,7 @@ mod test {
         let mut container: Container = html! {
             div sx-margin-top=(50.0) sx-height=(25.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8065,6 +8110,7 @@ mod test {
         let mut container: Container = html! {
             div sx-margin-bottom=(50.0) sx-height=(25.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8093,6 +8139,7 @@ mod test {
         let mut container: Container = html! {
             div sx-padding-left=(50.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8121,6 +8168,7 @@ mod test {
         let mut container: Container = html! {
             div sx-padding-right=(50.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8149,6 +8197,7 @@ mod test {
         let mut container: Container = html! {
             div sx-padding-top=(50.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8177,6 +8226,7 @@ mod test {
         let mut container: Container = html! {
             div sx-padding-bottom=(50.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8205,6 +8255,7 @@ mod test {
         let mut container: Container = html! {
             div sx-padding-left=(50.0) sx-width=(25.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8233,6 +8284,7 @@ mod test {
         let mut container: Container = html! {
             div sx-padding-right=(50.0) sx-width=(25.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8261,6 +8313,7 @@ mod test {
         let mut container: Container = html! {
             div sx-padding-top=(50.0) sx-height=(25.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8289,6 +8342,7 @@ mod test {
         let mut container: Container = html! {
             div sx-padding-bottom=(50.0) sx-height=(25.0) {}
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8322,6 +8376,7 @@ mod test {
                 }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8368,6 +8423,7 @@ mod test {
                 div sx-height=(15) {}
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8408,6 +8464,7 @@ mod test {
                 div { "three" }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8447,6 +8504,7 @@ mod test {
                 div sx-dir=(LayoutDirection::Row) { "three" }
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8485,6 +8543,7 @@ mod test {
                 div sx-width=(10) {}
             }
         }
+        .into_string()
         .try_into()
         .unwrap();
 
@@ -8523,6 +8582,7 @@ mod test {
             let mut container: Container = html! {
                 div { "test" }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8551,6 +8611,7 @@ mod test {
             let mut container: Container = html! {
                 div { "test" }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8582,6 +8643,7 @@ mod test {
                     "test" span { "two" }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8622,6 +8684,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8663,6 +8726,7 @@ mod test {
             let mut container: Container = html! {
                 div sx-width=(100) { "test" }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8692,6 +8756,7 @@ mod test {
             let mut container: Container = html! {
                 div sx-width=(100) { "test test" }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8724,6 +8789,7 @@ mod test {
                     span { "aoeu aoeu aoeu aoeu aoeu" }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8756,6 +8822,7 @@ mod test {
                     span { "aoeu aoeu aoeu aoeu aoeu" }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8788,6 +8855,7 @@ mod test {
                     div { "aoeu aoeu aoeu aoeu aoeu" }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8818,6 +8886,7 @@ mod test {
             let mut container: Container = html! {
                 "aoeu"
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8855,6 +8924,7 @@ mod test {
                     "aoeu"
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8894,6 +8964,7 @@ mod test {
                     "aoeu"
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8933,6 +9004,7 @@ mod test {
                     div { "aoeu" }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -8975,6 +9047,7 @@ mod test {
                     div { "aoeu" }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9016,6 +9089,7 @@ mod test {
                 div sx-font-size=(10) {}
                 div { "aoeu" }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9057,6 +9131,7 @@ mod test {
                 div sx-font-size="80%" {}
                 div { "aoeu" }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9102,7 +9177,7 @@ mod test {
                                 "aoeu"
                             }
                         }
-                        .try_into()
+                        .into_string().try_into()
                         .unwrap();
 
                         container.calculated_font_size = Some(20.0);
@@ -9140,7 +9215,7 @@ mod test {
                                 "aoeu"
                             }
                         }
-                        .try_into()
+                        .into_string().try_into()
                         .unwrap();
 
                         container.calculated_font_size = Some(20.0);
@@ -9184,7 +9259,7 @@ mod test {
                                 }
                             }
                         }
-                        .try_into()
+                        .into_string().try_into()
                         .unwrap();
 
                         container.calculated_font_size = Some(20.0);
@@ -9230,7 +9305,7 @@ mod test {
                                 "aoeu"
                             }
                         }
-                        .try_into()
+                        .into_string().try_into()
                         .unwrap();
 
                         container.calculated_font_size = Some(20.0);
@@ -9267,7 +9342,7 @@ mod test {
                                 "aoeu"
                             }
                         }
-                        .try_into()
+                        .into_string().try_into()
                         .unwrap();
 
                         container.calculated_font_size = Some(20.0);
@@ -9305,7 +9380,7 @@ mod test {
                                 "aoeu"
                             }
                         }
-                        .try_into()
+                        .into_string().try_into()
                         .unwrap();
 
                         container.calculated_font_size = Some(20.0);
@@ -9347,7 +9422,7 @@ mod test {
                                 "aoeu"
                             }
                         }
-                        .try_into()
+                        .into_string().try_into()
                         .unwrap();
 
                         container.calculated_font_size = Some(20.0);
@@ -9403,6 +9478,7 @@ mod test {
                     div sx-min-width=(100) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9436,6 +9512,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9467,6 +9544,7 @@ mod test {
                     div sx-min-height=(100) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9500,6 +9578,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9531,6 +9610,7 @@ mod test {
                     div sx-min-width="50%" {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9564,6 +9644,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9595,6 +9676,7 @@ mod test {
                     div sx-min-height="50%" {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9628,6 +9710,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9659,6 +9742,7 @@ mod test {
                     div sx-max-width=(100) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9692,6 +9776,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9723,6 +9808,7 @@ mod test {
                     div sx-max-height=(100) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9756,6 +9842,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9787,6 +9874,7 @@ mod test {
                     div sx-max-width="50%" {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9820,6 +9908,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9851,6 +9940,7 @@ mod test {
                     div sx-max-height="50%" {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9884,6 +9974,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9915,6 +10006,7 @@ mod test {
                     div sx-min-width=(100) sx-max-width=(90) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9948,6 +10040,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -9979,6 +10072,7 @@ mod test {
                     div sx-min-height=(100) sx-max-height=(90) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10013,6 +10107,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10044,6 +10139,7 @@ mod test {
                     div sx-min-width="50%" sx-max-width=(90) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10078,6 +10174,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10109,6 +10206,7 @@ mod test {
                     div sx-min-height="50%" sx-max-height=(90) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10143,6 +10241,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10174,6 +10273,7 @@ mod test {
                     div sx-min-width=(100) sx-max-width="0%" {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10208,6 +10308,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10239,6 +10340,7 @@ mod test {
                     div sx-min-height=(100) sx-max-height="0%" {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10273,6 +10375,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10304,6 +10407,7 @@ mod test {
                     div sx-min-width="50%" sx-max-width="0%" {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10338,6 +10442,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10369,6 +10474,7 @@ mod test {
                     div sx-min-height="50%" sx-max-height="0%" {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10403,6 +10509,7 @@ mod test {
                     }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10434,6 +10541,7 @@ mod test {
                     div sx-margin-top=(5) sx-height=(10) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10468,6 +10576,7 @@ mod test {
                     div sx-margin-bottom=(5) sx-height=(10) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10502,6 +10611,7 @@ mod test {
                     div sx-margin-left=(5) sx-width=(10) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10536,6 +10646,7 @@ mod test {
                     div sx-margin-right=(5) sx-width=(10) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10571,6 +10682,7 @@ mod test {
                     div flex=(1) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10608,6 +10720,7 @@ mod test {
                     div sx-position=(Position::Sticky) sx-width=(100) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10641,6 +10754,7 @@ mod test {
                     div sx-position=(Position::Sticky) sx-height=(100) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10676,6 +10790,7 @@ mod test {
             let mut container: Container = html! {
                 div sx-position=(Position::Fixed) sx-width="100%" {}
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10702,6 +10817,7 @@ mod test {
             let mut container: Container = html! {
                 div sx-position=(Position::Fixed) sx-height="100%" {}
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10741,6 +10857,7 @@ mod test {
                     {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -10785,6 +10902,7 @@ mod test {
                     { "test" }
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11070,6 +11188,7 @@ mod test {
                     div sx-width=(20) sx-height=(10) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11105,6 +11224,7 @@ mod test {
                     "test"
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11136,6 +11256,7 @@ mod test {
                     "test"
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11180,6 +11301,7 @@ mod test {
                     div sx-width=(20) sx-height=(10) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11227,6 +11349,7 @@ mod test {
                     "test"
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11262,6 +11385,7 @@ mod test {
                     "test"
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11293,7 +11417,7 @@ mod test {
                     div sx-height=(48) {}
                 }
             }
-            .try_into()
+            .into_string().try_into()
             .unwrap();
 
             container.calculated_width = Some(400.0);
@@ -11330,6 +11454,7 @@ mod test {
                     div sx-width=(48) {}
                 }
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11365,6 +11490,7 @@ mod test {
                 div sx-width=(20) {}
                 div sx-width=(30) {}
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11400,6 +11526,7 @@ mod test {
                 div sx-width=(20) {}
                 div sx-width=(30) {}
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11438,6 +11565,7 @@ mod test {
                 div sx-height=(20) {}
                 div sx-height=(30) {}
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11473,6 +11601,7 @@ mod test {
                 div sx-height=(20) {}
                 div sx-height=(30) {}
             }
+            .into_string()
             .try_into()
             .unwrap();
 
@@ -11514,6 +11643,7 @@ mod test {
                 let mut container: Container = html! {
                     div {}
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11539,6 +11669,7 @@ mod test {
                 let mut container: Container = html! {
                     div {}
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11567,6 +11698,7 @@ mod test {
                         div {}
                     }
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11603,6 +11735,7 @@ mod test {
                         div sx-width=(50) {}
                     }
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11633,6 +11766,7 @@ mod test {
                         div sx-height=(20) {}
                     }
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11663,7 +11797,7 @@ mod test {
                         div sx-height=(20) {}
                     }
                 }
-                .try_into()
+                .into_string().try_into()
                 .unwrap();
 
                 container.calculated_width = Some(400.0);
@@ -11693,6 +11827,7 @@ mod test {
                         div sx-width=(50) {}
                     }
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11724,6 +11859,7 @@ mod test {
                         div {}
                     }
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11761,6 +11897,7 @@ mod test {
                         div {}
                     }
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11798,6 +11935,7 @@ mod test {
                         div {}
                     }
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11835,7 +11973,7 @@ mod test {
                         div sx-width=(50) {}
                     }
                 }
-                .try_into()
+                .into_string().try_into()
                 .unwrap();
 
                 container.calculated_width = Some(400.0);
@@ -11873,6 +12011,7 @@ mod test {
                         div sx-height=(50) {}
                     }
                 }
+                .into_string()
                 .try_into()
                 .unwrap();
 
@@ -11910,7 +12049,7 @@ mod test {
                         div sx-width=(50) {}
                     }
                 }
-                .try_into()
+                .into_string().try_into()
                 .unwrap();
 
                 container.calculated_width = Some(400.0);
@@ -11948,7 +12087,7 @@ mod test {
                         div sx-height=(50) {}
                     }
                 }
-                .try_into()
+                .into_string().try_into()
                 .unwrap();
 
                 container.calculated_width = Some(400.0);

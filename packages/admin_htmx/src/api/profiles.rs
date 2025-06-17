@@ -5,7 +5,7 @@ use actix_web::{
     error::ErrorInternalServerError,
     route, web,
 };
-use hyperchad_template::{Markup, html};
+use maud::{Markup, html};
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_profiles::api::ProfileName;
 use serde::Deserialize;

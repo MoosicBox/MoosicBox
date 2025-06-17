@@ -28,7 +28,6 @@ hyperchad_renderer_html_lambda = { workspace = true, optional = true }
 hyperchad_renderer_vanilla_js  = { workspace = true, optional = true }
 hyperchad_router               = { workspace = true, optional = true }
 hyperchad_state                = { workspace = true, optional = true }
-hyperchad_template             = { workspace = true, optional = true }
 hyperchad_template2            = { workspace = true, optional = true }
 hyperchad_transformer          = { workspace = true, optional = true }
 hyperchad_transformer_models   = { workspace = true, optional = true }
@@ -53,7 +52,6 @@ all = [
     "renderer-vanilla-js",
     "router",
     "state",
-    "template",
     "template2",
     "transformer",
     "transformer-models",
@@ -107,7 +105,6 @@ renderer-profiling-tracy = [
     "hyperchad_renderer?/profiling-tracy",
 ]
 renderer-serde = ["hyperchad_renderer?/serde"]
-renderer-template = ["hyperchad_renderer/template"]
 
 renderer-egui = ["dep:hyperchad_renderer_egui", "hyperchad_app?/egui"]
 renderer-egui-debug = ["hyperchad_app?/debug", "hyperchad_renderer_egui?/debug"]
@@ -276,13 +273,6 @@ router-syntax-highlighting = [
     "hyperchad_app?/syntax-highlighting",
     "hyperchad_router?/syntax-highlighting",
 ]
-
-template = [
-    "dep:hyperchad_template",
-    "hyperchad_renderer?/template",
-    "hyperchad_transformer?/template",
-]
-template-actix-web = ["hyperchad_template?/actix-web", "template"]
 
 template2 = ["dep:hyperchad_template2"]
 

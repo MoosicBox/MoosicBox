@@ -5218,7 +5218,6 @@ dependencies = [
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
  "hyperchad_state",
- "hyperchad_template",
  "hyperchad_template2",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
@@ -5299,7 +5298,6 @@ dependencies = [
  "async-trait",
  "bytes",
  "hyperchad_color",
- "hyperchad_template",
  "hyperchad_transformer",
  "log 0.4.27",
  "serde",
@@ -5369,9 +5367,9 @@ dependencies = [
  "hyperchad_renderer_html_actix",
  "hyperchad_renderer_html_lambda",
  "hyperchad_router",
- "hyperchad_template",
  "hyperchad_transformer",
  "log 0.4.27",
+ "maud",
  "moosicbox_assert",
  "moosicbox_env_utils",
  "moosicbox_logging",
@@ -5453,9 +5451,9 @@ dependencies = [
  "hyperchad_renderer",
  "hyperchad_renderer_html",
  "hyperchad_renderer_vanilla_js_hash",
- "hyperchad_template",
  "hyperchad_transformer",
  "log 0.4.27",
+ "maud",
  "md5",
 ]
 
@@ -5509,16 +5507,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyperchad_template"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "hyperchad_template_macros",
- "itoa 1.0.15",
- "trybuild",
-]
-
-[[package]]
 name = "hyperchad_template2"
 version = "0.1.0"
 dependencies = [
@@ -5549,17 +5537,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyperchad_template_macros"
-version = "0.1.0"
-dependencies = [
- "log 0.4.27",
- "proc-macro2",
- "proc-macro2-diagnostics",
- "quote",
- "syn 2.0.103",
-]
-
-[[package]]
 name = "hyperchad_transformer"
 version = "0.1.0"
 dependencies = [
@@ -5567,9 +5544,9 @@ dependencies = [
  "html-escape",
  "hyperchad_actions",
  "hyperchad_color",
- "hyperchad_template",
  "hyperchad_transformer_models",
  "log 0.4.27",
+ "maud",
  "moosicbox_arb",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -6827,6 +6804,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 
 [[package]]
+name = "maud"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8156733e27020ea5c684db5beac5d1d611e1272ab17901a49466294b84fc217e"
+dependencies = [
+ "actix-web",
+ "futures-util",
+ "itoa 1.0.15",
+ "maud_macros",
+]
+
+[[package]]
+name = "maud_macros"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7261b00f3952f617899bc012e3dbd56e4f0110a038175929fa5d18e5a19913ca"
+dependencies = [
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
+ "syn 2.0.103",
+]
+
+[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7066,8 +7067,8 @@ dependencies = [
  "actix-htmx",
  "actix-web",
  "base64 0.22.1",
- "hyperchad_template",
  "log 0.4.27",
+ "maud",
  "moosicbox_assert",
  "moosicbox_config",
  "moosicbox_json_utils",

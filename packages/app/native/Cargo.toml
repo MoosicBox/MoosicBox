@@ -46,7 +46,6 @@ hyperchad = { workspace = true, features = [
     "router",
     "router-form",
     "router-serde",
-    "template",
     "transformer",
 ] }
 moosicbox_app_models = { workspace = true, features = ["music-api-api"] }

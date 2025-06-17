@@ -102,15 +102,6 @@ impl TryFrom<serde_json::Value> for Content {
     }
 }
 
-#[cfg(feature = "template")]
-impl TryFrom<hyperchad_template::Markup> for Content {
-    type Error = ParseError;
-
-    fn try_from(value: hyperchad_template::Markup) -> Result<Self, Self::Error> {
-        Ok(Self::View(value.into_string().try_into()?))
-    }
-}
-
 impl<'a> TryFrom<&'a str> for Content {
     type Error = ParseError;
 
@@ -161,15 +152,6 @@ impl From<View> for Content {
 impl From<PartialView> for Content {
     fn from(value: PartialView) -> Self {
         Self::PartialView(value)
-    }
-}
-
-#[cfg(feature = "template")]
-impl TryFrom<hyperchad_template::Markup> for View {
-    type Error = ParseError;
-
-    fn try_from(value: hyperchad_template::Markup) -> Result<Self, Self::Error> {
-        value.into_string().try_into()
     }
 }
 

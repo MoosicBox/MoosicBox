@@ -26,14 +26,14 @@ moosicbox_qobuz = { workspace = true, optional = true, features = ["db"] }
 base64          = { workspace = true, optional = true }
 moosicbox_tidal = { workspace = true, optional = true, features = ["db"] }
 
-actix-htmx         = { workspace = true }
-actix-web          = { workspace = true, optional = true }
-hyperchad_template = { workspace = true, features = ["actix-web"] }
-log                = { workspace = true }
-serde              = { workspace = true }
-serde_json         = { workspace = true }
-urlencoding        = { workspace = true }
-whoami             = { workspace = true }
+actix-htmx  = { workspace = true }
+actix-web   = { workspace = true, optional = true }
+log         = { workspace = true }
+maud        = { workspace = true, features = ["actix-web"] }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+urlencoding = { workspace = true }
+whoami      = { workspace = true }
 
 [features]
 default = ["api", "qobuz", "scan", "tidal"]
