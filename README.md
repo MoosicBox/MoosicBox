@@ -4,16 +4,20 @@ A music server for cows
 
 ![MoosicBox](https://github.com/MoosicBox/Files/blob/master/animation.gif?raw=true)
 
+## Project Status
+
+**⚠️ Development Notice:** This is currently a personal side project in active development. Most features are experimental and may not work as expected. While the goal is to eventually create a stable, user-friendly music app that others can enjoy, the project is not yet ready for general use. Your mileage may vary significantly at this stage.
+
 ## Features
 
 Implemented:
 
 - Audio playback controls
-  - Next/previous track, seek track, queue tracks, adjust volume, etc
+    - Next/previous track, seek track, queue tracks, adjust volume, etc
 - Control playback across applications (web and desktop)
-  - Supports multi simultaneous audio outputs
+    - Supports multi simultaneous audio outputs
 - Audio encoding on the fly
-  - AAC (m4a, mp4), mp3, Opus
+    - AAC (m4a, mp4), mp3, Opus
 - Hi-Fi audio player
 - Automatic image optimization for requested size on demand
 - Tunnel server reverse proxy - allows access to local server from internet without any firewall configuration
@@ -112,7 +116,7 @@ The SQLite database stores the music library data:
 The Postgres database stores the tunnel server configurations:
 
 - WebSocket connection mappings
-  - Enables the tunnel server to know which WebSocket connection to tunnel data from
+    - Enables the tunnel server to know which WebSocket connection to tunnel data from
 
 ##### Migrations
 
@@ -133,7 +137,7 @@ The Postgres database stores the tunnel server configurations:
 The MySQL database stores the tunnel server configurations:
 
 - WebSocket connection mappings
-  - Enables the tunnel server to know which WebSocket connection to tunnel data from
+    - Enables the tunnel server to know which WebSocket connection to tunnel data from
 
 ##### Migrations
 
