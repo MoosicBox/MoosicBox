@@ -224,7 +224,7 @@ pub fn player(state: &State) -> Containers {
             Div height=(VIZ_HEIGHT) padding-y=(VIZ_PADDING) direction=row {
                 Canvas
                     #visualization
-                    cursor="pointer"
+                    cursor=pointer
                     width=100%
                     height=(VIZ_HEIGHT)
                     fx-click=(get_mouse_x_self().divide(get_width_px_self()).then_pass_to(Action::SeekCurrentTrackPercent))
@@ -378,7 +378,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
             justify-content=center
             border-radius=30
             background=(BACKGROUND)
-            cursor="pointer"
+            cursor=pointer
             fx-mouse-down=(
                 hyperchad::actions::logic::Arithmetic::group(
                     get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)

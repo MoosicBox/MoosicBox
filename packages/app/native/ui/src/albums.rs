@@ -628,27 +628,27 @@ pub fn album_display(
             Div
                 width=(size)
                 height=(size)
-                position="relative"
+                position=relative
                 fx-hover=(ActionType::show_last_child())
             {
                 (album_cover_img_from_album(host, album, size))
                 Div
                     width=(size)
                     height=(size)
-                    position="absolute"
-                    visibility="hidden"
+                    position=absolute
+                    visibility=hidden
                 {
                     @let button_size = size / 4;
                     @let icon_size = size / 10;
                     Button
                         direction=row
-                        position="absolute"
+                        position=absolute
                         bottom=5%
                         left=5%
                         width=(button_size)
                         height=(button_size)
-                        justify-content="center"
-                        align-items="center"
+                        justify-content=center
+                        align-items=center
                         background="#fff"
                         border-radius=(button_size)
                         fx-click=(Action::PlayAlbum {
@@ -667,13 +667,13 @@ pub fn album_display(
                     @let icon_size = size / 7;
                     Button
                         direction=row
-                        position="absolute"
+                        position=absolute
                         bottom=5%
                         right=5%
                         width=(button_size)
                         height=(button_size)
-                        justify-content="center"
-                        align-items="center"
+                        justify-content=center
+                        align-items=center
                         background="#fff"
                         border-radius=(button_size)
                         fx-click=(Action::AddAlbumToQueue {
@@ -792,13 +792,13 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                     H1 { "Albums" }
                     @let button_size = 30;
                     @let icon_size = button_size - 10;
-                    Div position="relative" width=(button_size) height=(button_size) {
+                    Div position=relative width=(button_size) height=(button_size) {
                         Button
                             direction=row
                             width=(button_size)
                             height=(button_size)
-                            justify-content="center"
-                            align-items="center"
+                            justify-content=center
+                            align-items=center
                             fx-click=(
                                 get_visibility_str_id("albums-menu")
                                     .eq(Visibility::Hidden)
@@ -813,9 +813,9 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                         Div
                             #albums-menu
                             width=300
-                            position="absolute"
+                            position=absolute
                             top=100%
-                            visibility="hidden"
+                            visibility=hidden
                             background=(DARK_BACKGROUND)
                             border-radius=5
                             direction=row
@@ -958,7 +958,7 @@ pub fn load_albums(
             direction=row
             overflow-x=(LayoutOverflow::Wrap { grid: true })
             grid-cell-size=(size)
-            justify-content="space-evenly"
+            justify-content=space-evenly
             gap=15
             padding-x=30
             padding-y=15
