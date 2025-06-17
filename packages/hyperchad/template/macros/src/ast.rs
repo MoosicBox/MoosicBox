@@ -389,14 +389,52 @@ impl<E: MaybeElement> Markup<E> {
                         // For percent helper function, use calc module
                         let expr: Expr = content.parse()?;
                         parse_quote!(hyperchad_template::calc::to_percent_number(#expr))
-                    } else if matches!(ident_str.as_str(), "rgb" | "rgba") {
-                        // For color functions, parse comma-separated expressions
+                    } else if ident_str == "rgb" {
+                        // For rgb function, parse comma-separated expressions
                         let args =
                             syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated(
                                 &content,
                             )?;
                         let args_vec: Vec<Expr> = args.into_iter().collect();
-                        parse_quote!(hyperchad_template::color_functions::#unit_ident(#(#args_vec),*))
+
+                        // Route to appropriate function based on argument count
+                        match args_vec.len() {
+                            3 => {
+                                parse_quote!(hyperchad_template::color_functions::rgb(#(#args_vec),*))
+                            }
+                            4 => {
+                                // For 4 arguments, use the rgb_alpha function
+                                parse_quote!(hyperchad_template::color_functions::rgb_alpha(#(#args_vec),*))
+                            }
+                            _ => {
+                                return Err(syn::Error::new(
+                                    content.span(),
+                                    format!(
+                                        "rgb() function expects 3 or 4 arguments, got {}",
+                                        args_vec.len()
+                                    ),
+                                ));
+                            }
+                        }
+                    } else if ident_str == "rgba" {
+                        // For rgba function, parse comma-separated expressions (legacy support)
+                        let args =
+                            syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated(
+                                &content,
+                            )?;
+                        let args_vec: Vec<Expr> = args.into_iter().collect();
+
+                        if args_vec.len() != 4 {
+                            return Err(syn::Error::new(
+                                content.span(),
+                                format!(
+                                    "rgba() function expects 4 arguments, got {}",
+                                    args_vec.len()
+                                ),
+                            ));
+                        }
+
+                        parse_quote!(hyperchad_template::color_functions::rgba(#(#args_vec),*))
                     } else {
                         // For unit functions like vw, vh, etc., parse a single expression and use unit_functions module
                         let expr: Expr = content.parse()?;

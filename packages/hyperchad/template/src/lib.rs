@@ -1164,11 +1164,16 @@ pub mod color_functions {
 
     /// Create an RGB color from red, green, and blue values (0-255)
     ///
+    /// This function creates RGB colors with 3 arguments. For RGBA colors with alpha,
+    /// use the template syntax `rgb(r, g, b, a)` which will automatically route to
+    /// the appropriate function, or use `rgb_alpha()` directly.
+    ///
     /// # Examples
     /// ```rust
     /// use hyperchad_template::color_functions::rgb;
     /// use hyperchad_color::Color;
     ///
+    /// // RGB format (3 arguments)
     /// let red_color = rgb(255, 0, 0);
     /// let green_color = rgb(0, 255, 0);
     /// let blue_color = rgb(0, 0, 255);
@@ -1187,12 +1192,46 @@ pub mod color_functions {
         }
     }
 
-    /// Create an RGBA color from red, green, blue, and alpha values
+    /// Create an RGBA color using the rgb function with 4 arguments
     ///
+    /// This is an overloaded version of rgb() that accepts an alpha parameter.
     /// Alpha can be specified as:
     /// - A float between 0.0 and 1.0 (e.g., 0.5 for 50% opacity)
     /// - An integer between 0 and 255 (e.g., 128 for 50% opacity)
-    /// - A percentage value (handled by the Number system)
+    ///
+    /// # Examples
+    /// ```rust
+    /// use hyperchad_template::color_functions::rgb_alpha;
+    /// use hyperchad_color::Color;
+    ///
+    /// // Float alpha (0.0 - 1.0)
+    /// let semi_transparent_red = rgb_alpha(255, 0, 0, 0.5);
+    ///
+    /// // Integer alpha (0 - 255)  
+    /// let semi_transparent_green = rgb_alpha(0, 255, 0, 128);
+    /// ```
+    pub fn rgb_alpha<R, G, B, A>(red: R, green: G, blue: B, alpha: A) -> Color
+    where
+        R: ToRgbValue,
+        G: ToRgbValue,
+        B: ToRgbValue,
+        A: Into<AlphaValue>,
+    {
+        let alpha_val = alpha.into().to_u8();
+        Color {
+            r: red.to_rgb_value(),
+            g: green.to_rgb_value(),
+            b: blue.to_rgb_value(),
+            a: Some(alpha_val),
+        }
+    }
+
+    /// Create an RGBA color from red, green, blue, and alpha values
+    ///
+    /// This is the legacy rgba() function name for compatibility.
+    /// Alpha can be specified as:
+    /// - A float between 0.0 and 1.0 (e.g., 0.5 for 50% opacity)
+    /// - An integer between 0 and 255 (e.g., 128 for 50% opacity)
     ///
     /// # Examples
     /// ```rust
@@ -1212,13 +1251,8 @@ pub mod color_functions {
         B: ToRgbValue,
         A: Into<AlphaValue>,
     {
-        let alpha_val = alpha.into().to_u8();
-        Color {
-            r: red.to_rgb_value(),
-            g: green.to_rgb_value(),
-            b: blue.to_rgb_value(),
-            a: Some(alpha_val),
-        }
+        // Call the rgb_alpha function
+        rgb_alpha(red, green, blue, alpha)
     }
 
     /// Helper type for alpha values that can be converted from various numeric types
