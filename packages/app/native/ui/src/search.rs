@@ -55,7 +55,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                         button
                             type=submit
                             border-radius=5
-                            background="#111"
+                            background=#111
                             border="2, #222"
                             padding-x=10
                             padding-y=5
@@ -65,7 +65,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                         button
                             #close-search-button
                             border-radius=100
-                            background="#fff"
+                            background=#fff
                             border="2, #222"
                             padding=10
                             fx-click=(ActionType::hide_str_id("search").and(ActionType::show_str_id("search-button")))
@@ -87,7 +87,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             #search-button
             visibility=(if open { Visibility::Hidden } else { Visibility::Visible })
             border-radius=100
-            background="#fff"
+            background=#fff
             border="2, #222"
             padding=10
             margin-x=20

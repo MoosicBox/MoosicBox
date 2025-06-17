@@ -100,30 +100,30 @@ pub fn releases(releases: &[OsRelease], os: &Os) -> Containers {
                         col-gap=10
                     {
                         div { "Release " (release.version) }
-                        div font-size=16 margin-bottom=2 color="#ccc" {
+                        div font-size=16 margin-bottom=2 color=#ccc {
                             (format_date(&release.published_at))
                         }
                         div font-size=16 margin-bottom=2 {
-                            "[" anchor color="#fff" target="_blank" href=(release.url) { "GitHub" } "]"
+                            "[" anchor color=#fff target="_blank" href=(release.url) { "GitHub" } "]"
                         }
                     }
                     @for release_asset in &release.assets {
                         @if let Some(asset) = &release_asset.asset {
                             div {
                                 @if os.lower_name == release_asset.name {
-                                    div color="#888" {
+                                    div color=#888 {
                                         "// We think you are running " (os.header)
                                     }
                                 }
                                 h3 { (get_os_header(release_asset.name)) }
                                 "Download "
-                                anchor color="#fff" href=(asset.browser_download_url) { (asset.name) }
-                                span color="#ccc" font-size=12 { " (" (format_size(asset.size)) ")" }
+                                anchor color=#fff href=(asset.browser_download_url) { (asset.name) }
+                                span color=#ccc font-size=12 { " (" (format_size(asset.size)) ")" }
                                 ul margin=0 {
                                     @for other_asset in &release_asset.other_formats {
                                         li {
-                                            anchor color="#fff" href=(other_asset.browser_download_url) { (other_asset.name) }
-                                            span color="#ccc" font-size=12 { " (" (format_size(other_asset.size)) ")" }
+                                            anchor color=#fff href=(other_asset.browser_download_url) { (other_asset.name) }
+                                            span color=#ccc font-size=12 { " (" (format_size(other_asset.size)) ")" }
                                         }
                                     }
                                 }

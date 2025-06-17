@@ -32,7 +32,7 @@ pub fn settings_page_content(
                         button
                             type=submit
                             border-radius=5
-                            background="#111"
+                            background=#111
                             border="2, #222"
                             padding-x=10
                             padding-y=5
@@ -55,7 +55,7 @@ pub fn settings_page_content(
                     {
                         button
                             border-radius=5
-                            background="#111"
+                            background=#111
                             border="2, #222"
                             padding-x=10
                             padding-y=5
@@ -101,7 +101,7 @@ pub fn scan_settings_content(scan_settings: &ScanSettings) -> Containers {
                                 button
                                     type=submit
                                     border-radius=5
-                                    background="#111"
+                                    background=#111
                                     border="2, #222"
                                     padding-x=10
                                     padding-y=5
@@ -137,7 +137,7 @@ pub fn download_settings_content(download_settings: &DownloadSettings) -> Contai
                                 button
                                     type=submit
                                     border-radius=5
-                                    background="#111"
+                                    background=#111
                                     border="2, #222"
                                     padding-x=10
                                     padding-y=5
@@ -151,7 +151,7 @@ pub fn download_settings_content(download_settings: &DownloadSettings) -> Contai
                                     button
                                         type=submit
                                         border-radius=5
-                                        background="#111"
+                                        background=#111
                                         border="2, #222"
                                         padding-x=10
                                         padding-y=5
@@ -210,7 +210,7 @@ pub fn music_api_settings_content(
                                 hx-swap=(SwapTarget::Id(id))
                                 #run-scan-button
                                 border-radius=5
-                                background="#111"
+                                background=#111
                                 border="2, #222"
                                 padding-x=10
                                 padding-y=5
@@ -224,7 +224,7 @@ pub fn music_api_settings_content(
                                 hx-swap=(SwapTarget::Id(id))
                                 #run-scan-button
                                 border-radius=5
-                                background="#111"
+                                background=#111
                                 border="2, #222"
                                 padding-x=10
                                 padding-y=5
@@ -248,7 +248,7 @@ pub fn music_api_settings_content(
                             button
                                 type=submit
                                 border-radius=5
-                                background="#111"
+                                background=#111
                                 border="2, #222"
                                 padding-x=10
                                 padding-y=5
@@ -263,7 +263,7 @@ pub fn music_api_settings_content(
                                     button
                                         type=submit
                                         border-radius=5
-                                        background="#111"
+                                        background=#111
                                         border="2, #222"
                                         padding-x=10
                                         padding-y=5
@@ -341,7 +341,7 @@ pub fn connections_content(
                         @if !current_connection {
                             button
                                 border-radius=5
-                                background="#111"
+                                background=#111
                                 border="2, #222"
                                 padding-x=10
                                 padding-y=5
@@ -353,7 +353,7 @@ pub fn connections_content(
                         }
                         button
                             border-radius=5
-                            background="#111"
+                            background=#111
                             border="2, #222"
                             padding-x=10
                             padding-y=5
@@ -365,7 +365,7 @@ pub fn connections_content(
                         button
                             type=submit
                             border-radius=5
-                            background="#111"
+                            background=#111
                             border="2, #222"
                             padding-x=10
                             padding-y=5

@@ -53,7 +53,7 @@ fn download_task(host: &str, task: &ApiDownloadTask) -> Containers {
         div
             direction=row
             gap=20
-            background="#111"
+            background=#111
             align-items=center
             padding-x=18
             padding-y=20
@@ -190,7 +190,7 @@ pub fn downloads_page_content(
             }
             div
                 #downloads-content
-                background="#333"
+                background=#333
                 gap=10
                 padding=10
                 border-radius=10

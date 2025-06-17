@@ -25,11 +25,11 @@ pub fn header() -> Containers {
         header
             direction=row
             align-items=center
-            background="#080a0b"
+            background=#080a0b
         {
             div #header-logo padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20)) {
                 anchor
-                    color="#fff"
+                    color=#fff
                     direction=row
                     align-items=center
                     text-decoration="none"
@@ -55,15 +55,15 @@ pub fn header() -> Containers {
                 padding-x=(if_responsive("mobile").then::<i32>(10).or_else(20))
                 col-gap=(if_responsive("mobile").then::<i32>(10).or_else(20))
             {
-                anchor color="#fff" href="/download" {
+                anchor color=#fff href="/download" {
                     "Download"
                 }
-                anchor color="#fff" href="https://app.moosicbox.com/login" {
+                anchor color=#fff href="https://app.moosicbox.com/login" {
                     "Log in"
                 }
                 anchor
-                    color="#fff"
-                    background="#282a2b"
+                    color=#fff
+                    background=#282a2b
                     border-radius=5
                     padding=8
                     href="/try-now"
@@ -154,7 +154,7 @@ pub fn home() -> Containers {
                                 (public_img!("showcase-1x540.webp"))" 540w, "
                                 (public_img!("showcase-1.webp"))" 1080w"
                             }
-                            sizes="70vw"
+                            sizes=vw70
                             width=100%
                             height=100%
                             alt="MoosicBox showcase desktop"
@@ -193,7 +193,7 @@ pub fn page(slot: &Containers) -> Containers {
             width=100%
             height=100%
             position=relative
-            color="#fff"
+            color=#fff
             font-family="Gordita, Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif"
             overflow-x=hidden
             overflow-y=auto

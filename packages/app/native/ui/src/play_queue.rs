@@ -45,7 +45,7 @@ fn render_play_queue_item(state: &State, track: &ApiTrack, is_history: bool) -> 
                     anchor href=(artist_page_url) { (track.artist) }
                 }
             }
-            div align-items=end background="#000" {
+            div align-items=end background=#000 {
                 @let icon_size = 20;
                 button width=(icon_size) height=(icon_size) {
                     image
@@ -93,7 +93,7 @@ pub fn play_queue(state: &State) -> Containers {
             width=calc(min(500, 30%))
             height=calc(100% - 200)
             visibility=hidden
-            background="#282a2b"
+            background=#282a2b
             border-top-left-radius=10
             border-bottom-left-radius=10
             position=absolute

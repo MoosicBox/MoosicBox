@@ -397,7 +397,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
                 width=3
                 height=100%
                 border-radius=30
-                background="#444"
+                background=#444
             {
                 (volume_slider_value(size, volume_percent))
             }
@@ -406,7 +406,6 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
 }
 
 fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
-    let height_percent = volume_percent * 100.0;
     container! {
         div
             id=(VOLUME_SLIDER_VALUE_ID)
@@ -414,9 +413,9 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
             bottom=0
             left=0
             width=100%
-            height=(format!("{height_percent}%"))
+            height=(volume_percent * 100.0)%
             border-radius=30
-            background="#fff"
+            background=#fff
         {
             div position=relative {
                 @let slider_top_width = f32::from(size) / 2.5;
@@ -427,7 +426,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
                     width=(slider_top_width)
                     height=3
                     border-radius=30
-                    background="#fff"
+                    background=#fff
                 {}
             }
         }
@@ -648,7 +647,7 @@ pub fn page(state: &State, slot: &Containers) -> Containers {
             width=100%
             height=100%
             position=relative
-            color="#fff"
+            color=#fff
         {
             section
                 .navigation-bar-and-main-content

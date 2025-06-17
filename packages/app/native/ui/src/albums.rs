@@ -215,7 +215,7 @@ pub fn album_page_content(
                     direction=row
                     width=130
                     height=40
-                    background="#fff"
+                    background=#fff
                     border-radius=5
                     justify-content=center
                     align-items=center
@@ -239,7 +239,7 @@ pub fn album_page_content(
                     direction=row
                     width=130
                     height=40
-                    background="#fff"
+                    background=#fff
                     border-radius=5
                     justify-content=center
                     align-items=center
@@ -273,7 +273,7 @@ pub fn album_page_content(
                                 direction=row
                                 width=130
                                 height=40
-                                background="#fff"
+                                background=#fff
                                 border-radius=5
                                 justify-content=center
                                 align-items=center
@@ -292,7 +292,7 @@ pub fn album_page_content(
                                     direction=row
                                     width=130
                                     height=40
-                                    background="#fff"
+                                    background=#fff
                                     border-radius=5
                                     justify-content=center
                                     align-items=center
@@ -310,7 +310,7 @@ pub fn album_page_content(
                                     direction=row
                                     width=130
                                     height=40
-                                    background="#fff"
+                                    background=#fff
                                     border-radius=5
                                     justify-content=center
                                     align-items=center
@@ -649,7 +649,7 @@ pub fn album_display(
                         height=(button_size)
                         justify-content=center
                         align-items=center
-                        background="#fff"
+                        background=#fff
                         border-radius=(button_size)
                         fx-click=(Action::PlayAlbum {
                             album_id: album.album_id.clone(),
@@ -674,7 +674,7 @@ pub fn album_display(
                         height=(button_size)
                         justify-content=center
                         align-items=center
-                        background="#fff"
+                        background=#fff
                         border-radius=(button_size)
                         fx-click=(Action::AddAlbumToQueue {
                             album_id: album.album_id.clone(),
