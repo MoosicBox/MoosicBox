@@ -59,6 +59,7 @@ members = [
     "packages/hyperchad/router",
     "packages/hyperchad/state",
     "packages/hyperchad/template",
+    "packages/hyperchad/template/actions_dsl",
     "packages/hyperchad/template/macros",
     "packages/hyperchad/transformer",
     "packages/hyperchad/transformer/models",
@@ -272,6 +273,7 @@ hyperchad_renderer_vanilla_js_hash = { version = "0.1.0", default-features = fal
 hyperchad_router                   = { version = "0.1.0", default-features = false, path = "packages/hyperchad/router" }
 hyperchad_state                    = { version = "0.1.0", default-features = false, path = "packages/hyperchad/state" }
 hyperchad_template                 = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template" }
+hyperchad_template_actions_dsl     = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template/actions_dsl" }
 hyperchad_template_macros          = { version = "0.1.0", default-features = false, path = "packages/hyperchad/template/macros" }
 hyperchad_transformer              = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer" }
 hyperchad_transformer_models       = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer/models" }

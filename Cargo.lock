@@ -5522,6 +5522,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_template_actions_dsl"
+version = "0.1.0"
+dependencies = [
+ "hyperchad_actions",
+ "hyperchad_template",
+ "log 0.4.27",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.103",
+]
+
+[[package]]
 name = "hyperchad_template_macros"
 version = "0.1.0"
 dependencies = [
