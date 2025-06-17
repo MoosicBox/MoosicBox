@@ -295,15 +295,26 @@ impl<E: MaybeElement> Markup<E> {
             if let Ok(ident) = fork.call(Ident::parse_any) {
                 let ident_str = ident.to_string();
                 if fork.peek(Paren) && NumericLit::is_unit_identifier(&ident_str) {
-                    // This is a function-style unit call like vw(50) or vh(expr)
+                    // This is a function-style unit call like vw(50), vh(expr), calc(expr), min(a,b), etc.
                     let unit_ident: Ident = input.call(Ident::parse_any)?;
                     let content;
                     let _paren_token = parenthesized!(content in input);
-                    let expr: Expr = content.parse()?;
 
-                    // Create a function call expression that our generate.rs can handle
-                    let call_expr: Expr =
-                        parse_quote!(hyperchad_template::unit_functions::#unit_ident(#expr));
+                    // Handle calc and CSS math functions specially - pass the expression directly
+                    let call_expr: Expr = if matches!(ident_str.as_str(), "calc") {
+                        // For calc, parse a single expression
+                        let expr: Expr = content.parse()?;
+                        parse_quote!(#unit_ident(#expr))
+                    } else if matches!(ident_str.as_str(), "min" | "max" | "clamp") {
+                        // For CSS math functions, parse comma-separated expressions
+                        let args = syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated(&content)?;
+                        let args_vec: Vec<Expr> = args.into_iter().collect();
+                        parse_quote!(#unit_ident(#(#args_vec),*))
+                    } else {
+                        // For unit functions like vw, vh, etc., parse a single expression and use unit_functions module
+                        let expr: Expr = content.parse()?;
+                        parse_quote!(hyperchad_template::unit_functions::#unit_ident(#expr))
+                    };
 
                     return Ok(Self::Splice {
                         paren_token: Paren::default(),
@@ -1145,7 +1156,7 @@ impl NumericLit {
     fn is_unit_identifier(input: &str) -> bool {
         matches!(
             input,
-            "vw" | "vh" | "dvw" | "dvh" // Viewport units only
+            "vw" | "vh" | "dvw" | "dvh" | "calc" | "min" | "max" | "clamp" // Viewport units, calc function, and CSS math functions
         )
     }
 }

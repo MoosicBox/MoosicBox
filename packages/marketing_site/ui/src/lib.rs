@@ -118,9 +118,9 @@ pub fn home() -> Containers {
                         .or_else(LayoutDirection::Row)
                 )
                 align-items=center
-                max-height="1000px"
+                max-height=1000
                 padding-x=50
-                gap="calc(min(100, 5%))"
+                gap=calc(min(100, 5%))
             {
                 div flex-grow=2 {
                     h1
@@ -142,10 +142,10 @@ pub fn home() -> Containers {
                     flex-grow=3
                 {
                     div
-                        margin-left="calc(10% - (100% / 30))"
+                        margin-left=calc(10% - (100% / 30))
                         height=100%
                         max-height=100%
-                        max-width="calc(100% - calc(10% - (100% / 30)))"
+                        max-width=calc(100% - (10% - (100% / 30)))
                     {
                         image
                             src=(public_img!("showcase-1.webp"))
@@ -164,7 +164,7 @@ pub fn home() -> Containers {
                         position=absolute
                         bottom=50%
                         translate-y=50%
-                        height="calc(min(65%, 50dvw))"
+                        height=calc(min(65%, dvw(50)))
                         max-height=80%
                     {
                         image
@@ -174,7 +174,7 @@ pub fn home() -> Containers {
                                 (public_img!("showcase-2x540.webp"))" 540w, "
                                 (public_img!("showcase-2.webp"))" 1080w"
                             }
-                            sizes="30vw"
+                            sizes=vw30
                             width=100%
                             height=100%
                             alt="MoosicBox showcase android"

@@ -29,7 +29,7 @@ pub use hyperchad_transformer_models as transformer_models;
 /// so you don't need to manually import these traits.
 pub mod prelude {
     pub use crate::{
-        ContainerVecExt, ContainerVecMethods, IntoActionEffect, IntoBorder, ToBool,
+        calc, ContainerVecExt, ContainerVecMethods, IntoActionEffect, IntoBorder, ToBool,
         color as hyperchad_color, transformer as hyperchad_transformer,
         transformer_models as hyperchad_transformer_models,
     };
@@ -746,6 +746,324 @@ impl IntoBorder for (String, f64) {
             hyperchad_color::Color::from_hex(&self.0),
             hyperchad_transformer::Number::Real(self.1 as f32),
         )
+    }
+}
+
+/// Helper module for calc() expressions and mathematical operations on Number types
+///
+/// # Examples
+///
+/// The calc module enables mathematical expressions in attributes:
+///
+/// ```rust
+/// use hyperchad_template::container;
+/// use hyperchad_transformer::Number;
+///
+/// // Basic calc expressions
+/// let containers = container! {
+///     div width=calc(100% - 20) {
+///         "Content with calculated width"
+///     }
+/// };
+///
+/// // With variables
+/// let margin = 10;
+/// let containers = container! {
+///     div width=calc(100% - (margin * 2)) {
+///         "Content with variable-based calculation"
+///     }
+/// };
+///
+/// // With helper functions
+/// let height_value = 50;
+/// let containers = container! {
+///     div height=calc(vh(height_value) - 20) {
+///         "Content with viewport units"
+///     }
+/// };
+///
+/// // Complex nested calculations
+/// let base_width = Number::IntegerPercent(80);
+/// let containers = container! {
+///     div width=calc(base_width - (percent(10) - (100% / 5))) {
+///         "Complex calculation"
+///     }
+/// };
+/// ```
+pub mod calc {
+    use hyperchad_transformer::Number;
+
+    /// Convert any type that can be converted to Number into a Number
+    pub fn to_number<T: Into<Number>>(value: T) -> Number {
+        value.into()
+    }
+
+    /// Convert a value to a percentage Number variant
+    pub fn to_percent_number<T>(value: T) -> Number 
+    where
+        T: Into<Number>,
+    {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerPercent(n),
+            Number::Real(n) => Number::RealPercent(n),
+            // If it's already a percent type, keep it
+            Number::IntegerPercent(_) | Number::RealPercent(_) => num,
+            // For other number types, convert to Real percentage
+            _ => {
+                // Use the existing calc method to get the raw value
+                let raw_value = num.calc(0.0, 100.0, 100.0);
+                Number::RealPercent(raw_value)
+            }
+        }
+    }
+
+    /// Convert a value to a viewport width Number variant
+    pub fn to_vw_number<T>(value: T) -> Number 
+    where
+        T: Into<Number>,
+    {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerVw(n),
+            Number::Real(n) => Number::RealVw(n),
+            // If it's already a vw type, keep it
+            Number::IntegerVw(_) | Number::RealVw(_) => num,
+            // For other number types, convert to Real vw
+            _ => {
+                let raw_value = num.calc(0.0, 100.0, 100.0);
+                Number::RealVw(raw_value)
+            }
+        }
+    }
+
+    /// Convert a value to a viewport height Number variant
+    pub fn to_vh_number<T>(value: T) -> Number 
+    where
+        T: Into<Number>,
+    {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerVh(n),
+            Number::Real(n) => Number::RealVh(n),
+            // If it's already a vh type, keep it
+            Number::IntegerVh(_) | Number::RealVh(_) => num,
+            // For other number types, convert to Real vh
+            _ => {
+                let raw_value = num.calc(0.0, 100.0, 100.0);
+                Number::RealVh(raw_value)
+            }
+        }
+    }
+
+    /// Convert a value to a dynamic viewport width Number variant
+    pub fn to_dvw_number<T>(value: T) -> Number 
+    where
+        T: Into<Number>,
+    {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerDvw(n),
+            Number::Real(n) => Number::RealDvw(n),
+            // If it's already a dvw type, keep it
+            Number::IntegerDvw(_) | Number::RealDvw(_) => num,
+            // For other number types, convert to Real dvw
+            _ => {
+                let raw_value = num.calc(0.0, 100.0, 100.0);
+                Number::RealDvw(raw_value)
+            }
+        }
+    }
+
+    /// Convert a value to a dynamic viewport height Number variant
+    pub fn to_dvh_number<T>(value: T) -> Number 
+    where
+        T: Into<Number>,
+    {
+        let num = value.into();
+        match num {
+            Number::Integer(n) => Number::IntegerDvh(n),
+            Number::Real(n) => Number::RealDvh(n),
+            // If it's already a dvh type, keep it
+            Number::IntegerDvh(_) | Number::RealDvh(_) => num,
+            // For other number types, convert to Real dvh
+            _ => {
+                let raw_value = num.calc(0.0, 100.0, 100.0);
+                Number::RealDvh(raw_value)
+            }
+        }
+    }
+
+    /// Add two Number values, handling different Number types appropriately
+    pub fn add_numbers(left: Number, right: Number) -> Number {
+        // For now, use a simple approach that converts both to common units if possible
+        // or falls back to real numbers for calculations
+        match (&left, &right) {
+            // Same unit types - direct addition
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a + b),
+            (Number::Real(a), Number::Real(b)) => Number::Real(a + b),
+            (Number::IntegerPercent(a), Number::IntegerPercent(b)) => Number::IntegerPercent(a + b),
+            (Number::RealPercent(a), Number::RealPercent(b)) => Number::RealPercent(a + b),
+            (Number::IntegerVw(a), Number::IntegerVw(b)) => Number::IntegerVw(a + b),
+            (Number::RealVw(a), Number::RealVw(b)) => Number::RealVw(a + b),
+            (Number::IntegerVh(a), Number::IntegerVh(b)) => Number::IntegerVh(a + b),
+            (Number::RealVh(a), Number::RealVh(b)) => Number::RealVh(a + b),
+            (Number::IntegerDvw(a), Number::IntegerDvw(b)) => Number::IntegerDvw(a + b),
+            (Number::RealDvw(a), Number::RealDvw(b)) => Number::RealDvw(a + b),
+            (Number::IntegerDvh(a), Number::IntegerDvh(b)) => Number::IntegerDvh(a + b),
+            (Number::RealDvh(a), Number::RealDvh(b)) => Number::RealDvh(a + b),
+            
+            // Mixed integer/real of same unit
+            (Number::Integer(a), Number::Real(b)) => Number::Real(*a as f32 + b),
+            (Number::Real(a), Number::Integer(b)) => Number::Real(a + *b as f32),
+            (Number::IntegerPercent(a), Number::RealPercent(b)) => Number::RealPercent(*a as f32 + b),
+            (Number::RealPercent(a), Number::IntegerPercent(b)) => Number::RealPercent(a + *b as f32),
+            (Number::IntegerVw(a), Number::RealVw(b)) => Number::RealVw(*a as f32 + b),
+            (Number::RealVw(a), Number::IntegerVw(b)) => Number::RealVw(a + *b as f32),
+            (Number::IntegerVh(a), Number::RealVh(b)) => Number::RealVh(*a as f32 + b),
+            (Number::RealVh(a), Number::IntegerVh(b)) => Number::RealVh(a + *b as f32),
+            (Number::IntegerDvw(a), Number::RealDvw(b)) => Number::RealDvw(*a as f32 + b),
+            (Number::RealDvw(a), Number::IntegerDvw(b)) => Number::RealDvw(a + *b as f32),
+            (Number::IntegerDvh(a), Number::RealDvh(b)) => Number::RealDvh(*a as f32 + b),
+            (Number::RealDvh(a), Number::IntegerDvh(b)) => Number::RealDvh(a + *b as f32),
+            
+            // Different units - for now, use calc() to convert to pixels and add
+            // This is a simplified approach; a more sophisticated implementation might
+            // preserve the calc() expression for runtime evaluation
+            _ => {
+                // Use dummy viewport dimensions for conversion
+                let left_pixels = left.calc(100.0, 1920.0, 1080.0);
+                let right_pixels = right.calc(100.0, 1920.0, 1080.0);
+                Number::Real(left_pixels + right_pixels)
+            }
+        }
+    }
+
+    /// Subtract two Number values
+    pub fn subtract_numbers(left: Number, right: Number) -> Number {
+        match (&left, &right) {
+            // Same unit types - direct subtraction
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a - b),
+            (Number::Real(a), Number::Real(b)) => Number::Real(a - b),
+            (Number::IntegerPercent(a), Number::IntegerPercent(b)) => Number::IntegerPercent(a - b),
+            (Number::RealPercent(a), Number::RealPercent(b)) => Number::RealPercent(a - b),
+            (Number::IntegerVw(a), Number::IntegerVw(b)) => Number::IntegerVw(a - b),
+            (Number::RealVw(a), Number::RealVw(b)) => Number::RealVw(a - b),
+            (Number::IntegerVh(a), Number::IntegerVh(b)) => Number::IntegerVh(a - b),
+            (Number::RealVh(a), Number::RealVh(b)) => Number::RealVh(a - b),
+            (Number::IntegerDvw(a), Number::IntegerDvw(b)) => Number::IntegerDvw(a - b),
+            (Number::RealDvw(a), Number::RealDvw(b)) => Number::RealDvw(a - b),
+            (Number::IntegerDvh(a), Number::IntegerDvh(b)) => Number::IntegerDvh(a - b),
+            (Number::RealDvh(a), Number::RealDvh(b)) => Number::RealDvh(a - b),
+            
+            // Mixed integer/real of same unit
+            (Number::Integer(a), Number::Real(b)) => Number::Real(*a as f32 - b),
+            (Number::Real(a), Number::Integer(b)) => Number::Real(a - *b as f32),
+            (Number::IntegerPercent(a), Number::RealPercent(b)) => Number::RealPercent(*a as f32 - b),
+            (Number::RealPercent(a), Number::IntegerPercent(b)) => Number::RealPercent(a - *b as f32),
+            (Number::IntegerVw(a), Number::RealVw(b)) => Number::RealVw(*a as f32 - b),
+            (Number::RealVw(a), Number::IntegerVw(b)) => Number::RealVw(a - *b as f32),
+            (Number::IntegerVh(a), Number::RealVh(b)) => Number::RealVh(*a as f32 - b),
+            (Number::RealVh(a), Number::IntegerVh(b)) => Number::RealVh(a - *b as f32),
+            (Number::IntegerDvw(a), Number::RealDvw(b)) => Number::RealDvw(*a as f32 - b),
+            (Number::RealDvw(a), Number::IntegerDvw(b)) => Number::RealDvw(a - *b as f32),
+            (Number::IntegerDvh(a), Number::RealDvh(b)) => Number::RealDvh(*a as f32 - b),
+            (Number::RealDvh(a), Number::IntegerDvh(b)) => Number::RealDvh(a - *b as f32),
+            
+            // Different units - convert to pixels and subtract
+            _ => {
+                let left_pixels = left.calc(100.0, 1920.0, 1080.0);
+                let right_pixels = right.calc(100.0, 1920.0, 1080.0);
+                Number::Real(left_pixels - right_pixels)
+            }
+        }
+    }
+
+    /// Multiply two Number values
+    pub fn multiply_numbers(left: Number, right: Number) -> Number {
+        match (&left, &right) {
+            // When multiplying, typically one operand should be unitless
+            // For now, we'll handle some common cases and fall back to pixel conversion
+            (Number::Integer(a), Number::Integer(b)) => Number::Integer(a * b),
+            (Number::Real(a), Number::Real(b)) => Number::Real(a * b),
+            (Number::Integer(a), Number::Real(b)) => Number::Real(*a as f32 * b),
+            (Number::Real(a), Number::Integer(b)) => Number::Real(a * *b as f32),
+            
+            // For units, if one is unitless, preserve the unit of the other
+            (Number::IntegerPercent(a), Number::Integer(b)) => Number::IntegerPercent(a * b),
+            (Number::Integer(a), Number::IntegerPercent(b)) => Number::IntegerPercent(a * b),
+            (Number::RealPercent(a), Number::Real(b)) => Number::RealPercent(a * b),
+            (Number::Real(a), Number::RealPercent(b)) => Number::RealPercent(a * b),
+            
+            // For more complex cases, convert to pixels and multiply
+            _ => {
+                let left_pixels = left.calc(100.0, 1920.0, 1080.0);
+                let right_pixels = right.calc(100.0, 1920.0, 1080.0);
+                Number::Real(left_pixels * right_pixels)
+            }
+        }
+    }
+
+    /// Divide two Number values
+    pub fn divide_numbers(left: Number, right: Number) -> Number {
+        match (&left, &right) {
+            // Basic division
+            (Number::Integer(a), Number::Integer(b)) => {
+                if *b != 0 {
+                    Number::Real(*a as f32 / *b as f32)
+                } else {
+                    Number::Real(0.0) // Avoid division by zero
+                }
+            },
+            (Number::Real(a), Number::Real(b)) => {
+                if *b != 0.0 {
+                    Number::Real(a / b)
+                } else {
+                    Number::Real(0.0)
+                }
+            },
+            (Number::Integer(a), Number::Real(b)) => {
+                if *b != 0.0 {
+                    Number::Real(*a as f32 / b)
+                } else {
+                    Number::Real(0.0)
+                }
+            },
+            (Number::Real(a), Number::Integer(b)) => {
+                if *b != 0 {
+                    Number::Real(a / *b as f32)
+                } else {
+                    Number::Real(0.0)
+                }
+            },
+            
+            // For units, if the divisor is unitless, preserve the unit
+            (Number::IntegerPercent(a), Number::Integer(b)) => {
+                if *b != 0 {
+                    Number::RealPercent(*a as f32 / *b as f32)
+                } else {
+                    Number::RealPercent(0.0)
+                }
+            },
+            (Number::RealPercent(a), Number::Real(b)) => {
+                if *b != 0.0 {
+                    Number::RealPercent(a / b)
+                } else {
+                    Number::RealPercent(0.0)
+                }
+            },
+            
+            // For more complex cases, convert to pixels and divide
+            _ => {
+                let left_pixels = left.calc(100.0, 1920.0, 1080.0);
+                let right_pixels = right.calc(100.0, 1920.0, 1080.0);
+                if right_pixels != 0.0 {
+                    Number::Real(left_pixels / right_pixels)
+                } else {
+                    Number::Real(0.0)
+                }
+            }
+        }
     }
 }
 

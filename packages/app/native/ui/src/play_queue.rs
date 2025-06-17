@@ -90,8 +90,8 @@ pub fn play_queue(state: &State) -> Containers {
     container! {
         div
             #play-queue
-            width="calc(min(500, 30%))"
-            height="calc(100% - 200)"
+            width=calc(min(500, 30%))
+            height=calc(100% - 200)
             visibility=hidden
             background="#282a2b"
             border-top-left-radius=10

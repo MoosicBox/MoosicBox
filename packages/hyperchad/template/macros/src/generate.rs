@@ -1824,11 +1824,453 @@ impl Generator {
     }
 
     fn handle_potential_if_expression_for_number(expr: &syn::Expr) -> TokenStream {
+        // Check if this is a calc() function call
+        if let syn::Expr::Call(call_expr) = expr {
+            if let syn::Expr::Path(path_expr) = &*call_expr.func {
+                if path_expr.path.segments.len() == 1 {
+                    let function_name = path_expr.path.segments[0].ident.to_string();
+
+                    match function_name.as_str() {
+                        "calc" => {
+                            // Handle calc() expressions
+                            if call_expr.args.len() == 1 {
+                                let calc_expr = &call_expr.args[0];
+                                return Self::handle_calc_expression(calc_expr);
+                            }
+                        }
+                        "min" => {
+                            // Handle min() expressions outside of calc()
+                            if call_expr.args.len() >= 2 {
+                                // For multiple arguments, chain binary min operations
+                                // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
+                                let mut result = Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                                for i in (0..call_expr.args.len() - 1).rev() {
+                                    let left = Self::build_calculation_ast(&call_expr.args[i]);
+                                    result = quote! {
+                                        hyperchad_transformer::Calculation::Min(
+                                            Box::new(#left),
+                                            Box::new(#result)
+                                        )
+                                    };
+                                }
+                                return quote! {
+                                    hyperchad_transformer::Number::Calc(#result)
+                                };
+                            }
+                        }
+                        "max" => {
+                            // Handle max() expressions outside of calc()
+                            if call_expr.args.len() >= 2 {
+                                // For multiple arguments, chain binary max operations
+                                // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
+                                let mut result = Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                                for i in (0..call_expr.args.len() - 1).rev() {
+                                    let left = Self::build_calculation_ast(&call_expr.args[i]);
+                                    result = quote! {
+                                        hyperchad_transformer::Calculation::Max(
+                                            Box::new(#left),
+                                            Box::new(#result)
+                                        )
+                                    };
+                                }
+                                return quote! {
+                                    hyperchad_transformer::Number::Calc(#result)
+                                };
+                            }
+                        }
+                        "clamp" => {
+                            // Handle clamp() expressions outside of calc()
+                            if call_expr.args.len() == 3 {
+                                // clamp(min, preferred, max) = max(min, min(preferred, max))
+                                let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
+                                let preferred_arg = Self::build_calculation_ast(&call_expr.args[1]);
+                                let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
+                                return quote! {
+                                    hyperchad_transformer::Number::Calc(
+                                        hyperchad_transformer::Calculation::Max(
+                                            Box::new(#min_arg),
+                                            Box::new(hyperchad_transformer::Calculation::Min(
+                                                Box::new(#preferred_arg),
+                                                Box::new(#max_arg)
+                                            ))
+                                        )
+                                    )
+                                };
+                            }
+                        }
+                        "percent" => {
+                            // Helper function: percent(value) -> Number::*Percent
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_template::calc::to_percent_number(#value_expr)
+                                };
+                            }
+                        }
+                        "vh" => {
+                            // Helper function: vh(value) -> Number::*Vh
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_template::calc::to_vh_number(#value_expr)
+                                };
+                            }
+                        }
+                        "vw" => {
+                            // Helper function: vw(value) -> Number::*Vw
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_template::calc::to_vw_number(#value_expr)
+                                };
+                            }
+                        }
+                        "dvh" => {
+                            // Helper function: dvh(value) -> Number::*Dvh
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_template::calc::to_dvh_number(#value_expr)
+                                };
+                            }
+                        }
+                        "dvw" => {
+                            // Helper function: dvw(value) -> Number::*Dvw
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_template::calc::to_dvw_number(#value_expr)
+                                };
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        // Fallback to original behavior
         quote! {
             {
                 let val = #expr;
                 <hyperchad_transformer::Number as std::convert::From<_>>::from(val)
             }
+        }
+    }
+
+    /// Handle calc() expressions by recursively parsing mathematical operations
+    /// and building Calculation AST structures
+    fn handle_calc_expression(expr: &syn::Expr) -> TokenStream {
+        let calculation_tokens = Self::build_calculation_ast(expr);
+        quote! {
+            hyperchad_transformer::Number::Calc(#calculation_tokens)
+        }
+    }
+
+    /// Build a Calculation AST from a mathematical expression
+    fn build_calculation_ast(expr: &syn::Expr) -> TokenStream {
+        match expr {
+            // Handle binary operations: +, -, *, /
+            syn::Expr::Binary(binary_expr) => {
+                let left = Self::build_calculation_ast(&binary_expr.left);
+                let right = Self::build_calculation_ast(&binary_expr.right);
+
+                match binary_expr.op {
+                    syn::BinOp::Add(_) => quote! {
+                        hyperchad_transformer::Calculation::Add(
+                            Box::new(#left),
+                            Box::new(#right)
+                        )
+                    },
+                    syn::BinOp::Sub(_) => quote! {
+                        hyperchad_transformer::Calculation::Subtract(
+                            Box::new(#left),
+                            Box::new(#right)
+                        )
+                    },
+                    syn::BinOp::Mul(_) => quote! {
+                        hyperchad_transformer::Calculation::Multiply(
+                            Box::new(#left),
+                            Box::new(#right)
+                        )
+                    },
+                    syn::BinOp::Div(_) => quote! {
+                        hyperchad_transformer::Calculation::Divide(
+                            Box::new(#left),
+                            Box::new(#right)
+                        )
+                    },
+                    _ => {
+                        // For unsupported operations, just wrap both as numbers
+                        quote! {
+                            hyperchad_transformer::Calculation::Number(
+                                Box::new({
+                                    let left_val = {
+                                        let left = #left;
+                                        match left {
+                                            hyperchad_transformer::Calculation::Number(n) => *n,
+                                            _ => hyperchad_transformer::Number::Integer(0)
+                                        }
+                                    };
+                                    left_val
+                                })
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Handle parenthesized expressions
+            syn::Expr::Paren(paren_expr) => {
+                Self::build_calculation_ast(&paren_expr.expr)
+            }
+
+            // Handle numeric literals with units (100%, 50vw, etc.)
+            syn::Expr::Lit(expr_lit) => {
+                let number_tokens = match &expr_lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        Self::parse_number_literal_string(&value_str)
+                    }
+                    syn::Lit::Int(lit_int) => {
+                        quote! { hyperchad_transformer::Number::Integer(#lit_int) }
+                    }
+                    syn::Lit::Float(lit_float) => {
+                        quote! { hyperchad_transformer::Number::Real(#lit_float) }
+                    }
+                    _ => quote! { hyperchad_transformer::Number::Integer(0) }
+                };
+
+                quote! {
+                    hyperchad_transformer::Calculation::Number(Box::new(#number_tokens))
+                }
+            }
+
+            // Handle variable references
+            syn::Expr::Path(path_expr) => {
+                quote! {
+                    hyperchad_transformer::Calculation::Number(Box::new({
+                        let val = #path_expr;
+                        hyperchad_template::calc::to_number(val)
+                    }))
+                }
+            }
+
+            // Handle function calls (percent(), vh(), vw(), min(), max(), clamp(), etc.)
+            syn::Expr::Call(call_expr) => {
+                if let syn::Expr::Path(path_expr) = &*call_expr.func {
+                    if path_expr.path.segments.len() == 1 {
+                        let function_name = path_expr.path.segments[0].ident.to_string();
+
+                        match function_name.as_str() {
+                            // CSS Math functions that return Calculation variants
+                            "min" => {
+                                if call_expr.args.len() >= 2 {
+                                    // For multiple arguments, chain binary min operations
+                                    // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
+                                    let mut result = Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                                    for i in (0..call_expr.args.len() - 1).rev() {
+                                        let left = Self::build_calculation_ast(&call_expr.args[i]);
+                                        result = quote! {
+                                            hyperchad_transformer::Calculation::Min(
+                                                Box::new(#left),
+                                                Box::new(#result)
+                                            )
+                                        };
+                                    }
+                                    return result;
+                                } else {
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Number(
+                                            Box::new(hyperchad_transformer::Number::Integer(0))
+                                        )
+                                    };
+                                }
+                            }
+                            "max" => {
+                                if call_expr.args.len() >= 2 {
+                                    // For multiple arguments, chain binary max operations
+                                    // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
+                                    let mut result = Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                                    for i in (0..call_expr.args.len() - 1).rev() {
+                                        let left = Self::build_calculation_ast(&call_expr.args[i]);
+                                        result = quote! {
+                                            hyperchad_transformer::Calculation::Max(
+                                                Box::new(#left),
+                                                Box::new(#result)
+                                            )
+                                        };
+                                    }
+                                    return result;
+                                } else {
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Number(
+                                            Box::new(hyperchad_transformer::Number::Integer(0))
+                                        )
+                                    };
+                                }
+                            }
+                            "clamp" => {
+                                if call_expr.args.len() == 3 {
+                                    // clamp(min, preferred, max) = max(min, min(preferred, max))
+                                    let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
+                                    let preferred_arg = Self::build_calculation_ast(&call_expr.args[1]);
+                                    let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
+
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Max(
+                                            Box::new(#min_arg),
+                                            Box::new(hyperchad_transformer::Calculation::Min(
+                                                Box::new(#preferred_arg),
+                                                Box::new(#max_arg)
+                                            ))
+                                        )
+                                    };
+                                } else {
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Number(
+                                            Box::new(hyperchad_transformer::Number::Integer(0))
+                                        )
+                                    };
+                                }
+                            }
+                            "percent" => {
+                                // Helper function: percent(value) -> Number::*Percent
+                                if call_expr.args.len() == 1 {
+                                    let value_expr = &call_expr.args[0];
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Number(Box::new(
+                                            hyperchad_template::calc::to_percent_number(#value_expr)
+                                        ))
+                                    };
+                                }
+                            }
+                            "vh" => {
+                                // Helper function: vh(value) -> Number::*Vh
+                                if call_expr.args.len() == 1 {
+                                    let value_expr = &call_expr.args[0];
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Number(Box::new(
+                                            hyperchad_template::calc::to_vh_number(#value_expr)
+                                        ))
+                                    };
+                                }
+                            }
+                            "vw" => {
+                                // Helper function: vw(value) -> Number::*Vw
+                                if call_expr.args.len() == 1 {
+                                    let value_expr = &call_expr.args[0];
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Number(Box::new(
+                                            hyperchad_template::calc::to_vw_number(#value_expr)
+                                        ))
+                                    };
+                                }
+                            }
+                            "dvh" => {
+                                // Helper function: dvh(value) -> Number::*Dvh
+                                if call_expr.args.len() == 1 {
+                                    let value_expr = &call_expr.args[0];
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Number(Box::new(
+                                            hyperchad_template::calc::to_dvh_number(#value_expr)
+                                        ))
+                                    };
+                                }
+                            }
+                            "dvw" => {
+                                // Helper function: dvw(value) -> Number::*Dvw
+                                if call_expr.args.len() == 1 {
+                                    let value_expr = &call_expr.args[0];
+                                    return quote! {
+                                        hyperchad_transformer::Calculation::Number(Box::new(
+                                            hyperchad_template::calc::to_dvw_number(#value_expr)
+                                        ))
+                                    };
+                                }
+                            }
+                            _ => {
+                                // Fallback: treat as regular expression
+                                return quote! {
+                                    hyperchad_transformer::Calculation::Number(Box::new({
+                                        let val = #call_expr;
+                                        hyperchad_template::calc::to_number(val)
+                                    }))
+                                };
+                            }
+                        }
+                    }
+                }
+
+                // Fallback: treat as regular expression
+                quote! {
+                    hyperchad_transformer::Calculation::Number(Box::new({
+                        let val = #call_expr;
+                        hyperchad_template::calc::to_number(val)
+                    }))
+                }
+            }
+
+            // Handle any other expression types
+            _ => {
+                quote! {
+                    hyperchad_transformer::Calculation::Number(Box::new({
+                        let val = #expr;
+                        hyperchad_template::calc::to_number(val)
+                    }))
+                }
+            }
+        }
+    }
+
+    /// Parse number literal strings (e.g., "100%", "50vw", "30") into Number tokens
+    fn parse_number_literal_string(value_str: &str) -> TokenStream {
+        if let Some(num_str) = value_str.strip_suffix('%') {
+            if let Ok(num) = num_str.parse::<f32>() {
+                quote! { hyperchad_transformer::Number::RealPercent(#num) }
+            } else if let Ok(num) = num_str.parse::<i64>() {
+                quote! { hyperchad_transformer::Number::IntegerPercent(#num) }
+            } else {
+                quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+            }
+        } else if let Some(num_str) = value_str.strip_suffix("dvw") {
+            if let Ok(num) = num_str.parse::<f32>() {
+                quote! { hyperchad_transformer::Number::RealDvw(#num) }
+            } else if let Ok(num) = num_str.parse::<i64>() {
+                quote! { hyperchad_transformer::Number::IntegerDvw(#num) }
+            } else {
+                quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+            }
+        } else if let Some(num_str) = value_str.strip_suffix("dvh") {
+            if let Ok(num) = num_str.parse::<f32>() {
+                quote! { hyperchad_transformer::Number::RealDvh(#num) }
+            } else if let Ok(num) = num_str.parse::<i64>() {
+                quote! { hyperchad_transformer::Number::IntegerDvh(#num) }
+            } else {
+                quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+            }
+        } else if let Some(num_str) = value_str.strip_suffix("vw") {
+            if let Ok(num) = num_str.parse::<f32>() {
+                quote! { hyperchad_transformer::Number::RealVw(#num) }
+            } else if let Ok(num) = num_str.parse::<i64>() {
+                quote! { hyperchad_transformer::Number::IntegerVw(#num) }
+            } else {
+                quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+            }
+        } else if let Some(num_str) = value_str.strip_suffix("vh") {
+            if let Ok(num) = num_str.parse::<f32>() {
+                quote! { hyperchad_transformer::Number::RealVh(#num) }
+            } else if let Ok(num) = num_str.parse::<i64>() {
+                quote! { hyperchad_transformer::Number::IntegerVh(#num) }
+            } else {
+                quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
+            }
+        } else if let Ok(num) = value_str.parse::<f32>() {
+            quote! { hyperchad_transformer::Number::Real(#num) }
+        } else if let Ok(num) = value_str.parse::<i64>() {
+            quote! { hyperchad_transformer::Number::Integer(#num) }
+        } else {
+            quote! { hyperchad_transformer::parse::parse_number(#value_str).unwrap_or_default() }
         }
     }
 

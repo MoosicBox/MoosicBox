@@ -153,7 +153,7 @@ impl<'a> TryFrom<&'a str> for Action {
 #[must_use]
 pub fn sidebar_navigation() -> Containers {
     container! {
-        aside width="calc(max(240, min(280, 15%)))" background=(DARK_BACKGROUND) {
+        aside width=calc(max(240, min(280, 15%))) background=(DARK_BACKGROUND) {
             div .navigation-bar padding=20 {
                 @let size = 36;
                 div .navigation-bar-header direction=row align-items=center height=(size) {
@@ -423,7 +423,7 @@ fn volume_slider_value(size: u16, volume_percent: f64) -> Containers {
                 div
                     position=absolute
                     top=0
-                    left=(format!("calc(50% - {})", slider_top_width / 2.0))
+                    left=calc(50% - slider_top_width / 2.0)
                     width=(slider_top_width)
                     height=3
                     border-radius=30
@@ -653,7 +653,7 @@ pub fn page(state: &State, slot: &Containers) -> Containers {
             section
                 .navigation-bar-and-main-content
                 direction=row
-                height={"calc(100% - "(FOOTER_HEIGHT)")"}
+                height=calc(100% - FOOTER_HEIGHT)
             {
                 (sidebar_navigation())
                 (main(&slot))
@@ -721,7 +721,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                 flex=1
                 background=(DARK_BACKGROUND)
                 margin-x=vw20
-                min-height="calc(min(90vh, 300))"
+                min-height=calc(min(vh(90), 300))
                 max-height=vh90
                 border-radius=15
                 fx-click-outside=(
