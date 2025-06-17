@@ -10,7 +10,7 @@ fn if_statement() {
         }
     };
     // Just check that it compiles and produces some output
-    assert!(!result.to_string().is_empty());
+    assert!(!result.display_to_string(false, false).unwrap().is_empty());
 }
 
 #[ignore]
@@ -25,7 +25,7 @@ fn for_loop() {
         }
     };
     // Just check that it compiles and produces some output
-    assert!(!result.to_string().is_empty());
+    assert!(!result.display_to_string(false, false).unwrap().is_empty());
 }
 
 #[ignore]
@@ -36,7 +36,7 @@ fn let_statement() {
         Div { "I have " (x) " cupcakes!" }
     };
     // Just check that it compiles and produces some output
-    assert!(!result.to_string().is_empty());
+    assert!(!result.display_to_string(false, false).unwrap().is_empty());
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn if_expr() {
                 "oh noes"
             }
         };
-        assert_eq!(result.to_string(), name);
+        assert_eq!(result.display_to_string(false, false).unwrap(), name);
     }
 }
 
@@ -67,7 +67,7 @@ fn if_let() {
                 "oh noes"
             }
         };
-        assert_eq!(result.to_string(), output);
+        assert_eq!(result.display_to_string(false, false).unwrap(), output);
     }
 }
 
@@ -82,7 +82,7 @@ fn while_expr() {
         }
     };
     assert_eq!(
-        result.to_string(),
+        result.display_to_string(false, false).unwrap(),
         "<ul><li>0</li><li>1</li><li>2</li></ul>"
     );
 }
@@ -90,6 +90,7 @@ fn while_expr() {
 #[test]
 fn while_simple_condition() {
     let mut count = 0;
+    #[allow(clippy::let_unit_value)]
     let result = container! {
         Ul {
             @while count < 3 {
@@ -101,7 +102,7 @@ fn while_simple_condition() {
     };
 
     assert_eq!(
-        result.to_string(),
+        result.display_to_string(false, false).unwrap(),
         "<ul><li>Item 0</li><li>Item 1</li><li>Item 2</li></ul>"
     );
 }
@@ -117,7 +118,7 @@ fn for_expr() {
         }
     };
     assert_eq!(
-        result.to_string(),
+        result.display_to_string(false, false).unwrap(),
         concat!(
             "<ul>",
             "<li>Apple Bloom</li>",
@@ -141,7 +142,7 @@ fn match_expr() {
                 },
             }
         };
-        assert_eq!(result.to_string(), output);
+        assert_eq!(result.display_to_string(false, false).unwrap(), output);
     }
 }
 
@@ -154,7 +155,7 @@ fn match_expr_without_delims() {
                 None => Span { "oh noes" },
             }
         };
-        assert_eq!(result.to_string(), output);
+        assert_eq!(result.display_to_string(false, false).unwrap(), output);
     }
 }
 
@@ -167,7 +168,7 @@ fn match_no_trailing_comma() {
                 None => Span { "oh noes" }
             }
         };
-        assert_eq!(result.to_string(), output);
+        assert_eq!(result.display_to_string(false, false).unwrap(), output);
     }
 }
 
@@ -181,7 +182,7 @@ fn match_expr_with_guards() {
                 None => "none",
             }
         };
-        assert_eq!(result.to_string(), output);
+        assert_eq!(result.display_to_string(false, false).unwrap(), output);
     }
 }
 
@@ -191,7 +192,10 @@ fn let_expr() {
         @let x = 42;
         "I have " (x) " cupcakes!"
     };
-    assert_eq!(result.to_string(), "I have 42 cupcakes!");
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "I have 42 cupcakes!"
+    );
 }
 
 #[test]
@@ -205,7 +209,7 @@ fn let_lexical_scope() {
         "but I only had " (x) "."
     };
     assert_eq!(
-        result.to_string(),
+        result.display_to_string(false, false).unwrap(),
         "Twilight thought I had 99 cupcakes, but I only had 42."
     );
 }
@@ -216,7 +220,7 @@ fn let_type_ascription() {
         @let x: i32 = 42;
         "Value: " (x)
     };
-    assert_eq!(result.to_string(), "Value: 42");
+    assert_eq!(result.display_to_string(false, false).unwrap(), "Value: 42");
 }
 
 #[test]
@@ -237,7 +241,7 @@ fn nested_control_flow() {
         }
     };
     assert_eq!(
-        result.to_string(),
+        result.display_to_string(false, false).unwrap(),
         "<ul><li>Value: 1</li><li>No value</li><li>Value: 2</li><li>Value: 3</li></ul>"
     );
 }
@@ -255,7 +259,10 @@ fn complex_if_conditions() {
             "Neither positive"
         }
     };
-    assert_eq!(result.to_string(), "Both positive");
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "Both positive"
+    );
 }
 
 #[test]
@@ -269,7 +276,7 @@ fn for_with_enumerate() {
         }
     };
     assert_eq!(
-        result.to_string(),
+        result.display_to_string(false, false).unwrap(),
         "<ol><li>1: apple</li><li>2: banana</li><li>3: cherry</li></ol>"
     );
 }
@@ -290,5 +297,8 @@ fn match_with_complex_patterns() {
             }
         }
     };
-    assert_eq!(result.to_string(), "<div>hello - 42</div>");
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "<div>hello - 42</div>"
+    );
 }

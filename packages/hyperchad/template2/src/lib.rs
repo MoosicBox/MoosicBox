@@ -70,7 +70,7 @@ impl ContainerVecMethods for Vec<Container> {
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>> {
         self.iter()
-            .map(|c| c.display_to_string_default_plain(with_debug_attrs, wrap_raw_in_element))
+            .map(|c| c.display_to_string_default(with_debug_attrs, wrap_raw_in_element))
             .collect::<Result<String, _>>()
     }
 
@@ -152,7 +152,7 @@ impl ContainerVecExt for Vec<Container> {
         wrap_raw_in_element: bool,
     ) -> Result<String, Box<dyn core::error::Error>> {
         self.iter()
-            .map(|c| c.display_to_string_default_plain(with_debug_attrs, wrap_raw_in_element))
+            .map(|c| c.display_to_string_default(with_debug_attrs, wrap_raw_in_element))
             .collect::<Result<String, _>>()
     }
 

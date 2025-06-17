@@ -10,7 +10,9 @@ fn test_simple_container_creation() {
 
     assert_eq!(containers.len(), 1, "Should generate exactly one container");
 
-    let html = containers[0].to_string();
+    let html = containers[0]
+        .display_to_string_default(false, false)
+        .unwrap();
     assert!(
         html.contains("Hello World"),
         "Should contain the text content"
@@ -26,7 +28,9 @@ fn test_empty_container() {
 
     assert_eq!(containers.len(), 1, "Should generate exactly one container");
 
-    let html = containers[0].to_string();
+    let html = containers[0]
+        .display_to_string_default(false, false)
+        .unwrap();
     assert!(html.contains("<div"), "Should generate a div element");
 }
 
@@ -40,7 +44,10 @@ fn test_multiple_containers() {
 
     assert_eq!(containers.len(), 3, "Should generate three containers");
 
-    let html: String = containers.iter().map(|c| c.to_string()).collect();
+    let html: String = containers
+        .iter()
+        .map(|c| c.display_to_string_default(false, false).unwrap())
+        .collect();
     assert!(html.contains("First"), "Should contain first element");
     assert!(html.contains("Second"), "Should contain second element");
     assert!(html.contains("Third"), "Should contain third element");

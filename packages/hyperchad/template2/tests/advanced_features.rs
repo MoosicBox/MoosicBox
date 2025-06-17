@@ -11,9 +11,24 @@ fn htmx_attributes() {
     let container = &result[0];
     assert!(container.route.is_some());
     // Check for HTMX attributes in the rendered output
-    assert!(result.to_string().contains("hx-get=\"/api/data\""));
-    assert!(result.to_string().contains("hx-trigger=\"click\""));
-    assert!(result.to_string().contains("Click me for HTMX magic"));
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("hx-get=\"/api/data\"")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("hx-trigger=\"click\"")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Click me for HTMX magic")
+    );
 }
 
 #[test]
@@ -110,23 +125,56 @@ fn form_validation() {
     };
 
     // Check for key form elements and attributes
-    assert!(result.to_string().contains("<form"));
-    assert!(
-        result.to_string().contains("type=\"text\"")
-            || result.to_string().contains("type=\"email\"")
-    );
-    assert!(result.to_string().contains("type=\"password\""));
-    assert!(result.to_string().contains("name=\"email\""));
-    assert!(result.to_string().contains("name=\"password\""));
-    assert!(result.to_string().contains("type=\"submit\""));
     assert!(
         result
-            .to_string()
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("<form")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("type=\"text\"")
+            || result
+                .display_to_string(false, false)
+                .unwrap()
+                .contains("type=\"email\"")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("type=\"password\"")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("name=\"email\"")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("name=\"password\"")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("type=\"submit\"")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
             .contains("placeholder=\"Enter your email\"")
     );
     assert!(
         result
-            .to_string()
+            .display_to_string(false, false)
+            .unwrap()
             .contains("placeholder=\"Enter your password\"")
     );
 }
@@ -150,8 +198,18 @@ fn accessibility_attributes() {
 
     let _containers = &result;
     // Check if data attributes are present in the rendered HTML
-    assert!(result.to_string().contains("data-testid=\"submit-button\""));
-    assert!(result.to_string().contains("data-cy=\"submit-btn\""));
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("data-testid=\"submit-button\"")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("data-cy=\"submit-btn\"")
+    );
 }
 
 #[test]
@@ -174,9 +232,24 @@ fn conditional_rendering() {
     };
 
     // Check that the structure is correct, ignoring debug attributes
-    assert!(result.to_string().contains(r#"class="alert"#));
-    assert!(result.to_string().contains("Welcome!"));
-    assert!(result.to_string().contains("Hello, Alice!"));
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains(r#"class="alert"#)
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Welcome!")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Hello, Alice!")
+    );
 }
 
 #[test]
@@ -223,9 +296,24 @@ fn nested_components() {
         }
     };
 
-    assert!(result.to_string().contains("card"));
-    assert!(result.to_string().contains("Welcome"));
-    assert!(result.to_string().contains("About"));
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("card")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Welcome")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("About")
+    );
 }
 
 #[test]
@@ -273,11 +361,36 @@ fn table_with_data() {
         }
     };
 
-    assert!(result.to_string().contains("Alice"));
-    assert!(result.to_string().contains("30"));
-    assert!(result.to_string().contains("Engineer"));
-    assert!(result.to_string().contains("Bob"));
-    assert!(result.to_string().contains("Charlie"));
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Alice")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("30")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Engineer")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Bob")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Charlie")
+    );
 }
 
 #[test]
@@ -296,9 +409,24 @@ fn media_elements() {
         }
     };
 
-    assert!(result.to_string().contains("hero.jpg"));
-    assert!(result.to_string().contains("srcset"));
-    assert!(result.to_string().contains("Canvas placeholder"));
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("hero.jpg")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("srcset")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("Canvas placeholder")
+    );
 }
 
 #[test]
@@ -327,10 +455,30 @@ fn complex_form() {
         }
     };
 
-    assert!(result.to_string().contains("form-group"));
-    assert!(result.to_string().contains("firstName"));
-    assert!(result.to_string().contains("newsletter"));
-    assert!(result.to_string().contains("checked"));
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("form-group")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("firstName")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("newsletter")
+    );
+    assert!(
+        result
+            .display_to_string(false, false)
+            .unwrap()
+            .contains("checked")
+    );
 }
 
 #[test]

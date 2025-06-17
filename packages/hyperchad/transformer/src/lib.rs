@@ -3210,7 +3210,7 @@ impl Container {
     /// * If invalid UTF-8 characters
     #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::fn_params_excessive_bools)]
-    pub fn display_to_string_default_plain(
+    pub fn display_to_string_default(
         &self,
         with_debug_attrs: bool,
         wrap_raw_in_element: bool,
