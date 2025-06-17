@@ -3204,9 +3204,59 @@ impl Container {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    /// * If fails to write to the writer
+    /// * If invalid UTF-8 characters
     #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::fn_params_excessive_bools)]
-    fn display_to_string(
+    pub fn display_to_string_default_plain(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        self.display_to_string(
+            with_debug_attrs,
+            wrap_raw_in_element,
+            #[cfg(feature = "format")]
+            false,
+            #[cfg(feature = "syntax-highlighting")]
+            false,
+        )
+    }
+
+    /// # Errors
+    ///
+    /// * If fails to write to the writer
+    /// * If invalid UTF-8 characters
+    #[cfg_attr(feature = "profiling", profiling::function)]
+    #[allow(clippy::fn_params_excessive_bools)]
+    pub fn display_to_string_default_pretty(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        self.display_to_string(
+            with_debug_attrs,
+            wrap_raw_in_element,
+            #[cfg(feature = "format")]
+            true,
+            #[cfg(feature = "syntax-highlighting")]
+            true,
+        )
+    }
+
+    /// # Errors
+    ///
+    /// * If fails to write to the writer
+    /// * If invalid UTF-8 characters
+    ///
+    /// # Panics
+    ///
+    /// * If syntax highlighting fails
+    #[cfg_attr(feature = "profiling", profiling::function)]
+    #[allow(clippy::fn_params_excessive_bools)]
+    pub fn display_to_string(
         &self,
         with_debug_attrs: bool,
         wrap_raw_in_element: bool,
