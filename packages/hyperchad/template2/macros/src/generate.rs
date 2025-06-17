@@ -403,7 +403,7 @@ impl Generator {
                 {
                     let input_type = #input_type_tokens;
                     match input_type.as_str() {
-                        "text" => hyperchad_transformer::Input::Text {
+                        "text" | "tel" | "email" => hyperchad_transformer::Input::Text {
                             value: #value_field,
                             placeholder: #placeholder_field
                         },
