@@ -338,7 +338,14 @@ impl Generator {
                     value: attr_value, ..
                 } => match name_str.as_str() {
                     "type" => {
-                        input_type = Some(Self::markup_to_string_tokens(attr_value));
+                        // Extract compile-time type (string literal or identifier)
+                        if let Some(compile_time_type) =
+                            Self::extract_compile_time_input_type(&attr_value)
+                        {
+                            input_type = Some(compile_time_type);
+                        } else {
+                            return Err("Input type must be a compile-time constant (literal string or identifier). Dynamic input types are not supported. Use one of: text, tel, email, checkbox, password, hidden".to_string());
+                        }
                     }
                     "value" => {
                         let value_tokens = Self::markup_to_string_tokens(attr_value);
@@ -391,40 +398,42 @@ impl Generator {
             }
         }
 
+        let input_type = input_type.ok_or("Missing input type")?;
         let name_field = name.unwrap_or_else(|| quote! { None });
         let value_field = value.unwrap_or_else(|| quote! { None });
         let placeholder_field = placeholder.unwrap_or_else(|| quote! { None });
         let checked_field = checked.unwrap_or_else(|| quote! { false });
 
-        // Generate runtime matching for input type
-        let input_variant = if let Some(input_type_tokens) = input_type {
-            quote! {
-                {
-                    let input_type = #input_type_tokens;
-                    match input_type.as_str() {
-                        "text" | "tel" | "email" => hyperchad_transformer::Input::Text {
-                            value: #value_field,
-                            placeholder: #placeholder_field
-                        },
-                        "checkbox" => hyperchad_transformer::Input::Checkbox {
-                            checked: Some(#checked_field)
-                        },
-                        "password" => hyperchad_transformer::Input::Password {
-                            value: #value_field,
-                            placeholder: #placeholder_field
-                        },
-                        "hidden" => hyperchad_transformer::Input::Hidden {
-                            value: #value_field
-                        },
-                        _ => hyperchad_transformer::Input::Text {
-                            value: #value_field,
-                            placeholder: #placeholder_field
-                        },
-                    }
+        // Generate compile-time input type directly
+        let input_variant = match input_type.as_str() {
+            "text" | "tel" | "email" => quote! {
+                hyperchad_transformer::Input::Text {
+                    value: #value_field,
+                    placeholder: #placeholder_field
                 }
+            },
+            "checkbox" => quote! {
+                hyperchad_transformer::Input::Checkbox {
+                    checked: Some(#checked_field)
+                }
+            },
+            "password" => quote! {
+                hyperchad_transformer::Input::Password {
+                    value: #value_field,
+                    placeholder: #placeholder_field
+                }
+            },
+            "hidden" => quote! {
+                hyperchad_transformer::Input::Hidden {
+                    value: #value_field
+                }
+            },
+            _ => {
+                return Err(format!(
+                    "Unsupported input type '{}'. Supported types are: text, tel, email, checkbox, password, hidden",
+                    input_type
+                ));
             }
-        } else {
-            return Err("Missing input type".to_string());
         };
 
         Ok(quote! {
@@ -623,6 +632,40 @@ impl Generator {
                 quote! { (#expr).into() }
             }
             _ => quote! { hyperchad_transformer_models::ImageLoading::default() },
+        }
+    }
+
+    /// Extract a compile-time input type (string literal or identifier)
+    fn extract_compile_time_input_type(value: &Markup<NoElement>) -> Option<String> {
+        match value {
+            Markup::Lit(lit) => {
+                if let syn::Lit::Str(lit_str) = &lit.lit {
+                    Some(lit_str.value())
+                } else {
+                    None
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                // Handle raw identifiers like `type=text`
+                if let syn::Expr::Path(expr_path) = &expr {
+                    if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
+                        let identifier_name = expr_path.path.segments[0].ident.to_string();
+                        Some(identifier_name)
+                    } else {
+                        None
+                    }
+                } else if let syn::Expr::Lit(expr_lit) = &expr {
+                    // Handle literal expressions in splices
+                    if let syn::Lit::Str(lit_str) = &expr_lit.lit {
+                        Some(lit_str.value())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 
