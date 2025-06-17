@@ -45,6 +45,18 @@ pub type Containers = Vec<Container>;
 /// This trait is automatically implemented and in scope, so you can call
 /// these methods on any Vec<Container> without importing anything.
 pub trait ContainerVecMethods {
+    fn display_to_string(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn core::error::Error>>;
+
+    fn display_to_string_pretty(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn core::error::Error>>;
+
     /// Convert the containers to an HTML string
     fn to_string(&self) -> String;
     /// Convert the containers to an HTML string, consuming self
@@ -52,6 +64,26 @@ pub trait ContainerVecMethods {
 }
 
 impl ContainerVecMethods for Vec<Container> {
+    fn display_to_string(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn core::error::Error>> {
+        self.iter()
+            .map(|c| c.display_to_string_default_plain(with_debug_attrs, wrap_raw_in_element))
+            .collect::<Result<String, _>>()
+    }
+
+    fn display_to_string_pretty(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn core::error::Error>> {
+        self.iter()
+            .map(|c| c.display_to_string_default_pretty(with_debug_attrs, wrap_raw_in_element))
+            .collect::<Result<String, _>>()
+    }
+
     fn to_string(&self) -> String {
         self.iter().map(|c| c.to_string()).collect::<String>()
     }
@@ -97,11 +129,43 @@ pub fn into_html(containers: Vec<Container>) -> String {
 
 /// Extension trait to add missing methods to Vec<Container>
 pub trait ContainerVecExt {
+    fn display_to_string(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn core::error::Error>>;
+
+    fn display_to_string_pretty(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn core::error::Error>>;
+
     fn into_string(self) -> String;
     fn to_string(&self) -> String;
 }
 
 impl ContainerVecExt for Vec<Container> {
+    fn display_to_string(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn core::error::Error>> {
+        self.iter()
+            .map(|c| c.display_to_string_default_plain(with_debug_attrs, wrap_raw_in_element))
+            .collect::<Result<String, _>>()
+    }
+
+    fn display_to_string_pretty(
+        &self,
+        with_debug_attrs: bool,
+        wrap_raw_in_element: bool,
+    ) -> Result<String, Box<dyn core::error::Error>> {
+        self.iter()
+            .map(|c| c.display_to_string_default_pretty(with_debug_attrs, wrap_raw_in_element))
+            .collect::<Result<String, _>>()
+    }
+
     fn into_string(self) -> String {
         self.iter().map(|c| c.to_string()).collect::<String>()
     }
