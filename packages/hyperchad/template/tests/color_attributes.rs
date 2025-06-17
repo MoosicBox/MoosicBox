@@ -281,7 +281,7 @@ fn all_supported_color_names() {
     let parent = &result[0];
     assert_eq!(parent.children.len(), 13);
 
-    let expected_colors = vec![
+    let expected_colors = [
         Color::BLACK,
         Color::WHITE,
         Color::from_hex("#FF0000"), // red
@@ -325,7 +325,7 @@ fn hex_color_edge_cases() {
     let parent = &result[0];
     assert_eq!(parent.children.len(), 9);
 
-    let expected_colors = vec![
+    let expected_colors = [
         Color::from_hex("#FfF"),
         Color::from_hex("#AaA"),
         Color::from_hex("#000"),
@@ -389,7 +389,7 @@ fn raw_hex_colors_8_digit_edge_cases() {
     let parent = &result[0];
     assert_eq!(parent.children.len(), 4);
 
-    let expected_colors = vec![
+    let expected_colors = [
         Color::from_hex("#000000ff"),
         Color::from_hex("#ffffff00"),
         Color::from_hex("#ff000080"),
@@ -805,4 +805,457 @@ fn rgb_function_css_spec_compatibility() {
             a: Some(0)
         })
     ); // 0.0 * 255 = 0
+}
+
+#[test]
+fn rgb_function_percentage_alpha() {
+    let result = container! {
+        div {
+            // Test various percentage values
+            div color=rgb(255, 0, 0, "0%") { "0% alpha" }
+            div color=rgb(0, 255, 0, "25%") { "25% alpha" }
+            div color=rgb(0, 0, 255, "50%") { "50% alpha" }
+            div color=rgb(255, 255, 0, "75%") { "75% alpha" }
+            div color=rgb(255, 0, 255, "100%") { "100% alpha" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 5);
+
+    // Test percentage alpha conversions
+    assert_eq!(
+        parent.children[0].color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: Some(0)
+        })
+    ); // 0% = 0
+    assert_eq!(
+        parent.children[1].color,
+        Some(Color {
+            r: 0,
+            g: 255,
+            b: 0,
+            a: Some(64)
+        })
+    ); // 25% = 63.75 -> 64
+    assert_eq!(
+        parent.children[2].color,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: Some(128)
+        })
+    ); // 50% = 127.5 -> 128
+    assert_eq!(
+        parent.children[3].color,
+        Some(Color {
+            r: 255,
+            g: 255,
+            b: 0,
+            a: Some(191)
+        })
+    ); // 75% = 191.25 -> 191
+    assert_eq!(
+        parent.children[4].color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 255,
+            a: Some(255)
+        })
+    ); // 100% = 255
+}
+
+#[test]
+fn rgb_function_percentage_alpha_edge_cases() {
+    let result = container! {
+        div {
+            // Test edge cases and decimal percentages
+            div color=rgb(255, 0, 0, "0.5%") { "0.5% alpha" }
+            div color=rgb(0, 255, 0, "33.33%") { "33.33% alpha" }
+            div color=rgb(0, 0, 255, "66.67%") { "66.67% alpha" }
+            div color=rgb(128, 128, 128, "99.9%") { "99.9% alpha" }
+
+            // Test out-of-range values (should be clamped)
+            div color=rgb(255, 255, 255, "-10%") { "Negative percentage" }
+            div color=rgb(0, 0, 0, "150%") { "Over 100%" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 6);
+
+    // Test decimal percentage conversions
+    assert_eq!(
+        parent.children[0].color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: Some(1)
+        })
+    ); // 0.5% = 1.275 -> 1
+    assert_eq!(
+        parent.children[1].color,
+        Some(Color {
+            r: 0,
+            g: 255,
+            b: 0,
+            a: Some(85)
+        })
+    ); // 33.33% = 84.9915 -> 85
+    assert_eq!(
+        parent.children[2].color,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: Some(170)
+        })
+    ); // 66.67% = 170.0085 -> 170
+    assert_eq!(
+        parent.children[3].color,
+        Some(Color {
+            r: 128,
+            g: 128,
+            b: 128,
+            a: Some(255)
+        })
+    ); // 99.9% = 254.745 -> 255
+
+    // Test clamping
+    assert_eq!(
+        parent.children[4].color,
+        Some(Color {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: Some(0)
+        })
+    ); // -10% clamped to 0%
+    assert_eq!(
+        parent.children[5].color,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: Some(255)
+        })
+    ); // 150% clamped to 100%
+}
+
+#[test]
+fn rgb_function_mixed_alpha_types() {
+    let result = container! {
+        div {
+            // Mix percentage, float, and integer alpha values
+            div color=rgb(255, 0, 0, "50%") background=rgb(0, 0, 0, 0.5) { "Percentage vs Float" }
+            div color=rgb(0, 255, 0, "25%") background=rgb(0, 0, 0, 64) { "Percentage vs Integer" }
+            div color=rgb(0, 0, 255, 0.75) background=rgb(255, 255, 255, "75%") { "Float vs Percentage" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 3);
+
+    // Test that different alpha formats produce equivalent results
+    // 50% should equal 0.5 float
+    assert_eq!(
+        parent.children[0].color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: Some(128)
+        })
+    );
+    assert_eq!(
+        parent.children[0].background,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: Some(128)
+        })
+    );
+
+    // 25% should equal 64 integer
+    assert_eq!(
+        parent.children[1].color,
+        Some(Color {
+            r: 0,
+            g: 255,
+            b: 0,
+            a: Some(64)
+        })
+    );
+    assert_eq!(
+        parent.children[1].background,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: Some(64)
+        })
+    );
+
+    // 0.75 float should equal 75%
+    assert_eq!(
+        parent.children[2].color,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: Some(191)
+        })
+    );
+    assert_eq!(
+        parent.children[2].background,
+        Some(Color {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: Some(191)
+        })
+    );
+}
+
+#[test]
+fn rgb_function_percentage_alpha_with_variables() {
+    let alpha_percent = "60%";
+    let result = container! {
+        div color=rgb(200, 100, 50, alpha_percent) {
+            "RGB with percentage alpha variable"
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let container = &result[0];
+    // 60% = 0.6 * 255 = 153
+    assert_eq!(
+        container.color,
+        Some(Color {
+            r: 200,
+            g: 100,
+            b: 50,
+            a: Some(153)
+        })
+    );
+}
+
+#[test]
+fn simple_percentage_alpha_test() {
+    let result = container! {
+        div color=rgb(255, 0, 0, 50%) { "Test" }
+    };
+
+    assert_eq!(result.len(), 1);
+    let container = &result[0];
+    // 50% should convert to 127 or 128 (50% of 255)
+    assert_eq!(
+        container.color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: Some(128)
+        })
+    );
+}
+
+#[test]
+fn raw_percentage_alpha_comprehensive() {
+    let result = container! {
+        div {
+            // Test various raw percentage values
+            div color=rgb(255, 0, 0, 0%) { "0% alpha" }
+            div color=rgb(0, 255, 0, 25%) { "25% alpha" }
+            div color=rgb(0, 0, 255, 50%) { "50% alpha" }
+            div color=rgb(255, 255, 0, 75%) { "75% alpha" }
+            div color=rgb(255, 0, 255, 100%) { "100% alpha" }
+
+            // Test decimal percentages
+            div color=rgb(128, 128, 128, 12.5%) { "12.5% alpha" }
+            div color=rgb(64, 64, 64, 87.5%) { "87.5% alpha" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 7);
+
+    // Test percentage alpha conversions (percentage * 255 / 100)
+    assert_eq!(
+        parent.children[0].color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: Some(0)
+        })
+    ); // 0%
+    assert_eq!(
+        parent.children[1].color,
+        Some(Color {
+            r: 0,
+            g: 255,
+            b: 0,
+            a: Some(64)
+        })
+    ); // 25% = 63.75 -> 64
+    assert_eq!(
+        parent.children[2].color,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: Some(128)
+        })
+    ); // 50% = 127.5 -> 128
+    assert_eq!(
+        parent.children[3].color,
+        Some(Color {
+            r: 255,
+            g: 255,
+            b: 0,
+            a: Some(191)
+        })
+    ); // 75% = 191.25 -> 191
+    assert_eq!(
+        parent.children[4].color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 255,
+            a: Some(255)
+        })
+    ); // 100%
+
+    // Test decimal percentages
+    assert_eq!(
+        parent.children[5].color,
+        Some(Color {
+            r: 128,
+            g: 128,
+            b: 128,
+            a: Some(32)
+        })
+    ); // 12.5% = 31.875 -> 32
+    assert_eq!(
+        parent.children[6].color,
+        Some(Color {
+            r: 64,
+            g: 64,
+            b: 64,
+            a: Some(223)
+        })
+    ); // 87.5% = 223.125 -> 223
+}
+
+#[test]
+fn raw_percentage_mixed_with_other_types() {
+    let result = container! {
+        div {
+            // Mix raw percentages with other alpha types
+            div color=rgb(255, 0, 0, 50%) background=rgb(0, 255, 0, 0.5) { "Percentage vs float" }
+            div color=rgb(0, 0, 255, 75%) background=rgb(255, 255, 0, 128) { "Percentage vs integer" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 2);
+
+    // First child: 50% vs 0.5 (should be equivalent)
+    assert_eq!(
+        parent.children[0].color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: Some(128)
+        })
+    ); // 50%
+    assert_eq!(
+        parent.children[0].background,
+        Some(Color {
+            r: 0,
+            g: 255,
+            b: 0,
+            a: Some(128)
+        })
+    ); // 0.5
+
+    // Second child: 75% vs 128
+    assert_eq!(
+        parent.children[1].color,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: Some(191)
+        })
+    ); // 75%
+    assert_eq!(
+        parent.children[1].background,
+        Some(Color {
+            r: 255,
+            g: 255,
+            b: 0,
+            a: Some(128)
+        })
+    ); // 128
+}
+
+#[test]
+fn raw_percentage_edge_cases() {
+    let result = container! {
+        div {
+            // Test edge cases
+            div color=rgb(255, 0, 0, 0.1%) { "Very small percentage" }
+            div color=rgb(0, 255, 0, 99.9%) { "Very large percentage" }
+            div color=rgb(0, 0, 255, 150%) { "Over 100% (should clamp)" }
+        }
+    };
+
+    assert_eq!(result.len(), 1);
+    let parent = &result[0];
+    assert_eq!(parent.children.len(), 3);
+
+    // Test edge cases
+    assert_eq!(
+        parent.children[0].color,
+        Some(Color {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: Some(0)
+        })
+    ); // 0.1% = 0.255 -> 0
+    assert_eq!(
+        parent.children[1].color,
+        Some(Color {
+            r: 0,
+            g: 255,
+            b: 0,
+            a: Some(255)
+        })
+    ); // 99.9% = 254.745 -> 255
+    assert_eq!(
+        parent.children[2].color,
+        Some(Color {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: Some(255)
+        })
+    ); // 150% clamped to 100% = 255
 }

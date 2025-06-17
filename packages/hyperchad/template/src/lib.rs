@@ -1160,6 +1160,7 @@ pub mod unit_functions {
 /// };
 /// ```
 pub mod color_functions {
+    use alloc::string::String;
     use hyperchad_color::Color;
 
     /// Create an RGB color from red, green, and blue values (0-255)
@@ -1198,6 +1199,7 @@ pub mod color_functions {
     /// Alpha can be specified as:
     /// - A float between 0.0 and 1.0 (e.g., 0.5 for 50% opacity)
     /// - An integer between 0 and 255 (e.g., 128 for 50% opacity)
+    /// - A percentage string like "50%" (e.g., "75%" for 75% opacity)
     ///
     /// # Examples
     /// ```rust
@@ -1209,6 +1211,9 @@ pub mod color_functions {
     ///
     /// // Integer alpha (0 - 255)  
     /// let semi_transparent_green = rgb_alpha(0, 255, 0, 128);
+    ///
+    /// // Percentage alpha (0% - 100%)
+    /// let semi_transparent_blue = rgb_alpha(0, 0, 255, "75%");
     /// ```
     pub fn rgb_alpha<R, G, B, A>(red: R, green: G, blue: B, alpha: A) -> Color
     where
@@ -1232,6 +1237,7 @@ pub mod color_functions {
     /// Alpha can be specified as:
     /// - A float between 0.0 and 1.0 (e.g., 0.5 for 50% opacity)
     /// - An integer between 0 and 255 (e.g., 128 for 50% opacity)
+    /// - A percentage string like "50%" (e.g., "75%" for 75% opacity)
     ///
     /// # Examples
     /// ```rust
@@ -1243,6 +1249,9 @@ pub mod color_functions {
     ///
     /// // Integer alpha (0 - 255)
     /// let semi_transparent_green = rgba(0, 255, 0, 128);
+    ///
+    /// // Percentage alpha (0% - 100%)
+    /// let semi_transparent_blue = rgba(0, 0, 255, "50%");
     /// ```
     pub fn rgba<R, G, B, A>(red: R, green: G, blue: B, alpha: A) -> Color
     where
@@ -1257,8 +1266,9 @@ pub mod color_functions {
 
     /// Helper type for alpha values that can be converted from various numeric types
     pub enum AlphaValue {
-        Float(f32),  // 0.0 - 1.0
-        Integer(u8), // 0 - 255
+        Float(f32),      // 0.0 - 1.0
+        Integer(u8),     // 0 - 255
+        Percentage(f32), // 0% - 100%
     }
 
     impl AlphaValue {
@@ -1270,6 +1280,11 @@ pub mod color_functions {
                     (clamped * 255.0).round() as u8
                 }
                 AlphaValue::Integer(i) => i,
+                AlphaValue::Percentage(p) => {
+                    // Clamp to 0.0-100.0 range and convert to 0-255
+                    let clamped = p.clamp(0.0, 100.0);
+                    (clamped / 100.0 * 255.0).round() as u8
+                }
             }
         }
     }
@@ -1329,6 +1344,39 @@ pub mod color_functions {
             // Clamp to 0-255 range
             let clamped = i.min(255);
             AlphaValue::Integer(clamped as u8)
+        }
+    }
+
+    impl From<&str> for AlphaValue {
+        fn from(s: &str) -> Self {
+            let trimmed = s.trim();
+            if let Some(percent_str) = trimmed.strip_suffix('%') {
+                // Parse as percentage
+                if let Ok(percent) = percent_str.parse::<f32>() {
+                    AlphaValue::Percentage(percent)
+                } else {
+                    // Fallback to 0% if parsing fails
+                    AlphaValue::Percentage(0.0)
+                }
+            } else {
+                // Try to parse as float or integer
+                if let Ok(f) = trimmed.parse::<f32>() {
+                    if f <= 1.0 {
+                        AlphaValue::Float(f)
+                    } else {
+                        AlphaValue::Integer(f.clamp(0.0, 255.0) as u8)
+                    }
+                } else {
+                    // Fallback to 0 if parsing fails
+                    AlphaValue::Integer(0)
+                }
+            }
+        }
+    }
+
+    impl From<String> for AlphaValue {
+        fn from(s: String) -> Self {
+            Self::from(s.as_str())
         }
     }
 
