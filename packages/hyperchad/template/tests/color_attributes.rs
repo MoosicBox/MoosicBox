@@ -281,3 +281,98 @@ fn raw_hex_colors_8_digit_edge_cases() {
     };
     assert!(result.display_to_string(false, false).is_ok());
 }
+
+#[test]
+fn rgb_function_basic() {
+    let result = container! {
+        div color=rgb(255, 0, 0) background=rgb(0, 255, 0) {
+            "RGB color functions"
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}
+
+#[test]
+fn rgba_function_basic() {
+    let result = container! {
+        div color=rgba(255, 0, 0, 0.5) background=rgba(0, 255, 0, 128) {
+            "RGBA color functions"
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}
+
+#[test]
+fn rgb_function_with_variables() {
+    let red = 255;
+    let green = 100;
+    let blue = 50;
+    let result = container! {
+        div color=rgb(red, green, blue) {
+            "RGB with variables"
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}
+
+#[test]
+fn rgba_function_with_variables() {
+    let red = 255;
+    let green = 100;
+    let blue = 50;
+    let alpha = 0.75;
+    let result = container! {
+        div color=rgba(red, green, blue, alpha) {
+            "RGBA with variables"
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}
+
+#[test]
+fn rgb_rgba_mixed_usage() {
+    let result = container! {
+        div {
+            // RGB function
+            div color=rgb(255, 0, 0) { "Pure red" }
+
+            // RGBA with float alpha
+            div color=rgba(0, 255, 0, 0.5) { "Semi-transparent green" }
+
+            // RGBA with integer alpha
+            div color=rgba(0, 0, 255, 128) { "Semi-transparent blue" }
+
+            // Mixed with hex colors
+            div color=rgb(128, 128, 128) background=#ffffff { "Gray on white" }
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}
+
+#[test]
+fn color_functions_comprehensive() {
+    let red_val = 200;
+    let green_val = 100;
+    let blue_val = 50;
+    let alpha_val = 0.8;
+
+    let result = container! {
+        div {
+            // All color formats in one container
+            div color=rgb(red_val, green_val, blue_val)
+                background=rgba(255, 255, 255, alpha_val) {
+                "All color formats combined"
+            }
+
+            // Edge cases
+            div color=rgb(0, 0, 0) background=rgba(255, 255, 255, 1.0) {
+                "Black text on white background"
+            }
+
+            div color=rgb(255, 255, 255) background=rgba(0, 0, 0, 0.9) {
+                "White text on mostly opaque black"
+            }
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}

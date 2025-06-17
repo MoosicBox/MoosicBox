@@ -1124,3 +1124,237 @@ pub mod unit_functions {
         }
     }
 }
+
+/// Helper module for color functions
+///
+/// # Examples
+///
+/// The color_functions module enables CSS-style color functions in attributes:
+///
+/// ```rust
+/// use hyperchad_template::container;
+///
+/// // RGB color functions
+/// let containers = container! {
+///     div color=rgb(255, 0, 0) background=rgb(100, 200, 150) {
+///         "Red text on green background"
+///     }
+/// };
+///
+/// // RGBA color functions with alpha
+/// let containers = container! {
+///     div color=rgba(255, 0, 0, 0.8) background=rgba(100, 200, 150, 128) {
+///         "Semi-transparent colors"
+///     }
+/// };
+///
+/// // With variables
+/// let red = 255;
+/// let green = 100;
+/// let blue = 50;
+/// let alpha = 0.75;
+/// let containers = container! {
+///     div color=rgb(red, green, blue) background=rgba(red, green, blue, alpha) {
+///         "Variable-based colors"
+///     }
+/// };
+/// ```
+pub mod color_functions {
+    use hyperchad_color::Color;
+
+    /// Create an RGB color from red, green, and blue values (0-255)
+    ///
+    /// # Examples
+    /// ```rust
+    /// use hyperchad_template::color_functions::rgb;
+    /// use hyperchad_color::Color;
+    ///
+    /// let red_color = rgb(255, 0, 0);
+    /// let green_color = rgb(0, 255, 0);
+    /// let blue_color = rgb(0, 0, 255);
+    /// ```
+    pub fn rgb<R, G, B>(red: R, green: G, blue: B) -> Color
+    where
+        R: ToRgbValue,
+        G: ToRgbValue,
+        B: ToRgbValue,
+    {
+        Color {
+            r: red.to_rgb_value(),
+            g: green.to_rgb_value(),
+            b: blue.to_rgb_value(),
+            a: None,
+        }
+    }
+
+    /// Create an RGBA color from red, green, blue, and alpha values
+    ///
+    /// Alpha can be specified as:
+    /// - A float between 0.0 and 1.0 (e.g., 0.5 for 50% opacity)
+    /// - An integer between 0 and 255 (e.g., 128 for 50% opacity)
+    /// - A percentage value (handled by the Number system)
+    ///
+    /// # Examples
+    /// ```rust
+    /// use hyperchad_template::color_functions::rgba;
+    /// use hyperchad_color::Color;
+    ///
+    /// // Float alpha (0.0 - 1.0)
+    /// let semi_transparent_red = rgba(255, 0, 0, 0.5);
+    ///
+    /// // Integer alpha (0 - 255)
+    /// let semi_transparent_green = rgba(0, 255, 0, 128);
+    /// ```
+    pub fn rgba<R, G, B, A>(red: R, green: G, blue: B, alpha: A) -> Color
+    where
+        R: ToRgbValue,
+        G: ToRgbValue,
+        B: ToRgbValue,
+        A: Into<AlphaValue>,
+    {
+        let alpha_val = alpha.into().to_u8();
+        Color {
+            r: red.to_rgb_value(),
+            g: green.to_rgb_value(),
+            b: blue.to_rgb_value(),
+            a: Some(alpha_val),
+        }
+    }
+
+    /// Helper type for alpha values that can be converted from various numeric types
+    pub enum AlphaValue {
+        Float(f32),  // 0.0 - 1.0
+        Integer(u8), // 0 - 255
+    }
+
+    impl AlphaValue {
+        pub fn to_u8(self) -> u8 {
+            match self {
+                AlphaValue::Float(f) => {
+                    // Clamp to 0.0-1.0 range and convert to 0-255
+                    let clamped = f.clamp(0.0, 1.0);
+                    (clamped * 255.0).round() as u8
+                }
+                AlphaValue::Integer(i) => i,
+            }
+        }
+    }
+
+    impl From<f32> for AlphaValue {
+        fn from(f: f32) -> Self {
+            AlphaValue::Float(f)
+        }
+    }
+
+    impl From<f64> for AlphaValue {
+        fn from(f: f64) -> Self {
+            AlphaValue::Float(f as f32)
+        }
+    }
+
+    impl From<u8> for AlphaValue {
+        fn from(i: u8) -> Self {
+            AlphaValue::Integer(i)
+        }
+    }
+
+    impl From<i32> for AlphaValue {
+        fn from(i: i32) -> Self {
+            // Clamp to 0-255 range
+            let clamped = i.clamp(0, 255);
+            AlphaValue::Integer(clamped as u8)
+        }
+    }
+
+    impl From<i64> for AlphaValue {
+        fn from(i: i64) -> Self {
+            // Clamp to 0-255 range
+            let clamped = i.clamp(0, 255);
+            AlphaValue::Integer(clamped as u8)
+        }
+    }
+
+    impl From<u16> for AlphaValue {
+        fn from(i: u16) -> Self {
+            // Clamp to 0-255 range
+            let clamped = i.min(255);
+            AlphaValue::Integer(clamped as u8)
+        }
+    }
+
+    impl From<u32> for AlphaValue {
+        fn from(i: u32) -> Self {
+            // Clamp to 0-255 range
+            let clamped = i.min(255);
+            AlphaValue::Integer(clamped as u8)
+        }
+    }
+
+    impl From<u64> for AlphaValue {
+        fn from(i: u64) -> Self {
+            // Clamp to 0-255 range
+            let clamped = i.min(255);
+            AlphaValue::Integer(clamped as u8)
+        }
+    }
+
+    // Helper trait for converting RGB values from various numeric types to u8
+    pub trait ToRgbValue {
+        fn to_rgb_value(self) -> u8;
+    }
+
+    impl ToRgbValue for u8 {
+        fn to_rgb_value(self) -> u8 {
+            self
+        }
+    }
+
+    impl ToRgbValue for i32 {
+        fn to_rgb_value(self) -> u8 {
+            // Clamp to 0-255 range
+            self.clamp(0, 255) as u8
+        }
+    }
+
+    impl ToRgbValue for i64 {
+        fn to_rgb_value(self) -> u8 {
+            // Clamp to 0-255 range
+            self.clamp(0, 255) as u8
+        }
+    }
+
+    impl ToRgbValue for u16 {
+        fn to_rgb_value(self) -> u8 {
+            // Clamp to 0-255 range
+            self.min(255) as u8
+        }
+    }
+
+    impl ToRgbValue for u32 {
+        fn to_rgb_value(self) -> u8 {
+            // Clamp to 0-255 range
+            self.min(255) as u8
+        }
+    }
+
+    impl ToRgbValue for u64 {
+        fn to_rgb_value(self) -> u8 {
+            // Clamp to 0-255 range
+            self.min(255) as u8
+        }
+    }
+
+    impl ToRgbValue for f32 {
+        fn to_rgb_value(self) -> u8 {
+            // Clamp to 0-255 range
+            self.clamp(0.0, 255.0).round() as u8
+        }
+    }
+
+    impl ToRgbValue for f64 {
+        fn to_rgb_value(self) -> u8 {
+            // Clamp to 0-255 range
+            self.clamp(0.0, 255.0).round() as u8
+        }
+    }
+}

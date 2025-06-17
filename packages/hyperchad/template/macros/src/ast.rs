@@ -389,6 +389,14 @@ impl<E: MaybeElement> Markup<E> {
                         // For percent helper function, use calc module
                         let expr: Expr = content.parse()?;
                         parse_quote!(hyperchad_template::calc::to_percent_number(#expr))
+                    } else if matches!(ident_str.as_str(), "rgb" | "rgba") {
+                        // For color functions, parse comma-separated expressions
+                        let args =
+                            syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated(
+                                &content,
+                            )?;
+                        let args_vec: Vec<Expr> = args.into_iter().collect();
+                        parse_quote!(hyperchad_template::color_functions::#unit_ident(#(#args_vec),*))
                     } else {
                         // For unit functions like vw, vh, etc., parse a single expression and use unit_functions module
                         let expr: Expr = content.parse()?;
@@ -1253,7 +1261,16 @@ impl NumericLit {
     fn is_unit_identifier(input: &str) -> bool {
         matches!(
             input,
-            "vw" | "vh" | "dvw" | "dvh" | "calc" | "min" | "max" | "clamp" | "percent" // Viewport units, calc function, CSS math functions, and helper functions
+            "vw" | "vh"
+                | "dvw"
+                | "dvh"
+                | "calc"
+                | "min"
+                | "max"
+                | "clamp"
+                | "percent"
+                | "rgb"
+                | "rgba" // Viewport units, calc function, CSS math functions, helper functions, and color functions
         )
     }
 }
