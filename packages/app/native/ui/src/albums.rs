@@ -528,7 +528,7 @@ pub fn albums_list_start(
                             @if i == MAX_PARALLEL_REQUESTS - 1 {
                                 Div
                                     hx-get={
-                                        "/albums-list{}"
+                                        "/albums-list"
                                         (build_query('?', &[
                                             ("offset", &(offset + i * limit).to_string()),
                                             ("limit", &last.to_string()),
@@ -544,7 +544,7 @@ pub fn albums_list_start(
                             } @else {
                                 Div
                                     hx-get={
-                                        "/albums-list{}"
+                                        "/albums-list"
                                         (build_query('?', &[
                                             ("offset", &(offset + i * limit).to_string()),
                                             ("limit", &limit.to_string()),
