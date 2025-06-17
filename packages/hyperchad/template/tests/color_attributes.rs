@@ -244,3 +244,40 @@ fn colors_in_complex_layout() {
     };
     assert!(result.display_to_string(false, false).is_ok());
 }
+
+#[test]
+fn raw_hex_colors_8_digit_rgba() {
+    let result = container! {
+        div color=#445566ff background=#12345678 {
+            "8-digit hex colors with alpha channel"
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}
+
+#[test]
+fn raw_hex_colors_8_digit_mixed() {
+    let result = container! {
+        div color=#abcdef80 background=#ff00ff33 {
+            "8-digit hex colors with various alpha values"
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}
+
+#[test]
+fn raw_hex_colors_8_digit_edge_cases() {
+    let result = container! {
+        div {
+            // Fully opaque (ff alpha)
+            div color=#000000ff { "Fully opaque black" }
+            // Fully transparent (00 alpha)
+            div color=#ffffff00 { "Fully transparent white" }
+            // Semi-transparent (80 alpha)
+            div color=#ff000080 { "Semi-transparent red" }
+            // Mixed case
+            div color=#AbCdEf12 { "Mixed case 8-digit" }
+        }
+    };
+    assert!(result.display_to_string(false, false).is_ok());
+}

@@ -305,8 +305,8 @@ impl<E: MaybeElement> Markup<E> {
             if let Ok(hex_ident) = input.call(Ident::parse_any) {
                 let hex_str = hex_ident.to_string();
 
-                // Validate that it's a valid hex color (3 or 6 hex digits)
-                if (hex_str.len() == 3 || hex_str.len() == 6)
+                // Validate that it's a valid hex color (3, 6, or 8 hex digits)
+                if (hex_str.len() == 3 || hex_str.len() == 6 || hex_str.len() == 8)
                     && hex_str.chars().all(|c| c.is_ascii_hexdigit())
                 {
                     // Create a string literal with the full hex color
@@ -320,7 +320,7 @@ impl<E: MaybeElement> Markup<E> {
                     return Err(Error::new(
                         hex_ident.span(),
                         format!(
-                            "Invalid hex color '{}'. Hex colors must be 3 or 6 hexadecimal digits (0-9, a-f)",
+                            "Invalid hex color '{}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)",
                             hex_str
                         ),
                     ));
@@ -330,8 +330,8 @@ impl<E: MaybeElement> Markup<E> {
             else if let Ok(hex_int) = input.parse::<syn::LitInt>() {
                 let hex_str = hex_int.to_string();
 
-                // Validate that it's a valid hex color (3 or 6 hex digits)
-                if (hex_str.len() == 3 || hex_str.len() == 6)
+                // Validate that it's a valid hex color (3, 6, or 8 hex digits)
+                if (hex_str.len() == 3 || hex_str.len() == 6 || hex_str.len() == 8)
                     && hex_str.chars().all(|c| c.is_ascii_hexdigit())
                 {
                     // Create a string literal with the full hex color
@@ -345,7 +345,7 @@ impl<E: MaybeElement> Markup<E> {
                     return Err(Error::new(
                         hex_int.span(),
                         format!(
-                            "Invalid hex color '{}'. Hex colors must be 3 or 6 hexadecimal digits (0-9, a-f)",
+                            "Invalid hex color '{}'. Hex colors must be 3, 6, or 8 hexadecimal digits (0-9, a-f)",
                             hex_str
                         ),
                     ));

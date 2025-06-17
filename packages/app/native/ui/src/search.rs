@@ -29,7 +29,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             left=0
             right=0
             bottom=0
-            background="#00000088"
+            background=#00000088
         {
             section
                 align-items=start
