@@ -206,7 +206,8 @@ impl Generator {
             self.separate_element_and_container_attributes(&element_name, filtered_named_attrs);
 
         // Generate the element type with element-specific attributes
-        let element_type = self.element_name_to_type_with_attributes(&element_name, element_attrs);
+        let element_type =
+            self.element_name_to_type_with_attributes(&element_name, element_attrs)?;
 
         // Process container-level attributes (styling, layout, etc.)
         let processed_attrs = self.process_attributes(container_attrs)?;
@@ -309,22 +310,22 @@ impl Generator {
         &self,
         name: &ElementName,
         element_attrs: Vec<(AttributeName, AttributeType)>,
-    ) -> TokenStream {
+    ) -> Result<TokenStream, String> {
         let name_str = name.name.to_string();
 
-        match name_str.as_str() {
-            "Input" => self.generate_input_element(element_attrs),
+        Ok(match name_str.as_str() {
+            "Input" => self.generate_input_element(element_attrs)?,
             "Button" => self.generate_button_element(element_attrs),
             "Anchor" => self.generate_anchor_element(element_attrs),
             "Image" => self.generate_image_element(element_attrs),
             _ => self.element_name_to_type(name), // Fallback to simple element generation
-        }
+        })
     }
 
     fn generate_input_element(
         &self,
         element_attrs: Vec<(AttributeName, AttributeType)>,
-    ) -> TokenStream {
+    ) -> Result<TokenStream, String> {
         let mut input_type = None;
         let mut value = None;
         let mut placeholder = None;
@@ -402,6 +403,10 @@ impl Generator {
                 {
                     let input_type = #input_type_tokens;
                     match input_type.as_str() {
+                        "text" => hyperchad_transformer::Input::Text {
+                            value: #value_field,
+                            placeholder: #placeholder_field
+                        },
                         "checkbox" => hyperchad_transformer::Input::Checkbox {
                             checked: Some(#checked_field)
                         },
@@ -420,21 +425,15 @@ impl Generator {
                 }
             }
         } else {
-            // Default to text input if no type specified
-            quote! {
-                hyperchad_transformer::Input::Text {
-                    value: #value_field,
-                    placeholder: #placeholder_field
-                }
-            }
+            return Err("Missing input type".to_string());
         };
 
-        quote! {
+        Ok(quote! {
             hyperchad_transformer::Element::Input {
                 input: #input_variant,
                 name: #name_field
             }
-        }
+        })
     }
 
     fn generate_button_element(
