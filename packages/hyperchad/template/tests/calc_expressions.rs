@@ -485,3 +485,104 @@ fn test_css_math_with_multiple_arguments() {
         "calc(min(300, min(50%, min(80vh, 90vw))))"
     );
 }
+
+#[test]
+fn test_raw_percent_values() {
+    // Test that raw percent values (without calc()) work correctly
+    let containers = container! {
+        div {
+            div width=100% height=50% { "Raw percent test" }
+            div margin=25% padding=10% { "Margin/padding percent test" }
+            div max-width=75% min-height=30% { "Min/max percent test" }
+        }
+    };
+
+    assert_eq!(containers.len(), 1, "Should generate exactly one container");
+    assert_eq!(containers[0].children.len(), 3, "Should have 3 child containers");
+
+    // Test width and height with raw percents
+    assert_eq!(
+        containers[0].children[0].width.as_ref().unwrap().to_string(),
+        "100%"
+    );
+    assert_eq!(
+        containers[0].children[0].height.as_ref().unwrap().to_string(),
+        "50%"
+    );
+
+    // Test margin and padding with raw percents
+    assert_eq!(
+        containers[0].children[1].margin_top.as_ref().unwrap().to_string(),
+        "25%"
+    );
+    assert_eq!(
+        containers[0].children[1].margin_right.as_ref().unwrap().to_string(),
+        "25%"
+    );
+    assert_eq!(
+        containers[0].children[1].margin_bottom.as_ref().unwrap().to_string(),
+        "25%"
+    );
+    assert_eq!(
+        containers[0].children[1].margin_left.as_ref().unwrap().to_string(),
+        "25%"
+    );
+    assert_eq!(
+        containers[0].children[1].padding_top.as_ref().unwrap().to_string(),
+        "10%"
+    );
+    assert_eq!(
+        containers[0].children[1].padding_right.as_ref().unwrap().to_string(),
+        "10%"
+    );
+    assert_eq!(
+        containers[0].children[1].padding_bottom.as_ref().unwrap().to_string(),
+        "10%"
+    );
+    assert_eq!(
+        containers[0].children[1].padding_left.as_ref().unwrap().to_string(),
+        "10%"
+    );
+
+    // Test max-width and min-height with raw percents
+    assert_eq!(
+        containers[0].children[2].max_width.as_ref().unwrap().to_string(),
+        "75%"
+    );
+    assert_eq!(
+        containers[0].children[2].min_height.as_ref().unwrap().to_string(),
+        "30%"
+    );
+}
+
+#[test]
+fn test_canvas_percent_values() {
+    // Test that canvas elements handle percent values correctly for width/height
+    let containers = container! {
+        div {
+            canvas width=100% height=50% { "Canvas with percents" }
+            div width=100% height=50% { "Div with percents" }
+        }
+    };
+
+    assert_eq!(containers.len(), 1, "Should generate exactly one container");
+    assert_eq!(containers[0].children.len(), 2, "Should have 2 child containers");
+
+    // Canvas width/height should work the same as div width/height
+    assert_eq!(
+        containers[0].children[0].width.as_ref().unwrap().to_string(),
+        "100%"
+    );
+    assert_eq!(
+        containers[0].children[0].height.as_ref().unwrap().to_string(),
+        "50%"
+    );
+    assert_eq!(
+        containers[0].children[1].width.as_ref().unwrap().to_string(),
+        "100%"
+    );
+    assert_eq!(
+        containers[0].children[1].height.as_ref().unwrap().to_string(),
+        "50%"
+    );
+}

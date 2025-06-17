@@ -292,7 +292,6 @@ impl Generator {
                     name_str.as_str(),
                     "src" | "alt" | "srcset" | "sizes" | "loading" | "fit"
                 ),
-                "canvas" => matches!(name_str.as_str(), "width" | "height"),
                 _ => false,
             };
 

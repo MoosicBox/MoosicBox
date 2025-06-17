@@ -17,7 +17,7 @@ group = "hyperchad"
 [dependencies]
 hyperchad_actions            = { workspace = true }
 hyperchad_color              = { workspace = true }
-hyperchad_template_macros   = { workspace = true }
+hyperchad_template_macros    = { workspace = true }
 hyperchad_transformer        = { workspace = true }
 hyperchad_transformer_models = { workspace = true }
 
@@ -25,9 +25,10 @@ itoa = { workspace = true }
 ryu  = { workspace = true }
 
 [dev-dependencies]
-hyperchad_actions   = { workspace = true, features = ["logic"] }
-hyperchad_template = { workspace = true, features = ["logic"] }
-trybuild            = { workspace = true, features = ["diff"] }
+hyperchad_actions     = { workspace = true, features = ["logic"] }
+hyperchad_template    = { workspace = true, features = ["logic"] }
+hyperchad_transformer = { workspace = true, features = ["canvas"] }
+trybuild              = { workspace = true, features = ["diff"] }
 
 [features]
 default = ["logic"]
