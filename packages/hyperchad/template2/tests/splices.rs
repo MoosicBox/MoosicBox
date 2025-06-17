@@ -1,30 +1,11 @@
 use hyperchad_template2::{ContainerVecExt, container};
 
-#[ignore]
 #[test]
-fn simple_splice() {
-    let name = "world";
-    let result = container! { "Hello, " (name) "!" };
-    assert_eq!(result.to_string(), "Hello, world!");
+fn literals() {
+    let result = container! { ("<pinkie>") };
+    assert_eq!(result.display_to_string(false, false).unwrap(), "<pinkie>");
 }
 
-#[ignore]
-#[test]
-fn expression_splice() {
-    let x = 5;
-    let y = 3;
-    let result = container! { "The sum is " (x + y) };
-    assert_eq!(result.to_string(), "The sum is 8");
-}
-
-#[ignore]
-#[test]
-fn raw_literals() {
-    let result = container! { "<pinkie>" };
-    assert_eq!(result.to_string(), "<pinkie>");
-}
-
-#[ignore]
 #[test]
 fn blocks() {
     let result = container! {
@@ -36,24 +17,88 @@ fn blocks() {
             result
         })
     };
-    assert_eq!(result.to_string(), "3628800");
+    assert_eq!(result.display_to_string(false, false).unwrap(), "3628800");
+}
+
+#[test]
+fn string_interpolation() {
+    let name = "Pinkie Pie";
+    let result = container! { "Hello, " (name) "!" };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "Hello, Pinkie Pie!"
+    );
+}
+
+#[test]
+fn numeric_interpolation() {
+    let number = 42;
+    let result = container! { "The answer is " (number) };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "The answer is 42"
+    );
+}
+
+#[test]
+fn attributes() {
+    let alt = "Pinkie Pie";
+    let result = container! { Image src="pinkie.jpg" alt=(alt); };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        r#"<img src="pinkie.jpg" alt="Pinkie Pie" />"#
+    );
+}
+
+#[test]
+fn class_shorthand() {
+    let _pinkie_class = "pinkie";
+    let result = container! { Div.pinkie { "Fun!" } };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        r#"<div class="pinkie">Fun!</div>"#
+    );
+}
+
+#[test]
+fn class_shorthand_block() {
+    let _class_prefix = "pinkie-";
+    let result = container! { Div.pinkie-123 { "Fun!" } };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        r#"<div class="pinkie-123">Fun!</div>"#
+    );
+}
+
+#[test]
+fn id_shorthand() {
+    let pinkie_id = "pinkie";
+    let result = container! { Div #(pinkie_id) { "Fun!" } };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        r#"<div id="pinkie">Fun!</div>"#
+    );
 }
 
 static BEST_PONY: &str = "Pinkie Pie";
 
-#[ignore]
 #[test]
 fn statics() {
     let result = container! { (BEST_PONY) };
-    assert_eq!(result.to_string(), "Pinkie Pie");
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "Pinkie Pie"
+    );
 }
 
-#[ignore]
 #[test]
 fn locals() {
     let best_pony = "Pinkie Pie";
     let result = container! { (best_pony) };
-    assert_eq!(result.to_string(), "Pinkie Pie");
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "Pinkie Pie"
+    );
 }
 
 /// An example struct, for testing purposes only
@@ -71,7 +116,6 @@ impl Creature {
     }
 }
 
-#[ignore]
 #[test]
 fn structs() {
     let pinkie = Creature {
@@ -81,18 +125,19 @@ fn structs() {
     let result = container! {
         "Name: " (pinkie.name) ". Rating: " (pinkie.repugnance())
     };
-    assert_eq!(result.to_string(), "Name: Pinkie Pie. Rating: 1");
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "Name: Pinkie Pie. Rating: 1"
+    );
 }
 
-#[ignore]
 #[test]
 fn tuple_accessors() {
     let a = ("ducks", "geese");
     let result = container! { (a.0) };
-    assert_eq!(result.to_string(), "ducks");
+    assert_eq!(result.display_to_string(false, false).unwrap(), "ducks");
 }
 
-#[ignore]
 #[test]
 fn splice_with_path() {
     mod inner {
@@ -101,20 +146,99 @@ fn splice_with_path() {
         }
     }
     let result = container! { (inner::name()) };
-    assert_eq!(result.to_string(), "Maud");
+    assert_eq!(result.display_to_string(false, false).unwrap(), "Maud");
 }
 
-#[ignore]
 #[test]
 fn nested_macro_invocation() {
     let best_pony = "Pinkie Pie";
     let result = container! { (format!("{best_pony} is best pony")) };
-    assert_eq!(result.to_string(), "Pinkie Pie is best pony");
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "Pinkie Pie is best pony"
+    );
 }
 
-#[ignore]
 #[test]
 fn expression_grouping() {
     let result = container! { (1 + 1) };
-    assert_eq!(result.to_string(), "2");
+    assert_eq!(result.display_to_string(false, false).unwrap(), "2");
+}
+
+#[test]
+fn multiple_expressions() {
+    let x = 5;
+    let y = 10;
+    let result = container! { (x) " + " (y) " = " (x + y) };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "5 + 10 = 15"
+    );
+}
+
+#[test]
+fn boolean_expressions() {
+    let is_true = true;
+    let is_false = false;
+    let result = container! { (is_true) " and " (is_false) };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "true and false"
+    );
+}
+
+#[test]
+fn array_access() {
+    let items = ["apple", "banana", "cherry"];
+    let result = container! { (items[0]) " and " (items[2]) };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "apple and cherry"
+    );
+}
+
+#[test]
+fn method_calls() {
+    let text = "Hello World";
+    let result = container! { (text.to_lowercase()) };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "hello world"
+    );
+}
+
+#[test]
+fn chained_method_calls() {
+    let text = "  Hello World  ";
+    let result = container! { (text.trim().to_uppercase()) };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "HELLO WORLD"
+    );
+}
+
+#[test]
+fn option_handling() {
+    let some_value = Some("exists");
+    let none_value: Option<&str> = None;
+    let result = container! {
+        (some_value.unwrap_or("default")) " "
+        (none_value.unwrap_or("default"))
+    };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "exists default"
+    );
+}
+
+#[test]
+fn vector_operations() {
+    let numbers = [1, 2, 3, 4, 5];
+    let result = container! {
+        "Length: " (numbers.len()) ", Sum: " (numbers.iter().sum::<i32>())
+    };
+    assert_eq!(
+        result.display_to_string(false, false).unwrap(),
+        "Length: 5, Sum: 15"
+    );
 }
