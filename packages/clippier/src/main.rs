@@ -1166,7 +1166,7 @@ fi"
     // System setup for final image
     writeln!(
         content,
-        "RUN echo 'Acquire::http::Timeout \"10\";' >>/etc/apt/apt.conf.d/httpproxy && \\\n",
+        "RUN echo 'Acquire::http::Timeout \"10\";' >>/etc/apt/apt.conf.d/httpproxy && \\",
     )?;
     writeln!(
         content,
