@@ -724,6 +724,40 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             }
         }
 
+        // Self-targeting functions
+        "show_self" => {
+            if !args_code.is_empty() {
+                return Err("show_self() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::ActionType::show_self()
+            })
+        }
+        "hide_self" => {
+            if !args_code.is_empty() {
+                return Err("hide_self() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::ActionType::hide_self()
+            })
+        }
+        "show_last_child" => {
+            if !args_code.is_empty() {
+                return Err("show_last_child() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::ActionType::show_last_child()
+            })
+        }
+        "get_visibility_self" => {
+            if !args_code.is_empty() {
+                return Err("get_visibility_self() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::logic::get_visibility_self()
+            })
+        }
+
         // Default case - assume it's a variable or unknown function
         _ => {
             let function_ident = format_ident!("{}", function);

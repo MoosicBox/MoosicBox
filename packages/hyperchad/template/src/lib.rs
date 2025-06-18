@@ -24,8 +24,9 @@ pub use hyperchad_transformer_models as transformer_models;
 /// so you don't need to manually import these traits.
 pub mod prelude {
     pub use crate::{
-        ContainerVecExt, ContainerVecMethods, IntoActionEffect, IntoBorder, ToBool, calc,
-        color as hyperchad_color, template_actions_dsl as hyperchad_template_actions_dsl,
+        self as hyperchad_template, ContainerVecExt, ContainerVecMethods, IntoActionEffect,
+        IntoBorder, ToBool, actions as hyperchad_actions, calc, color as hyperchad_color,
+        template_actions_dsl as hyperchad_template_actions_dsl,
         transformer as hyperchad_transformer, transformer_models as hyperchad_transformer_models,
     };
 }

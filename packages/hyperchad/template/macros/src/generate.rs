@@ -892,13 +892,20 @@ impl Generator {
                     // Parse the DSL content using actions_dsl! macro
                     quote! {
                         {
-                            let mut actions = hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens };
+                            let actions = hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens };
                             if actions.is_empty() {
                                 hyperchad_actions::ActionType::NoOp.into()
-                            } else {
-                                // Take ownership of the first action and convert to ActionEffect
+                            } else if actions.len() == 1 {
+                                // Single action - convert directly
                                 let action = actions.into_iter().next().unwrap();
                                 hyperchad_actions::ActionEffect::from(action.action)
+                            } else {
+                                // Multiple actions - use ActionType::Multi
+                                let action_types: Vec<hyperchad_actions::ActionType> = actions
+                                    .into_iter()
+                                    .map(|action| action.action)
+                                    .collect();
+                                hyperchad_actions::ActionEffect::from(hyperchad_actions::ActionType::Multi(action_types))
                             }
                         }
                     }

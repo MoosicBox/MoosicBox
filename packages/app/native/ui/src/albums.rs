@@ -2,7 +2,7 @@
 
 use hyperchad::{
     actions::{
-        self as hyperchad_actions, ActionType,
+        ActionType,
         logic::{
             get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
         },

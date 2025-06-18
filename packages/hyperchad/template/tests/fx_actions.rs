@@ -1,4 +1,4 @@
-use hyperchad_actions::ActionType;
+use hyperchad_actions::{ActionEffect, ActionType, LogLevel};
 use hyperchad_template::{
     actions::{ActionTrigger, ElementTarget, StyleAction},
     container,
@@ -8,12 +8,8 @@ use hyperchad_transformer_models::Visibility;
 
 #[test]
 fn test_fx_click_with_action_type() {
-    let action = actions_dsl! {
-        hide("test")
-    };
-
     let containers = container! {
-        div fx-click=(action[0].clone()) {
+        div fx-click=(ActionType::hide_str_id("test")) {
             "Hello"
         }
     };
@@ -22,27 +18,27 @@ fn test_fx_click_with_action_type() {
     assert_eq!(containers[0].actions.len(), 1);
     assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
 
+    // Verify the specific action type and target
     match &containers[0].actions[0].action.action {
-        ActionType::Style {
-            target: ElementTarget::StrId(id),
-            action: StyleAction::SetVisibility(Visibility::Hidden),
-        } => {
-            assert_eq!(id, "test");
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("test".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
-        _ => panic!("Expected hide action"),
+        _ => panic!("Expected Style action for hide_str_id"),
     }
 }
 
 #[test]
 fn test_fx_click_with_action_effect() {
-    // Using DSL to create a throttled action
-    let action_effects = actions_dsl! {
-        show("test")
+    let action = ActionEffect {
+        action: ActionType::hide_str_id("test"),
+        delay_off: Some(1000),
+        throttle: Some(500),
+        unique: Some(true),
     };
-    let action_effect = action_effects[0].clone().throttle(100);
 
     let containers = container! {
-        div fx-click=(action_effect) {
+        div fx-click=(action) {
             "Hello"
         }
     };
@@ -50,27 +46,27 @@ fn test_fx_click_with_action_effect() {
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].actions.len(), 1);
     assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
-    assert_eq!(containers[0].actions[0].action.throttle, Some(100));
 
-    match &containers[0].actions[0].action.action {
-        ActionType::Style {
-            target: ElementTarget::StrId(id),
-            action: StyleAction::SetVisibility(Visibility::Visible),
-        } => {
-            assert_eq!(id, "test");
+    // Verify the action effect properties
+    let action_effect = &containers[0].actions[0].action;
+    assert_eq!(action_effect.delay_off, Some(1000));
+    assert_eq!(action_effect.throttle, Some(500));
+    assert_eq!(action_effect.unique, Some(true));
+
+    // Verify the underlying action
+    match &action_effect.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("test".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
         }
-        _ => panic!("Expected show action"),
+        _ => panic!("Expected Style action"),
     }
 }
 
 #[test]
 fn test_fx_click_outside() {
-    let actions = actions_dsl! {
-        hide("modal")
-    };
-
     let containers = container! {
-        div fx-click-outside=(actions[0].clone()) {
+        div fx-click-outside=(ActionType::hide_str_id("modal")) {
             "Modal content"
         }
     };
@@ -81,16 +77,24 @@ fn test_fx_click_outside() {
         containers[0].actions[0].trigger,
         ActionTrigger::ClickOutside
     );
+
+    // Verify the action content
+    match &containers[0].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("modal".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for click outside"),
+    }
 }
 
 #[test]
 fn test_fx_resize() {
-    let actions = actions_dsl! {
-        custom("refresh")
-    };
-
     let containers = container! {
-        div fx-resize=(actions[0].clone()) {
+        div fx-resize=(ActionType::Log {
+            message: "Window resized".to_string(),
+            level: LogLevel::Info,
+        }) {
             "Resizable content"
         }
     };
@@ -99,74 +103,76 @@ fn test_fx_resize() {
     assert_eq!(containers[0].actions.len(), 1);
     assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Resize);
 
+    // Verify the log action
     match &containers[0].actions[0].action.action {
-        ActionType::Custom { action } => {
-            assert_eq!(action, "refresh");
+        ActionType::Log { message, level } => {
+            assert_eq!(message, "Window resized");
+            assert_eq!(*level, LogLevel::Info);
         }
-        _ => panic!("Expected Custom action"),
+        _ => panic!("Expected Log action for resize trigger"),
     }
 }
 
 #[test]
 fn test_fx_custom_event() {
-    let actions = actions_dsl! {
-        noop()
-    };
-
     let containers = container! {
-        div fx-scroll=(actions[0].clone()) {
-            "Scrollable content"
+        div fx-custom-event=(ActionType::Custom {
+            action: "refresh-data".to_string(),
+        }) {
+            "Custom event handler"
         }
     };
 
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(
+        containers[0].actions[0].trigger,
+        ActionTrigger::Event("custom-event".to_string())
+    );
 
-    match &containers[0].actions[0].trigger {
-        ActionTrigger::Event(event_name) => {
-            assert_eq!(event_name, "scroll");
+    // Verify the custom action
+    match &containers[0].actions[0].action.action {
+        ActionType::Custom { action } => {
+            assert_eq!(action, "refresh-data");
         }
-        _ => panic!("Expected Event trigger"),
+        _ => panic!("Expected Custom action for custom event"),
     }
 }
 
 #[test]
 fn test_multiple_fx_actions() {
-    // Create individual actions for each trigger
-    let show_action = actions_dsl! { show("panel") };
-    let hide_action = actions_dsl! { hide("tooltip") };
-    let noop_action = actions_dsl! { noop() };
-
     let containers = container! {
-        div
-            fx-click=(show_action[0].clone())
-            fx-hover=(hide_action[0].clone())
-            fx-resize=(noop_action[0].clone())
-        {
-            "Multi-action element"
+        div fx-click=(ActionType::show_str_id("panel"))
+            fx-hover=(ActionType::Log {
+                message: "Hovered".to_string(),
+                level: LogLevel::Debug,
+            }) {
+            "Multiple actions"
         }
     };
 
     assert_eq!(containers.len(), 1);
-    assert_eq!(containers[0].actions.len(), 3);
+    assert_eq!(containers[0].actions.len(), 2);
 
-    // Check that we have all three triggers
-    let has_click = containers[0]
-        .actions
-        .iter()
-        .any(|action| action.trigger == ActionTrigger::Click);
-    let has_hover = containers[0]
-        .actions
-        .iter()
-        .any(|action| action.trigger == ActionTrigger::Hover);
-    let has_resize = containers[0]
-        .actions
-        .iter()
-        .any(|action| action.trigger == ActionTrigger::Resize);
+    // First action (click)
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+    match &containers[0].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("panel".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+        }
+        _ => panic!("Expected Style action for first action"),
+    }
 
-    assert!(has_click);
-    assert!(has_hover);
-    assert!(has_resize);
+    // Second action (hover)
+    assert_eq!(containers[0].actions[1].trigger, ActionTrigger::Hover);
+    match &containers[0].actions[1].action.action {
+        ActionType::Log { message, level } => {
+            assert_eq!(message, "Hovered");
+            assert_eq!(*level, LogLevel::Debug);
+        }
+        _ => panic!("Expected Log action for second action"),
+    }
 }
 
 #[test]
@@ -179,7 +185,25 @@ fn test_dsl_basic_features() {
     };
 
     // The actions should contain multiple action effects
-    assert!(actions.len() >= 2, "DSL should generate multiple actions");
+    assert_eq!(actions.len(), 2, "DSL should generate 2 actions");
+
+    // Verify the first action (hide)
+    match &actions[0].action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("basic-modal".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for hide"),
+    }
+
+    // Verify the second action (log)
+    match &actions[1].action {
+        ActionType::Log { message, level } => {
+            assert_eq!(message, "Modal hidden");
+            assert_eq!(*level, LogLevel::Info);
+        }
+        _ => panic!("Expected Log action"),
+    }
 }
 
 #[test]
@@ -354,6 +378,38 @@ fn test_dsl_action_chaining() {
 
     assert_eq!(actions.len(), 4, "Should generate 4 sequential actions");
 
+    // Verify each action type
+    match &actions[0].action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("modal".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for hide"),
+    }
+
+    match &actions[1].action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("backdrop".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+        }
+        _ => panic!("Expected Style action for show"),
+    }
+
+    match &actions[2].action {
+        ActionType::Log { message, level } => {
+            assert_eq!(message, "Actions chained");
+            assert_eq!(*level, LogLevel::Info);
+        }
+        _ => panic!("Expected Log action"),
+    }
+
+    match &actions[3].action {
+        ActionType::Custom { action } => {
+            assert_eq!(action, "refresh-ui");
+        }
+        _ => panic!("Expected Custom action"),
+    }
+
     // Test that actions can be used individually
     let containers = container! {
         div fx-click=(actions[0].clone()) {
@@ -363,6 +419,15 @@ fn test_dsl_action_chaining() {
 
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].actions.len(), 1);
+
+    // Verify the single action on the container
+    match &containers[0].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("modal".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for container"),
+    }
 }
 
 #[test]
@@ -644,7 +709,15 @@ fn test_dsl_navigation_action() {
         navigate("/search")
     };
 
-    assert!(!actions.is_empty(), "DSL should handle navigation actions");
+    assert_eq!(actions.len(), 1);
+
+    // Verify the navigation action
+    match &actions[0].action {
+        ActionType::Navigate { url } => {
+            assert_eq!(url, "/search");
+        }
+        _ => panic!("Expected Navigate action"),
+    }
 }
 
 #[test]
@@ -709,9 +782,42 @@ fn test_dsl_in_hyperchad_template() {
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].children.len(), 4);
 
-    // Verify each button has actions
-    for child in &containers[0].children {
-        assert!(!child.actions.is_empty(), "Each button should have actions");
+    // Verify first button (log action)
+    assert_eq!(containers[0].children[0].actions.len(), 1);
+    match &containers[0].children[0].actions[0].action.action {
+        ActionType::Log { message, level } => {
+            assert_eq!(message, "Toggle Playback");
+            assert_eq!(*level, LogLevel::Info);
+        }
+        _ => panic!("Expected Log action for first button"),
+    }
+
+    // Verify second button (conditional logic action)
+    assert_eq!(containers[0].children[1].actions.len(), 1);
+    match &containers[0].children[1].actions[0].action.action {
+        ActionType::Logic(_) => {
+            // Complex conditional logic - just verify it's there
+        }
+        _ => panic!("Expected Logic action for second button"),
+    }
+
+    // Verify third button (navigation action)
+    assert_eq!(containers[0].children[2].actions.len(), 1);
+    match &containers[0].children[2].actions[0].action.action {
+        ActionType::Navigate { url } => {
+            assert_eq!(url, "/search");
+        }
+        _ => panic!("Expected Navigate action for third button"),
+    }
+
+    // Verify fourth button (hide action)
+    assert_eq!(containers[0].children[3].actions.len(), 1);
+    match &containers[0].children[3].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("search".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for fourth button"),
     }
 }
 
@@ -727,6 +833,16 @@ fn test_dsl_backwards_compatibility() {
 
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Verify the backward compatible action
+    match &containers[0].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("test".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+        }
+        _ => panic!("Expected Style action for backward compatibility"),
+    }
 }
 
 #[test]
@@ -745,4 +861,86 @@ fn test_dsl_complex_real_world_pattern() {
     assert_eq!(containers.len(), 1);
     assert_eq!(containers[0].actions.len(), 2); // mouse-down and hover actions
     assert_eq!(containers[0].str_id, Some("volume-slider".to_string()));
+}
+
+#[test]
+fn test_multiple_dsl_actions_use_multi() {
+    // Test that multiple actions generate Multi ActionType
+    let actions = actions_dsl! {
+        hide("modal");
+        show("success");
+        log("done");
+    };
+
+    let containers = container! {
+        div fx-click=(ActionType::Multi(actions.into_iter().map(|a| a.action).collect())) {
+            "Multiple actions"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Check that Multi ActionType is used for multiple actions
+    match &containers[0].actions[0].action.action {
+        ActionType::Multi(action_types) => {
+            assert_eq!(action_types.len(), 3);
+
+            // First action should be hide("modal")
+            match &action_types[0] {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::StrId("modal".to_string()));
+                    assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+                }
+                _ => panic!("Expected Style action for hide"),
+            }
+
+            // Second action should be show("success")
+            match &action_types[1] {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::StrId("success".to_string()));
+                    assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+                }
+                _ => panic!("Expected Style action for show"),
+            }
+
+            // Third action should be log("done")
+            match &action_types[2] {
+                ActionType::Log { message, level } => {
+                    assert_eq!(message, "done");
+                    assert_eq!(*level, LogLevel::Info);
+                }
+                _ => panic!("Expected Log action"),
+            }
+        }
+        _ => panic!("Expected Multi ActionType for multiple actions"),
+    }
+}
+
+#[test]
+fn test_dsl_in_template_with_multiple_actions() {
+    // Test DSL with multiple actions in template
+    let containers = container! {
+        div fx-click=(fx({ hide("modal"); show("success"); log("done"); })) {
+            "Click to execute multiple actions"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Verify the Multi ActionType structure
+    match &containers[0].actions[0].action.action {
+        ActionType::Multi(action_types) => {
+            assert_eq!(action_types.len(), 3);
+
+            // Verify each action type
+            assert!(matches!(action_types[0], ActionType::Style { .. }));
+            assert!(matches!(action_types[1], ActionType::Style { .. }));
+            assert!(matches!(action_types[2], ActionType::Log { .. }));
+        }
+        _ => panic!("Expected Multi ActionType for block syntax with multiple actions"),
+    }
 }
