@@ -4,7 +4,7 @@ on:
     push:
         branches: ['master', 'edge']
         paths:
-            - .github/workflows/build-server-docker-image.yml
+            - .github/workflows/build-docker-images.yml
             - packages/**
             - '**/*.toml'
             - '**/Cargo.lock'
