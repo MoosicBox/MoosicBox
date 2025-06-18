@@ -40,6 +40,7 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             matrix: ${{ steps.set-matrix.outputs.matrix }}
+            has-changes: ${{ steps.set-matrix.outputs.has-changes }}
         steps:
             - uses: actions/checkout@v4
               with:
@@ -188,12 +189,15 @@ jobs:
                       fi
                   done
 
-                  # If no packages are affected, create an empty matrix
+                  # Check if any packages are affected
                   if [ $(echo "$MATRIX_PROJECTS" | jq 'length') -eq 0 ]; then
                       echo "No Docker packages are affected by the changes"
-                      MATRIX='{"include": []}'
+                      # Create a dummy matrix entry to satisfy GitHub Actions matrix requirements
+                      MATRIX='{"include": [{"name": "no-changes", "dockerfile": "dummy"}]}'
+                      echo "has-changes=false" >> $GITHUB_OUTPUT
                   else
                       MATRIX="{\"include\": $MATRIX_PROJECTS}"
+                      echo "has-changes=true" >> $GITHUB_OUTPUT
                   fi
 
                   # Ensure the JSON is properly formatted and compact
@@ -204,7 +208,7 @@ jobs:
 
     build:
         needs: determine-affected-packages
-        if: '${{ needs.determine-affected-packages.outputs.matrix != ''{"include": []}'' }}'
+        if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' }}
         strategy:
             fail-fast: false
             matrix: ${{ fromJson(needs.determine-affected-packages.outputs.matrix) }}
