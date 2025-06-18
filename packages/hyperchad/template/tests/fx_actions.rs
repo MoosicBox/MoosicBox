@@ -455,3 +455,74 @@ fn test_dsl_complex_workflow() {
 
     assert_eq!(containers.len(), 1);
 }
+
+#[test]
+fn test_fx_wrapper_syntax() {
+    // Test the new fx() wrapper syntax
+    let containers = container! {
+        div fx-click=(fx(show("panel"))) {
+            "Click to show panel"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    match &containers[0].actions[0].action.action {
+        ActionType::Style {
+            target: ElementTarget::StrId(id),
+            action: StyleAction::SetVisibility(Visibility::Visible),
+        } => {
+            assert_eq!(id, "panel");
+        }
+        _ => panic!("Expected show action from fx() wrapper"),
+    }
+}
+
+#[test]
+fn test_fx_wrapper_complex_dsl() {
+    // Test complex DSL with fx() wrapper
+    let containers = container! {
+        div fx-click=(fx(if get_visibility("modal") == visible() { hide("modal") } else { show("modal") })) {
+            "Toggle modal"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Should generate a Logic action for the conditional
+    match &containers[0].actions[0].action.action {
+        ActionType::Logic(_) => {
+            // Success - we got a logic action
+        }
+        _ => panic!("Expected Logic action from complex fx() DSL"),
+    }
+}
+
+#[test]
+fn test_backward_compatibility() {
+    // Test that existing syntax still works
+    let action = actions_dsl! {
+        custom("legacy-action")
+    };
+
+    let containers = container! {
+        div fx-click=(action[0].clone()) {
+            "Legacy syntax still works"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    match &containers[0].actions[0].action.action {
+        ActionType::Custom { action } => {
+            assert_eq!(action, "legacy-action");
+        }
+        _ => panic!("Expected custom action from legacy syntax"),
+    }
+}

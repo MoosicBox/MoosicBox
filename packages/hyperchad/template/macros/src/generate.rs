@@ -1,3 +1,5 @@
+#![allow(clippy::option_if_let_else)]
+
 use proc_macro2::{Ident, TokenStream};
 use quote::{ToTokens, format_ident, quote};
 use syn::{Expr, Local};
@@ -876,21 +878,55 @@ impl Generator {
                     }
                 } else {
                     let lit = &lit.lit;
-                    quote! { hyperchad_template::IntoActionEffect::into_action_effect(#lit) }
+                    // For backwards compatibility: convert non-string literals to custom actions
+                    quote! {
+                        hyperchad_actions::ActionType::Custom {
+                            action: (#lit).to_string()
+                        }.into()
+                    }
                 }
             }
             Markup::Splice { expr, .. } => {
-                // For expressions, handle them directly using our helper trait
-                quote! { hyperchad_template::IntoActionEffect::into_action_effect(#expr) }
+                // Check if this is an fx() function call
+                if let Some(dsl_tokens) = Self::extract_fx_call_content(&expr) {
+                    // Parse the DSL content using actions_dsl! macro
+                    quote! {
+                        {
+                            let mut actions = hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens };
+                            if actions.is_empty() {
+                                hyperchad_actions::ActionType::NoOp.into()
+                            } else {
+                                // Take ownership of the first action and convert to ActionEffect
+                                let action = actions.into_iter().next().unwrap();
+                                hyperchad_actions::ActionEffect::from(action.action)
+                            }
+                        }
+                    }
+                } else {
+                    // For backwards compatibility: handle all non-fx() expressions directly
+                    quote! {
+                        {
+                            let val = #expr;
+                            // Use the IntoActionEffect trait for conversion
+                            hyperchad_template::IntoActionEffect::into_action_effect(val)
+                        }
+                    }
+                }
             }
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, handle like single item if only one
+                // For brace-wrapped items, check if it's DSL content
                 if items.len() == 1 {
                     Self::markup_to_action_effect_tokens(items[0].clone())
                 } else {
                     let expr = Self::handle_brace_splice_expression(&items);
+
+                    // For backwards compatibility: handle all brace splice expressions directly
                     quote! {
-                        hyperchad_template::IntoActionEffect::into_action_effect({ #expr })
+                        {
+                            let val = { #expr };
+                            // Use the IntoActionEffect trait for conversion
+                            hyperchad_template::IntoActionEffect::into_action_effect(val)
+                        }
                     }
                 }
             }
@@ -1709,7 +1745,6 @@ impl Generator {
                         let value_str = lit_str.value();
 
                         // Try to parse different number formats from strings
-                        #[allow(clippy::option_if_let_else)]
                         if value_str.ends_with('%') {
                             let num_str = &value_str[..value_str.len() - 1];
                             if let Ok(num) = num_str.parse::<f32>() {
@@ -2213,7 +2248,6 @@ impl Generator {
 
     /// Parse number literal strings (e.g., "100%", "50vw", "30") into Number tokens
     fn parse_number_literal_string(value_str: &str) -> TokenStream {
-        #[allow(clippy::option_if_let_else)]
         if let Some(num_str) = value_str.strip_suffix('%') {
             if let Ok(num) = num_str.parse::<f32>() {
                 quote! { hyperchad_transformer::Number::RealPercent(#num) }
@@ -2773,7 +2807,6 @@ impl Generator {
     }
 
     fn markup_to_border_tokens(value: Markup<NoElement>) -> TokenStream {
-        #[allow(clippy::option_if_let_else)]
         match value {
             Markup::Lit(lit) => {
                 if let syn::Lit::Str(lit_str) = &lit.lit {
@@ -2912,7 +2945,6 @@ impl Generator {
                         // Parse flex format: "grow shrink basis" (e.g., "1 0 0" or "1" or "1 0")
                         let parts: Vec<&str> = value_str.split_whitespace().collect();
 
-                        #[allow(clippy::option_if_let_else)]
                         match parts.len() {
                             1 => {
                                 // Only grow specified
@@ -3162,6 +3194,23 @@ impl Generator {
                 quote! { hyperchad_transformer::TextDecoration::default() }
             }
         }
+    }
+
+    /// Extract DSL content from `fx()` function calls
+    fn extract_fx_call_content(expr: &syn::Expr) -> Option<TokenStream> {
+        if let syn::Expr::Call(call_expr) = expr {
+            // Check if this is a call to fx()
+            if let syn::Expr::Path(path_expr) = &*call_expr.func {
+                if let Some(ident) = path_expr.path.get_ident() {
+                    if ident == "fx" && call_expr.args.len() == 1 {
+                        // Extract the argument content as token stream
+                        let arg = &call_expr.args[0];
+                        return Some(quote! { #arg });
+                    }
+                }
+            }
+        }
+        None
     }
 }
 

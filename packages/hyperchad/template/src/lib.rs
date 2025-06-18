@@ -14,6 +14,7 @@ pub use hyperchad_transformer::Container;
 
 pub use hyperchad_actions as actions;
 pub use hyperchad_color as color;
+pub use hyperchad_template_actions_dsl as template_actions_dsl;
 pub use hyperchad_transformer as transformer;
 pub use hyperchad_transformer_models as transformer_models;
 
@@ -24,8 +25,8 @@ pub use hyperchad_transformer_models as transformer_models;
 pub mod prelude {
     pub use crate::{
         ContainerVecExt, ContainerVecMethods, IntoActionEffect, IntoBorder, ToBool, calc,
-        color as hyperchad_color, transformer as hyperchad_transformer,
-        transformer_models as hyperchad_transformer_models,
+        color as hyperchad_color, template_actions_dsl as hyperchad_template_actions_dsl,
+        transformer as hyperchad_transformer, transformer_models as hyperchad_transformer_models,
     };
 }
 

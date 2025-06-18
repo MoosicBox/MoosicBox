@@ -17,15 +17,16 @@ group = "hyperchad"
 proc-macro = true
 
 [dependencies]
-hyperchad_color              = { workspace = true }
-hyperchad_transformer        = { workspace = true }
+hyperchad_color = { workspace = true }
+hyperchad_template_actions_dsl = { workspace = true }
+hyperchad_transformer = { workspace = true }
 hyperchad_transformer_models = { workspace = true }
+proc-macro2 = { workspace = true }
+proc-macro2-diagnostics = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true, features = ["full", "extra-traits"] }
 
 log                     = { workspace = true }
-proc-macro2             = { workspace = true }
-proc-macro2-diagnostics = { workspace = true }
-quote                   = { workspace = true }
-syn                     = { workspace = true, features = ["extra-traits", "full"] }
 
 [dev-dependencies]
 hyperchad_template = { workspace = true }

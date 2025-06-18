@@ -5527,7 +5527,6 @@ name = "hyperchad_template_actions_dsl"
 version = "0.1.0"
 dependencies = [
  "hyperchad_actions",
- "hyperchad_template",
  "log 0.4.27",
  "proc-macro2",
  "quote",
@@ -5540,6 +5539,7 @@ version = "0.1.0"
 dependencies = [
  "hyperchad_color",
  "hyperchad_template",
+ "hyperchad_template_actions_dsl",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
  "log 0.4.27",
