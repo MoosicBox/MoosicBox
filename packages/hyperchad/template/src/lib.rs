@@ -126,7 +126,7 @@ pub fn to_html(containers: &[Container]) -> String {
 /// let containers = container! {
 ///     div { "Hello World" }
 /// };
-/// let html = into_html(containers);
+/// let html = into_html(&containers);
 /// ```
 pub fn into_html(containers: &[Container]) -> String {
     containers

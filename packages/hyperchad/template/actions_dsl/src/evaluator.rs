@@ -249,15 +249,7 @@ fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
             args,
         } => {
             let receiver_code = generate_expression_code(receiver)?;
-            let args_code: Result<Vec<_>, String> =
-                args.iter().map(generate_expression_code).collect();
-            let args_code = args_code?;
-
-            let method_ident = format_ident!("{}", method);
-
-            Ok(quote! {
-                #receiver_code.#method_ident(#(#args_code),*)
-            })
+            generate_method_call_code(&receiver_code, method, args)
         }
         Expression::Field { object, field } => {
             let object_code = generate_expression_code(object)?;
@@ -467,6 +459,15 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 hyperchad_actions::logic::get_visibility_str_id(#target.to_string())
             })
         }
+        "get_visibility_str_id" => {
+            if args_code.len() != 1 {
+                return Err("get_visibility_str_id() expects exactly 1 argument".to_string());
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::logic::get_visibility_str_id(#target.to_string())
+            })
+        }
         "get_display" => {
             if args_code.len() != 1 {
                 return Err("get_display() expects exactly 1 argument".to_string());
@@ -485,9 +486,26 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 hyperchad_actions::logic::get_width_px_str_id(#target.to_string())
             })
         }
+        "get_width_px_self" => {
+            if !args_code.is_empty() {
+                return Err("get_width_px_self() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::logic::get_width_px_self()
+            })
+        }
         "get_height" => {
             if args_code.len() != 1 {
                 return Err("get_height() expects exactly 1 argument".to_string());
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::logic::get_height_px_str_id(#target.to_string())
+            })
+        }
+        "get_height_px_str_id" => {
+            if args_code.len() != 1 {
+                return Err("get_height_px_str_id() expects exactly 1 argument".to_string());
             }
             let target = &args_code[0];
             Ok(quote! {
@@ -508,6 +526,14 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 Err("get_mouse_x() expects 0 or 1 arguments".to_string())
             }
         }
+        "get_mouse_x_self" => {
+            if !args_code.is_empty() {
+                return Err("get_mouse_x_self() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::logic::get_mouse_x_self()
+            })
+        }
         "get_mouse_y" => {
             if args_code.is_empty() {
                 Ok(quote! {
@@ -521,6 +547,15 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             } else {
                 Err("get_mouse_y() expects 0 or 1 arguments".to_string())
             }
+        }
+        "get_mouse_y_str_id" => {
+            if args_code.len() != 1 {
+                return Err("get_mouse_y_str_id() expects exactly 1 argument".to_string());
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::logic::get_mouse_y_str_id(#target.to_string())
+            })
         }
 
         // Utility functions
@@ -580,6 +615,115 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
 
+        // ActionType struct constructors
+        name if name.starts_with("ActionType::") => {
+            let variant = name.strip_prefix("ActionType::").unwrap();
+            match variant {
+                "Navigate" => {
+                    // Handle ActionType::Navigate { url: "..." }
+                    if args_code.len() == 1 {
+                        // Expecting a tuple with field name and value
+                        let url_arg = &args_code[0];
+                        Ok(quote! {
+                            hyperchad_actions::ActionType::Navigate {
+                                url: #url_arg.to_string()
+                            }
+                        })
+                    } else {
+                        Err("ActionType::Navigate expects exactly 1 field (url)".to_string())
+                    }
+                }
+                "hide_str_id" => {
+                    if args_code.len() != 1 {
+                        return Err(
+                            "ActionType::hide_str_id() expects exactly 1 argument".to_string()
+                        );
+                    }
+                    let target = &args_code[0];
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::hide_str_id(&#target.to_string())
+                    })
+                }
+                "show_str_id" => {
+                    if args_code.len() != 1 {
+                        return Err(
+                            "ActionType::show_str_id() expects exactly 1 argument".to_string()
+                        );
+                    }
+                    let target = &args_code[0];
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::show_str_id(&#target.to_string())
+                    })
+                }
+                "show_self" => {
+                    if !args_code.is_empty() {
+                        return Err("ActionType::show_self() expects no arguments".to_string());
+                    }
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::show_self()
+                    })
+                }
+                "hide_self" => {
+                    if !args_code.is_empty() {
+                        return Err("ActionType::hide_self() expects no arguments".to_string());
+                    }
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::hide_self()
+                    })
+                }
+                _ => {
+                    let variant_ident = format_ident!("{}", variant);
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::#variant_ident
+                    })
+                }
+            }
+        }
+
+        // Visibility enum variants
+        name if name.starts_with("Visibility::") => {
+            let variant = name.strip_prefix("Visibility::").unwrap();
+            let variant_ident = format_ident!("{}", variant);
+            Ok(quote! {
+                hyperchad_transformer_models::Visibility::#variant_ident
+            })
+        }
+
+        // Action enum variants
+        name if name.starts_with("Action::") => {
+            let variant = name.strip_prefix("Action::").unwrap();
+            match variant {
+                "SetVolume" | "SeekCurrentTrackPercent" => {
+                    // These expect a value to be passed via then_pass_to
+                    let variant_ident = format_ident!("{}", variant);
+                    Ok(quote! {
+                        Action::#variant_ident
+                    })
+                }
+                "PlayAlbum" | "AddAlbumToQueue" | "PlayAlbumStartingAtTrackId" => {
+                    // These are complex variants with fields - for now, just return the variant
+                    let variant_ident = format_ident!("{}", variant);
+                    if args_code.is_empty() {
+                        // Simple variant without arguments
+                        Ok(quote! {
+                            Action::#variant_ident
+                        })
+                    } else {
+                        // For now, assume arguments are provided as a single struct-like expression
+                        Ok(quote! {
+                            Action::#variant_ident { #(#args_code),* }
+                        })
+                    }
+                }
+                _ => {
+                    let variant_ident = format_ident!("{}", variant);
+                    Ok(quote! {
+                        Action::#variant_ident
+                    })
+                }
+            }
+        }
+
         // Default case - assume it's a variable or unknown function
         _ => {
             let function_ident = format_ident!("{}", function);
@@ -631,5 +775,138 @@ fn generate_unary_op_code(op: &UnaryOp) -> TokenStream {
         UnaryOp::Not => quote! { ! },
         UnaryOp::Minus => quote! { - },
         UnaryOp::Plus => quote! { + },
+    }
+}
+
+/// Generate code for method calls
+#[allow(clippy::too_many_lines)]
+fn generate_method_call_code(
+    receiver: &TokenStream,
+    method: &str,
+    args: &[Expression],
+) -> Result<TokenStream, String> {
+    let args_code: Result<Vec<_>, String> = args.iter().map(generate_expression_code).collect();
+    let args_code = args_code?;
+
+    match method {
+        // Logic chaining methods
+        "eq" => {
+            if args_code.len() != 1 {
+                return Err("eq() expects exactly 1 argument".to_string());
+            }
+            let value = &args_code[0];
+            Ok(quote! {
+                #receiver.eq(#value)
+            })
+        }
+        "then" => {
+            if args_code.len() != 1 {
+                return Err("then() expects exactly 1 argument".to_string());
+            }
+            let action = &args_code[0];
+            Ok(quote! {
+                #receiver.then(#action)
+            })
+        }
+        "or_else" => {
+            if args_code.len() != 1 {
+                return Err("or_else() expects exactly 1 argument".to_string());
+            }
+            let action = &args_code[0];
+            Ok(quote! {
+                #receiver.or_else(#action)
+            })
+        }
+        "and" => {
+            if args_code.len() != 1 {
+                return Err("and() expects exactly 1 argument".to_string());
+            }
+            let action = &args_code[0];
+            Ok(quote! {
+                #receiver.and(#action)
+            })
+        }
+        "then_pass_to" => {
+            if args_code.len() != 1 {
+                return Err("then_pass_to() expects exactly 1 argument".to_string());
+            }
+            let action = &args_code[0];
+            Ok(quote! {
+                #receiver.then_pass_to(#action)
+            })
+        }
+        // Math operations
+        "divide" => {
+            if args_code.len() != 1 {
+                return Err("divide() expects exactly 1 argument".to_string());
+            }
+            let divisor = &args_code[0];
+            Ok(quote! {
+                #receiver.divide(#divisor)
+            })
+        }
+        "minus" => {
+            if args_code.len() != 1 {
+                return Err("minus() expects exactly 1 argument".to_string());
+            }
+            let value = &args_code[0];
+            Ok(quote! {
+                #receiver.minus(#value)
+            })
+        }
+        "plus" => {
+            if args_code.len() != 1 {
+                return Err("plus() expects exactly 1 argument".to_string());
+            }
+            let value = &args_code[0];
+            Ok(quote! {
+                #receiver.plus(#value)
+            })
+        }
+        "multiply" => {
+            if args_code.len() != 1 {
+                return Err("multiply() expects exactly 1 argument".to_string());
+            }
+            let value = &args_code[0];
+            Ok(quote! {
+                #receiver.multiply(#value)
+            })
+        }
+        "clamp" => {
+            if args_code.len() != 2 {
+                return Err("clamp() expects exactly 2 arguments (min, max)".to_string());
+            }
+            let min = &args_code[0];
+            let max = &args_code[1];
+            Ok(quote! {
+                #receiver.clamp(#min, #max)
+            })
+        }
+        // Delay/timing methods
+        "delay_off" => {
+            if args_code.len() != 1 {
+                return Err("delay_off() expects exactly 1 argument".to_string());
+            }
+            let delay = &args_code[0];
+            Ok(quote! {
+                #receiver.delay_off(#delay)
+            })
+        }
+        "throttle" => {
+            if args_code.len() != 1 {
+                return Err("throttle() expects exactly 1 argument".to_string());
+            }
+            let interval = &args_code[0];
+            Ok(quote! {
+                #receiver.throttle(#interval)
+            })
+        }
+        // Default case - pass through to the receiver object
+        _ => {
+            let method_ident = format_ident!("{}", method);
+            Ok(quote! {
+                #receiver.#method_ident(#(#args_code),*)
+            })
+        }
     }
 }

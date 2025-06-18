@@ -331,7 +331,7 @@ fn parse_unary_expression(input: ParseStream) -> Result<Expression> {
     }
 }
 
-/// Parse postfix expression (method calls, field access, etc.)
+/// Parse postfix expressions (method calls, field access, etc.)
 fn parse_postfix_expression(input: ParseStream) -> Result<Expression> {
     let mut expr = parse_primary_expression(input)?;
 
@@ -344,7 +344,11 @@ fn parse_postfix_expression(input: ParseStream) -> Result<Expression> {
                 // Method call
                 let content;
                 parenthesized!(content in input);
-                let args = parse_expression_list(&content)?;
+                let args = if content.is_empty() {
+                    Vec::new()
+                } else {
+                    parse_expression_list(&content)?
+                };
 
                 expr = Expression::MethodCall {
                     receiver: Box::new(expr),
@@ -358,6 +362,36 @@ fn parse_postfix_expression(input: ParseStream) -> Result<Expression> {
                     field: method.to_string(),
                 };
             }
+        } else if input.peek(token::Paren) {
+            // Function call
+            let content;
+            parenthesized!(content in input);
+            let args = if content.is_empty() {
+                Vec::new()
+            } else {
+                parse_expression_list(&content)?
+            };
+
+            // Convert function call to method call if needed
+            if let Expression::Variable(func_name) = expr {
+                expr = Expression::Call {
+                    function: func_name,
+                    args,
+                };
+            } else {
+                return Err(input.error("Invalid function call"));
+            }
+        } else if input.peek(token::Bracket) {
+            // Array indexing
+            let content;
+            bracketed!(content in input);
+            let index = parse_expression(&content)?;
+
+            expr = Expression::MethodCall {
+                receiver: Box::new(expr),
+                method: "index".to_string(),
+                args: vec![index],
+            };
         } else {
             break;
         }
@@ -366,97 +400,99 @@ fn parse_postfix_expression(input: ParseStream) -> Result<Expression> {
     Ok(expr)
 }
 
-/// Parse primary expression
+/// Parse primary expressions (literals, variables, function calls, etc.)
 fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
     let lookahead = input.lookahead1();
 
-    if lookahead.peek(Lit) {
+    if lookahead.peek(syn::LitStr)
+        || lookahead.peek(syn::LitInt)
+        || lookahead.peek(syn::LitFloat)
+        || lookahead.peek(syn::LitBool)
+    {
         let lit: Lit = input.parse()?;
         Ok(Expression::Literal(parse_literal(lit)?))
     } else if lookahead.peek(Ident) {
         let ident: Ident = input.parse()?;
+        let ident_str = ident.to_string();
 
-        if input.peek(token::Paren) {
-            // Function call
-            let content;
-            parenthesized!(content in input);
-            let args = parse_expression_list(&content)?;
+        // Check for enum variants (Type::Variant)
+        if input.peek(token::PathSep) {
+            input.parse::<token::PathSep>()?;
 
-            Ok(Expression::Call {
-                function: ident.to_string(),
-                args,
-            })
-        } else {
-            // Variable reference
-            Ok(Expression::Variable(ident.to_string()))
+            if input.peek(Ident) || (input.peek(token::Brace) || input.peek(token::Paren)) {
+                let variant: Ident = if input.peek(Ident) {
+                    input.parse()?
+                } else {
+                    return Err(input.error("Expected enum variant name"));
+                };
+
+                // Check for struct-like variant with fields { field: value }
+                if input.peek(token::Brace) {
+                    let content;
+                    braced!(content in input);
+
+                    let mut fields = Vec::new();
+                    while !content.is_empty() {
+                        let field_name: Ident = content.parse()?;
+                        content.parse::<token::Colon>()?;
+                        let field_value = parse_expression(&content)?;
+
+                        fields.push((field_name.to_string(), field_value));
+
+                        if content.peek(token::Comma) {
+                            content.parse::<token::Comma>()?;
+                        }
+                    }
+
+                    // For now, represent struct variants as method calls with named arguments
+                    return Ok(Expression::Call {
+                        function: format!("{ident_str}::{variant}"),
+                        args: fields
+                            .into_iter()
+                            .map(|(name, value)| {
+                                // Create a tuple expression for named fields
+                                Expression::Tuple(vec![
+                                    Expression::Literal(Literal::String(name)),
+                                    value,
+                                ])
+                            })
+                            .collect(),
+                    });
+                }
+
+                // Simple enum variant
+                return Ok(Expression::Call {
+                    function: format!("{ident_str}::{variant}"),
+                    args: vec![],
+                });
+            }
         }
+
+        Ok(Expression::Variable(ident_str))
     } else if lookahead.peek(token::Paren) {
-        // Parenthesized expression or tuple
         let content;
         parenthesized!(content in input);
-
         if content.is_empty() {
-            // Unit literal
             Ok(Expression::Literal(Literal::Unit))
         } else {
-            let exprs = parse_expression_list(&content)?;
-            if exprs.len() == 1 {
-                // Parenthesized expression
-                Ok(exprs.into_iter().next().unwrap())
-            } else {
-                // Tuple
-                Ok(Expression::Tuple(exprs))
-            }
+            parse_expression(&content)
         }
     } else if lookahead.peek(token::Bracket) {
-        // Array literal
         let content;
         bracketed!(content in input);
-        let exprs = parse_expression_list(&content)?;
+        let exprs = if content.is_empty() {
+            Vec::new()
+        } else {
+            parse_expression_list(&content)?
+        };
         Ok(Expression::Array(exprs))
+    } else if lookahead.peek(token::If) {
+        parse_if_expression(input)
+    } else if lookahead.peek(token::Match) {
+        parse_match_expression(input)
     } else if lookahead.peek(token::Brace) {
-        // Block expression
         let block = parse_block(input)?;
         Ok(Expression::Block(block))
-    } else if lookahead.peek(token::If) {
-        // If expression
-        input.parse::<token::If>()?;
-        let condition = Box::new(parse_expression(input)?);
-        let then_branch = Box::new(parse_expression(input)?);
-        let else_branch = if input.peek(token::Else) {
-            input.parse::<token::Else>()?;
-            Some(Box::new(parse_expression(input)?))
-        } else {
-            None
-        };
-
-        Ok(Expression::If {
-            condition,
-            then_branch,
-            else_branch,
-        })
-    } else if lookahead.peek(token::Match) {
-        // Match expression
-        input.parse::<token::Match>()?;
-        let expr = Box::new(parse_expression(input)?);
-
-        let content;
-        braced!(content in input);
-
-        let mut arms = Vec::new();
-        while !content.is_empty() {
-            let pattern = parse_pattern(&content)?;
-            content.parse::<token::FatArrow>()?;
-            let body = parse_expression(&content)?;
-
-            arms.push(MatchArm { pattern, body });
-
-            if content.peek(token::Comma) {
-                content.parse::<token::Comma>()?;
-            }
-        }
-
-        Ok(Expression::Match { expr, arms })
     } else {
         Err(lookahead.error())
     }
@@ -521,4 +557,47 @@ fn parse_literal(lit: Lit) -> Result<Literal> {
         Lit::Bool(b) => Ok(Literal::Bool(b.value())),
         _ => Err(syn::Error::new_spanned(lit, "Unsupported literal type")),
     }
+}
+
+/// Parse an if expression
+fn parse_if_expression(input: ParseStream) -> Result<Expression> {
+    input.parse::<token::If>()?;
+    let condition = Box::new(parse_expression(input)?);
+    let then_branch = Box::new(parse_expression(input)?);
+    let else_branch = if input.peek(token::Else) {
+        input.parse::<token::Else>()?;
+        Some(Box::new(parse_expression(input)?))
+    } else {
+        None
+    };
+
+    Ok(Expression::If {
+        condition,
+        then_branch,
+        else_branch,
+    })
+}
+
+/// Parse a match expression
+fn parse_match_expression(input: ParseStream) -> Result<Expression> {
+    input.parse::<token::Match>()?;
+    let expr = Box::new(parse_expression(input)?);
+
+    let content;
+    braced!(content in input);
+
+    let mut arms = Vec::new();
+    while !content.is_empty() {
+        let pattern = parse_pattern(&content)?;
+        content.parse::<token::FatArrow>()?;
+        let body = parse_expression(&content)?;
+
+        arms.push(MatchArm { pattern, body });
+
+        if content.peek(token::Comma) {
+            content.parse::<token::Comma>()?;
+        }
+    }
+
+    Ok(Expression::Match { expr, arms })
 }
