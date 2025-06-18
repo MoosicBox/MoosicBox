@@ -36,20 +36,152 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
+    determine-affected-packages:
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.set-matrix.outputs.matrix }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Get changed files
+              id: changed-files
+              run: |
+                  if [ "${{ github.event_name }}" == "pull_request" ]; then
+                      # For pull requests, get changed files between base and head
+                      echo "Pull request: comparing ${{ github.event.pull_request.base.sha }} to ${{ github.event.pull_request.head.sha }}"
+                      CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+                  elif [ "${{ github.event_name }}" == "push" ]; then
+                      # For pushes, get changed files between the before and after commits
+                      # This handles multiple commits being pushed at once
+                      BEFORE_SHA="${{ github.event.before }}"
+                      AFTER_SHA="${{ github.event.after }}"
+                      FORCED="${{ github.event.forced }}"
+
+                      echo "Push event: before=$BEFORE_SHA after=$AFTER_SHA forced=$FORCED"
+
+                      # If this is the first push to a new branch, github.event.before will be all zeros
+                      if [ "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]; then
+                          # For new branches, compare against the default branch
+                          DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "master")
+                          echo "New branch detected, comparing against origin/$DEFAULT_BRANCH"
+                          if ! git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA; then
+                              echo "Error: Could not compare against origin/$DEFAULT_BRANCH...$AFTER_SHA"
+                              echo "This likely means the git history is incomplete or the branch doesn't exist"
+                              exit 1
+                          fi
+                          CHANGED_FILES=$(git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA)
+                      elif [ "$FORCED" == "true" ]; then
+                          # Handle force pushes - the before commit is invalidated
+                          echo "Force push detected - before commit $BEFORE_SHA is no longer valid"
+
+                          # Strategy: Compare against the default branch to get all changes in this branch
+                          DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "master")
+
+                          # If we're on the default branch, we need a different strategy
+                          if [ "${{ github.ref_name }}" == "$DEFAULT_BRANCH" ]; then
+                              echo "Force push on default branch - comparing against recent history"
+                              # For force pushes on default branch, compare against the merge-base with the remote
+                              # This gets changes that are unique to this push
+                              MERGE_BASE=$(git merge-base $AFTER_SHA origin/$DEFAULT_BRANCH 2>/dev/null || echo "")
+                              if [ -n "$MERGE_BASE" ] && [ "$MERGE_BASE" != "$AFTER_SHA" ]; then
+                                  echo "Using merge-base: $MERGE_BASE..$AFTER_SHA"
+                                  CHANGED_FILES=$(git diff --name-only $MERGE_BASE..$AFTER_SHA)
+                              else
+                                  echo "Warning: Could not determine merge-base, assuming all packages affected"
+                                  CHANGED_FILES="packages/"
+                              fi
+                          else
+                              echo "Force push on feature branch - comparing against origin/$DEFAULT_BRANCH"
+                              CHANGED_FILES=$(git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA)
+                          fi
+                      else
+                          # Normal push: compare the range of commits
+                          echo "Comparing commit range: $BEFORE_SHA..$AFTER_SHA"
+                          if ! git diff --name-only $BEFORE_SHA..$AFTER_SHA >/dev/null 2>&1; then
+                              echo "Error: Could not use commit range $BEFORE_SHA..$AFTER_SHA"
+                              echo "This likely means one or both commits are not available in the git history"
+                              echo "This could be due to a force push that invalidated the before commit"
+                              echo "Consider treating this as a force push scenario"
+                              exit 1
+                          fi
+                          CHANGED_FILES=$(git diff --name-only $BEFORE_SHA..$AFTER_SHA)
+                      fi
+                  else
+                      # For workflow_dispatch, assume all packages are affected
+                      echo "Workflow dispatch: assuming all packages affected"
+                      CHANGED_FILES="packages/"
+                  fi
+                  echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+                  echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+                  echo "EOF" >> $GITHUB_OUTPUT
+                  echo "Changed files:"
+                  echo "$CHANGED_FILES"
+
+            - name: Install Rust
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Build clippier
+              run: |
+                  cd packages/clippier
+                  cargo build --release
+
+            - name: Determine affected packages
+              id: affected-packages
+              run: |
+                  # Convert changed files to comma-separated list for clippier
+                  CHANGED_FILES="${{ steps.changed-files.outputs.changed_files }}"
+                  CHANGED_FILES_CSV=$(echo "$CHANGED_FILES" | tr '\n' ',' | sed 's/,$//')
+
+                  echo "Checking affected packages for files: $CHANGED_FILES_CSV"
+
+                  # Get affected packages using clippier
+                  AFFECTED_PACKAGES=$(./target/release/clippier affected-packages . --changed-files "$CHANGED_FILES_CSV" --output json)
+                  echo "affected_packages=$AFFECTED_PACKAGES" >> $GITHUB_OUTPUT
+                  echo "Affected packages: $AFFECTED_PACKAGES"
+
+            - name: Set matrix
+              id: set-matrix
+              run: |
+                  # Parse affected packages and create matrix
+                  AFFECTED_PACKAGES='${{ steps.affected-packages.outputs.affected_packages }}'
+
+                  # Define the packages that have Docker images (mapping from package name to docker info)
+                  DOCKER_PACKAGES='{"moosicbox_server": {"name": "server", "dockerfile": "packages/server/Server.Dockerfile"}, "moosicbox_tunnel_server": {"name": "tunnel_server", "dockerfile": "packages/tunnel_server/TunnelServer.Dockerfile"}, "moosicbox_load_balancer": {"name": "load_balancer", "dockerfile": "packages/load_balancer/LoadBalancer.Dockerfile"}}'
+
+                  # Extract affected package names from the JSON
+                  AFFECTED_PACKAGE_NAMES=$(echo "$AFFECTED_PACKAGES" | jq -r '.affected_packages[]')
+
+                  # Build the matrix with packages that both have Docker images and are affected
+                  MATRIX_PROJECTS="[]"
+                  for pkg in $AFFECTED_PACKAGE_NAMES; do
+                      DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg\" // empty")
+                      if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ]; then
+                          MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_INFO]")
+                      fi
+                  done
+
+                  # If no packages are affected, create an empty matrix
+                  if [ $(echo "$MATRIX_PROJECTS" | jq 'length') -eq 0 ]; then
+                      echo "No Docker packages are affected by the changes"
+                      MATRIX='{"include": []}'
+                  else
+                      MATRIX="{\"include\": $MATRIX_PROJECTS}"
+                  fi
+
+                  # Ensure the JSON is properly formatted and compact
+                  MATRIX=$(echo "$MATRIX" | jq -c .)
+
+                  echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+                  echo "Generated matrix: $MATRIX"
+
     build:
+        needs: determine-affected-packages
+        if: '${{ needs.determine-affected-packages.outputs.matrix != ''{"include": []}'' }}'
         strategy:
             fail-fast: false
-
-            matrix:
-                project:
-                    - name: server
-                      dockerfile: packages/server/Server.Dockerfile
-
-                    - name: tunnel_server
-                      dockerfile: packages/tunnel_server/TunnelServer.Dockerfile
-
-                    - name: load_balancer
-                      dockerfile: packages/load_balancer/LoadBalancer.Dockerfile
+            matrix: ${{ fromJson(needs.determine-affected-packages.outputs.matrix) }}
 
         runs-on: ubuntu-latest
 
@@ -69,9 +201,9 @@ jobs:
             - name: Generate Dockerfile
               shell: bash
               run: |
-                  ./generate-dockerfiles.sh ${{ matrix.project.name }}
+                  ./generate-dockerfiles.sh ${{ matrix.name }}
 
             - name: Build Dockerfile
               shell: bash
               run: |
-                  docker build . -f ${{ matrix.project.dockerfile }}
+                  docker build . -f ${{ matrix.dockerfile }}
