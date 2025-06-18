@@ -72,40 +72,66 @@ jobs:
                               exit 1
                           fi
                           CHANGED_FILES=$(git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA)
-                      elif [ "$FORCED" == "true" ]; then
-                          # Handle force pushes - the before commit is invalidated
-                          echo "Force push detected - before commit $BEFORE_SHA is no longer valid"
-
-                          # Strategy: Compare against the default branch to get all changes in this branch
-                          DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "master")
-
-                          # If we're on the default branch, we need a different strategy
-                          if [ "${{ github.ref_name }}" == "$DEFAULT_BRANCH" ]; then
-                              echo "Force push on default branch - comparing against recent history"
-                              # For force pushes on default branch, compare against the merge-base with the remote
-                              # This gets changes that are unique to this push
-                              MERGE_BASE=$(git merge-base $AFTER_SHA origin/$DEFAULT_BRANCH 2>/dev/null || echo "")
-                              if [ -n "$MERGE_BASE" ] && [ "$MERGE_BASE" != "$AFTER_SHA" ]; then
-                                  echo "Using merge-base: $MERGE_BASE..$AFTER_SHA"
-                                  CHANGED_FILES=$(git diff --name-only $MERGE_BASE..$AFTER_SHA)
-                              else
-                                  echo "Warning: Could not determine merge-base, assuming all packages affected"
-                                  CHANGED_FILES="packages/"
-                              fi
+                      elif [ "$FORCED" == "true" ] || ! git diff --name-only $BEFORE_SHA..$AFTER_SHA >/dev/null 2>&1; then
+                          # Handle force pushes or invalidated before commits
+                          if [ "$FORCED" == "true" ]; then
+                              echo "Force push detected - before commit $BEFORE_SHA is no longer valid"
                           else
-                              echo "Force push on feature branch - comparing against origin/$DEFAULT_BRANCH"
-                              CHANGED_FILES=$(git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA)
+                              echo "Before commit $BEFORE_SHA is not available - likely due to force push"
+                          fi
+
+                          # Try to find a valid commit from recent successful workflow runs
+                          echo "Searching through recent successful workflow runs..."
+                          FOUND_VALID_COMMIT=false
+                          LAST_SUCCESS_SHA=""
+
+                          # Get up to 10 recent successful workflow runs
+                          WORKFLOW_RUNS=$(curl -s \
+                              -H "Authorization: Bearer ${{ github.token }}" \
+                              -H "Accept: application/vnd.github.v3+json" \
+                              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-docker-images.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=10")
+
+                          # Walk through each run until we find a valid commit
+                          for i in $(seq 0 9); do
+                              RUN_SHA=$(echo "$WORKFLOW_RUNS" | jq -r ".workflow_runs[$i].head_sha // empty")
+                              if [ -z "$RUN_SHA" ] || [ "$RUN_SHA" == "null" ] || [ "$RUN_SHA" == "empty" ]; then
+                                  echo "No more workflow runs to check (checked $((i)) runs)"
+                                  break
+                              fi
+
+                              if [ "$RUN_SHA" == "$AFTER_SHA" ]; then
+                                  echo "Skipping current commit $RUN_SHA"
+                                  continue
+                              fi
+
+                              echo "Checking if commit $RUN_SHA is available in git history..."
+                              if git cat-file -e $RUN_SHA 2>/dev/null; then
+                                  echo "Found valid commit from workflow run: $RUN_SHA"
+                                  LAST_SUCCESS_SHA="$RUN_SHA"
+                                  FOUND_VALID_COMMIT=true
+                                  break
+                              else
+                                  echo "Commit $RUN_SHA not available in git history, trying next..."
+                              fi
+                          done
+
+                          if [ "$FOUND_VALID_COMMIT" == "true" ]; then
+                              echo "Comparing against last valid workflow run: $LAST_SUCCESS_SHA..$AFTER_SHA"
+                              CHANGED_FILES=$(git diff --name-only $LAST_SUCCESS_SHA..$AFTER_SHA)
+                          else
+                              echo "Could not find any valid commits from recent workflow runs, using branch comparison fallback"
+                              DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "master")
+                              if [ "${{ github.ref_name }}" == "$DEFAULT_BRANCH" ]; then
+                                  echo "Force push on default branch - assuming all packages affected"
+                                  CHANGED_FILES="packages/"
+                              else
+                                  echo "Comparing against origin/$DEFAULT_BRANCH"
+                                  CHANGED_FILES=$(git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA)
+                              fi
                           fi
                       else
                           # Normal push: compare the range of commits
                           echo "Comparing commit range: $BEFORE_SHA..$AFTER_SHA"
-                          if ! git diff --name-only $BEFORE_SHA..$AFTER_SHA >/dev/null 2>&1; then
-                              echo "Error: Could not use commit range $BEFORE_SHA..$AFTER_SHA"
-                              echo "This likely means one or both commits are not available in the git history"
-                              echo "This could be due to a force push that invalidated the before commit"
-                              echo "Consider treating this as a force push scenario"
-                              exit 1
-                          fi
                           CHANGED_FILES=$(git diff --name-only $BEFORE_SHA..$AFTER_SHA)
                       fi
                   else
