@@ -853,8 +853,14 @@ fn generate_dockerfile(
             .unwrap_or(target_package)
     );
     if !dependencies.iter().any(|(name, _)| name == target_package) {
-        dependencies.push((target_package.to_string(), default_target_path));
+        dependencies.push((target_package.to_string(), default_target_path.clone()));
     }
+
+    // Get target package path
+    let target_package_path = dependencies
+        .iter()
+        .find(|(name, _)| name == target_package)
+        .map_or_else(|| default_target_path.as_str(), |(_, path)| path.as_str());
 
     // Create the Dockerfile content
     let dockerfile_content = generate_dockerfile_content(
@@ -866,6 +872,7 @@ fn generate_dockerfile(
         port,
         build_args,
         workspace_root,
+        target_package_path,
     )?;
 
     // Write the Dockerfile
@@ -919,6 +926,7 @@ fn generate_dockerfile_content(
     port: Option<u16>,
     build_args: Option<&str>,
     workspace_root: &Path,
+    target_package_path: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::fmt::Write as _;
 
@@ -1035,19 +1043,20 @@ fn generate_dockerfile_content(
     }
     content.push('\n');
 
-    // Handle special cases for packages with build.rs
-    let default_target_path = format!("packages/{target_package}");
-    let target_package_path = dependencies
-        .iter()
-        .find(|(name, _)| name == target_package)
-        .map_or_else(|| default_target_path.as_str(), |(_, path)| path.as_str());
+    // Copy build.rs for target package if it exists
+    writeln!(content, "# Copy build.rs for target package if it exists")?;
 
-    // Only copy build.rs if it exists for the target package
-    writeln!(
-        content,
-        "# Copy build.rs if it exists\nRUN [ -f {target_package_path}/build.rs ] && cp {target_package_path}/build.rs {target_package_path}/build.rs || true"
-    )?;
+    // Check if build.rs exists for the target package
+    let build_rs_path = workspace_root.join(target_package_path).join("build.rs");
+    if build_rs_path.exists() {
+        writeln!(
+            content,
+            "COPY {target_package_path}/build.rs {target_package_path}/build.rs"
+        )?;
+    }
     content.push('\n');
+
+    // Handle special cases for packages with build.rs
 
     // Create temporary lib file for stubbing
     writeln!(content, "RUN touch temp_lib.rs\n")?;
@@ -1074,16 +1083,33 @@ fn generate_dockerfile_content(
 
     // Handle nested packages (models, api, etc.) with correct relative paths (exclude target package)
     writeln!(content, "# Handle nested packages with correct lib paths")?;
+
     for (name, path) in dependencies {
         if name != target_package {
-            // Exclude target package from lib stubbing
+            // Check if this package has an existing [lib] section
+            let cargo_toml_path = workspace_root.join(path).join("Cargo.toml");
+            let has_existing_lib = std::fs::read_to_string(&cargo_toml_path)
+                .is_ok_and(|toml_content| toml_content.contains("[lib]"));
             let depth = path.matches('/').count();
-            if depth > 1 {
+
+            if has_existing_lib {
+                // Package has existing [lib] section - append path to it
                 let relative_path = "../".repeat(depth + 1) + "temp_lib.rs";
                 writeln!(
                     content,
-                    "RUN printf \"\\n\\n[lib]\\npath=\\\"{relative_path}\\\"\" >> \"{path}/Cargo.toml\""
+                    "RUN if [ -f {path}/Cargo.toml ]; then \\
+    sed -i '/^\\[lib\\]/a path = \"{relative_path}\"' \"{path}/Cargo.toml\"; \\
+fi"
                 )?;
+            } else {
+                // Package doesn't have [lib] section - add new one
+                if depth > 1 {
+                    let relative_path = "../".repeat(depth + 1) + "temp_lib.rs";
+                    writeln!(
+                        content,
+                        "RUN printf \"\\n\\n[lib]\\npath=\\\"{relative_path}\\\"\" >> \"{path}/Cargo.toml\""
+                    )?;
+                }
             }
         }
     }
@@ -1100,8 +1126,8 @@ fn generate_dockerfile_content(
 
     // Environment variables
     writeln!(content, "# Environment setup")?;
-    if let Some(args) = build_args {
-        for arg in args.split(',') {
+    if let Some(build_args) = build_args {
+        for arg in build_args.split(',') {
             let arg = arg.trim();
             writeln!(content, "ARG {arg}\nENV {arg}=${{{arg}}}")?;
         }
