@@ -448,6 +448,27 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 hyperchad_actions::ActionType::set_background_str_id(#background.to_string(), &#target.to_string())
             })
         }
+        "set_background_self" => {
+            if args_code.len() != 1 {
+                return Err("set_background() expects exactly 1 argument".to_string());
+            }
+            let background = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::set_background_self(#background.to_string())
+            })
+        }
+
+        // Visibility functions
+        "set_visibility_child_class" => {
+            if args_code.len() != 2 {
+                return Err("set_visibility_child_class() expects exactly 2 arguments".to_string());
+            }
+            let visibility = &args_code[0];
+            let target = &args_code[1];
+            Ok(quote! {
+                hyperchad_actions::ActionType::set_visibility_child_class(#visibility, &#target.to_string())
+            })
+        }
 
         // Getter functions
         "get_visibility" => {

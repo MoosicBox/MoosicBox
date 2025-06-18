@@ -3,9 +3,7 @@
 use hyperchad::{
     actions::{
         ActionType,
-        logic::{
-            get_data_attr_value_self, get_event_value, get_visibility_self, get_visibility_str_id,
-        },
+        logic::{get_data_attr_value_self, get_event_value},
     },
     template::{self as hyperchad_template, Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow, Visibility},
@@ -355,12 +353,12 @@ pub fn album_page_tracks_table_body(
                 direction=row
                 border-radius=5
                 data-track-id=(track.track_id)
-                fx-hover=(
-                    ActionType::set_background_self("#444")
-                        .and(ActionType::set_visibility_child_class(Visibility::Hidden, "track-number"))
-                        .and(ActionType::set_visibility_child_class(Visibility::Hidden, "track-playing"))
-                        .and(ActionType::set_visibility_child_class(Visibility::Visible, "play-button"))
-                )
+                fx-hover=(fx({
+                    set_background_self("#444");
+                    set_visibility_child_class(Visibility::Hidden, "track-number");
+                    set_visibility_child_class(Visibility::Hidden, "track-playing");
+                    set_visibility_child_class(Visibility::Visible, "play-button");
+                }))
                 fx-event=(ActionType::on_event(
                     "play-track",
                     get_event_value()
@@ -629,7 +627,7 @@ pub fn album_display(
                 width=(size)
                 height=(size)
                 position=relative
-                fx-hover=(ActionType::show_last_child())
+                fx-hover=(fx(show_last_child()))
             {
                 (album_cover_img_from_album(host, album, size))
                 div
@@ -799,11 +797,11 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             height=(button_size)
                             justify-content=center
                             align-items=center
-                            fx-click=(
-                                get_visibility_str_id("albums-menu")
-                                    .eq(Visibility::Hidden)
-                                    .then(ActionType::show_str_id("albums-menu"))
-                            )
+                            fx-click=(fx({
+                                if get_visibility_str_id("albums-menu") == hidden() {
+                                    show("albums-menu");
+                                }
+                            }))
                         {
                             image
                                 width=(icon_size)
@@ -819,11 +817,11 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             background=(DARK_BACKGROUND)
                             border-radius=5
                             direction=row
-                            fx-click-outside=(
-                                get_visibility_self()
-                                    .eq(Visibility::Visible)
-                                    .then(ActionType::hide_self())
-                            )
+                            fx-click-outside=(fx({
+                                if get_visibility_self() == visible() {
+                                    hide_self();
+                                }
+                            }))
                         {
                             div {
                                 div {
