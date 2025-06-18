@@ -147,6 +147,19 @@ enum Commands {
         #[arg(long, default_value = "true")]
         generate_dockerignore: bool,
     },
+    AffectedPackages {
+        /// Path to the workspace root
+        workspace_root: PathBuf,
+        /// List of changed files (paths relative to workspace root)
+        #[arg(long, value_delimiter = ',')]
+        changed_files: Vec<String>,
+        /// Package to check if affected (optional - if not provided, returns all affected packages)
+        #[arg(long)]
+        target_package: Option<String>,
+        /// Output format
+        #[arg(long, value_enum, default_value_t=OutputType::Json)]
+        output: OutputType,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -238,6 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         CommandType::Features => unimplemented!(),
                         CommandType::WorkspaceDeps => unimplemented!(),
                         CommandType::GenerateDockerfile => unimplemented!(),
+                        CommandType::AffectedPackages => unimplemented!(),
                     })
                     .and_then(|x| x.as_str())
                     .map(ToString::to_string)
@@ -428,6 +442,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )?;
 
             println!("Generated Dockerfile at: {}", output.display());
+        }
+        Commands::AffectedPackages {
+            workspace_root,
+            changed_files,
+            target_package,
+            output,
+        } => {
+            let workspace_path = PathBuf::from_str(&workspace_root.to_string_lossy())?;
+            let affected_packages = find_affected_packages(&workspace_path, &changed_files)?;
+
+            match target_package {
+                Some(package) => {
+                    // Check if specific package is affected
+                    let is_affected = affected_packages.contains(&package);
+                    match output {
+                        OutputType::Json => {
+                            println!(
+                                "{}",
+                                serde_json::json!({
+                                    "package": package,
+                                    "affected": is_affected,
+                                    "all_affected": affected_packages
+                                })
+                            );
+                        }
+                        OutputType::Raw => {
+                            println!("{is_affected}");
+                        }
+                    }
+                }
+                None => {
+                    // Return all affected packages
+                    match output {
+                        OutputType::Json => {
+                            println!(
+                                "{}",
+                                serde_json::json!({
+                                    "affected_packages": affected_packages
+                                })
+                            );
+                        }
+                        OutputType::Raw => {
+                            for package in affected_packages {
+                                println!("{package}");
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1802,6 +1865,166 @@ pub struct ClippierConf {
     env: Option<HashMap<String, ClippierEnv>>,
     parallelization: Option<ParallelizationConfig>,
     nightly: Option<bool>,
+}
+
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+fn find_affected_packages(
+    workspace_root: &Path,
+    changed_files: &[String],
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    use std::collections::{HashMap, HashSet, VecDeque};
+
+    log::trace!("🔍 Finding affected packages for changed files: {changed_files:?}");
+
+    // First, load the workspace and get all members
+    let workspace_cargo_path = workspace_root.join("Cargo.toml");
+    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_value: Value = toml::from_str(&workspace_source)?;
+
+    let workspace_members = workspace_value
+        .get("workspace")
+        .and_then(|x| x.get("members"))
+        .and_then(|x| x.as_array())
+        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+        .ok_or("No workspace members found")?;
+
+    log::trace!("🏢 Found {} workspace members", workspace_members.len());
+
+    // Create a map of package name -> package path and package_path -> package name
+    let mut package_name_to_path = HashMap::new();
+    let mut package_path_to_name = HashMap::new();
+    let mut package_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+
+    for member_path in workspace_members {
+        let full_path = workspace_root.join(member_path);
+        let cargo_path = full_path.join("Cargo.toml");
+
+        if !cargo_path.exists() {
+            log::trace!("⚠️  Skipping {member_path}: Cargo.toml not found");
+            continue;
+        }
+
+        log::trace!("📄 Processing package: {member_path}");
+        let source = std::fs::read_to_string(&cargo_path)?;
+        let value: Value = toml::from_str(&source)?;
+
+        // Get package name
+        if let Some(package_name) = value
+            .get("package")
+            .and_then(|x| x.get("name"))
+            .and_then(|x| x.as_str())
+        {
+            log::trace!("📦 Package name: {package_name} -> {member_path}");
+            package_name_to_path.insert(package_name.to_string(), member_path.to_string());
+            package_path_to_name.insert(member_path.to_string(), package_name.to_string());
+
+            // Extract dependencies that are workspace members
+            let mut deps = Vec::new();
+
+            // Check regular dependencies
+            if let Some(dependencies) = value.get("dependencies").and_then(|x| x.as_table()) {
+                for (dep_name, dep_value) in dependencies {
+                    if is_workspace_dependency(dep_value) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            // Check dev dependencies
+            if let Some(dev_dependencies) = value.get("dev-dependencies").and_then(|x| x.as_table())
+            {
+                for (dep_name, dep_value) in dev_dependencies {
+                    if is_workspace_dependency(dep_value) && !deps.contains(dep_name) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            // Check build dependencies
+            if let Some(build_dependencies) =
+                value.get("build-dependencies").and_then(|x| x.as_table())
+            {
+                for (dep_name, dep_value) in build_dependencies {
+                    if is_workspace_dependency(dep_value) && !deps.contains(dep_name) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            log::trace!("📊 Dependencies for {package_name}: {deps:?}");
+            package_dependencies.insert(package_name.to_string(), deps);
+        }
+    }
+
+    // Find packages directly affected by changed files
+    let mut directly_affected_packages = HashSet::new();
+
+    for changed_file in changed_files {
+        let changed_path = PathBuf::from(changed_file);
+
+        // Check if the changed file belongs to a workspace package
+        for (package_path, package_name) in &package_path_to_name {
+            let package_path_buf = PathBuf::from(package_path);
+
+            // Check if the changed file is within this package's directory
+            if changed_path.starts_with(&package_path_buf) {
+                log::trace!("📝 File {changed_file} affects package {package_name}");
+                directly_affected_packages.insert(package_name.clone());
+            }
+        }
+
+        // Also check if it's a workspace-level file that affects all packages
+        if changed_file == "Cargo.toml" || changed_file == "Cargo.lock" {
+            log::trace!("📝 Workspace-level file {changed_file} affects all packages");
+            for package_name in package_name_to_path.keys() {
+                directly_affected_packages.insert(package_name.clone());
+            }
+        }
+    }
+
+    log::trace!("🎯 Directly affected packages: {directly_affected_packages:?}");
+
+    // Now find all packages that depend on the directly affected packages (transitive dependencies)
+    let mut all_affected_packages = directly_affected_packages.clone();
+    let mut queue = VecDeque::new();
+
+    // Add all directly affected packages to the queue
+    for package in &directly_affected_packages {
+        queue.push_back(package.clone());
+    }
+
+    // Build reverse dependency map (package -> packages that depend on it)
+    let mut reverse_deps: HashMap<String, Vec<String>> = HashMap::new();
+    for (package, deps) in &package_dependencies {
+        for dep in deps {
+            reverse_deps
+                .entry(dep.clone())
+                .or_default()
+                .push(package.clone());
+        }
+    }
+
+    // Process the queue to find all transitive dependents
+    while let Some(current_package) = queue.pop_front() {
+        if let Some(dependents) = reverse_deps.get(&current_package) {
+            for dependent in dependents {
+                if !all_affected_packages.contains(dependent) {
+                    log::trace!(
+                        "🔄 Package {dependent} depends on affected package {current_package}"
+                    );
+                    all_affected_packages.insert(dependent.clone());
+                    queue.push_back(dependent.clone());
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<String> = all_affected_packages.into_iter().collect();
+    result.sort();
+
+    log::trace!("🏁 Final affected packages: {result:?}");
+
+    Ok(result)
 }
 
 fn get_dependency_default_features(dep_value: &Value) -> Option<bool> {
