@@ -944,3 +944,336 @@ fn test_dsl_in_template_with_multiple_actions() {
         _ => panic!("Expected Multi ActionType for block syntax with multiple actions"),
     }
 }
+
+#[test]
+fn test_dsl_macro_single_action() {
+    // Test actions_dsl! macro with single action
+    let actions = actions_dsl! {
+        hide("test-modal")
+    };
+
+    assert_eq!(actions.len(), 1);
+
+    // Verify the DSL-generated action
+    match &actions[0].action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("test-modal".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action from DSL macro"),
+    }
+}
+
+#[test]
+fn test_dsl_macro_multiple_actions() {
+    // Test actions_dsl! macro with multiple sequential actions
+    let actions = actions_dsl! {
+        show("success-dialog");
+        log("Operation completed");
+        custom("refresh-data");
+        navigate("/dashboard");
+    };
+
+    assert_eq!(actions.len(), 4);
+
+    // Verify first action (show)
+    match &actions[0].action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("success-dialog".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+        }
+        _ => panic!("Expected Style action for show from DSL"),
+    }
+
+    // Verify second action (log)
+    match &actions[1].action {
+        ActionType::Log { message, level } => {
+            assert_eq!(message, "Operation completed");
+            assert_eq!(*level, LogLevel::Info);
+        }
+        _ => panic!("Expected Log action from DSL"),
+    }
+
+    // Verify third action (custom)
+    match &actions[2].action {
+        ActionType::Custom { action } => {
+            assert_eq!(action, "refresh-data");
+        }
+        _ => panic!("Expected Custom action from DSL"),
+    }
+
+    // Verify fourth action (navigate)
+    match &actions[3].action {
+        ActionType::Navigate { url } => {
+            assert_eq!(url, "/dashboard");
+        }
+        _ => panic!("Expected Navigate action from DSL"),
+    }
+}
+
+#[test]
+fn test_dsl_macro_with_variables() {
+    // Test actions_dsl! macro with variable usage
+    let actions = actions_dsl! {
+        let modal_id = "user-settings";
+        let success_msg = "Settings updated";
+
+        hide(modal_id);
+        log(success_msg);
+    };
+
+    assert_eq!(actions.len(), 2);
+
+    // Verify variable was properly substituted in first action
+    match &actions[0].action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("user-settings".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action with variable from DSL"),
+    }
+
+    // Verify variable was properly substituted in second action
+    match &actions[1].action {
+        ActionType::Log { message, level } => {
+            assert_eq!(message, "Settings updated");
+            assert_eq!(*level, LogLevel::Info);
+        }
+        _ => panic!("Expected Log action with variable from DSL"),
+    }
+}
+
+#[test]
+fn test_dsl_macro_conditional_logic() {
+    // Test actions_dsl! macro with conditional expressions
+    let actions = actions_dsl! {
+        if get_visibility("sidebar") == hidden() {
+            show("sidebar");
+            log("Sidebar opened");
+        } else {
+            hide("sidebar");
+            log("Sidebar closed");
+        }
+    };
+
+    assert_eq!(actions.len(), 1);
+
+    // Verify conditional logic action was generated
+    match &actions[0].action {
+        ActionType::Logic(_) => {
+            // Complex conditional logic - verify it's the right type
+        }
+        _ => panic!("Expected Logic action from DSL conditional"),
+    }
+}
+
+#[test]
+fn test_dsl_macro_in_container_single() {
+    // Test using actions_dsl! macro result in container with single action
+    let action = actions_dsl! {
+        custom("toggle-theme")
+    };
+
+    let containers = container! {
+        button fx-click=(action[0].clone()) {
+            "Toggle Theme"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Verify the DSL action was properly applied to container
+    match &containers[0].actions[0].action.action {
+        ActionType::Custom { action } => {
+            assert_eq!(action, "toggle-theme");
+        }
+        _ => panic!("Expected Custom action from DSL in container"),
+    }
+}
+
+#[test]
+fn test_dsl_macro_in_container_multiple() {
+    // Test using actions_dsl! macro with multiple actions in container
+    let actions = actions_dsl! {
+        hide("loading-spinner");
+        show("content");
+        log("Content loaded");
+    };
+
+    let containers = container! {
+        div fx-click=(ActionType::Multi(actions.into_iter().map(|a| a.action).collect())) {
+            "Load Content"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Verify Multi ActionType contains DSL-generated actions
+    match &containers[0].actions[0].action.action {
+        ActionType::Multi(action_types) => {
+            assert_eq!(action_types.len(), 3);
+
+            // Verify first DSL action (hide)
+            match &action_types[0] {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::StrId("loading-spinner".to_string()));
+                    assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+                }
+                _ => panic!("Expected Style action for hide from DSL"),
+            }
+
+            // Verify second DSL action (show)
+            match &action_types[1] {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::StrId("content".to_string()));
+                    assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+                }
+                _ => panic!("Expected Style action for show from DSL"),
+            }
+
+            // Verify third DSL action (log)
+            match &action_types[2] {
+                ActionType::Log { message, level } => {
+                    assert_eq!(message, "Content loaded");
+                    assert_eq!(*level, LogLevel::Info);
+                }
+                _ => panic!("Expected Log action from DSL"),
+            }
+        }
+        _ => panic!("Expected Multi ActionType containing DSL actions"),
+    }
+}
+
+#[test]
+fn test_dsl_macro_with_fx_wrapper() {
+    // Test actions_dsl! macro used within fx() wrapper syntax
+    let containers = container! {
+        div fx-click=(fx({
+            let panel_id = "info-panel";
+            show(panel_id);
+            log("Info panel displayed");
+        })) {
+            "Show Info"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Verify the fx() wrapper with DSL block syntax
+    match &containers[0].actions[0].action.action {
+        ActionType::Multi(action_types) => {
+            assert_eq!(action_types.len(), 2);
+
+            // Verify DSL-generated actions in fx() block
+            match &action_types[0] {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::StrId("info-panel".to_string()));
+                    assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+                }
+                _ => panic!("Expected Style action from DSL in fx() wrapper"),
+            }
+
+            match &action_types[1] {
+                ActionType::Log { message, level } => {
+                    assert_eq!(message, "Info panel displayed");
+                    assert_eq!(*level, LogLevel::Info);
+                }
+                _ => panic!("Expected Log action from DSL in fx() wrapper"),
+            }
+        }
+        _ => panic!("Expected Multi ActionType from fx() DSL block"),
+    }
+}
+
+#[test]
+fn test_dsl_macro_complex_real_world_usage() {
+    // Test actions_dsl! macro with complex real-world MoosicBox-style patterns
+    let toggle_actions = actions_dsl! {
+        if get_visibility("audio-zones") == hidden() {
+            show("audio-zones");
+            hide("audio-zones-button-icon");
+            show("audio-zones-close-icon");
+            log("Audio zones panel opened");
+        } else {
+            hide("audio-zones");
+            show("audio-zones-button-icon");
+            hide("audio-zones-close-icon");
+            log("Audio zones panel closed");
+        }
+    };
+
+    let close_actions = actions_dsl! {
+        hide("search-modal");
+        show("search-button");
+        custom("clear-search-results");
+    };
+
+    // Test first action (toggle)
+    assert_eq!(toggle_actions.len(), 1);
+    match &toggle_actions[0].action {
+        ActionType::Logic(_) => {
+            // Complex conditional logic verified
+        }
+        _ => panic!("Expected Logic action from complex DSL conditional"),
+    }
+
+    // Test second action set (close)
+    assert_eq!(close_actions.len(), 3);
+
+    match &close_actions[0].action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("search-modal".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for hide from DSL"),
+    }
+
+    match &close_actions[1].action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("search-button".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+        }
+        _ => panic!("Expected Style action for show from DSL"),
+    }
+
+    match &close_actions[2].action {
+        ActionType::Custom { action } => {
+            assert_eq!(action, "clear-search-results");
+        }
+        _ => panic!("Expected Custom action from DSL"),
+    }
+}
+
+#[test]
+fn test_dsl_macro_vs_direct_actiontype() {
+    // Test that actions_dsl! macro generates equivalent actions to direct ActionType usage
+    let dsl_action = actions_dsl! {
+        hide("test-element")
+    };
+
+    let direct_action = ActionType::hide_str_id("test-element");
+
+    // Both should generate equivalent Style actions
+    match (&dsl_action[0].action, &direct_action) {
+        (
+            ActionType::Style {
+                target: dsl_target,
+                action: dsl_action,
+            },
+            ActionType::Style {
+                target: direct_target,
+                action: direct_action,
+            },
+        ) => {
+            assert_eq!(dsl_target, direct_target);
+            assert_eq!(dsl_action, direct_action);
+        }
+        _ => panic!("DSL and direct ActionType should generate equivalent actions"),
+    }
+}
