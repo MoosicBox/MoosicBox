@@ -102,6 +102,10 @@ enum Commands {
         #[arg(long)]
         required_features: Option<String>,
 
+        /// List of changed files (paths relative to workspace root) - only include affected packages
+        #[arg(long, value_delimiter = ',')]
+        changed_files: Option<Vec<String>>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -279,6 +283,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             features: specific_features,
             skip_features,
             required_features,
+            changed_files,
             output,
         } => {
             let path = PathBuf::from_str(&file)?;
@@ -343,6 +348,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .filter(|x| {
                                     x.get("os")
                                         .is_some_and(|x| x.as_str().is_some_and(|x| x == os))
+                                })
+                                .collect()
+                        } else {
+                            packages
+                        };
+
+                        // Filter by affected packages if changed_files is provided
+                        let packages = if let Some(changed_files) = &changed_files {
+                            let affected_packages = find_affected_packages(&path, changed_files)?;
+                            packages
+                                .into_iter()
+                                .filter(|pkg| {
+                                    pkg.get("name")
+                                        .and_then(|n| n.as_str())
+                                        .is_some_and(|name| {
+                                            affected_packages.contains(&name.to_string())
+                                        })
                                 })
                                 .collect()
                         } else {
