@@ -9,6 +9,29 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Show help message
+show_help() {
+    echo "Usage: $0 [PACKAGE_NAME]"
+    echo
+    echo "Generate Dockerfiles for MoosicBox packages."
+    echo
+    echo "Arguments:"
+    echo "  PACKAGE_NAME    Optional. Generate Dockerfile only for the specified package."
+    echo "                  If not provided, generates Dockerfiles for all packages."
+    echo
+    echo "Available packages:"
+    echo "  - server"
+    echo "  - load_balancer"
+    echo "  - tunnel_server"
+    echo
+    echo "Examples:"
+    echo "  $0                    # Generate all Dockerfiles"
+    echo "  $0 load_balancer      # Generate only LoadBalancer.Dockerfile"
+    echo "  $0 server             # Generate only Server.Dockerfile"
+    echo "  $0 tunnel_server      # Generate only TunnelServer.Dockerfile"
+    echo
+}
+
 # Utility functions
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -103,7 +126,19 @@ generate_dockerfile() {
 
 # Main function
 main() {
-    log_info "Starting Dockerfile generation for MoosicBox packages"
+    local target_package="${1:-}"
+
+    # Handle help options
+    if [[ "$target_package" == "-h" || "$target_package" == "--help" ]]; then
+        show_help
+        exit 0
+    fi
+
+    if [[ -n "$target_package" ]]; then
+        log_info "Starting Dockerfile generation for specific package: $target_package"
+    else
+        log_info "Starting Dockerfile generation for MoosicBox packages"
+    fi
 
     # Change to script directory
     cd "$(dirname "$0")"
@@ -118,7 +153,33 @@ main() {
         "tunnel_server:8012:"
     )
 
-    log_info "Generating Dockerfiles for ${#packages[@]} packages..."
+    # Filter packages if a specific target is provided
+    if [[ -n "$target_package" ]]; then
+        declare -a filtered_packages=()
+        local found=false
+
+        for package_config in "${packages[@]}"; do
+            IFS=':' read -r name port features <<< "$package_config"
+            if [[ "$name" == "$target_package" ]]; then
+                filtered_packages+=("$package_config")
+                found=true
+                break
+            fi
+        done
+
+        if [[ "$found" == false ]]; then
+            log_error "Package '$target_package' not found. Available packages:"
+            for package_config in "${packages[@]}"; do
+                IFS=':' read -r name port features <<< "$package_config"
+                echo "  - $name"
+            done
+            exit 1
+        fi
+
+        packages=("${filtered_packages[@]}")
+    fi
+
+    log_info "Generating Dockerfiles for ${#packages[@]} package(s)..."
 
     local success_count=0
     local total_count=${#packages[@]}
@@ -139,7 +200,11 @@ main() {
 
     # Summary
     if [[ $success_count -eq $total_count ]]; then
-        log_success "All $total_count Dockerfiles generated successfully!"
+        if [[ -n "$target_package" ]]; then
+            log_success "Dockerfile for $target_package generated successfully!"
+        else
+            log_success "All $total_count Dockerfiles generated successfully!"
+        fi
     else
         log_warning "Generated $success_count/$total_count Dockerfiles successfully"
     fi
@@ -184,10 +249,32 @@ main() {
     log_success "Dockerfile generation complete!"
     log_info "You can now build optimized Docker images with minimal dependencies"
     echo
-    echo "Example usage:"
-    echo "  docker build -f packages/server/Server.Dockerfile -t moosicbox-server ."
-    echo "  docker build -f packages/load_balancer/LoadBalancer.Dockerfile -t moosicbox-load-balancer ."
-    echo "  docker build -f packages/tunnel_server/TunnelServer.Dockerfile -t moosicbox-tunnel-server ."
+
+    if [[ -n "$target_package" ]]; then
+        # Show specific example for the target package
+        local dockerfile_name
+        case "$target_package" in
+            "tunnel_server")
+                dockerfile_name="TunnelServer.Dockerfile"
+                ;;
+            "load_balancer")
+                dockerfile_name="LoadBalancer.Dockerfile"
+                ;;
+            "server")
+                dockerfile_name="Server.Dockerfile"
+                ;;
+            *)
+                dockerfile_name="${target_package^}.Dockerfile"
+                ;;
+        esac
+        echo "Example usage:"
+        echo "  docker build -f packages/${target_package}/${dockerfile_name} -t moosicbox-${target_package//_/-} ."
+    else
+        echo "Example usage:"
+        echo "  docker build -f packages/server/Server.Dockerfile -t moosicbox-server ."
+        echo "  docker build -f packages/load_balancer/LoadBalancer.Dockerfile -t moosicbox-load-balancer ."
+        echo "  docker build -f packages/tunnel_server/TunnelServer.Dockerfile -t moosicbox-tunnel-server ."
+    fi
 
     # Exit with error only if no Dockerfiles were generated
     if [[ $success_count -eq 0 ]]; then
