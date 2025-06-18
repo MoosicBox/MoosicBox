@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
-    actions::{self as hyperchad_actions, ActionType},
+    actions::{self as hyperchad_actions},
     template::{self as hyperchad_template, Containers, container},
     transformer::models::Visibility,
 };
@@ -132,10 +132,10 @@ pub fn search_results(
                             border-top-right-radius=5
                             padding=10
                             background=(BACKGROUND)
-                            fx-click=(ActionType::Multi(vec![
-                                ActionType::no_display_class("search-results-container"),
-                                ActionType::display_str_id(&id)
-                            ]))
+                            fx-click=(fx({
+                                no_display_class("search-results-container");
+                                display_str_id(id);
+                            }))
                         {
                             (source.to_string_display())
                         }

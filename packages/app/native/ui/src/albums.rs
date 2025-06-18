@@ -825,66 +825,54 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                         {
                             div {
                                 div {
-                                    button
-                                        fx-click=(ActionType::Navigate {
-                                            url: albums_page_url(
-                                                filtered_sources,
-                                                if sort == AlbumSort::ArtistAsc {
-                                                    AlbumSort::ArtistDesc
-                                                } else {
-                                                    AlbumSort::ArtistAsc
-                                                }
-                                            )
-                                        })
-                                    {
+                                    @let url = albums_page_url(
+                                        filtered_sources,
+                                        if sort == AlbumSort::ArtistAsc {
+                                            AlbumSort::ArtistDesc
+                                        } else {
+                                            AlbumSort::ArtistAsc
+                                        }
+                                    );
+                                    button fx-click=(fx(navigate(url))) {
                                         "Album Artist"
                                     }
                                 }
                                 div border-top="1, #222" {
-                                    button
-                                        fx-click=(ActionType::Navigate {
-                                            url: albums_page_url(
-                                                filtered_sources,
-                                                if sort == AlbumSort::NameAsc {
-                                                    AlbumSort::NameDesc
-                                                } else {
-                                                    AlbumSort::NameAsc
-                                                }
-                                            )
-                                        })
-                                    {
+                                    @let url = albums_page_url(
+                                        filtered_sources,
+                                        if sort == AlbumSort::NameAsc {
+                                            AlbumSort::NameDesc
+                                        } else {
+                                            AlbumSort::NameAsc
+                                        }
+                                    );
+                                    button fx-click=(fx(navigate(url))) {
                                         "Album Name"
                                     }
                                 }
                                 div border-top="1, #222" {
-                                    button
-                                        fx-click=(ActionType::Navigate {
-                                            url: albums_page_url(
-                                                filtered_sources,
-                                                if sort == AlbumSort::ReleaseDateDesc {
-                                                    AlbumSort::ReleaseDateAsc
-                                                } else {
-                                                    AlbumSort::ReleaseDateDesc
-                                                }
-                                            )
-                                        })
-                                    {
+                                    @let url = albums_page_url(
+                                        filtered_sources,
+                                        if sort == AlbumSort::ReleaseDateAsc {
+                                            AlbumSort::ReleaseDateDesc
+                                        } else {
+                                            AlbumSort::ReleaseDateAsc
+                                        }
+                                    );
+                                    button fx-click=(fx(navigate(url))) {
                                         "Album Release Date"
                                     }
                                 }
                                 div border-top="1, #222" {
-                                    button
-                                        fx-click=(ActionType::Navigate {
-                                            url: albums_page_url(
-                                                filtered_sources,
-                                                if sort == AlbumSort::DateAddedDesc {
-                                                    AlbumSort::DateAddedAsc
-                                                } else {
-                                                    AlbumSort::DateAddedDesc
-                                                }
-                                            )
-                                        })
-                                    {
+                                    @let url = albums_page_url(
+                                        filtered_sources,
+                                        if sort == AlbumSort::DateAddedAsc {
+                                            AlbumSort::DateAddedDesc
+                                        } else {
+                                            AlbumSort::DateAddedAsc
+                                        }
+                                    );
+                                    button fx-click=(fx(navigate(url))) {
                                         "Album Date Added"
                                     }
                                 }

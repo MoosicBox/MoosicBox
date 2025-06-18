@@ -470,6 +470,44 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
 
+        // Display functions
+        "display_str_id" => {
+            if args_code.len() != 1 {
+                return Err("display_str_id() expects exactly 1 argument".to_string());
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::display_str_id(&#target.to_string())
+            })
+        }
+        "no_display_str_id" => {
+            if args_code.len() != 1 {
+                return Err("no_display_str_id() expects exactly 1 argument".to_string());
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::no_display_str_id(&#target.to_string())
+            })
+        }
+        "display_class" => {
+            if args_code.len() != 1 {
+                return Err("display_class() expects exactly 1 argument".to_string());
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::display_class(&#target.to_string())
+            })
+        }
+        "no_display_class" => {
+            if args_code.len() != 1 {
+                return Err("no_display_class() expects exactly 1 argument".to_string());
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::no_display_class(&#target.to_string())
+            })
+        }
+
         // Getter functions
         "get_visibility" => {
             if args_code.len() != 1 {

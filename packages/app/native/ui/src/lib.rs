@@ -19,13 +19,9 @@ use formatting::TimeFormat;
 use hyperchad::{
     actions::{
         self as hyperchad_actions, ActionType,
-        logic::{
-            get_height_px_str_id, get_mouse_x_self, get_mouse_y_str_id, get_visibility_str_id,
-            get_width_px_self,
-        },
+        logic::{get_height_px_str_id, get_mouse_x_self, get_mouse_y_str_id, get_width_px_self},
     },
     template::{self as hyperchad_template, Containers, IntoActionEffect, container},
-    transformer::models::Visibility,
 };
 use moosicbox_music_models::{
     API_SOURCES, AlbumSort, ApiSource, TrackApiSource, api::ApiTrack, id::Id,
@@ -286,12 +282,13 @@ pub fn player(state: &State) -> Containers {
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
-                        fx-click=(
-                            get_visibility_str_id(AUDIO_ZONES_ID)
-                                .eq(Visibility::Hidden)
-                                .then(ActionType::show_str_id(AUDIO_ZONES_ID))
-                                .or_else(ActionType::hide_str_id(AUDIO_ZONES_ID))
-                        )
+                        fx-click=(fx({
+                            if get_visibility_str_id(AUDIO_ZONES_ID) == hidden() {
+                                show(AUDIO_ZONES_ID);
+                            } else {
+                                hide(AUDIO_ZONES_ID);
+                            }
+                        }))
                     {
                         image
                             width=(FOOTER_ICON_SIZE)
@@ -302,12 +299,13 @@ pub fn player(state: &State) -> Containers {
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
-                        fx-click=(
-                            get_visibility_str_id(PLAYBACK_SESSIONS_ID)
-                                .eq(Visibility::Hidden)
-                                .then(ActionType::show_str_id(PLAYBACK_SESSIONS_ID))
-                                .or_else(ActionType::hide_str_id(PLAYBACK_SESSIONS_ID))
-                        )
+                        fx-click=(fx({
+                            if get_visibility_str_id(PLAYBACK_SESSIONS_ID) == hidden() {
+                                show(PLAYBACK_SESSIONS_ID);
+                            } else {
+                                hide(PLAYBACK_SESSIONS_ID);
+                            }
+                        }))
                     {
                         image
                             width=(FOOTER_ICON_SIZE)
@@ -315,12 +313,13 @@ pub fn player(state: &State) -> Containers {
                             src=(public_img!("sessions-white.svg"));
                     }
                     button
-                        fx-click=(
-                            get_visibility_str_id("play-queue")
-                                .eq(Visibility::Hidden)
-                                .then(ActionType::show_str_id("play-queue"))
-                                .or_else(ActionType::hide_str_id("play-queue"))
-                        )
+                        fx-click=(fx({
+                            if get_visibility_str_id("play-queue") == hidden() {
+                                show("play-queue");
+                            } else {
+                                hide("play-queue");
+                            }
+                        }))
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
@@ -723,11 +722,11 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                 min-height=calc(min(vh(90), 300))
                 max-height=vh90
                 border-radius=15
-                fx-click-outside=(
-                    get_visibility_str_id(id)
-                        .eq(Visibility::Visible)
-                        .then(ActionType::hide_str_id(id))
-                )
+                fx-click-outside=(fx({
+                    if get_visibility_str_id(id) == visible() {
+                        hide(id);
+                    }
+                }))
                 overflow-y=auto
             {
                 div
@@ -746,11 +745,13 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                         button
                             width=(icon_size)
                             height=(icon_size)
-                            fx-click=(
-                                get_visibility_str_id(id)
-                                    .eq(Visibility::Visible)
-                                    .then(ActionType::hide_str_id(id))
-                            )
+                            fx-click=(fx({
+                                if get_visibility_str_id(id) == visible() {
+                                    hide(id);
+                                } else {
+                                    show(id);
+                                }
+                            }))
                         {
                             image
                                 width=(icon_size)

@@ -1,10 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use hyperchad::{
-    actions::{ActionType, logic::get_visibility_self},
-    template::{self as hyperchad_template, Containers, container},
-    transformer::models::Visibility,
-};
+use hyperchad::template::{self as hyperchad_template, Containers, container};
 use moosicbox_music_models::api::ApiTrack;
 
 use crate::{public_img, state::State};
@@ -99,11 +95,11 @@ pub fn play_queue(state: &State) -> Containers {
             position=absolute
             bottom=170
             right=0
-            fx-click-outside=(
-                get_visibility_self()
-                    .eq(Visibility::Visible)
-                    .then(ActionType::hide_self())
-            )
+            fx-click-outside=(fx({
+                if get_visibility_self() == visible() {
+                    hide_self();
+                }
+            }))
         {
             div overflow-y=auto {
                 div padding=20 {
