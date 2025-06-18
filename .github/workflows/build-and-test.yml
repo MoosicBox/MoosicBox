@@ -4,10 +4,10 @@ on:
     push:
         branches: ['master', 'edge']
         paths:
+            - .github/workflows/build-and-test.yml
             - packages/**
             - '**/*.toml'
             - '**/Cargo.lock'
-            - .github/workflows/build-and-test.yml
             - free_disk_space.sh
             - '!packages/marketing_site/*.ts'
             - '!packages/marketing_site/*.json'
