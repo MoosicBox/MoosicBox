@@ -133,6 +133,7 @@ jobs:
         outputs:
             matrix: ${{ steps.set-matrix.outputs.matrix }}
             has-changes: ${{ steps.set-matrix.outputs.has-changes }}
+            has-tauri-changes: ${{ steps.check-tauri-changes.outputs.has-tauri-changes }}
         steps:
             - uses: actions/checkout@v4
               with:
@@ -291,6 +292,54 @@ jobs:
                   else
                       echo "has-changes=true" >> $GITHUB_OUTPUT
                       echo "matrix=$(echo "$MATRIX" | jq -c .)" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Check Tauri-related changes
+              id: check-tauri-changes
+              run: |
+                  CHANGED_FILES="${{ steps.changed-files.outputs.changed-files }}"
+
+                  if [[ -n "$CHANGED_FILES" ]]; then
+                      echo "Checking if changes affect the Tauri app..."
+
+                      # First check if app-website files changed (these don't affect Rust packages but do affect Tauri)
+                      WEBSITE_AFFECTED=false
+                      if echo "$CHANGED_FILES" | grep -q "app-website/"; then
+                          echo "App website files changed - Tauri release needed"
+                          WEBSITE_AFFECTED=true
+                      fi
+
+                      # Use clippier to check if the moosicbox_app package is affected by the changes
+                      echo "Checking if moosicbox_app package is affected by changes..."
+                      TAURI_CHECK_RESULT=$(cargo run -p clippier affected-packages . --changed-files "$CHANGED_FILES" --target-package moosicbox_app --output json)
+
+                      TAURI_AFFECTED=$(echo "$TAURI_CHECK_RESULT" | jq -r '.affected')
+
+                      if [[ "$TAURI_AFFECTED" == "true" ]]; then
+                          echo "✅ moosicbox_app package is affected by changes"
+
+                          # Show which packages were affected that led to this determination
+                          AFFECTED_PACKAGES=$(echo "$TAURI_CHECK_RESULT" | jq -r '.all_affected[]')
+                          echo "All affected packages:"
+                          echo "$AFFECTED_PACKAGES" | sed 's/^/  - /'
+                      else
+                          echo "❌ moosicbox_app package is not affected by changes"
+                          TAURI_AFFECTED=false
+                      fi
+
+                      # Final determination
+                      if [[ "$WEBSITE_AFFECTED" == "true" || "$TAURI_AFFECTED" == "true" ]]; then
+                          echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
+                          echo "✅ Tauri-related changes detected - Tauri release will be triggered"
+                      else
+                          echo "has-tauri-changes=false" >> $GITHUB_OUTPUT
+                          echo "❌ No Tauri-related changes detected - Tauri release will be skipped"
+                      fi
+                  else
+                      # For scheduled runs or when no specific files are detected, assume Tauri is affected
+                      echo "No specific changed files detected (scheduled run or workflow_dispatch) - assuming Tauri is affected"
+                      echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
+                      echo "✅ Tauri-related changes assumed for scheduled run"
                   fi
 
     build-cargo-machete:
@@ -491,7 +540,7 @@ jobs:
                   ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete.exe --with-metadata ${{ matrix.package.path }}
 
     create-tauri-app-release:
-        if: ${{ github.event_name != 'schedule' && !github.event.inputs.edge && needs.determine-affected-packages.outputs.has-changes == 'true' }}
+        if: ${{ github.event_name != 'schedule' && !github.event.inputs.edge && needs.determine-affected-packages.outputs.has-tauri-changes == 'true' }}
 
         runs-on: ubuntu-latest
 
