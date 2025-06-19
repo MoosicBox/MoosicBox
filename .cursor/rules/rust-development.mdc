@@ -4,7 +4,6 @@ globs:
   - "**/*.rs"
   - "**/Cargo.toml"
   - "**/Cargo.lock"
-alwaysApply: true
 ---
 
 # Rust Development Guidelines for MoosicBox

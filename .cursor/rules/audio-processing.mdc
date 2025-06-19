@@ -4,7 +4,6 @@ globs:
   - "packages/audio_*/**/*"
   - "packages/player/**/*"
   - "packages/resampler/**/*"
-alwaysApply: true
 ---
 
 # Audio Processing in MoosicBox

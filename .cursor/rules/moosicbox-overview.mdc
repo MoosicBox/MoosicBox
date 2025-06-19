@@ -2,7 +2,6 @@
 description: "Comprehensive overview of MoosicBox project architecture, components, and navigation guide"
 globs:
   - "**/*"
-alwaysApply: true
 ---
 
 # MoosicBox Project Overview
@@ -10,6 +9,12 @@ alwaysApply: true
 ## What is MoosicBox?
 
 MoosicBox is a modern, high-fidelity music server and streaming platform built in Rust. It's a self-hosted solution that allows users to stream their personal music library and access premium music services from anywhere with lossless audio quality.
+
+## Making updates to packages
+
+Ensure to always update the README.md file in the package directory with any changes that may affect
+the package's functionality or dependencies externally, or any other relevant information that should
+be included in the package's documentation.
 
 ## Project Structure
 
@@ -79,12 +84,18 @@ PORT=8001 cargo run -p moosicbox_server
 RUST_LOG="moosicbox=debug" PORT=8001 cargo run -p moosicbox_server
 
 # Run tests
-cargo test
+STATIC_TOKEN=123 TUNNEL_ACCESS_TOKEN=123 cargo nextest run
 
 # Code quality checks
-cargo clippy --all-targets --all-features
+STATIC_TOKEN=123 TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets
 cargo fmt
 ```
+
+### NixOS
+
+You may need to run commands in a nix-shell for the project to work properly.
+There is a shell.nix file in the root of the project that sets up the environment for development.
+Some other packages may require more specific dependencies and have a shell.nix file in their respective directories.
 
 ## Key Technologies
 - **Rust** - Memory-safe, high-performance backend (120+ packages)

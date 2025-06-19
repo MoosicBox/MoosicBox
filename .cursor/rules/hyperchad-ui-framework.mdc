@@ -3,8 +3,7 @@ description: "Custom HyperChad UI framework architecture, multi-platform renderi
 globs:
   - "packages/hyperchad/**/*"
   - "packages/marketing_site/**/*"
-  - "packages/admin_htmx/**/*"
-alwaysApply: true
+  - "packages/**/ui/**/*"
 ---
 
 # HyperChad UI Framework Guide
@@ -38,7 +37,6 @@ HyperChad is MoosicBox's custom reactive UI framework that supports multiple ren
 
 #### Router (@packages/hyperchad/router/)
 - **Client-Side Routing**: SPA-style navigation
-- **Route Guards**: Authentication and authorization checks
 - **Nested Routes**: Hierarchical route structures
 - **Route Parameters**: Dynamic route matching
 
@@ -57,7 +55,7 @@ HyperChad is MoosicBox's custom reactive UI framework that supports multiple ren
 #### Vanilla JS (@packages/hyperchad/renderer/vanilla_js/)
 - **Client-Side Runtime**: JavaScript framework for browser interactions
 - **Hash Routing**: @packages/hyperchad/renderer/vanilla_js/hash/ - Browser history management
-- **DOM Manipulation**: Efficient virtual DOM-like updates
+- **DOM Manipulation**: Efficient native DOM updates
 
 ### Development Tools
 
@@ -84,9 +82,7 @@ HyperChad is MoosicBox's custom reactive UI framework that supports multiple ren
 - Configuration and initialization
 
 ### Color System (@packages/hyperchad/color/)
-- Consistent color theming across platforms
 - Color utilities and transformations
-- Theme switching capabilities
 
 ## Usage in MoosicBox
 
@@ -95,21 +91,12 @@ HyperChad is MoosicBox's custom reactive UI framework that supports multiple ren
 - Demonstrates server-side rendering capabilities
 - UI components in @packages/marketing_site/ui/
 
-### Native Applications
-- Desktop apps built with HyperChad + Tauri
-- Consistent UI across different operating systems
-- Shared components between web and native platforms
-
-### Admin Interface (@packages/admin_htmx/)
-- Server administration interface
-- Integration with HTMX for enhanced interactivity
-- HyperChad components for consistent styling
+### Native Application (@packages/app/native/)
+- Desktop app built with HyperChad and optionally using Tauri
 
 ## Development Guidelines
 
 ### Component Development
-- **Functional Components**: Prefer stateless functional components
-- **Props-Based**: Pass data through props, not global state when possible
 - **Reusable**: Design components for reuse across different contexts
 - **Platform Agnostic**: Write components that work on all supported renderers
 
@@ -120,26 +107,12 @@ HyperChad is MoosicBox's custom reactive UI framework that supports multiple ren
 - **State Normalization**: Avoid deeply nested state structures
 
 ### Styling Guidelines
-- **Consistent Theming**: Use the color system for consistent theming
 - **Responsive Design**: Support different screen sizes and orientations
 - **Platform Adaptation**: Adapt styling for different platforms (web vs native)
 - **Accessibility**: Ensure UI is accessible across all renderers
-
-### Performance Considerations
-- **Virtual DOM**: Minimize unnecessary re-renders
-- **Component Memoization**: Cache expensive component computations
-- **Asset Optimization**: Optimize images and other assets for each platform
-- **Bundle Splitting**: Split large applications into smaller chunks
 
 ### Testing HyperChad Components
 - **Unit Tests**: Test component logic independently
 - **Integration Tests**: Test component interactions
 - **Cross-Platform Testing**: Ensure components work on all supported renderers
 - **Visual Regression Tests**: Detect unintended visual changes
-
-### Debugging HyperChad Applications
-- **State Inspector**: Tools for inspecting application state
-- **Action Logging**: Log all actions for debugging state changes
-- **Renderer-Specific Tools**: Use platform-specific debugging tools
-- **Performance Profiling**: Profile rendering performance
-

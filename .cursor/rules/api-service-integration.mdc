@@ -1,5 +1,5 @@
 ---
-description: "Music service integrations (Tidal, Qobuz, YouTube), API architecture, and development patterns"
+description: "Music service integrations (Tidal, Qobuz, YouTube Music), API architecture, and development patterns"
 globs:
   - "packages/music_api/**/*"
   - "packages/tidal/**/*"
@@ -7,7 +7,6 @@ globs:
   - "packages/yt/**/*"
   - "packages/library/**/*"
   - "packages/search/**/*"
-alwaysApply: true
 ---
 
 # Music Service Integration & API Guide
@@ -110,10 +109,9 @@ MoosicBox provides a unified API layer that abstracts multiple music sources, al
 - **Unified Results**: Combine results from different sources
 - **Search Filters**: Filter by type (artist, album, track), source, quality
 - **Search History**: Remember recent searches
-- **Autocomplete**: Suggest searches as user types
 
 ### Search Implementation
-- Elasticsearch integration for advanced search
+- Tantivy integration for advanced search
 - Full-text search across metadata
 - Fuzzy matching for typos and variations
 - Performance optimization for large libraries
