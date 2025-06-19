@@ -1,1 +1,566 @@
-# MoosicBox HyperChad Actix HTML Renderer crate
+# HyperChad HTML HTTP Renderer
+
+Generic HTTP server integration for HyperChad HTML renderer with framework-agnostic design.
+
+## Overview
+
+The HyperChad HTML HTTP Renderer provides:
+
+- **Framework Agnostic**: Works with any HTTP server implementation
+- **HTTP Standard**: Full HTTP/1.1 and HTTP/2 protocol support
+- **Request Processing**: Complete HTTP request parsing and routing
+- **Response Generation**: Standards-compliant HTTP response generation
+- **Static Assets**: Integrated static file serving
+- **Action Handling**: Server-side action processing
+- **Error Handling**: Comprehensive HTTP error handling
+
+## Features
+
+### HTTP Server Capabilities
+- **Generic HTTP**: Works with any HTTP server framework
+- **Request Parsing**: Parse HTTP requests into RouteRequest objects
+- **Response Building**: Generate proper HTTP responses
+- **Status Codes**: Full HTTP status code support
+- **Headers**: Custom header management
+- **Content Types**: Automatic content type detection
+
+### HyperChad Integration
+- **HTML Rendering**: Server-side HTML generation
+- **Routing**: URL routing and path matching
+- **Action Processing**: Handle HyperChad actions
+- **Partial Updates**: Support for partial page updates
+- **Asset Serving**: Static asset management
+
+### Performance Features
+- **Async Processing**: Fully asynchronous request handling
+- **Streaming**: Support for streaming responses
+- **Caching**: Configurable response caching
+- **Compression**: Optional response compression
+
+## Installation
+
+Add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+hyperchad_renderer_html_http = { path = "../hyperchad/renderer/html/http" }
+
+# With additional features
+hyperchad_renderer_html_http = {
+    path = "../hyperchad/renderer/html/http",
+    features = ["actions", "assets"]
+}
+```
+
+## Usage
+
+### Basic HTTP Application
+
+```rust
+use hyperchad_renderer_html_http::HttpApp;
+use hyperchad_renderer_html::DefaultHtmlTagRenderer;
+use hyperchad_router::{Router, RouteRequest};
+use hyperchad_template::container;
+use http::{Request, Response, StatusCode};
+use std::collections::HashMap;
+
+async fn handle_request(req: Request<Vec<u8>>) -> Result<Response<Vec<u8>>, Box<dyn std::error::Error>> {
+    // Create router and tag renderer
+    let router = Router::new();
+    let tag_renderer = DefaultHtmlTagRenderer::default();
+
+    // Create HTTP app
+    let app = HttpApp::new(tag_renderer, router)
+        .with_title("My HyperChad App".to_string())
+        .with_description("A HyperChad HTTP application".to_string())
+        .with_viewport("width=device-width, initial-scale=1".to_string());
+
+    // Convert HTTP request to RouteRequest
+    let route_request = RouteRequest {
+        path: req.uri().path().to_string(),
+        query: req.uri().query().map(|q| q.to_string()),
+        method: req.method().to_string(),
+        headers: req.headers().iter()
+            .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
+            .collect(),
+        body: Some(req.into_body()),
+    };
+
+    // Process the request
+    let response = app.process(&route_request).await?;
+
+    Ok(response)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Example with hyper server
+    use hyper::service::{make_service_fn, service_fn};
+    use hyper::{Body, Server};
+    use std::convert::Infallible;
+
+    let make_svc = make_service_fn(|_conn| async {
+        Ok::<_, Infallible>(service_fn(|req: Request<Body>| async move {
+            // Convert hyper request to our format
+            let (parts, body) = req.into_parts();
+            let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+            let req = Request::from_parts(parts, body_bytes.to_vec());
+
+            match handle_request(req).await {
+                Ok(response) => {
+                    let (parts, body) = response.into_parts();
+                    Ok::<_, Infallible>(Response::from_parts(parts, Body::from(body)))
+                }
+                Err(_) => Ok(Response::builder()
+                    .status(500)
+                    .body(Body::from("Internal Server Error"))
+                    .unwrap()),
+            }
+        }))
+    });
+
+    let addr = ([127, 0, 0, 1], 3000).into();
+    let server = Server::bind(&addr).serve(make_svc);
+
+    println!("Server running on http://{}", addr);
+    server.await?;
+
+    Ok(())
+}
+```
+
+### Advanced Routing
+
+```rust
+use hyperchad_router::{Router, RoutePath};
+use hyperchad_template::container;
+
+fn create_router() -> Router {
+    let mut router = Router::new();
+
+    // Add routes
+    router.add_route("/", render_home);
+    router.add_route("/about", render_about);
+    router.add_route("/users/{id}", render_user);
+    router.add_route("/api/users", handle_api_users);
+
+    router
+}
+
+fn render_home() -> String {
+    let view = container! {
+        html {
+            head {
+                title { "Home - HyperChad HTTP" }
+                meta name="viewport" content="width=device-width, initial-scale=1";
+            }
+            body {
+                div class="container" {
+                    h1 { "Welcome to HyperChad HTTP" }
+                    p { "This is a framework-agnostic HTTP server." }
+
+                    nav {
+                        a href="/about" { "About" }
+                        " | "
+                        a href="/users/123" { "User Profile" }
+                        " | "
+                        a href="/api/users" { "API" }
+                    }
+
+                    div class="features" {
+                        h2 { "Features" }
+                        ul {
+                            li { "Framework agnostic design" }
+                            li { "Full HTTP standard support" }
+                            li { "Static asset serving" }
+                            li { "Action processing" }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    view.to_string()
+}
+
+fn render_user(user_id: &str) -> String {
+    let view = container! {
+        html {
+            head {
+                title { format!("User {} - HyperChad HTTP", user_id) }
+            }
+            body {
+                div class="container" {
+                    h1 { format!("User Profile: {}", user_id) }
+
+                    div class="user-info" {
+                        p { format!("User ID: {}", user_id) }
+                        p { "Name: John Doe" }
+                        p { "Email: john@example.com" }
+                    }
+
+                    a href="/" { "← Back to Home" }
+                }
+            }
+        }
+    };
+
+    view.to_string()
+}
+
+async fn handle_api_users(req: &RouteRequest) -> Result<Response<Vec<u8>>, Box<dyn std::error::Error>> {
+    match req.method.as_str() {
+        "GET" => {
+            let users = serde_json::json!([
+                {"id": 1, "name": "Alice", "email": "alice@example.com"},
+                {"id": 2, "name": "Bob", "email": "bob@example.com"}
+            ]);
+
+            Ok(Response::builder()
+                .status(200)
+                .header("Content-Type", "application/json")
+                .body(serde_json::to_vec(&users)?)?)
+        }
+        "POST" => {
+            // Handle user creation
+            let body = req.body.as_ref().unwrap();
+            let new_user: serde_json::Value = serde_json::from_slice(body)?;
+
+            let response = serde_json::json!({
+                "id": 123,
+                "name": new_user["name"],
+                "email": new_user["email"],
+                "created_at": chrono::Utc::now()
+            });
+
+            Ok(Response::builder()
+                .status(201)
+                .header("Content-Type", "application/json")
+                .body(serde_json::to_vec(&response)?)?)
+        }
+        _ => {
+            Ok(Response::builder()
+                .status(405)
+                .body(b"Method Not Allowed".to_vec())?)
+        }
+    }
+}
+```
+
+### Static Asset Serving
+
+```rust
+use hyperchad_renderer::{assets::{StaticAssetRoute, AssetPathTarget}};
+use std::path::PathBuf;
+
+fn create_app_with_assets() -> HttpApp<DefaultHtmlTagRenderer> {
+    let router = Router::new();
+    let tag_renderer = DefaultHtmlTagRenderer::default();
+
+    HttpApp::new(tag_renderer, router)
+        .with_static_asset_routes(vec![
+            StaticAssetRoute {
+                route: "/css/style.css".to_string(),
+                target: AssetPathTarget::File(PathBuf::from("assets/style.css")),
+            },
+            StaticAssetRoute {
+                route: "/js/app.js".to_string(),
+                target: AssetPathTarget::File(PathBuf::from("assets/app.js")),
+            },
+            StaticAssetRoute {
+                route: "/images/".to_string(),
+                target: AssetPathTarget::Directory(PathBuf::from("assets/images")),
+            },
+        ])
+        .with_static_asset_route_handler(|req| {
+            // Custom asset handler
+            if req.path.starts_with("/uploads/") {
+                Some(AssetPathTarget::Directory(PathBuf::from("uploads")))
+            } else {
+                None
+            }
+        })
+}
+
+fn render_page_with_assets() -> String {
+    let view = container! {
+        html {
+            head {
+                title { "HyperChad with Assets" }
+                link rel="stylesheet" href="/css/style.css";
+                meta name="viewport" content="width=device-width, initial-scale=1";
+            }
+            body {
+                div class="container" {
+                    h1 { "HyperChad with Static Assets" }
+
+                    img src="/images/logo.png" alt="Logo" class="logo";
+
+                    p { "This page includes CSS, JavaScript, and image assets." }
+
+                    div class="gallery" {
+                        img src="/uploads/photo1.jpg" alt="Photo 1";
+                        img src="/uploads/photo2.jpg" alt="Photo 2";
+                    }
+                }
+
+                script src="/js/app.js" {}
+            }
+        }
+    };
+
+    view.to_string()
+}
+```
+
+### Action Handling
+
+```rust
+use hyperchad_actions::logic::Value;
+
+fn create_app_with_actions() -> HttpApp<DefaultHtmlTagRenderer> {
+    let (action_tx, action_rx) = flume::unbounded();
+
+    // Handle actions in background
+    tokio::spawn(async move {
+        while let Ok((action_name, value)) = action_rx.recv_async().await {
+            match action_name.as_str() {
+                "submit_contact_form" => {
+                    if let Some(Value::Object(data)) = value {
+                        println!("Contact form submitted: {:?}", data);
+                        // Send email, save to database, etc.
+                    }
+                }
+                "user_login" => {
+                    if let Some(Value::Object(credentials)) = value {
+                        println!("Login attempt: {:?}", credentials);
+                        // Authenticate user
+                    }
+                }
+                _ => {
+                    println!("Unknown action: {}", action_name);
+                }
+            }
+        }
+    });
+
+    let router = Router::new();
+    let tag_renderer = DefaultHtmlTagRenderer::default();
+
+    HttpApp::new(tag_renderer, router)
+        .with_action_tx(action_tx)
+}
+
+fn render_contact_form() -> String {
+    let view = container! {
+        html {
+            head {
+                title { "Contact Us" }
+            }
+            body {
+                div class="container" {
+                    h1 { "Contact Us" }
+
+                    form
+                        method="post"
+                        action="/$action"
+                        onsubmit=request_action("submit_contact_form", form_data())
+                    {
+                        div class="form-group" {
+                            label for="name" { "Name:" }
+                            input
+                                type="text"
+                                id="name"
+                                name="name"
+                                required=true
+                            {}
+                        }
+
+                        div class="form-group" {
+                            label for="email" { "Email:" }
+                            input
+                                type="email"
+                                id="email"
+                                name="email"
+                                required=true
+                            {}
+                        }
+
+                        div class="form-group" {
+                            label for="message" { "Message:" }
+                            textarea
+                                id="message"
+                                name="message"
+                                rows=5
+                                required=true
+                            {}
+                        }
+
+                        button type="submit" { "Send Message" }
+                    }
+                }
+            }
+        }
+    };
+
+    view.to_string()
+}
+```
+
+### Error Handling
+
+```rust
+use http::StatusCode;
+
+async fn handle_request_with_errors(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
+    match process_request(req).await {
+        Ok(response) => response,
+        Err(e) => handle_error(e),
+    }
+}
+
+fn handle_error(error: Box<dyn std::error::Error>) -> Response<Vec<u8>> {
+    let (status, message) = match error.downcast_ref::<hyperchad_renderer_html_http::Error>() {
+        Some(hyperchad_renderer_html_http::Error::Navigate(nav_err)) => {
+            (StatusCode::NOT_FOUND, format!("Page not found: {}", nav_err))
+        }
+        Some(hyperchad_renderer_html_http::Error::IO(io_err)) => {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("IO error: {}", io_err))
+        }
+        _ => {
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+        }
+    };
+
+    let error_page = container! {
+        html {
+            head {
+                title { format!("{} - Error", status.as_u16()) }
+            }
+            body {
+                div class="error-page" {
+                    h1 { format!("Error {}", status.as_u16()) }
+                    p { message }
+                    a href="/" { "Go Home" }
+                }
+            }
+        }
+    };
+
+    Response::builder()
+        .status(status)
+        .header("Content-Type", "text/html")
+        .body(error_page.to_string().into_bytes())
+        .unwrap()
+}
+```
+
+### Middleware Integration
+
+```rust
+use std::time::Instant;
+
+async fn logging_middleware<F, Fut>(
+    req: Request<Vec<u8>>,
+    handler: F,
+) -> Response<Vec<u8>>
+where
+    F: FnOnce(Request<Vec<u8>>) -> Fut,
+    Fut: std::future::Future<Output = Response<Vec<u8>>>,
+{
+    let start = Instant::now();
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+
+    println!("→ {} {}", method, path);
+
+    let response = handler(req).await;
+
+    let duration = start.elapsed();
+    let status = response.status();
+
+    println!("← {} {} {} {:?}", method, path, status.as_u16(), duration);
+
+    response
+}
+
+async fn cors_middleware<F, Fut>(
+    req: Request<Vec<u8>>,
+    handler: F,
+) -> Response<Vec<u8>>
+where
+    F: FnOnce(Request<Vec<u8>>) -> Fut,
+    Fut: std::future::Future<Output = Response<Vec<u8>>>,
+{
+    let mut response = handler(req).await;
+
+    let headers = response.headers_mut();
+    headers.insert("Access-Control-Allow-Origin", "*".parse().unwrap());
+    headers.insert("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS".parse().unwrap());
+    headers.insert("Access-Control-Allow-Headers", "Content-Type, Authorization".parse().unwrap());
+
+    response
+}
+
+async fn handle_with_middleware(req: Request<Vec<u8>>) -> Response<Vec<u8>> {
+    cors_middleware(req, |req| {
+        logging_middleware(req, |req| {
+            handle_request(req)
+        })
+    }).await
+}
+```
+
+## Feature Flags
+
+- **`actions`**: Enable server-side action processing
+- **`assets`**: Enable static asset serving
+
+## HTTP Standards Compliance
+
+### Supported Methods
+- **GET**: Retrieve resources
+- **POST**: Create resources
+- **PUT**: Update resources
+- **DELETE**: Delete resources
+- **PATCH**: Partial updates
+- **HEAD**: Headers only
+- **OPTIONS**: CORS preflight
+
+### Status Codes
+- **2xx Success**: 200 OK, 201 Created, 204 No Content
+- **3xx Redirection**: 301 Moved Permanently, 302 Found, 304 Not Modified
+- **4xx Client Error**: 400 Bad Request, 401 Unauthorized, 404 Not Found
+- **5xx Server Error**: 500 Internal Server Error, 503 Service Unavailable
+
+### Headers
+- **Content-Type**: Automatic content type detection
+- **Cache-Control**: Configurable caching headers
+- **CORS**: Cross-origin resource sharing
+- **Security**: Security headers support
+
+## Dependencies
+
+- **HTTP**: Standard HTTP types and utilities
+- **HyperChad HTML Renderer**: Core HTML rendering functionality
+- **HyperChad Router**: Routing and navigation
+- **Async Trait**: Async trait support
+- **Thiserror**: Error handling
+
+## Integration
+
+This renderer is designed for:
+- **Custom HTTP Servers**: Build your own HTTP server
+- **Framework Integration**: Integrate with existing frameworks
+- **Microservices**: HTTP-based microservices
+- **API Gateways**: Custom API gateway implementations
+- **Edge Computing**: Edge server implementations
+
+## Performance Considerations
+
+- **Zero-copy**: Minimize data copying where possible
+- **Async**: Fully asynchronous processing
+- **Streaming**: Support for streaming large responses
+- **Caching**: Configurable response caching
+- **Memory**: Efficient memory usage patterns

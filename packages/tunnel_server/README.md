@@ -1,138 +1,166 @@
-# Tunnel Server
+# MoosicBox Tunnel Server
 
-## Connection
+Basic WebSocket-based tunneling server for MoosicBox remote access.
 
-```mermaid
-sequenceDiagram
+## Overview
 
-title Server Tunnel Connection Sequence Diagram
+The MoosicBox Tunnel Server provides:
 
-box Local Network
-    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
-end
+- **WebSocket Tunneling**: Basic tunneling through WebSocket connections
+- **Client Registration**: Simple client authentication and registration
+- **Database Integration**: PostgreSQL backend for client management
+- **HTTP API**: REST endpoints for tunnel management
+- **Health Monitoring**: Basic health check endpoint
 
-box Server
-    participant WS as Tunnel WS<br>(moosicbox_tunnel_server)
-end
+## Features
 
-box rgb(143, 195, 255) PlanetScale
-    participant MySQL
-end
+### Core Functionality
+- **WebSocket Server**: Handles WebSocket connections for tunneling
+- **Authentication**: Basic client registration and token-based auth
+- **Database Storage**: Client data stored in PostgreSQL
+- **HTTP Endpoints**: REST API for tunnel operations
+- **CORS Support**: Cross-origin resource sharing enabled
 
-MoosicBox ->> WS: Connect request (/ws?clientId=12345)
-WS ->> MySQL: Upsert client_id and tunnel_ws_id in `connections` table
-WS ->> MoosicBox: Connect success
+### Available Endpoints
+- **Health Check**: `/health` endpoint for service monitoring
+- **WebSocket**: `/ws` endpoint for tunnel connections
+- **Client Registration**: Authentication and client management
+- **Track/Album/Artist**: Media proxy endpoints
+- **Tunnel Management**: Basic tunnel lifecycle operations
 
-loop every 5 minutes
-    MoosicBox ->> WS: [PING]
-    WS ->> MoosicBox: [PONG]
-end
+## Installation
+
+### From Source
+
+```bash
+# Install dependencies
+sudo apt update
+sudo apt install build-essential libssl-dev pkg-config postgresql-dev
+
+# Clone and build
+git clone https://github.com/MoosicBox/MoosicBox.git
+cd MoosicBox
+cargo build --release --bin tunnel_server
+
+# Install binary
+sudo cp target/release/tunnel_server /usr/local/bin/
 ```
 
-## Data Stream Request
+### Database Setup
 
-```mermaid
-sequenceDiagram
+```bash
+# Install and setup PostgreSQL
+sudo apt install postgresql postgresql-contrib
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
 
-title Server Tunnel Data Stream Request Sequence Diagram
-
-box Internet
-    actor Client
-end
-
-box Server<br>(moosicbox_tunnel_server)
-    participant API as Tunnel API
-    participant WS as Tunnel WS
-end
-
-box Local Network
-    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
-end
-
-box rgb(143, 195, 255) PlanetScale
-    participant MySQL
-end
-
-Client ->> API: Request data<br>{clientId: "12345"}
-API ->> WS: Request data<br>{clientId: "12345"}
-WS ->> MySQL: Request tunnel_ws_id for clientId "12345"
-activate MySQL#gray
-MySQL ->> WS: Return tunnel_ws_id "127347374123"
-deactivate MySQL#gray
-WS ->> MoosicBox: Request data from ws connection "127347374123"
-
-loop until all data sent
-    MoosicBox ->> MoosicBox: Read data (bytes)
-    activate MoosicBox#gray
-    deactivate MoosicBox#gray
-
-    MoosicBox ->> WS: Send packet of data (bytes)
-    activate WS#gray
-    deactivate WS#gray
-
-    WS ->> API: Send packet of data (bytes)
-    activate API#gray
-    deactivate API#gray
-
-    API ->> Client: Send packet of data (bytes)
-    activate Client#gray
-    deactivate Client#gray
-end
+# Create database and user
+sudo -u postgres createdb moosicbox_tunnel
+sudo -u postgres createuser moosicbox
 ```
 
-## Data Blocking Request
+## Usage
 
-```mermaid
-sequenceDiagram
+### Running the Tunnel Server
 
-title Server Tunnel Data Blocking Request Sequence Diagram
+```bash
+# Start tunnel server on default port 8000
+tunnel_server
 
-box Internet
-    actor Client
-end
+# Start on custom port
+tunnel_server 8443
 
-box Server<br>(moosicbox_tunnel_server)
-    participant API as Tunnel API
-    participant WS as Tunnel WS
-end
-
-box Local Network
-    participant MoosicBox as Local MoosicBox Server<br>(moosicbox_server)
-end
-
-box rgb(143, 195, 255) PlanetScale
-    participant MySQL
-end
-
-Client ->> API: Request data<br>{clientId: "12345"}
-API ->> API: Create response buffer
-activate API#gray
-deactivate API#gray
-API ->> WS: Request data<br>{clientId: "12345"}
-WS ->> MySQL: Request tunnel_ws_id for clientId "12345"
-activate MySQL#gray
-MySQL ->> WS: Return tunnel_ws_id "127347374123"
-deactivate MySQL#gray
-WS ->> MoosicBox: Request data from ws connection "127347374123"
-
-loop until all data saved to buffer
-    MoosicBox ->> MoosicBox: Read data (bytes)
-    activate MoosicBox#gray
-    deactivate MoosicBox#gray
-
-    MoosicBox ->> WS: Send packet of data (bytes)
-    activate WS#gray
-    deactivate WS#gray
-
-    WS ->> API: Send packet of data (bytes)
-    activate API#gray
-    deactivate API#gray
-    API ->> API: Push bytes to response buffer
-    activate API#gray
-    deactivate API#gray
-end
-
-API ->> Client: Send response buffer (bytes)
-activate Client#gray
-deactivate Client#gray
+# With environment variables
+export PORT=8443
+export BIND_ADDR=0.0.0.0
+export DATABASE_URL=postgresql://user:pass@localhost/moosicbox_tunnel
+tunnel_server
 ```
+
+### Environment Variables
+
+- `PORT`: Server port (default: 8000)
+- `BIND_ADDR`: Bind address (default: 0.0.0.0)
+- `DATABASE_URL`: PostgreSQL connection string
+- `MAX_THREADS`: Maximum blocking threads (default: 64)
+- `ACTIX_WORKERS`: Number of Actix workers
+
+## API Reference
+
+### Health Check
+
+```bash
+curl http://localhost:8000/health
+```
+
+### WebSocket Connection
+
+```javascript
+const ws = new WebSocket('ws://localhost:8000/ws');
+ws.onopen = () => console.log('Connected');
+ws.onmessage = (event) => console.log('Message:', event.data);
+```
+
+### Client Authentication
+
+```bash
+# Register client
+curl -X POST http://localhost:8000/auth/register-client \
+  -H "Content-Type: application/json" \
+  -d '{"client_id": "my-client"}'
+
+# Get authentication token
+curl -X POST http://localhost:8000/auth/signature-token \
+  -H "Content-Type: application/json" \
+  -d '{"client_id": "my-client", "signature": "..."}'
+```
+
+## Configuration
+
+The server can be configured via environment variables:
+
+```bash
+# Basic configuration
+export PORT=8443
+export BIND_ADDR=0.0.0.0
+export DATABASE_URL=postgresql://localhost/moosicbox_tunnel
+
+# Performance tuning
+export MAX_THREADS=64
+export ACTIX_WORKERS=4
+
+# Logging
+export RUST_LOG=info
+export TOKIO_CONSOLE=1  # For tokio console debugging
+```
+
+## Development
+
+### Building
+
+```bash
+# Build with all features
+cargo build --release --bin tunnel_server
+
+# Build with specific features
+cargo build --release --bin tunnel_server --features postgres-raw
+```
+
+### Running in Development
+
+```bash
+# Run with debug logging
+RUST_LOG=debug cargo run --bin tunnel_server
+
+# Run with tokio console
+TOKIO_CONSOLE=1 cargo run --bin tunnel_server
+```
+
+## Implementation Notes
+
+- The server is built with Actix Web framework
+- Uses PostgreSQL for data persistence
+- WebSocket connections are managed through a dedicated service
+- CORS is configured for web client access
+- Supports graceful shutdown with proper cleanup
+- Includes basic telemetry and metrics collection
