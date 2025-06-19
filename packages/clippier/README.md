@@ -9,8 +9,9 @@ Clippier is a command-line utility designed to analyze Rust workspaces and autom
 - **CI/CD Pipeline Generation**: Generate feature matrices for testing
 - **Dependency Analysis**: Analyze workspace dependencies and relationships
 - **Feature Management**: Generate feature combinations for comprehensive testing
-- **Docker Integration**: Generate Dockerfiles for workspace packages
+- **Docker Integration**: Generate optimized Dockerfiles for workspace packages
 - **Change Impact Analysis**: Determine which packages are affected by file changes
+- **External Dependency Tracking**: Detect changes in external dependencies via git diff analysis
 
 ## Installation
 
@@ -19,6 +20,13 @@ Clippier is a command-line utility designed to analyze Rust workspaces and autom
 ```bash
 cargo install --path packages/clippier
 ```
+
+### Features
+
+Clippier supports optional features:
+
+- **`git-diff`** (default): Enhanced change analysis using git diff to detect external dependency changes
+- **`fail-on-warnings`**: Fail build on warnings
 
 ## Usage
 
@@ -63,6 +71,28 @@ clippier features Cargo.toml \
   --output json
 ```
 
+#### Enhanced Change Impact Analysis 
+
+Include only features for packages affected by specific file changes:
+```bash
+clippier features Cargo.toml \
+  --changed-files "src/lib.rs,packages/server/src/main.rs" \
+  --max 10 \
+  --output json
+```
+
+#### Git-Based External Dependency Analysis (Requires git-diff feature)
+
+Analyze feature matrices considering both file changes and external dependency changes:
+```bash
+clippier features Cargo.toml \
+  --changed-files "Cargo.lock,src/lib.rs" \
+  --git-base "origin/main" \
+  --git-head "HEAD" \
+  --max 10 \
+  --output json
+```
+
 ### Workspace Dependencies
 
 Find all workspace dependencies for a package:
@@ -70,17 +100,27 @@ Find all workspace dependencies for a package:
 clippier workspace-deps /path/to/workspace package-name --format json
 ```
 
-Include all potential dependencies:
+Include specific features:
 ```bash
 clippier workspace-deps /path/to/workspace package-name \
   --features "feature1,feature2" \
-  --all-potential-deps \
   --format text
 ```
 
+#### All Potential Dependencies Mode
+
+Include all potential workspace dependencies (useful for Docker builds):
+```bash
+clippier workspace-deps /path/to/workspace package-name \
+  --all-potential-deps \
+  --format json
+```
+
+This mode includes all workspace dependencies regardless of feature activation, ensuring Docker builds have access to all required packages for build compatibility.
+
 ### Generate Dockerfile
 
-Automatically generate optimized Dockerfiles:
+Automatically generate optimized multi-stage Dockerfiles:
 ```bash
 clippier generate-dockerfile /path/to/workspace target-package \
   --features "feature1,feature2" \
@@ -92,6 +132,13 @@ clippier generate-dockerfile /path/to/workspace target-package \
   --generate-dockerignore true
 ```
 
+The generated Dockerfiles include:
+- Multi-stage builds for optimized layer caching
+- Automatic system dependency detection from `clippier.toml` files
+- Workspace member optimization
+- Build artifact caching
+- Runtime dependency installation
+
 ### Affected Packages Analysis
 
 Determine which packages are affected by file changes:
@@ -101,6 +148,22 @@ clippier affected-packages /path/to/workspace \
   --target-package server \
   --output json
 ```
+
+#### Enhanced Git-Based Analysis (Requires git-diff feature)
+
+Analyze impact including external dependency changes from Cargo.lock:
+```bash
+clippier affected-packages /path/to/workspace \
+  --changed-files "Cargo.lock,src/lib.rs,packages/server/src/main.rs" \
+  --git-base "origin/main" \
+  --git-head "HEAD" \
+  --output json
+```
+
+This enhanced mode:
+- Detects changes in external dependencies by analyzing Cargo.lock diff
+- Maps external dependency changes to affected workspace packages
+- Provides comprehensive impact analysis for both internal and external changes
 
 ## Command Line Options
 
@@ -124,6 +187,16 @@ clippier affected-packages /path/to/workspace \
 | `--skip-features` | Features to exclude | - |
 | `--required-features` | Always-required features | - |
 | `--changed-files` | Filter by changed files | - |
+| `--git-base` | Git base commit for external dep analysis | - |
+| `--git-head` | Git head commit for external dep analysis | - |
+
+### Workspace Dependencies Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--features` | Features to enable | - |
+| `--format` | Output format: `json`, `text` | `text` |
+| `--all-potential-deps` | Include all potential dependencies | false |
 
 ### Docker Generation Options
 
@@ -135,11 +208,22 @@ clippier affected-packages /path/to/workspace \
 | `--build-args` | Cargo build arguments | - |
 | `--generate-dockerignore` | Generate .dockerignore | true |
 
+### Affected Packages Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--changed-files` | List of changed files | Required |
+| `--target-package` | Specific package to check | - |
+| `--git-base` | Git base commit for external dep analysis | - |
+| `--git-head` | Git head commit for external dep analysis | - |
+| `--output` | Output format: `json`, `raw` | `json` |
+
 ## Configuration
 
-Clippier can be configured using a `clippier.toml` file in your workspace root:
+Clippier can be configured using a `clippier.toml` file in your workspace root or individual package directories:
 
 ```toml
+# Global configuration
 [config.linux]
 os = "ubuntu-latest"
 nightly = false
@@ -149,25 +233,42 @@ cargo = ["build", "test", "clippy"]
 RUST_BACKTRACE = "1"
 CARGO_TERM_COLOR = "always"
 
+# System dependencies for Docker generation
 [[config.linux.dependencies]]
 command = "sudo apt-get update"
 
 [[config.linux.dependencies]]
-command = "sudo apt-get install -y pkg-config libssl-dev"
+command = "sudo apt-get install -y pkg-config libssl-dev libasound2-dev"
+
+# Feature-specific dependencies
+[[config.linux.dependencies]]
+command = "sudo apt-get install -y libsqlite3-dev"
+features = ["database"]
 
 [parallelization]
 chunked = 4
 ```
 
+### Configuration Features
+
+- **Feature-specific dependencies**: Dependencies can be conditionally included based on enabled features
+- **Multiple OS configurations**: Support for different operating systems
+- **Environment variable management**: Configurable environment variables
+- **CI step customization**: Custom CI pipeline steps
+- **Toolchain specification**: Custom Rust toolchains per configuration
+
 ## Use Cases
 
 ### CI/CD Pipeline Generation
 
-Generate feature matrices for GitHub Actions:
+Generate feature matrices for GitHub Actions with intelligent change detection:
 
 ```bash
-# Generate feature combinations for testing
+# Generate feature combinations for testing only affected packages
 clippier features Cargo.toml \
+  --changed-files "$CHANGED_FILES" \
+  --git-base "origin/main" \
+  --git-head "HEAD" \
   --max 20 \
   --max-parallel 6 \
   --chunked 3 \
@@ -178,10 +279,10 @@ clippier features Cargo.toml \
 
 ### Docker Deployment
 
-Generate production-ready Dockerfiles:
+Generate production-ready Dockerfiles with comprehensive dependency analysis:
 
 ```bash
-# Generate Dockerfile for server package
+# Generate Dockerfile for server package with all potential dependencies
 clippier generate-dockerfile . server \
   --features "production,postgres" \
   --output docker/Dockerfile.server \
@@ -191,14 +292,28 @@ clippier generate-dockerfile . server \
 
 ### Change Impact Analysis
 
-Determine test scope based on changed files:
+Determine test scope based on changed files and external dependencies:
 
 ```bash
-# Find affected packages from git changes
+# Find affected packages from git changes including external deps
 CHANGED=$(git diff --name-only HEAD~1)
 clippier affected-packages . \
   --changed-files "$CHANGED" \
+  --git-base "HEAD~1" \
+  --git-head "HEAD" \
   --output json
+```
+
+### Smart Workspace Dependency Management
+
+Analyze workspace dependencies with different levels of detail:
+
+```bash
+# Get minimal dependencies for current features
+clippier workspace-deps . my-package --features "default,feature1"
+
+# Get all potential dependencies for Docker builds
+clippier workspace-deps . my-package --all-potential-deps --format json
 ```
 
 ## Core Functionality
@@ -208,93 +323,204 @@ clippier affected-packages . \
 - **CI Configuration Generation**: Produces CI/CD pipeline configurations
 - **Docker File Generation**: Creates optimized multi-stage Dockerfiles
 - **Impact Analysis**: Determines which packages are affected by code changes
+- **External Dependency Tracking**: Monitors changes in external dependencies via git analysis
+- **Smart Filtering**: Reduces test scope by analyzing only affected packages
 
-This tool is particularly useful for large Rust workspaces with complex feature interactions and CI/CD requirements.
+## Advanced Features
+
+### External Dependency Analysis
+
+When the `git-diff` feature is enabled (default), Clippier can:
+
+- **Parse Cargo.lock changes**: Detect version updates in external dependencies
+- **Map external to internal dependencies**: Understand which workspace packages use which external dependencies  
+- **Provide comprehensive impact analysis**: Include both file-based and dependency-based changes
+- **Optimize CI/CD pipelines**: Test only packages actually affected by changes
+
+### Intelligent Docker Generation
+
+The Docker generation feature provides:
+
+- **System dependency detection**: Automatically includes required system packages
+- **Multi-stage optimization**: Separates build and runtime environments
+- **Layer caching optimization**: Structures Dockerfiles for maximum cache efficiency
+- **Feature-aware builds**: Includes only dependencies needed for specified features
+- **Comprehensive dependency inclusion**: Uses `--all-potential-deps` mode for build compatibility
+
+### Workspace Relationship Mapping
+
+- **Dependency graph generation**: Complete workspace dependency mapping
+- **Circular dependency detection**: identify problematic dependency cycles
+- **Build order optimization**: Determine optimal build sequences
+- **Feature dependency resolution**: Handle complex feature interactions
 
 ## Output Formats
 
 ### JSON Output
 Structured data suitable for programmatic processing:
+
 ```json
 {
   "packages": [
     {
       "name": "package-name",
       "features": ["feature1", "feature2"],
-      "dependencies": ["dep1", "dep2"]
+      "dependencies": ["dep1", "dep2"],
+      "os": "ubuntu-latest",
+      "path": "packages/package-name"
     }
   ]
 }
 ```
 
-### Raw Output
-Human-readable text format for direct use in scripts.
+For affected packages analysis:
+```json
+{
+  "affected_packages": ["server", "auth", "database"],
+  "package": "server",
+  "affected": true,
+  "all_affected": ["server", "auth", "database"]
+}
+```
+
+### Raw/Text Output
+Human-readable text format for direct use in scripts:
+```
+server
+auth
+database
+```
 
 ## Integration Examples
 
-### GitHub Actions Workflow
+### GitHub Actions Workflow with Smart Change Detection
 
 ```yaml
 name: CI
 on: [push, pull_request]
 
 jobs:
-  generate-matrix:
+  analyze-changes:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      analysis-method: ${{ steps.analysis.outputs.method }}
     steps:
-      - uses: actions/checkout@v3
-      - name: Generate test matrix
-        id: matrix
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Build clippier
+        run: cargo build --release --package clippier
+      
+      - name: Analyze changes and generate matrix
+        id: analysis
         run: |
-          matrix=$(clippier features Cargo.toml --max 10 --output json)
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }} | tr '\n' ',' | sed 's/,$//')
+          
+          # Use enhanced analysis if Cargo.lock changed
+          if echo "$CHANGED_FILES" | grep -q "Cargo.lock"; then
+            echo "method=hybrid" >> $GITHUB_OUTPUT
+            matrix=$(./target/release/clippier features Cargo.toml \
+              --changed-files "$CHANGED_FILES" \
+              --git-base "${{ github.event.before }}" \
+              --git-head "${{ github.sha }}" \
+              --max 15 --output json)
+          else
+            echo "method=file-based" >> $GITHUB_OUTPUT  
+            matrix=$(./target/release/clippier features Cargo.toml \
+              --changed-files "$CHANGED_FILES" \
+              --max 15 --output json)
+          fi
+          
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   test:
-    needs: generate-matrix
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.matrix != '[]'
     strategy:
-      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.analyze-changes.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
-      - name: Test with features
-        run: cargo test --features "${{ matrix.features }}"
+      - uses: actions/checkout@v4
+      - name: Test with features (${{ needs.analyze-changes.outputs.analysis-method }})
+        run: cargo test --package ${{ matrix.name }} --features "${{ matrix.features }}"
 ```
 
-### Docker Build Pipeline
+### Docker Build Pipeline with Dependency Optimization
 
 ```bash
 #!/bin/bash
-# Generate Dockerfiles for all binary packages
+# Generate optimized Dockerfiles for all binary packages
 
-for package in server tunnel-server load-balancer; do
-  clippier generate-dockerfile . "$package" \
+PACKAGES=("server" "tunnel-server" "load-balancer")
+
+for package in "${PACKAGES[@]}"; do
+  echo "Generating Dockerfile for $package..."
+  
+  # Show dependency analysis
+  echo "Dependencies analysis:"
+  echo "  Normal: $(./clippier workspace-deps . "moosicbox_$package" | wc -l) packages"
+  echo "  All potential: $(./clippier workspace-deps . "moosicbox_$package" --all-potential-deps | wc -l) packages"
+  
+  # Generate Dockerfile
+  ./clippier generate-dockerfile . "moosicbox_$package" \
     --output "docker/Dockerfile.$package" \
     --port 8080 \
     --generate-dockerignore
+    
+  echo "Generated docker/Dockerfile.$package"
 done
 ```
 
-## Advanced Features
+### Advanced Change Analysis Script
 
-### Feature Combination Analysis
-- Intelligent feature dependency resolution
-- Conflict detection between features
-- Optimization suggestions for feature flags
+```bash
+#!/bin/bash
+# Comprehensive change impact analysis
 
-### Workspace Relationship Mapping
-- Dependency graph generation
-- Circular dependency detection
-- Build order optimization
+BASE_COMMIT=${1:-"origin/main"}
+HEAD_COMMIT=${2:-"HEAD"}
 
-### Multi-Platform Support
-- Cross-platform configuration generation
-- Platform-specific dependency handling
-- Architecture-aware build optimization
+echo "🔍 Analyzing changes from $BASE_COMMIT to $HEAD_COMMIT"
+
+# Get changed files
+CHANGED_FILES=$(git diff --name-only "$BASE_COMMIT".."$HEAD_COMMIT" | tr '\n' ',' | sed 's/,$//')
+echo "📝 Changed files: $CHANGED_FILES"
+
+# Analyze affected packages
+if echo "$CHANGED_FILES" | grep -q "Cargo.lock"; then
+  echo "🧠 Using hybrid analysis (external deps + file changes)"
+  AFFECTED=$(./clippier affected-packages . \
+    --changed-files "$CHANGED_FILES" \
+    --git-base "$BASE_COMMIT" \
+    --git-head "$HEAD_COMMIT" \
+    --output json)
+else
+  echo "📁 Using file-based analysis"
+  AFFECTED=$(./clippier affected-packages . \
+    --changed-files "$CHANGED_FILES" \
+    --output json)
+fi
+
+echo "📦 Affected packages: $AFFECTED"
+
+# Generate test matrix for affected packages only
+echo "🎯 Generating targeted test matrix..."
+MATRIX=$(./clippier features Cargo.toml \
+  --changed-files "$CHANGED_FILES" \
+  --git-base "$BASE_COMMIT" \
+  --git-head "$HEAD_COMMIT" \
+  --max 20 \
+  --output json)
+
+echo "🧪 Test matrix: $MATRIX"
+```
 
 ## See Also
 
 - [MoosicBox Server](../server/README.md) - Example of complex workspace package
-- [Cargo Workspaces](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) - Rust workspace documentation
+- [Cargo Workspaces](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) - Rust workspace documentation  
 - [GitHub Actions](https://docs.github.com/en/actions) - CI/CD platform integration
+- [Docker Multi-stage Builds](https://docs.docker.com/develop/dev-best-practices/dockerfile_best-practices/#use-multi-stage-builds) - Docker optimization techniques
