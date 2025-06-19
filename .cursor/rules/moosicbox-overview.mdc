@@ -1,0 +1,95 @@
+---
+description: "Comprehensive overview of MoosicBox project architecture, components, and navigation guide"
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# MoosicBox Project Overview
+
+## What is MoosicBox?
+
+MoosicBox is a modern, high-fidelity music server and streaming platform built in Rust. It's a self-hosted solution that allows users to stream their personal music library and access premium music services from anywhere with lossless audio quality.
+
+## Project Structure
+
+### Core Entry Points
+- **Main Server**: @packages/server/Cargo.toml - The primary server application
+- **Configuration**: @packages/config/ - Server and application configuration
+- **Main Package**: @packages/moosicbox/ - Core MoosicBox functionality
+
+### Key Architecture Components
+
+#### Audio Pipeline
+- **Audio Decoder**: @packages/audio_decoder/ - Decoding various audio formats (FLAC, ALAC, etc.)
+- **Audio Encoder**: @packages/audio_encoder/ - Real-time encoding (AAC, MP3, Opus)
+- **Audio Output**: @packages/audio_output/ - Audio playback and output management
+- **Audio Zone**: @packages/audio_zone/ - Multi-zone audio support
+- **Player**: @packages/player/ - Core music player functionality
+- **Resampler**: @packages/resampler/ - Audio resampling for different quality levels
+
+#### Music Services & Library
+- **Library**: @packages/library/ - Local music library management
+- **Music API**: @packages/music_api/ - Unified API for all music sources
+- **Tidal**: @packages/tidal/ - Tidal streaming service integration
+- **Qobuz**: @packages/qobuz/ - Qobuz streaming service integration
+- **YouTube**: @packages/yt/ - YouTube Music integration
+- **Remote Library**: @packages/remote_library/ - Connect to other MoosicBox servers
+- **Scan**: @packages/scan/ - Music library scanning and indexing
+
+#### Web & UI Framework
+- **HyperChad**: @packages/hyperchad/ - Custom reactive UI framework
+  - **Actions**: @packages/hyperchad/actions/ - UI action system
+  - **Renderer**: @packages/hyperchad/renderer/ - Multi-target rendering (HTML, native)
+  - **Router**: @packages/hyperchad/router/ - Client-side routing
+- **Web Server**: @packages/web_server/ - HTTP server foundation
+- **WebSockets**: @packages/ws/ - Real-time communication
+
+#### Desktop & Mobile Apps
+- **App Native**: @packages/app/native/ - Native desktop application
+- **Tauri Apps**: @packages/app/tauri/ - Cross-platform desktop apps
+- **App Models**: @packages/app/models/ - Shared application data models
+- **App State**: @packages/app/state/ - Application state management
+
+#### Infrastructure & Utilities
+- **Database**: @packages/database/ - Database abstraction (PostgreSQL, MySQL, SQLite)
+- **HTTP**: @packages/http/ - HTTP client utilities
+- **Auth**: @packages/auth/ - Authentication and authorization
+- **Image**: @packages/image/ - Image processing and optimization
+- **Files**: @packages/files/ - File management utilities
+- **Downloader**: @packages/downloader/ - File downloading utilities
+
+### Frontend Applications
+- **Marketing Site**: @app-website/ - Public website built with Astro
+- **Admin Interface**: @packages/admin_htmx/ - Admin panel with HTMX
+
+### Development & Deployment
+- **Docker**: @docker/ - Docker configurations
+- **Kubernetes**: @kubernetes/ - Kubernetes deployment manifests
+- **Terraform**: @terraform/ - Infrastructure as code
+- **Examples**: @examples/ - Usage examples and demos
+
+## Development Commands
+
+```bash
+# Run main server
+PORT=8001 cargo run -p moosicbox_server
+
+# Run with debug logging
+RUST_LOG="moosicbox=debug" PORT=8001 cargo run -p moosicbox_server
+
+# Run tests
+cargo test
+
+# Code quality checks
+cargo clippy --all-targets --all-features
+cargo fmt
+```
+
+## Key Technologies
+- **Rust** - Memory-safe, high-performance backend (120+ packages)
+- **Tauri** - Cross-platform desktop applications
+- **Astro** - Marketing website framework
+- **WebSockets** - Real-time synchronization
+- **Multiple Database Support** - PostgreSQL, MySQL, SQLite
+

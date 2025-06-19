@@ -1,0 +1,197 @@
+---
+description: "Deployment strategies, infrastructure, Docker, Kubernetes, and DevOps practices"
+globs:
+  - "docker/**/*"
+  - "kubernetes/**/*"
+  - "terraform/**/*"
+  - "*.yaml"
+  - "*.toml"
+  - "*.sh"
+alwaysApply: true
+---
+
+# Deployment & Infrastructure Guide
+
+## Deployment Overview
+
+MoosicBox supports multiple deployment strategies ranging from simple self-hosting to enterprise-scale cloud deployments.
+
+## Container Deployment
+
+### Docker Configuration (@docker/)
+- **Multi-Stage Builds**: Optimized Docker images for production
+- **Service Separation**: Individual containers for different components
+- **Base Images**: Consistent base images across all services
+- **Security**: Non-root user execution and minimal attack surface
+
+### Docker Compose (@compose.yaml)
+- **Development Environment**: Quick local development setup
+- **Service Orchestration**: Database, cache, and application services
+- **Volume Management**: Persistent storage for music library and database
+- **Network Configuration**: Service-to-service communication
+
+### Image Generation (@generate-dockerfiles.sh)
+- **Automated Dockerfile Generation**: Create Dockerfiles for all packages
+- **Multi-Architecture Support**: ARM64 and AMD64 builds
+- **Optimization**: Layer caching and build optimization
+- **Tagging Strategy**: Consistent image tagging and versioning
+
+## Kubernetes Deployment (@kubernetes/)
+
+### Cluster Architecture
+- **Microservices**: Each major component as separate deployment
+- **Service Mesh**: Inter-service communication and security
+- **Auto-Scaling**: HPA and VPA for dynamic scaling
+- **Resource Management**: CPU and memory limits/requests
+
+### Key Manifests
+- **Deployments**: Application workload definitions
+- **Services**: Service discovery and load balancing
+- **Ingress**: External traffic routing and SSL termination
+- **ConfigMaps**: Configuration management
+- **Secrets**: Secure credential storage
+- **PersistentVolumes**: Storage for music library and databases
+
+### Production Considerations
+- **High Availability**: Multi-replica deployments
+- **Rolling Updates**: Zero-downtime deployments
+- **Health Checks**: Liveness and readiness probes
+- **Monitoring**: Prometheus and Grafana integration
+- **Logging**: Centralized log aggregation
+
+## Cloud Infrastructure
+
+### Terraform Configuration (@terraform/)
+- **Infrastructure as Code**: Declarative infrastructure management
+- **Multi-Cloud Support**: AWS, GCP, Azure configurations
+- **State Management**: Remote state storage and locking
+- **Environment Separation**: Dev, staging, production environments
+
+### AWS Deployment (@aws-deploy.sh)
+- **ECS/EKS**: Container orchestration on AWS
+- **RDS**: Managed database services
+- **S3**: Object storage for music files and static assets
+- **CloudFront**: CDN for global content delivery
+- **Route 53**: DNS management
+- **IAM**: Role-based access control
+
+### SST Framework (@sst.config.ts)
+- **Serverless Stack**: Infrastructure for web applications
+- **TypeScript Configuration**: Type-safe infrastructure definitions
+- **Local Development**: SST dev for local testing
+- **Environment Management**: Multi-stage deployments
+
+## Website Deployment (@app-website/)
+
+### Astro Framework
+- **Static Site Generation**: Pre-built pages for performance
+- **CDN Optimization**: Static assets delivered via CDN
+- **SEO Optimization**: Server-side rendering for search engines
+- **Performance**: Optimized bundle sizes and loading
+
+### SST Integration (@app-website/sst.config.ts)
+- **AWS Integration**: Deploy to S3 + CloudFront
+- **Custom Domains**: SSL certificates and DNS configuration
+- **Edge Functions**: Server-side rendering at the edge
+- **Analytics**: Built-in performance monitoring
+
+## Infrastructure Utilities
+
+### Load Balancer (@packages/load_balancer/)
+- **Request Distribution**: Distribute load across multiple instances
+- **Health Checking**: Monitor backend service health
+- **Connection Pooling**: Efficient connection management
+- **SSL Termination**: Handle TLS encryption/decryption
+
+### Tunneling (@packages/tunnel/, @packages/tunnel_server/, @packages/tunnel_sender/)
+- **Secure Communication**: Encrypted communication between services
+- **NAT Traversal**: Connect services behind firewalls
+- **Connection Management**: Handle connection failures and reconnection
+- **Multiplexing**: Multiple logical connections over single tunnel
+
+### Port Management (@packages/openport/)
+- **Dynamic Port Allocation**: Find available ports for services
+- **Port Conflict Resolution**: Avoid port conflicts in development
+- **Service Discovery**: Register services with port information
+
+## Development & Deployment Scripts
+
+### Deployment Script (@do-deploy.sh)
+- **Automated Deployment**: Single command deployment
+- **Environment Configuration**: Deploy to different environments
+- **Rollback Support**: Quick rollback on deployment failures
+
+### Disk Space Management (@free_disk_space.sh)
+- **CI/CD Optimization**: Free up disk space in build environments
+- **Automated Cleanup**: Remove unnecessary files and caches
+- **Build Optimization**: Improve build performance
+
+## Development Infrastructure
+
+### Development Environment
+- **Shell Configuration**: @shell.nix for Nix-based development
+- **Editor Configuration**: @.editorconfig for consistent formatting
+- **Git Configuration**: @.gitignore and @.dockerignore
+
+### Code Quality
+- **ESLint**: @.eslintrc.cjs for JavaScript/TypeScript linting
+- **Prettier**: @.prettierrc.json for code formatting
+- **Clippy**: @clippy.toml for Rust linting
+- **Deny**: @deny.toml for dependency auditing
+
+## Monitoring & Observability
+
+### Telemetry (@packages/telemetry/)
+- **Metrics Collection**: Application and system metrics
+- **Distributed Tracing**: Request tracing across services
+- **Performance Monitoring**: Track application performance
+- **Alerting**: Automated alerts for critical issues
+
+### Logging (@packages/logging/)
+- **Structured Logging**: Consistent log format across services
+- **Log Levels**: Configurable logging verbosity
+- **Log Aggregation**: Centralized log collection
+- **Log Analysis**: Tools for analyzing application logs
+
+## Security Considerations
+
+### Authentication & Authorization (@packages/auth/)
+- **User Authentication**: Secure user login and session management
+- **Service Authentication**: Secure service-to-service communication
+- **API Security**: Rate limiting and API key management
+- **Data Protection**: Encryption at rest and in transit
+
+### Network Security
+- **TLS/SSL**: Encrypted communication for all external connections
+- **Firewall Rules**: Restrict network access to necessary ports
+- **VPN Access**: Secure access to production environments
+- **Service Mesh**: Zero-trust networking between services
+
+## Performance Optimization
+
+### Caching Strategies
+- **Redis**: In-memory caching for frequently accessed data
+- **CDN**: Geographic content distribution
+- **Application Caching**: Component-level caching
+- **Database Caching**: Query result caching
+
+### Resource Optimization
+- **CPU Optimization**: Profile and optimize CPU-intensive operations
+- **Memory Management**: Monitor and optimize memory usage
+- **I/O Optimization**: Efficient file and network I/O
+- **Database Optimization**: Query optimization and indexing
+
+## Disaster Recovery
+
+### Backup Strategies
+- **Database Backups**: Automated database backup and restoration
+- **File Backups**: Music library and configuration backups
+- **Configuration Backups**: Infrastructure and application configuration
+- **Cross-Region Replication**: Geographic disaster recovery
+
+### Recovery Procedures
+- **RTO/RPO**: Define recovery time and data loss objectives
+- **Failover Procedures**: Automated failover to backup systems
+- **Data Recovery**: Procedures for recovering lost data
+- **Testing**: Regular disaster recovery testing
+

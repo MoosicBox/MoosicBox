@@ -1,0 +1,145 @@
+---
+description: "Custom HyperChad UI framework architecture, multi-platform rendering, and development guidelines"
+globs:
+  - "packages/hyperchad/**/*"
+  - "packages/marketing_site/**/*"
+  - "packages/admin_htmx/**/*"
+alwaysApply: true
+---
+
+# HyperChad UI Framework Guide
+
+## What is HyperChad?
+
+HyperChad is MoosicBox's custom reactive UI framework that supports multiple rendering targets (HTML, native, etc.). It's designed for building consistent UIs across web, desktop, and mobile platforms.
+
+## Framework Architecture
+
+### Core Components
+
+#### HyperChad Core (@packages/hyperchad/)
+- Main framework entry point and coordination
+- Cross-platform UI abstractions
+- Component lifecycle management
+
+#### Actions System (@packages/hyperchad/actions/)
+- **Purpose**: Declarative action handling for UI interactions
+- **Features**:
+  - Type-safe action definitions
+  - Async action support
+  - Action composition and chaining
+  - State mutation through actions
+
+#### State Management (@packages/hyperchad/state/)
+- **Reactive State**: Automatic UI updates on state changes
+- **State Stores**: Centralized application state
+- **State Synchronization**: Cross-component state sharing
+- **Persistence**: State save/restore capabilities
+
+#### Router (@packages/hyperchad/router/)
+- **Client-Side Routing**: SPA-style navigation
+- **Route Guards**: Authentication and authorization checks
+- **Nested Routes**: Hierarchical route structures
+- **Route Parameters**: Dynamic route matching
+
+### Multi-Platform Rendering
+
+#### HTML Renderer (@packages/hyperchad/renderer/html/)
+- **Web Platform**: Browser-based rendering
+- **Actix Integration**: @packages/hyperchad/renderer/html/actix/ - Web server integration
+- **HTTP Integration**: @packages/hyperchad/renderer/html/http/ - HTTP-based rendering
+- **Lambda Support**: @packages/hyperchad/renderer/html/lambda/ - Serverless rendering
+
+#### Native Renderers
+- **Egui Renderer**: @packages/hyperchad/renderer/egui/ - Immediate mode GUI
+- **FLTK Renderer**: @packages/hyperchad/renderer/fltk/ - Cross-platform native UI
+
+#### Vanilla JS (@packages/hyperchad/renderer/vanilla_js/)
+- **Client-Side Runtime**: JavaScript framework for browser interactions
+- **Hash Routing**: @packages/hyperchad/renderer/vanilla_js/hash/ - Browser history management
+- **DOM Manipulation**: Efficient virtual DOM-like updates
+
+### Development Tools
+
+#### Template System (@packages/hyperchad/template/)
+- **Declarative Templates**: HTML-like syntax for UI definitions
+- **Template Macros**: @packages/hyperchad/template/macros/ - Compile-time template processing
+- **Actions DSL**: @packages/hyperchad/template/actions_dsl/ - Domain-specific language for actions
+
+#### Transformer (@packages/hyperchad/transformer/)
+- **Code Generation**: Transform templates to platform-specific code
+- **Optimization**: Compile-time optimizations for performance
+- **Models**: @packages/hyperchad/transformer/models/ - Data structures for transformations
+
+#### JavaScript Bundler (@packages/hyperchad/js_bundler/)
+- **Asset Bundling**: JavaScript and CSS compilation
+- **Module Resolution**: Import/export handling
+- **Minification**: Production build optimizations
+
+## HyperChad Application Structure
+
+### App Framework (@packages/hyperchad/app/)
+- Application lifecycle management
+- Plugin system for extending functionality
+- Configuration and initialization
+
+### Color System (@packages/hyperchad/color/)
+- Consistent color theming across platforms
+- Color utilities and transformations
+- Theme switching capabilities
+
+## Usage in MoosicBox
+
+### Marketing Site (@packages/marketing_site/)
+- Uses HyperChad for the main MoosicBox website
+- Demonstrates server-side rendering capabilities
+- UI components in @packages/marketing_site/ui/
+
+### Native Applications
+- Desktop apps built with HyperChad + Tauri
+- Consistent UI across different operating systems
+- Shared components between web and native platforms
+
+### Admin Interface (@packages/admin_htmx/)
+- Server administration interface
+- Integration with HTMX for enhanced interactivity
+- HyperChad components for consistent styling
+
+## Development Guidelines
+
+### Component Development
+- **Functional Components**: Prefer stateless functional components
+- **Props-Based**: Pass data through props, not global state when possible
+- **Reusable**: Design components for reuse across different contexts
+- **Platform Agnostic**: Write components that work on all supported renderers
+
+### State Management Best Practices
+- **Minimal State**: Keep component state minimal and focused
+- **Action-Driven**: All state changes should go through actions
+- **Immutable Updates**: Use immutable data structures for state
+- **State Normalization**: Avoid deeply nested state structures
+
+### Styling Guidelines
+- **Consistent Theming**: Use the color system for consistent theming
+- **Responsive Design**: Support different screen sizes and orientations
+- **Platform Adaptation**: Adapt styling for different platforms (web vs native)
+- **Accessibility**: Ensure UI is accessible across all renderers
+
+### Performance Considerations
+- **Virtual DOM**: Minimize unnecessary re-renders
+- **Component Memoization**: Cache expensive component computations
+- **Asset Optimization**: Optimize images and other assets for each platform
+- **Bundle Splitting**: Split large applications into smaller chunks
+
+### Testing HyperChad Components
+- **Unit Tests**: Test component logic independently
+- **Integration Tests**: Test component interactions
+- **Cross-Platform Testing**: Ensure components work on all supported renderers
+- **Visual Regression Tests**: Detect unintended visual changes
+
+### Debugging HyperChad Applications
+- **State Inspector**: Tools for inspecting application state
+- **Action Logging**: Log all actions for debugging state changes
+- **Renderer-Specific Tools**: Use platform-specific debugging tools
+- **Performance Profiling**: Profile rendering performance
+

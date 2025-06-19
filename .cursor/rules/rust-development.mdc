@@ -1,0 +1,135 @@
+---
+description: "Rust-specific development patterns, workspace management, and best practices for MoosicBox"
+globs:
+  - "**/*.rs"
+  - "**/Cargo.toml"
+  - "**/Cargo.lock"
+alwaysApply: true
+---
+
+# Rust Development Guidelines for MoosicBox
+
+## Workspace Structure
+
+MoosicBox uses a Cargo workspace with 120+ packages. The main workspace configuration is in @Cargo.toml.
+
+### Package Organization
+- Each package lives in `packages/[package-name]/`
+- Package names follow the pattern `moosicbox_[functionality]`
+- Related packages are grouped (e.g., `packages/hyperchad/` contains UI framework packages)
+
+## Key Development Patterns
+
+### Error Handling
+- Use `Result<T, E>` for fallible operations
+- Create custom error types for each package when needed
+- Leverage `?` operator for error propagation
+- Check @packages/assert/ for assertion utilities
+
+### Async Programming
+- Heavy use of `tokio` for async runtime
+- See @packages/async/ and @packages/async_service/ for async patterns
+- Channel-based communication patterns in @packages/channel_utils/
+
+### Configuration Management
+- Environment-based configuration in @packages/config/
+- Environment utilities in @packages/env_utils/
+- Database configuration handled in @packages/database_connection/
+
+### Logging & Observability
+- Structured logging setup in @packages/logging/
+- Telemetry and metrics in @packages/telemetry/
+- Use `RUST_LOG=moosicbox=debug` for development logging
+
+## Audio Processing Patterns
+
+### Audio Pipeline
+1. **Decode**: @packages/audio_decoder/ - Convert audio files to PCM
+2. **Process**: @packages/resampler/ - Resample if needed
+3. **Encode**: @packages/audio_encoder/ - Encode for streaming
+4. **Output**: @packages/audio_output/ - Send to audio devices
+
+### Performance Considerations
+- Use `cargo build --release` for audio processing
+- Profile with `cargo bench` and `perf` tools
+- Consider SIMD optimizations for audio DSP
+
+## Database Patterns
+
+### Multi-Database Support
+- Database abstraction in @packages/database/
+- Connection management in @packages/database_connection/
+- Schema definitions in @packages/schema/
+
+### Migration Strategy
+- Use diesel or sqlx for database migrations
+- Support PostgreSQL, MySQL, and SQLite
+- Test against all supported databases in CI
+
+## Web Service Patterns
+
+### HTTP Services
+- Base HTTP utilities in @packages/http/
+- Web server framework in @packages/web_server/
+- CORS handling in @packages/web_server/cors/
+
+### Real-time Communication
+- WebSocket implementation in @packages/ws/
+- State synchronization patterns
+- Connection management and reconnection logic
+
+## Testing Strategy
+
+### Unit Tests
+- Each package should have comprehensive unit tests
+- Use `cargo test` to run all tests
+- Mock external dependencies appropriately
+
+### Integration Tests
+- Test full audio pipeline end-to-end
+- Test database operations against real databases
+- Test web service endpoints
+
+### Performance Tests
+- Benchmark audio processing performance
+- Load test web services
+- Memory usage profiling
+
+## Build Profiles
+
+The project defines several build profiles in @Cargo.toml:
+
+- `release` - Standard optimized build
+- `debug-release` - Release with debug symbols
+- `release-lto` - Release with link-time optimization
+- `small` - Size-optimized build
+- `fast` - Fast compilation for development
+
+## Dependencies Management
+
+### Internal Dependencies
+- All MoosicBox packages are versioned together at 0.1.1
+- Use workspace dependencies for consistency
+- Prefer internal packages over external crates when functionality exists
+
+### External Dependencies
+- Pin versions for stability
+- Regular dependency updates via Dependabot
+- Security auditing with `cargo audit`
+
+## Code Quality
+
+### Linting
+- Use `cargo clippy --all-targets --all-features`
+- Configuration in @clippy.toml
+- Custom clippy rules in @packages/clippier/
+
+### Formatting
+- Use `cargo fmt` for consistent formatting
+- EditorConfig in @.editorconfig
+
+### Security
+- Dependency auditing with `cargo deny`
+- Configuration in @deny.toml
+- Regular security updates
+
