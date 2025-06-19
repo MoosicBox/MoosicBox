@@ -14,6 +14,9 @@ use serde::{Deserialize, Serialize};
 use strum::{EnumDiscriminants, EnumIter, IntoDiscriminant};
 use toml::Value;
 
+#[cfg(feature = "git-diff")]
+mod git_diff;
+
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 #[clap(rename_all = "kebab_case")]
 pub enum OutputType {
@@ -106,6 +109,16 @@ enum Commands {
         #[arg(long, value_delimiter = ',')]
         changed_files: Option<Vec<String>>,
 
+        /// Git base commit for external dependency analysis (requires git-diff feature)
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_base: Option<String>,
+
+        /// Git head commit for external dependency analysis (requires git-diff feature)
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_head: Option<String>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -160,6 +173,14 @@ enum Commands {
         /// Package to check if affected (optional - if not provided, returns all affected packages)
         #[arg(long)]
         target_package: Option<String>,
+        /// Git base commit for external dependency analysis (requires git-diff feature)
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_base: Option<String>,
+        /// Git head commit for external dependency analysis (requires git-diff feature)
+        #[cfg(feature = "git-diff")]
+        #[arg(long)]
+        git_head: Option<String>,
         /// Output format
         #[arg(long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
@@ -284,6 +305,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             skip_features,
             required_features,
             changed_files,
+            #[cfg(feature = "git-diff")]
+            git_base,
+            #[cfg(feature = "git-diff")]
+            git_head,
             output,
         } => {
             let path = PathBuf::from_str(&file)?;
@@ -355,21 +380,53 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         };
 
                         // Filter by affected packages if changed_files is provided
-                        let packages = if let Some(changed_files) = &changed_files {
-                            let affected_packages = find_affected_packages(&path, changed_files)?;
-                            packages
-                                .into_iter()
-                                .filter(|pkg| {
-                                    pkg.get("name")
-                                        .and_then(|n| n.as_str())
-                                        .is_some_and(|name| {
-                                            affected_packages.contains(&name.to_string())
-                                        })
-                                })
-                                .collect()
-                        } else {
-                            packages
-                        };
+                        let packages =
+                            if let Some(changed_files) = &changed_files {
+                                let affected_packages = {
+                                    #[cfg(feature = "git-diff")]
+                                    {
+                                        // Check if git parameters are provided for external dependency analysis
+                                        if let (Some(base), Some(head)) = (&git_base, &git_head) {
+                                            log::debug!(
+                                                "Using git diff analysis for external dependencies"
+                                            );
+
+                                            // Extract changed external dependencies from git diff
+                                            let changed_external_deps =
+                                                git_diff::extract_changed_dependencies_from_git(
+                                                    &path,
+                                                    base,
+                                                    head,
+                                                    changed_files,
+                                                )?;
+
+                                            // Use the enhanced function with external dependencies
+                                            find_affected_packages_with_external_deps(
+                                                &path,
+                                                changed_files,
+                                                Some(&changed_external_deps),
+                                            )?
+                                        } else {
+                                            find_affected_packages(&path, changed_files)?
+                                        }
+                                    }
+                                    #[cfg(not(feature = "git-diff"))]
+                                    {
+                                        find_affected_packages(&path, changed_files)?
+                                    }
+                                };
+
+                                packages
+                                    .into_iter()
+                                    .filter(|pkg| {
+                                        pkg.get("name").and_then(|n| n.as_str()).is_some_and(
+                                            |name| affected_packages.contains(&name.to_string()),
+                                        )
+                                    })
+                                    .collect()
+                            } else {
+                                packages
+                            };
 
                         if let (Some(max_parallel), Some(chunked)) = (max_parallel, &mut chunked) {
                             if packages.len() > max_parallel as usize {
@@ -469,10 +526,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             workspace_root,
             changed_files,
             target_package,
+            #[cfg(feature = "git-diff")]
+            git_base,
+            #[cfg(feature = "git-diff")]
+            git_head,
             output,
         } => {
             let workspace_path = PathBuf::from_str(&workspace_root.to_string_lossy())?;
-            let affected_packages = find_affected_packages(&workspace_path, &changed_files)?;
+
+            let affected_packages = {
+                #[cfg(feature = "git-diff")]
+                {
+                    // Check if git parameters are provided for external dependency analysis
+                    if let (Some(base), Some(head)) = (&git_base, &git_head) {
+                        log::debug!("Using git diff analysis for external dependencies");
+
+                        // Extract changed external dependencies from git diff
+                        let changed_external_deps =
+                            git_diff::extract_changed_dependencies_from_git(
+                                &workspace_path,
+                                base,
+                                head,
+                                &changed_files,
+                            )?;
+
+                        // Use the enhanced function with external dependencies
+                        find_affected_packages_with_external_deps(
+                            &workspace_path,
+                            &changed_files,
+                            Some(&changed_external_deps),
+                        )?
+                    } else {
+                        find_affected_packages(&workspace_path, &changed_files)?
+                    }
+                }
+                #[cfg(not(feature = "git-diff"))]
+                {
+                    find_affected_packages(&workspace_path, &changed_files)?
+                }
+            };
 
             match target_package {
                 Some(package) => {
@@ -1894,6 +1986,22 @@ fn find_affected_packages(
     workspace_root: &Path,
     changed_files: &[String],
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    #[cfg(feature = "git-diff")]
+    {
+        find_affected_packages_with_external_deps(workspace_root, changed_files, None)
+    }
+    #[cfg(not(feature = "git-diff"))]
+    {
+        find_affected_packages_basic(workspace_root, changed_files)
+    }
+}
+
+#[cfg(not(feature = "git-diff"))]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+fn find_affected_packages_basic(
+    workspace_root: &Path,
+    changed_files: &[String],
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     use std::collections::{HashMap, HashSet, VecDeque};
 
     log::trace!("🔍 Finding affected packages for changed files: {changed_files:?}");
@@ -1994,12 +2102,179 @@ fn find_affected_packages(
                 directly_affected_packages.insert(package_name.clone());
             }
         }
+    }
 
-        // Also check if it's a workspace-level file that affects all packages
-        if changed_file == "Cargo.toml" || changed_file == "Cargo.lock" {
-            log::trace!("📝 Workspace-level file {changed_file} affects all packages");
-            for package_name in package_name_to_path.keys() {
+    log::trace!("🎯 Directly affected packages: {directly_affected_packages:?}");
+
+    // Now find all packages that depend on the directly affected packages (transitive dependencies)
+    let mut all_affected_packages = directly_affected_packages.clone();
+    let mut queue = VecDeque::new();
+
+    // Add all directly affected packages to the queue
+    for package in &directly_affected_packages {
+        queue.push_back(package.clone());
+    }
+
+    // Build reverse dependency map (package -> packages that depend on it)
+    let mut reverse_deps: HashMap<String, Vec<String>> = HashMap::new();
+    for (package, deps) in &package_dependencies {
+        for dep in deps {
+            reverse_deps
+                .entry(dep.clone())
+                .or_default()
+                .push(package.clone());
+        }
+    }
+
+    // Process the queue to find all transitive dependents
+    while let Some(current_package) = queue.pop_front() {
+        if let Some(dependents) = reverse_deps.get(&current_package) {
+            for dependent in dependents {
+                if !all_affected_packages.contains(dependent) {
+                    log::trace!(
+                        "🔄 Package {dependent} depends on affected package {current_package}"
+                    );
+                    all_affected_packages.insert(dependent.clone());
+                    queue.push_back(dependent.clone());
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<String> = all_affected_packages.into_iter().collect();
+    result.sort();
+
+    log::trace!("🏁 Final affected packages: {result:?}");
+
+    Ok(result)
+}
+
+#[cfg(feature = "git-diff")]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+fn find_affected_packages_with_external_deps(
+    workspace_root: &Path,
+    changed_files: &[String],
+    external_deps: Option<&[String]>,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    use std::collections::{HashMap, HashSet, VecDeque};
+
+    log::trace!("🔍 Finding affected packages for changed files: {changed_files:?}");
+
+    // First, load the workspace and get all members
+    let workspace_cargo_path = workspace_root.join("Cargo.toml");
+    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_value: Value = toml::from_str(&workspace_source)?;
+
+    let workspace_members = workspace_value
+        .get("workspace")
+        .and_then(|x| x.get("members"))
+        .and_then(|x| x.as_array())
+        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+        .ok_or("No workspace members found")?;
+
+    log::trace!("🏢 Found {} workspace members", workspace_members.len());
+
+    // Create a map of package name -> package path and package_path -> package name
+    let mut package_path_to_name = HashMap::new();
+    let mut package_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+
+    for member_path in workspace_members {
+        let full_path = workspace_root.join(member_path);
+        let cargo_path = full_path.join("Cargo.toml");
+
+        if !cargo_path.exists() {
+            log::trace!("⚠️  Skipping {member_path}: Cargo.toml not found");
+            continue;
+        }
+
+        log::trace!("📄 Processing package: {member_path}");
+        let source = std::fs::read_to_string(&cargo_path)?;
+        let value: Value = toml::from_str(&source)?;
+
+        // Get package name
+        if let Some(package_name) = value
+            .get("package")
+            .and_then(|x| x.get("name"))
+            .and_then(|x| x.as_str())
+        {
+            log::trace!("📦 Package name: {package_name} -> {member_path}");
+            package_path_to_name.insert(member_path.to_string(), package_name.to_string());
+
+            // Extract dependencies that are workspace members
+            let mut deps = Vec::new();
+
+            // Check regular dependencies
+            if let Some(dependencies) = value.get("dependencies").and_then(|x| x.as_table()) {
+                for (dep_name, dep_value) in dependencies {
+                    if is_workspace_dependency(dep_value) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            // Check dev dependencies
+            if let Some(dev_dependencies) = value.get("dev-dependencies").and_then(|x| x.as_table())
+            {
+                for (dep_name, dep_value) in dev_dependencies {
+                    if is_workspace_dependency(dep_value) && !deps.contains(dep_name) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            // Check build dependencies
+            if let Some(build_dependencies) =
+                value.get("build-dependencies").and_then(|x| x.as_table())
+            {
+                for (dep_name, dep_value) in build_dependencies {
+                    if is_workspace_dependency(dep_value) && !deps.contains(dep_name) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            log::trace!("📊 Dependencies for {package_name}: {deps:?}");
+            package_dependencies.insert(package_name.to_string(), deps);
+        }
+    }
+
+    // Find packages directly affected by changed files
+    let mut directly_affected_packages = HashSet::new();
+
+    for changed_file in changed_files {
+        let changed_path = PathBuf::from(changed_file);
+
+        // Check if the changed file belongs to a workspace package
+        for (package_path, package_name) in &package_path_to_name {
+            let package_path_buf = PathBuf::from(package_path);
+
+            // Check if the changed file is within this package's directory
+            if changed_path.starts_with(&package_path_buf) {
+                log::trace!("📝 File {changed_file} affects package {package_name}");
                 directly_affected_packages.insert(package_name.clone());
+            }
+        }
+    }
+
+    // Add packages affected by external dependency changes
+    #[cfg(feature = "git-diff")]
+    if let Some(external_deps) = external_deps {
+        if !external_deps.is_empty() {
+            log::trace!("🔍 Processing external dependency changes: {external_deps:?}");
+
+            // Build external dependency map
+            let workspace_members: Vec<String> = package_path_to_name.keys().cloned().collect();
+            let external_dep_map =
+                git_diff::build_external_dependency_map(workspace_root, &workspace_members)?;
+
+            // Find packages affected by external dependencies
+            let externally_affected =
+                git_diff::find_packages_affected_by_external_deps(&external_dep_map, external_deps);
+
+            log::trace!("📦 Packages affected by external dependencies: {externally_affected:?}");
+
+            for package in externally_affected {
+                directly_affected_packages.insert(package);
             }
         }
     }
