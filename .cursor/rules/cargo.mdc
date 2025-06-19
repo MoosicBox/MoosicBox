@@ -1,0 +1,24 @@
+---
+description: "Cargo-specific development patterns, workspace management, and best practices for MoosicBox"
+globs:
+  - "**/Cargo.toml"
+---
+
+# Cargo Development Guidelines for MoosicBox
+
+## Workspace Structure
+
+MoosicBox uses a Cargo workspace with 120+ packages. The main workspace configuration is in @Cargo.toml.
+
+### Package Organization
+- Each package lives in `packages/**/[package-name]/`
+- Package names follow the pattern `moosicbox_[functionality]`
+  - Unless they are switchy or hyperchad-related packages
+- Related packages are grouped (e.g., `packages/hyperchad/` contains UI framework packages)
+
+## Key Development Patterns
+
+Ensure all packages are workspace members and have a `Cargo.toml` file in the root directory.
+
+Ensure that the `Cargo.toml` formatting matches what is specified by the taplo linter in @taplo.toml.
+Re-format the file with the taplo linter on modifications to the file.
