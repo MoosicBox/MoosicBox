@@ -301,7 +301,7 @@ fn test_dsl_advanced_features() {
 
     // The actions should contain logic actions
     assert!(
-        actions.len() >= 1,
+        !actions.is_empty(),
         "DSL should generate logic actions from complex conditional"
     );
 }

@@ -138,11 +138,7 @@ fn test_helper_functions_vs_calc_equivalent() {
     assert_eq!(containers_direct[0].width, Some(Number::RealPercent(50.0)));
     // The calc version should produce a Calc variant containing the percent
     match &containers_calc[0].width {
-        Some(Number::Calc(_calc)) => {
-            // The calc should contain a Number with RealPercent(50.0)
-            // This is implementation-specific, but we can at least verify it's a Calc
-            assert!(true); // Calc was created successfully
-        }
+        Some(Number::Calc(_calc)) => {}
         _ => panic!("Expected Calc variant for calc() usage"),
     }
 }
