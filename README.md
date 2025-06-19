@@ -1,38 +1,201 @@
-# MoosicBox Server
+# MoosicBox
 
-A music server for cows
+**A modern, high-fidelity music server and streaming platform for cows**
 
 ![MoosicBox](https://github.com/MoosicBox/Files/blob/master/animation.gif?raw=true)
 
-## Project Status
+## 🎵 Listen to your HiFi music anywhere
 
-**⚠️ Development Notice:** This is currently a personal side project in active development. Most features are experimental and may not work as expected. While the goal is to eventually create a stable, user-friendly music app that others can enjoy, the project is not yet ready for general use. Your mileage may vary significantly at this stage.
+MoosicBox is a powerful, self-hosted music server that lets you stream your personal music library and access premium music services from anywhere. Built with performance and audio quality in mind, MoosicBox provides a seamless listening experience across all your devices.
 
-## Features
+**[📱 Download MoosicBox](https://moosicbox.com/download)** | **[🏠 Visit Website](https://moosicbox.com)**
 
-Implemented:
+## ⚠️ Project Status
 
-- Audio playback controls
-    - Next/previous track, seek track, queue tracks, adjust volume, etc
-- Control playback across applications (web and desktop)
-    - Supports multi simultaneous audio outputs
-- Audio encoding on the fly
-    - AAC (m4a, mp4), mp3, Opus
-- Hi-Fi audio player
-- Automatic image optimization for requested size on demand
-- Tunnel server reverse proxy - allows access to local server from internet without any firewall configuration
-- Tidal and Qobuz integration
-- No internet connection required, ever.
-- Global search functionality
-- Postgres, MySQL, and SQLite database support
-- Android app
-- Audio file visualization on seek bar
+**Development Notice:** This is currently a personal side project in active development. Most features are experimental and may not work as expected. While the goal is to eventually create a stable, user-friendly music app that others can enjoy, the project is not yet ready for general use. Your mileage may vary significantly at this stage.
 
-To-do:
+---
 
-See the [prioritized backlog](https://github.com/orgs/MoosicBox/projects/1/views/1)
+## ✨ Key Features
 
-## Workspace Packages
+### 🎧 **Hi-Fi Audio Experience**
+
+- **Lossless audio streaming** with support for FLAC, ALAC, and other high-quality formats
+- **Real-time audio encoding** (AAC, MP3, Opus) optimized for your connection
+- **High-resolution audio support** for audiophile-grade listening
+
+### 🌐 **Multi-Platform Access**
+
+- **Web interface** - Stream from any browser
+- **Desktop applications** - Native apps for Windows, macOS, and Linux
+- **Mobile apps** - iOS (in-progress) and Android applications
+- **Cross-device sync** - Continue listening where you left off
+
+### 🎼 **Music Service Integration**
+
+- **Local library** - Your personal music collection
+- **Tidal** - Access millions of hi-fi tracks and MQA content
+- **Qobuz** - Studio-quality streaming with large catalog
+- **Global search** across all connected services and local library
+
+### 🏠 **Self-Hosted & Private**
+
+- **Complete ownership** of your music server
+- **No internet required** for local music playback
+- **Privacy-focused** - your data stays on your devices
+
+### 🔧 **Advanced Features**
+
+- **Multi-zone audio** - Play different music in different rooms
+- **Multiple simultaneous outputs** - Stream to multiple devices at once
+- **Automatic image optimization** - Perfect album art for any screen size
+- **Database flexibility** - Support for PostgreSQL, MySQL, and SQLite
+- **Audio visualization** - See waveforms and track progress
+- **Remote library access** - Connect to other MoosicBox servers
+
+---
+
+## 🚀 Getting Started
+
+### Quick Start Options
+
+1. **📱 Download Apps**: Get native apps at [moosicbox.com/download](https://moosicbox.com/download)
+2. **🛠️ Self-Host**: Set up your own server using the instructions below
+
+### Self-Hosting Your MoosicBox Server
+
+#### Prerequisites
+
+- **Rust toolchain** (latest stable)
+
+#### Installation & Setup
+
+1. **Clone the repository**:
+
+    ```bash
+    git clone https://github.com/MoosicBox/MoosicBox.git
+    cd MoosicBox
+    ```
+
+2. **Start the server**:
+
+    ```bash
+    PORT=8001 cargo run -p moosicbox_server
+    ```
+
+3. **Access your server**:
+    - Open your browser to `http://localhost:8001`
+    - Start adding your music library and connecting services
+
+#### Advanced Configuration
+
+**Development mode with debugging**:
+
+```bash
+RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" PORT=8001 cargo run -p moosicbox_server
+```
+
+---
+
+## 🏗️ Architecture
+
+MoosicBox is built with a modular, high-performance architecture:
+
+### Core Technologies
+
+- **🦀 Rust** - Memory-safe, high-performance backend
+- **🌐 Web Technologies** - Modern web interface with TypeScript
+- **🎨 HyperChad UI Framework** - Custom reactive UI system
+- **📱 Tauri** - Cross-platform desktop applications
+- **🔄 Real-time sync** - WebSocket-based live updates
+
+### Supported Platforms
+
+- **🖥️ Desktop**: Windows, macOS, Linux (via Tauri)
+- **📱 Mobile**: iOS, Android
+- **🌐 Web**: All modern browsers
+- **🐧 Server**: Linux, Docker, cloud deployments
+
+---
+
+## 📊 Database Support
+
+MoosicBox supports multiple database backends for maximum flexibility:
+
+- **SQLite** - Perfect for personal use and getting started
+- **PostgreSQL** - Recommended for production and multi-user setups
+- **MySQL** - Enterprise-grade reliability and performance
+
+## 🔧 Development
+
+MoosicBox is built as a comprehensive Rust workspace with 120+ packages:
+
+### Key Development Commands
+
+```bash
+# Run the main server
+PORT=8001 cargo run -p moosicbox_server
+
+# Run with debug logging
+RUST_LOG="moosicbox=debug" cargo run -p moosicbox_server
+
+# Run tests
+cargo test
+
+# Check code quality
+cargo clippy --all-targets --all-features
+
+# Format code
+cargo fmt
+```
+
+### Project Structure
+
+- **`packages/`** - Modular Rust packages (audio, networking, UI, etc.)
+- **`app-website/`** - Marketing website source
+- **`infra/`** - Infrastructure and deployment configurations
+- **`kubernetes/`** - Kubernetes deployment manifests
+- **`terraform/`** - Infrastructure as code
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! MoosicBox is open source and community-driven.
+
+### Ways to Contribute
+
+- 🐛 **Report bugs** via GitHub Issues
+- 💡 **Suggest features** and improvements
+- 🔧 **Submit pull requests** for bug fixes and enhancements
+- 📚 **Improve documentation** and help others get started
+- 🎨 **Design improvements** for UI/UX
+
+### Development Setup
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
+
+See our [prioritized backlog](https://github.com/orgs/MoosicBox/projects/1/views/1) for current development priorities.
+
+---
+
+## 📄 License
+
+MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
+
+## 🔗 Links
+
+- **🌐 Website**: [moosicbox.com](https://moosicbox.com)
+- **📱 Downloads**: [moosicbox.com/download](https://moosicbox.com/download)
+- **🎮 Try Online**: [moosicbox.com/try-now](https://moosicbox.com/try-now)
+- **📖 Documentation**: [GitHub Wiki](https://github.com/MoosicBox/MoosicBox/wiki)
+- **🐛 Issues**: [GitHub Issues](https://github.com/MoosicBox/MoosicBox/issues)
+- **💬 Discussions**: [GitHub Discussions](https://github.com/MoosicBox/MoosicBox/discussions)
+
+---
 
 <details>
 <summary><strong>📦 All Workspace Packages (Click to expand)</strong></summary>
@@ -220,124 +383,3 @@ See the [prioritized backlog](https://github.com/orgs/MoosicBox/projects/1/views
 - **[simple_get](packages/web_server/examples/simple_get)** - Simple web server example
 
 </details>
-
-## Local Server
-
-### Dependencies
-
-- pkg-config (optional for OPUS)
-- libtool (optional for OPUS)
-- [vips](https://www.libvips.org/install.html) (optional for libvips image optimization)
-
-### Run
-
-`cargo server 8001`
-
-### Debug
-
-`RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" cargo server:debug 8001`
-
-### Deploy
-
-`WS_HOST="wss://tunnel2.moosicbox.com/ws" TUNNEL_ACCESS_TOKEN='your access token here' STATIC_TOKEN='your static token here' ./do-deploy.sh moosicbox-tunnel-server`
-
-## Tunnel Server
-
-### Run
-
-`TUNNEL_ACCESS_TOKEN='your access token here' cargo tunnel-server 8005`
-
-### Development
-
-`TUNNEL_ACCESS_TOKEN='your access token here' RUST_BACKTRACE=1 RUST_LOG="moosicbox=debug" cargo tunnel-server:debug 8005`
-
-### Deploy
-
-`TUNNEL_ACCESS_TOKEN='your access token here' AWS_ACCESS_KEY_ID='token here' AWS_SECRET_ACCESS_KEY='key here' ./do-deploy.sh moosicbox-tunnel-server`
-
-## Database
-
-### Server
-
-The SQLite database stores the music library data:
-
-- Artist metadata
-- Album metadata
-- Track metadata
-- Local WebSocket connection metadata
-- Audio Player configurations
-- Playback Sessions
-
-#### Migrations
-
-##### SQLite
-
-###### Run
-
-`diesel migration run --migration-dir migrations/server/sqlite --database-url library.db`
-
-###### Revert
-
-`diesel migration revert --migration-dir migrations/server/sqlite --database-url library.db`
-
-###### New Migration
-
-`diesel migration generate --migration-dir migrations/server/sqlite migration_name`
-
-##### Postgres
-
-###### Run
-
-`diesel migration run --migration-dir migrations/server/postgres --database-url postgres://username:password@host/dbname`
-
-###### Revert
-
-`diesel migration revert --migration-dir migrations/server/postgres --database-url postgres://username:password@host/dbname`
-
-###### New Migration
-
-`diesel migration generate --migration-dir migrations/server/postgres migration_name`
-
-### Tunnel
-
-#### Postgres
-
-The Postgres database stores the tunnel server configurations:
-
-- WebSocket connection mappings
-    - Enables the tunnel server to know which WebSocket connection to tunnel data from
-
-##### Migrations
-
-###### Run
-
-`diesel migration run --migration-dir migrations/tunnel/postgres --database-url postgres://username:password@host/dbname`
-
-###### Revert
-
-`diesel migration revert --migration-dir migrations/tunnel/postgres --database-url postgres://username:password@host/dbname`
-
-###### New Migration
-
-`diesel migration generate --migration-dir migrations/tunnel/postgres migration_name`
-
-#### MySQL
-
-The MySQL database stores the tunnel server configurations:
-
-- WebSocket connection mappings
-    - Enables the tunnel server to know which WebSocket connection to tunnel data from
-
-##### Migrations
-
-###### Run
-
-`diesel migration run --migration-dir migrations/tunnel/mysql --database-url mysql://username:password@host/dbname`
-
-###### Revert
-
-`diesel migration revert --migration-dir migrations/tunnel/mysql --database-url mysql://username:password@host/dbname`
-
-###### New Migration
-
-`diesel migration generate --migration-dir migrations/tunnel/mysql migration_name`
