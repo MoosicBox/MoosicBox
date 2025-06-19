@@ -131,9 +131,9 @@ jobs:
         name: Determine affected packages
         runs-on: ubuntu-latest
         outputs:
-            matrix: ${{ steps.set-matrix.outputs.matrix }}
-            has-changes: ${{ steps.set-matrix.outputs.has-changes }}
-            has-tauri-changes: ${{ steps.check-tauri-changes.outputs.has-tauri-changes }}
+            matrix: ${{ steps.analyze-changes.outputs.matrix }}
+            has-changes: ${{ steps.analyze-changes.outputs.has-changes }}
+            has-tauri-changes: ${{ steps.analyze-changes.outputs.has-tauri-changes }}
         steps:
             - uses: actions/checkout@v4
               with:
@@ -141,53 +141,50 @@ jobs:
 
             - uses: dtolnay/rust-toolchain@stable
 
-            - name: Get changed files
-              id: changed-files
+            - name: Build clippier with git-diff support
+              run: cargo build --package clippier --features git-diff
+
+            - name: Analyze changes and generate matrix
+              id: analyze-changes
               run: |
+                  echo "🔍 Determining git comparison range and analyzing changes..."
+
+                  # Determine git comparison range using robust fallback logic
                   if [ "${{ github.event_name }}" == "pull_request" ]; then
-                      # For pull requests, get changed files between base and head
                       echo "Pull request: comparing ${{ github.event.pull_request.base.sha }} to ${{ github.event.pull_request.head.sha }}"
-                      CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+                      BASE_SHA="${{ github.event.pull_request.base.sha }}"
+                      HEAD_SHA="${{ github.event.pull_request.head.sha }}"
                   elif [ "${{ github.event_name }}" == "push" ]; then
-                      # For pushes, get changed files between the before and after commits
-                      # This handles multiple commits being pushed at once
                       BEFORE_SHA="${{ github.event.before }}"
                       AFTER_SHA="${{ github.event.after }}"
                       FORCED="${{ github.event.forced }}"
 
                       echo "Push event: before=$BEFORE_SHA after=$AFTER_SHA forced=$FORCED"
 
-                      # If this is the first push to a new branch, github.event.before will be all zeros
                       if [ "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]; then
-                          # For new branches, compare against the default branch
                           DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "master")
                           echo "New branch detected, comparing against origin/$DEFAULT_BRANCH"
-                          if ! git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA; then
+                          if ! git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA >/dev/null 2>&1; then
                               echo "Error: Could not compare against origin/$DEFAULT_BRANCH...$AFTER_SHA"
                               echo "This likely means the git history is incomplete or the branch doesn't exist"
                               exit 1
                           fi
-                          CHANGED_FILES=$(git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA)
+                          BASE_SHA="origin/$DEFAULT_BRANCH"
+                          HEAD_SHA="$AFTER_SHA"
                       elif [ "$FORCED" == "true" ] || ! git diff --name-only $BEFORE_SHA..$AFTER_SHA >/dev/null 2>&1; then
-                          # Handle force pushes or invalidated before commits
                           if [ "$FORCED" == "true" ]; then
                               echo "Force push detected - before commit $BEFORE_SHA is no longer valid"
                           else
                               echo "Before commit $BEFORE_SHA is not available - likely due to force push"
                           fi
 
-                          # Try to find a valid commit from recent successful workflow runs
                           echo "Searching through recent successful workflow runs..."
                           FOUND_VALID_COMMIT=false
-                          LAST_SUCCESS_SHA=""
-
-                          # Get up to 10 recent successful workflow runs
                           WORKFLOW_RUNS=$(curl -s \
                               -H "Authorization: Bearer ${{ github.token }}" \
                               -H "Accept: application/vnd.github.v3+json" \
                               "https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-and-test.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=10")
 
-                          # Walk through each run until we find a valid commit
                           for i in $(seq 0 9); do
                               RUN_SHA=$(echo "$WORKFLOW_RUNS" | jq -r ".workflow_runs[$i].head_sha // empty")
                               if [ -z "$RUN_SHA" ] || [ "$RUN_SHA" == "null" ] || [ "$RUN_SHA" == "empty" ]; then
@@ -203,7 +200,8 @@ jobs:
                               echo "Checking if commit $RUN_SHA is available in git history..."
                               if git cat-file -e $RUN_SHA 2>/dev/null; then
                                   echo "Found valid commit from workflow run: $RUN_SHA"
-                                  LAST_SUCCESS_SHA="$RUN_SHA"
+                                  BASE_SHA="$RUN_SHA"
+                                  HEAD_SHA="$AFTER_SHA"
                                   FOUND_VALID_COMMIT=true
                                   break
                               else
@@ -211,97 +209,133 @@ jobs:
                               fi
                           done
 
-                          if [ "$FOUND_VALID_COMMIT" == "true" ]; then
-                              echo "Comparing against last valid workflow run: $LAST_SUCCESS_SHA..$AFTER_SHA"
-                              CHANGED_FILES=$(git diff --name-only $LAST_SUCCESS_SHA..$AFTER_SHA)
-                          else
+                          if [ "$FOUND_VALID_COMMIT" != "true" ]; then
                               echo "Could not find any valid commits from recent workflow runs, using branch comparison fallback"
                               DEFAULT_BRANCH=$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5 2>/dev/null || echo "master")
                               if [ "${{ github.ref_name }}" == "$DEFAULT_BRANCH" ]; then
                                   echo "Force push on default branch - assuming all packages affected"
-                                  CHANGED_FILES="packages/"
+                                  BASE_SHA="HEAD~1"
+                                  HEAD_SHA="$AFTER_SHA"
                               else
                                   echo "Comparing against origin/$DEFAULT_BRANCH"
-                                  CHANGED_FILES=$(git diff --name-only origin/$DEFAULT_BRANCH...$AFTER_SHA)
+                                  BASE_SHA="origin/$DEFAULT_BRANCH"
+                                  HEAD_SHA="$AFTER_SHA"
                               fi
                           fi
                       else
-                          # Normal push: compare the range of commits
                           echo "Comparing commit range: $BEFORE_SHA..$AFTER_SHA"
-                          CHANGED_FILES=$(git diff --name-only $BEFORE_SHA..$AFTER_SHA)
+                          BASE_SHA="$BEFORE_SHA"
+                          HEAD_SHA="$AFTER_SHA"
                       fi
                   else
-                      # For workflow_dispatch or schedule, assume all packages are affected
-                      echo "Workflow dispatch or schedule: assuming all packages affected"
-                      CHANGED_FILES="packages/"
+                      echo "Workflow dispatch or schedule: comparing against HEAD~1"
+                      BASE_SHA="HEAD~1"
+                      HEAD_SHA="HEAD"
                   fi
 
-                  # Convert to comma-separated for clippier
-                  CHANGED_FILES_CSV=$(echo "$CHANGED_FILES" | tr '\n' ',' | sed 's/,$//')
+                  echo "Final comparison range: $BASE_SHA -> $HEAD_SHA"
 
-                  echo "changed-files=$CHANGED_FILES_CSV" >> $GITHUB_OUTPUT
-                  echo "Changed files:"
-                  echo "$CHANGED_FILES"
+                  # Get changed files, filtering out ignored patterns (same as tj-actions/changed-files)
+                  CHANGED_FILES_RAW=$(git diff --name-only $BASE_SHA $HEAD_SHA || echo "")
 
-            - name: Generate matrix for affected packages
-              id: set-matrix
-              run: |
-                  CHANGED_FILES="${{ steps.changed-files.outputs.changed-files }}"
+                  # Filter out ignored files
+                  CHANGED_FILES=""
+                  if [ -n "$CHANGED_FILES_RAW" ]; then
+                      CHANGED_FILES=$(echo "$CHANGED_FILES_RAW" | grep -v -E '^\.github/' | grep -v -E '\.(md|txt)$' | grep -v -E '^Dockerfile' | grep -v -E '^\.dockerignore$' | tr '\n' ',' | sed 's/,$//')
+                  fi
 
-                  # Build the clippier command conditionally
-                  if [[ -n "$CHANGED_FILES" ]]; then
-                      echo "Building matrix for affected packages only"
-                      CLIPPIER_CMD="cargo run -p clippier features . --changed-files \"$CHANGED_FILES\" --chunked 15 --max-parallel 256 -o json --spread"
+                  echo "📝 Changed files (after filtering): $CHANGED_FILES"
+
+                  # Generate build matrix
+                  echo ""
+                  echo "🔧 Generating build matrix..."
+
+                  # Determine if we should build anything based on event type and changes
+                  SHOULD_BUILD=false
+
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                      echo "🚀 Workflow dispatch detected - building all packages"
+                      CLIPPIER_CMD="./target/debug/clippier features . --chunked 15 --max-parallel 256 -o json --spread"
+                      ANALYSIS_TYPE="full"
+                      SHOULD_BUILD=true
+                  elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+                      echo "⏰ Scheduled run - building all packages"
+                      CLIPPIER_CMD="./target/debug/clippier features . --chunked 15 --max-parallel 256 -o json --spread"
+                      ANALYSIS_TYPE="full"
+                      SHOULD_BUILD=true
+                  elif [[ -n "$CHANGED_FILES" ]]; then
+                      echo "🔍 Using smart dependency analysis for Cargo.lock/Cargo.toml changes"
+                      CLIPPIER_CMD="./target/debug/clippier features . --changed-files \"$CHANGED_FILES\" --git-base \"$BASE_SHA\" --git-head \"$HEAD_SHA\" --chunked 15 --max-parallel 256 -o json --spread"
+                      ANALYSIS_TYPE="smart"
+                      SHOULD_BUILD=true
                   else
-                      echo "Building matrix for all packages (scheduled run or no changed files detected)"
-                      CLIPPIER_CMD="cargo run -p clippier features . --chunked 15 --max-parallel 256 -o json --spread"
+                      echo "❌ No changes detected and not a scheduled/manual run - skipping builds"
+                      ANALYSIS_TYPE="none"
+                      SHOULD_BUILD=false
                   fi
 
-                  echo "Running: $CLIPPIER_CMD"
+                  if [[ "$SHOULD_BUILD" == "true" ]]; then
+                      echo "Running: $CLIPPIER_CMD"
 
-                  MATRIX=$(
-                      eval "$CLIPPIER_CMD" \
-                          | jq -rc \
-                              '[
-                                  .[]
-                                  | {
-                                      "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
-                                      "path": (.path),
-                                      "features": (.features),
-                                      "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
-                                      "os": (.os + "-latest"),
-                                      "dependencies": (.dependencies),
-                                      "toolchains": (.toolchains),
-                                      "ciSteps": (.ciSteps),
-                                      "ciToolchains": (.ciToolchains),
-                                      "env": (if .env != null then .env | gsub("\n";" ") else null end),
-                                      "nightly": (.nightly)
-                                  }
-                                  | del(.. | nulls)
-                              ]'
-                  )
+                      MATRIX=$(
+                          eval "$CLIPPIER_CMD" \
+                              | jq -rc \
+                                  '[
+                                      .[]
+                                      | {
+                                          "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
+                                          "path": (.path),
+                                          "features": (.features),
+                                          "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
+                                          "os": (.os + "-latest"),
+                                          "dependencies": (.dependencies),
+                                          "toolchains": (.toolchains),
+                                          "ciSteps": (.ciSteps),
+                                          "ciToolchains": (.ciToolchains),
+                                          "env": (if .env != null then .env | gsub("\n";" ") else null end),
+                                          "nightly": (.nightly)
+                                      }
+                                      | del(.. | nulls)
+                                  ]'
+                      )
 
-                  echo "Matrix length: $(echo "$MATRIX" | jq length)"
-                  echo "Using matrix:"
-                  echo "$MATRIX" | jq
+                      echo "Matrix length: $(echo "$MATRIX" | jq length)"
 
-                  # Check if matrix is empty
-                  if [[ "$(echo "$MATRIX" | jq length)" -eq 0 ]]; then
+                      # Show what the analysis found
+                      if [[ "$ANALYSIS_TYPE" == "smart" ]]; then
+                          echo "🎯 Smart dependency analysis results:"
+                          echo "$MATRIX" | jq -r '[.[].name] | unique []' | sed 's/^/  - /'
+                          PACKAGE_COUNT=$(echo "$MATRIX" | jq length)
+                          echo "📊 Building $PACKAGE_COUNT affected packages (instead of full workspace)"
+                      fi
+
+                      # Check if matrix is empty (shouldn't happen for workflow_dispatch/schedule, but could for smart/file analysis)
+                      if [[ "$(echo "$MATRIX" | jq length)" -eq 0 ]]; then
+                          echo "has-changes=false" >> $GITHUB_OUTPUT
+                          echo "matrix=[]" >> $GITHUB_OUTPUT
+                          echo "⚠️ No packages affected by changes"
+                      else
+                          echo "has-changes=true" >> $GITHUB_OUTPUT
+                          echo "matrix=$(echo "$MATRIX" | jq -c .)" >> $GITHUB_OUTPUT
+                          echo "✅ Found affected packages"
+                      fi
+                  else
+                      # No changes detected and not a manual/scheduled run
                       echo "has-changes=false" >> $GITHUB_OUTPUT
                       echo "matrix=[]" >> $GITHUB_OUTPUT
-                  else
-                      echo "has-changes=true" >> $GITHUB_OUTPUT
-                      echo "matrix=$(echo "$MATRIX" | jq -c .)" >> $GITHUB_OUTPUT
+                      echo "⚠️ No changes detected - builds will be skipped"
                   fi
 
-            - name: Check Tauri-related changes
-              id: check-tauri-changes
-              run: |
-                  CHANGED_FILES="${{ steps.changed-files.outputs.changed-files }}"
+                  # Check Tauri-related changes
+                  echo ""
+                  echo "🎯 Checking Tauri-related changes..."
 
-                  if [[ -n "$CHANGED_FILES" ]]; then
-                      echo "Checking if changes affect the Tauri app..."
-
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
+                      # For manual or scheduled runs, assume Tauri is affected
+                      echo "Manual or scheduled run - assuming Tauri is affected"
+                      echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
+                      echo "✅ Tauri-related changes assumed for manual/scheduled run"
+                  elif [[ "$SHOULD_BUILD" == "true" && -n "$CHANGED_FILES" ]]; then
                       # First check if app-website files changed (these don't affect Rust packages but do affect Tauri)
                       WEBSITE_AFFECTED=false
                       if echo "$CHANGED_FILES" | grep -q "app-website/"; then
@@ -311,13 +345,19 @@ jobs:
 
                       # Use clippier to check if the moosicbox_app package is affected by the changes
                       echo "Checking if moosicbox_app package is affected by changes..."
-                      TAURI_CHECK_RESULT=$(cargo run -p clippier affected-packages . --changed-files "$CHANGED_FILES" --target-package moosicbox_app --output json)
+
+                      if [[ "$ANALYSIS_TYPE" == "smart" ]]; then
+                          echo "🔍 Using smart dependency analysis for Tauri check"
+                          TAURI_CHECK_RESULT=$(./target/debug/clippier affected-packages . --changed-files Cargo.lock --git-base "$BASE_SHA" --git-head "$HEAD_SHA" --target-package moosicbox_app --output json)
+                      else
+                          echo "📝 Using file-based analysis for Tauri check"
+                          TAURI_CHECK_RESULT=$(./target/debug/clippier affected-packages . --changed-files "$CHANGED_FILES" --target-package moosicbox_app --output json)
+                      fi
 
                       TAURI_AFFECTED=$(echo "$TAURI_CHECK_RESULT" | jq -r '.affected')
 
                       if [[ "$TAURI_AFFECTED" == "true" ]]; then
                           echo "✅ moosicbox_app package is affected by changes"
-
                           # Show which packages were affected that led to this determination
                           AFFECTED_PACKAGES=$(echo "$TAURI_CHECK_RESULT" | jq -r '.all_affected[]')
                           echo "All affected packages:"
@@ -336,11 +376,57 @@ jobs:
                           echo "❌ No Tauri-related changes detected - Tauri release will be skipped"
                       fi
                   else
-                      # For scheduled runs or when no specific files are detected, assume Tauri is affected
-                      echo "No specific changed files detected (scheduled run or workflow_dispatch) - assuming Tauri is affected"
-                      echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
-                      echo "✅ Tauri-related changes assumed for scheduled run"
+                      # No changes detected and not a manual/scheduled run
+                      echo "No changes detected - Tauri release will be skipped"
+                      echo "has-tauri-changes=false" >> $GITHUB_OUTPUT
+                      echo "❌ No Tauri-related changes detected"
                   fi
+
+            - name: Smart CI Summary
+              if: always()
+              run: |
+                  echo "## 🧠 Smart CI Analysis Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+
+                  HAS_CHANGES="${{ steps.analyze-changes.outputs.has-changes }}"
+                  HAS_TAURI_CHANGES="${{ steps.analyze-changes.outputs.has-tauri-changes }}"
+                  EVENT_NAME="${{ github.event_name }}"
+
+                  # Show event type
+                  case "$EVENT_NAME" in
+                      "workflow_dispatch")
+                          echo "🚀 **Trigger**: Manual workflow dispatch" >> $GITHUB_STEP_SUMMARY
+                          ;;
+                      "schedule")
+                          echo "⏰ **Trigger**: Scheduled run" >> $GITHUB_STEP_SUMMARY
+                          ;;
+                      "push")
+                          echo "📤 **Trigger**: Push to ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+                          ;;
+                      "pull_request")
+                          echo "🔀 **Trigger**: Pull request" >> $GITHUB_STEP_SUMMARY
+                          ;;
+                  esac
+                  echo "" >> $GITHUB_STEP_SUMMARY
+
+                  # The analyze-changes step will have logged whether smart or file-based analysis was used
+                  # We can detect this from the step logs, but for the summary we'll check if analysis was done
+                  if [[ "$HAS_CHANGES" == "true" ]]; then
+                      MATRIX_LENGTH=$(echo '${{ steps.analyze-changes.outputs.matrix }}' | jq length)
+                      echo "📊 **Build Matrix**: $MATRIX_LENGTH packages will be built/tested" >> $GITHUB_STEP_SUMMARY
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                      echo "**Affected packages:**" >> $GITHUB_STEP_SUMMARY
+                      echo '${{ steps.analyze-changes.outputs.matrix }}' | jq -r '[.[].name] | unique []' | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+                  else
+                      if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "schedule" ]]; then
+                          echo "⚠️ **No Packages**: Matrix generation may have failed for manual/scheduled run" >> $GITHUB_STEP_SUMMARY
+                      else
+                          echo "🎉 **No Changes**: No packages affected - builds will be skipped!" >> $GITHUB_STEP_SUMMARY
+                      fi
+                  fi
+
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Tauri Release**: $([[ \"$HAS_TAURI_CHANGES\" == \"true\" ]] && echo \"Will be triggered\" || echo \"Will be skipped\")" >> $GITHUB_STEP_SUMMARY
 
     build-cargo-machete:
         name: Build cargo-machete
