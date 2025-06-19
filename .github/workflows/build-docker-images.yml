@@ -278,7 +278,8 @@ jobs:
                   # We can detect this from the step logs, but for the summary we'll check if analysis was done
                   if [[ "$HAS_CHANGES" == "true" ]]; then
                       MATRIX_LENGTH=$(echo '${{ steps.analyze-changes.outputs.matrix }}' | jq length)
-                      echo "📊 **Build Matrix**: $MATRIX_LENGTH packages will be built/tested" >> $GITHUB_STEP_SUMMARY
+                      PACKAGES_LENGTH=$(echo '${{ steps.analyze-changes.outputs.matrix }}' | jq '[.[].name] | unique [] | length')
+                      echo "📊 **Build Matrix**: $MATRIX_LENGTH jobs for $PACKAGES_LENGTH packages will be built/tested" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
                       echo "**Affected packages:**" >> $GITHUB_STEP_SUMMARY
                       echo '${{ steps.analyze-changes.outputs.matrix }}' | jq -r '[.[].name] | unique []' | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
