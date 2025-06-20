@@ -357,7 +357,7 @@ jobs:
 
                       if [[ "$ANALYSIS_TYPE" == "smart" ]]; then
                           echo "🔍 Using smart dependency analysis for Tauri check"
-                          TAURI_CHECK_RESULT=$(./target/debug/clippier affected-packages . --changed-files Cargo.lock --git-base "$BASE_SHA" --git-head "$HEAD_SHA" --target-package moosicbox_app --output json)
+                          TAURI_CHECK_RESULT=$(./target/debug/clippier affected-packages . --changed-files "$CHANGED_FILES" --git-base "$BASE_SHA" --git-head "$HEAD_SHA" --target-package moosicbox_app --output json)
                       else
                           echo "📝 Using file-based analysis for Tauri check"
                           TAURI_CHECK_RESULT=$(./target/debug/clippier affected-packages . --changed-files "$CHANGED_FILES" --target-package moosicbox_app --output json)
