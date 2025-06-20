@@ -1188,22 +1188,22 @@ pub mod unit_functions {
 /// FX DSL function for template actions
 ///
 /// This function serves as the entry point for the fx DSL syntax in templates.
-/// It supports both the legacy parentheses syntax and the new curly brace syntax:
+/// It supports the curly brace syntax for defining actions:
 ///
 /// # Examples
 ///
-/// **Legacy syntax (still supported):**
+/// **Single action:**
 /// ```rust
 /// use hyperchad_template::container;
 ///
 /// let containers = container! {
-///     button fx-click=(fx(hide("modal"))) {
-///         "Close Modal"
+///     button fx-click=fx { hide("search") } {
+///         "Close Search"
 ///     }
 /// };
 /// ```
 ///
-/// **New curly brace syntax:**
+/// **Multiple actions:**
 /// ```rust
 /// use hyperchad_template::container;
 ///
@@ -1217,13 +1217,19 @@ pub mod unit_functions {
 /// };
 /// ```
 ///
-/// **Single expression syntax:**
+/// **Conditional actions:**
 /// ```rust
 /// use hyperchad_template::container;
 ///
 /// let containers = container! {
-///     button fx-click=fx { hide("search") } {
-///         "Close Search"
+///     button fx-click=fx {
+///         if get_visibility("modal") == visible() {
+///             hide("modal")
+///         } else {
+///             show("modal")
+///         }
+///     } {
+///         "Toggle Modal"
 ///     }
 /// };
 /// ```

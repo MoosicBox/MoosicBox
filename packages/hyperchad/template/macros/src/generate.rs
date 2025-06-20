@@ -3211,40 +3211,9 @@ impl Generator {
         }
     }
 
-    /// Extract DSL content from `fx()` function calls and `fx { }` block syntax
-    fn extract_fx_call_content(expr: &syn::Expr) -> Option<TokenStream> {
-        match expr {
-            // Handle `fx(...)` function call syntax
-            syn::Expr::Call(call_expr) => {
-                if let syn::Expr::Path(path_expr) = &*call_expr.func {
-                    if let Some(ident) = path_expr.path.get_ident() {
-                        if ident == "fx" && call_expr.args.len() == 1 {
-                            // Extract the argument content as token stream
-                            let arg = &call_expr.args[0];
-                            return Some(quote! { #arg });
-                        }
-                    }
-                }
-                None
-            }
-            // Handle `fx { ... }` block syntax
-            syn::Expr::Block(_block_expr) => {
-                // Check if this block is preceded by an fx identifier
-                // This is a bit tricky since we only have the block expression
-                // We'll handle this in the calling code instead
-                None
-            }
-            _ => None,
-        }
-    }
-
-    /// Extract DSL content from fx calls, supporting both `fx(...)` and `fx { ... }` syntax
+    /// Extract DSL content from fx calls, supporting only `fx { ... }` syntax
     fn extract_fx_dsl_content(markup: &Markup<NoElement>) -> Option<TokenStream> {
         match markup {
-            Markup::Splice { expr, .. } => {
-                // Try the existing extract_fx_call_content for fx(...) syntax
-                Self::extract_fx_call_content(expr)
-            }
             Markup::BraceSplice { items, .. } => {
                 // Check if this is fx followed by block content
                 if !items.is_empty() {

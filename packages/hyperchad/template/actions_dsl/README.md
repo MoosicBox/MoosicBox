@@ -1,85 +1,66 @@
-# hyperchad_template_actions_dsl
+# HyperChad Actions DSL
 
-HyperChad template actions DSL macros package
+A domain-specific language (DSL) for writing interactive actions in HyperChad templates.
 
-## Features
+## Overview
 
-This package provides a domain-specific language (DSL) for defining UI actions in HyperChad templates. The DSL supports both simple function calls and complex patterns used in real-world applications like MoosicBox.
+The Actions DSL provides a simple, intuitive syntax for defining user interactions in your HyperChad templates. It supports various action types including visibility toggles, navigation, logging, and custom actions.
 
-### Basic DSL Functions
+## Basic Usage
 
-#### Element Visibility
-- `show(id)` - Show an element by ID
-- `hide(id)` - Hide an element by ID
-- `toggle(id)` - Toggle element visibility
-- `set_visibility(id, visibility)` - Set specific visibility state
+### Simple Actions
 
-#### Self-targeting Functions
-- `show_self()` - Show the current element
-- `hide_self()` - Hide the current element
-- `show_last_child()` - Show the last child element
+```rust
+// Show an element
+fx-click=fx { show("panel") }
 
-#### Display Control
-- `set_display(id, display)` - Set element display property
+// Hide an element
+fx-click=fx { hide("modal") }
 
-#### Background Control
-- `set_background(id, background)` - Set element background
+// Toggle visibility
+fx-click=fx { toggle("sidebar") }
 
-#### Navigation
-- `navigate(url)` - Navigate to a URL
+// Navigate to a URL
+fx-click=fx { navigate("/dashboard") }
 
-#### Logging and Custom Actions
-- `log(message)` - Log a message
-- `custom(action_name)` - Execute a custom action by name
+// Log a message
+fx-click=fx { log("Button clicked") }
 
-#### Visibility State Functions
-- `get_visibility(id)` - Get visibility state of an element
-- `get_visibility_self()` - Get visibility state of current element
-- `visible()` - Returns visible state for comparison
-- `hidden()` - Returns hidden state for comparison
+// Custom action
+fx-click=fx { custom("my-action") }
+```
 
 ### Multiple Actions
 
-The DSL supports multiple actions in a single expression using block syntax:
+Chain multiple actions together:
 
-**New Curly Brace Syntax (Recommended):**
 ```rust
 fx-click=fx {
     hide("modal");
     show("success-message");
-    log("Action completed");
+    log("Modal closed successfully");
 }
 ```
 
-**Legacy Parentheses Syntax (Still Supported):**
-```rust
-fx-click=(fx({
-    hide("modal");
-    show("success-message");
-    log("Action completed");
-}))
-```
+### Variables and Reusability
 
-When multiple actions are used, they are automatically wrapped in `ActionType::Multi` to ensure all actions are executed.
-
-### Method Chaining
-
-The DSL supports method chaining for complex logic:
+Use variables to make your actions more maintainable:
 
 ```rust
-fx-click=(fx(
-    get_visibility("modal")
-        .eq(hidden())
-        .then(show("modal"))
-        .or_else(hide("modal"))
-))
+fx-click=fx {
+    let modal_id = "user-modal";
+    let overlay_id = "modal-overlay";
+    
+    hide(modal_id);
+    hide(overlay_id);
+    log("User modal workflow completed");
+}
 ```
 
 ### Conditional Expressions
 
 Use if/else expressions for clear conditional logic:
 
-**New Curly Brace Syntax (Recommended):**
 ```rust
 fx-click=fx {
     if get_visibility("panel") == hidden() {
@@ -90,21 +71,9 @@ fx-click=fx {
 }
 ```
 
-**Legacy Parentheses Syntax (Still Supported):**
-```rust
-fx-click=(fx(
-    if get_visibility("panel") == hidden() {
-        show("panel")
-    } else {
-        hide("panel")
-    }
-))
-```
-
 ### Real-world Examples
 
 #### Modal Toggle with Feedback
-**New Curly Brace Syntax:**
 ```rust
 button fx-click=fx {
     if get_visibility("modal") == hidden() {
@@ -115,27 +84,11 @@ button fx-click=fx {
         log("Modal closed");
     }
 } {
-    "Toggle Modal"
-}
-```
-
-**Legacy Parentheses Syntax:**
-```rust
-button fx-click=(fx({
-    if get_visibility("modal") == hidden() {
-        show("modal");
-        log("Modal opened");
-    } else {
-        hide("modal");
-        log("Modal closed");
-    }
-})) {
     "Toggle Modal"
 }
 ```
 
 #### Multi-step Navigation
-**New Curly Brace Syntax:**
 ```rust
 button fx-click=fx {
     hide("current-page");
@@ -146,52 +99,100 @@ button fx-click=fx {
 }
 ```
 
-**Legacy Parentheses Syntax:**
-```rust
-button fx-click=(fx({
-    hide("current-page");
-    show("loading-spinner");
-    navigate("/next-page");
-})) {
-    "Next Page"
-}
-```
-
 #### Single Action (Clean Syntax)
-**New Curly Brace Syntax:**
 ```rust
 button fx-click=fx { hide("search") } {
     "Close Search"
 }
 ```
 
-**Legacy Parentheses Syntax:**
+## Action Types
+
+### Visibility Actions
+- `show(id)` - Show an element
+- `hide(id)` - Hide an element  
+- `toggle(id)` - Toggle element visibility
+
+### Navigation Actions
+- `navigate(url)` - Navigate to a URL
+
+### Logging Actions
+- `log(message)` - Log an info message
+- `log_debug(message)` - Log a debug message
+- `log_warn(message)` - Log a warning message
+- `log_error(message)` - Log an error message
+
+### Custom Actions
+- `custom(action_name)` - Execute a custom action
+
+### Conditional Functions
+- `get_visibility(id)` - Get element visibility state
+- `visible()` - Visibility state constant
+- `hidden()` - Hidden state constant
+
+## Comparison Operators
+
+The DSL supports standard comparison operators:
+- `==` - Equal
+- `!=` - Not equal
+- `<` - Less than
+- `>` - Greater than
+- `<=` - Less than or equal
+- `>=` - Greater than or equal
+
+## Control Flow
+
+### If/Else Expressions
 ```rust
-button fx-click=(fx(hide("search"))) {
-    "Close Search"
+fx-click=fx {
+    if condition {
+        action1()
+    } else {
+        action2()
+    }
 }
 ```
 
-## Backwards Compatibility
-
-The DSL is fully backwards compatible with existing HyperChad action syntax:
-
+### Complex Conditions
 ```rust
-// DSL syntax
-fx-click=(fx(toggle("menu")))
-
-// Traditional syntax (still works)
-fx-click=(ActionType::toggle_str_id("menu"))
-
-// Complex expressions (still work)
-fx-click=(
-    get_visibility_str_id("menu")
-        .eq(Visibility::Hidden)
-        .then(ActionType::show_str_id("menu"))
-        .or_else(ActionType::hide_str_id("menu"))
-)
+fx-click=fx {
+    if get_visibility("panel") == visible() && user_logged_in() {
+        show("admin-panel")
+    } else {
+        navigate("/login")
+    }
+}
 ```
 
-## Implementation
+## Best Practices
 
-The DSL is implemented using procedural macros that parse Rust-like syntax and generate appropriate action code at compile time. This ensures type safety and performance while providing a more expressive syntax for UI actions.
+1. **Use descriptive element IDs**: Make your actions self-documenting
+2. **Group related actions**: Keep logically related actions together
+3. **Use variables for reusability**: Define IDs as variables when used multiple times
+4. **Add logging for debugging**: Include log statements for complex workflows
+5. **Keep actions focused**: Each action should have a single responsibility
+
+## Integration with HyperChad
+
+The Actions DSL integrates seamlessly with HyperChad's template system:
+
+```rust
+use hyperchad_template::container;
+
+let ui = container! {
+    div {
+        button fx-click=fx {
+            toggle("search-panel");
+            log("Search panel toggled");
+        } {
+            "Toggle Search"
+        }
+        
+        div id="search-panel" {
+            "Search content here..."
+        }
+    }
+};
+```
+
+This DSL provides a powerful yet simple way to add interactivity to your HyperChad applications while maintaining clean, readable code.
