@@ -277,12 +277,12 @@ jobs:
                   # The analyze-changes step will have logged whether smart or file-based analysis was used
                   # We can detect this from the step logs, but for the summary we'll check if analysis was done
                   if [[ "$HAS_CHANGES" == "true" ]]; then
-                      MATRIX_LENGTH=$(echo '${{ steps.analyze-changes.outputs.matrix }}' | jq length)
-                      PACKAGES_LENGTH=$(echo '${{ steps.analyze-changes.outputs.matrix }}' | jq '[.[].name] | unique | length')
+                      MATRIX_LENGTH=$(echo '${{ steps.analyze-changes.outputs.matrix }}' | jq '.include | length')
+                      PACKAGES_LENGTH=$(echo '${{ steps.analyze-changes.outputs.matrix }}' | jq '.include | [.[].name] | unique | length')
                       echo "📊 **Build Matrix**: $MATRIX_LENGTH jobs for $PACKAGES_LENGTH packages will be built/tested" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
                       echo "**Affected packages:**" >> $GITHUB_STEP_SUMMARY
-                      echo '${{ steps.analyze-changes.outputs.matrix }}' | jq -r '[.[].name] | unique []' | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+                      echo '${{ steps.analyze-changes.outputs.matrix }}' | jq -r '.include | group_by(.name) | .[] | "- \(.[0].name) (\(.length) job\(if .length > 1 then "s" else "" end))"' >> $GITHUB_STEP_SUMMARY
                   else
                       if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "schedule" ]]; then
                           echo "⚠️ **No Packages**: Matrix generation may have failed for manual/scheduled run" >> $GITHUB_STEP_SUMMARY
