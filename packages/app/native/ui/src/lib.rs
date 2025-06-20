@@ -220,9 +220,9 @@ pub fn player(state: &State) -> Containers {
                     cursor=pointer
                     width=100%
                     height=(VIZ_HEIGHT)
-                    fx-click=(fx(invoke(Action::SeekCurrentTrackPercent, get_mouse_x_self() / get_width_px_self())))
-                    fx-resize=(fx(invoke(Action::RefreshVisualization, get_width_px_self())))
-                    fx-immediate=(fx(invoke(Action::RefreshVisualization, get_width_px_self())))
+                    fx-click=fx { invoke(Action::SeekCurrentTrackPercent, get_mouse_x_self() / get_width_px_self()) }
+                    fx-resize=fx { invoke(Action::RefreshVisualization, get_width_px_self()) }
+                    fx-immediate=fx { invoke(Action::RefreshVisualization, get_width_px_self()) }
                 {}
             }
             div height=100 direction=row {
@@ -279,13 +279,13 @@ pub fn player(state: &State) -> Containers {
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
-                        fx-click=(fx({
+                        fx-click=fx {
                             if get_visibility_str_id(AUDIO_ZONES_ID) == hidden() {
                                 show(AUDIO_ZONES_ID);
                             } else {
                                 hide(AUDIO_ZONES_ID);
                             }
-                        }))
+                        }
                     {
                         image
                             width=(FOOTER_ICON_SIZE)
@@ -296,13 +296,13 @@ pub fn player(state: &State) -> Containers {
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
-                        fx-click=(fx({
+                        fx-click=fx {
                             if get_visibility_str_id(PLAYBACK_SESSIONS_ID) == hidden() {
                                 show(PLAYBACK_SESSIONS_ID);
                             } else {
                                 hide(PLAYBACK_SESSIONS_ID);
                             }
-                        }))
+                        }
                     {
                         image
                             width=(FOOTER_ICON_SIZE)
@@ -310,13 +310,13 @@ pub fn player(state: &State) -> Containers {
                             src=(public_img!("sessions-white.svg"));
                     }
                     button
-                        fx-click=(fx({
+                        fx-click=fx {
                             if get_visibility_str_id("play-queue") == hidden() {
                                 show("play-queue");
                             } else {
                                 hide("play-queue");
                             }
-                        }))
+                        }
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
@@ -345,7 +345,7 @@ fn volume(state: &State, size: u16) -> Containers {
             width=(size)
             height=(size)
             position=relative
-            fx-hover=(fx(show(VOLUME_SLIDER_ID).delay_off(400)))
+            fx-hover=fx { show(VOLUME_SLIDER_ID).delay_off(400) }
         {
             button {
                 image
@@ -375,7 +375,7 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
             border-radius=30
             background=(BACKGROUND)
             cursor=pointer
-            fx-mouse-down=(fx({
+            fx-mouse-down=fx {
                 invoke(
                     Action::SetVolume,
                     clamp(
@@ -385,9 +385,9 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
                             / get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID),
                         1.0
                     )
-                ).throttle(30);
-            }))
-            fx-hover=(fx(show_self().delay_off(400)))
+                ).throttle(30)
+            }
+            fx-hover=fx { show_self().delay_off(400) }
         {
             div
                 id=(VOLUME_SLIDER_VALUE_CONTAINER_ID)
@@ -721,11 +721,11 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                 min-height=calc(min(vh(90), 300))
                 max-height=vh90
                 border-radius=15
-                fx-click-outside=(fx({
+                fx-click-outside=fx {
                     if get_visibility_str_id(id) == visible() {
                         hide(id);
                     }
-                }))
+                }
                 overflow-y=auto
             {
                 div
@@ -744,13 +744,13 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                         button
                             width=(icon_size)
                             height=(icon_size)
-                            fx-click=(fx({
+                            fx-click=fx {
                                 if get_visibility_str_id(id) == visible() {
                                     hide(id);
                                 } else {
                                     show(id);
                                 }
-                            }))
+                            }
                         {
                             image
                                 width=(icon_size)

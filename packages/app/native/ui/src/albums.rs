@@ -350,13 +350,13 @@ pub fn album_page_tracks_table_body(
                 direction=row
                 border-radius=5
                 data-track-id=(track.track_id)
-                fx-hover=(fx({
+                fx-hover=fx {
                     set_background_self("#444");
                     set_visibility_child_class(Visibility::Hidden, "track-number");
                     set_visibility_child_class(Visibility::Hidden, "track-playing");
                     set_visibility_child_class(Visibility::Visible, "play-button");
-                }))
-                fx-event=(fx(
+                }
+                fx-event=fx {
                     on_event("play-track", |value| {
                         if value == get_data_attr_value_self("track-id") {
                             set_background_self("#333");
@@ -370,7 +370,7 @@ pub fn album_page_tracks_table_body(
                             set_visibility_child_class(Visibility::Visible, "track-number");
                         }
                     })
-                ))
+                }
                 background=[if current_track { Some("#333") } else { None }]
             {
                 div padding-x=10 height=50 justify-content=center {
@@ -622,7 +622,7 @@ pub fn album_display(
                 width=(size)
                 height=(size)
                 position=relative
-                fx-hover=(fx(show_last_child()))
+                fx-hover=fx { show_last_child() }
             {
                 (album_cover_img_from_album(host, album, size))
                 div
@@ -792,11 +792,11 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             height=(button_size)
                             justify-content=center
                             align-items=center
-                            fx-click=(fx({
+                            fx-click=fx {
                                 if get_visibility_str_id("albums-menu") == hidden() {
                                     show("albums-menu");
                                 }
-                            }))
+                            }
                         {
                             image
                                 width=(icon_size)
@@ -812,11 +812,11 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             background=(DARK_BACKGROUND)
                             border-radius=5
                             direction=row
-                            fx-click-outside=(fx({
+                            fx-click-outside=fx {
                                 if get_visibility_self() == visible() {
                                     hide_self();
                                 }
-                            }))
+                            }
                         {
                             div {
                                 div {
@@ -828,7 +828,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                             AlbumSort::ArtistAsc
                                         }
                                     );
-                                    button fx-click=(fx(navigate(url))) {
+                                    button fx-click=fx { navigate(url) } {
                                         "Album Artist"
                                     }
                                 }
@@ -841,7 +841,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                             AlbumSort::NameAsc
                                         }
                                     );
-                                    button fx-click=(fx(navigate(url))) {
+                                    button fx-click=fx { navigate(url) } {
                                         "Album Name"
                                     }
                                 }
@@ -854,7 +854,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                             AlbumSort::ReleaseDateAsc
                                         }
                                     );
-                                    button fx-click=(fx(navigate(url))) {
+                                    button fx-click=fx { navigate(url) } {
                                         "Album Release Date"
                                     }
                                 }
@@ -867,7 +867,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                             AlbumSort::DateAddedAsc
                                         }
                                     );
-                                    button fx-click=(fx(navigate(url))) {
+                                    button fx-click=fx { navigate(url) } {
                                         "Album Date Added"
                                     }
                                 }
@@ -878,13 +878,15 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                         @let checked = filtered_sources.iter().any(|x| x == source);
                                         (source.to_string())
                                         input
-                                            fx-change=(fx(navigate(
-                                                albums_page_url(&if checked {
-                                                    filtered_sources.iter().filter(|x| *x != source).cloned().collect::<Vec<_>>()
-                                                } else {
-                                                    [filtered_sources, &[source.clone()]].concat()
-                                                }, sort)
-                                            )))
+                                            fx-change=fx {
+                                                navigate(
+                                                    albums_page_url(&if checked {
+                                                        filtered_sources.iter().filter(|x| *x != source).cloned().collect::<Vec<_>>()
+                                                    } else {
+                                                        [filtered_sources, &[source.clone()]].concat()
+                                                    }, sort)
+                                                )
+                                            }
                                             type=checkbox
                                             checked=(checked);
                                     }
@@ -896,12 +898,12 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                 input
                     type=text
                     placeholder="Filter..."
-                    fx-change=(fx({
+                    fx-change=fx {
                         invoke(Action::FilterAlbums {
                             filtered_sources: filtered_sources.to_vec(),
                             sort
                         }, get_event_value());
-                    }));
+                    };
             }
         }
         (load_albums(size, sort, filtered_sources, ""))

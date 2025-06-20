@@ -42,6 +42,16 @@ This package provides a domain-specific language (DSL) for defining UI actions i
 
 The DSL supports multiple actions in a single expression using block syntax:
 
+**New Curly Brace Syntax (Recommended):**
+```rust
+fx-click=fx {
+    hide("modal");
+    show("success-message");
+    log("Action completed");
+}
+```
+
+**Legacy Parentheses Syntax (Still Supported):**
 ```rust
 fx-click=(fx({
     hide("modal");
@@ -69,6 +79,18 @@ fx-click=(fx(
 
 Use if/else expressions for clear conditional logic:
 
+**New Curly Brace Syntax (Recommended):**
+```rust
+fx-click=fx {
+    if get_visibility("panel") == hidden() {
+        show("panel")
+    } else {
+        hide("panel")
+    }
+}
+```
+
+**Legacy Parentheses Syntax (Still Supported):**
 ```rust
 fx-click=(fx(
     if get_visibility("panel") == hidden() {
@@ -82,6 +104,22 @@ fx-click=(fx(
 ### Real-world Examples
 
 #### Modal Toggle with Feedback
+**New Curly Brace Syntax:**
+```rust
+button fx-click=fx {
+    if get_visibility("modal") == hidden() {
+        show("modal");
+        log("Modal opened");
+    } else {
+        hide("modal");
+        log("Modal closed");
+    }
+} {
+    "Toggle Modal"
+}
+```
+
+**Legacy Parentheses Syntax:**
 ```rust
 button fx-click=(fx({
     if get_visibility("modal") == hidden() {
@@ -97,6 +135,18 @@ button fx-click=(fx({
 ```
 
 #### Multi-step Navigation
+**New Curly Brace Syntax:**
+```rust
+button fx-click=fx {
+    hide("current-page");
+    show("loading-spinner");
+    navigate("/next-page");
+} {
+    "Next Page"
+}
+```
+
+**Legacy Parentheses Syntax:**
 ```rust
 button fx-click=(fx({
     hide("current-page");
@@ -107,15 +157,18 @@ button fx-click=(fx({
 }
 ```
 
-#### Form Submission Flow
+#### Single Action (Clean Syntax)
+**New Curly Brace Syntax:**
 ```rust
-button fx-click=(fx({
-    hide("form");
-    show("loading");
-    custom("SubmitForm");
-    log("Form submitted");
-})) {
-    "Submit"
+button fx-click=fx { hide("search") } {
+    "Close Search"
+}
+```
+
+**Legacy Parentheses Syntax:**
+```rust
+button fx-click=(fx(hide("search"))) {
+    "Close Search"
 }
 ```
 

@@ -25,7 +25,7 @@ pub use hyperchad_transformer_models as transformer_models;
 pub mod prelude {
     pub use crate::{
         self as hyperchad_template, ContainerVecExt, ContainerVecMethods, IntoActionEffect,
-        IntoBorder, ToBool, actions as hyperchad_actions, calc, color as hyperchad_color,
+        IntoBorder, ToBool, actions as hyperchad_actions, calc, color as hyperchad_color, fx,
         template_actions_dsl as hyperchad_template_actions_dsl,
         transformer as hyperchad_transformer, transformer_models as hyperchad_transformer_models,
     };
@@ -1183,6 +1183,62 @@ pub mod unit_functions {
             _ => Number::RealDvh(number_to_f32(&num)),
         }
     }
+}
+
+/// FX DSL function for template actions
+///
+/// This function serves as the entry point for the fx DSL syntax in templates.
+/// It supports both the legacy parentheses syntax and the new curly brace syntax:
+///
+/// # Examples
+///
+/// **Legacy syntax (still supported):**
+/// ```rust
+/// use hyperchad_template::container;
+///
+/// let containers = container! {
+///     button fx-click=(fx(hide("modal"))) {
+///         "Close Modal"
+///     }
+/// };
+/// ```
+///
+/// **New curly brace syntax:**
+/// ```rust
+/// use hyperchad_template::container;
+///
+/// let containers = container! {
+///     button fx-click=fx {
+///         hide("search");
+///         show("search-button");
+///     } {
+///         "Toggle Search"
+///     }
+/// };
+/// ```
+///
+/// **Single expression syntax:**
+/// ```rust
+/// use hyperchad_template::container;
+///
+/// let containers = container! {
+///     button fx-click=fx { hide("search") } {
+///         "Close Search"
+///     }
+/// };
+/// ```
+///
+/// The function itself is just a marker - the actual processing is done by the
+/// template macro system during compilation. The macro detects `fx` calls and
+/// processes them through the `actions_dsl!` macro.
+pub fn fx<T>(content: T) -> actions::ActionEffect
+where
+    T: IntoActionEffect,
+{
+    // This function is mainly for compilation - the template macro system
+    // will intercept fx calls before they reach this runtime implementation.
+    // For fallback purposes, try to convert the input to an ActionEffect.
+    content.into_action_effect()
 }
 
 /// Helper module for color functions

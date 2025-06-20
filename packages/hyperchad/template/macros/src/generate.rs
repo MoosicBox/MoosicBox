@@ -866,6 +866,38 @@ impl Generator {
     }
 
     fn markup_to_action_effect_tokens(value: Markup<NoElement>) -> TokenStream {
+        // First, try to extract fx DSL content
+        if let Some(dsl_tokens) = Self::extract_fx_dsl_content(&value) {
+            // Check if dsl_tokens is empty - if so, return NoOp directly
+            if dsl_tokens.is_empty() {
+                return quote! {
+                    hyperchad_actions::ActionType::NoOp.into()
+                };
+            }
+
+            // Parse the DSL content using actions_dsl! macro
+            return quote! {
+                {
+                    let actions = hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens };
+                    if actions.is_empty() {
+                        hyperchad_actions::ActionType::NoOp.into()
+                    } else if actions.len() == 1 {
+                        // Single action - convert directly
+                        let action = actions.into_iter().next().unwrap();
+                        hyperchad_actions::ActionEffect::from(action.action)
+                    } else {
+                        // Multiple actions - use ActionType::Multi
+                        let action_types: Vec<hyperchad_actions::ActionType> = actions
+                            .into_iter()
+                            .map(|action| action.action)
+                            .collect();
+                        hyperchad_actions::ActionEffect::from(hyperchad_actions::ActionType::Multi(action_types))
+                    }
+                }
+            };
+        }
+
+        // Fallback to existing behavior for non-fx content
         match value {
             Markup::Lit(lit) => {
                 // Handle literal action effects - this might be a string representation
@@ -887,41 +919,17 @@ impl Generator {
                 }
             }
             Markup::Splice { expr, .. } => {
-                // Check if this is an fx() function call
-                if let Some(dsl_tokens) = Self::extract_fx_call_content(&expr) {
-                    // Parse the DSL content using actions_dsl! macro
-                    quote! {
-                        {
-                            let actions = hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens };
-                            if actions.is_empty() {
-                                hyperchad_actions::ActionType::NoOp.into()
-                            } else if actions.len() == 1 {
-                                // Single action - convert directly
-                                let action = actions.into_iter().next().unwrap();
-                                hyperchad_actions::ActionEffect::from(action.action)
-                            } else {
-                                // Multiple actions - use ActionType::Multi
-                                let action_types: Vec<hyperchad_actions::ActionType> = actions
-                                    .into_iter()
-                                    .map(|action| action.action)
-                                    .collect();
-                                hyperchad_actions::ActionEffect::from(hyperchad_actions::ActionType::Multi(action_types))
-                            }
-                        }
-                    }
-                } else {
-                    // For backwards compatibility: handle all non-fx() expressions directly
-                    quote! {
-                        {
-                            let val = #expr;
-                            // Use the IntoActionEffect trait for conversion
-                            hyperchad_template::IntoActionEffect::into_action_effect(val)
-                        }
+                // For backwards compatibility: handle all non-fx() expressions directly
+                quote! {
+                    {
+                        let val = #expr;
+                        // Use the IntoActionEffect trait for conversion
+                        hyperchad_template::IntoActionEffect::into_action_effect(val)
                     }
                 }
             }
             Markup::BraceSplice { items, .. } => {
-                // For brace-wrapped items, check if it's DSL content
+                // For brace-wrapped items that aren't fx DSL
                 if items.len() == 1 {
                     Self::markup_to_action_effect_tokens(items[0].clone())
                 } else {
@@ -3203,21 +3211,106 @@ impl Generator {
         }
     }
 
-    /// Extract DSL content from `fx()` function calls
+    /// Extract DSL content from `fx()` function calls and `fx { }` block syntax
     fn extract_fx_call_content(expr: &syn::Expr) -> Option<TokenStream> {
-        if let syn::Expr::Call(call_expr) = expr {
-            // Check if this is a call to fx()
-            if let syn::Expr::Path(path_expr) = &*call_expr.func {
-                if let Some(ident) = path_expr.path.get_ident() {
-                    if ident == "fx" && call_expr.args.len() == 1 {
-                        // Extract the argument content as token stream
-                        let arg = &call_expr.args[0];
-                        return Some(quote! { #arg });
+        match expr {
+            // Handle `fx(...)` function call syntax
+            syn::Expr::Call(call_expr) => {
+                if let syn::Expr::Path(path_expr) = &*call_expr.func {
+                    if let Some(ident) = path_expr.path.get_ident() {
+                        if ident == "fx" && call_expr.args.len() == 1 {
+                            // Extract the argument content as token stream
+                            let arg = &call_expr.args[0];
+                            return Some(quote! { #arg });
+                        }
                     }
                 }
+                None
             }
+            // Handle `fx { ... }` block syntax
+            syn::Expr::Block(_block_expr) => {
+                // Check if this block is preceded by an fx identifier
+                // This is a bit tricky since we only have the block expression
+                // We'll handle this in the calling code instead
+                None
+            }
+            _ => None,
         }
-        None
+    }
+
+    /// Extract DSL content from fx calls, supporting both `fx(...)` and `fx { ... }` syntax
+    fn extract_fx_dsl_content(markup: &Markup<NoElement>) -> Option<TokenStream> {
+        match markup {
+            Markup::Splice { expr, .. } => {
+                // Try the existing extract_fx_call_content for fx(...) syntax
+                Self::extract_fx_call_content(expr)
+            }
+            Markup::BraceSplice { items, .. } => {
+                // Check if this is fx followed by block content
+                if !items.is_empty() {
+                    // Check if the first item is an fx identifier
+                    if let Some(Markup::Splice { expr, .. }) = items.first() {
+                        if let syn::Expr::Path(path_expr) = expr.as_ref() {
+                            if let Some(ident) = path_expr.path.get_ident() {
+                                if ident == "fx" {
+                                    // This is fx followed by block content
+                                    if items.len() == 1 {
+                                        // Single fx identifier without content - return empty DSL
+                                        return Some(quote! {});
+                                    } else if items.len() == 2 {
+                                        // fx followed by one block expression
+                                        if let Markup::Splice { expr, .. } = &items[1] {
+                                            // Extract the block expression content
+                                            if let syn::Expr::Block(block_expr) = expr.as_ref() {
+                                                // Extract the statements from the block
+                                                let stmts = &block_expr.block.stmts;
+                                                return Some(quote! { #(#stmts)* });
+                                            }
+
+                                            // Not a block expression, return the expression directly
+                                            return Some(quote! { #expr });
+                                        }
+                                    } else {
+                                        // Multiple items - combine them
+                                        let content_items = &items[1..];
+                                        let content_tokens = content_items
+                                            .iter()
+                                            .map(|item| match item {
+                                                Markup::Splice { expr, .. } => {
+                                                    if let syn::Expr::Block(block_expr) =
+                                                        expr.as_ref()
+                                                    {
+                                                        let stmts = &block_expr.block.stmts;
+                                                        quote! { #(#stmts)* }
+                                                    } else {
+                                                        quote! { #expr }
+                                                    }
+                                                }
+                                                Markup::Lit(lit) => {
+                                                    let lit_token = &lit.lit;
+                                                    quote! { #lit_token }
+                                                }
+                                                _ => quote! {},
+                                            })
+                                            .collect::<Vec<_>>();
+
+                                        return Some(quote! { #(#content_tokens)* });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Not an fx pattern - check if it's a single item that might be fx content
+                if items.len() == 1 {
+                    Self::extract_fx_dsl_content(&items[0])
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 }
 

@@ -95,11 +95,11 @@ pub fn play_queue(state: &State) -> Containers {
             position=absolute
             bottom=170
             right=0
-            fx-click-outside=(fx({
+            fx-click-outside=fx {
                 if get_visibility_self() == visible() {
                     hide_self();
                 }
-            }))
+            }
         {
             div overflow-y=auto {
                 div padding=20 {

@@ -920,6 +920,43 @@ impl DiagnosticParse for AttributeType {
                     toggler: input.diagnostic_parse(diagnostics)?,
                 })
             } else {
+                // Check for special fx { ... } syntax without parentheses
+                if input.peek(Ident::peek_any) {
+                    let fork = input.fork();
+                    if let Ok(ident) = fork.call(Ident::parse_any) {
+                        if ident == "fx" && fork.peek(Brace) {
+                            // This is the fx { ... } syntax - parse it specially
+                            let fx_ident: Ident = input.call(Ident::parse_any)?;
+                            let content;
+                            let brace_token = braced!(content in input);
+
+                            // Create a BraceSplice with fx as first item and brace content as second
+                            let mut items = vec![Markup::Splice {
+                                paren_token: Box::new(Paren::default()),
+                                expr: Box::new(syn::Expr::Path(syn::ExprPath {
+                                    attrs: vec![],
+                                    qself: None,
+                                    path: syn::Path::from(fx_ident),
+                                })),
+                            }];
+
+                            if !content.is_empty() {
+                                // Parse the content as a block
+                                let tokens: proc_macro2::TokenStream = content.parse()?;
+                                items.push(Markup::Splice {
+                                    paren_token: Box::new(Paren::default()),
+                                    expr: Box::new(syn::parse2(quote::quote! { { #tokens } })?),
+                                });
+                            }
+
+                            return Ok(Self::Normal {
+                                eq_token,
+                                value: Markup::BraceSplice { brace_token, items },
+                            });
+                        }
+                    }
+                }
+
                 Ok(Self::Normal {
                     eq_token,
                     value: input.diagnostic_parse(diagnostics)?,

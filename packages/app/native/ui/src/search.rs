@@ -67,10 +67,10 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                             background=#fff
                             border="2, #222"
                             padding=10
-                            fx-click=(fx({
+                            fx-click=fx {
                                 hide("search");
                                 show("search-button");
-                            }))
+                            }
                         {
                             image
                                 width=20
@@ -97,10 +97,10 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             position=fixed
             top=0
             right=0
-            fx-click=(fx({
+            fx-click=fx {
                 hide_self();
                 show("search");
-            }))
+            }
         {
             image
                 width=20
@@ -131,10 +131,10 @@ pub fn search_results(
                             border-top-right-radius=5
                             padding=10
                             background=(BACKGROUND)
-                            fx-click=(fx({
+                            fx-click=fx {
                                 no_display_class("search-results-container");
                                 display_str_id(id);
-                            }))
+                            }
                         {
                             (source.to_string_display())
                         }

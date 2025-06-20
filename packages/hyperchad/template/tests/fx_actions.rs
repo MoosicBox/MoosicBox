@@ -133,7 +133,7 @@ fn test_fx_custom_event() {
     // Verify the custom action
     match &containers[0].actions[0].action.action {
         ActionType::Custom { action } => {
-            assert_eq!(action, "refresh-data");
+            assert_eq!(*action, "refresh-data");
         }
         _ => panic!("Expected Custom action for custom event"),
     }
@@ -405,7 +405,7 @@ fn test_dsl_action_chaining() {
 
     match &actions[3].action {
         ActionType::Custom { action } => {
-            assert_eq!(action, "refresh-ui");
+            assert_eq!(*action, "refresh-ui");
         }
         _ => panic!("Expected Custom action"),
     }
@@ -587,7 +587,7 @@ fn test_backward_compatibility() {
 
     match &containers[0].actions[0].action.action {
         ActionType::Custom { action } => {
-            assert_eq!(action, "legacy-action");
+            assert_eq!(*action, "legacy-action");
         }
         _ => panic!("Expected custom action from legacy syntax"),
     }
@@ -997,7 +997,7 @@ fn test_dsl_macro_multiple_actions() {
     // Verify third action (custom)
     match &actions[2].action {
         ActionType::Custom { action } => {
-            assert_eq!(action, "refresh-data");
+            assert_eq!(*action, "refresh-data");
         }
         _ => panic!("Expected Custom action from DSL"),
     }
@@ -1087,7 +1087,7 @@ fn test_dsl_macro_in_container_single() {
     // Verify the DSL action was properly applied to container
     match &containers[0].actions[0].action.action {
         ActionType::Custom { action } => {
-            assert_eq!(action, "toggle-theme");
+            assert_eq!(*action, "toggle-theme");
         }
         _ => panic!("Expected Custom action from DSL in container"),
     }
@@ -1244,7 +1244,7 @@ fn test_dsl_macro_complex_real_world_usage() {
 
     match &close_actions[2].action {
         ActionType::Custom { action } => {
-            assert_eq!(action, "clear-search-results");
+            assert_eq!(*action, "clear-search-results");
         }
         _ => panic!("Expected Custom action from DSL"),
     }
@@ -1275,5 +1275,254 @@ fn test_dsl_macro_vs_direct_actiontype() {
             assert_eq!(dsl_action, direct_action);
         }
         _ => panic!("DSL and direct ActionType should generate equivalent actions"),
+    }
+}
+
+#[test]
+fn test_new_fx_syntax_without_parentheses() {
+    // Test the new fx syntax without parentheses - single action
+    let containers = container! {
+        button fx-click=fx { hide("search") } {
+            "Close Search"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    match &containers[0].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("search".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for hide in new fx syntax"),
+    }
+}
+
+#[test]
+fn test_new_fx_syntax_multiple_actions() {
+    // Test the new fx syntax with multiple actions in curly braces
+    let containers = container! {
+        button fx-click=fx {
+            hide("search");
+            show("search-button");
+            log("Search toggled");
+        } {
+            "Toggle Search"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Should generate a Multi ActionType for multiple actions
+    match &containers[0].actions[0].action.action {
+        ActionType::Multi(action_types) => {
+            assert_eq!(action_types.len(), 3);
+
+            // Verify first action (hide)
+            match &action_types[0] {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::StrId("search".to_string()));
+                    assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+                }
+                _ => panic!("Expected Style action for hide"),
+            }
+
+            // Verify second action (show)
+            match &action_types[1] {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::StrId("search-button".to_string()));
+                    assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+                }
+                _ => panic!("Expected Style action for show"),
+            }
+
+            // Verify third action (log)
+            match &action_types[2] {
+                ActionType::Log { message, level } => {
+                    assert_eq!(message, "Search toggled");
+                    assert_eq!(*level, LogLevel::Info);
+                }
+                _ => panic!("Expected Log action"),
+            }
+        }
+        _ => panic!("Expected Multi ActionType for multiple actions in new fx syntax"),
+    }
+}
+
+#[test]
+fn test_new_fx_syntax_conditional() {
+    // Test the new fx syntax with conditional logic
+    let containers = container! {
+        button fx-click=fx {
+            if get_visibility("modal") == visible() {
+                hide("modal")
+            } else {
+                show("modal")
+            }
+        } {
+            "Toggle Modal"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Should generate a Logic action for conditional
+    match &containers[0].actions[0].action.action {
+        ActionType::Logic(_) => {
+            // Success - we got a logic action
+        }
+        _ => panic!("Expected Logic action from conditional in new fx syntax"),
+    }
+}
+
+#[test]
+fn test_backward_compatibility_fx_parentheses() {
+    // Ensure the old fx(...) syntax still works
+    let containers = container! {
+        button fx-click=(fx(hide("modal"))) {
+            "Close Modal (Old Syntax)"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    match &containers[0].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("modal".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for backward compatibility"),
+    }
+}
+
+#[test]
+fn test_new_fx_syntax_with_variables() {
+    // Test the new fx syntax with variables
+    let containers = container! {
+        button fx-click=fx {
+            let modal_id = "user-modal";
+            hide(modal_id);
+            log("Modal closed");
+        } {
+            "Close User Modal"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Should generate a Multi ActionType for multiple actions including variable usage
+    match &containers[0].actions[0].action.action {
+        ActionType::Multi(action_types) => {
+            assert_eq!(action_types.len(), 2);
+
+            // Verify first action (hide with variable)
+            match &action_types[0] {
+                ActionType::Style { target, action } => {
+                    assert_eq!(*target, ElementTarget::StrId("user-modal".to_string()));
+                    assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+                }
+                _ => panic!("Expected Style action for hide with variable"),
+            }
+
+            // Verify second action (log)
+            match &action_types[1] {
+                ActionType::Log { message, level } => {
+                    assert_eq!(message, "Modal closed");
+                    assert_eq!(*level, LogLevel::Info);
+                }
+                _ => panic!("Expected Log action"),
+            }
+        }
+        _ => panic!("Expected Multi ActionType for variable-based fx syntax"),
+    }
+}
+
+#[test]
+fn test_mixed_fx_syntax_in_same_template() {
+    // Test using both old and new syntax in the same template
+    let containers = container! {
+        div {
+            // Old syntax
+            button fx-click=(fx(show("panel"))) {
+                "Show Panel (Old)"
+            }
+
+            // New syntax - single action
+            button fx-click=fx { hide("panel") } {
+                "Hide Panel (New)"
+            }
+
+            // New syntax - multiple actions
+            button fx-click=fx {
+                toggle("panel");
+                log("Panel toggled");
+            } {
+                "Toggle Panel (New Multi)"
+            }
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].children.len(), 3);
+
+    // Verify first button (old syntax)
+    assert_eq!(containers[0].children[0].actions.len(), 1);
+    match &containers[0].children[0].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("panel".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+        }
+        _ => panic!("Expected Style action for old syntax"),
+    }
+
+    // Verify second button (new syntax, single action)
+    assert_eq!(containers[0].children[1].actions.len(), 1);
+    match &containers[0].children[1].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            assert_eq!(*target, ElementTarget::StrId("panel".to_string()));
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
+        }
+        _ => panic!("Expected Style action for new syntax"),
+    }
+
+    // Verify third button (new syntax, multiple actions)
+    assert_eq!(containers[0].children[2].actions.len(), 1);
+    match &containers[0].children[2].actions[0].action.action {
+        ActionType::Multi(action_types) => {
+            assert_eq!(action_types.len(), 2);
+            // Just verify we have multiple actions - detailed checks done in other tests
+        }
+        _ => panic!("Expected Multi ActionType for new syntax with multiple actions"),
+    }
+}
+
+#[test]
+fn test_new_fx_syntax_empty_block() {
+    // Test fx with empty block (should generate NoOp)
+    let containers = container! {
+        button fx-click=fx { } {
+            "No Action"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    match &containers[0].actions[0].action.action {
+        ActionType::NoOp => {
+            // Success - empty fx block generates NoOp
+        }
+        _ => panic!("Expected NoOp action for empty fx block"),
     }
 }
