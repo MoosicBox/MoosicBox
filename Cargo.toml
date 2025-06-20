@@ -480,7 +480,7 @@ swc_ecma_ast = "13.0.0"
 swc_ecma_codegen = "15.0.1"
 swc_ecma_loader = { version = "13.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "22.0.0"
-swc_ecma_parser = "16.0.1"
+swc_ecma_parser = "16.0.2"
 swc_ecma_transforms_base = "17.0.0"
 swc_ecma_transforms_typescript = "19.0.0"
 swc_ecma_visit = "13.0.0"
