@@ -313,7 +313,9 @@ jobs:
                           echo "$MATRIX" | jq -r '[.[].name] | unique []' | sed 's/^/  - /'
                           JOBS_COUNT=$(echo "$MATRIX" | jq length)
                           PACKAGES_LENGTH=$(echo "$MATRIX" | jq '[.[].name] | unique | length')
-                          echo "📊 Building $JOBS_COUNT jobs for $PACKAGES_LENGTH affected packages (instead of full workspace)"
+                          JOB_PLURAL=$([[ "$JOBS_COUNT" -eq 1 ]] && echo "job" || echo "jobs")
+                          PACKAGE_PLURAL=$([[ "$PACKAGES_LENGTH" -eq 1 ]] && echo "package" || echo "packages")
+                          echo "📊 Building $JOBS_COUNT $JOB_PLURAL for $PACKAGES_LENGTH affected $PACKAGE_PLURAL (instead of full workspace)"
                       fi
 
                       # Check if matrix is empty (shouldn't happen for workflow_dispatch/schedule, but could for smart/file analysis)
@@ -506,7 +508,9 @@ jobs:
                   if [[ "$HAS_CHANGES" == "true" ]]; then
                       MATRIX_LENGTH=$(echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq 'length')
                       PACKAGES_LENGTH=$(echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq '[.[].name] | unique | length')
-                      echo "📊 **Build Matrix**: $MATRIX_LENGTH jobs for $PACKAGES_LENGTH packages will be built/tested" >> $GITHUB_STEP_SUMMARY
+                      JOB_PLURAL=$([[ "$MATRIX_LENGTH" -eq 1 ]] && echo "job" || echo "jobs")
+                      PACKAGE_PLURAL=$([[ "$PACKAGES_LENGTH" -eq 1 ]] && echo "package" || echo "packages")
+                      echo "📊 **Build Matrix**: $MATRIX_LENGTH $JOB_PLURAL for $PACKAGES_LENGTH $PACKAGE_PLURAL will be built/tested" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
                       echo "**Affected packages:**" >> $GITHUB_STEP_SUMMARY
                       echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -r 'group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' >> $GITHUB_STEP_SUMMARY
@@ -528,7 +532,8 @@ jobs:
                       DOCKER_COUNT="${{ needs.determine-affected-packages.outputs.docker-count }}"
 
                       if [[ "$HAS_DOCKER_CHANGES" == "true" && "$DOCKER_COUNT" -gt 0 ]]; then
-                          echo "🐳 **Docker Images**: $DOCKER_COUNT Docker images will be built" >> $GITHUB_STEP_SUMMARY
+                          DOCKER_PLURAL=$([[ "$DOCKER_COUNT" -eq 1 ]] && echo "image" || echo "images")
+                          echo "🐳 **Docker Images**: $DOCKER_COUNT Docker $DOCKER_PLURAL will be built" >> $GITHUB_STEP_SUMMARY
                           echo "" >> $GITHUB_STEP_SUMMARY
                           echo "**Docker images to build:**" >> $GITHUB_STEP_SUMMARY
                           echo '${{ needs.determine-affected-packages.outputs.docker-packages-list }}' >> $GITHUB_STEP_SUMMARY
