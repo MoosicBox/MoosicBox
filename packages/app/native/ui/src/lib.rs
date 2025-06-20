@@ -17,10 +17,7 @@ pub mod state;
 use albums::album_cover_img_from_album;
 use formatting::TimeFormat;
 use hyperchad::{
-    actions::{
-        self as hyperchad_actions, ActionType,
-        logic::{get_height_px_str_id, get_mouse_x_self, get_mouse_y_str_id, get_width_px_self},
-    },
+    actions::ActionType,
     template::{self as hyperchad_template, Containers, IntoActionEffect, container},
 };
 use moosicbox_music_models::{
@@ -91,7 +88,7 @@ pub enum Action {
 }
 
 impl IntoActionEffect for Action {
-    fn into_action_effect(self) -> hyperchad_actions::ActionEffect {
+    fn into_action_effect(self) -> hyperchad::actions::ActionEffect {
         ActionType::Custom {
             action: self.to_string(),
         }
@@ -223,9 +220,9 @@ pub fn player(state: &State) -> Containers {
                     cursor=pointer
                     width=100%
                     height=(VIZ_HEIGHT)
-                    fx-click=(get_mouse_x_self().divide(get_width_px_self()).then_pass_to(Action::SeekCurrentTrackPercent))
-                    fx-resize=(get_width_px_self().then_pass_to(Action::RefreshVisualization))
-                    fx-immediate=(get_width_px_self().then_pass_to(Action::RefreshVisualization))
+                    fx-click=(fx(invoke(Action::SeekCurrentTrackPercent, get_mouse_x_self() / get_width_px_self())))
+                    fx-resize=(fx(invoke(Action::RefreshVisualization, get_width_px_self())))
+                    fx-immediate=(fx(invoke(Action::RefreshVisualization, get_width_px_self())))
                 {}
             }
             div height=100 direction=row {
@@ -348,7 +345,7 @@ fn volume(state: &State, size: u16) -> Containers {
             width=(size)
             height=(size)
             position=relative
-            fx-hover=(ActionType::show_str_id(VOLUME_SLIDER_ID).delay_off(400))
+            fx-hover=(fx(show(VOLUME_SLIDER_ID).delay_off(400)))
         {
             button {
                 image
@@ -378,17 +375,19 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
             border-radius=30
             background=(BACKGROUND)
             cursor=pointer
-            fx-mouse-down=(
-                hyperchad::actions::logic::Arithmetic::group(
-                    get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
-                        .minus(get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
-                )
-                    .divide(get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
-                    .clamp(0.0, 1.0)
-                    .then_pass_to(Action::SetVolume)
-                    .throttle(30)
-            )
-            fx-hover=(ActionType::show_self().delay_off(400))
+            fx-mouse-down=(fx({
+                invoke(
+                    Action::SetVolume,
+                    clamp(
+                        0.0,
+                        (get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
+                            - get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
+                            / get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID),
+                        1.0
+                    )
+                ).throttle(30);
+            }))
+            fx-hover=(fx(show_self().delay_off(400)))
         {
             div
                 id=(VOLUME_SLIDER_VALUE_CONTAINER_ID)

@@ -1,10 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
-    actions::{
-        ActionType,
-        logic::{get_data_attr_value_self, get_event_value},
-    },
+    actions::logic::get_data_attr_value_self,
     template::{self as hyperchad_template, Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow, Visibility},
 };
@@ -359,22 +356,20 @@ pub fn album_page_tracks_table_body(
                     set_visibility_child_class(Visibility::Hidden, "track-playing");
                     set_visibility_child_class(Visibility::Visible, "play-button");
                 }))
-                fx-event=(ActionType::on_event(
-                    "play-track",
-                    get_event_value()
-                        .eq(get_data_attr_value_self("track-id"))
-                        .then(ActionType::Multi(vec![
-                            ActionType::set_background_self("#333"),
-                            ActionType::set_visibility_child_class(Visibility::Hidden, "track-number"),
-                            ActionType::set_visibility_child_class(Visibility::Hidden, "play-button"),
-                            ActionType::set_visibility_child_class(Visibility::Visible, "track-playing"),
-                        ]))
-                        .or_else(ActionType::Multi(vec![
-                            ActionType::remove_background_self(),
-                            ActionType::set_visibility_child_class(Visibility::Hidden, "play-button"),
-                            ActionType::set_visibility_child_class(Visibility::Hidden, "track-playing"),
-                            ActionType::set_visibility_child_class(Visibility::Visible, "track-number"),
-                        ]))
+                fx-event=(fx(
+                    on_event("play-track", |value| {
+                        if value == get_data_attr_value_self("track-id") {
+                            set_background_self("#333");
+                            set_visibility_child_class(Visibility::Hidden, "track-number");
+                            set_visibility_child_class(Visibility::Hidden, "play-button");
+                            set_visibility_child_class(Visibility::Visible, "track-playing");
+                        } else {
+                            remove_background_self();
+                            set_visibility_child_class(Visibility::Hidden, "play-button");
+                            set_visibility_child_class(Visibility::Hidden, "track-playing");
+                            set_visibility_child_class(Visibility::Visible, "track-number");
+                        }
+                    })
                 ))
                 background=[if current_track { Some("#333") } else { None }]
             {
@@ -883,13 +878,13 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                         @let checked = filtered_sources.iter().any(|x| x == source);
                                         (source.to_string())
                                         input
-                                            fx-change=(ActionType::Navigate {
-                                                url: albums_page_url(&if checked {
+                                            fx-change=(fx(navigate(
+                                                albums_page_url(&if checked {
                                                     filtered_sources.iter().filter(|x| *x != source).cloned().collect::<Vec<_>>()
                                                 } else {
                                                     [filtered_sources, &[source.clone()]].concat()
                                                 }, sort)
-                                            })
+                                            )))
                                             type=checkbox
                                             checked=(checked);
                                     }
@@ -901,13 +896,12 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                 input
                     type=text
                     placeholder="Filter..."
-                    fx-change=(
-                        get_event_value()
-                            .then_pass_to(Action::FilterAlbums {
-                                filtered_sources: filtered_sources.to_vec(),
-                                sort
-                            })
-                    );
+                    fx-change=(fx({
+                        invoke(Action::FilterAlbums {
+                            filtered_sources: filtered_sources.to_vec(),
+                            sort
+                        }, get_event_value());
+                    }));
             }
         }
         (load_albums(size, sort, filtered_sources, ""))

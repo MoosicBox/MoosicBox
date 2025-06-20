@@ -1,7 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
-    actions::{self as hyperchad_actions},
     template::{self as hyperchad_template, Containers, container},
     transformer::models::Visibility,
 };
