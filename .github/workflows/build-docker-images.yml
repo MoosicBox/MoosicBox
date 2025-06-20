@@ -282,7 +282,7 @@ jobs:
                       echo "📊 **Build Matrix**: $MATRIX_LENGTH jobs for $PACKAGES_LENGTH packages will be built/tested" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
                       echo "**Affected packages:**" >> $GITHUB_STEP_SUMMARY
-                      echo '${{ steps.analyze-changes.outputs.matrix }}' | jq -r '.include | group_by(.name) | .[] | "- \(.[0].name) (\(.length) job\(if .length > 1 then "s" else "" end))"' >> $GITHUB_STEP_SUMMARY
+                      echo '${{ steps.analyze-changes.outputs.matrix }}' | jq -r '.include | group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' >> $GITHUB_STEP_SUMMARY
                   else
                       if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "schedule" ]]; then
                           echo "⚠️ **No Packages**: Matrix generation may have failed for manual/scheduled run" >> $GITHUB_STEP_SUMMARY
