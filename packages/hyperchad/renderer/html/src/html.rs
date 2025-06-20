@@ -130,12 +130,12 @@ pub fn calc_to_css_string(calc: &Calculation, px: bool) -> String {
         ),
         Calculation::Multiply(left, right) => format!(
             "{} * {}",
-            calc_to_css_string(left, false),
+            calc_to_css_string(left, px),
             calc_to_css_string(right, false)
         ),
         Calculation::Divide(left, right) => format!(
             "{} / {}",
-            calc_to_css_string(left, false),
+            calc_to_css_string(left, px),
             calc_to_css_string(right, false)
         ),
         Calculation::Grouping(value) => format!("({})", calc_to_css_string(value, px)),
