@@ -2,9 +2,10 @@
 //!
 //! This module implements a parser that can handle Rust-like syntax for defining actions.
 
+use proc_macro2::TokenStream;
 use syn::{
     Ident, Lit, braced, bracketed, parenthesized,
-    parse::{ParseStream, Result},
+    parse::{ParseStream, Parser, Result},
     token,
 };
 
@@ -26,6 +27,12 @@ pub fn parse_dsl(input: ParseStream) -> Result<Dsl> {
 
 /// Parse a single statement
 fn parse_statement(input: ParseStream) -> Result<Statement> {
+    // Try to parse the statement normally first
+    try_parse_statement_normal(input).map_or_else(|_| try_parse_statement_as_raw_rust(input), Ok)
+}
+
+/// Try to parse a statement using normal DSL parsing
+fn try_parse_statement_normal(input: ParseStream) -> Result<Statement> {
     let lookahead = input.lookahead1();
 
     if lookahead.peek(token::Let) {
@@ -49,6 +56,36 @@ fn parse_statement(input: ParseStream) -> Result<Statement> {
         }
         Ok(Statement::Expression(expr))
     }
+}
+
+/// Try to parse a statement as raw Rust code
+fn try_parse_statement_as_raw_rust(input: ParseStream) -> Result<Statement> {
+    // Collect tokens until we hit a semicolon or end of input
+    let mut tokens = Vec::new();
+
+    while !input.is_empty() && !input.peek(token::Semi) {
+        let token: proc_macro2::TokenTree = input.parse()?;
+        tokens.push(token);
+    }
+
+    // Consume the semicolon if present
+    if input.peek(token::Semi) {
+        input.parse::<token::Semi>()?;
+        tokens.push(proc_macro2::TokenTree::Punct(proc_macro2::Punct::new(
+            ';',
+            proc_macro2::Spacing::Alone,
+        )));
+    }
+
+    if tokens.is_empty() {
+        return Err(input.error("Empty statement"));
+    }
+
+    // Combine tokens into raw Rust code
+    let raw_code: TokenStream = tokens.into_iter().collect();
+    let raw_code_str = raw_code.to_string();
+
+    Ok(Statement::Expression(Expression::RawRust(raw_code_str)))
 }
 
 /// Parse a let statement
@@ -326,6 +363,13 @@ fn parse_unary_expression(input: ParseStream) -> Result<Expression> {
             op: UnaryOp::Plus,
             expr: Box::new(expr),
         })
+    } else if input.peek(token::And) {
+        input.parse::<token::And>()?;
+        let expr = parse_unary_expression(input)?;
+        Ok(Expression::Unary {
+            op: UnaryOp::Ref,
+            expr: Box::new(expr),
+        })
     } else {
         parse_postfix_expression(input)
     }
@@ -434,8 +478,15 @@ fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
                     let mut fields = Vec::new();
                     while !content.is_empty() {
                         let field_name: Ident = content.parse()?;
-                        content.parse::<token::Colon>()?;
-                        let field_value = parse_expression(&content)?;
+
+                        let field_value = if content.peek(token::Colon) {
+                            // Full syntax: field: value
+                            content.parse::<token::Colon>()?;
+                            parse_expression(&content)?
+                        } else {
+                            // Shorthand syntax: field (equivalent to field: field)
+                            Expression::Variable(field_name.to_string())
+                        };
 
                         fields.push((field_name.to_string(), field_value));
 
@@ -469,6 +520,9 @@ fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
         }
 
         Ok(Expression::Variable(ident_str))
+    } else if lookahead.peek(token::Or) {
+        // Parse closure: |param| { ... }
+        parse_closure(input)
     } else if lookahead.peek(token::Paren) {
         let content;
         parenthesized!(content in input);
@@ -494,7 +548,9 @@ fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
         let block = parse_block(input)?;
         Ok(Expression::Block(block))
     } else {
-        Err(lookahead.error())
+        // Try to parse as raw Rust expression if it's a complex pattern we don't recognize
+        // This handles cases like generics, complex method chains, etc.
+        try_parse_as_raw_rust(input)
     }
 }
 
@@ -503,7 +559,26 @@ fn parse_expression_list(input: ParseStream) -> Result<Vec<Expression>> {
     let mut exprs = Vec::new();
 
     while !input.is_empty() {
-        exprs.push(parse_expression(input)?);
+        // For function arguments, be more aggressive about using raw Rust fallback
+        // Check if the argument looks complex (contains certain patterns)
+        let lookahead = input.lookahead1();
+        let use_raw_rust = lookahead.peek(token::And) || // &if, &[...]
+                          input.peek(token::If); // if expressions
+
+        let expr = if use_raw_rust {
+            // Use raw Rust parsing for complex expressions
+            try_parse_as_raw_rust(input)?
+        } else {
+            // Try to parse as normal DSL expression first
+            match parse_expression(input) {
+                Ok(expr) => expr,
+                Err(_) => {
+                    // If normal parsing fails, try to parse as raw Rust code
+                    try_parse_as_raw_rust(input)?
+                }
+            }
+        };
+        exprs.push(expr);
 
         if input.peek(token::Comma) {
             input.parse::<token::Comma>()?;
@@ -562,11 +637,23 @@ fn parse_literal(lit: Lit) -> Result<Literal> {
 /// Parse an if expression
 fn parse_if_expression(input: ParseStream) -> Result<Expression> {
     input.parse::<token::If>()?;
-    let condition = Box::new(parse_expression(input)?);
-    let then_branch = Box::new(parse_expression(input)?);
+
+    let condition = Box::new(match parse_expression(input) {
+        Ok(expr) => expr,
+        Err(_) => try_parse_as_raw_rust(input)?,
+    });
+
+    let then_branch = Box::new(match parse_expression(input) {
+        Ok(expr) => expr,
+        Err(_) => try_parse_as_raw_rust(input)?,
+    });
+
     let else_branch = if input.peek(token::Else) {
         input.parse::<token::Else>()?;
-        Some(Box::new(parse_expression(input)?))
+        Some(Box::new(match parse_expression(input) {
+            Ok(expr) => expr,
+            Err(_) => try_parse_as_raw_rust(input)?,
+        }))
     } else {
         None
     };
@@ -600,4 +687,157 @@ fn parse_match_expression(input: ParseStream) -> Result<Expression> {
     }
 
     Ok(Expression::Match { expr, arms })
+}
+
+/// Parse a closure expression: |param| { ... }
+fn parse_closure(input: ParseStream) -> Result<Expression> {
+    // Parse opening |
+    input.parse::<token::Or>()?;
+
+    // Parse parameters
+    let mut params = Vec::new();
+    while !input.peek(token::Or) {
+        let param: Ident = input.parse()?;
+        params.push(param.to_string());
+
+        if input.peek(token::Comma) {
+            input.parse::<token::Comma>()?;
+        }
+    }
+
+    // Parse closing |
+    input.parse::<token::Or>()?;
+
+    // Parse body (can be a block or single expression)
+    let body = if input.peek(token::Brace) {
+        // Block body: |param| { ... }
+        Box::new(Expression::Block(parse_block(input)?))
+    } else {
+        // Expression body: |param| expr
+        Box::new(parse_expression(input)?)
+    };
+
+    Ok(Expression::Closure { params, body })
+}
+
+/// Try to parse an unrecognized pattern as raw Rust code
+fn try_parse_as_raw_rust(input: ParseStream) -> Result<Expression> {
+    // Collect tokens until we hit a delimiter that indicates end of expression
+    let mut tokens = Vec::new();
+    let mut paren_depth: i32 = 0;
+    let mut bracket_depth: i32 = 0;
+    let mut brace_depth: i32 = 0;
+
+    while !input.is_empty() {
+        // Check for expression terminators at top level only
+        if paren_depth == 0
+            && bracket_depth == 0
+            && brace_depth == 0
+            && (input.peek(token::Comma) || input.peek(token::Semi) || input.peek(token::RArrow))
+        {
+            break;
+        }
+
+        // Parse any token and track delimiters
+        let token: proc_macro2::TokenTree = input.parse()?;
+
+        // Track opening/closing delimiters and add tokens
+        match &token {
+            proc_macro2::TokenTree::Group(group) => {
+                match group.delimiter() {
+                    proc_macro2::Delimiter::Parenthesis => {
+                        // This is a complete parenthesized group - no need to track depth
+                        tokens.push(format!("({})", group.stream()));
+                    }
+                    proc_macro2::Delimiter::Bracket => {
+                        // This is a complete bracketed group - no need to track depth
+                        tokens.push(format!("[{}]", group.stream()));
+                    }
+                    proc_macro2::Delimiter::Brace => {
+                        // This is a complete braced group - no need to track depth
+                        tokens.push(format!("{{{}}}", group.stream()));
+                    }
+                    proc_macro2::Delimiter::None => {
+                        tokens.push(group.stream().to_string());
+                    }
+                }
+            }
+            proc_macro2::TokenTree::Punct(punct) => {
+                let punct_str = punct.to_string();
+                tokens.push(punct_str.clone());
+
+                // Track individual delimiter characters (though Groups should handle most cases)
+                match punct_str.as_str() {
+                    "(" => paren_depth += 1,
+                    ")" => paren_depth = paren_depth.saturating_sub(1),
+                    "[" => bracket_depth += 1,
+                    "]" => bracket_depth = bracket_depth.saturating_sub(1),
+                    "{" => brace_depth += 1,
+                    "}" => brace_depth = brace_depth.saturating_sub(1),
+                    _ => {}
+                }
+            }
+            _ => {
+                tokens.push(token.to_string());
+            }
+        }
+    }
+
+    if tokens.is_empty() {
+        return Err(input.error("Unexpected end of input"));
+    }
+
+    // Combine tokens into raw Rust code
+    let raw_code = tokens.join(" ");
+    Ok(Expression::RawRust(raw_code))
+}
+
+/// Fallback parsing function that wraps complex expressions as raw Rust code
+/// but tries to preserve DSL function calls
+pub fn parse_dsl_with_fallback(input: &TokenStream) -> Dsl {
+    // Check if the input starts with a known DSL function
+    let input_str = input.to_string();
+    let known_dsl_functions = [
+        "navigate",
+        "hide",
+        "show",
+        "log",
+        "invoke",
+        "throttle",
+        "clamp",
+        "set_background",
+        "set_visibility",
+        "on_event",
+        "remove_background",
+    ];
+
+    let starts_with_dsl_function = known_dsl_functions
+        .iter()
+        .any(|func| input_str.trim_start().starts_with(func));
+
+    if starts_with_dsl_function {
+        // Try to parse individual arguments with fallback
+        if let Ok(dsl) = parse_dsl_with_argument_fallback(input.clone()) {
+            return dsl;
+        }
+
+        // If that fails, fall back to full raw Rust
+        let raw_code = input.to_string();
+        let fallback_expr = Expression::RawRust(raw_code);
+        let statement = Statement::Expression(fallback_expr);
+        return Dsl::new(vec![statement]);
+    }
+
+    // For non-DSL functions, use raw Rust fallback
+    let raw_code = input.to_string();
+    let fallback_expr = Expression::RawRust(raw_code);
+    let statement = Statement::Expression(fallback_expr);
+    Dsl::new(vec![statement])
+}
+
+/// Try to parse DSL with argument-level fallback
+fn parse_dsl_with_argument_fallback(input: TokenStream) -> Result<Dsl> {
+    // This is a simplified approach - we'll enhance the error handling
+    // to be more specific about what failed
+    Parser::parse2(parse_dsl, input)
 }

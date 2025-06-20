@@ -192,6 +192,13 @@ impl From<f32> for Value {
     }
 }
 
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        #[allow(clippy::cast_possible_truncation)]
+        Self::Real(value as f32)
+    }
+}
+
 impl From<LayoutDirection> for Value {
     fn from(value: LayoutDirection) -> Self {
         Self::LayoutDirection(value)

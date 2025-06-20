@@ -128,6 +128,14 @@ pub enum Expression {
         end: Option<Box<Expression>>,
         inclusive: bool,
     },
+    /// Closure expression (e.g., `|param| { ... }`)
+    Closure {
+        params: Vec<String>,
+        body: Box<Expression>,
+    },
+    /// Raw Rust code that couldn't be parsed by the DSL
+    /// This is a fallback for complex expressions
+    RawRust(String),
 }
 
 /// Binary operators
@@ -170,6 +178,7 @@ pub enum UnaryOp {
     Not,
     Minus,
     Plus,
+    Ref,
 }
 
 /// Literal values

@@ -279,6 +279,25 @@ fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
                     // For comparisons, we need to handle this differently
                     Err("Greater than operation is not yet supported in logic context".to_string())
                 }
+                // Convert arithmetic operations to method calls for hyperchad actions
+                BinaryOp::Add => Ok(quote! {
+                    #left_code.plus(#right_code)
+                }),
+                BinaryOp::Subtract => Ok(quote! {
+                    #left_code.minus(#right_code)
+                }),
+                BinaryOp::Multiply => Ok(quote! {
+                    #left_code.multiply(#right_code)
+                }),
+                BinaryOp::Divide => Ok(quote! {
+                    #left_code.divide(#right_code)
+                }),
+                BinaryOp::Min => Ok(quote! {
+                    #left_code.min(#right_code)
+                }),
+                BinaryOp::Max => Ok(quote! {
+                    #left_code.max(#right_code)
+                }),
                 _ => {
                     // For other operations, use standard Rust operators
                     let op_code = generate_binary_op_code(op);
@@ -327,9 +346,21 @@ fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
                 hyperchad_actions::ActionType::NoOp
             })
         }
-        Expression::Block(_block) => {
-            // For now, block expressions are not supported
-            Err("Block expressions are not yet supported in expression context".to_string())
+        Expression::Block(block) => {
+            // Handle block expressions by generating the block code
+            // and returning the result as a compound action
+            let output_var = format_ident!("__block_output");
+            let block_code = generate_block_code(block, &output_var)?;
+
+            Ok(quote! {
+                {
+                    let mut #output_var: Vec<hyperchad_actions::ActionEffect> = Vec::new();
+                    #block_code
+                    hyperchad_actions::ActionType::Multi(
+                        #output_var.into_iter().map(|effect| effect.action).collect()
+                    )
+                }
+            })
         }
         Expression::Array(exprs) => {
             let exprs_code: Result<Vec<_>, String> =
@@ -372,11 +403,30 @@ fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
                 Ok(quote! { #start_code..#end_code })
             }
         }
+        Expression::Closure { params, body } => {
+            // Generate a closure that captures the closure parameters
+            let param_idents: Vec<_> = params.iter().map(|p| format_ident!("{}", p)).collect();
+            let body_code = generate_expression_code(body)?;
+
+            Ok(quote! {
+                |#(#param_idents),*| #body_code
+            })
+        }
+        Expression::RawRust(code) => {
+            // Parse the raw Rust code as tokens and insert directly
+            let tokens: TokenStream = match code.parse() {
+                Ok(tokens) => tokens,
+                Err(e) => {
+                    return Err(format!("Failed to parse raw Rust code: {e}"));
+                }
+            };
+            Ok(tokens)
+        }
     }
 }
 
 /// Generate code for function calls, mapping DSL functions to hyperchad actions
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<TokenStream, String> {
     let args_code: Result<Vec<_>, String> = args.iter().map(generate_expression_code).collect();
     let args_code = args_code?;
@@ -674,12 +724,187 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
 
+        // Action invocation function
+        "invoke" => {
+            if args_code.len() != 2 {
+                return Err("invoke() expects exactly 2 arguments (action, value)".to_string());
+            }
+
+            // Check if the first argument is a struct variant call
+            let action_code = if let Expression::Call {
+                function,
+                args: call_args,
+            } = &args[0]
+            {
+                // Check if this looks like a struct variant (contains :: and has tuple args)
+                if function.contains("::") && !call_args.is_empty() {
+                    let is_struct_variant = call_args.iter().all(|arg| {
+                        matches!(arg, Expression::Tuple(tuple_args) if tuple_args.len() == 2 &&
+                            matches!(tuple_args[0], Expression::Literal(Literal::String(_))))
+                    });
+
+                    if is_struct_variant {
+                        // Generate struct syntax: Enum::Variant { field1: value1, field2: value2 }
+                        let struct_path = function;
+                        let struct_path_tokens: TokenStream = struct_path.parse().map_err(|e| {
+                            format!("Failed to parse struct path '{struct_path}': {e}")
+                        })?;
+
+                        let mut field_assignments = Vec::new();
+                        for arg in call_args {
+                            if let Expression::Tuple(tuple_args) = arg {
+                                if let (
+                                    Expression::Literal(Literal::String(field_name)),
+                                    field_value,
+                                ) = (&tuple_args[0], &tuple_args[1])
+                                {
+                                    let field_ident = format_ident!("{}", field_name);
+                                    let field_value_code = generate_expression_code(field_value)?;
+                                    field_assignments
+                                        .push(quote! { #field_ident: #field_value_code });
+                                }
+                            }
+                        }
+
+                        quote! { #struct_path_tokens { #(#field_assignments),* } }
+                    } else {
+                        args_code[0].clone()
+                    }
+                } else {
+                    args_code[0].clone()
+                }
+            } else {
+                args_code[0].clone()
+            };
+
+            let value = &args_code[1];
+            Ok(quote! {
+                hyperchad_actions::ActionType::Parameterized {
+                    action: Box::new(hyperchad_actions::ActionType::Custom {
+                        action: serde_json::to_string(&#action_code).unwrap_or_else(|_| #action_code.to_string()),
+                    }),
+                    value: hyperchad_actions::logic::Value::from(#value),
+                }
+            })
+        }
+
+        // Throttle function: throttle(duration, action)
+        "throttle" => {
+            if args_code.len() != 2 {
+                return Err("throttle() expects exactly 2 arguments (duration, action)".to_string());
+            }
+            let duration = &args_code[0];
+            let action = &args_code[1];
+            Ok(quote! {
+                hyperchad_actions::ActionEffect {
+                    action: #action,
+                    throttle: Some(#duration as u64),
+                    delay_off: None,
+                    unique: None,
+                }
+            })
+        }
+
+        // Delay off function: delay_off(duration, action)
+        "delay_off" => {
+            if args_code.len() != 2 {
+                return Err(
+                    "delay_off() expects exactly 2 arguments (duration, action)".to_string()
+                );
+            }
+            let duration = &args_code[0];
+            let action = &args_code[1];
+            Ok(quote! {
+                hyperchad_actions::ActionEffect {
+                    action: #action,
+                    throttle: None,
+                    delay_off: Some(#duration as u64),
+                    unique: None,
+                }
+            })
+        }
+
+        // Unique function: unique(action)
+        "unique" => {
+            if args_code.len() != 1 {
+                return Err("unique() expects exactly 1 argument (action)".to_string());
+            }
+            let action = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionEffect {
+                    action: #action,
+                    throttle: None,
+                    delay_off: None,
+                    unique: Some(true),
+                }
+            })
+        }
+
+        // Clamp function: clamp(min, value, max)
+        "clamp" => {
+            if args_code.len() != 3 {
+                return Err("clamp() expects exactly 3 arguments (min, value, max)".to_string());
+            }
+            let min = &args_code[0];
+            let value = &args_code[1];
+            let max = &args_code[2];
+            Ok(quote! {
+                #value.clamp(#min, #max)
+            })
+        }
+
+        // Group function for arithmetic grouping: group(expression)
+        "group" => {
+            if args_code.len() != 1 {
+                return Err("group() expects exactly 1 argument".to_string());
+            }
+            let expr = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::logic::Arithmetic::Grouping(Box::new(#expr))
+            })
+        }
+
+        // Event handling function: on_event(event_name, closure)
+        "on_event" => {
+            if args_code.len() != 2 {
+                return Err(
+                    "on_event() expects exactly 2 arguments (event_name, closure)".to_string(),
+                );
+            }
+            let event_name = &args_code[0];
+            let closure_expr = &args[1]; // Use the original expression, not the generated code
+
+            // Check if the second argument is a closure
+            if let Expression::Closure { params, body } = closure_expr {
+                // Transform the closure into hyperchad logic
+                // Replace the closure parameter with get_event_value() calls
+                let transformed_body = transform_closure_for_event(params, body)?;
+                Ok(quote! {
+                    hyperchad_actions::ActionType::Event {
+                        name: #event_name.to_string(),
+                        action: Box::new(#transformed_body),
+                    }
+                })
+            } else {
+                // If it's not a closure, just use the regular action
+                let action = &args_code[1];
+                Ok(quote! {
+                    hyperchad_actions::ActionType::Event {
+                        name: #event_name.to_string(),
+                        action: Box::new(#action),
+                    }
+                })
+            }
+        }
+
         // ActionType struct constructors
-        name if name.starts_with("ActionType::") => {
-            let variant = name.strip_prefix("ActionType::").unwrap();
+        name if name.starts_with("hyperchad_actions::ActionType::") => {
+            let variant = name
+                .strip_prefix("hyperchad_actions::ActionType::")
+                .unwrap();
             match variant {
                 "Navigate" => {
-                    // Handle ActionType::Navigate { url: "..." }
+                    // Handle hyperchad_actions::ActionType::Navigate { url: "..." }
                     if args_code.len() == 1 {
                         // Expecting a tuple with field name and value
                         let url_arg = &args_code[0];
@@ -689,13 +914,16 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                             }
                         })
                     } else {
-                        Err("ActionType::Navigate expects exactly 1 field (url)".to_string())
+                        Err(
+                            "hyperchad_actions::ActionType::Navigate expects exactly 1 field (url)"
+                                .to_string(),
+                        )
                     }
                 }
                 "hide_str_id" => {
                     if args_code.len() != 1 {
                         return Err(
-                            "ActionType::hide_str_id() expects exactly 1 argument".to_string()
+                            "hyperchad_actions::ActionType::hide_str_id() expects exactly 1 argument".to_string()
                         );
                     }
                     let target = &args_code[0];
@@ -706,7 +934,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 "show_str_id" => {
                     if args_code.len() != 1 {
                         return Err(
-                            "ActionType::show_str_id() expects exactly 1 argument".to_string()
+                            "hyperchad_actions::ActionType::show_str_id() expects exactly 1 argument".to_string()
                         );
                     }
                     let target = &args_code[0];
@@ -716,7 +944,10 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 }
                 "show_self" => {
                     if !args_code.is_empty() {
-                        return Err("ActionType::show_self() expects no arguments".to_string());
+                        return Err(
+                            "hyperchad_actions::ActionType::show_self() expects no arguments"
+                                .to_string(),
+                        );
                     }
                     Ok(quote! {
                         hyperchad_actions::ActionType::show_self()
@@ -724,10 +955,71 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 }
                 "hide_self" => {
                     if !args_code.is_empty() {
-                        return Err("ActionType::hide_self() expects no arguments".to_string());
+                        return Err("hide_self() expects no arguments".to_string());
                     }
                     Ok(quote! {
                         hyperchad_actions::ActionType::hide_self()
+                    })
+                }
+                "remove_background_self" => {
+                    if !args_code.is_empty() {
+                        return Err("remove_background_self() expects no arguments".to_string());
+                    }
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::remove_background_self()
+                    })
+                }
+                "remove_background_str_id" => {
+                    if args_code.len() != 1 {
+                        return Err(
+                            "remove_background_str_id() expects exactly 1 argument (target)"
+                                .to_string(),
+                        );
+                    }
+                    let target = &args_code[0];
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::remove_background_str_id(#target)
+                    })
+                }
+                "remove_background_id" => {
+                    if args_code.len() != 1 {
+                        return Err("remove_background_id() expects exactly 1 argument (target)"
+                            .to_string());
+                    }
+                    let target = &args_code[0];
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::remove_background_id(#target)
+                    })
+                }
+                "remove_background_class" => {
+                    if args_code.len() != 1 {
+                        return Err(
+                            "remove_background_class() expects exactly 1 argument (class_name)"
+                                .to_string(),
+                        );
+                    }
+                    let class_name = &args_code[0];
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::remove_background_class(#class_name)
+                    })
+                }
+                "remove_background_child_class" => {
+                    if args_code.len() != 1 {
+                        return Err("remove_background_child_class() expects exactly 1 argument (class_name)".to_string());
+                    }
+                    let class_name = &args_code[0];
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::remove_background_child_class(#class_name)
+                    })
+                }
+                "remove_background_last_child" => {
+                    if !args_code.is_empty() {
+                        return Err(
+                            "remove_background_last_child() expects no arguments".to_string()
+                        );
+                    }
+                    Ok(quote! {
+                        hyperchad_actions::ActionType::remove_background_last_child()
                     })
                 }
                 _ => {
@@ -800,6 +1092,67 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 hyperchad_actions::ActionType::hide_self()
             })
         }
+        "remove_background_self" => {
+            if !args_code.is_empty() {
+                return Err("remove_background_self() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::ActionType::remove_background_self()
+            })
+        }
+        "remove_background_str_id" => {
+            if args_code.len() != 1 {
+                return Err(
+                    "remove_background_str_id() expects exactly 1 argument (target)".to_string(),
+                );
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::remove_background_str_id(#target)
+            })
+        }
+        "remove_background_id" => {
+            if args_code.len() != 1 {
+                return Err(
+                    "remove_background_id() expects exactly 1 argument (target)".to_string()
+                );
+            }
+            let target = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::remove_background_id(#target)
+            })
+        }
+        "remove_background_class" => {
+            if args_code.len() != 1 {
+                return Err(
+                    "remove_background_class() expects exactly 1 argument (class_name)".to_string(),
+                );
+            }
+            let class_name = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::remove_background_class(#class_name)
+            })
+        }
+        "remove_background_child_class" => {
+            if args_code.len() != 1 {
+                return Err(
+                    "remove_background_child_class() expects exactly 1 argument (class_name)"
+                        .to_string(),
+                );
+            }
+            let class_name = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::ActionType::remove_background_child_class(#class_name)
+            })
+        }
+        "remove_background_last_child" => {
+            if !args_code.is_empty() {
+                return Err("remove_background_last_child() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::ActionType::remove_background_last_child()
+            })
+        }
         "show_last_child" => {
             if !args_code.is_empty() {
                 return Err("show_last_child() expects no arguments".to_string());
@@ -816,9 +1169,52 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 hyperchad_actions::logic::get_visibility_self()
             })
         }
+        "get_event_value" => {
+            if !args_code.is_empty() {
+                return Err("get_event_value() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                hyperchad_actions::logic::get_event_value()
+            })
+        }
 
         // Default case - assume it's a variable or unknown function
         _ => {
+            // Check if this looks like a struct variant (contains :: and has tuple args)
+            if function.contains("::") && !args.is_empty() {
+                // Check if arguments are tuples representing struct fields
+                let is_struct_variant = args.iter().all(|arg| {
+                    matches!(arg, Expression::Tuple(tuple_args) if tuple_args.len() == 2 &&
+                        matches!(tuple_args[0], Expression::Literal(Literal::String(_))))
+                });
+
+                if is_struct_variant {
+                    // Generate struct syntax: Enum::Variant { field1: value1, field2: value2 }
+                    let struct_path = function;
+                    let struct_path_tokens: TokenStream = struct_path
+                        .parse()
+                        .map_err(|e| format!("Failed to parse struct path '{struct_path}': {e}"))?;
+
+                    let mut field_assignments = Vec::new();
+                    for arg in args {
+                        if let Expression::Tuple(tuple_args) = arg {
+                            if let (Expression::Literal(Literal::String(field_name)), field_value) =
+                                (&tuple_args[0], &tuple_args[1])
+                            {
+                                let field_ident = format_ident!("{}", field_name);
+                                let field_value_code = generate_expression_code(field_value)?;
+                                field_assignments.push(quote! { #field_ident: #field_value_code });
+                            }
+                        }
+                    }
+
+                    return Ok(quote! {
+                        #struct_path_tokens { #(#field_assignments),* }
+                    });
+                }
+            }
+
+            // Regular function call
             let function_ident = format_ident!("{}", function);
             Ok(quote! {
                 #function_ident(#(#args_code),*)
@@ -868,6 +1264,7 @@ fn generate_unary_op_code(op: &UnaryOp) -> TokenStream {
         UnaryOp::Not => quote! { ! },
         UnaryOp::Minus => quote! { - },
         UnaryOp::Plus => quote! { + },
+        UnaryOp::Ref => quote! { & },
     }
 }
 
@@ -982,7 +1379,7 @@ fn generate_method_call_code(
             }
             let delay = &args_code[0];
             Ok(quote! {
-                #receiver.delay_off(#delay)
+                #receiver.delay_off(#delay as u64)
             })
         }
         "throttle" => {
@@ -991,7 +1388,7 @@ fn generate_method_call_code(
             }
             let interval = &args_code[0];
             Ok(quote! {
-                #receiver.throttle(#interval)
+                #receiver.throttle(#interval as u64)
             })
         }
         // Default case - pass through to the receiver object
@@ -1002,4 +1399,162 @@ fn generate_method_call_code(
             })
         }
     }
+}
+
+/// Transform a closure used in `on_event` by replacing parameters with `get_event_value()` calls
+fn transform_closure_for_event(
+    params: &[String],
+    body: &Expression,
+) -> Result<TokenStream, String> {
+    // For now, assume single parameter named 'value' that should be replaced with get_event_value()
+    if params.len() != 1 {
+        return Err("on_event closures must have exactly one parameter".to_string());
+    }
+
+    let param_name = &params[0];
+    let transformed_body = replace_param_with_get_event_value(body, param_name)?;
+    generate_expression_code(&transformed_body)
+}
+
+/// Replace a parameter in an expression with `get_event_value()` calls
+fn replace_param_with_get_event_value(
+    expr: &Expression,
+    param_name: &str,
+) -> Result<Expression, String> {
+    match expr {
+        Expression::Variable(name) if name == param_name => {
+            // Replace the parameter with get_event_value() call
+            Ok(Expression::Call {
+                function: "get_event_value".to_string(),
+                args: vec![],
+            })
+        }
+        Expression::Binary { left, op, right } => {
+            let left_transformed = replace_param_with_get_event_value(left, param_name)?;
+            let right_transformed = replace_param_with_get_event_value(right, param_name)?;
+            Ok(Expression::Binary {
+                left: Box::new(left_transformed),
+                op: op.clone(),
+                right: Box::new(right_transformed),
+            })
+        }
+        Expression::Call { function, args } => {
+            let transformed_args: Result<Vec<_>, String> = args
+                .iter()
+                .map(|arg| replace_param_with_get_event_value(arg, param_name))
+                .collect();
+            Ok(Expression::Call {
+                function: function.clone(),
+                args: transformed_args?,
+            })
+        }
+        Expression::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            let condition_transformed = replace_param_with_get_event_value(condition, param_name)?;
+            let then_transformed = replace_param_with_get_event_value(then_branch, param_name)?;
+            let else_transformed = if let Some(else_branch) = else_branch {
+                Some(Box::new(replace_param_with_get_event_value(
+                    else_branch,
+                    param_name,
+                )?))
+            } else {
+                None
+            };
+            Ok(Expression::If {
+                condition: Box::new(condition_transformed),
+                then_branch: Box::new(then_transformed),
+                else_branch: else_transformed,
+            })
+        }
+        Expression::Block(block) => {
+            let transformed_statements: Result<Vec<_>, String> = block
+                .statements
+                .iter()
+                .map(|stmt| replace_param_in_statement(stmt, param_name))
+                .collect();
+            Ok(Expression::Block(Block {
+                statements: transformed_statements?,
+            }))
+        }
+        Expression::MethodCall {
+            receiver,
+            method,
+            args,
+        } => {
+            let receiver_transformed = replace_param_with_get_event_value(receiver, param_name)?;
+            let transformed_args: Result<Vec<_>, String> = args
+                .iter()
+                .map(|arg| replace_param_with_get_event_value(arg, param_name))
+                .collect();
+            Ok(Expression::MethodCall {
+                receiver: Box::new(receiver_transformed),
+                method: method.clone(),
+                args: transformed_args?,
+            })
+        }
+        Expression::RawRust(code) => {
+            // For raw Rust code, we need to do string replacement
+            // This is a simple approach - replace the parameter name with get_event_value()
+            let transformed_code = code.replace(param_name, "get_event_value()");
+            Ok(Expression::RawRust(transformed_code))
+        }
+        // For other expressions, return as-is (literals, etc.)
+        _ => Ok(expr.clone()),
+    }
+}
+
+/// Replace a parameter in a statement with `get_event_value()` calls
+fn replace_param_in_statement(stmt: &Statement, param_name: &str) -> Result<Statement, String> {
+    match stmt {
+        Statement::Expression(expr) => {
+            let transformed_expr = replace_param_with_get_event_value(expr, param_name)?;
+            Ok(Statement::Expression(transformed_expr))
+        }
+        Statement::Let { name, value } => {
+            let transformed_value = replace_param_with_get_event_value(value, param_name)?;
+            Ok(Statement::Let {
+                name: name.clone(),
+                value: transformed_value,
+            })
+        }
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+        } => {
+            let condition_transformed = replace_param_with_get_event_value(condition, param_name)?;
+            let then_transformed = replace_param_in_block(then_block, param_name)?;
+            let else_transformed = if let Some(else_block) = else_block {
+                Some(replace_param_in_block(else_block, param_name)?)
+            } else {
+                None
+            };
+            Ok(Statement::If {
+                condition: condition_transformed,
+                then_block: then_transformed,
+                else_block: else_transformed,
+            })
+        }
+        Statement::Block(block) => {
+            let transformed_block = replace_param_in_block(block, param_name)?;
+            Ok(Statement::Block(transformed_block))
+        }
+        // For other statements, return as-is
+        _ => Ok(stmt.clone()),
+    }
+}
+
+/// Replace a parameter in a block with `get_event_value()` calls
+fn replace_param_in_block(block: &Block, param_name: &str) -> Result<Block, String> {
+    let transformed_statements: Result<Vec<_>, String> = block
+        .statements
+        .iter()
+        .map(|stmt| replace_param_in_statement(stmt, param_name))
+        .collect();
+    Ok(Block {
+        statements: transformed_statements?,
+    })
 }

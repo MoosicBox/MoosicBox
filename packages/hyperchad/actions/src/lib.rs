@@ -382,6 +382,46 @@ impl ActionType {
     }
 
     #[must_use]
+    pub fn remove_background_str_id(target: &str) -> Self {
+        Self::Style {
+            target: ElementTarget::StrId(target.to_string()),
+            action: StyleAction::SetBackground(None),
+        }
+    }
+
+    #[must_use]
+    pub const fn remove_background_id(target: usize) -> Self {
+        Self::Style {
+            target: ElementTarget::Id(target),
+            action: StyleAction::SetBackground(None),
+        }
+    }
+
+    #[must_use]
+    pub fn remove_background_class(class_name: &str) -> Self {
+        Self::Style {
+            target: ElementTarget::Class(class_name.to_string()),
+            action: StyleAction::SetBackground(None),
+        }
+    }
+
+    #[must_use]
+    pub fn remove_background_child_class(class_name: &str) -> Self {
+        Self::Style {
+            target: ElementTarget::ChildClass(class_name.to_string()),
+            action: StyleAction::SetBackground(None),
+        }
+    }
+
+    #[must_use]
+    pub const fn remove_background_last_child() -> Self {
+        Self::Style {
+            target: ElementTarget::LastChild,
+            action: StyleAction::SetBackground(None),
+        }
+    }
+
+    #[must_use]
     pub fn set_background_last_child(background: impl Into<String>) -> Self {
         Self::Style {
             target: ElementTarget::LastChild,
