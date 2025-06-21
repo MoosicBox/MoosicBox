@@ -475,17 +475,17 @@ static_init = "1.0.4"
 strum = "0.27.1"
 strum_macros = "0.27.1"
 swc_bundler = "22.0.0"
-swc_common = { version = "13.0.0", features = ["tty-emitter"] }
+swc_common = { version = "13.0.1", features = ["tty-emitter"] }
 swc_ecma_ast = "13.0.0"
 swc_ecma_codegen = "15.0.1"
 swc_ecma_loader = { version = "13.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "23.0.1"
-swc_ecma_parser = "17.0.0"
+swc_ecma_parser = "17.0.1"
 swc_ecma_transforms_base = "18.0.0"
 swc_ecma_transforms_typescript = "20.0.0"
 swc_ecma_visit = "13.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
-syn = "2.0.103"
+syn = "2.0.104"
 syntect = "5.2.0"
 tantivy = "0.24.1"
 tauri = { version = "2.5.1", features = ["protocol-asset"] }
