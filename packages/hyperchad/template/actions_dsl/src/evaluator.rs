@@ -29,16 +29,29 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
     match stmt {
         Statement::Expression(expr) => {
             let expr_code = generate_expression_code(expr)?;
-            Ok(quote! {
-                let _action_result = #expr_code;
-                #output_var.push(_action_result.into());
-            })
+
+            // All expressions need to be convertible to ActionType for the macro to work
+            // Non-action expressions are wrapped in NoOp to maintain type compatibility
+            if expression_produces_action(expr) {
+                Ok(quote! {
+                    let _action_result = #expr_code;
+                    #output_var.push(_action_result.into());
+                })
+            } else {
+                // Non-action expressions are evaluated but wrapped as NoOp to maintain type compatibility
+                Ok(quote! {
+                    let _expr_result = #expr_code;
+                    // Evaluate the expression but don't produce an action
+                    #output_var.push(hyperchad_actions::ActionType::NoOp.into());
+                })
+            }
         }
         Statement::Let { name, value } => {
             let var_name = format_ident!("{}", name);
             let value_code = generate_expression_code(value)?;
             Ok(quote! {
                 let #var_name = #value_code;
+                // Note: Let statements don't produce ActionEffects, they just create variables
             })
         }
         Statement::If {
@@ -242,6 +255,14 @@ fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
             let var_name = format_ident!("{}", name);
             Ok(quote! { #var_name })
         }
+        Expression::ElementRef(element_ref) => {
+            let selector = &element_ref.selector;
+            Ok(quote! {
+                hyperchad_actions::dsl::ElementReference {
+                    selector: #selector.to_string()
+                }
+            })
+        }
         Expression::Call { function, args } => generate_function_call_code(function, args),
         Expression::MethodCall {
             receiver,
@@ -432,6 +453,19 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
     let args_code = args_code?;
 
     match function {
+        // Element reference function
+        "element" => {
+            if args_code.len() != 1 {
+                return Err("element() expects exactly 1 argument".to_string());
+            }
+            let selector = &args_code[0];
+            Ok(quote! {
+                hyperchad_actions::dsl::ElementReference {
+                    selector: #selector.to_string()
+                }
+            })
+        }
+
         // Element visibility functions
         "hide" => {
             if args_code.len() != 1 {
@@ -1279,6 +1313,143 @@ fn generate_method_call_code(
     let args_code = args_code?;
 
     match method {
+        // Element reference methods
+        "show" => {
+            if !args_code.is_empty() {
+                return Err("ElementReference.show() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                {
+                    let element_ref = &#receiver;
+                    let parsed = element_ref.parse_selector();
+                    match parsed {
+                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                            hyperchad_actions::ActionType::show_str_id(&id)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
+                            hyperchad_actions::ActionType::show_class(&class)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
+                            // For complex selectors, fall back to string ID for now
+                            hyperchad_actions::ActionType::show_str_id(&element_ref.selector)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
+                            hyperchad_actions::ActionType::NoOp
+                        }
+                    }
+                }
+            })
+        }
+        "hide" => {
+            if !args_code.is_empty() {
+                return Err("ElementReference.hide() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                {
+                    let element_ref = &#receiver;
+                    let parsed = element_ref.parse_selector();
+                    match parsed {
+                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                            hyperchad_actions::ActionType::hide_str_id(&id)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
+                            hyperchad_actions::ActionType::hide_class(&class)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
+                            // For complex selectors, fall back to string ID for now
+                            hyperchad_actions::ActionType::hide_str_id(&element_ref.selector)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
+                            hyperchad_actions::ActionType::NoOp
+                        }
+                    }
+                }
+            })
+        }
+        "toggle" => {
+            if !args_code.is_empty() {
+                return Err("ElementReference.toggle() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                {
+                    let element_ref = &#receiver;
+                    let parsed = element_ref.parse_selector();
+                    match parsed {
+                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                            // TODO: Implement proper toggle logic based on current visibility
+                            hyperchad_actions::ActionType::show_str_id(&id)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
+                            // TODO: Implement proper toggle logic based on current visibility
+                            hyperchad_actions::ActionType::show_class(&class)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
+                            // For complex selectors, fall back to string ID for now
+                            hyperchad_actions::ActionType::show_str_id(&element_ref.selector)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
+                            hyperchad_actions::ActionType::NoOp
+                        }
+                    }
+                }
+            })
+        }
+        "visibility" => {
+            if !args_code.is_empty() {
+                return Err("ElementReference.visibility() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                {
+                    let element_ref = &#receiver;
+                    let parsed = element_ref.parse_selector();
+                    match parsed {
+                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                            hyperchad_actions::logic::get_visibility_str_id(id)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
+                            hyperchad_actions::logic::get_visibility_class(class)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
+                            // For complex selectors, fall back to string ID for now
+                            hyperchad_actions::logic::get_visibility_str_id(element_ref.selector.clone())
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
+                            hyperchad_actions::logic::get_visibility_self() // Return a CalcValue instead of Value
+                        }
+                    }
+                }
+            })
+        }
+        "set_visibility" => {
+            if args_code.len() != 1 {
+                return Err(
+                    "ElementReference.set_visibility() expects exactly 1 argument".to_string(),
+                );
+            }
+            let visibility = &args_code[0];
+            Ok(quote! {
+                {
+                    let element_ref = &#receiver;
+                    let parsed = element_ref.parse_selector();
+                    match parsed {
+                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                            hyperchad_actions::ActionType::set_visibility_str_id(#visibility, &id)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
+                            hyperchad_actions::ActionType::set_visibility_class(#visibility, &class)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
+                            // For complex selectors, fall back to string ID for now
+                            hyperchad_actions::ActionType::set_visibility_str_id(#visibility, &element_ref.selector)
+                        }
+                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
+                            hyperchad_actions::ActionType::NoOp
+                        }
+                    }
+                }
+            })
+        }
+
         // Logic chaining methods
         "eq" => {
             if args_code.len() != 1 {
@@ -1557,4 +1728,71 @@ fn replace_param_in_block(block: &Block, param_name: &str) -> Result<Block, Stri
     Ok(Block {
         statements: transformed_statements?,
     })
+}
+
+/// Check if an expression produces an `ActionType` (should be pushed to output)
+/// vs a value type (should just be evaluated)
+fn expression_produces_action(expr: &Expression) -> bool {
+    match expr {
+        // Method calls on ElementReference that produce actions
+        Expression::MethodCall { method, .. } => {
+            matches!(
+                method.as_str(),
+                "show" | "hide" | "toggle" | "set_visibility"
+            )
+        }
+        // Function calls that produce actions
+        Expression::Call { function, .. } => {
+            matches!(
+                function.as_str(),
+                "show"
+                    | "hide"
+                    | "log"
+                    | "navigate"
+                    | "custom"
+                    | "noop"
+                    | "show_str_id"
+                    | "hide_str_id"
+                    | "show_class"
+                    | "hide_class"
+                    | "set_visibility_str_id"
+                    | "set_visibility_class"
+                    | "add_class"
+                    | "remove_class"
+                    | "toggle_class"
+                    | "set_style"
+                    | "remove_style"
+                    | "set_attribute"
+                    | "remove_attribute"
+            )
+        }
+        // Binary operations, literals, variables, etc. don't produce actions
+        Expression::Binary { .. }
+        | Expression::Literal(_)
+        | Expression::Variable(_)
+        | Expression::ElementRef(_)
+        | Expression::Field { .. }
+        | Expression::Unary { .. } => false,
+
+        // Conditional expressions might produce actions based on their branches
+        Expression::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            expression_produces_action(then_branch)
+                || else_branch
+                    .as_ref()
+                    .is_some_and(|e| expression_produces_action(e))
+        }
+
+        // Other complex expressions - be conservative and assume they might produce actions
+        Expression::Match { .. }
+        | Expression::Block(_)
+        | Expression::Array(_)
+        | Expression::Tuple(_)
+        | Expression::Range { .. }
+        | Expression::Closure { .. }
+        | Expression::RawRust(_) => true,
+    }
 }

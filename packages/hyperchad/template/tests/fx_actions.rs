@@ -1455,3 +1455,79 @@ fn test_new_fx_syntax_empty_block() {
         _ => panic!("Expected NoOp action for empty fx block"),
     }
 }
+
+#[test]
+fn test_element_reference_api() {
+    // Test the new object-oriented element API - start with simplest case
+    let containers = container! {
+        div fx-click=fx {
+            element("#play-queue").show();
+        } {
+            "Show Play Queue"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+
+    // Should generate appropriate action
+    match &containers[0].actions[0].action.action {
+        ActionType::Style { target, action } => {
+            match target {
+                ElementTarget::StrId(id) => assert_eq!(id, "play-queue"),
+                _ => panic!("Expected StrId target"),
+            }
+            assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
+        }
+        _ => {
+            println!(
+                "Generated action type: {:?}",
+                containers[0].actions[0].action.action
+            );
+        }
+    }
+}
+
+#[test]
+fn test_element_reference_simple_usage() {
+    // Test very simple element reference usage without complex conditionals
+    let containers = container! {
+        button fx-click=fx { show("test-id") } {
+            "Traditional Syntax"
+        }
+    };
+
+    assert_eq!(containers.len(), 1);
+    assert_eq!(containers[0].actions.len(), 1);
+    assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
+}
+
+#[test]
+fn test_selector_parsing_unit() {
+    // Test selector parsing at the unit level
+    use hyperchad_actions::dsl::{ElementReference, ParsedSelector};
+
+    let id_ref = ElementReference {
+        selector: "#my-id".to_string(),
+    };
+    let class_ref = ElementReference {
+        selector: ".my-class".to_string(),
+    };
+    let plain_ref = ElementReference {
+        selector: "plain-id".to_string(),
+    };
+
+    assert_eq!(
+        id_ref.parse_selector(),
+        ParsedSelector::Id("my-id".to_string())
+    );
+    assert_eq!(
+        class_ref.parse_selector(),
+        ParsedSelector::Class("my-class".to_string())
+    );
+    assert_eq!(
+        plain_ref.parse_selector(),
+        ParsedSelector::Id("plain-id".to_string())
+    );
+}

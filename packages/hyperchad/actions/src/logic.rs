@@ -489,6 +489,13 @@ pub const fn get_visibility_self() -> CalcValue {
 }
 
 #[must_use]
+pub fn get_visibility_class(class_name: impl Into<String>) -> CalcValue {
+    CalcValue::Visibility {
+        target: ElementTarget::Class(class_name.into()),
+    }
+}
+
+#[must_use]
 pub fn get_display_str_id(str_id: impl Into<String>) -> CalcValue {
     CalcValue::Display {
         target: ElementTarget::StrId(str_id.into()),

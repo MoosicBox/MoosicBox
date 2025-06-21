@@ -206,6 +206,24 @@ impl ActionType {
     }
 
     #[must_use]
+    pub fn hide_class(class_name: &str) -> Self {
+        Self::set_visibility_class(Visibility::Hidden, class_name)
+    }
+
+    #[must_use]
+    pub fn show_class(class_name: &str) -> Self {
+        Self::set_visibility_class(Visibility::Visible, class_name)
+    }
+
+    #[must_use]
+    pub fn set_visibility_class(visibility: Visibility, class_name: &str) -> Self {
+        Self::Style {
+            target: ElementTarget::Class(class_name.to_string()),
+            action: StyleAction::SetVisibility(visibility),
+        }
+    }
+
+    #[must_use]
     pub const fn set_visibility_id(visibility: Visibility, target: usize) -> Self {
         Self::Style {
             target: ElementTarget::Id(target),

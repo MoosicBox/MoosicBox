@@ -81,6 +81,8 @@ pub enum Expression {
     Literal(Literal),
     /// Variable reference
     Variable(String),
+    /// Element reference for object-oriented API
+    ElementRef(ElementReference),
     /// Function call
     Call {
         function: String,
@@ -204,6 +206,45 @@ pub struct Dsl {
     pub statements: Vec<Statement>,
 }
 
+/// Element reference type for object-oriented element manipulation
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ElementReference {
+    /// The element selector (e.g., "#my-id", ".my-class")
+    pub selector: String,
+}
+
+impl ElementReference {
+    /// Parse the selector and determine the type at compile time
+    #[must_use]
+    pub fn parse_selector(&self) -> ParsedSelector {
+        if self.selector.starts_with('#') {
+            ParsedSelector::Id(self.selector[1..].to_string())
+        } else if self.selector.starts_with('.') {
+            ParsedSelector::Class(self.selector[1..].to_string())
+        } else if self.selector.is_empty() {
+            ParsedSelector::Invalid
+        } else {
+            // If it doesn't start with # or ., treat it as a string ID for backward compatibility
+            ParsedSelector::Id(self.selector.clone())
+        }
+    }
+}
+
+/// Parsed selector type to determine the correct function to call
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ParsedSelector {
+    /// ID selector (#my-id -> my-id)
+    Id(String),
+    /// Class selector (.my-class -> my-class)
+    Class(String),
+    /// Complex selector (for future implementation)
+    Complex(String),
+    /// Invalid selector
+    Invalid,
+}
+
 impl Dsl {
     /// Create a new DSL AST
     #[must_use]
@@ -232,6 +273,9 @@ pub enum BuiltinFunction {
     SetVisibility,
     SetDisplay,
     SetBackground,
+
+    // Element references
+    Element,
 
     // Getters
     GetVisibility,
@@ -309,7 +353,7 @@ pub struct EvalContext {
     pub variables: std::collections::HashMap<String, DslValue>,
 }
 
-/// Runtime values in the DSL
+/// DSL values that can be stored in variables or used in expressions
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DslValue {
@@ -323,6 +367,8 @@ pub enum DslValue {
     Visibility(Visibility),
     /// Element target
     Target(DslElementTarget),
+    /// Element reference for object-oriented API
+    ElementRef(ElementReference),
     /// Action effect
     Action(ActionEffect),
     /// List of values
@@ -348,13 +394,23 @@ impl From<DslValue> for ActionEffect {
     fn from(value: DslValue) -> Self {
         match value {
             DslValue::Action(action) => action,
-            DslValue::String(s) => ActionType::Custom { action: s }.into(),
-            DslValue::Bool(..)
-            | DslValue::Number(_)
-            | DslValue::Visibility(..)
-            | DslValue::Target(..)
-            | DslValue::List(..)
-            | DslValue::Unit => ActionType::NoOp.into(),
+            DslValue::ElementRef(element_ref) => {
+                // For element references, create a custom action that stores the element reference
+                Self {
+                    action: ActionType::Custom {
+                        action: format!("element_ref:{}", element_ref.selector),
+                    },
+                    delay_off: None,
+                    throttle: None,
+                    unique: None,
+                }
+            }
+            _ => Self {
+                action: ActionType::NoOp,
+                delay_off: None,
+                throttle: None,
+                unique: None,
+            },
         }
     }
 }

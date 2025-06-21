@@ -30,6 +30,41 @@ fx-click=fx { log("Button clicked") }
 fx-click=fx { custom("my-action") }
 ```
 
+### Element Reference API (Object-Oriented)
+
+The DSL supports a modern, object-oriented API for element manipulation:
+
+```rust
+// Get an element reference
+fx-click=fx {
+    let queue = element("#play-queue");
+    if queue.visibility() == hidden() {
+        queue.show();
+    } else {
+        queue.hide();
+    }
+}
+
+// Simple method calls
+fx-click=fx {
+    let button = element("#my-button");
+    button.show();
+}
+
+// Set properties
+fx-click=fx {
+    let panel = element("#info-panel");
+    panel.set_visibility(visible());
+}
+```
+
+**Available element methods:**
+- `element.show()` - Show the element
+- `element.hide()` - Hide the element
+- `element.toggle()` - Toggle element visibility
+- `element.visibility()` - Get current visibility state
+- `element.set_visibility(visibility)` - Set visibility state
+
 ### Multiple Actions
 
 Chain multiple actions together:
@@ -59,8 +94,9 @@ fx-click=fx {
 
 ### Conditional Expressions
 
-Use if/else expressions for clear conditional logic:
+Compare traditional vs. element reference syntax:
 
+**Traditional syntax:**
 ```rust
 fx-click=fx {
     if get_visibility("panel") == hidden() {
@@ -71,38 +107,15 @@ fx-click=fx {
 }
 ```
 
-### Real-world Examples
-
-#### Modal Toggle with Feedback
+**Element reference syntax (recommended):**
 ```rust
-button fx-click=fx {
-    if get_visibility("modal") == hidden() {
-        show("modal");
-        log("Modal opened");
+fx-click=fx {
+    let panel = element("panel");
+    if panel.visibility() == hidden() {
+        panel.show();
     } else {
-        hide("modal");
-        log("Modal closed");
+        panel.hide();
     }
-} {
-    "Toggle Modal"
-}
-```
-
-#### Multi-step Navigation
-```rust
-button fx-click=fx {
-    hide("current-page");
-    show("loading-spinner");
-    navigate("/next-page");
-} {
-    "Next Page"
-}
-```
-
-#### Single Action (Clean Syntax)
-```rust
-button fx-click=fx { hide("search") } {
-    "Close Search"
 }
 ```
 
@@ -118,59 +131,28 @@ button fx-click=fx { hide("search") } {
 
 ### Logging Actions
 - `log(message)` - Log an info message
-- `log_debug(message)` - Log a debug message
-- `log_warn(message)` - Log a warning message
-- `log_error(message)` - Log an error message
-
-### Custom Actions
 - `custom(action_name)` - Execute a custom action
 
+### Element Reference Functions
+- `element(selector)` - Get an element reference
+- `element.show()` - Show the element
+- `element.hide()` - Hide the element
+- `element.toggle()` - Toggle element visibility
+- `element.visibility()` - Get current visibility state
+- `element.set_visibility(visibility)` - Set visibility state
+
 ### Conditional Functions
-- `get_visibility(id)` - Get element visibility state
+- `get_visibility(id)` - Get element visibility state (traditional)
 - `visible()` - Visibility state constant
 - `hidden()` - Hidden state constant
 
-## Comparison Operators
-
-The DSL supports standard comparison operators:
-- `==` - Equal
-- `!=` - Not equal
-- `<` - Less than
-- `>` - Greater than
-- `<=` - Less than or equal
-- `>=` - Greater than or equal
-
-## Control Flow
-
-### If/Else Expressions
-```rust
-fx-click=fx {
-    if condition {
-        action1()
-    } else {
-        action2()
-    }
-}
-```
-
-### Complex Conditions
-```rust
-fx-click=fx {
-    if get_visibility("panel") == visible() && user_logged_in() {
-        show("admin-panel")
-    } else {
-        navigate("/login")
-    }
-}
-```
-
 ## Best Practices
 
-1. **Use descriptive element IDs**: Make your actions self-documenting
-2. **Group related actions**: Keep logically related actions together
-3. **Use variables for reusability**: Define IDs as variables when used multiple times
-4. **Add logging for debugging**: Include log statements for complex workflows
-5. **Keep actions focused**: Each action should have a single responsibility
+1. **Prefer element references**: Use the element reference API for cleaner, more readable code
+2. **Use descriptive element IDs**: Make your actions self-documenting
+3. **Group related actions**: Keep logically related actions together
+4. **Use variables for reusability**: Define element references as variables when used multiple times
+5. **Add logging for debugging**: Include log statements for complex workflows
 
 ## Integration with HyperChad
 
@@ -182,7 +164,8 @@ use hyperchad_template::container;
 let ui = container! {
     div {
         button fx-click=fx {
-            toggle("search-panel");
+            let search = element("search-panel");
+            search.toggle();
             log("Search panel toggled");
         } {
             "Toggle Search"
