@@ -6,22 +6,8 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 
 use hyperchad_actions::dsl::{
-    BinaryOp, Block, Dsl, Expression, Literal, MatchArm, Pattern, Statement, UnaryOp,
+    BinaryOp, Block, Expression, Literal, MatchArm, Pattern, Statement, UnaryOp,
 };
-
-/// Generate evaluation code for the entire DSL
-pub fn generate_evaluation_code(dsl: &Dsl, output_var: &Ident) -> Result<TokenStream, String> {
-    let mut statements = Vec::new();
-
-    for stmt in &dsl.statements {
-        let code = generate_statement_code(stmt, output_var)?;
-        statements.push(code);
-    }
-
-    Ok(quote! {
-        #(#statements)*
-    })
-}
 
 /// Generate code for a statement
 #[allow(clippy::too_many_lines)]
@@ -92,7 +78,7 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
                         let new_actions: Vec<_> = #output_var.drain(original_len..).collect();
                         then_actions.extend(new_actions.into_iter().map(|effect| hyperchad_actions::Action {
                             trigger: hyperchad_actions::ActionTrigger::Immediate,
-                            action: effect,
+                            effect,
                         }));
 
                         // Execute the else block and collect its actions
@@ -101,7 +87,7 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
                         let new_actions: Vec<_> = #output_var.drain(original_len..).collect();
                         else_actions.extend(new_actions.into_iter().map(|effect| hyperchad_actions::Action {
                             trigger: hyperchad_actions::ActionTrigger::Immediate,
-                            action: effect,
+                            effect,
                         }));
 
                         // Create the If statement with collected actions
@@ -133,7 +119,7 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
                     let new_actions: Vec<_> = #output_var.drain(original_len..).collect();
                     then_actions.extend(new_actions.into_iter().map(|effect| hyperchad_actions::Action {
                         trigger: hyperchad_actions::ActionTrigger::Immediate,
-                        action: effect,
+                        effect,
                     }));
 
                     // Create the If statement with collected actions
@@ -245,7 +231,7 @@ fn generate_pattern_code(pattern: &Pattern) -> TokenStream {
 
 /// Generate code for an expression
 #[allow(clippy::too_many_lines)]
-fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
+pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
     match expr {
         Expression::Literal(lit) => {
             let lit_code = generate_literal_code(lit);
@@ -263,12 +249,24 @@ fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
                 }
             })
         }
+
         Expression::Call { function, args } => generate_function_call_code(function, args),
         Expression::MethodCall {
             receiver,
             method,
             args,
         } => {
+            // Special optimization: if receiver is an element() call, generate direct optimized code
+            if let Expression::Call {
+                function,
+                args: element_args,
+            } = receiver.as_ref()
+            {
+                if function == "element" && element_args.len() == 1 {
+                    return generate_optimized_element_method_call(&element_args[0], method, args);
+                }
+            }
+
             let receiver_code = generate_expression_code(receiver)?;
             generate_method_call_code(&receiver_code, method, args)
         }
@@ -458,6 +456,9 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             if args_code.len() != 1 {
                 return Err("element() expects exactly 1 argument".to_string());
             }
+
+            // Note: element() calls that are directly chained with methods (e.g., element("#id").show())
+            // are optimized in the method call handler. This case handles standalone element() calls.
             let selector = &args_code[0];
             Ok(quote! {
                 hyperchad_actions::dsl::ElementReference {
@@ -1398,6 +1399,7 @@ fn generate_method_call_code(
             if !args_code.is_empty() {
                 return Err("ElementReference.visibility() expects no arguments".to_string());
             }
+            // For ElementReference visibility, we need to generate runtime parsing
             Ok(quote! {
                 {
                     let element_ref = &#receiver;
@@ -1414,7 +1416,7 @@ fn generate_method_call_code(
                             hyperchad_actions::logic::get_visibility_str_id(element_ref.selector.clone())
                         }
                         hyperchad_actions::dsl::ParsedSelector::Invalid => {
-                            hyperchad_actions::logic::get_visibility_self() // Return a CalcValue instead of Value
+                            hyperchad_actions::logic::get_visibility_self()
                         }
                     }
                 }
@@ -1732,7 +1734,7 @@ fn replace_param_in_block(block: &Block, param_name: &str) -> Result<Block, Stri
 
 /// Check if an expression produces an `ActionType` (should be pushed to output)
 /// vs a value type (should just be evaluated)
-fn expression_produces_action(expr: &Expression) -> bool {
+pub fn expression_produces_action(expr: &Expression) -> bool {
     match expr {
         // Method calls on ElementReference that produce actions
         Expression::MethodCall { method, .. } => {
@@ -1747,6 +1749,7 @@ fn expression_produces_action(expr: &Expression) -> bool {
                 function.as_str(),
                 "show"
                     | "hide"
+                    | "toggle"
                     | "log"
                     | "navigate"
                     | "custom"
@@ -1795,4 +1798,128 @@ fn expression_produces_action(expr: &Expression) -> bool {
         | Expression::Closure { .. }
         | Expression::RawRust(_) => true,
     }
+}
+
+/// Generate optimized element method calls with compile-time selector parsing
+fn generate_optimized_element_method_call(
+    selector_expr: &Expression,
+    method: &str,
+    args: &[Expression],
+) -> Result<TokenStream, String> {
+    // Extract selector string from literal expression
+    let selector = if let Expression::Literal(Literal::String(s)) = selector_expr {
+        s.clone()
+    } else {
+        // If not a string literal, fall back to runtime generation
+        let selector_code = generate_expression_code(selector_expr)?;
+        return generate_runtime_element_method_call(&selector_code, method, args);
+    };
+
+    // Parse selector at compile time
+    let (target_type, target_value) = if let Some(id) = selector.strip_prefix('#') {
+        ("Id", id.to_string())
+    } else if let Some(class) = selector.strip_prefix('.') {
+        ("Class", class.to_string())
+    } else if selector.is_empty() {
+        return Ok(quote! { hyperchad_actions::ActionType::NoOp });
+    } else {
+        // Treat as string ID for backward compatibility
+        ("Id", selector)
+    };
+
+    let args_code: Result<Vec<_>, String> = args.iter().map(generate_expression_code).collect();
+    let args_code = args_code?;
+
+    // Generate direct method calls without runtime parsing
+    match method {
+        "show" => {
+            if !args_code.is_empty() {
+                return Err("element.show() expects no arguments".to_string());
+            }
+            match target_type {
+                "Id" => Ok(quote! {
+                    hyperchad_actions::ActionType::show_str_id(#target_value)
+                }),
+                "Class" => Ok(quote! {
+                    hyperchad_actions::ActionType::show_class(#target_value)
+                }),
+                _ => Ok(quote! { hyperchad_actions::ActionType::NoOp }),
+            }
+        }
+        "hide" => {
+            if !args_code.is_empty() {
+                return Err("element.hide() expects no arguments".to_string());
+            }
+            match target_type {
+                "Id" => Ok(quote! {
+                    hyperchad_actions::ActionType::hide_str_id(#target_value)
+                }),
+                "Class" => Ok(quote! {
+                    hyperchad_actions::ActionType::hide_class(#target_value)
+                }),
+                _ => Ok(quote! { hyperchad_actions::ActionType::NoOp }),
+            }
+        }
+        "toggle" => {
+            if !args_code.is_empty() {
+                return Err("element.toggle() expects no arguments".to_string());
+            }
+            // TODO: Implement proper toggle logic
+            match target_type {
+                "Id" => Ok(quote! {
+                    hyperchad_actions::ActionType::show_str_id(#target_value)
+                }),
+                "Class" => Ok(quote! {
+                    hyperchad_actions::ActionType::show_class(#target_value)
+                }),
+                _ => Ok(quote! { hyperchad_actions::ActionType::NoOp }),
+            }
+        }
+        "visibility" => {
+            if !args_code.is_empty() {
+                return Err("element.visibility() expects no arguments".to_string());
+            }
+            match target_type {
+                "Id" => Ok(quote! {
+                    hyperchad_actions::logic::get_visibility_str_id(#target_value.to_string())
+                }),
+                "Class" => Ok(quote! {
+                    hyperchad_actions::logic::get_visibility_class(#target_value)
+                }),
+                _ => Ok(quote! {
+                    hyperchad_actions::logic::get_visibility_self()
+                }),
+            }
+        }
+        "set_visibility" => {
+            if args_code.len() != 1 {
+                return Err("element.set_visibility() expects exactly 1 argument".to_string());
+            }
+            let visibility = &args_code[0];
+            match target_type {
+                "Id" => Ok(quote! {
+                    hyperchad_actions::ActionType::set_visibility_str_id(#visibility, #target_value)
+                }),
+                "Class" => Ok(quote! {
+                    hyperchad_actions::ActionType::set_visibility_class(#visibility, #target_value)
+                }),
+                _ => Ok(quote! { hyperchad_actions::ActionType::NoOp }),
+            }
+        }
+        _ => Err(format!("Unknown element method: {method}")),
+    }
+}
+
+/// Generate runtime element method call as fallback
+fn generate_runtime_element_method_call(
+    selector_code: &TokenStream,
+    method: &str,
+    args: &[Expression],
+) -> Result<TokenStream, String> {
+    let element_ref_code = quote! {
+        hyperchad_actions::dsl::ElementReference {
+            selector: #selector_code.to_string()
+        }
+    };
+    generate_method_call_code(&element_ref_code, method, args)
 }

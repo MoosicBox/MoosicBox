@@ -2733,28 +2733,28 @@ impl Container {
         for action in &self.actions {
             match &action.trigger {
                 hyperchad_actions::ActionTrigger::Click => {
-                    attrs.add("fx-click", action.action.to_string());
+                    attrs.add("fx-click", action.effect.to_string());
                 }
                 hyperchad_actions::ActionTrigger::ClickOutside => {
-                    attrs.add("fx-click-outside", action.action.to_string());
+                    attrs.add("fx-click-outside", action.effect.to_string());
                 }
                 hyperchad_actions::ActionTrigger::MouseDown => {
-                    attrs.add("fx-mouse-down", action.action.to_string());
+                    attrs.add("fx-mouse-down", action.effect.to_string());
                 }
                 hyperchad_actions::ActionTrigger::Hover => {
-                    attrs.add("fx-hover", action.action.to_string());
+                    attrs.add("fx-hover", action.effect.to_string());
                 }
                 hyperchad_actions::ActionTrigger::Change => {
-                    attrs.add("fx-change", action.action.to_string());
+                    attrs.add("fx-change", action.effect.to_string());
                 }
                 hyperchad_actions::ActionTrigger::Resize => {
-                    attrs.add("fx-resize", action.action.to_string());
+                    attrs.add("fx-resize", action.effect.to_string());
                 }
                 hyperchad_actions::ActionTrigger::Immediate => {
-                    attrs.add("fx-immediate", action.action.to_string());
+                    attrs.add("fx-immediate", action.effect.to_string());
                 }
                 hyperchad_actions::ActionTrigger::Event(..) => {
-                    attrs.add("fx-event", action.action.to_string());
+                    attrs.add("fx-event", action.effect.to_string());
                 }
             }
         }

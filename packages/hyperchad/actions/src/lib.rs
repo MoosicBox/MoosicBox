@@ -61,7 +61,7 @@ impl ActionTrigger {
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub struct Action {
     pub trigger: ActionTrigger,
-    pub action: ActionEffect,
+    pub effect: ActionEffect,
 }
 
 #[cfg(feature = "serde")]
@@ -82,6 +82,17 @@ pub struct ActionEffect {
     pub throttle: Option<u64>,
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub unique: Option<bool>,
+}
+
+impl From<Vec<Self>> for ActionEffect {
+    fn from(value: Vec<Self>) -> Self {
+        Self {
+            action: ActionType::MultiEffect(value),
+            delay_off: None,
+            throttle: None,
+            unique: None,
+        }
+    }
 }
 
 impl ActionEffect {
@@ -161,6 +172,7 @@ pub enum ActionType {
         action: Box<ActionType>,
     },
     Multi(Vec<ActionType>),
+    MultiEffect(Vec<ActionEffect>),
     #[cfg(feature = "logic")]
     Parameterized {
         action: Box<ActionType>,
@@ -499,7 +511,7 @@ impl From<ActionType> for Action {
     fn from(value: ActionType) -> Self {
         Self {
             trigger: ActionTrigger::default(),
-            action: ActionEffect {
+            effect: ActionEffect {
                 action: value,
                 delay_off: None,
                 throttle: None,

@@ -557,13 +557,19 @@ pub trait IntoActionEffect {
 
 impl IntoActionEffect for actions::Action {
     fn into_action_effect(self) -> actions::ActionEffect {
-        self.action
+        self.effect
     }
 }
 
 impl IntoActionEffect for actions::ActionEffect {
     fn into_action_effect(self) -> actions::ActionEffect {
         self
+    }
+}
+
+impl IntoActionEffect for Vec<actions::ActionEffect> {
+    fn into_action_effect(self) -> actions::ActionEffect {
+        actions::ActionType::MultiEffect(self).into()
     }
 }
 

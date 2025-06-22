@@ -765,7 +765,7 @@ impl Generator {
                     actions.push(quote! {
                         hyperchad_actions::Action {
                             trigger: #trigger_ident,
-                            action: #action_effect,
+                            effect: #action_effect,
                         }
                     });
                 }
@@ -875,26 +875,8 @@ impl Generator {
                 };
             }
 
-            // Parse the DSL content using actions_dsl! macro
-            return quote! {
-                {
-                    let actions = hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens };
-                    if actions.is_empty() {
-                        hyperchad_actions::ActionType::NoOp.into()
-                    } else if actions.len() == 1 {
-                        // Single action - convert directly
-                        let action = actions.into_iter().next().unwrap();
-                        hyperchad_actions::ActionEffect::from(action.action)
-                    } else {
-                        // Multiple actions - use ActionType::Multi
-                        let action_types: Vec<hyperchad_actions::ActionType> = actions
-                            .into_iter()
-                            .map(|action| action.action)
-                            .collect();
-                        hyperchad_actions::ActionEffect::from(hyperchad_actions::ActionType::Multi(action_types))
-                    }
-                }
-            };
+            // Parse the DSL content and determine ActionType at compile time
+            return Self::generate_compile_time_optimized_dsl_action(&dsl_tokens);
         }
 
         // Fallback to existing behavior for non-fx content
@@ -3279,6 +3261,15 @@ impl Generator {
                 }
             }
             _ => None,
+        }
+    }
+
+    fn generate_compile_time_optimized_dsl_action(dsl_tokens: &TokenStream) -> TokenStream {
+        // Use the main optimized macro and extract the single ActionEffect from the Vec
+        // The main macro now includes optimizations internally
+        // (hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens }).into_iter().next().unwrap()
+        quote! {
+            (hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens }).into()
         }
     }
 }

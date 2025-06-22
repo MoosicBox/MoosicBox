@@ -323,10 +323,10 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                 }
 
                 for action in &logic.actions {
-                    check_action(&action.action.action, root, watch_positions, id);
+                    check_action(&action.effect.action, root, watch_positions, id);
                 }
                 for action in &logic.else_actions {
-                    check_action(&action.action.action, root, watch_positions, id);
+                    check_action(&action.effect.action, root, watch_positions, id);
                 }
             }
             ActionType::NoOp
@@ -346,11 +346,16 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                     check_action(action, root, watch_positions, id);
                 }
             }
+            ActionType::MultiEffect(effects) => {
+                for effect in effects {
+                    check_action(&effect.action, root, watch_positions, id);
+                }
+            }
         }
     }
 
     for action in &container.actions {
-        check_action(&action.action.action, root, watch_positions, container.id);
+        check_action(&action.effect.action, root, watch_positions, container.id);
     }
 
     for element in &container.children {
@@ -2404,7 +2409,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         #[cfg(feature = "profiling")]
                         profiling::scope!("click/clickOutside side effects");
                         let inside = matches!(fx_action.trigger, ActionTrigger::Click);
-                        let action = fx_action.action.clone();
+                        let action = fx_action.effect.clone();
                         let id = container.id;
                         let pointer = ctx.input(|x| x.pointer.clone());
                         let ctx = ctx.clone();
@@ -2448,7 +2453,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     ActionTrigger::MouseDown => {
                         #[cfg(feature = "profiling")]
                         profiling::scope!("mouse down side effects");
-                        let action = fx_action.action.clone();
+                        let action = fx_action.effect.clone();
                         let id = container.id;
                         let pointer = ctx.input(|x| x.pointer.clone());
                         let ctx = ctx.clone();
@@ -2491,7 +2496,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     ActionTrigger::Hover => {
                         #[cfg(feature = "profiling")]
                         profiling::scope!("hover side effects");
-                        let action = fx_action.action.clone();
+                        let action = fx_action.effect.clone();
                         let id = container.id;
                         let responses = responses.clone();
                         let pointer = ctx.input(|x| x.pointer.clone());
@@ -2532,7 +2537,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     ActionTrigger::Change => {
                         #[cfg(feature = "profiling")]
                         profiling::scope!("change side effects");
-                        let action = fx_action.action.clone();
+                        let action = fx_action.effect.clone();
                         let id = container.id;
                         let changed = responses
                             .iter()
@@ -2580,7 +2585,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     }
                     ActionTrigger::Resize => {
                         let request_action = self.request_action.clone();
-                        let action = fx_action.action.clone();
+                        let action = fx_action.effect.clone();
                         let id = container.id;
                         let ctx = self.ctx.read().unwrap().clone().unwrap();
                         let sender = self.sender.clone();
@@ -2604,7 +2609,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     }
                     ActionTrigger::Immediate => {
                         let request_action = self.request_action.clone();
-                        let action = fx_action.action.clone();
+                        let action = fx_action.effect.clone();
                         let id = container.id;
                         let ctx = self.ctx.read().unwrap().clone().unwrap();
                         let sender = self.sender.clone();
@@ -2636,7 +2641,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         for fx_action in &container.actions {
             if let ActionTrigger::Event(event_name) = &fx_action.trigger {
                 let request_action = self.request_action.clone();
-                let action = fx_action.action.clone();
+                let action = fx_action.effect.clone();
                 let id = container.id;
                 let ctx = self.ctx.read().unwrap().clone().unwrap();
                 let sender = self.sender.clone();
@@ -2968,8 +2973,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             action.trigger,
                             ActionTrigger::Immediate | ActionTrigger::Event(..)
                         ) && !Self::handle_action(
-                            &action.action.action,
-                            Some(&action.action),
+                            &action.effect.action,
+                            Some(&action.effect),
                             trigger,
                             render_context,
                             ctx,
@@ -2988,8 +2993,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             action.trigger,
                             ActionTrigger::Immediate | ActionTrigger::Event(..)
                         ) && !Self::handle_action(
-                            &action.action.action,
-                            Some(&action.action),
+                            &action.effect.action,
+                            Some(&action.effect),
                             trigger,
                             render_context,
                             ctx,
@@ -3015,6 +3020,26 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     if !Self::handle_action(
                         action,
                         effect,
+                        trigger,
+                        render_context,
+                        ctx,
+                        id,
+                        sender,
+                        request_action,
+                        event_value,
+                        value,
+                    ) {
+                        return false;
+                    }
+                }
+
+                true
+            }
+            ActionType::MultiEffect(effects) => {
+                for effect in effects {
+                    if !Self::handle_action(
+                        &effect.action,
+                        Some(effect),
                         trigger,
                         render_context,
                         ctx,
@@ -3134,6 +3159,18 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             ActionType::Multi(actions) => {
                 for action in actions {
                     Self::unhandle_action(action, effect, trigger, render_context, ctx, id);
+                }
+            }
+            ActionType::MultiEffect(effects) => {
+                for effect in effects {
+                    Self::unhandle_action(
+                        &effect.action,
+                        Some(effect),
+                        trigger,
+                        render_context,
+                        ctx,
+                        id,
+                    );
                 }
             }
             ActionType::Parameterized { action, .. } => {

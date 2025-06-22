@@ -341,6 +341,26 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
                 },
             )
         }
+        ActionType::MultiEffect(vec) => {
+            let effects = vec.iter().map(action_effect_to_js).collect::<Vec<_>>();
+            let all_effects = effects
+                .iter()
+                .map(|(effect, _)| effect.as_str())
+                .collect::<String>();
+            let all_reset = effects
+                .iter()
+                .filter_map(|(_, reset)| reset.as_ref().map(String::as_str))
+                .collect::<String>();
+
+            (
+                all_effects,
+                if all_reset.is_empty() {
+                    None
+                } else {
+                    Some(all_reset)
+                },
+            )
+        }
         ActionType::Event {
             name: _name,
             action,
@@ -356,7 +376,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             let if_true = logic
                 .actions
                 .iter()
-                .map(|x| &x.action)
+                .map(|x| &x.effect)
                 .map(action_effect_to_js)
                 .collect::<Vec<_>>();
 
@@ -373,7 +393,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             let if_false = logic
                 .else_actions
                 .iter()
-                .map(|x| &x.action)
+                .map(|x| &x.effect)
                 .map(action_effect_to_js)
                 .collect::<Vec<_>>();
 
@@ -522,56 +542,56 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                     write_attr(
                         f,
                         b"v-onclick",
-                        action_effect_to_js_attr(&action.action).as_bytes(),
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
                 ActionTrigger::ClickOutside => {
                     write_attr(
                         f,
                         b"v-onclickoutside",
-                        action_effect_to_js_attr(&action.action).as_bytes(),
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
                 ActionTrigger::MouseDown => {
                     write_attr(
                         f,
                         b"v-onmousedown",
-                        action_effect_to_js_attr(&action.action).as_bytes(),
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
                 ActionTrigger::Hover => {
                     write_attr(
                         f,
                         b"v-onmouseover",
-                        action_effect_to_js_attr(&action.action).as_bytes(),
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
                 ActionTrigger::Change => {
                     write_attr(
                         f,
                         b"v-onchange",
-                        action_effect_to_js_attr(&action.action).as_bytes(),
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
                 ActionTrigger::Resize => {
                     write_attr(
                         f,
                         b"v-onresize",
-                        action_effect_to_js_attr(&action.action).as_bytes(),
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
                 ActionTrigger::Event(name) => {
                     write_attr(
                         f,
                         b"v-onevent",
-                        format!("{name}:{}", action_effect_to_js_attr(&action.action)).as_bytes(),
+                        format!("{name}:{}", action_effect_to_js_attr(&action.effect)).as_bytes(),
                     )?;
                 }
                 ActionTrigger::Immediate => {
                     write_attr(
                         f,
                         b"v-onload",
-                        action_effect_to_js_attr(&action.action).as_bytes(),
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
             }

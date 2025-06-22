@@ -568,12 +568,12 @@ fn parse_std_action(action: &str) -> Option<ActionEffect> {
     None
 }
 
-fn parse_action(action: String) -> ActionEffect {
-    if let Some(action) = parse_std_action(&action) {
-        return action;
+fn parse_effect(effect: String) -> ActionEffect {
+    if let Some(effect) = parse_std_action(&effect) {
+        return effect;
     }
 
-    ActionType::Custom { action }.into()
+    ActionType::Custom { action: effect }.into()
 }
 
 fn parse_event_action(action: &str) -> (String, ActionEffect) {
@@ -608,50 +608,50 @@ fn get_actions(tag: &HTMLTag) -> Vec<Action> {
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-click") {
         actions.push(Action {
             trigger: ActionTrigger::Click,
-            action: parse_action(action),
+            effect: parse_effect(action),
         });
     }
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-click-outside") {
         actions.push(Action {
             trigger: ActionTrigger::ClickOutside,
-            action: parse_action(action),
+            effect: parse_effect(action),
         });
     }
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-mouse-down") {
         actions.push(Action {
             trigger: ActionTrigger::MouseDown,
-            action: parse_action(action),
+            effect: parse_effect(action),
         });
     }
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-hover") {
         actions.push(Action {
             trigger: ActionTrigger::Hover,
-            action: parse_action(action),
+            effect: parse_effect(action),
         });
     }
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-change") {
         actions.push(Action {
             trigger: ActionTrigger::Change,
-            action: parse_action(action),
+            effect: parse_effect(action),
         });
     }
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-resize") {
         actions.push(Action {
             trigger: ActionTrigger::Resize,
-            action: parse_action(action),
+            effect: parse_effect(action),
         });
     }
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-immediate") {
         actions.push(Action {
             trigger: ActionTrigger::Immediate,
-            action: parse_action(action),
+            effect: parse_effect(action),
         });
     }
     if let Some(action) = get_tag_attr_value_owned(tag, "fx-event") {
         let (name, action) = parse_event_action(&action);
         actions.push(Action {
             trigger: ActionTrigger::Event(name),
-            action,
+            effect: action,
         });
     }
 

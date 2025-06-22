@@ -297,10 +297,11 @@ pub fn player(state: &State) -> Containers {
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
                         fx-click=fx {
-                            if get_visibility_str_id(PLAYBACK_SESSIONS_ID) == hidden() {
-                                show(PLAYBACK_SESSIONS_ID);
+                            let playback_sessions = element(PLAYBACK_SESSIONS_ID);
+                            if playback_sessions.visibility() == hidden() {
+                                playback_sessions.show();
                             } else {
-                                hide(PLAYBACK_SESSIONS_ID);
+                                playback_sessions.hide();
                             }
                         }
                     {

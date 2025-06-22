@@ -137,7 +137,7 @@ impl Arbitrary for Action {
         if let ActionTrigger::Event(name) = &trigger {
             Self {
                 trigger: trigger.clone(),
-                action: ActionEffect {
+                effect: ActionEffect {
                     action: ActionType::Event {
                         name: name.to_string(),
                         action: Box::new(ActionType::arbitrary(g)),
@@ -150,7 +150,7 @@ impl Arbitrary for Action {
         } else {
             Self {
                 trigger,
-                action: ActionEffect {
+                effect: ActionEffect {
                     action: ActionType::arbitrary(g),
                     delay_off: Option::arbitrary(g),
                     throttle: Option::arbitrary(g),
