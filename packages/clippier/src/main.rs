@@ -2021,7 +2021,6 @@ fn find_affected_packages_basic(
     log::trace!("🏢 Found {} workspace members", workspace_members.len());
 
     // Create a map of package name -> package path and package_path -> package name
-    let mut package_name_to_path = HashMap::new();
     let mut package_path_to_name = HashMap::new();
     let mut package_dependencies: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -2045,7 +2044,6 @@ fn find_affected_packages_basic(
             .and_then(|x| x.as_str())
         {
             log::trace!("📦 Package name: {package_name} -> {member_path}");
-            package_name_to_path.insert(package_name.to_string(), member_path.to_string());
             package_path_to_name.insert(member_path.to_string(), package_name.to_string());
 
             // Extract dependencies that are workspace members
