@@ -167,10 +167,6 @@ pub enum BinaryOp {
     BitAnd,
     BitOr,
     BitXor,
-
-    // Miscellaneous
-    Min,
-    Max,
 }
 
 /// Unary operators

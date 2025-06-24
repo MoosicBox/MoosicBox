@@ -311,12 +311,6 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
                 BinaryOp::Divide => Ok(quote! {
                     #left_code.divide(#right_code)
                 }),
-                BinaryOp::Min => Ok(quote! {
-                    #left_code.min(#right_code)
-                }),
-                BinaryOp::Max => Ok(quote! {
-                    #left_code.max(#right_code)
-                }),
                 _ => {
                     // For other operations, use standard Rust operators
                     let op_code = generate_binary_op_code(op);
@@ -1288,8 +1282,6 @@ fn generate_binary_op_code(op: &BinaryOp) -> TokenStream {
         BinaryOp::BitAnd => quote! { & },
         BinaryOp::BitOr => quote! { | },
         BinaryOp::BitXor => quote! { ^ },
-        BinaryOp::Min => quote! { .min },
-        BinaryOp::Max => quote! { .max },
     }
 }
 
