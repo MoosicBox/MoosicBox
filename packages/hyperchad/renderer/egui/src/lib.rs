@@ -320,6 +320,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                         check_value(a, root, watch_positions, id);
                         check_value(b, root, watch_positions, id);
                     }
+                    hyperchad_actions::logic::Condition::Bool(_b) => {}
                 }
 
                 for action in &logic.actions {
@@ -2963,6 +2964,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                         a == b
                     }
+                    Condition::Bool(b) => *b,
                 };
 
                 log::debug!("handle_action: success={success}");

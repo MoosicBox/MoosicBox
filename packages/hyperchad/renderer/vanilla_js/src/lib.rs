@@ -372,6 +372,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
                     let (b, b_eq) = value_to_js(b, false);
                     format!("{}{}{}", a, if a_eq == b_eq { "===" } else { "!==" }, b)
                 }
+                Condition::Bool(b) => format!("{b}"),
             };
             let if_true = logic
                 .actions
