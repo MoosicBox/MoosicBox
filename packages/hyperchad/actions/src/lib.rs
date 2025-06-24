@@ -71,7 +71,7 @@ impl std::fmt::Display for Action {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
 pub struct ActionEffect {
@@ -149,9 +149,10 @@ pub enum LogLevel {
     Trace,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionType {
+    #[default]
     NoOp,
     Style {
         target: ElementTarget,
