@@ -822,10 +822,10 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                 div {
                                     @let url = albums_page_url(
                                         filtered_sources,
-                                        if sort == AlbumSort::ArtistAsc {
-                                            AlbumSort::ArtistDesc
-                                        } else {
+                                        if sort == AlbumSort::ArtistDesc {
                                             AlbumSort::ArtistAsc
+                                        } else {
+                                            AlbumSort::ArtistDesc
                                         }
                                     );
                                     button fx-click=fx { navigate(url) } {
@@ -835,10 +835,10 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                 div border-top="1, #222" {
                                     @let url = albums_page_url(
                                         filtered_sources,
-                                        if sort == AlbumSort::NameAsc {
-                                            AlbumSort::NameDesc
-                                        } else {
+                                        if sort == AlbumSort::NameDesc {
                                             AlbumSort::NameAsc
+                                        } else {
+                                            AlbumSort::NameDesc
                                         }
                                     );
                                     button fx-click=fx { navigate(url) } {
@@ -848,10 +848,10 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                 div border-top="1, #222" {
                                     @let url = albums_page_url(
                                         filtered_sources,
-                                        if sort == AlbumSort::ReleaseDateAsc {
-                                            AlbumSort::ReleaseDateDesc
-                                        } else {
+                                        if sort == AlbumSort::ReleaseDateDesc {
                                             AlbumSort::ReleaseDateAsc
+                                        } else {
+                                            AlbumSort::ReleaseDateDesc
                                         }
                                     );
                                     button fx-click=fx { navigate(url) } {
@@ -861,10 +861,10 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                                 div border-top="1, #222" {
                                     @let url = albums_page_url(
                                         filtered_sources,
-                                        if sort == AlbumSort::DateAddedAsc {
-                                            AlbumSort::DateAddedDesc
-                                        } else {
+                                        if sort == AlbumSort::DateAddedDesc {
                                             AlbumSort::DateAddedAsc
+                                        } else {
+                                            AlbumSort::DateAddedDesc
                                         }
                                     );
                                     button fx-click=fx { navigate(url) } {
