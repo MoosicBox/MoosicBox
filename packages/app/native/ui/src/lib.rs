@@ -379,13 +379,10 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
             fx-mouse-down=fx {
                 invoke(
                     Action::SetVolume,
-                    clamp(
-                        0.0,
-                        (get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
-                            - get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
-                            / get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID),
-                        1.0
-                    )
+                    ((get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
+                        - get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
+                        / get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
+                        .clamp(0.0, 1.0)
                 ).throttle(30)
             }
             fx-hover=fx { show_self().delay_off(400) }
