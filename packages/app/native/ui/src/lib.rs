@@ -280,10 +280,11 @@ pub fn player(state: &State) -> Containers {
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
                         fx-click=fx {
-                            if get_visibility(AUDIO_ZONES_ID) == hidden() {
-                                show(AUDIO_ZONES_ID);
+                            let audio_zones = element(AUDIO_ZONES_ID);
+                            if audio_zones.visibility() == hidden() {
+                                audio_zones.show();
                             } else {
-                                hide(AUDIO_ZONES_ID);
+                                audio_zones.hide();
                             }
                         }
                     {
@@ -312,10 +313,11 @@ pub fn player(state: &State) -> Containers {
                     }
                     button
                         fx-click=fx {
-                            if get_visibility("play-queue") == hidden() {
-                                show("play-queue");
+                            let play_queue = element(PLAY_QUEUE_ID);
+                            if play_queue.visibility() == hidden() {
+                                play_queue.show();
                             } else {
-                                hide("play-queue");
+                                play_queue.hide();
                             }
                         }
                         width=(FOOTER_ICON_SIZE)
@@ -346,7 +348,7 @@ fn volume(state: &State, size: u16) -> Containers {
             width=(size)
             height=(size)
             position=relative
-            fx-hover=fx { show(VOLUME_SLIDER_ID).delay_off(400) }
+            fx-hover=fx { element(VOLUME_SLIDER_ID).show().delay_off(400) }
         {
             button {
                 image
@@ -683,6 +685,7 @@ pub fn audio_zones() -> Containers {
 
 pub static PLAYBACK_SESSIONS_ID: &str = "playback-sessions";
 pub static PLAYBACK_SESSIONS_CONTENT_ID: &str = "playback-sessions-content";
+pub static PLAY_QUEUE_ID: &str = "play-queue";
 
 #[must_use]
 pub fn playback_sessions() -> Containers {
