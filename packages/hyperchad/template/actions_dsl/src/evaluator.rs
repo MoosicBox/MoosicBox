@@ -680,6 +680,13 @@ pub fn generate_expression_code(
             };
             Ok(tokens)
         }
+        Expression::Grouping(inner) => {
+            // Generate the inner expression surrounded by parentheses to preserve grouping
+            let inner_code = generate_expression_code(context, inner)?;
+            Ok(quote! {
+                hyperchad_actions::logic::Arithmetic::Grouping(#inner_code.into())
+            })
+        }
     }
 }
 
@@ -717,7 +724,8 @@ fn target_to_expr(
         | Expression::Tuple(..)
         | Expression::Range { .. }
         | Expression::Closure { .. }
-        | Expression::RawRust(..) => {}
+        | Expression::RawRust(..)
+        | Expression::Grouping(..) => {}
     }
 
     let code = generate_expression_code(context, target)?;

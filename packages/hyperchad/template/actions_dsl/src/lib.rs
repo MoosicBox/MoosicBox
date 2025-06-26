@@ -837,6 +837,61 @@ mod tests {
     }
 
     #[test]
+    fn test_arithmetic_grouping_with_parentheses() {
+        let input = quote! {
+            invoke(Action::SetVolume, ((get_height_px_str_id("container") - get_mouse_y_str_id("container")) / get_height_px_str_id("container")).clamp(0.0, 1.0));
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("actual: {result}");
+
+        // Should properly handle parenthetical grouping in arithmetic expressions
+        assert!(result.contains("Parameterized"));
+        assert!(result.contains("Action :: SetVolume"));
+        assert!(result.contains("get_height_px_str_id"));
+        assert!(result.contains("get_mouse_y_str_id"));
+        assert!(result.contains("clamp"));
+
+        // The critical test: should contain parentheses to preserve grouping
+        // The subtraction should be grouped before the division
+        assert!(result.contains('('));
+        assert!(result.contains(')'));
+    }
+
+    #[test]
+    fn test_nested_arithmetic_grouping() {
+        let input = quote! {
+            invoke(Action::Test, (a + b) * (c - d));
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("actual: {result}");
+
+        // Should preserve both groupings
+        assert!(result.contains("Parameterized"));
+        assert!(result.contains("Action :: Test"));
+        // Should maintain proper grouping with parentheses
+        assert!(result.contains('('));
+        assert!(result.contains(')'));
+    }
+
+    #[test]
+    fn test_simple_grouping_preserved() {
+        let input = quote! {
+            invoke(Action::Test, (a + b));
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("actual: {result}");
+
+        // Even simple grouping should be preserved
+        assert!(result.contains("Parameterized"));
+        assert!(result.contains("Action :: Test"));
+        assert!(result.contains('('));
+        assert!(result.contains(')'));
+    }
+
+    #[test]
     fn test_simple_invoke() {
         let input = quote! {
             invoke(Action::Test, "value");

@@ -529,7 +529,9 @@ fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
         if content.is_empty() {
             Ok(Expression::Literal(Literal::Unit))
         } else {
-            parse_expression(&content)
+            // Preserve grouping information by wrapping in Grouping variant
+            let inner_expr = parse_expression(&content)?;
+            Ok(Expression::Grouping(Box::new(inner_expr)))
         }
     } else if lookahead.peek(token::Bracket) {
         let content;
