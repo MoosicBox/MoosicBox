@@ -480,7 +480,7 @@ swc_ecma_ast = "13.0.0"
 swc_ecma_codegen = "15.0.1"
 swc_ecma_loader = { version = "13.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "23.0.3"
-swc_ecma_parser = "17.0.3"
+swc_ecma_parser = "17.1.0"
 swc_ecma_transforms_base = "18.0.0"
 swc_ecma_transforms_typescript = "20.0.0"
 swc_ecma_visit = "13.0.0"
@@ -491,10 +491,10 @@ tantivy = "0.24.1"
 tauri = { version = "2.6.0", features = ["protocol-asset"] }
 tauri-build = { version = "2.3.0", features = [] }
 tauri-plugin = { version = "2.3.0", features = ["build"] }
-tauri-plugin-dialog = "2.2.2"
-tauri-plugin-fs = "2.3.0"
-tauri-plugin-log = "2.5.1"
-tauri-plugin-notification = "2.2.3"
+tauri-plugin-dialog = "2.3.0"
+tauri-plugin-fs = "2.4.0"
+tauri-plugin-log = "2.6.0"
+tauri-plugin-notification = "2.3.0"
 test-log = "0.2.17"
 thiserror = "2.0.12"
 throttle = "0.1.0"
