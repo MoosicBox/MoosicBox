@@ -140,7 +140,7 @@ fn generate_action_effect_from_statement(
 ) -> Result<TokenStream, String> {
     let code = evaluator::generate_statement_code(context, stmt)?;
     Ok(quote! {
-        #code
+        #code.into_action_effect()
     })
 }
 

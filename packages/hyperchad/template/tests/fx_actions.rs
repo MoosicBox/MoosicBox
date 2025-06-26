@@ -191,7 +191,7 @@ fn test_dsl_basic_features() {
     assert_eq!(actions.len(), 3, "DSL should generate 3 actions");
 
     // Verify the first action (let)
-    match &actions[0] {
+    match &actions[0].action {
         ActionType::Let { name, value } => {
             assert_eq!(name, "modal_id");
             assert_eq!(
@@ -205,7 +205,7 @@ fn test_dsl_basic_features() {
     }
 
     // Verify the second action (hide)
-    match &actions[1] {
+    match &actions[1].action {
         ActionType::Style { target, action } => {
             assert_eq!(
                 *target,
@@ -217,7 +217,7 @@ fn test_dsl_basic_features() {
     }
 
     // Verify the third action (log)
-    match &actions[2] {
+    match &actions[2].action {
         ActionType::Log { message, level } => {
             assert_eq!(message, "Modal hidden");
             assert_eq!(*level, LogLevel::Info);
@@ -238,7 +238,7 @@ fn test_dsl_simple_conditional() {
     };
 
     assert_eq!(
-        action,
+        action.action,
         ActionType::Style {
             target: ElementTarget::str_id("panel"),
             action: StyleAction::SetVisibility(Visibility::Visible)
@@ -439,7 +439,7 @@ fn test_dsl_action_chaining() {
     assert_eq!(actions.len(), 4, "Should generate 4 sequential actions");
 
     // Verify each action type
-    match &actions[0] {
+    match &actions[0].action {
         ActionType::Style { target, action } => {
             assert_eq!(*target, ElementTarget::str_id("modal"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -447,7 +447,7 @@ fn test_dsl_action_chaining() {
         _ => panic!("Expected Style action for hide"),
     }
 
-    match &actions[1] {
+    match &actions[1].action {
         ActionType::Style { target, action } => {
             assert_eq!(*target, ElementTarget::str_id("backdrop"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
@@ -455,7 +455,7 @@ fn test_dsl_action_chaining() {
         _ => panic!("Expected Style action for show"),
     }
 
-    match &actions[2] {
+    match &actions[2].action {
         ActionType::Log { message, level } => {
             assert_eq!(message, "Actions chained");
             assert_eq!(*level, LogLevel::Info);
@@ -463,7 +463,7 @@ fn test_dsl_action_chaining() {
         _ => panic!("Expected Log action"),
     }
 
-    match &actions[3] {
+    match &actions[3].action {
         ActionType::Custom { action } => {
             assert_eq!(*action, "refresh-ui");
         }
@@ -504,7 +504,7 @@ fn test_dsl_nested_conditions() {
         }
     };
 
-    match &action {
+    match &action.action {
         ActionType::MultiEffect(actions) => {
             // Verify first action (hide)
             match &actions[0].action {
@@ -539,7 +539,7 @@ fn test_dsl_variable_interpolation() {
     };
 
     assert_eq!(
-        action,
+        action.action,
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
@@ -625,7 +625,7 @@ fn test_dsl_complex_workflow() {
     );
 
     // Verify the first action (let)
-    match &actions[0] {
+    match &actions[0].action {
         ActionType::Let { name, value } => {
             assert_eq!(name, "modal");
             assert_eq!(
@@ -639,7 +639,7 @@ fn test_dsl_complex_workflow() {
     }
 
     // Verify the first action (let)
-    match &actions[1] {
+    match &actions[1].action {
         ActionType::Let { name, value } => {
             assert_eq!(name, "overlay");
             assert_eq!(
@@ -652,7 +652,7 @@ fn test_dsl_complex_workflow() {
         unknown => panic!("Expected Let action, got {unknown:?}"),
     }
 
-    match &actions[2] {
+    match &actions[2].action {
         ActionType::Style { target, action } => {
             assert_eq!(*target, ElementTarget::str_id(Target::reference("modal")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -660,7 +660,7 @@ fn test_dsl_complex_workflow() {
         unknown => panic!("Expected Style action for hide, got {unknown:?}"),
     }
 
-    match &actions[3] {
+    match &actions[3].action {
         ActionType::Style { target, action } => {
             assert_eq!(*target, ElementTarget::str_id(Target::reference("overlay")));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -668,7 +668,7 @@ fn test_dsl_complex_workflow() {
         unknown => panic!("Expected Style action for hide, got {unknown:?}"),
     }
 
-    match &actions[4] {
+    match &actions[4].action {
         ActionType::Log { message, level } => {
             assert_eq!(message, "Modal workflow completed");
             assert_eq!(*level, LogLevel::Info);
@@ -676,14 +676,14 @@ fn test_dsl_complex_workflow() {
         unknown => panic!("Expected Style action for hide, got {unknown:?}"),
     }
 
-    match &actions[5] {
+    match &actions[5].action {
         ActionType::Navigate { url } => {
             assert_eq!(url, "/success");
         }
         unknown => panic!("Expected Navigate action for hide, got {unknown:?}"),
     }
 
-    match &actions[6] {
+    match &actions[6].action {
         ActionType::Custom { action } => {
             assert_eq!(*action, "modal-closed");
         }
@@ -774,7 +774,7 @@ fn test_dsl_moosicbox_patterns() {
     };
 
     assert_eq!(
-        action,
+        action.action,
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
@@ -817,7 +817,7 @@ fn test_dsl_method_chaining_patterns() {
     };
 
     assert_eq!(
-        action,
+        action.action,
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
@@ -888,7 +888,7 @@ fn test_dsl_mouse_and_dimension_functions() {
     };
 
     assert_eq!(
-        action,
+        action.action,
         ActionType::Log {
             message: "Mouse and dimension test".to_string(),
             level: LogLevel::Info,
@@ -904,7 +904,7 @@ fn test_dsl_navigation_action() {
     };
 
     // Verify the navigation action
-    match &action {
+    match &action.action {
         ActionType::Navigate { url } => {
             assert_eq!(url, "/search");
         }
@@ -921,7 +921,7 @@ fn test_dsl_delay_and_throttle() {
     };
 
     assert_eq!(
-        actions,
+        actions.into_iter().map(|x| x.action).collect::<Vec<_>>(),
         vec![
             ActionType::Style {
                 target: ElementTarget::StrId(Target::literal("tooltip")),
@@ -1049,7 +1049,7 @@ fn test_multiple_dsl_actions_use_multi() {
     };
 
     let containers = container! {
-        div fx-click=(ActionType::Multi(actions)) {
+        div fx-click=(ActionType::MultiEffect(actions)) {
             "Multiple actions"
         }
     };
@@ -1060,11 +1060,11 @@ fn test_multiple_dsl_actions_use_multi() {
 
     // Check that Multi ActionType is used for multiple actions
     match &containers[0].actions[0].effect.action {
-        ActionType::Multi(action_types) => {
+        ActionType::MultiEffect(action_types) => {
             assert_eq!(action_types.len(), 3);
 
             // First action should be hide("modal")
-            match &action_types[0] {
+            match &action_types[0].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("modal"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -1073,7 +1073,7 @@ fn test_multiple_dsl_actions_use_multi() {
             }
 
             // Second action should be show("success")
-            match &action_types[1] {
+            match &action_types[1].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("success"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
@@ -1082,7 +1082,7 @@ fn test_multiple_dsl_actions_use_multi() {
             }
 
             // Third action should be log("done")
-            match &action_types[2] {
+            match &action_types[2].action {
                 ActionType::Log { message, level } => {
                     assert_eq!(message, "done");
                     assert_eq!(*level, LogLevel::Info);
@@ -1090,7 +1090,7 @@ fn test_multiple_dsl_actions_use_multi() {
                 _ => panic!("Expected Log action"),
             }
         }
-        _ => panic!("Expected Multi ActionType for multiple actions"),
+        _ => panic!("Expected MultiEffect ActionType for multiple actions"),
     }
 }
 
@@ -1108,11 +1108,11 @@ fn test_dsl_in_template_with_multiple_actions() {
     assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
 
     match &containers[0].actions[0].effect.action {
-        ActionType::Multi(actions) => {
+        ActionType::MultiEffect(actions) => {
             assert_eq!(actions.len(), 3);
 
             // Verify first action (hide)
-            match &actions[0] {
+            match &actions[0].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("modal"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -1121,7 +1121,7 @@ fn test_dsl_in_template_with_multiple_actions() {
             }
 
             // Verify second action (show)
-            match &actions[1] {
+            match &actions[1].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("success"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
@@ -1130,7 +1130,7 @@ fn test_dsl_in_template_with_multiple_actions() {
             }
 
             // Verify third action (log)
-            match &actions[2] {
+            match &actions[2].action {
                 ActionType::Log { message, level } => {
                     assert_eq!(message, "done");
                     assert_eq!(*level, LogLevel::Info);
@@ -1138,7 +1138,7 @@ fn test_dsl_in_template_with_multiple_actions() {
                 unknown => panic!("Expected Log action, got {unknown:?}"),
             }
         }
-        unknown => panic!("Expected Multi action for multiple actions, got {unknown:?}"),
+        unknown => panic!("Expected MultiEffect action for multiple actions, got {unknown:?}"),
     }
 }
 
@@ -1150,7 +1150,7 @@ fn test_dsl_macro_single_action() {
     };
 
     assert_eq!(
-        action,
+        action.action,
         ActionType::Style {
             target: ElementTarget::str_id("test-modal"),
             action: StyleAction::SetVisibility(Visibility::Hidden)
@@ -1171,7 +1171,7 @@ fn test_dsl_macro_multiple_actions() {
     assert_eq!(actions.len(), 4);
 
     // Verify first action (show)
-    match &actions[0] {
+    match &actions[0].action {
         ActionType::Style { target, action } => {
             assert_eq!(*target, ElementTarget::str_id("success-dialog"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
@@ -1180,7 +1180,7 @@ fn test_dsl_macro_multiple_actions() {
     }
 
     // Verify second action (log)
-    match &actions[1] {
+    match &actions[1].action {
         ActionType::Log { message, level } => {
             assert_eq!(message, "Operation completed");
             assert_eq!(*level, LogLevel::Info);
@@ -1189,7 +1189,7 @@ fn test_dsl_macro_multiple_actions() {
     }
 
     // Verify third action (custom)
-    match &actions[2] {
+    match &actions[2].action {
         ActionType::Custom { action } => {
             assert_eq!(*action, "refresh-data");
         }
@@ -1197,7 +1197,7 @@ fn test_dsl_macro_multiple_actions() {
     }
 
     // Verify fourth action (navigate)
-    match &actions[3] {
+    match &actions[3].action {
         ActionType::Navigate { url } => {
             assert_eq!(url, "/dashboard");
         }
@@ -1217,7 +1217,7 @@ fn test_dsl_macro_with_variables() {
 
     assert_eq!(actions.len(), 3);
 
-    match &actions[0] {
+    match &actions[0].action {
         ActionType::Let { name, value } => {
             assert_eq!(name, "modal_id");
             assert_eq!(
@@ -1231,7 +1231,7 @@ fn test_dsl_macro_with_variables() {
     }
 
     // Verify variable was properly substituted in first action
-    match &actions[1] {
+    match &actions[1].action {
         ActionType::Style { target, action } => {
             assert_eq!(
                 *target,
@@ -1243,7 +1243,7 @@ fn test_dsl_macro_with_variables() {
     }
 
     // Verify variable was properly substituted in second action
-    match &actions[2] {
+    match &actions[2].action {
         ActionType::Log { message, level } => {
             assert_eq!(message, "success");
             assert_eq!(*level, LogLevel::Info);
@@ -1266,7 +1266,7 @@ fn test_dsl_macro_conditional_logic() {
     };
 
     assert_eq!(
-        action,
+        action.action,
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
@@ -1351,7 +1351,7 @@ fn test_dsl_macro_in_container_multiple() {
     };
 
     let containers = container! {
-        div fx-click=(ActionType::Multi(actions)) {
+        div fx-click=(ActionType::MultiEffect(actions)) {
             "Load Content"
         }
     };
@@ -1362,11 +1362,11 @@ fn test_dsl_macro_in_container_multiple() {
 
     // Verify Multi ActionType contains DSL-generated actions
     match &containers[0].actions[0].effect.action {
-        ActionType::Multi(action_types) => {
+        ActionType::MultiEffect(action_types) => {
             assert_eq!(action_types.len(), 3);
 
             // Verify first DSL action (hide)
-            match &action_types[0] {
+            match &action_types[0].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("loading-spinner"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -1375,7 +1375,7 @@ fn test_dsl_macro_in_container_multiple() {
             }
 
             // Verify second DSL action (show)
-            match &action_types[1] {
+            match &action_types[1].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("content"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
@@ -1384,7 +1384,7 @@ fn test_dsl_macro_in_container_multiple() {
             }
 
             // Verify third DSL action (log)
-            match &action_types[2] {
+            match &action_types[2].action {
                 ActionType::Log { message, level } => {
                     assert_eq!(message, "Content loaded");
                     assert_eq!(*level, LogLevel::Info);
@@ -1392,7 +1392,7 @@ fn test_dsl_macro_in_container_multiple() {
                 _ => panic!("Expected Log action from DSL"),
             }
         }
-        _ => panic!("Expected Multi ActionType containing DSL actions"),
+        _ => panic!("Expected MultiEffect ActionType containing DSL actions"),
     }
 }
 
@@ -1414,10 +1414,10 @@ fn test_dsl_macro_with_fx_wrapper() {
     assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
 
     match &containers[0].actions[0].effect.action {
-        ActionType::Multi(actions) => {
+        ActionType::MultiEffect(actions) => {
             assert_eq!(actions.len(), 3);
 
-            match &actions[0] {
+            match &actions[0].action {
                 ActionType::Let { name, value } => {
                     assert_eq!(name, "panel_id");
                     assert_eq!(
@@ -1431,7 +1431,7 @@ fn test_dsl_macro_with_fx_wrapper() {
             }
 
             // Verify first action (show)
-            match &actions[1] {
+            match &actions[1].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(
                         *target,
@@ -1442,7 +1442,7 @@ fn test_dsl_macro_with_fx_wrapper() {
                 unknown => panic!("Expected Style action from DSL in fx block, got {unknown:?}"),
             }
 
-            match &actions[2] {
+            match &actions[2].action {
                 ActionType::Log { message, level } => {
                     assert_eq!(message, "Info panel displayed");
                     assert_eq!(*level, LogLevel::Info);
@@ -1450,7 +1450,7 @@ fn test_dsl_macro_with_fx_wrapper() {
                 unknown => panic!("Expected Log action from DSL in fx block, got {unknown:?}"),
             }
         }
-        unknown => panic!("Expected Multi action from fx DSL block, got {unknown:?}"),
+        unknown => panic!("Expected MultiEffect action from fx DSL block, got {unknown:?}"),
     }
 }
 
@@ -1478,7 +1478,7 @@ fn test_dsl_macro_complex_real_world_usage() {
     };
 
     assert_eq!(
-        toggle_action,
+        toggle_action.action,
         ActionType::Logic(hyperchad_actions::logic::If {
             condition: hyperchad_actions::logic::Condition::Eq(
                 hyperchad_actions::logic::CalcValue::Visibility {
@@ -1577,7 +1577,7 @@ fn test_dsl_macro_complex_real_world_usage() {
     // Test second action set (close)
     assert_eq!(close_actions.len(), 3);
 
-    match &close_actions[0] {
+    match &close_actions[0].action {
         ActionType::Style { target, action } => {
             assert_eq!(*target, ElementTarget::str_id("search-modal"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -1585,7 +1585,7 @@ fn test_dsl_macro_complex_real_world_usage() {
         _ => panic!("Expected Style action for hide from DSL"),
     }
 
-    match &close_actions[1] {
+    match &close_actions[1].action {
         ActionType::Style { target, action } => {
             assert_eq!(*target, ElementTarget::str_id("search-button"));
             assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
@@ -1593,7 +1593,7 @@ fn test_dsl_macro_complex_real_world_usage() {
         _ => panic!("Expected Style action for show from DSL"),
     }
 
-    match &close_actions[2] {
+    match &close_actions[2].action {
         ActionType::Custom { action } => {
             assert_eq!(*action, "clear-search-results");
         }
@@ -1611,7 +1611,7 @@ fn test_dsl_macro_vs_direct_actiontype() {
     let direct_action = ActionType::hide_str_id("test-element");
 
     // Both should generate equivalent Style actions
-    match (&dsl_action, &direct_action) {
+    match (&dsl_action.action, &direct_action) {
         (
             ActionType::Style {
                 target: dsl_target,
@@ -1671,11 +1671,11 @@ fn test_new_fx_syntax_multiple_actions() {
     assert_eq!(containers[0].actions[0].trigger, ActionTrigger::Click);
 
     match &containers[0].actions[0].effect.action {
-        ActionType::Multi(actions) => {
+        ActionType::MultiEffect(actions) => {
             assert_eq!(actions.len(), 3);
 
             // Verify first action (hide)
-            match &actions[0] {
+            match &actions[0].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("search"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -1684,7 +1684,7 @@ fn test_new_fx_syntax_multiple_actions() {
             }
 
             // Verify second action (show)
-            match &actions[1] {
+            match &actions[1].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("search-button"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Visible));
@@ -1693,7 +1693,7 @@ fn test_new_fx_syntax_multiple_actions() {
             }
 
             // Verify third action (log)
-            match &actions[2] {
+            match &actions[2].action {
                 ActionType::Log { message, level } => {
                     assert_eq!(message, "Search toggled");
                     assert_eq!(*level, LogLevel::Info);
@@ -1701,7 +1701,7 @@ fn test_new_fx_syntax_multiple_actions() {
                 unknown => panic!("Expected Log action, got {unknown:?}"),
             }
         }
-        unknown => panic!("Expected Multi action for multiple actions, got {unknown:?}"),
+        unknown => panic!("Expected MultiEffect action for multiple actions, got {unknown:?}"),
     }
 }
 
@@ -1772,10 +1772,10 @@ fn test_new_fx_syntax_with_variables() {
 
     // Should generate a Multi ActionType for multiple actions including variable usage
     match &containers[0].actions[0].effect.action {
-        ActionType::Multi(action_types) => {
+        ActionType::MultiEffect(action_types) => {
             assert_eq!(action_types.len(), 3);
 
-            match &action_types[0] {
+            match &action_types[0].action {
                 ActionType::Let { name, value } => {
                     assert_eq!(name, "modal_id");
                     assert_eq!(
@@ -1789,7 +1789,7 @@ fn test_new_fx_syntax_with_variables() {
             }
 
             // Verify first action (hide with variable)
-            match &action_types[1] {
+            match &action_types[1].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(
                         *target,
@@ -1801,7 +1801,7 @@ fn test_new_fx_syntax_with_variables() {
             }
 
             // Verify second action (log)
-            match &action_types[2] {
+            match &action_types[2].action {
                 ActionType::Log { message, level } => {
                     assert_eq!(message, "Modal closed");
                     assert_eq!(*level, LogLevel::Info);
@@ -1810,7 +1810,7 @@ fn test_new_fx_syntax_with_variables() {
             }
         }
         unknown => {
-            panic!("Expected Multi ActionType for variable-based fx syntax, got {unknown:?}")
+            panic!("Expected MultiEffect ActionType for variable-based fx syntax, got {unknown:?}")
         }
     }
 }
@@ -1860,10 +1860,10 @@ fn test_fx_syntax_variations() {
     }
 
     match &containers[0].children[2].actions[0].effect.action {
-        ActionType::Multi(actions) => {
+        ActionType::MultiEffect(actions) => {
             assert_eq!(actions.len(), 2);
 
-            match &actions[0] {
+            match &actions[0].action {
                 ActionType::Style { target, action } => {
                     assert_eq!(*target, ElementTarget::str_id("panel"));
                     assert_eq!(*action, StyleAction::SetVisibility(Visibility::Hidden));
@@ -1871,7 +1871,7 @@ fn test_fx_syntax_variations() {
                 unknown => panic!("Expected Style action for show, got {unknown:?}"),
             }
 
-            match &actions[1] {
+            match &actions[1].action {
                 ActionType::Log { message, level } => {
                     assert_eq!(message, "Panel hid");
                     assert_eq!(*level, LogLevel::Info);
@@ -1879,7 +1879,7 @@ fn test_fx_syntax_variations() {
                 unknown => panic!("Expected Log action, got {unknown:?}"),
             }
         }
-        unknown => panic!("Expected Multi action for multiple actions, got {unknown:?}"),
+        unknown => panic!("Expected MultiEffect action for multiple actions, got {unknown:?}"),
     }
 }
 
