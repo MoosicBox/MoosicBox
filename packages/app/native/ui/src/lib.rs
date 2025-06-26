@@ -279,14 +279,7 @@ pub fn player(state: &State) -> Containers {
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
-                        fx-click=fx {
-                            let audio_zones = element(AUDIO_ZONES_ID);
-                            if audio_zones.visibility() == hidden() {
-                                audio_zones.show();
-                            } else {
-                                audio_zones.hide();
-                            }
-                        }
+                        fx-click=fx { element(AUDIO_ZONES_ID).toggle_visibility() }
                     {
                         image
                             width=(FOOTER_ICON_SIZE)
@@ -297,14 +290,7 @@ pub fn player(state: &State) -> Containers {
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
-                        fx-click=fx {
-                            let playback_sessions = element(PLAYBACK_SESSIONS_ID);
-                            if playback_sessions.visibility() == hidden() {
-                                playback_sessions.show();
-                            } else {
-                                playback_sessions.hide();
-                            }
-                        }
+                        fx-click=fx { element(PLAYBACK_SESSIONS_ID).toggle_visibility() }
                     {
                         image
                             width=(FOOTER_ICON_SIZE)
@@ -312,14 +298,7 @@ pub fn player(state: &State) -> Containers {
                             src=(public_img!("sessions-white.svg"));
                     }
                     button
-                        fx-click=fx {
-                            let play_queue = element(PLAY_QUEUE_ID);
-                            if play_queue.visibility() == hidden() {
-                                play_queue.show();
-                            } else {
-                                play_queue.hide();
-                            }
-                        }
+                        fx-click=fx { element(PLAY_QUEUE_ID).toggle_visibility() }
                         width=(FOOTER_ICON_SIZE)
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
@@ -740,14 +719,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                         button
                             width=(icon_size)
                             height=(icon_size)
-                            fx-click=fx {
-                                let element = element(id);
-                                if element.visibility() == visible() {
-                                    element.hide();
-                                } else {
-                                    element.show();
-                                }
-                            }
+                            fx-click=fx { element(id).toggle_visibility() }
                         {
                             image
                                 width=(icon_size)
