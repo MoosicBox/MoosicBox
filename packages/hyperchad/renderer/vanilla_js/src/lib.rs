@@ -233,18 +233,11 @@ fn value_to_js(value: &Value, serializable: bool) -> (String, bool) {
 }
 
 fn action_effect_to_js(effect: &ActionEffect) -> (String, Option<String>) {
-    action_to_js(&effect.action)
+    action_to_js(&effect.action, true)
 }
 
 fn action_effect_to_js_attr(effect: &ActionEffect) -> String {
-    let (mut action, reset) = action_effect_to_js(effect);
-
-    if matches!(
-        &effect.action,
-        ActionType::Custom { .. } | ActionType::Parameterized { .. }
-    ) {
-        action = format!("triggerAction({action})");
-    }
+    let (action, reset) = action_effect_to_js(effect);
 
     let reset = if let Some(delay) = effect.delay_off {
         reset.map(|x| format!("ctx.delay(()=>{{{x}}},{delay});"))
@@ -434,7 +427,7 @@ fn expression_to_js(expr: &Expression) -> String {
 }
 
 #[allow(clippy::too_many_lines)]
-fn action_to_js(action: &ActionType) -> (String, Option<String>) {
+fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<String>) {
     match action {
         ActionType::NoOp => (String::new(), None),
         ActionType::Let { name, value } => {
@@ -474,7 +467,10 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             }
         }
         ActionType::Multi(vec) => {
-            let actions = vec.iter().map(action_to_js).collect::<Vec<_>>();
+            let actions = vec
+                .iter()
+                .map(|x| action_to_js(x, true))
+                .collect::<Vec<_>>();
             let all_actions = actions
                 .iter()
                 .map(|(action, _)| action.as_str())
@@ -516,7 +512,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
         ActionType::Event {
             name: _name,
             action,
-        } => action_to_js(action),
+        } => action_to_js(action, true),
         ActionType::Logic(logic) => {
             let expr = match &logic.condition {
                 Condition::Eq(a, b) => {
@@ -568,7 +564,7 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             )
         }
         ActionType::Parameterized { action, value } => {
-            let (action, reset) = action_to_js(action);
+            let (action, reset) = action_to_js(action, false);
 
             let action = action
                 .strip_prefix("{action:")
@@ -579,17 +575,30 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
                 .to_string()
                 .replace('\n', "&#10;");
 
-            (
-                format!("{{action:{action},value:{}}}", value_to_js(value, true).0),
-                reset,
-            )
+            let action = format!("{{action:{action},value:{}}}", value_to_js(value, true).0);
+
+            let action = if trigger_action {
+                format!("triggerAction({action})")
+            } else {
+                action
+            };
+
+            (action, reset)
         }
         ActionType::Custom { action } => {
             let action = html_escape::encode_double_quoted_attribute(&action)
                 .to_string()
                 .replace('\n', "&#10;");
 
-            (format!("{{action:{action}}}"), None)
+            let action = format!("{{action:{action}}}");
+
+            let action = if trigger_action {
+                format!("triggerAction({action})")
+            } else {
+                action
+            };
+
+            (action, None)
         }
         ActionType::Log { message, level } => (
             format!(
