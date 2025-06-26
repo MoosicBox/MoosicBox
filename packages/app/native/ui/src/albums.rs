@@ -791,11 +791,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             height=(button_size)
                             justify-content=center
                             align-items=center
-                            fx-click=fx {
-                                if get_visibility("albums-menu") == hidden() {
-                                    show("albums-menu");
-                                }
-                            }
+                            fx-click=fx { show("albums-menu") }
                         {
                             image
                                 width=(icon_size)
@@ -811,11 +807,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             background=(DARK_BACKGROUND)
                             border-radius=5
                             direction=row
-                            fx-click-outside=fx {
-                                if get_visibility_self() == visible() {
-                                    hide_self();
-                                }
-                            }
+                            fx-click-outside=fx { hide_self() }
                         {
                             div {
                                 div {

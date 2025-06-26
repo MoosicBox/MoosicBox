@@ -721,11 +721,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                 min-height=calc(min(vh(90), 300))
                 max-height=vh90
                 border-radius=15
-                fx-click-outside=fx {
-                    if get_visibility(id) == visible() {
-                        hide(id);
-                    }
-                }
+                fx-click-outside=fx { hide(id) }
                 overflow-y=auto
             {
                 div
@@ -745,10 +741,11 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                             width=(icon_size)
                             height=(icon_size)
                             fx-click=fx {
-                                if get_visibility(id) == visible() {
-                                    hide(id);
+                                let element = element(id);
+                                if element.visibility() == visible() {
+                                    element.hide();
                                 } else {
-                                    show(id);
+                                    element.show();
                                 }
                             }
                         {
