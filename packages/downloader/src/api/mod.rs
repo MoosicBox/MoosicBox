@@ -161,7 +161,7 @@ pub async fn download_endpoint(
     let download_path = get_download_path(&db, query.location_id).await?;
 
     let api_source = match query.source.as_str() {
-        "MoosicBox" => ApiSource::library(),
+        "MoosicBox" | "MOOSIC_BOX" => ApiSource::library(),
         api => api.try_into().map_err(ErrorBadRequest)?,
     };
 
@@ -190,7 +190,7 @@ pub async fn download_endpoint(
     };
 
     let source = match query.source.as_str() {
-        "MoosicBox" => DownloadApiSource::MoosicBox(
+        "MoosicBox" | "MOOSIC_BOX" => DownloadApiSource::MoosicBox(
             query
                 .url
                 .clone()
