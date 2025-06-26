@@ -379,11 +379,10 @@ fn volume_slider(size: u16, volume_percent: f64) -> Containers {
             background=(BACKGROUND)
             cursor=pointer
             fx-mouse-down=fx {
+                let element = element(VOLUME_SLIDER_VALUE_CONTAINER_ID);
                 invoke(
                     Action::SetVolume,
-                    ((get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID)
-                        - get_mouse_y_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
-                        / get_height_px_str_id(VOLUME_SLIDER_VALUE_CONTAINER_ID))
+                    ((element.get_height_px() - element.get_mouse_y()) / element.get_height_px())
                         .clamp(0.0, 1.0)
                 ).throttle(30)
             }
