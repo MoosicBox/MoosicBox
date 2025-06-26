@@ -44,7 +44,7 @@
         "eslint-plugin-node": "^11.1.0",
         "globals": "^15.15.0",
         "jsdom": "^24.1.3",
-        "prettier": "^3.6.0",
+        "prettier": "^3.6.1",
         "prettier-plugin-astro": "^0.13.0",
         "sst": "^3.17.8",
         "typescript": "^5.8.3",
