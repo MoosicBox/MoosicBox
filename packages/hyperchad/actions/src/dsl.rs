@@ -164,6 +164,8 @@ pub enum Expression {
         params: Vec<String>,
         body: Box<Expression>,
     },
+    /// Parenthesized expression for explicit grouping
+    Grouping(Box<Expression>),
     /// Raw Rust code that couldn't be parsed by the DSL
     /// This is a fallback for complex expressions
     RawRust(String),
@@ -195,7 +197,8 @@ impl Expression {
             | Self::Tuple(..)
             | Self::Range { .. }
             | Self::Closure { .. }
-            | Self::RawRust(..) => unimplemented!("show() for expression"),
+            | Self::RawRust(..)
+            | Self::Grouping(..) => unimplemented!("show() for expression"),
         }
     }
 
@@ -239,6 +242,7 @@ impl std::fmt::Display for Expression {
             Self::Range { .. } => unimplemented!("range"),
             Self::Closure { .. } => unimplemented!("closure"),
             Self::RawRust(_) => unimplemented!("raw_rust"),
+            Self::Grouping(_) => unimplemented!("grouping"),
         }
     }
 }

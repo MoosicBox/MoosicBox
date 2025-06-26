@@ -324,6 +324,7 @@ const fn unary_op_to_js(op: &UnaryOp) -> &'static str {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn expression_to_js(expr: &Expression) -> String {
     match expr {
         Expression::Literal(lit) => match lit {
@@ -424,6 +425,9 @@ fn expression_to_js(expr: &Expression) -> String {
         }
         Expression::Closure { .. } => {
             unimplemented!("closure expression")
+        }
+        Expression::Grouping(x) => {
+            format!("({})", expression_to_js(x))
         }
         Expression::RawRust(code) => code.to_string(),
     }
