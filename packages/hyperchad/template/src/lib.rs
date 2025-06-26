@@ -579,6 +579,15 @@ impl IntoActionEffect for actions::ActionType {
     }
 }
 
+impl IntoActionEffect for Vec<actions::ActionType> {
+    fn into_action_effect(self) -> actions::ActionEffect {
+        self.into_iter()
+            .map(IntoActionEffect::into_action_effect)
+            .collect::<Vec<_>>()
+            .into()
+    }
+}
+
 #[cfg(feature = "logic")]
 impl IntoActionEffect for actions::logic::If {
     fn into_action_effect(self) -> actions::ActionEffect {

@@ -6,7 +6,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{ActionEffect, ActionType, ElementTarget};
+use crate::{ActionEffect, ActionType, ElementTarget, Target};
 use hyperchad_transformer_models::Visibility;
 
 /// Top-level DSL statement
@@ -71,6 +71,35 @@ pub enum Pattern {
         variant: String,
         fields: Vec<Pattern>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ElementVariable {
+    pub name: String,
+}
+
+impl ElementVariable {
+    #[must_use]
+    pub fn show(self) -> ActionType {
+        ActionType::show_str_id(Target::reference(self.name))
+    }
+
+    #[must_use]
+    pub fn hide(self) -> ActionType {
+        ActionType::hide_str_id(Target::reference(self.name))
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn visibility(self) -> crate::logic::CalcValue {
+        crate::logic::get_visibility_str_id(Target::reference(self.name))
+    }
+
+    #[must_use]
+    pub fn set_visibility(self, visibility: Visibility) -> ActionType {
+        ActionType::set_visibility_str_id(visibility, Target::reference(self.name))
+    }
 }
 
 /// DSL Expression
@@ -140,6 +169,80 @@ pub enum Expression {
     RawRust(String),
 }
 
+impl Expression {
+    #[must_use]
+    pub fn show(self) -> ActionType {
+        match self {
+            Self::Literal(Literal::String(s)) => ActionType::show_str_id(Target::literal(s)),
+            Self::Variable(name) => ActionType::show_str_id(Target::reference(name)),
+            Self::ElementRef(element_ref) => match element_ref.parse_selector() {
+                ParsedSelector::Id(id) => ActionType::show_str_id(Target::literal(id)),
+                ParsedSelector::Class(class) => ActionType::show_class(Target::literal(class)),
+                ParsedSelector::Complex(..) | ParsedSelector::Invalid => {
+                    unimplemented!("show() for expression")
+                }
+            },
+            Self::Literal(..)
+            | Self::Call { .. }
+            | Self::MethodCall { .. }
+            | Self::Field { .. }
+            | Self::Binary { .. }
+            | Self::Unary { .. }
+            | Self::If { .. }
+            | Self::Match { .. }
+            | Self::Block(..)
+            | Self::Array(..)
+            | Self::Tuple(..)
+            | Self::Range { .. }
+            | Self::Closure { .. }
+            | Self::RawRust(..) => unimplemented!("show() for expression"),
+        }
+    }
+
+    #[must_use]
+    pub fn hide(self) -> ActionType {
+        ActionType::hide_str_id(Target::reference(self.to_string()))
+    }
+
+    #[must_use]
+    pub fn set_visibility(self, visibility: Visibility) -> ActionType {
+        ActionType::set_visibility_str_id(visibility, Target::reference(self.to_string()))
+    }
+
+    #[must_use]
+    pub fn set_display(self, display: bool) -> ActionType {
+        ActionType::set_display_str_id(display, Target::reference(self.to_string()))
+    }
+
+    #[must_use]
+    pub fn set_background(self, background: impl Into<String>) -> ActionType {
+        ActionType::set_background_str_id(background.into(), Target::reference(self.to_string()))
+    }
+}
+
+impl std::fmt::Display for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Literal(literal) => std::fmt::Display::fmt(literal, f),
+            Self::Variable(variable) => std::fmt::Display::fmt(variable, f),
+            Self::ElementRef(..) => unimplemented!("element_ref"),
+            Self::Call { .. } => unimplemented!("call"),
+            Self::MethodCall { .. } => unimplemented!("method_call"),
+            Self::Field { .. } => unimplemented!("field"),
+            Self::Binary { .. } => unimplemented!("binary"),
+            Self::Unary { .. } => unimplemented!("unary"),
+            Self::If { .. } => unimplemented!("if"),
+            Self::Match { .. } => unimplemented!("match"),
+            Self::Block(..) => unimplemented!("block"),
+            Self::Array(..) => unimplemented!("array"),
+            Self::Tuple(..) => unimplemented!("tuple"),
+            Self::Range { .. } => unimplemented!("range"),
+            Self::Closure { .. } => unimplemented!("closure"),
+            Self::RawRust(_) => unimplemented!("raw_rust"),
+        }
+    }
+}
+
 /// Binary operators
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -195,6 +298,18 @@ pub enum Literal {
     Unit,
 }
 
+impl std::fmt::Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(x) => f.write_str(x),
+            Self::Integer(x) => write!(f, "{x}"),
+            Self::Float(x) => write!(f, "{x}"),
+            Self::Bool(x) => write!(f, "{x}"),
+            Self::Unit => write!(f, ""),
+        }
+    }
+}
+
 /// DSL AST root
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -207,6 +322,7 @@ pub struct Dsl {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ElementReference {
     /// The element selector (e.g., "#my-id", ".my-class")
+    /// FIXME: This should just be a `ParseSelector`
     pub selector: String,
 }
 
@@ -225,6 +341,23 @@ impl ElementReference {
             ParsedSelector::Id(self.selector.clone())
         }
     }
+
+    // #[must_use]
+    // pub fn delay_off(self, millis: u64) -> ActionType {
+    //     let selector = self.parse_selector();
+
+    //     match selector {
+    //         ParsedSelector::Id(id) => ActionType::delay_off_id(millis, id),
+    //         ParsedSelector::Class(class) => ActionType::delay_off_class(millis, class),
+    //         ParsedSelector::Complex(selector) => ActionType::delay_off_child_class(millis, selector),
+    //         ParsedSelector::Invalid => ActionType::NoOp,
+    //     }
+    // }
+
+    // #[must_use]
+    // pub fn throttle(self, millis: u64) -> ActionType {
+    //     ActionType::throttle(millis, Target::reference(self.selector))
+    // }
 }
 
 /// Parsed selector type to determine the correct function to call
@@ -311,37 +444,6 @@ pub enum BuiltinFunction {
     Not,
 }
 
-/// Element target types for DSL
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum DslElementTarget {
-    /// String ID
-    Id(String),
-    /// CSS Class
-    Class(String),
-    /// Child class
-    ChildClass(String),
-    /// Numeric ID
-    NumericId(usize),
-    /// Self reference
-    SelfTarget,
-    /// Last child
-    LastChild,
-}
-
-impl From<DslElementTarget> for ElementTarget {
-    fn from(target: DslElementTarget) -> Self {
-        match target {
-            DslElementTarget::Id(id) => Self::StrId(id),
-            DslElementTarget::Class(class) => Self::Class(class),
-            DslElementTarget::ChildClass(class) => Self::ChildClass(class),
-            DslElementTarget::NumericId(id) => Self::Id(id),
-            DslElementTarget::SelfTarget => Self::SelfTarget,
-            DslElementTarget::LastChild => Self::LastChild,
-        }
-    }
-}
-
 /// Evaluation context for DSL expressions
 #[derive(Clone, Debug, Default)]
 pub struct EvalContext {
@@ -362,7 +464,7 @@ pub enum DslValue {
     /// Visibility value
     Visibility(Visibility),
     /// Element target
-    Target(DslElementTarget),
+    Target(ElementTarget),
     /// Element reference for object-oriented API
     ElementRef(ElementReference),
     /// Action effect

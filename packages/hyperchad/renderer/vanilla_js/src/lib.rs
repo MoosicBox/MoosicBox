@@ -15,7 +15,8 @@ use hyperchad_renderer_html::{
 use hyperchad_transformer::{
     Container, ResponsiveTrigger,
     actions::{
-        ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
+        ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction, Target,
+        dsl::{BinaryOp, Expression, Literal, UnaryOp},
         logic::{Arithmetic, CalcValue, Condition, Value},
     },
     models::{LayoutDirection, Route, Visibility},
@@ -267,13 +268,22 @@ fn element_target_to_js(target: &ElementTarget) -> String {
     #[allow(clippy::match_wildcard_for_single_variants)]
     match target {
         ElementTarget::StrId(id) => {
-            format!("[document.getElementById('{id}')]")
+            match id {
+                Target::Literal(id) => format!("[document.getElementById('{id}')]"),
+                Target::Ref(ref_name) => format!("[{ref_name}]"),
+            }
         }
         ElementTarget::Class(class) => {
-            format!("Array.from(document.querySelectorAll('.{class}'))")
+            match class {
+                Target::Literal(class) => format!("Array.from(document.querySelectorAll('{class}'))"),
+                Target::Ref(ref_name) => format!("[{ref_name}]"),
+            }
         }
         ElementTarget::ChildClass(class) => {
-            format!("Array.from(ctx.element.querySelectorAll('.{class}'))")
+            match class {
+                Target::Literal(class) => format!("Array.from(ctx.element.querySelectorAll('{class}'))"),
+                Target::Ref(ref_name) => format!("[{ref_name}]"),
+            }
         }
         ElementTarget::SelfTarget => "[ctx.element]".to_string(),
         ElementTarget::LastChild => {
@@ -284,10 +294,148 @@ fn element_target_to_js(target: &ElementTarget) -> String {
     }
 }
 
+const fn binary_op_to_js(op: &BinaryOp) -> &'static str {
+    match op {
+        BinaryOp::Add => "+",
+        BinaryOp::Subtract => "-",
+        BinaryOp::Multiply => "*",
+        BinaryOp::Divide => "/",
+        BinaryOp::Modulo => "%",
+        BinaryOp::Equal => "==",
+        BinaryOp::NotEqual => "!=",
+        BinaryOp::Less => "<",
+        BinaryOp::LessEqual => "<=",
+        BinaryOp::Greater => ">",
+        BinaryOp::GreaterEqual => ">=",
+        BinaryOp::And => "&&",
+        BinaryOp::Or => "||",
+        BinaryOp::BitAnd => "&",
+        BinaryOp::BitOr => "|",
+        BinaryOp::BitXor => "^",
+    }
+}
+
+const fn unary_op_to_js(op: &UnaryOp) -> &'static str {
+    match op {
+        UnaryOp::Not => "!",
+        UnaryOp::Minus => "-",
+        UnaryOp::Plus => "+",
+        UnaryOp::Ref => "&",
+    }
+}
+
+fn expression_to_js(expr: &Expression) -> String {
+    match expr {
+        Expression::Literal(lit) => match lit {
+            Literal::String(s) => format!("'{s}'"),
+            Literal::Integer(i) => format!("{i}"),
+            Literal::Float(f) => format!("{f}"),
+            Literal::Bool(b) => format!("{b}"),
+            Literal::Unit => "null".to_string(),
+        },
+        Expression::Variable(name) => name.to_string(),
+        Expression::ElementRef(element_ref) => {
+            // For element references, create a custom action that stores the element reference
+            let selector = match element_ref.parse_selector() {
+                hyperchad_transformer::actions::dsl::ParsedSelector::Id(x) => format!("#{x}"),
+                hyperchad_transformer::actions::dsl::ParsedSelector::Class(x) => format!(".{x}"),
+                hyperchad_transformer::actions::dsl::ParsedSelector::Complex(x) => x,
+                hyperchad_transformer::actions::dsl::ParsedSelector::Invalid => unimplemented!(),
+            };
+            format!("document.querySelector('{selector}')")
+        }
+        Expression::Call { function, args } => {
+            let args = args.iter().map(expression_to_js).collect::<Vec<_>>();
+            format!("{function}({})", args.join(","))
+        }
+        Expression::MethodCall {
+            receiver,
+            method,
+            args,
+        } => {
+            let receiver = expression_to_js(receiver);
+            let args = args.iter().map(expression_to_js).collect::<Vec<_>>();
+            format!("{receiver}.{method}({})", args.join(","))
+        }
+        Expression::Field { object, field } => {
+            let object = expression_to_js(object);
+            format!("{object}.{field}")
+        }
+        Expression::Binary { left, op, right } => {
+            let left = expression_to_js(left);
+            let right = expression_to_js(right);
+            let op = binary_op_to_js(op);
+            format!("({left} {op} {right})")
+        }
+        Expression::Unary { op, expr } => {
+            let expr = expression_to_js(expr);
+            let op = unary_op_to_js(op);
+            format!("({op} {expr})")
+        }
+        Expression::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            let condition = expression_to_js(condition);
+            let then_branch = expression_to_js(then_branch);
+            let else_branch = else_branch
+                .as_ref()
+                .map(|else_branch| expression_to_js(else_branch));
+            format!(
+                "if({condition}){{{then_branch}}}{else_branch}",
+                else_branch = else_branch
+                    .map(|x| format!("else {{{x}}}"))
+                    .as_deref()
+                    .unwrap_or("")
+            )
+        }
+        Expression::Match { .. } => {
+            unimplemented!("match expression")
+        }
+        Expression::Block(..) => {
+            unimplemented!("block expression")
+        }
+        Expression::Array(..) => {
+            unimplemented!("array expression")
+        }
+        Expression::Tuple(..) => {
+            unimplemented!("tuple expression")
+        }
+        Expression::Range {
+            start,
+            end,
+            inclusive,
+        } => {
+            let start = start
+                .as_ref()
+                .map_or_else(|| "0".to_string(), |start| expression_to_js(start));
+
+            let end = end
+                .as_ref()
+                .map_or_else(|| "0".to_string(), |end| expression_to_js(end));
+
+            format!(
+                "ctx.range({start},{end},{inclusive})",
+                start = start,
+                end = end,
+                inclusive = if *inclusive { "true" } else { "false" }
+            )
+        }
+        Expression::Closure { .. } => {
+            unimplemented!("closure expression")
+        }
+        Expression::RawRust(code) => code.to_string(),
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn action_to_js(action: &ActionType) -> (String, Option<String>) {
     match action {
         ActionType::NoOp => (String::new(), None),
+        ActionType::Let { name, value } => {
+            (format!("let {name}={};", expression_to_js(value)), None)
+        }
         ActionType::Style { target, action } => {
             let target = element_target_to_js(target);
 
@@ -377,7 +525,6 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             let if_true = logic
                 .actions
                 .iter()
-                .map(|x| &x.effect)
                 .map(action_effect_to_js)
                 .collect::<Vec<_>>();
 
@@ -394,7 +541,6 @@ fn action_to_js(action: &ActionType) -> (String, Option<String>) {
             let if_false = logic
                 .else_actions
                 .iter()
-                .map(|x| &x.effect)
                 .map(action_effect_to_js)
                 .collect::<Vec<_>>();
 

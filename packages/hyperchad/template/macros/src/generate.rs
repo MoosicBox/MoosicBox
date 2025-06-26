@@ -765,7 +765,7 @@ impl Generator {
                     actions.push(quote! {
                         hyperchad_actions::Action {
                             trigger: #trigger_ident,
-                            effect: #action_effect,
+                            effect: (#action_effect).into(),
                         }
                     });
                 }
@@ -871,7 +871,7 @@ impl Generator {
             // Check if dsl_tokens is empty - if so, return NoOp directly
             if dsl_tokens.is_empty() {
                 return quote! {
-                    hyperchad_actions::ActionType::NoOp.into()
+                    hyperchad_actions::ActionType::NoOp.into_action_effect()
                 };
             }
 
@@ -888,7 +888,7 @@ impl Generator {
                     quote! {
                         hyperchad_actions::ActionType::Custom {
                             action: #value_str.to_string()
-                        }.into()
+                        }
                     }
                 } else {
                     let lit = &lit.lit;
@@ -896,18 +896,14 @@ impl Generator {
                     quote! {
                         hyperchad_actions::ActionType::Custom {
                             action: (#lit).to_string()
-                        }.into()
+                        }
                     }
                 }
             }
             Markup::Splice { expr, .. } => {
                 // For backwards compatibility: handle all non-fx() expressions directly
                 quote! {
-                    {
-                        let val = #expr;
-                        // Use the IntoActionEffect trait for conversion
-                        hyperchad_template::IntoActionEffect::into_action_effect(val)
-                    }
+                    hyperchad_template::IntoActionEffect::into_action_effect(#expr)
                 }
             }
             Markup::BraceSplice { items, .. } => {
@@ -919,16 +915,12 @@ impl Generator {
 
                     // For backwards compatibility: handle all brace splice expressions directly
                     quote! {
-                        {
-                            let val = { #expr };
-                            // Use the IntoActionEffect trait for conversion
-                            hyperchad_template::IntoActionEffect::into_action_effect(val)
-                        }
+                        hyperchad_template::IntoActionEffect::into_action_effect(#expr)
                     }
                 }
             }
             _ => quote! {
-                hyperchad_actions::ActionType::NoOp.into()
+                hyperchad_actions::ActionType::NoOp
             },
         }
     }
@@ -3265,11 +3257,8 @@ impl Generator {
     }
 
     fn generate_compile_time_optimized_dsl_action(dsl_tokens: &TokenStream) -> TokenStream {
-        // Use the main optimized macro and extract the single ActionEffect from the Vec
-        // The main macro now includes optimizations internally
-        // (hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens }).into_iter().next().unwrap()
         quote! {
-            (hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens }).into()
+            hyperchad_template_actions_dsl::actions_dsl! { #dsl_tokens }
         }
     }
 }

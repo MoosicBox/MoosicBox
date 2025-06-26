@@ -1,7 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
-    actions::logic::get_data_attr_value_self,
     template::{self as hyperchad_template, Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow, Visibility},
 };
@@ -793,7 +792,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                             justify-content=center
                             align-items=center
                             fx-click=fx {
-                                if get_visibility_str_id("albums-menu") == hidden() {
+                                if get_visibility("albums-menu") == hidden() {
                                     show("albums-menu");
                                 }
                             }

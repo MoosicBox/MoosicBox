@@ -5520,6 +5520,7 @@ dependencies = [
  "hyperchad_transformer",
  "hyperchad_transformer_models",
  "itoa",
+ "pretty_assertions",
  "ryu",
  "trybuild",
 ]

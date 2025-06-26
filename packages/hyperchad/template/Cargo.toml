@@ -29,6 +29,7 @@ ryu  = { workspace = true }
 hyperchad_actions     = { workspace = true, features = ["logic"] }
 hyperchad_template    = { workspace = true, features = ["logic"] }
 hyperchad_transformer = { workspace = true, features = ["canvas"] }
+pretty_assertions     = { workspace = true }
 trybuild              = { workspace = true, features = ["diff"] }
 
 [features]

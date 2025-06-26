@@ -2,6 +2,8 @@
 //!
 //! This module generates Rust code that evaluates the DSL at runtime.
 
+use std::collections::VecDeque;
+
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 
@@ -9,35 +11,74 @@ use hyperchad_actions::dsl::{
     BinaryOp, Block, Expression, Literal, MatchArm, Pattern, Statement, UnaryOp,
 };
 
+#[derive(Default, Clone, Debug)]
+pub struct Scope {
+    variables: VecDeque<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Context {
+    scopes: VecDeque<Scope>,
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        let mut scopes = VecDeque::new();
+        scopes.push_back(Scope::default());
+
+        Self { scopes }
+    }
+}
+
+impl Context {
+    pub fn add_variable(&mut self, name: &str) {
+        self.scopes
+            .front_mut()
+            .unwrap()
+            .variables
+            .push_front(name.to_string());
+    }
+
+    pub fn is_variable_defined(&self, name: impl AsRef<str>) -> bool {
+        let name = name.as_ref();
+        self.scopes
+            .iter()
+            .any(|scope| scope.variables.iter().any(|x| x == name))
+    }
+}
+
+macro_rules! push_scope {
+    ($context:ident, $($tt:tt)*) => {
+        $context.scopes.push_front(Scope::default());
+        $($tt)*
+        $context.scopes.pop_front();
+    };
+}
+
 /// Generate code for a statement
 #[allow(clippy::too_many_lines)]
-fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<TokenStream, String> {
+fn generate_statement_push(
+    context: &mut Context,
+    stmt: &Statement,
+    output_var: &Ident,
+) -> Result<TokenStream, String> {
     match stmt {
         Statement::Expression(expr) => {
-            let expr_code = generate_expression_code(expr)?;
+            let expr_code = generate_expression_code(context, expr)?;
 
-            // All expressions need to be convertible to ActionType for the macro to work
-            // Non-action expressions are wrapped in NoOp to maintain type compatibility
-            if expression_produces_action(expr) {
-                Ok(quote! {
-                    let _action_result = #expr_code;
-                    #output_var.push(_action_result.into());
-                })
-            } else {
-                // Non-action expressions are evaluated but wrapped as NoOp to maintain type compatibility
-                Ok(quote! {
-                    let _expr_result = #expr_code;
-                    // Evaluate the expression but don't produce an action
-                    #output_var.push(hyperchad_actions::ActionType::NoOp.into());
-                })
-            }
+            Ok(quote! {
+                #output_var.push((#expr_code).into());
+            })
         }
         Statement::Let { name, value } => {
-            let var_name = format_ident!("{}", name);
-            let value_code = generate_expression_code(value)?;
+            let var_name = format_ident!("{name}");
+            let value_code = generate_expression_code(context, value)?;
+            context.add_variable(name);
             Ok(quote! {
-                let #var_name = #value_code;
-                // Note: Let statements don't produce ActionEffects, they just create variables
+                hyperchad_actions::ActionType::Let {
+                    name: #var_name.to_string(),
+                    value: #value_code,
+                }.into()
             })
         }
         Statement::If {
@@ -48,11 +89,11 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
             // Check if the condition is a boolean literal vs a complex expression
             let is_boolean_literal = matches!(condition, Expression::Literal(Literal::Bool(_)));
 
-            let condition_code = generate_expression_code(condition)?;
-            let then_code = generate_block_code(then_block, output_var)?;
+            let condition_code = generate_expression_code(context, condition)?;
+            let then_code = generate_block_push(context, then_block, output_var)?;
 
             let code = if let Some(else_block) = else_block {
-                let else_code = generate_block_code(else_block, output_var)?;
+                let else_code = generate_block_push(context, else_block, output_var)?;
 
                 if is_boolean_literal {
                     // For boolean literals, use direct evaluation
@@ -76,19 +117,13 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
                         let original_len = #output_var.len();
                         #then_code
                         let new_actions: Vec<_> = #output_var.drain(original_len..).collect();
-                        then_actions.extend(new_actions.into_iter().map(|effect| hyperchad_actions::Action {
-                            trigger: hyperchad_actions::ActionTrigger::Immediate,
-                            effect,
-                        }));
+                        then_actions.extend(new_actions);
 
                         // Execute the else block and collect its actions
                         let original_len = #output_var.len();
                         #else_code
                         let new_actions: Vec<_> = #output_var.drain(original_len..).collect();
-                        else_actions.extend(new_actions.into_iter().map(|effect| hyperchad_actions::Action {
-                            trigger: hyperchad_actions::ActionTrigger::Immediate,
-                            effect,
-                        }));
+                        else_actions.extend(new_actions);
 
                         // Create the If statement with collected actions
                         let mut if_action = hyperchad_actions::logic::if_stmt(condition_result, hyperchad_actions::ActionType::NoOp);
@@ -117,10 +152,7 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
                     let original_len = #output_var.len();
                     #then_code
                     let new_actions: Vec<_> = #output_var.drain(original_len..).collect();
-                    then_actions.extend(new_actions.into_iter().map(|effect| hyperchad_actions::Action {
-                        trigger: hyperchad_actions::ActionTrigger::Immediate,
-                        effect,
-                    }));
+                    then_actions.extend(new_actions);
 
                     // Create the If statement with collected actions
                     let mut if_action = hyperchad_actions::logic::if_stmt(condition_result, hyperchad_actions::ActionType::NoOp);
@@ -133,10 +165,10 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
             Ok(code)
         }
         Statement::Match { expr, arms } => {
-            let expr_code = generate_expression_code(expr)?;
+            let expr_code = generate_expression_code(context, expr)?;
             let arms_code: Result<Vec<_>, String> = arms
                 .iter()
-                .map(|arm| generate_match_arm_code(arm, output_var))
+                .map(|arm| generate_match_arm_push(context, arm, output_var))
                 .collect();
             let arms_code = arms_code?;
 
@@ -152,8 +184,8 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
             body,
         } => {
             let pattern_name = format_ident!("{}", pattern);
-            let iter_code = generate_expression_code(iter)?;
-            let body_code = generate_block_code(body, output_var)?;
+            let iter_code = generate_expression_code(context, iter)?;
+            let body_code = generate_block_push(context, body, output_var)?;
 
             Ok(quote! {
                 for #pattern_name in #iter_code {
@@ -162,8 +194,8 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
             })
         }
         Statement::While { condition, body } => {
-            let condition_code = generate_expression_code(condition)?;
-            let body_code = generate_block_code(body, output_var)?;
+            let condition_code = generate_expression_code(context, condition)?;
+            let body_code = generate_block_push(context, body, output_var)?;
 
             Ok(quote! {
                 while #condition_code {
@@ -171,18 +203,192 @@ fn generate_statement_code(stmt: &Statement, output_var: &Ident) -> Result<Token
                 }
             })
         }
-        Statement::Block(block) => generate_block_code(block, output_var),
+        Statement::Block(block) => generate_block_push(context, block, output_var),
+    }
+}
+
+/// Generate code for a statement
+#[allow(clippy::too_many_lines)]
+pub fn generate_statement_code(
+    context: &mut Context,
+    stmt: &Statement,
+) -> Result<TokenStream, String> {
+    match stmt {
+        Statement::Expression(expr) => {
+            let expr_code = generate_expression_code(context, expr)?;
+
+            Ok(quote! {
+                #expr_code
+            })
+        }
+        Statement::Let { name, value } => {
+            let var_name = syn::Lit::Str(syn::LitStr::new(name, proc_macro2::Span::call_site()));
+            let value_code = generate_expression_code(context, value)?;
+            context.add_variable(name);
+            Ok(quote! {
+                hyperchad_actions::ActionType::Let {
+                    name: #var_name.to_string(),
+                    value: #value_code,
+                }
+            })
+        }
+        Statement::If {
+            condition,
+            then_block,
+            else_block,
+        } => {
+            // Check if the condition is a boolean literal vs a complex expression
+            let constant_condition = if let Expression::Literal(Literal::Bool(x)) = condition {
+                Some(*x)
+            } else {
+                None
+            };
+
+            if let Some(condition) = constant_condition {
+                let actions = if condition {
+                    if then_block.statements.is_empty() {
+                        return Ok(quote! { hyperchad_actions::ActionEffect::NoOp });
+                    } else if then_block.statements.len() == 1 {
+                        let action = generate_statement_code(context, &then_block.statements[0])?;
+                        return Ok(quote! { #action });
+                    }
+                    then_block
+                        .statements
+                        .iter()
+                        .map(|x| generate_statement_code(context, x))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .map(|effect| {
+                            quote! {
+                                (#effect).into_action_effect()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                } else if let Some(else_block) = &else_block {
+                    if else_block.statements.is_empty() {
+                        return Ok(quote! { hyperchad_actions::ActionEffect::NoOp });
+                    } else if else_block.statements.len() == 1 {
+                        let action = generate_statement_code(context, &else_block.statements[0])?;
+                        return Ok(quote! { #action });
+                    }
+                    else_block
+                        .statements
+                        .iter()
+                        .map(|x| generate_statement_code(context, x))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .map(|effect| {
+                            quote! {
+                                (#effect).into_action_effect()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![]
+                };
+
+                Ok(quote! {
+                    hyperchad_actions::ActionType::MultiEffect(vec![#(#actions),*])
+                })
+            } else {
+                let condition_code = generate_expression_code(context, condition)?;
+
+                let then_actions = then_block
+                    .statements
+                    .iter()
+                    .map(|x| generate_statement_code(context, x))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .map(|effect| {
+                        quote! {
+                            (#effect).into_action_effect()
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let else_actions = if let Some(else_block) = &else_block {
+                    else_block
+                        .statements
+                        .iter()
+                        .map(|x| generate_statement_code(context, x))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .map(|effect| {
+                            quote! {
+                                (#effect).into_action_effect()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![]
+                };
+
+                Ok(quote! {
+                    hyperchad_actions::ActionType::Logic(hyperchad_actions::logic::If {
+                        condition: #condition_code,
+                        actions: vec![#(#then_actions),*],
+                        else_actions: vec![#(#else_actions),*],
+                    })
+                })
+            }
+        }
+        Statement::Match { expr, arms } => {
+            let expr_code = generate_expression_code(context, expr)?;
+            let arms_code: Result<Vec<_>, String> = arms
+                .iter()
+                .map(|x| generate_match_arm_code(context, x))
+                .collect();
+            let arms_code = arms_code?;
+
+            Ok(quote! {
+                match #expr_code {
+                    #(#arms_code)*
+                }
+            })
+        }
+        Statement::For {
+            pattern,
+            iter,
+            body,
+        } => {
+            let pattern_name = format_ident!("{}", pattern);
+            let iter_code = generate_expression_code(context, iter)?;
+            let body_code = generate_block_code(context, body)?;
+
+            Ok(quote! {
+                for #pattern_name in #iter_code {
+                    #body_code
+                }
+            })
+        }
+        Statement::While { condition, body } => {
+            let condition_code = generate_expression_code(context, condition)?;
+            let body_code = generate_block_code(context, body)?;
+
+            Ok(quote! {
+                while #condition_code {
+                    #body_code
+                }
+            })
+        }
+        Statement::Block(block) => generate_block_code(context, block),
     }
 }
 
 /// Generate code for a block
-fn generate_block_code(block: &Block, output_var: &Ident) -> Result<TokenStream, String> {
+fn generate_block_push(
+    context: &mut Context,
+    block: &Block,
+    output_var: &Ident,
+) -> Result<TokenStream, String> {
     let mut statements = Vec::new();
 
-    for stmt in &block.statements {
-        let code = generate_statement_code(stmt, output_var)?;
-        statements.push(code);
-    }
+    push_scope!(context, {
+        for stmt in &block.statements {
+            let code = generate_statement_push(context, stmt, output_var)?;
+            statements.push(code);
+        }
+    });
 
     Ok(quote! {
         {
@@ -191,15 +397,47 @@ fn generate_block_code(block: &Block, output_var: &Ident) -> Result<TokenStream,
     })
 }
 
+/// Generate code for a block
+fn generate_block_code(context: &mut Context, block: &Block) -> Result<TokenStream, String> {
+    let mut statements = Vec::new();
+
+    push_scope!(context, {
+        for stmt in &block.statements {
+            let code = generate_statement_code(context, stmt)?;
+            statements.push(code);
+        }
+    });
+
+    Ok(quote! {{
+        #(#statements)*
+    }})
+}
+
 /// Generate code for a match arm
-fn generate_match_arm_code(arm: &MatchArm, output_var: &Ident) -> Result<TokenStream, String> {
+fn generate_match_arm_push(
+    context: &mut Context,
+    arm: &MatchArm,
+    output_var: &Ident,
+) -> Result<TokenStream, String> {
     let pattern_code = generate_pattern_code(&arm.pattern);
-    let body_code = generate_expression_code(&arm.body)?;
+    let body_code = generate_expression_code(context, &arm.body)?;
 
     Ok(quote! {
         #pattern_code => {
             let _action_result = #body_code;
             #output_var.push(_action_result.into());
+        },
+    })
+}
+
+/// Generate code for a match arm
+fn generate_match_arm_code(context: &mut Context, arm: &MatchArm) -> Result<TokenStream, String> {
+    let pattern_code = generate_pattern_code(&arm.pattern);
+    let body_code = generate_expression_code(context, &arm.body)?;
+
+    Ok(quote! {
+        #pattern_code => {
+            #body_code
         },
     })
 }
@@ -231,47 +469,50 @@ fn generate_pattern_code(pattern: &Pattern) -> TokenStream {
 
 /// Generate code for an expression
 #[allow(clippy::too_many_lines)]
-pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String> {
+pub fn generate_expression_code(
+    context: &mut Context,
+    expr: &Expression,
+) -> Result<TokenStream, String> {
     match expr {
         Expression::Literal(lit) => {
             let lit_code = generate_literal_code(lit);
-            Ok(quote! { #lit_code })
+            Ok(quote! { hyperchad_actions::dsl::Expression::Literal(#lit_code) })
         }
         Expression::Variable(name) => {
-            let var_name = format_ident!("{}", name);
-            Ok(quote! { #var_name })
+            if context.is_variable_defined(name) {
+                let name = syn::LitStr::new(name, proc_macro2::Span::call_site());
+                Ok(quote! {
+                    hyperchad_actions::dsl::ElementVariable {
+                        name: #name.to_string(),
+                    }
+                })
+            } else {
+                let var_name = format_ident!("{name}");
+                Ok(quote! { #var_name })
+            }
         }
         Expression::ElementRef(element_ref) => {
             let selector = &element_ref.selector;
             Ok(quote! {
-                hyperchad_actions::dsl::ElementReference {
-                    selector: #selector.to_string()
-                }
+                hyperchad_actions::dsl::Expression::ElementRef(
+                    hyperchad_actions::dsl::ElementReference {
+                        selector: #selector.to_string()
+                    }
+                )
             })
         }
 
-        Expression::Call { function, args } => generate_function_call_code(function, args),
+        Expression::Call { function, args } => generate_function_call_code(context, function, args),
         Expression::MethodCall {
             receiver,
             method,
             args,
         } => {
-            // Special optimization: if receiver is an element() call, generate direct optimized code
-            if let Expression::Call {
-                function,
-                args: element_args,
-            } = receiver.as_ref()
-            {
-                if function == "element" && element_args.len() == 1 {
-                    return generate_optimized_element_method_call(&element_args[0], method, args);
-                }
-            }
-
-            let receiver_code = generate_expression_code(receiver)?;
-            generate_method_call_code(&receiver_code, method, args)
+            let receiver_code = generate_expression_code(context, receiver)?;
+            generate_method_call_code(context, &receiver_code, method, args)
         }
         Expression::Field { object, field } => {
-            let object_code = generate_expression_code(object)?;
+            let object_code = generate_expression_code(context, object)?;
             let field_ident = format_ident!("{}", field);
 
             Ok(quote! {
@@ -279,8 +520,8 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
             })
         }
         Expression::Binary { left, op, right } => {
-            let left_code = generate_expression_code(left)?;
-            let right_code = generate_expression_code(right)?;
+            let left_code = generate_expression_code(context, left)?;
+            let right_code = generate_expression_code(context, right)?;
 
             // Handle special cases for logic operations
             match op {
@@ -321,7 +562,7 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
             }
         }
         Expression::Unary { op, expr } => {
-            let expr_code = generate_expression_code(expr)?;
+            let expr_code = generate_expression_code(context, expr)?;
             let op_code = generate_unary_op_code(op);
 
             Ok(quote! {
@@ -333,11 +574,11 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
             then_branch,
             else_branch,
         } => {
-            let condition_code = generate_expression_code(condition)?;
-            let then_code = generate_expression_code(then_branch)?;
+            let condition_code = generate_expression_code(context, condition)?;
+            let then_code = generate_expression_code(context, then_branch)?;
 
             if let Some(else_branch) = else_branch {
-                let else_code = generate_expression_code(else_branch)?;
+                let else_code = generate_expression_code(context, else_branch)?;
                 Ok(quote! {
                     if #condition_code { #then_code } else { #else_code }
                 })
@@ -363,7 +604,7 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
             // Handle block expressions by generating the block code
             // and returning the result as a compound action
             let output_var = format_ident!("__block_output");
-            let block_code = generate_block_code(block, &output_var)?;
+            let block_code = generate_block_push(context, block, &output_var)?;
 
             Ok(quote! {
                 {
@@ -376,8 +617,10 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
             })
         }
         Expression::Array(exprs) => {
-            let exprs_code: Result<Vec<_>, String> =
-                exprs.iter().map(generate_expression_code).collect();
+            let exprs_code: Result<Vec<_>, String> = exprs
+                .iter()
+                .map(|x| generate_expression_code(context, x))
+                .collect();
             let exprs_code = exprs_code?;
 
             Ok(quote! {
@@ -385,8 +628,10 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
             })
         }
         Expression::Tuple(exprs) => {
-            let exprs_code: Result<Vec<_>, String> =
-                exprs.iter().map(generate_expression_code).collect();
+            let exprs_code: Result<Vec<_>, String> = exprs
+                .iter()
+                .map(|x| generate_expression_code(context, x))
+                .collect();
             let exprs_code = exprs_code?;
 
             Ok(quote! {
@@ -399,13 +644,13 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
             inclusive,
         } => {
             let start_code = if let Some(start) = start {
-                generate_expression_code(start)?
+                generate_expression_code(context, start)?
             } else {
                 quote! { 0 }
             };
 
             let end_code = if let Some(end) = end {
-                generate_expression_code(end)?
+                generate_expression_code(context, end)?
             } else {
                 return Err("Range without end is not supported".to_string());
             };
@@ -419,7 +664,7 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
         Expression::Closure { params, body } => {
             // Generate a closure that captures the closure parameters
             let param_idents: Vec<_> = params.iter().map(|p| format_ident!("{}", p)).collect();
-            let body_code = generate_expression_code(body)?;
+            let body_code = generate_expression_code(context, body)?;
 
             Ok(quote! {
                 |#(#param_idents),*| #body_code
@@ -438,100 +683,146 @@ pub fn generate_expression_code(expr: &Expression) -> Result<TokenStream, String
     }
 }
 
+fn target_to_expr(
+    context: &mut Context,
+    target: &Expression,
+    into: bool,
+) -> Result<TokenStream, String> {
+    match target {
+        Expression::Variable(name) => {
+            if context.is_variable_defined(name) {
+                let name = syn::LitStr::new(name, proc_macro2::Span::call_site());
+                return Ok(quote! {
+                    hyperchad_actions::Target::reference(#name)
+                });
+            }
+        }
+        Expression::Literal(Literal::String(name)) => {
+            let name = syn::LitStr::new(name, proc_macro2::Span::call_site());
+            return Ok(quote! {
+                hyperchad_actions::Target::literal(#name)
+            });
+        }
+        Expression::Literal(..)
+        | Expression::ElementRef(..)
+        | Expression::Call { .. }
+        | Expression::MethodCall { .. }
+        | Expression::Field { .. }
+        | Expression::Binary { .. }
+        | Expression::Unary { .. }
+        | Expression::If { .. }
+        | Expression::Match { .. }
+        | Expression::Block(..)
+        | Expression::Array(..)
+        | Expression::Tuple(..)
+        | Expression::Range { .. }
+        | Expression::Closure { .. }
+        | Expression::RawRust(..) => {}
+    }
+
+    let code = generate_expression_code(context, target)?;
+
+    Ok(if into {
+        quote! {
+            #code.into()
+        }
+    } else {
+        quote! {
+            #code
+        }
+    })
+}
+
 /// Generate code for function calls, mapping DSL functions to hyperchad actions
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<TokenStream, String> {
-    let args_code: Result<Vec<_>, String> = args.iter().map(generate_expression_code).collect();
-    let args_code = args_code?;
-
+fn generate_function_call_code(
+    context: &mut Context,
+    function: &str,
+    args: &[Expression],
+) -> Result<TokenStream, String> {
     match function {
         // Element reference function
         "element" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("element() expects exactly 1 argument".to_string());
             }
 
             // Note: element() calls that are directly chained with methods (e.g., element("#id").show())
             // are optimized in the method call handler. This case handles standalone element() calls.
-            let selector = &args_code[0];
+            let selector = generate_expression_code(context, &args[0])?;
             Ok(quote! {
-                hyperchad_actions::dsl::ElementReference {
-                    selector: #selector.to_string()
-                }
+                hyperchad_actions::dsl::Expression::ElementRef(
+                    hyperchad_actions::dsl::ElementReference {
+                        selector: #selector.to_string()
+                    }
+                )
             })
         }
 
         // Element visibility functions
         "hide" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("hide() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::hide_str_id(&#target.to_string())
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Hidden
+                    ),
+                }
             })
         }
         "show" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("show() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::show_str_id(&#target.to_string())
-            })
-        }
-        "toggle" => {
-            if args_code.len() != 1 {
-                return Err("toggle() expects exactly 1 argument".to_string());
-            }
-            let target = &args_code[0];
-            Ok(quote! {
-                {
-                    let target_id = #target.to_string();
-                    // TODO: Implement toggle logic based on current visibility
-                    hyperchad_actions::ActionType::show_str_id(&target_id)
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Visible
+                    ),
                 }
             })
         }
         "set_visibility" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err("set_visibility() expects exactly 2 arguments".to_string());
             }
-            let target = &args_code[0];
-            let visibility = &args_code[1];
+            let target = target_to_expr(context, &args[0], true)?;
+            let visibility = generate_expression_code(context, &args[1])?;
             Ok(quote! {
-                hyperchad_actions::ActionType::set_visibility_str_id(#visibility, &#target.to_string())
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(#visibility),
+                }
             })
         }
 
         // Display functions
         "set_display" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err("set_display() expects exactly 2 arguments".to_string());
             }
-            let target = &args_code[0];
-            let display = &args_code[1];
+            let target = target_to_expr(context, &args[0], true)?;
+            let display = generate_expression_code(context, &args[1])?;
             Ok(quote! {
-                hyperchad_actions::ActionType::set_display_str_id(#display, &#target.to_string())
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                    action: hyperchad_actions::StyleAction::SetDisplay(#display),
+                }
             })
         }
 
         // Background functions
-        "set_background" => {
-            if args_code.len() != 2 {
-                return Err("set_background() expects exactly 2 arguments".to_string());
-            }
-            let target = &args_code[0];
-            let background = &args_code[1];
-            Ok(quote! {
-                hyperchad_actions::ActionType::set_background_str_id(#background.to_string(), &#target.to_string())
-            })
-        }
         "set_background_self" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("set_background() expects exactly 1 argument".to_string());
             }
-            let background = &args_code[0];
+            let background = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::set_background_self(#background.to_string())
             })
@@ -539,93 +830,89 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 
         // Visibility functions
         "set_visibility_child_class" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err("set_visibility_child_class() expects exactly 2 arguments".to_string());
             }
-            let visibility = &args_code[0];
-            let target = &args_code[1];
+            let visibility = generate_expression_code(context, &args[0])?;
+            let target = target_to_expr(context, &args[1], true)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::set_visibility_child_class(#visibility, &#target.to_string())
+                hyperchad_actions::ActionType::Style {
+                    target: hyperchad_actions::ElementTarget::ChildClass(#target),
+                    action: hyperchad_actions::StyleAction::SetVisibility(#visibility),
+                }
             })
         }
 
         // Display functions
         "display_str_id" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("display_str_id() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::display_str_id(&#target.to_string())
+                hyperchad_actions::ActionType::display_str_id(#target)
             })
         }
         "no_display_str_id" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("no_display_str_id() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::no_display_str_id(&#target.to_string())
+                hyperchad_actions::ActionType::no_display_str_id(#target)
             })
         }
         "display_class" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("display_class() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::display_class(&#target.to_string())
+                hyperchad_actions::ActionType::display_class(#target)
             })
         }
         "no_display_class" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("no_display_class() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::ActionType::no_display_class(&#target.to_string())
+                hyperchad_actions::ActionType::no_display_class(#target)
             })
         }
 
         // Getter functions
         "get_visibility" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("get_visibility() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], true)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_visibility_str_id(#target.to_string())
-            })
-        }
-        "get_visibility_str_id" => {
-            if args_code.len() != 1 {
-                return Err("get_visibility_str_id() expects exactly 1 argument".to_string());
-            }
-            let target = &args_code[0];
-            Ok(quote! {
-                hyperchad_actions::logic::get_visibility_str_id(#target.to_string())
+                hyperchad_actions::logic::CalcValue::Visibility {
+                    target: hyperchad_actions::ElementTarget::StrId(#target),
+                }
             })
         }
         "get_display" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("get_display() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_display_str_id(#target.to_string())
+                hyperchad_actions::logic::get_display_str_id(#target)
             })
         }
         "get_width" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("get_width() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_width_px_str_id(#target.to_string())
+                hyperchad_actions::logic::get_width_px_str_id(#target)
             })
         }
         "get_width_px_self" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("get_width_px_self() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -633,39 +920,39 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "get_height" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("get_height() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_height_px_str_id(#target.to_string())
+                hyperchad_actions::logic::get_height_px_str_id(#target)
             })
         }
         "get_height_px_str_id" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("get_height_px_str_id() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_height_px_str_id(#target.to_string())
+                hyperchad_actions::logic::get_height_px_str_id(#target)
             })
         }
         "get_mouse_x" => {
-            if args_code.is_empty() {
+            if args.is_empty() {
                 Ok(quote! {
                     hyperchad_actions::logic::get_mouse_x()
                 })
-            } else if args_code.len() == 1 {
-                let target = &args_code[0];
+            } else if args.len() == 1 {
+                let target = target_to_expr(context, &args[0], false)?;
                 Ok(quote! {
-                    hyperchad_actions::logic::get_mouse_x_str_id(#target.to_string())
+                    hyperchad_actions::logic::get_mouse_x_str_id(#target)
                 })
             } else {
                 Err("get_mouse_x() expects 0 or 1 arguments".to_string())
             }
         }
         "get_mouse_x_self" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("get_mouse_x_self() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -673,26 +960,47 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "get_mouse_y" => {
-            if args_code.is_empty() {
+            if args.is_empty() {
                 Ok(quote! {
                     hyperchad_actions::logic::get_mouse_y()
                 })
-            } else if args_code.len() == 1 {
-                let target = &args_code[0];
+            } else if args.len() == 1 {
+                let target = target_to_expr(context, &args[0], false)?;
                 Ok(quote! {
-                    hyperchad_actions::logic::get_mouse_y_str_id(#target.to_string())
+                    hyperchad_actions::logic::get_mouse_y_str_id(#target)
                 })
             } else {
                 Err("get_mouse_y() expects 0 or 1 arguments".to_string())
             }
         }
         "get_mouse_y_str_id" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("get_mouse_y_str_id() expects exactly 1 argument".to_string());
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
-                hyperchad_actions::logic::get_mouse_y_str_id(#target.to_string())
+                hyperchad_actions::logic::get_mouse_y_str_id(#target)
+            })
+        }
+
+        "get_data_attr_value" => {
+            if args.len() != 2 {
+                return Err("get_data_attr_value() expects exactly 2 arguments".to_string());
+            }
+            let target = target_to_expr(context, &args[0], false)?;
+            let attr = literal_or_stmt(context, &args[1])?;
+            Ok(quote! {
+                hyperchad_actions::logic::get_data_attr_value(#target, #attr)
+            })
+        }
+
+        "get_data_attr_value_self" => {
+            if args.len() != 1 {
+                return Err("get_data_attr_value_self() expects exactly 1 argument".to_string());
+            }
+            let attr = literal_or_stmt(context, &args[0])?;
+            Ok(quote! {
+                hyperchad_actions::logic::get_data_attr_value_self(#attr)
             })
         }
 
@@ -701,10 +1009,10 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             hyperchad_actions::ActionType::NoOp
         }),
         "log" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("log() expects exactly 1 argument".to_string());
             }
-            let message = &args_code[0];
+            let message = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Log {
                     message: #message.to_string(),
@@ -713,10 +1021,10 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "navigate" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("navigate() expects exactly 1 argument".to_string());
             }
-            let url = &args_code[0];
+            let url = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Navigate {
                     url: #url.to_string(),
@@ -724,10 +1032,10 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "custom" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("custom() expects exactly 1 argument".to_string());
             }
-            let action = &args_code[0];
+            let action = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Custom {
                     action: #action.to_string(),
@@ -743,11 +1051,11 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             hyperchad_actions::logic::hidden()
         }),
         "eq" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err("eq() expects exactly 2 arguments".to_string());
             }
-            let left = &args_code[0];
-            let right = &args_code[1];
+            let left = generate_expression_code(context, &args[0])?;
+            let right = generate_expression_code(context, &args[1])?;
             Ok(quote! {
                 hyperchad_actions::logic::eq(#left, #right)
             })
@@ -755,7 +1063,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 
         // Action invocation function
         "invoke" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err("invoke() expects exactly 2 arguments (action, value)".to_string());
             }
 
@@ -788,7 +1096,8 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                                 ) = (&tuple_args[0], &tuple_args[1])
                                 {
                                     let field_ident = format_ident!("{}", field_name);
-                                    let field_value_code = generate_expression_code(field_value)?;
+                                    let field_value_code =
+                                        generate_expression_code(context, field_value)?;
                                     field_assignments
                                         .push(quote! { #field_ident: #field_value_code });
                                 }
@@ -797,16 +1106,16 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 
                         quote! { #struct_path_tokens { #(#field_assignments),* } }
                     } else {
-                        args_code[0].clone()
+                        generate_expression_code(context, &args[0])?
                     }
                 } else {
-                    args_code[0].clone()
+                    generate_expression_code(context, &args[0])?
                 }
             } else {
-                args_code[0].clone()
+                generate_expression_code(context, &args[0])?
             };
 
-            let value = &args_code[1];
+            let value = generate_expression_code(context, &args[1])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::Parameterized {
                     action: Box::new(hyperchad_actions::ActionType::Custom {
@@ -819,64 +1128,61 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 
         // Throttle function: throttle(duration, action)
         "throttle" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err("throttle() expects exactly 2 arguments (duration, action)".to_string());
             }
-            let duration = &args_code[0];
-            let action = &args_code[1];
+            let duration = generate_expression_code(context, &args[0])?;
+            let action = generate_expression_code(context, &args[1])?;
             Ok(quote! {
                 hyperchad_actions::ActionEffect {
                     action: #action,
                     throttle: Some(#duration as u64),
-                    delay_off: None,
-                    unique: None,
+                    ..Default::default()
                 }
             })
         }
 
         // Delay off function: delay_off(duration, action)
         "delay_off" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err(
                     "delay_off() expects exactly 2 arguments (duration, action)".to_string()
                 );
             }
-            let duration = &args_code[0];
-            let action = &args_code[1];
+            let duration = generate_expression_code(context, &args[0])?;
+            let action = generate_expression_code(context, &args[1])?;
             Ok(quote! {
                 hyperchad_actions::ActionEffect {
                     action: #action,
-                    throttle: None,
                     delay_off: Some(#duration as u64),
-                    unique: None,
+                    ..Default::default()
                 }
             })
         }
 
         // Unique function: unique(action)
         "unique" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("unique() expects exactly 1 argument (action)".to_string());
             }
-            let action = &args_code[0];
+            let action = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 hyperchad_actions::ActionEffect {
                     action: #action,
-                    throttle: None,
-                    delay_off: None,
                     unique: Some(true),
+                    ..Default::default()
                 }
             })
         }
 
         // Clamp function: clamp(min, value, max)
         "clamp" => {
-            if args_code.len() != 3 {
+            if args.len() != 3 {
                 return Err("clamp() expects exactly 3 arguments (min, value, max)".to_string());
             }
-            let min = &args_code[0];
-            let value = &args_code[1];
-            let max = &args_code[2];
+            let min = literal_or_stmt(context, &args[0])?;
+            let value = generate_expression_code(context, &args[1])?;
+            let max = literal_or_stmt(context, &args[2])?;
             Ok(quote! {
                 #value.clamp(#min, #max)
             })
@@ -884,10 +1190,10 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 
         // Group function for arithmetic grouping: group(expression)
         "group" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("group() expects exactly 1 argument".to_string());
             }
-            let expr = &args_code[0];
+            let expr = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 hyperchad_actions::logic::Arithmetic::Grouping(Box::new(#expr))
             })
@@ -895,19 +1201,19 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 
         // Event handling function: on_event(event_name, closure)
         "on_event" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err(
                     "on_event() expects exactly 2 arguments (event_name, closure)".to_string(),
                 );
             }
-            let event_name = &args_code[0];
+            let event_name = generate_expression_code(context, &args[0])?;
             let closure_expr = &args[1]; // Use the original expression, not the generated code
 
             // Check if the second argument is a closure
             if let Expression::Closure { params, body } = closure_expr {
                 // Transform the closure into hyperchad logic
                 // Replace the closure parameter with get_event_value() calls
-                let transformed_body = transform_closure_for_event(params, body)?;
+                let transformed_body = transform_closure_for_event(context, params, body)?;
                 Ok(quote! {
                     hyperchad_actions::ActionType::Event {
                         name: #event_name.to_string(),
@@ -916,7 +1222,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 })
             } else {
                 // If it's not a closure, just use the regular action
-                let action = &args_code[1];
+                let action = generate_expression_code(context, &args[1])?;
                 Ok(quote! {
                     hyperchad_actions::ActionType::Event {
                         name: #event_name.to_string(),
@@ -934,9 +1240,9 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             match variant {
                 "Navigate" => {
                     // Handle hyperchad_actions::ActionType::Navigate { url: "..." }
-                    if args_code.len() == 1 {
+                    if args.len() == 1 {
                         // Expecting a tuple with field name and value
-                        let url_arg = &args_code[0];
+                        let url_arg = generate_expression_code(context, &args[0])?;
                         Ok(quote! {
                             hyperchad_actions::ActionType::Navigate {
                                 url: #url_arg.to_string()
@@ -950,29 +1256,29 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                     }
                 }
                 "hide_str_id" => {
-                    if args_code.len() != 1 {
+                    if args.len() != 1 {
                         return Err(
                             "hyperchad_actions::ActionType::hide_str_id() expects exactly 1 argument".to_string()
                         );
                     }
-                    let target = &args_code[0];
+                    let target = target_to_expr(context, &args[0], false)?;
                     Ok(quote! {
-                        hyperchad_actions::ActionType::hide_str_id(&#target.to_string())
+                        hyperchad_actions::ActionType::hide_str_id(#target)
                     })
                 }
                 "show_str_id" => {
-                    if args_code.len() != 1 {
+                    if args.len() != 1 {
                         return Err(
                             "hyperchad_actions::ActionType::show_str_id() expects exactly 1 argument".to_string()
                         );
                     }
-                    let target = &args_code[0];
+                    let target = target_to_expr(context, &args[0], false)?;
                     Ok(quote! {
-                        hyperchad_actions::ActionType::show_str_id(&#target.to_string())
+                        hyperchad_actions::ActionType::show_str_id(#target)
                     })
                 }
                 "show_self" => {
-                    if !args_code.is_empty() {
+                    if !args.is_empty() {
                         return Err(
                             "hyperchad_actions::ActionType::show_self() expects no arguments"
                                 .to_string(),
@@ -983,7 +1289,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                     })
                 }
                 "hide_self" => {
-                    if !args_code.is_empty() {
+                    if !args.is_empty() {
                         return Err("hide_self() expects no arguments".to_string());
                     }
                     Ok(quote! {
@@ -991,7 +1297,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                     })
                 }
                 "remove_background_self" => {
-                    if !args_code.is_empty() {
+                    if !args.is_empty() {
                         return Err("remove_background_self() expects no arguments".to_string());
                     }
                     Ok(quote! {
@@ -999,50 +1305,50 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                     })
                 }
                 "remove_background_str_id" => {
-                    if args_code.len() != 1 {
+                    if args.len() != 1 {
                         return Err(
                             "remove_background_str_id() expects exactly 1 argument (target)"
                                 .to_string(),
                         );
                     }
-                    let target = &args_code[0];
+                    let target = target_to_expr(context, &args[0], false)?;
                     Ok(quote! {
                         hyperchad_actions::ActionType::remove_background_str_id(#target)
                     })
                 }
                 "remove_background_id" => {
-                    if args_code.len() != 1 {
+                    if args.len() != 1 {
                         return Err("remove_background_id() expects exactly 1 argument (target)"
                             .to_string());
                     }
-                    let target = &args_code[0];
+                    let target = target_to_expr(context, &args[0], false)?;
                     Ok(quote! {
                         hyperchad_actions::ActionType::remove_background_id(#target)
                     })
                 }
                 "remove_background_class" => {
-                    if args_code.len() != 1 {
+                    if args.len() != 1 {
                         return Err(
                             "remove_background_class() expects exactly 1 argument (class_name)"
                                 .to_string(),
                         );
                     }
-                    let class_name = &args_code[0];
+                    let class_name = generate_expression_code(context, &args[0])?;
                     Ok(quote! {
                         hyperchad_actions::ActionType::remove_background_class(#class_name)
                     })
                 }
                 "remove_background_child_class" => {
-                    if args_code.len() != 1 {
+                    if args.len() != 1 {
                         return Err("remove_background_child_class() expects exactly 1 argument (class_name)".to_string());
                     }
-                    let class_name = &args_code[0];
+                    let class_name = generate_expression_code(context, &args[0])?;
                     Ok(quote! {
                         hyperchad_actions::ActionType::remove_background_child_class(#class_name)
                     })
                 }
                 "remove_background_last_child" => {
-                    if !args_code.is_empty() {
+                    if !args.is_empty() {
                         return Err(
                             "remove_background_last_child() expects no arguments".to_string()
                         );
@@ -1083,12 +1389,16 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                 "PlayAlbum" | "AddAlbumToQueue" | "PlayAlbumStartingAtTrackId" => {
                     // These are complex variants with fields - for now, just return the variant
                     let variant_ident = format_ident!("{}", variant);
-                    if args_code.is_empty() {
+                    if args.is_empty() {
                         // Simple variant without arguments
                         Ok(quote! {
                             Action::#variant_ident
                         })
                     } else {
+                        let args_code = args
+                            .iter()
+                            .map(|x| generate_expression_code(context, x))
+                            .collect::<Result<Vec<_>, String>>()?;
                         // For now, assume arguments are provided as a single struct-like expression
                         Ok(quote! {
                             Action::#variant_ident { #(#args_code),* }
@@ -1106,7 +1416,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 
         // Self-targeting functions
         "show_self" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("show_self() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -1114,7 +1424,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "hide_self" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("hide_self() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -1122,7 +1432,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "remove_background_self" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("remove_background_self() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -1130,52 +1440,52 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "remove_background_str_id" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err(
                     "remove_background_str_id() expects exactly 1 argument (target)".to_string(),
                 );
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
                 hyperchad_actions::ActionType::remove_background_str_id(#target)
             })
         }
         "remove_background_id" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err(
                     "remove_background_id() expects exactly 1 argument (target)".to_string()
                 );
             }
-            let target = &args_code[0];
+            let target = target_to_expr(context, &args[0], false)?;
             Ok(quote! {
                 hyperchad_actions::ActionType::remove_background_id(#target)
             })
         }
         "remove_background_class" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err(
                     "remove_background_class() expects exactly 1 argument (class_name)".to_string(),
                 );
             }
-            let class_name = &args_code[0];
+            let class_name = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::remove_background_class(#class_name)
             })
         }
         "remove_background_child_class" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err(
                     "remove_background_child_class() expects exactly 1 argument (class_name)"
                         .to_string(),
                 );
             }
-            let class_name = &args_code[0];
+            let class_name = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 hyperchad_actions::ActionType::remove_background_child_class(#class_name)
             })
         }
         "remove_background_last_child" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("remove_background_last_child() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -1183,7 +1493,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "show_last_child" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("show_last_child() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -1191,7 +1501,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "get_visibility_self" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("get_visibility_self() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -1199,7 +1509,7 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
             })
         }
         "get_event_value" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("get_event_value() expects no arguments".to_string());
             }
             Ok(quote! {
@@ -1231,7 +1541,8 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
                                 (&tuple_args[0], &tuple_args[1])
                             {
                                 let field_ident = format_ident!("{}", field_name);
-                                let field_value_code = generate_expression_code(field_value)?;
+                                let field_value_code =
+                                    generate_expression_code(context, field_value)?;
                                 field_assignments.push(quote! { #field_ident: #field_value_code });
                             }
                         }
@@ -1245,6 +1556,12 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 
             // Regular function call
             let function_ident = format_ident!("{}", function);
+
+            let args_code = args
+                .iter()
+                .map(|x| generate_expression_code(context, x))
+                .collect::<Result<Vec<_>, String>>()?;
+
             Ok(quote! {
                 #function_ident(#(#args_code),*)
             })
@@ -1255,11 +1572,11 @@ fn generate_function_call_code(function: &str, args: &[Expression]) -> Result<To
 /// Generate code for a literal
 fn generate_literal_code(lit: &Literal) -> TokenStream {
     match lit {
-        Literal::String(s) => quote! { #s },
-        Literal::Integer(i) => quote! { #i },
-        Literal::Float(f) => quote! { #f },
-        Literal::Bool(b) => quote! { #b },
-        Literal::Unit => quote! { () },
+        Literal::String(s) => quote! { hyperchad_actions::dsl::Literal::String(#s.to_string()) },
+        Literal::Integer(i) => quote! { hyperchad_actions::dsl::Literal::Integer(#i) },
+        Literal::Float(f) => quote! { hyperchad_actions::dsl::Literal::Float(#f) },
+        Literal::Bool(b) => quote! { hyperchad_actions::dsl::Literal::Bool(#b) },
+        Literal::Unit => quote! { hyperchad_actions::dsl::Literal::Unit },
     }
 }
 
@@ -1295,269 +1612,189 @@ fn generate_unary_op_code(op: &UnaryOp) -> TokenStream {
     }
 }
 
+fn literal_or_stmt(context: &mut Context, expr: &Expression) -> Result<TokenStream, String> {
+    Ok(match expr {
+        Expression::Literal(Literal::Integer(x)) => {
+            quote! { #x }
+        }
+        Expression::Literal(Literal::Float(x)) => {
+            quote! { #x }
+        }
+        Expression::Literal(Literal::Bool(x)) => {
+            quote! { #x }
+        }
+        Expression::Literal(Literal::String(x)) => {
+            quote! { #x }
+        }
+        value => generate_expression_code(context, value)?,
+    })
+}
+
 /// Generate code for method calls
 #[allow(clippy::too_many_lines)]
 fn generate_method_call_code(
+    context: &mut Context,
     receiver: &TokenStream,
     method: &str,
     args: &[Expression],
 ) -> Result<TokenStream, String> {
-    let args_code: Result<Vec<_>, String> = args.iter().map(generate_expression_code).collect();
-    let args_code = args_code?;
-
     match method {
         // Element reference methods
         "show" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("ElementReference.show() expects no arguments".to_string());
             }
             Ok(quote! {
-                {
-                    let element_ref = &#receiver;
-                    let parsed = element_ref.parse_selector();
-                    match parsed {
-                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
-                            hyperchad_actions::ActionType::show_str_id(&id)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
-                            hyperchad_actions::ActionType::show_class(&class)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
-                            // For complex selectors, fall back to string ID for now
-                            hyperchad_actions::ActionType::show_str_id(&element_ref.selector)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
-                            hyperchad_actions::ActionType::NoOp
-                        }
-                    }
-                }
+                #receiver.show()
             })
         }
         "hide" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("ElementReference.hide() expects no arguments".to_string());
             }
             Ok(quote! {
-                {
-                    let element_ref = &#receiver;
-                    let parsed = element_ref.parse_selector();
-                    match parsed {
-                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
-                            hyperchad_actions::ActionType::hide_str_id(&id)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
-                            hyperchad_actions::ActionType::hide_class(&class)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
-                            // For complex selectors, fall back to string ID for now
-                            hyperchad_actions::ActionType::hide_str_id(&element_ref.selector)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
-                            hyperchad_actions::ActionType::NoOp
-                        }
-                    }
-                }
-            })
-        }
-        "toggle" => {
-            if !args_code.is_empty() {
-                return Err("ElementReference.toggle() expects no arguments".to_string());
-            }
-            Ok(quote! {
-                {
-                    let element_ref = &#receiver;
-                    let parsed = element_ref.parse_selector();
-                    match parsed {
-                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
-                            // TODO: Implement proper toggle logic based on current visibility
-                            hyperchad_actions::ActionType::show_str_id(&id)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
-                            // TODO: Implement proper toggle logic based on current visibility
-                            hyperchad_actions::ActionType::show_class(&class)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
-                            // For complex selectors, fall back to string ID for now
-                            hyperchad_actions::ActionType::show_str_id(&element_ref.selector)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
-                            hyperchad_actions::ActionType::NoOp
-                        }
-                    }
-                }
+                #receiver.hide()
             })
         }
         "visibility" => {
-            if !args_code.is_empty() {
+            if !args.is_empty() {
                 return Err("ElementReference.visibility() expects no arguments".to_string());
             }
-            // For ElementReference visibility, we need to generate runtime parsing
             Ok(quote! {
-                {
-                    let element_ref = &#receiver;
-                    let parsed = element_ref.parse_selector();
-                    match parsed {
-                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
-                            hyperchad_actions::logic::get_visibility_str_id(id)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
-                            hyperchad_actions::logic::get_visibility_class(class)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
-                            // For complex selectors, fall back to string ID for now
-                            hyperchad_actions::logic::get_visibility_str_id(element_ref.selector.clone())
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
-                            hyperchad_actions::logic::get_visibility_self()
-                        }
-                    }
-                }
+                #receiver.visibility()
             })
         }
         "set_visibility" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err(
                     "ElementReference.set_visibility() expects exactly 1 argument".to_string(),
                 );
             }
-            let visibility = &args_code[0];
+            let visibility = generate_expression_code(context, &args[0])?;
             Ok(quote! {
-                {
-                    let element_ref = &#receiver;
-                    let parsed = element_ref.parse_selector();
-                    match parsed {
-                        hyperchad_actions::dsl::ParsedSelector::Id(id) => {
-                            hyperchad_actions::ActionType::set_visibility_str_id(#visibility, &id)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Class(class) => {
-                            hyperchad_actions::ActionType::set_visibility_class(#visibility, &class)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Complex(_) => {
-                            // For complex selectors, fall back to string ID for now
-                            hyperchad_actions::ActionType::set_visibility_str_id(#visibility, &element_ref.selector)
-                        }
-                        hyperchad_actions::dsl::ParsedSelector::Invalid => {
-                            hyperchad_actions::ActionType::NoOp
-                        }
-                    }
-                }
+                #receiver.set_visibility(#visibility)
             })
         }
 
         // Logic chaining methods
         "eq" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("eq() expects exactly 1 argument".to_string());
             }
-            let value = &args_code[0];
+            let value = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.eq(#value)
             })
         }
         "then" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("then() expects exactly 1 argument".to_string());
             }
-            let action = &args_code[0];
+            let action = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.then(#action)
             })
         }
         "or_else" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("or_else() expects exactly 1 argument".to_string());
             }
-            let action = &args_code[0];
+            let action = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.or_else(#action)
             })
         }
         "and" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("and() expects exactly 1 argument".to_string());
             }
-            let action = &args_code[0];
+            let action = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.and(#action)
             })
         }
         "then_pass_to" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("then_pass_to() expects exactly 1 argument".to_string());
             }
-            let action = &args_code[0];
+            let action = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.then_pass_to(#action)
             })
         }
         // Math operations
         "divide" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("divide() expects exactly 1 argument".to_string());
             }
-            let divisor = &args_code[0];
+            let divisor = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.divide(#divisor)
             })
         }
         "minus" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("minus() expects exactly 1 argument".to_string());
             }
-            let value = &args_code[0];
+            let value = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.minus(#value)
             })
         }
         "plus" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("plus() expects exactly 1 argument".to_string());
             }
-            let value = &args_code[0];
+            let value = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.plus(#value)
             })
         }
         "multiply" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("multiply() expects exactly 1 argument".to_string());
             }
-            let value = &args_code[0];
+            let value = generate_expression_code(context, &args[0])?;
             Ok(quote! {
                 #receiver.multiply(#value)
             })
         }
         "clamp" => {
-            if args_code.len() != 2 {
+            if args.len() != 2 {
                 return Err("clamp() expects exactly 2 arguments (min, max)".to_string());
             }
-            let min = &args_code[0];
-            let max = &args_code[1];
+            let min = literal_or_stmt(context, &args[0])?;
+            let max = literal_or_stmt(context, &args[1])?;
             Ok(quote! {
                 #receiver.clamp(#min, #max)
             })
         }
         // Delay/timing methods
         "delay_off" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("delay_off() expects exactly 1 argument".to_string());
             }
-            let delay = &args_code[0];
+            let value = literal_or_stmt(context, &args[0])?;
             Ok(quote! {
-                #receiver.delay_off(#delay as u64)
+                #receiver.delay_off(#value as u64)
             })
         }
         "throttle" => {
-            if args_code.len() != 1 {
+            if args.len() != 1 {
                 return Err("throttle() expects exactly 1 argument".to_string());
             }
-            let interval = &args_code[0];
+            let value = literal_or_stmt(context, &args[0])?;
             Ok(quote! {
-                #receiver.throttle(#interval as u64)
+                #receiver.throttle(#value as u64)
             })
         }
         // Default case - pass through to the receiver object
         _ => {
+            let args_code = args
+                .iter()
+                .map(|x| generate_expression_code(context, x))
+                .collect::<Result<Vec<_>, String>>()?;
+
             let method_ident = format_ident!("{}", method);
             Ok(quote! {
                 #receiver.#method_ident(#(#args_code),*)
@@ -1568,6 +1805,7 @@ fn generate_method_call_code(
 
 /// Transform a closure used in `on_event` by replacing parameters with `get_event_value()` calls
 fn transform_closure_for_event(
+    context: &mut Context,
     params: &[String],
     body: &Expression,
 ) -> Result<TokenStream, String> {
@@ -1577,12 +1815,13 @@ fn transform_closure_for_event(
     }
 
     let param_name = &params[0];
-    let transformed_body = replace_param_with_get_event_value(body, param_name)?;
-    generate_expression_code(&transformed_body)
+    let transformed_body = replace_param_with_get_event_value(context, body, param_name)?;
+    generate_expression_code(context, &transformed_body)
 }
 
 /// Replace a parameter in an expression with `get_event_value()` calls
 fn replace_param_with_get_event_value(
+    context: &mut Context,
     expr: &Expression,
     param_name: &str,
 ) -> Result<Expression, String> {
@@ -1595,8 +1834,8 @@ fn replace_param_with_get_event_value(
             })
         }
         Expression::Binary { left, op, right } => {
-            let left_transformed = replace_param_with_get_event_value(left, param_name)?;
-            let right_transformed = replace_param_with_get_event_value(right, param_name)?;
+            let left_transformed = replace_param_with_get_event_value(context, left, param_name)?;
+            let right_transformed = replace_param_with_get_event_value(context, right, param_name)?;
             Ok(Expression::Binary {
                 left: Box::new(left_transformed),
                 op: op.clone(),
@@ -1606,7 +1845,7 @@ fn replace_param_with_get_event_value(
         Expression::Call { function, args } => {
             let transformed_args: Result<Vec<_>, String> = args
                 .iter()
-                .map(|arg| replace_param_with_get_event_value(arg, param_name))
+                .map(|arg| replace_param_with_get_event_value(context, arg, param_name))
                 .collect();
             Ok(Expression::Call {
                 function: function.clone(),
@@ -1618,10 +1857,13 @@ fn replace_param_with_get_event_value(
             then_branch,
             else_branch,
         } => {
-            let condition_transformed = replace_param_with_get_event_value(condition, param_name)?;
-            let then_transformed = replace_param_with_get_event_value(then_branch, param_name)?;
+            let condition_transformed =
+                replace_param_with_get_event_value(context, condition, param_name)?;
+            let then_transformed =
+                replace_param_with_get_event_value(context, then_branch, param_name)?;
             let else_transformed = if let Some(else_branch) = else_branch {
                 Some(Box::new(replace_param_with_get_event_value(
+                    context,
                     else_branch,
                     param_name,
                 )?))
@@ -1638,7 +1880,7 @@ fn replace_param_with_get_event_value(
             let transformed_statements: Result<Vec<_>, String> = block
                 .statements
                 .iter()
-                .map(|stmt| replace_param_in_statement(stmt, param_name))
+                .map(|stmt| replace_param_in_statement(context, stmt, param_name))
                 .collect();
             Ok(Expression::Block(Block {
                 statements: transformed_statements?,
@@ -1649,10 +1891,11 @@ fn replace_param_with_get_event_value(
             method,
             args,
         } => {
-            let receiver_transformed = replace_param_with_get_event_value(receiver, param_name)?;
+            let receiver_transformed =
+                replace_param_with_get_event_value(context, receiver, param_name)?;
             let transformed_args: Result<Vec<_>, String> = args
                 .iter()
-                .map(|arg| replace_param_with_get_event_value(arg, param_name))
+                .map(|arg| replace_param_with_get_event_value(context, arg, param_name))
                 .collect();
             Ok(Expression::MethodCall {
                 receiver: Box::new(receiver_transformed),
@@ -1672,14 +1915,19 @@ fn replace_param_with_get_event_value(
 }
 
 /// Replace a parameter in a statement with `get_event_value()` calls
-fn replace_param_in_statement(stmt: &Statement, param_name: &str) -> Result<Statement, String> {
+fn replace_param_in_statement(
+    context: &mut Context,
+    stmt: &Statement,
+    param_name: &str,
+) -> Result<Statement, String> {
     match stmt {
         Statement::Expression(expr) => {
-            let transformed_expr = replace_param_with_get_event_value(expr, param_name)?;
+            let transformed_expr = replace_param_with_get_event_value(context, expr, param_name)?;
             Ok(Statement::Expression(transformed_expr))
         }
         Statement::Let { name, value } => {
-            let transformed_value = replace_param_with_get_event_value(value, param_name)?;
+            let transformed_value = replace_param_with_get_event_value(context, value, param_name)?;
+            context.add_variable(name);
             Ok(Statement::Let {
                 name: name.clone(),
                 value: transformed_value,
@@ -1690,10 +1938,11 @@ fn replace_param_in_statement(stmt: &Statement, param_name: &str) -> Result<Stat
             then_block,
             else_block,
         } => {
-            let condition_transformed = replace_param_with_get_event_value(condition, param_name)?;
-            let then_transformed = replace_param_in_block(then_block, param_name)?;
+            let condition_transformed =
+                replace_param_with_get_event_value(context, condition, param_name)?;
+            let then_transformed = replace_param_in_block(context, then_block, param_name)?;
             let else_transformed = if let Some(else_block) = else_block {
-                Some(replace_param_in_block(else_block, param_name)?)
+                Some(replace_param_in_block(context, else_block, param_name)?)
             } else {
                 None
             };
@@ -1704,7 +1953,7 @@ fn replace_param_in_statement(stmt: &Statement, param_name: &str) -> Result<Stat
             })
         }
         Statement::Block(block) => {
-            let transformed_block = replace_param_in_block(block, param_name)?;
+            let transformed_block = replace_param_in_block(context, block, param_name)?;
             Ok(Statement::Block(transformed_block))
         }
         // For other statements, return as-is
@@ -1713,205 +1962,17 @@ fn replace_param_in_statement(stmt: &Statement, param_name: &str) -> Result<Stat
 }
 
 /// Replace a parameter in a block with `get_event_value()` calls
-fn replace_param_in_block(block: &Block, param_name: &str) -> Result<Block, String> {
+fn replace_param_in_block(
+    context: &mut Context,
+    block: &Block,
+    param_name: &str,
+) -> Result<Block, String> {
     let transformed_statements: Result<Vec<_>, String> = block
         .statements
         .iter()
-        .map(|stmt| replace_param_in_statement(stmt, param_name))
+        .map(|stmt| replace_param_in_statement(context, stmt, param_name))
         .collect();
     Ok(Block {
         statements: transformed_statements?,
     })
-}
-
-/// Check if an expression produces an `ActionType` (should be pushed to output)
-/// vs a value type (should just be evaluated)
-pub fn expression_produces_action(expr: &Expression) -> bool {
-    match expr {
-        // Method calls on ElementReference that produce actions
-        Expression::MethodCall { method, .. } => {
-            matches!(
-                method.as_str(),
-                "show" | "hide" | "toggle" | "set_visibility"
-            )
-        }
-        // Function calls that produce actions
-        Expression::Call { function, .. } => {
-            matches!(
-                function.as_str(),
-                "show"
-                    | "hide"
-                    | "toggle"
-                    | "log"
-                    | "navigate"
-                    | "custom"
-                    | "noop"
-                    | "show_str_id"
-                    | "hide_str_id"
-                    | "show_class"
-                    | "hide_class"
-                    | "set_visibility_str_id"
-                    | "set_visibility_class"
-                    | "add_class"
-                    | "remove_class"
-                    | "toggle_class"
-                    | "set_style"
-                    | "remove_style"
-                    | "set_attribute"
-                    | "remove_attribute"
-            )
-        }
-        // Binary operations, literals, variables, etc. don't produce actions
-        Expression::Binary { .. }
-        | Expression::Literal(_)
-        | Expression::Variable(_)
-        | Expression::ElementRef(_)
-        | Expression::Field { .. }
-        | Expression::Unary { .. } => false,
-
-        // Conditional expressions might produce actions based on their branches
-        Expression::If {
-            then_branch,
-            else_branch,
-            ..
-        } => {
-            expression_produces_action(then_branch)
-                || else_branch
-                    .as_ref()
-                    .is_some_and(|e| expression_produces_action(e))
-        }
-
-        // Other complex expressions - be conservative and assume they might produce actions
-        Expression::Match { .. }
-        | Expression::Block(_)
-        | Expression::Array(_)
-        | Expression::Tuple(_)
-        | Expression::Range { .. }
-        | Expression::Closure { .. }
-        | Expression::RawRust(_) => true,
-    }
-}
-
-/// Generate optimized element method calls with compile-time selector parsing
-fn generate_optimized_element_method_call(
-    selector_expr: &Expression,
-    method: &str,
-    args: &[Expression],
-) -> Result<TokenStream, String> {
-    // Extract selector string from literal expression
-    let selector = if let Expression::Literal(Literal::String(s)) = selector_expr {
-        s.clone()
-    } else {
-        // If not a string literal, fall back to runtime generation
-        let selector_code = generate_expression_code(selector_expr)?;
-        return generate_runtime_element_method_call(&selector_code, method, args);
-    };
-
-    // Parse selector at compile time
-    let (target_type, target_value) = if let Some(id) = selector.strip_prefix('#') {
-        ("Id", id.to_string())
-    } else if let Some(class) = selector.strip_prefix('.') {
-        ("Class", class.to_string())
-    } else if selector.is_empty() {
-        return Ok(quote! { hyperchad_actions::ActionType::NoOp });
-    } else {
-        // Treat as string ID for backward compatibility
-        ("Id", selector)
-    };
-
-    let args_code: Result<Vec<_>, String> = args.iter().map(generate_expression_code).collect();
-    let args_code = args_code?;
-
-    // Generate direct method calls without runtime parsing
-    match method {
-        "show" => {
-            if !args_code.is_empty() {
-                return Err("element.show() expects no arguments".to_string());
-            }
-            match target_type {
-                "Id" => Ok(quote! {
-                    hyperchad_actions::ActionType::show_str_id(#target_value)
-                }),
-                "Class" => Ok(quote! {
-                    hyperchad_actions::ActionType::show_class(#target_value)
-                }),
-                _ => Ok(quote! { hyperchad_actions::ActionType::NoOp }),
-            }
-        }
-        "hide" => {
-            if !args_code.is_empty() {
-                return Err("element.hide() expects no arguments".to_string());
-            }
-            match target_type {
-                "Id" => Ok(quote! {
-                    hyperchad_actions::ActionType::hide_str_id(#target_value)
-                }),
-                "Class" => Ok(quote! {
-                    hyperchad_actions::ActionType::hide_class(#target_value)
-                }),
-                _ => Ok(quote! { hyperchad_actions::ActionType::NoOp }),
-            }
-        }
-        "toggle" => {
-            if !args_code.is_empty() {
-                return Err("element.toggle() expects no arguments".to_string());
-            }
-            // TODO: Implement proper toggle logic
-            match target_type {
-                "Id" => Ok(quote! {
-                    hyperchad_actions::ActionType::show_str_id(#target_value)
-                }),
-                "Class" => Ok(quote! {
-                    hyperchad_actions::ActionType::show_class(#target_value)
-                }),
-                _ => Ok(quote! { hyperchad_actions::ActionType::NoOp }),
-            }
-        }
-        "visibility" => {
-            if !args_code.is_empty() {
-                return Err("element.visibility() expects no arguments".to_string());
-            }
-            match target_type {
-                "Id" => Ok(quote! {
-                    hyperchad_actions::logic::get_visibility_str_id(#target_value.to_string())
-                }),
-                "Class" => Ok(quote! {
-                    hyperchad_actions::logic::get_visibility_class(#target_value)
-                }),
-                _ => Ok(quote! {
-                    hyperchad_actions::logic::get_visibility_self()
-                }),
-            }
-        }
-        "set_visibility" => {
-            if args_code.len() != 1 {
-                return Err("element.set_visibility() expects exactly 1 argument".to_string());
-            }
-            let visibility = &args_code[0];
-            match target_type {
-                "Id" => Ok(quote! {
-                    hyperchad_actions::ActionType::set_visibility_str_id(#visibility, #target_value)
-                }),
-                "Class" => Ok(quote! {
-                    hyperchad_actions::ActionType::set_visibility_class(#visibility, #target_value)
-                }),
-                _ => Ok(quote! { hyperchad_actions::ActionType::NoOp }),
-            }
-        }
-        _ => Err(format!("Unknown element method: {method}")),
-    }
-}
-
-/// Generate runtime element method call as fallback
-fn generate_runtime_element_method_call(
-    selector_code: &TokenStream,
-    method: &str,
-    args: &[Expression],
-) -> Result<TokenStream, String> {
-    let element_ref_code = quote! {
-        hyperchad_actions::dsl::ElementReference {
-            selector: #selector_code.to_string()
-        }
-    };
-    generate_method_call_code(&element_ref_code, method, args)
 }

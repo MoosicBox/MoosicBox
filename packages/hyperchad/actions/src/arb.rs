@@ -3,7 +3,7 @@ use moosicbox_arb::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{
-    Action, ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction,
+    Action, ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction, Target,
 };
 
 fn half_g_max(g: &Gen, max: usize) -> Gen {
@@ -26,11 +26,22 @@ impl Arbitrary for ActionTrigger {
     }
 }
 
+impl Arbitrary for Target {
+    fn arbitrary(g: &mut Gen) -> Self {
+        let max = 1;
+        match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
+            0 => Self::Literal(XmlString::arbitrary(g).0),
+            1 => Self::Ref(XmlString::arbitrary(g).0),
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl Arbitrary for ElementTarget {
     fn arbitrary(g: &mut Gen) -> Self {
         let max = 3;
         match *g.choose(&(0..=max).collect::<Vec<_>>()).unwrap() {
-            0 => Self::StrId(XmlString::arbitrary(g).0),
+            0 => Self::StrId(Arbitrary::arbitrary(g)),
             1 => Self::SelfTarget,
             2 => Self::LastChild,
             3 => Self::Id(usize::arbitrary(g)),
@@ -150,13 +161,19 @@ impl Arbitrary for Action {
         } else {
             Self {
                 trigger,
-                effect: ActionEffect {
-                    action: ActionType::arbitrary(g),
-                    delay_off: Option::arbitrary(g),
-                    throttle: Option::arbitrary(g),
-                    unique: Option::arbitrary(g),
-                },
+                effect: Arbitrary::arbitrary(g),
             }
+        }
+    }
+}
+
+impl Arbitrary for ActionEffect {
+    fn arbitrary(g: &mut Gen) -> Self {
+        Self {
+            action: Arbitrary::arbitrary(g),
+            delay_off: Option::arbitrary(g),
+            throttle: Option::arbitrary(g),
+            unique: Option::arbitrary(g),
         }
     }
 }

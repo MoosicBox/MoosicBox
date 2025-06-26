@@ -280,7 +280,7 @@ pub fn player(state: &State) -> Containers {
                         height=(FOOTER_ICON_SIZE)
                         margin-left=10
                         fx-click=fx {
-                            if get_visibility_str_id(AUDIO_ZONES_ID) == hidden() {
+                            if get_visibility(AUDIO_ZONES_ID) == hidden() {
                                 show(AUDIO_ZONES_ID);
                             } else {
                                 hide(AUDIO_ZONES_ID);
@@ -312,7 +312,7 @@ pub fn player(state: &State) -> Containers {
                     }
                     button
                         fx-click=fx {
-                            if get_visibility_str_id("play-queue") == hidden() {
+                            if get_visibility("play-queue") == hidden() {
                                 show("play-queue");
                             } else {
                                 hide("play-queue");
@@ -723,7 +723,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                 max-height=vh90
                 border-radius=15
                 fx-click-outside=fx {
-                    if get_visibility_str_id(id) == visible() {
+                    if get_visibility(id) == visible() {
                         hide(id);
                     }
                 }
@@ -746,7 +746,7 @@ pub fn modal(id: &str, header: &Containers, content: &Containers) -> Containers 
                             width=(icon_size)
                             height=(icon_size)
                             fx-click=fx {
-                                if get_visibility_str_id(id) == visible() {
+                                if get_visibility(id) == visible() {
                                     hide(id);
                                 } else {
                                     show(id);

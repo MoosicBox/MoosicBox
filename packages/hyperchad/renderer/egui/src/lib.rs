@@ -13,7 +13,7 @@ use canvas::CanvasAction;
 use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
 use hyperchad_actions::{
-    ActionEffect, ActionTrigger, ActionType, ElementTarget, StyleAction, logic::Value,
+    ActionEffect, ActionTrigger, ActionType, ElementTarget, StyleAction, Target, logic::Value,
 };
 use hyperchad_renderer::canvas::CanvasUpdate;
 use hyperchad_renderer::viewport::immediate::{Pos, Viewport, ViewportListener};
@@ -168,6 +168,9 @@ fn map_element_target<R>(
 ) -> Option<R> {
     match target {
         ElementTarget::StrId(str_id) => {
+            let Target::Literal(str_id) = str_id else {
+                unimplemented!("reference target")
+            };
             if let Some(element) = container.find_element_by_str_id(str_id) {
                 return Some(func(element));
             }
@@ -175,6 +178,9 @@ fn map_element_target<R>(
             log::warn!("Could not find element with str id '{str_id}'");
         }
         ElementTarget::Class(class) => {
+            let Target::Literal(class) = class else {
+                unimplemented!("reference target")
+            };
             if let Some(element) = container.find_element_by_class(class) {
                 return Some(func(element));
             }
@@ -182,6 +188,9 @@ fn map_element_target<R>(
             log::warn!("Could not find element with class '{class}'");
         }
         ElementTarget::ChildClass(class) => {
+            let Target::Literal(class) = class else {
+                unimplemented!("reference target")
+            };
             if let Some(container) = container.find_element_by_id(self_id) {
                 if let Some(element) = container.find_element_by_class(class) {
                     return Some(func(element));
@@ -324,15 +333,16 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                 }
 
                 for action in &logic.actions {
-                    check_action(&action.effect.action, root, watch_positions, id);
+                    check_action(&action.action, root, watch_positions, id);
                 }
                 for action in &logic.else_actions {
-                    check_action(&action.effect.action, root, watch_positions, id);
+                    check_action(&action.action, root, watch_positions, id);
                 }
             }
             ActionType::NoOp
             | ActionType::Style { .. }
             | ActionType::Navigate { .. }
+            | ActionType::Let { .. }
             | ActionType::Log { .. }
             | ActionType::Custom { .. } => {}
             ActionType::Parameterized { action, value } => {
@@ -2917,6 +2927,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     render_context.backgrounds,
                 )
             }
+            ActionType::Let { .. } => {
+                // let value = Self::calc_value(value, render_context, ctx, id, event_value);
+                // render_context.variables.insert(name.clone(), value);
+                // true
+                unimplemented!("let action");
+            }
             ActionType::Navigate { url } => {
                 if let Err(e) = sender.send(url.to_owned()) {
                     log::error!("Failed to navigate via action: {e:?}");
@@ -2971,12 +2987,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                 if success {
                     for action in &eval.actions {
-                        if matches!(
-                            action.trigger,
-                            ActionTrigger::Immediate | ActionTrigger::Event(..)
-                        ) && !Self::handle_action(
-                            &action.effect.action,
-                            Some(&action.effect),
+                        if !Self::handle_action(
+                            &action.action,
+                            Some(action),
                             trigger,
                             render_context,
                             ctx,
@@ -2991,12 +3004,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     }
                 } else {
                     for action in &eval.else_actions {
-                        if matches!(
-                            action.trigger,
-                            ActionTrigger::Immediate | ActionTrigger::Event(..)
-                        ) && !Self::handle_action(
-                            &action.effect.action,
-                            Some(&action.effect),
+                        if !Self::handle_action(
+                            &action.action,
+                            Some(action),
                             trigger,
                             render_context,
                             ctx,
@@ -3183,6 +3193,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             | ActionType::Log { .. }
             | ActionType::Custom { .. }
             | ActionType::Event { .. }
+            | ActionType::Let { .. }
             | ActionType::Logic(..) => {}
         }
     }
@@ -3195,6 +3206,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     ) -> Option<usize> {
         match target {
             ElementTarget::StrId(str_id) => {
+                let Target::Literal(str_id) = str_id else {
+                    unimplemented!("reference target")
+                };
                 if let Some(element) = container.find_element_by_str_id(str_id) {
                     return Some(element.id);
                 }
@@ -3202,6 +3216,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 log::warn!("Could not find element with str id '{str_id}'");
             }
             ElementTarget::Class(class) => {
+                let Target::Literal(class) = class else {
+                    unimplemented!("reference target")
+                };
                 if let Some(element) = container.find_element_by_class(class) {
                     return Some(element.id);
                 }
@@ -3209,6 +3226,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 log::warn!("Could not find element with class '{class}'");
             }
             ElementTarget::ChildClass(class) => {
+                let Target::Literal(class) = class else {
+                    unimplemented!("reference target")
+                };
                 if let Some(container) = container.find_element_by_id(self_id) {
                     if let Some(element) = container.find_element_by_class(class) {
                         return Some(element.id);

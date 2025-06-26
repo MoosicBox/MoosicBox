@@ -2,7 +2,7 @@ use hyperchad_transformer_models::{LayoutDirection, Visibility};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{Action, ActionType, ElementTarget};
+use crate::{Action, ActionEffect, ActionType, ElementTarget, Target};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -214,7 +214,7 @@ pub enum Condition {
 
 impl Condition {
     #[must_use]
-    pub fn then(self, action: impl Into<Action>) -> If {
+    pub fn then(self, action: impl Into<ActionEffect>) -> If {
         If {
             condition: self,
             actions: vec![action.into()],
@@ -223,7 +223,7 @@ impl Condition {
     }
 
     #[must_use]
-    pub fn or_else(self, action: impl Into<Action>) -> If {
+    pub fn or_else(self, action: impl Into<ActionEffect>) -> If {
         If {
             condition: self,
             actions: vec![],
@@ -407,19 +407,19 @@ impl From<Arithmetic> for Value {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct If {
     pub condition: Condition,
-    pub actions: Vec<Action>,
-    pub else_actions: Vec<Action>,
+    pub actions: Vec<ActionEffect>,
+    pub else_actions: Vec<ActionEffect>,
 }
 
 impl If {
     #[must_use]
-    pub fn then(mut self, action: impl Into<Action>) -> Self {
+    pub fn then(mut self, action: impl Into<ActionEffect>) -> Self {
         self.actions.push(action.into());
         self
     }
 
     #[must_use]
-    pub fn or_else(mut self, action: impl Into<Action>) -> Self {
+    pub fn or_else(mut self, action: impl Into<ActionEffect>) -> Self {
         self.else_actions.push(action.into());
         self
     }
@@ -442,7 +442,7 @@ impl<'a> TryFrom<&'a str> for If {
 }
 
 #[must_use]
-pub fn if_stmt(condition: Condition, action: impl Into<Action>) -> If {
+pub fn if_stmt(condition: Condition, action: impl Into<ActionEffect>) -> If {
     If {
         condition,
         actions: vec![action.into()],
@@ -469,7 +469,7 @@ pub fn eq(a: impl Into<Value>, b: impl Into<Value>) -> Condition {
 }
 
 #[must_use]
-pub fn get_visibility_str_id(str_id: impl Into<String>) -> CalcValue {
+pub fn get_visibility_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::Visibility {
         target: ElementTarget::StrId(str_id.into()),
     }
@@ -490,14 +490,14 @@ pub const fn get_visibility_self() -> CalcValue {
 }
 
 #[must_use]
-pub fn get_visibility_class(class_name: impl Into<String>) -> CalcValue {
+pub fn get_visibility_class(class_name: impl Into<Target>) -> CalcValue {
     CalcValue::Visibility {
         target: ElementTarget::Class(class_name.into()),
     }
 }
 
 #[must_use]
-pub fn get_display_str_id(str_id: impl Into<String>) -> CalcValue {
+pub fn get_display_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::Display {
         target: ElementTarget::StrId(str_id.into()),
     }
@@ -538,7 +538,7 @@ pub fn get_data_attr_value_self(attr: impl Into<String>) -> CalcValue {
 }
 
 #[must_use]
-pub fn get_width_px_str_id(str_id: impl Into<String>) -> CalcValue {
+pub fn get_width_px_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::WidthPx {
         target: ElementTarget::StrId(str_id.into()),
     }
@@ -559,7 +559,7 @@ pub const fn get_width_px_self() -> CalcValue {
 }
 
 #[must_use]
-pub fn get_height_px_str_id(str_id: impl Into<String>) -> CalcValue {
+pub fn get_height_px_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::HeightPx {
         target: ElementTarget::StrId(str_id.into()),
     }
@@ -580,7 +580,7 @@ pub const fn get_height_px_self() -> CalcValue {
 }
 
 #[must_use]
-pub fn get_position_x_str_id(str_id: impl Into<String>) -> CalcValue {
+pub fn get_position_x_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::PositionX {
         target: ElementTarget::StrId(str_id.into()),
     }
@@ -601,7 +601,7 @@ pub const fn get_position_x_self() -> CalcValue {
 }
 
 #[must_use]
-pub fn get_position_y_str_id(str_id: impl Into<String>) -> CalcValue {
+pub fn get_position_y_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::PositionY {
         target: ElementTarget::StrId(str_id.into()),
     }
@@ -627,7 +627,7 @@ pub const fn get_mouse_x() -> CalcValue {
 }
 
 #[must_use]
-pub fn get_mouse_x_str_id(str_id: impl Into<String>) -> CalcValue {
+pub fn get_mouse_x_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::MouseX {
         target: Some(ElementTarget::StrId(str_id.into())),
     }
@@ -653,7 +653,7 @@ pub const fn get_mouse_y() -> CalcValue {
 }
 
 #[must_use]
-pub fn get_mouse_y_str_id(str_id: impl Into<String>) -> CalcValue {
+pub fn get_mouse_y_str_id(str_id: impl Into<Target>) -> CalcValue {
     CalcValue::MouseY {
         target: Some(ElementTarget::StrId(str_id.into())),
     }

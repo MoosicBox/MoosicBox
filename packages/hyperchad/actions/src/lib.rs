@@ -15,15 +15,74 @@ pub mod dsl;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Target {
+    Literal(String),
+    Ref(String),
+}
+
+impl From<String> for Target {
+    fn from(value: String) -> Self {
+        Self::Literal(value)
+    }
+}
+
+impl From<&str> for Target {
+    fn from(value: &str) -> Self {
+        Self::Literal(value.to_string())
+    }
+}
+
+impl From<&String> for Target {
+    fn from(value: &String) -> Self {
+        Self::Literal(value.clone())
+    }
+}
+
+impl Target {
+    #[must_use]
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Literal(x) | Self::Ref(x) => Some(x),
+        }
+    }
+
+    pub fn literal(str: impl Into<String>) -> Self {
+        Self::Literal(str.into())
+    }
+
+    pub fn reference(str: impl Into<String>) -> Self {
+        Self::Ref(str.into())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ElementTarget {
-    StrId(String),
-    Class(String),
-    ChildClass(String),
+    StrId(Target),
+    Class(Target),
+    ChildClass(Target),
     Id(usize),
     SelfTarget,
     LastChild,
+}
+
+impl ElementTarget {
+    #[must_use]
+    pub fn str_id(target: impl Into<Target>) -> Self {
+        Self::StrId(target.into())
+    }
+
+    #[must_use]
+    pub fn class(target: impl Into<Target>) -> Self {
+        Self::Class(target.into())
+    }
+
+    #[must_use]
+    pub fn child_class(target: impl Into<Target>) -> Self {
+        Self::ChildClass(target.into())
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -84,13 +143,27 @@ pub struct ActionEffect {
     pub unique: Option<bool>,
 }
 
+impl ActionEffect {
+    #[must_use]
+    pub const fn into_action_effect(self) -> Self {
+        self
+    }
+}
+
 impl From<Vec<Self>> for ActionEffect {
     fn from(value: Vec<Self>) -> Self {
         Self {
             action: ActionType::MultiEffect(value),
-            delay_off: None,
-            throttle: None,
-            unique: None,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<Vec<ActionType>> for ActionEffect {
+    fn from(value: Vec<ActionType>) -> Self {
+        Self {
+            action: ActionType::Multi(value),
+            ..Default::default()
         }
     }
 }
@@ -119,9 +192,7 @@ impl From<ActionType> for ActionEffect {
     fn from(value: ActionType) -> Self {
         Self {
             action: value,
-            delay_off: None,
-            throttle: None,
-            unique: None,
+            ..Default::default()
         }
     }
 }
@@ -154,6 +225,10 @@ pub enum LogLevel {
 pub enum ActionType {
     #[default]
     NoOp,
+    Let {
+        name: String,
+        value: dsl::Expression,
+    },
     Style {
         target: ElementTarget,
         action: StyleAction,
@@ -185,6 +260,13 @@ pub enum ActionType {
 
 impl ActionType {
     #[must_use]
+    pub fn into_action_effect(self) -> ActionEffect {
+        self.into()
+    }
+}
+
+impl ActionType {
+    #[must_use]
     pub fn on_event(event: impl Into<String>, action: impl Into<Self>) -> Self {
         Self::Event {
             name: event.into(),
@@ -193,45 +275,45 @@ impl ActionType {
     }
 
     #[must_use]
-    pub fn set_visibility_str_id(visibility: Visibility, target: &str) -> Self {
+    pub fn set_visibility_str_id(visibility: Visibility, target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.to_string()),
+            target: ElementTarget::StrId(target.into()),
             action: StyleAction::SetVisibility(visibility),
         }
     }
 
     #[must_use]
-    pub fn set_visibility_child_class(visibility: Visibility, class: &str) -> Self {
+    pub fn set_visibility_child_class(visibility: Visibility, class: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::ChildClass(class.to_string()),
+            target: ElementTarget::ChildClass(class.into()),
             action: StyleAction::SetVisibility(visibility),
         }
     }
 
     #[must_use]
-    pub fn hide_str_id(target: &str) -> Self {
+    pub fn hide_str_id(target: impl Into<Target>) -> Self {
         Self::set_visibility_str_id(Visibility::Hidden, target)
     }
 
     #[must_use]
-    pub fn show_str_id(target: &str) -> Self {
+    pub fn show_str_id(target: impl Into<Target>) -> Self {
         Self::set_visibility_str_id(Visibility::Visible, target)
     }
 
     #[must_use]
-    pub fn hide_class(class_name: &str) -> Self {
+    pub fn hide_class(class_name: impl Into<Target>) -> Self {
         Self::set_visibility_class(Visibility::Hidden, class_name)
     }
 
     #[must_use]
-    pub fn show_class(class_name: &str) -> Self {
+    pub fn show_class(class_name: impl Into<Target>) -> Self {
         Self::set_visibility_class(Visibility::Visible, class_name)
     }
 
     #[must_use]
-    pub fn set_visibility_class(visibility: Visibility, class_name: &str) -> Self {
+    pub fn set_visibility_class(visibility: Visibility, class_name: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::Class(class_name.to_string()),
+            target: ElementTarget::Class(class_name.into()),
             action: StyleAction::SetVisibility(visibility),
         }
     }
@@ -291,38 +373,38 @@ impl ActionType {
     }
 
     #[must_use]
-    pub fn set_display_str_id(display: bool, target: &str) -> Self {
+    pub fn set_display_str_id(display: bool, target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.to_string()),
+            target: ElementTarget::StrId(target.into()),
             action: StyleAction::SetDisplay(display),
         }
     }
 
     #[must_use]
-    pub fn set_display_class(display: bool, class_name: &str) -> Self {
+    pub fn set_display_class(display: bool, class_name: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::Class(class_name.to_string()),
+            target: ElementTarget::Class(class_name.into()),
             action: StyleAction::SetDisplay(display),
         }
     }
 
     #[must_use]
-    pub fn no_display_str_id(target: &str) -> Self {
+    pub fn no_display_str_id(target: impl Into<Target>) -> Self {
         Self::set_display_str_id(false, target)
     }
 
     #[must_use]
-    pub fn display_str_id(target: &str) -> Self {
+    pub fn display_str_id(target: impl Into<Target>) -> Self {
         Self::set_display_str_id(true, target)
     }
 
     #[must_use]
-    pub fn no_display_class(class_name: &str) -> Self {
+    pub fn no_display_class(class_name: impl Into<Target>) -> Self {
         Self::set_display_class(false, class_name)
     }
 
     #[must_use]
-    pub fn display_class(class_name: &str) -> Self {
+    pub fn display_class(class_name: impl Into<Target>) -> Self {
         Self::set_display_class(true, class_name)
     }
 
@@ -381,9 +463,9 @@ impl ActionType {
     }
 
     #[must_use]
-    pub fn set_background_str_id(background: impl Into<String>, target: &str) -> Self {
+    pub fn set_background_str_id(background: impl Into<String>, target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.to_string()),
+            target: ElementTarget::StrId(target.into()),
             action: StyleAction::SetBackground(Some(background.into())),
         }
     }
@@ -413,9 +495,9 @@ impl ActionType {
     }
 
     #[must_use]
-    pub fn remove_background_str_id(target: &str) -> Self {
+    pub fn remove_background_str_id(target: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::StrId(target.to_string()),
+            target: ElementTarget::StrId(target.into()),
             action: StyleAction::SetBackground(None),
         }
     }
@@ -429,17 +511,17 @@ impl ActionType {
     }
 
     #[must_use]
-    pub fn remove_background_class(class_name: &str) -> Self {
+    pub fn remove_background_class(class_name: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::Class(class_name.to_string()),
+            target: ElementTarget::Class(class_name.into()),
             action: StyleAction::SetBackground(None),
         }
     }
 
     #[must_use]
-    pub fn remove_background_child_class(class_name: &str) -> Self {
+    pub fn remove_background_child_class(class_name: impl Into<Target>) -> Self {
         Self::Style {
-            target: ElementTarget::ChildClass(class_name.to_string()),
+            target: ElementTarget::ChildClass(class_name.into()),
             action: StyleAction::SetBackground(None),
         }
     }
