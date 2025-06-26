@@ -937,8 +937,7 @@ mod tests {
         println!("actual: {result}");
 
         // Should handle element function with method call
-        assert!(result.contains("hyperchad_actions :: dsl :: Expression :: ElementRef"));
-        assert!(result.contains("hyperchad_actions :: dsl :: ElementReference { selector : hyperchad_actions :: dsl :: Expression :: Literal"));
+        assert!(result.contains(r#"hyperchad_actions :: ActionType :: show_str_class (hyperchad_actions :: Target :: literal ("selector"))"#));
     }
 
     #[test]
@@ -953,10 +952,7 @@ mod tests {
 
         // Should handle multiple element calls
         assert!(result.contains("vec !"));
-        assert!(result.contains("hyperchad_actions :: dsl :: Expression :: ElementRef"));
-        assert!(result.contains(
-            "hyperchad_actions :: dsl :: ElementReference { selector : hyperchad_actions ::"
-        ));
+        assert!(result.contains(r#"hyperchad_actions :: ActionType :: show_str_class (hyperchad_actions :: Target :: literal ("modal"))"#));
     }
 
     #[test]
@@ -969,8 +965,7 @@ mod tests {
         println!("actual: {result}");
 
         // Should contain optimized element method call
-        assert!(result.contains("hyperchad_actions :: dsl :: Expression :: ElementRef"));
-        assert!(result.contains("hyperchad_actions :: dsl :: ElementReference { selector : hyperchad_actions :: dsl :: Expression :: Literal"));
+        assert!(result.contains(r#"hyperchad_actions :: ActionType :: show_str_class (hyperchad_actions :: Target :: literal ("modal"))"#));
     }
 
     #[test]
@@ -983,8 +978,7 @@ mod tests {
         println!("actual: {result}");
 
         // Should contain optimized visibility call
-        assert!(result.contains("hyperchad_actions :: dsl :: Expression :: ElementRef"));
-        assert!(result.contains("hyperchad_transformer_models :: Visibility :: Visible"));
+        assert!(result.contains(r#"hyperchad_actions :: ActionType :: set_visibility_class (hyperchad_transformer_models :: Visibility :: Visible , hyperchad_actions :: Target :: literal ("highlight"))"#));
     }
 
     #[test]

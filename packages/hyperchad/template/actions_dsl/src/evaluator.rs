@@ -508,6 +508,19 @@ pub fn generate_expression_code(
             method,
             args,
         } => {
+            if let hyperchad_actions::dsl::Expression::ElementRef(element_ref) = &**receiver {
+                match element_ref.parse_selector() {
+                    hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                        return generate_action_for_id(context, &id, method, args);
+                    }
+                    hyperchad_actions::dsl::ParsedSelector::Class(class) => {
+                        return generate_action_for_class(context, &class, method, args);
+                    }
+                    hyperchad_actions::dsl::ParsedSelector::Complex(..)
+                    | hyperchad_actions::dsl::ParsedSelector::Invalid => {}
+                }
+            }
+
             let receiver_code = generate_expression_code(context, receiver)?;
             generate_method_call_code(context, &receiver_code, method, args)
         }
@@ -688,6 +701,102 @@ pub fn generate_expression_code(
             })
         }
     }
+}
+
+fn generate_action_for_id(
+    context: &mut Context,
+    id: &str,
+    method: &str,
+    args: &[Expression],
+) -> Result<TokenStream, String> {
+    Ok(match method {
+        "show" => {
+            if !args.is_empty() {
+                return Err("ElementReference.show() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::show_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
+        "hide" => {
+            if !args.is_empty() {
+                return Err("ElementReference.hide() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::hide_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
+        "toggle_visibility" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_visibility() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::toggle_visibility_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
+        "set_visibility" => {
+            if args.len() != 1 {
+                return Err(
+                    "ElementReference.set_visibility() expects exactly 1 argument".to_string(),
+                );
+            }
+            let visibility = generate_expression_code(context, &args[0])?;
+            quote! {
+                hyperchad_actions::ActionType::set_visibility_str_id(#visibility, hyperchad_actions::Target::literal(#id))
+            }
+        }
+        unknown => {
+            return Err(format!("Unknown method: {unknown}"));
+        }
+    })
+}
+
+fn generate_action_for_class(
+    context: &mut Context,
+    class: &str,
+    method: &str,
+    args: &[Expression],
+) -> Result<TokenStream, String> {
+    Ok(match method {
+        "show" => {
+            if !args.is_empty() {
+                return Err("ElementReference.show() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::show_str_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "hide" => {
+            if !args.is_empty() {
+                return Err("ElementReference.hide() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::hide_str_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "toggle_visibility" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_visibility() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::toggle_visibility_str_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "set_visibility" => {
+            if args.len() != 1 {
+                return Err(
+                    "ElementReference.set_visibility() expects exactly 1 argument".to_string(),
+                );
+            }
+            let visibility = generate_expression_code(context, &args[0])?;
+            quote! {
+                hyperchad_actions::ActionType::set_visibility_class(#visibility, hyperchad_actions::Target::literal(#class))
+            }
+        }
+        unknown => {
+            return Err(format!("Unknown method: {unknown}"));
+        }
+    })
 }
 
 fn target_to_expr(
@@ -1664,6 +1773,16 @@ fn generate_method_call_code(
                 #receiver.hide()
             })
         }
+
+        "toggle_visibility" => {
+            if !args.is_empty() {
+                return Err("ElementReference.toggle_visibility() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.toggle_visibility()
+            })
+        }
+
         "visibility" => {
             if !args.is_empty() {
                 return Err("ElementReference.visibility() expects no arguments".to_string());

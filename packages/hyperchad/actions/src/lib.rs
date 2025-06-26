@@ -40,6 +40,12 @@ impl From<&String> for Target {
     }
 }
 
+impl From<&Self> for Target {
+    fn from(value: &Self) -> Self {
+        value.clone()
+    }
+}
+
 impl Target {
     #[must_use]
     pub fn as_str(&self) -> Option<&str> {
@@ -370,6 +376,36 @@ impl ActionType {
     #[must_use]
     pub const fn show_last_child() -> Self {
         Self::set_visibility_last_child(Visibility::Visible)
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn toggle_visibility_str_id(target: impl Into<Target>) -> Self {
+        let target = target.into();
+        Self::Logic(crate::logic::If {
+            condition: crate::logic::Condition::Eq(
+                crate::logic::get_visibility_str_id(&target).into(),
+                crate::logic::Value::Visibility(hyperchad_transformer_models::Visibility::Visible),
+            ),
+            actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::str_id(&target),
+                    action: crate::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Hidden,
+                    ),
+                },
+                ..Default::default()
+            }],
+            else_actions: vec![crate::ActionEffect {
+                action: Self::Style {
+                    target: crate::ElementTarget::str_id(&target),
+                    action: crate::StyleAction::SetVisibility(
+                        hyperchad_transformer_models::Visibility::Visible,
+                    ),
+                },
+                ..Default::default()
+            }],
+        })
     }
 
     #[must_use]

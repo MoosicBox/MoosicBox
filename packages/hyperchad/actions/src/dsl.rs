@@ -92,6 +92,12 @@ impl ElementVariable {
 
     #[cfg(feature = "logic")]
     #[must_use]
+    pub fn toggle_visibility(self) -> ActionType {
+        ActionType::toggle_visibility_str_id(Target::reference(self.name))
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
     pub fn visibility(self) -> crate::logic::CalcValue {
         crate::logic::get_visibility_str_id(Target::reference(self.name))
     }
@@ -193,58 +199,6 @@ pub enum Expression {
     /// Raw Rust code that couldn't be parsed by the DSL
     /// This is a fallback for complex expressions
     RawRust(String),
-}
-
-impl Expression {
-    #[must_use]
-    pub fn show(self) -> ActionType {
-        match self {
-            Self::Literal(Literal::String(s)) => ActionType::show_str_id(Target::literal(s)),
-            Self::Variable(name) => ActionType::show_str_id(Target::reference(name)),
-            Self::ElementRef(element_ref) => match element_ref.parse_selector() {
-                ParsedSelector::Id(id) => ActionType::show_str_id(Target::literal(id)),
-                ParsedSelector::Class(class) => ActionType::show_class(Target::literal(class)),
-                ParsedSelector::Complex(..) | ParsedSelector::Invalid => {
-                    unimplemented!("show() for expression")
-                }
-            },
-            Self::Literal(..)
-            | Self::Call { .. }
-            | Self::MethodCall { .. }
-            | Self::Field { .. }
-            | Self::Binary { .. }
-            | Self::Unary { .. }
-            | Self::If { .. }
-            | Self::Match { .. }
-            | Self::Block(..)
-            | Self::Array(..)
-            | Self::Tuple(..)
-            | Self::Range { .. }
-            | Self::Closure { .. }
-            | Self::RawRust(..)
-            | Self::Grouping(..) => unimplemented!("show() for expression"),
-        }
-    }
-
-    #[must_use]
-    pub fn hide(self) -> ActionType {
-        ActionType::hide_str_id(Target::reference(self.to_string()))
-    }
-
-    #[must_use]
-    pub fn set_visibility(self, visibility: Visibility) -> ActionType {
-        ActionType::set_visibility_str_id(visibility, Target::reference(self.to_string()))
-    }
-
-    #[must_use]
-    pub fn set_display(self, display: bool) -> ActionType {
-        ActionType::set_display_str_id(display, Target::reference(self.to_string()))
-    }
-
-    #[must_use]
-    pub fn set_background(self, background: impl Into<String>) -> ActionType {
-        ActionType::set_background_str_id(background.into(), Target::reference(self.to_string()))
-    }
 }
 
 impl std::fmt::Display for Expression {
@@ -369,23 +323,6 @@ impl ElementReference {
             ParsedSelector::Id(self.selector.clone())
         }
     }
-
-    // #[must_use]
-    // pub fn delay_off(self, millis: u64) -> ActionType {
-    //     let selector = self.parse_selector();
-
-    //     match selector {
-    //         ParsedSelector::Id(id) => ActionType::delay_off_id(millis, id),
-    //         ParsedSelector::Class(class) => ActionType::delay_off_class(millis, class),
-    //         ParsedSelector::Complex(selector) => ActionType::delay_off_child_class(millis, selector),
-    //         ParsedSelector::Invalid => ActionType::NoOp,
-    //     }
-    // }
-
-    // #[must_use]
-    // pub fn throttle(self, millis: u64) -> ActionType {
-    //     ActionType::throttle(millis, Target::reference(self.selector))
-    // }
 }
 
 /// Parsed selector type to determine the correct function to call
