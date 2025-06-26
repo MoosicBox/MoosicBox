@@ -96,6 +96,30 @@ impl ElementVariable {
         crate::logic::get_visibility_str_id(Target::reference(self.name))
     }
 
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn get_width_px(self) -> crate::logic::CalcValue {
+        crate::logic::get_width_px_str_id(Target::reference(self.name))
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn get_height_px(self) -> crate::logic::CalcValue {
+        crate::logic::get_height_px_str_id(Target::reference(self.name))
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn get_mouse_x(self) -> crate::logic::CalcValue {
+        crate::logic::get_mouse_x_str_id(Target::reference(self.name))
+    }
+
+    #[cfg(feature = "logic")]
+    #[must_use]
+    pub fn get_mouse_y(self) -> crate::logic::CalcValue {
+        crate::logic::get_mouse_y_str_id(Target::reference(self.name))
+    }
+
     #[must_use]
     pub fn set_visibility(self, visibility: Visibility) -> ActionType {
         ActionType::set_visibility_str_id(visibility, Target::reference(self.name))

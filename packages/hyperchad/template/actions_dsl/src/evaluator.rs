@@ -1684,6 +1684,42 @@ fn generate_method_call_code(
             })
         }
 
+        "get_width_px" => {
+            if !args.is_empty() {
+                return Err("get_width_px() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.get_width_px()
+            })
+        }
+
+        "get_height_px" => {
+            if !args.is_empty() {
+                return Err("get_height_px() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.get_height_px()
+            })
+        }
+
+        "get_mouse_x" => {
+            if !args.is_empty() {
+                return Err("get_mouse_x() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.get_mouse_x()
+            })
+        }
+
+        "get_mouse_y" => {
+            if !args.is_empty() {
+                return Err("get_mouse_y() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.get_mouse_y()
+            })
+        }
+
         // Logic chaining methods
         "eq" => {
             if args.len() != 1 {
