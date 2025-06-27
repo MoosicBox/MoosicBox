@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@pulumi/pulumi':
-        specifier: ^3.178.0
-        version: 3.178.0(typescript@5.8.3)
+        specifier: ^3.180.0
+        version: 3.180.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -42,8 +42,8 @@ importers:
         specifier: ^11.1.0
         version: 11.1.0(eslint@8.57.1)
       prettier:
-        specifier: ^3.6.1
-        version: 3.6.1
+        specifier: ^3.6.2
+        version: 3.6.2
       prettier-plugin-astro:
         specifier: ^0.13.0
         version: 0.13.0
@@ -310,8 +310,8 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@pulumi/pulumi@3.178.0':
-    resolution: {integrity: sha512-giEX8H79XLfLZkbpHjT400DCOWXZ1oTSoBGk9RUIeNqq3xh9WvvVf6Zrcs6Xe96ciPu/Cf4lCKENBgtY3Jtugw==}
+  '@pulumi/pulumi@3.180.0':
+    resolution: {integrity: sha512-QGjSm9/OXU3hyz+QHdgMl7JmyZFkA1uML79rvHR97g52msApQEhfqZdlmbqf1nxjueb924xb+0ddld6tLZDw1w==}
     engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -1900,8 +1900,8 @@ packages:
     resolution: {integrity: sha512-5HrJNnPmZqTUNoA97zn4gNQv9BgVhv+et03314WpQ9H9N8m2L9OSV798olwmG2YLXPl1iSstlJCR1zB3x5xG4g==}
     engines: {node: ^14.15.0 || >=16.0.0}
 
-  prettier@3.6.1:
-    resolution: {integrity: sha512-5xGWRa90Sp2+x1dQtNpIpeOQpTDBs9cZDmA/qs2vDNN2i18PdapqY7CmBeyLlMuGqXJRIOPaCaVZTLNQRWUH/A==}
+  prettier@3.6.2:
+    resolution: {integrity: sha512-I7AIg5boAr5R0FFtJ6rCfD+LFsWHp81dolrFD8S79U9tb8Az2nGrJncnMSnys+bpQJfRUzqs9hnA81OAA3hCuQ==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -2846,7 +2846,7 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@pulumi/pulumi@3.178.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.180.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.4
       '@logdna/tail-file': 2.2.0
@@ -4694,10 +4694,10 @@ snapshots:
   prettier-plugin-astro@0.13.0:
     dependencies:
       '@astrojs/compiler': 1.8.2
-      prettier: 3.6.1
+      prettier: 3.6.2
       sass-formatter: 0.7.9
 
-  prettier@3.6.1: {}
+  prettier@3.6.2: {}
 
   proc-log@4.2.0: {}
 
