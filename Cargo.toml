@@ -479,8 +479,8 @@ swc_common = { version = "13.0.1", features = ["tty-emitter"] }
 swc_ecma_ast = "13.0.0"
 swc_ecma_codegen = "15.0.1"
 swc_ecma_loader = { version = "13.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "23.0.3"
-swc_ecma_parser = "17.1.0"
+swc_ecma_minifier = "23.0.4"
+swc_ecma_parser = "17.2.0"
 swc_ecma_transforms_base = "18.0.0"
 swc_ecma_transforms_typescript = "20.0.0"
 swc_ecma_visit = "13.0.0"
@@ -488,7 +488,7 @@ symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.104"
 syntect = "5.2.0"
 tantivy = "0.24.1"
-tauri = { version = "2.6.0", features = ["protocol-asset"] }
+tauri = { version = "2.6.1", features = ["protocol-asset"] }
 tauri-build = { version = "2.3.0", features = [] }
 tauri-plugin = { version = "2.3.0", features = ["build"] }
 tauri-plugin-dialog = "2.3.0"
@@ -510,7 +510,7 @@ toml = "0.8.23"
 tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.31.0" }
 tracing-subscriber = "0.3.19"
-tracy-client = { version = "0.18.1", default-features = false }
+tracy-client = { version = "0.18.2", default-features = false }
 trybuild = "1.0.105"
 turmoil = "0.6.6"
 uaparser = "0.6.4"
