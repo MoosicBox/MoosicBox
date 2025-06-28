@@ -24,7 +24,7 @@ fn test_input_value_expression() {
         {
             assert_eq!(value, &Some("test_connection".to_string()));
         } else {
-            panic!("Expected Input::Text, got: {:?}", input);
+            panic!("Expected Input::Text, got: {input:?}");
         }
     } else {
         panic!("Expected Input element, got: {:?}", result[0].element);
@@ -49,7 +49,7 @@ fn test_input_placeholder_expression() {
         {
             assert_eq!(placeholder, &Some("Enter your name".to_string()));
         } else {
-            panic!("Expected Input::Text, got: {:?}", input);
+            panic!("Expected Input::Text, got: {input:?}");
         }
     } else {
         panic!("Expected Input element, got: {:?}", result[0].element);
@@ -111,7 +111,7 @@ fn test_mixed_expressions_and_literals() {
             assert_eq!(value, &Some("dynamic".to_string()));
             assert_eq!(placeholder, &Some("Static placeholder".to_string()));
         } else {
-            panic!("Expected Input::Text, got: {:?}", input);
+            panic!("Expected Input::Text, got: {input:?}");
         }
     } else {
         panic!("Expected Input element, got: {:?}", result[0].element);

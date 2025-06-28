@@ -21,7 +21,7 @@ fn test_concatenation_order() {
         );
     };
 
-    println!("Raw value: '{}'", value);
+    println!("Raw value: '{value}'");
     assert_eq!(value, "Name: ");
 
     let Element::Raw { value } = &result[0].children[1].element else {
@@ -31,7 +31,7 @@ fn test_concatenation_order() {
         );
     };
 
-    println!("Raw value: '{}'", value);
+    println!("Raw value: '{value}'");
     assert_eq!(value, "123");
 }
 
@@ -56,7 +56,7 @@ fn test_multiple_concatenation_order() {
         );
     };
 
-    println!("Raw value: '{}'", value);
+    println!("Raw value: '{value}'");
     assert_eq!(value, "start");
 
     let Element::Raw { value } = &result[0].children[1].element else {
@@ -66,7 +66,7 @@ fn test_multiple_concatenation_order() {
         );
     };
 
-    println!("Raw value: '{}'", value);
+    println!("Raw value: '{value}'");
     assert_eq!(value, ": middle :");
 
     let Element::Raw { value } = &result[0].children[2].element else {
@@ -76,6 +76,6 @@ fn test_multiple_concatenation_order() {
         );
     };
 
-    println!("Raw value: '{}'", value);
+    println!("Raw value: '{value}'");
     assert_eq!(value, "end");
 }

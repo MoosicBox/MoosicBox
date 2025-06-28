@@ -90,12 +90,7 @@ impl MusicApisProfiles {
     /// Will panic if `RwLock` is poisoned
     #[must_use]
     pub fn names(&self) -> Vec<String> {
-        self.profiles
-            .read()
-            .unwrap()
-            .iter()
-            .map(|(profile, _)| profile.clone())
-            .collect()
+        self.profiles.read().unwrap().keys().cloned().collect()
     }
 }
 

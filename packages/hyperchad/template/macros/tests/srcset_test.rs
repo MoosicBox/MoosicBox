@@ -30,7 +30,7 @@ fn test_srcset_concatenation() {
 #[test]
 fn test_srcset_with_expressions() {
     fn public_img(name: &str) -> String {
-        format!("/public/{}", name)
+        format!("/public/{name}")
     }
 
     let containers = container! {

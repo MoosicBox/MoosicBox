@@ -20,14 +20,14 @@ fn test_sequential_literal_splice() {
         panic!("Expected Raw element, got: {:?}", div.children[0].element);
     };
 
-    println!("Sequential concatenation result: '{}'", value);
+    println!("Sequential concatenation result: '{value}'");
     assert_eq!(value, "Name: ");
 
     let Element::Raw { value } = &div.children[1].element else {
         panic!("Expected Raw element, got: {:?}", div.children[1].element);
     };
 
-    println!("Sequential concatenation result: '{}'", value);
+    println!("Sequential concatenation result: '{value}'");
     assert_eq!(value, "test_input");
 }
 
@@ -56,35 +56,35 @@ fn test_multiple_sequential_concatenations() {
         panic!("Expected Raw element, got: {:?}", div.children[0].element);
     };
 
-    println!("Multiple concatenation result: '{}'", value);
+    println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, "Before: ");
 
     let Element::Raw { value } = &div.children[1].element else {
         panic!("Expected Raw element, got: {:?}", div.children[1].element);
     };
 
-    println!("Multiple concatenation result: '{}'", value);
+    println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, "first");
 
     let Element::Raw { value } = &div.children[2].element else {
         panic!("Expected Raw element, got: {:?}", div.children[2].element);
     };
 
-    println!("Multiple concatenation result: '{}'", value);
+    println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, " Middle: ");
 
     let Element::Raw { value } = &div.children[3].element else {
         panic!("Expected Raw element, got: {:?}", div.children[3].element);
     };
 
-    println!("Multiple concatenation result: '{}'", value);
+    println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, "second");
 
     let Element::Raw { value } = &div.children[4].element else {
         panic!("Expected Raw element, got: {:?}", div.children[4].element);
     };
 
-    println!("Multiple concatenation result: '{}'", value);
+    println!("Multiple concatenation result: '{value}'");
     assert_eq!(value, " End");
 }
 
@@ -172,35 +172,35 @@ fn test_unwrapped_sequential_concatenation() {
         panic!("Expected Raw element, got: {:?}", result[0].element);
     };
 
-    println!("Unwrapped concatenation result: '{}'", value);
+    println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, "Name: ");
 
     let Element::Raw { value } = &result[1].element else {
         panic!("Expected Raw element, got: {:?}", result[1].element);
     };
 
-    println!("Unwrapped concatenation result: '{}'", value);
+    println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, "John");
 
     let Element::Raw { value } = &result[2].element else {
         panic!("Expected Raw element, got: {:?}", result[2].element);
     };
 
-    println!("Unwrapped concatenation result: '{}'", value);
+    println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, ", Age: ");
 
     let Element::Raw { value } = &result[3].element else {
         panic!("Expected Raw element, got: {:?}", result[3].element);
     };
 
-    println!("Unwrapped concatenation result: '{}'", value);
+    println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, "25");
 
     let Element::Raw { value } = &result[4].element else {
         panic!("Expected Raw element, got: {:?}", result[4].element);
     };
 
-    println!("Unwrapped concatenation result: '{}'", value);
+    println!("Unwrapped concatenation result: '{value}'");
     assert_eq!(value, " years old");
 }
 
@@ -221,13 +221,13 @@ fn test_unwrapped_simple_literal_splice() {
         panic!("Expected Raw element, got: {:?}", result[0].element);
     };
 
-    println!("Simple unwrapped result: '{}'", value);
+    println!("Simple unwrapped result: '{value}'");
     assert_eq!(value, "Label: ");
 
     let Element::Raw { value } = &result[1].element else {
         panic!("Expected Raw element, got: {:?}", result[1].element);
     };
 
-    println!("Simple unwrapped result: '{}'", value);
+    println!("Simple unwrapped result: '{value}'");
     assert_eq!(value, "test_value");
 }

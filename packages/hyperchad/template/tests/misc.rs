@@ -100,7 +100,7 @@ fn display_implementation() {
         fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
             containers.push(Container {
                 element: hyperchad_transformer::Element::Raw {
-                    value: format!("{}", self),
+                    value: format!("{self}"),
                 },
                 ..Default::default()
             });

@@ -4,7 +4,7 @@ use hyperchad_template::container;
 fn test_user_example_srcset() {
     // Simulate the public_img! macro function
     fn public_img(name: &str) -> String {
-        format!("/public/{}", name)
+        format!("/public/{name}")
     }
 
     let containers = container! {
@@ -25,7 +25,7 @@ fn test_user_example_srcset() {
         let srcset_value = source_set.as_ref().unwrap();
 
         // This should be a single concatenated string, not an array
-        println!("Generated srcset: {}", srcset_value);
+        println!("Generated srcset: {srcset_value}");
         assert_eq!(
             srcset_value,
             "/public/showcase-2x240.webp 240w, /public/showcase-2x540.webp 540w, /public/showcase-2.webp 1080w"

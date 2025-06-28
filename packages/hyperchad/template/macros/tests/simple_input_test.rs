@@ -15,7 +15,7 @@ fn test_simple_input() {
         if let Input::Text { value, .. } = input {
             assert_eq!(value, &Some("static_value".to_string()));
         } else {
-            panic!("Expected Input::Text, got: {:?}", input);
+            panic!("Expected Input::Text, got: {input:?}");
         }
     } else {
         panic!("Expected Input element, got: {:?}", result[0].element);
@@ -36,7 +36,7 @@ fn test_input_types() {
         if let Input::Checkbox { checked } = input {
             assert_eq!(checked, &Some(true));
         } else {
-            panic!("Expected Input::Checkbox, got: {:?}", input);
+            panic!("Expected Input::Checkbox, got: {input:?}");
         }
     } else {
         panic!("Expected Input element, got: {:?}", result[0].element);
@@ -57,7 +57,7 @@ fn test_input_hidden() {
         if let Input::Hidden { value } = input {
             assert_eq!(value, &Some("hidden_value".to_string()));
         } else {
-            panic!("Expected Input::Hidden, got: {:?}", input);
+            panic!("Expected Input::Hidden, got: {input:?}");
         }
     } else {
         panic!("Expected Input element, got: {:?}", result[0].element);
