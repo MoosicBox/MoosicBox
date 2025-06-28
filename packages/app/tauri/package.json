@@ -39,7 +39,7 @@
         "astro": "^5.10.1",
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
-        "htmx.org": "^2.0.5",
+        "htmx.org": "^2.0.6",
         "nanostores": "^0.9.5",
         "solid-js": "^1.9.7"
     },
