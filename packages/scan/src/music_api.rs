@@ -116,7 +116,7 @@ pub async fn scan(
 /// # Errors
 ///
 /// * If the albums scan fails
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub async fn scan_albums(
     api: &dyn MusicApi,
     albums: &[Album],

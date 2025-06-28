@@ -943,7 +943,11 @@ impl PlaybackHandler {
     ///
     /// * If any of the playback actions failed
     /// * If failed to handle logic in the `before_update_playback`
-    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        clippy::cognitive_complexity
+    )]
     pub async fn update_playback(
         &mut self,
         modify_playback: bool,

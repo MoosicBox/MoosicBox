@@ -540,6 +540,7 @@ impl AppState {
     /// # Errors
     ///
     /// * If fails to update playback
+    #[allow(clippy::cognitive_complexity)]
     pub async fn handle_playback_update(
         &self,
         update: &ApiUpdateSession,

@@ -63,6 +63,7 @@ async fn health_check(host: &str) -> Result<(), Box<dyn std::error::Error + Send
     Ok(())
 }
 
+#[allow(clippy::cognitive_complexity)]
 async fn assert_health(host: &str) -> Result<(), Box<dyn std::error::Error + Send>> {
     let response = loop {
         log::debug!("[Client] Connecting to server...");

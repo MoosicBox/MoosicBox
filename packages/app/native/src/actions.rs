@@ -17,7 +17,7 @@ use crate::{PROFILE, RENDERER, STATE};
 /// # Panics
 ///
 /// * If the default `PROFILE` is missing.
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub async fn handle_action(action: Action, value: Option<Value>) -> Result<(), AppStateError> {
     log::debug!("handle_action: action={action:?} value={value:?}");
 

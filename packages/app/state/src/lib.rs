@@ -1515,7 +1515,7 @@ impl AppState {
     /// # Errors
     ///
     /// * If fails to `updated_connection_details`
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub async fn set_state(&self, state: UpdateAppState) -> Result<(), AppStateError> {
         log::debug!("set_state: state={state:?}");
 

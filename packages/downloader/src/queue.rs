@@ -323,7 +323,8 @@ impl DownloadQueue {
         unreachable_code,
         unused,
         clippy::too_many_lines,
-        clippy::uninhabited_references
+        clippy::uninhabited_references,
+        clippy::cognitive_complexity
     )]
     async fn process_task(
         &self,

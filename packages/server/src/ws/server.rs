@@ -315,6 +315,7 @@ impl WsServer {
         Ok(())
     }
 
+    #[allow(clippy::cognitive_complexity)]
     async fn process_command(ctx: Arc<RwLock<Self>>, cmd: Command) -> io::Result<()> {
         let cmd_str = cmd.to_string();
 

@@ -177,7 +177,7 @@ impl WsClient {
         .await
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     async fn start_handler<T, O>(
         &self,
         client_id: Option<String>,

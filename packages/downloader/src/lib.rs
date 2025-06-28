@@ -783,7 +783,11 @@ pub enum DownloadTrackInnerError {
     Timeout(Option<u64>),
 }
 
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::cognitive_complexity
+)]
 async fn download_track_inner(
     api: &dyn MusicApi,
     path: &str,

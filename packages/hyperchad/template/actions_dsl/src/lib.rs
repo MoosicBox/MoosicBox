@@ -670,7 +670,7 @@ mod tests {
         assert!(result.contains("addEventListener"));
     }
 
-    #[ignore]
+    #[ignore = "Unsupported syntax"]
     #[test]
     fn test_mixed_dsl_and_fallback() {
         let input = quote! {

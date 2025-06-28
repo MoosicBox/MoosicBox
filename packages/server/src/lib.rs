@@ -80,7 +80,11 @@ pub async fn run_basic<T>(
 /// # Panics
 ///
 /// * If cannot create config paths
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::cognitive_complexity
+)]
 pub async fn run<T>(
     #[allow(unused)] app_type: AppType,
     addr: &str,
