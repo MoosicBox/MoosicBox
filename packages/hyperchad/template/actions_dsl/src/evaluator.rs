@@ -491,16 +491,27 @@ pub fn generate_expression_code(
                 Ok(quote! { #var_name })
             }
         }
-        Expression::ElementRef(element_ref) => {
-            let selector = &element_ref.selector;
-            Ok(quote! {
-                hyperchad_actions::dsl::Expression::ElementRef(
-                    hyperchad_actions::dsl::ElementReference {
-                        selector: #selector.to_string()
-                    }
-                )
-            })
-        }
+        Expression::ElementRef(element_ref) => match &**element_ref {
+            Expression::Literal(Literal::String(selector)) => {
+                let selector = selector.to_string();
+                Ok(quote! {
+                    hyperchad_actions::dsl::Expression::ElementRef(
+                        Box::new(hyperchad_actions::dsl::Expression::Literal(
+                            hyperchad_actions::dsl::Literal::String(#selector)
+                        ))
+                    )
+                })
+            }
+            Expression::Variable(selector) => {
+                let selector = selector.to_string();
+                Ok(quote! {
+                    hyperchad_actions::dsl::Expression::ElementRef(
+                        Box::new(hyperchad_actions::dsl::Expression::Variable(#selector.to_string()))
+                    )
+                })
+            }
+            _ => Err("Invalid element selector".to_string()),
+        },
 
         Expression::Call { function, args } => generate_function_call_code(context, function, args),
         Expression::MethodCall {
@@ -509,15 +520,30 @@ pub fn generate_expression_code(
             args,
         } => {
             if let hyperchad_actions::dsl::Expression::ElementRef(element_ref) = &**receiver {
-                match element_ref.parse_selector() {
-                    hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                match &**element_ref {
+                    Expression::Literal(Literal::String(selector)) => {
+                        let reference = hyperchad_actions::dsl::ElementReference {
+                            selector: selector.to_string(),
+                        };
+                        match reference.parse_selector() {
+                            hyperchad_actions::dsl::ParsedSelector::Id(id) => {
+                                let id = syn::LitStr::new(&id, proc_macro2::Span::call_site());
+                                let id = quote! { #id };
+                                return generate_action_for_id(context, &id, method, args);
+                            }
+                            hyperchad_actions::dsl::ParsedSelector::Class(class) => {
+                                return generate_action_for_class(context, &class, method, args);
+                            }
+                            hyperchad_actions::dsl::ParsedSelector::Complex(..)
+                            | hyperchad_actions::dsl::ParsedSelector::Invalid => {}
+                        }
+                    }
+                    Expression::Variable(selector) => {
+                        let id = format_ident!("{selector}");
+                        let id = quote! { #id };
                         return generate_action_for_id(context, &id, method, args);
                     }
-                    hyperchad_actions::dsl::ParsedSelector::Class(class) => {
-                        return generate_action_for_class(context, &class, method, args);
-                    }
-                    hyperchad_actions::dsl::ParsedSelector::Complex(..)
-                    | hyperchad_actions::dsl::ParsedSelector::Invalid => {}
+                    _ => {}
                 }
             }
 
@@ -705,7 +731,7 @@ pub fn generate_expression_code(
 
 fn generate_action_for_id(
     context: &mut Context,
-    id: &str,
+    id: &TokenStream,
     method: &str,
     args: &[Expression],
 ) -> Result<TokenStream, String> {

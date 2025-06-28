@@ -141,7 +141,7 @@ pub enum Expression {
     /// Variable reference
     Variable(String),
     /// Element reference for object-oriented API
-    ElementRef(ElementReference),
+    ElementRef(Box<Expression>),
     /// Function call
     Call {
         function: String,

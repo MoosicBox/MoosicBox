@@ -328,16 +328,17 @@ fn expression_to_js(expr: &Expression) -> String {
             Literal::Unit => "null".to_string(),
         },
         Expression::Variable(name) => name.to_string(),
-        Expression::ElementRef(element_ref) => {
-            // For element references, create a custom action that stores the element reference
-            let selector = match element_ref.parse_selector() {
-                hyperchad_transformer::actions::dsl::ParsedSelector::Id(x) => format!("#{x}"),
-                hyperchad_transformer::actions::dsl::ParsedSelector::Class(x) => format!(".{x}"),
-                hyperchad_transformer::actions::dsl::ParsedSelector::Complex(x) => x,
-                hyperchad_transformer::actions::dsl::ParsedSelector::Invalid => unimplemented!(),
-            };
-            format!("document.querySelector('{selector}')")
-        }
+        Expression::ElementRef(element_ref) => match &**element_ref {
+            Expression::Literal(Literal::String(selector)) => {
+                let selector = selector.to_string();
+                format!("document.querySelector('{selector}')")
+            }
+            Expression::Variable(selector) => {
+                let selector = selector.to_string();
+                format!("document.querySelector({selector})")
+            }
+            _ => unimplemented!(),
+        },
         Expression::Call { function, args } => {
             let args = args.iter().map(expression_to_js).collect::<Vec<_>>();
             format!("{function}({})", args.join(","))

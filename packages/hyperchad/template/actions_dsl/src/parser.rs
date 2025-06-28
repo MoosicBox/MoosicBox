@@ -419,9 +419,7 @@ fn parse_postfix_expression(input: ParseStream) -> Result<Expression> {
             // Convert function call to method call if needed
             if let Expression::Variable(func_name) = expr {
                 expr = if func_name == "element" && args.len() == 1 {
-                    Expression::ElementRef(hyperchad_actions::dsl::ElementReference {
-                        selector: args[0].to_string(),
-                    })
+                    Expression::ElementRef(Box::new(args[0].clone()))
                 } else {
                     Expression::Call {
                         function: func_name,

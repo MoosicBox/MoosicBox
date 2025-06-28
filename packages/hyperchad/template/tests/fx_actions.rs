@@ -2015,6 +2015,22 @@ fn test_element_reference_simple_usage() {
 }
 
 #[test]
+fn test_element_reference_interpolation() {
+    let id = "test";
+
+    // Test very simple element reference usage without complex conditionals
+    let action = actions_dsl! { element(id).show() };
+
+    assert_eq!(
+        action.action,
+        ActionType::Style {
+            target: ElementTarget::StrId(Target::literal("test")),
+            action: StyleAction::SetVisibility(Visibility::Visible),
+        }
+    );
+}
+
+#[test]
 fn test_selector_parsing_unit() {
     // Test selector parsing at the unit level
     use hyperchad_actions::dsl::{ElementReference, ParsedSelector};
