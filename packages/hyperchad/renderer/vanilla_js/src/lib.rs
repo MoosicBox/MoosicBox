@@ -579,7 +579,7 @@ fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<St
             let action = format!("{{action:{action},value:{}}}", value_to_js(value, true).0);
 
             let action = if trigger_action {
-                format!("triggerAction({action})")
+                format!("triggerAction({action});")
             } else {
                 action
             };
@@ -594,7 +594,7 @@ fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<St
             let action = format!("{{action:{action}}}");
 
             let action = if trigger_action {
-                format!("triggerAction({action})")
+                format!("triggerAction({action});")
             } else {
                 action
             };
@@ -603,7 +603,7 @@ fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<St
         }
         ActionType::Log { message, level } => (
             format!(
-                "console.{}(`{}`)",
+                "console.{}(`{}`);",
                 match level {
                     LogLevel::Error => "error",
                     LogLevel::Warn => "warn",
@@ -615,7 +615,7 @@ fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<St
             ),
             None,
         ),
-        ActionType::Navigate { url } => (format!("navigate(`{url}`)"), None),
+        ActionType::Navigate { url } => (format!("navigate(`{url}`);"), None),
     }
 }
 
