@@ -1,4 +1,7 @@
-use hyperchad_actions::{ActionEffect, ActionType, LogLevel, Target};
+use hyperchad_actions::{
+    ActionEffect, ActionType, LogLevel, Target,
+    dsl::{Expression, Literal},
+};
 use hyperchad_template::{
     actions::{ActionTrigger, ElementTarget, StyleAction},
     container,
@@ -2027,6 +2030,32 @@ fn test_element_reference_interpolation() {
             target: ElementTarget::StrId(Target::literal("test")),
             action: StyleAction::SetVisibility(Visibility::Visible),
         }
+    );
+}
+
+#[test]
+fn test_element_reference_interpolation_multi_statement() {
+    let id = "test";
+
+    let actions = actions_dsl! {
+        let x = element(id);
+        x.show();
+    };
+
+    assert_eq!(
+        actions.into_iter().map(|x| x.action).collect::<Vec<_>>(),
+        vec![
+            ActionType::Let {
+                name: "x".to_string(),
+                value: Expression::ElementRef(Box::new(Expression::Literal(Literal::string(
+                    format!("#{id}")
+                )))),
+            },
+            ActionType::Style {
+                target: ElementTarget::str_id(Target::reference("x")),
+                action: StyleAction::SetVisibility(Visibility::Visible),
+            }
+        ]
     );
 }
 

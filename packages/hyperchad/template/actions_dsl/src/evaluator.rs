@@ -503,10 +503,14 @@ pub fn generate_expression_code(
                 })
             }
             Expression::Variable(selector) => {
-                let selector = selector.to_string();
+                let selector = format_ident!("{selector}");
                 Ok(quote! {
                     hyperchad_actions::dsl::Expression::ElementRef(
-                        Box::new(hyperchad_actions::dsl::Expression::Variable(#selector.to_string()))
+                        Box::new(hyperchad_actions::dsl::Expression::Literal(
+                            hyperchad_actions::dsl::Literal::String(
+                                format!("#{}", #selector)
+                            )
+                        ))
                     )
                 })
             }
