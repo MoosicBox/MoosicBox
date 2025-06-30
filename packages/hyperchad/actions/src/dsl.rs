@@ -280,6 +280,28 @@ pub enum Literal {
     Unit,
 }
 
+impl Literal {
+    #[must_use]
+    pub fn string(x: impl Into<String>) -> Self {
+        Self::String(x.into())
+    }
+
+    #[must_use]
+    pub fn integer(x: impl Into<i64>) -> Self {
+        Self::Integer(x.into())
+    }
+
+    #[must_use]
+    pub fn float(x: impl Into<f64>) -> Self {
+        Self::Float(x.into())
+    }
+
+    #[must_use]
+    pub fn bool(x: impl Into<bool>) -> Self {
+        Self::Bool(x.into())
+    }
+}
+
 impl std::fmt::Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
