@@ -119,6 +119,10 @@ enum Commands {
         #[arg(long)]
         git_head: Option<String>,
 
+        /// Include reasoning for why each package is affected in the JSON output (only works with --changed-files)
+        #[arg(long)]
+        include_reasoning: bool,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -181,6 +185,9 @@ enum Commands {
         #[cfg(feature = "git-diff")]
         #[arg(long)]
         git_head: Option<String>,
+        /// Include reasoning for why each package is affected in the JSON output
+        #[arg(long)]
+        include_reasoning: bool,
         /// Output format
         #[arg(long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
@@ -198,7 +205,28 @@ struct WorkspaceDepsResult {
     packages: Vec<PackageInfo>,
 }
 
-#[allow(clippy::too_many_lines)]
+#[derive(Debug, Serialize, Clone)]
+struct AffectedPackageInfo {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize)]
+struct AffectedPackagesResult {
+    affected_packages: Vec<AffectedPackageInfo>,
+}
+
+#[derive(Debug, Serialize)]
+struct SinglePackageResult {
+    package: String,
+    affected: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning: Option<Vec<String>>,
+    all_affected: Vec<AffectedPackageInfo>,
+}
+
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     moosicbox_logging::init(None, None).expect("Failed to initialize logging");
 
@@ -309,8 +337,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_base,
             #[cfg(feature = "git-diff")]
             git_head,
+            include_reasoning,
             output,
         } => {
+            // Validate that include_reasoning is only used with changed_files
+            if include_reasoning && changed_files.is_none() {
+                return Err("--include-reasoning can only be used with --changed-files".into());
+            }
+
             let path = PathBuf::from_str(&file)?;
             let cargo_path = path.join("Cargo.toml");
             log::debug!("Loading file '{}'", cargo_path.display());
@@ -380,8 +414,85 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         };
 
                         // Filter by affected packages if changed_files is provided
-                        let packages =
-                            if let Some(changed_files) = &changed_files {
+                        let packages = if let Some(changed_files) = &changed_files {
+                            if include_reasoning {
+                                // Get affected packages with reasoning
+                                let affected_packages = {
+                                    #[cfg(feature = "git-diff")]
+                                    {
+                                        // Check if git parameters are provided for external dependency analysis
+                                        if let (Some(base), Some(head)) = (&git_base, &git_head) {
+                                            log::debug!(
+                                                "Using git diff analysis for external dependencies"
+                                            );
+
+                                            // Extract changed external dependencies from git diff
+                                            let changed_external_deps =
+                                                git_diff::extract_changed_dependencies_from_git(
+                                                    &path,
+                                                    base,
+                                                    head,
+                                                    changed_files,
+                                                )?;
+
+                                            // Use the enhanced function with external dependencies and reasoning
+                                            find_affected_packages_with_external_deps_and_reasoning(
+                                                &path,
+                                                changed_files,
+                                                Some(&changed_external_deps),
+                                            )?
+                                        } else {
+                                            find_affected_packages_with_reasoning(
+                                                &path,
+                                                changed_files,
+                                            )?
+                                        }
+                                    }
+                                    #[cfg(not(feature = "git-diff"))]
+                                    {
+                                        find_affected_packages_with_reasoning(&path, changed_files)?
+                                    }
+                                };
+
+                                // Create a map from package name to reasoning for quick lookup
+                                let reasoning_map: std::collections::HashMap<String, Vec<String>> =
+                                    affected_packages
+                                        .iter()
+                                        .filter_map(|pkg| {
+                                            pkg.reasoning
+                                                .as_ref()
+                                                .map(|r| (pkg.name.clone(), r.clone()))
+                                        })
+                                        .collect();
+
+                                // Create a set of affected package names for filtering
+                                let affected_names: std::collections::HashSet<String> =
+                                    affected_packages
+                                        .iter()
+                                        .map(|pkg| pkg.name.clone())
+                                        .collect();
+
+                                packages
+                                    .into_iter()
+                                    .filter_map(|mut pkg| {
+                                        if let Some(name) = pkg.get("name").and_then(|n| n.as_str())
+                                        {
+                                            if affected_names.contains(name) {
+                                                // Add reasoning if available
+                                                if let Some(reasoning) = reasoning_map.get(name) {
+                                                    pkg.insert(
+                                                        "reasoning".to_string(),
+                                                        serde_json::to_value(reasoning).unwrap(),
+                                                    );
+                                                }
+                                                return Some(pkg);
+                                            }
+                                        }
+                                        None
+                                    })
+                                    .collect()
+                            } else {
+                                // Get affected packages without reasoning (original behavior)
                                 let affected_packages = {
                                     #[cfg(feature = "git-diff")]
                                     {
@@ -424,9 +535,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         )
                                     })
                                     .collect()
-                            } else {
-                                packages
-                            };
+                            }
+                        } else {
+                            packages
+                        };
 
                         if let (Some(max_parallel), Some(chunked)) = (max_parallel, &mut chunked) {
                             if packages.len() > max_parallel as usize {
@@ -530,11 +642,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             git_base,
             #[cfg(feature = "git-diff")]
             git_head,
+            include_reasoning,
             output,
         } => {
             let workspace_path = PathBuf::from_str(&workspace_root.to_string_lossy())?;
 
-            let affected_packages = {
+            let affected_packages = if include_reasoning {
                 #[cfg(feature = "git-diff")]
                 {
                     // Check if git parameters are provided for external dependency analysis
@@ -550,36 +663,80 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 &changed_files,
                             )?;
 
-                        // Use the enhanced function with external dependencies
-                        find_affected_packages_with_external_deps(
+                        // Use the enhanced function with external dependencies and reasoning
+                        find_affected_packages_with_external_deps_and_reasoning(
                             &workspace_path,
                             &changed_files,
                             Some(&changed_external_deps),
                         )?
                     } else {
-                        find_affected_packages(&workspace_path, &changed_files)?
+                        find_affected_packages_with_reasoning(&workspace_path, &changed_files)?
                     }
                 }
                 #[cfg(not(feature = "git-diff"))]
                 {
-                    find_affected_packages(&workspace_path, &changed_files)?
+                    find_affected_packages_with_reasoning(&workspace_path, &changed_files)?
                 }
+            } else {
+                // Use the original functions that return simple Vec<String>
+                let simple_packages = {
+                    #[cfg(feature = "git-diff")]
+                    {
+                        // Check if git parameters are provided for external dependency analysis
+                        if let (Some(base), Some(head)) = (&git_base, &git_head) {
+                            log::debug!("Using git diff analysis for external dependencies");
+
+                            // Extract changed external dependencies from git diff
+                            let changed_external_deps =
+                                git_diff::extract_changed_dependencies_from_git(
+                                    &workspace_path,
+                                    base,
+                                    head,
+                                    &changed_files,
+                                )?;
+
+                            // Use the enhanced function with external dependencies
+                            find_affected_packages_with_external_deps(
+                                &workspace_path,
+                                &changed_files,
+                                Some(&changed_external_deps),
+                            )?
+                        } else {
+                            find_affected_packages(&workspace_path, &changed_files)?
+                        }
+                    }
+                    #[cfg(not(feature = "git-diff"))]
+                    {
+                        find_affected_packages(&workspace_path, &changed_files)?
+                    }
+                };
+                // Convert Vec<String> to Vec<AffectedPackageInfo> without reasoning
+                simple_packages
+                    .into_iter()
+                    .map(|name| AffectedPackageInfo {
+                        name,
+                        reasoning: None,
+                    })
+                    .collect()
             };
 
             match target_package {
                 Some(package) => {
                     // Check if specific package is affected
-                    let is_affected = affected_packages.contains(&package);
+                    let affected_package_info =
+                        affected_packages.iter().find(|p| p.name == package);
+                    let is_affected = affected_package_info.is_some();
+                    let reasoning = affected_package_info.and_then(|p| p.reasoning.clone());
+
                     match output {
                         OutputType::Json => {
-                            println!(
-                                "{}",
-                                serde_json::json!({
-                                    "package": package,
-                                    "affected": is_affected,
-                                    "all_affected": affected_packages
-                                })
-                            );
+                            let result = SinglePackageResult {
+                                package: package.clone(),
+                                affected: is_affected,
+                                reasoning,
+                                all_affected: affected_packages,
+                            };
+                            println!("{}", serde_json::to_string_pretty(&result)?);
                         }
                         OutputType::Raw => {
                             println!("{is_affected}");
@@ -590,16 +747,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Return all affected packages
                     match output {
                         OutputType::Json => {
-                            println!(
-                                "{}",
-                                serde_json::json!({
-                                    "affected_packages": affected_packages
-                                })
-                            );
+                            let result = AffectedPackagesResult { affected_packages };
+                            println!("{}", serde_json::to_string_pretty(&result)?);
                         }
                         OutputType::Raw => {
                             for package in affected_packages {
-                                println!("{package}");
+                                println!("{}", package.name);
                             }
                         }
                     }
@@ -1979,6 +2132,413 @@ pub struct ClippierConf {
     env: Option<HashMap<String, ClippierEnv>>,
     parallelization: Option<ParallelizationConfig>,
     nightly: Option<bool>,
+}
+
+/// Find affected packages with reasoning for why each package is affected
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+fn find_affected_packages_with_reasoning(
+    workspace_root: &Path,
+    changed_files: &[String],
+) -> Result<Vec<AffectedPackageInfo>, Box<dyn std::error::Error>> {
+    #[cfg(feature = "git-diff")]
+    {
+        find_affected_packages_with_external_deps_and_reasoning(workspace_root, changed_files, None)
+    }
+    #[cfg(not(feature = "git-diff"))]
+    {
+        find_affected_packages_basic_with_reasoning(workspace_root, changed_files)
+    }
+}
+
+/// Find affected packages with external dependencies and reasoning
+#[cfg(feature = "git-diff")]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+fn find_affected_packages_with_external_deps_and_reasoning(
+    workspace_root: &Path,
+    changed_files: &[String],
+    external_deps: Option<&[String]>,
+) -> Result<Vec<AffectedPackageInfo>, Box<dyn std::error::Error>> {
+    use std::collections::{HashMap, HashSet, VecDeque};
+
+    log::trace!("🔍 Finding affected packages with reasoning for changed files: {changed_files:?}");
+
+    // First, load the workspace and get all members
+    let workspace_cargo_path = workspace_root.join("Cargo.toml");
+    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_value: Value = toml::from_str(&workspace_source)?;
+
+    let workspace_members = workspace_value
+        .get("workspace")
+        .and_then(|x| x.get("members"))
+        .and_then(|x| x.as_array())
+        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+        .ok_or("No workspace members found")?;
+
+    log::trace!("🏢 Found {} workspace members", workspace_members.len());
+
+    // Create a map of package name -> package path and package_path -> package name
+    let mut package_path_to_name = HashMap::new();
+    let mut package_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+
+    for member_path in workspace_members {
+        let full_path = workspace_root.join(member_path);
+        let cargo_path = full_path.join("Cargo.toml");
+
+        if !cargo_path.exists() {
+            log::trace!("⚠️  Skipping {member_path}: Cargo.toml not found");
+            continue;
+        }
+
+        log::trace!("📄 Processing package: {member_path}");
+        let source = std::fs::read_to_string(&cargo_path)?;
+        let value: Value = toml::from_str(&source)?;
+
+        // Get package name
+        if let Some(package_name) = value
+            .get("package")
+            .and_then(|x| x.get("name"))
+            .and_then(|x| x.as_str())
+        {
+            log::trace!("📦 Package name: {package_name} -> {member_path}");
+            package_path_to_name.insert(member_path.to_string(), package_name.to_string());
+
+            // Extract dependencies that are workspace members
+            let mut deps = Vec::new();
+
+            // Check regular dependencies
+            if let Some(dependencies) = value.get("dependencies").and_then(|x| x.as_table()) {
+                for (dep_name, dep_value) in dependencies {
+                    if is_workspace_dependency(dep_value) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            // Check dev dependencies
+            if let Some(dev_dependencies) = value.get("dev-dependencies").and_then(|x| x.as_table())
+            {
+                for (dep_name, dep_value) in dev_dependencies {
+                    if is_workspace_dependency(dep_value) && !deps.contains(dep_name) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            // Check build dependencies
+            if let Some(build_dependencies) =
+                value.get("build-dependencies").and_then(|x| x.as_table())
+            {
+                for (dep_name, dep_value) in build_dependencies {
+                    if is_workspace_dependency(dep_value) && !deps.contains(dep_name) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            log::trace!("📊 Dependencies for {package_name}: {deps:?}");
+            package_dependencies.insert(package_name.to_string(), deps);
+        }
+    }
+
+    // Find packages directly affected by changed files
+    let mut directly_affected_packages = HashMap::new(); // package name -> list of changed files
+    let mut reasoning_map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for changed_file in changed_files {
+        let changed_path = PathBuf::from(changed_file);
+
+        // Check if the changed file belongs to a workspace package
+        for (package_path, package_name) in &package_path_to_name {
+            let package_path_buf = PathBuf::from(package_path);
+
+            // Check if the changed file is within this package's directory
+            if changed_path.starts_with(&package_path_buf) {
+                log::trace!("📝 File {changed_file} affects package {package_name}");
+                directly_affected_packages
+                    .entry(package_name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(changed_file.clone());
+
+                reasoning_map
+                    .entry(package_name.clone())
+                    .or_default()
+                    .push(format!("Contains changed file: {changed_file}"));
+            }
+        }
+    }
+
+    // Add packages affected by external dependency changes
+    #[cfg(feature = "git-diff")]
+    if let Some(external_deps) = external_deps {
+        if !external_deps.is_empty() {
+            log::trace!("🔍 Processing external dependency changes: {external_deps:?}");
+
+            // Build external dependency map
+            let workspace_members: Vec<String> = package_path_to_name.keys().cloned().collect();
+            let external_dep_map =
+                git_diff::build_external_dependency_map(workspace_root, &workspace_members)?;
+
+            // Find packages affected by external dependencies with specific mapping
+            let package_to_deps_map =
+                git_diff::find_packages_affected_by_external_deps_with_mapping(
+                    &external_dep_map,
+                    external_deps,
+                );
+
+            log::trace!(
+                "📦 Packages affected by external dependencies with specific mapping: {package_to_deps_map:?}"
+            );
+
+            for (package, specific_deps) in package_to_deps_map {
+                if !directly_affected_packages.contains_key(&package) {
+                    directly_affected_packages.insert(package.clone(), Vec::new());
+                }
+
+                reasoning_map
+                    .entry(package.clone())
+                    .or_default()
+                    .push(format!(
+                        "External dependency changes: {}",
+                        specific_deps.join(", ")
+                    ));
+            }
+        }
+    }
+
+    log::trace!("🎯 Directly affected packages: {directly_affected_packages:?}");
+
+    // Now find all packages that depend on the directly affected packages (transitive dependencies)
+    let mut all_affected_packages = directly_affected_packages
+        .keys()
+        .cloned()
+        .collect::<HashSet<String>>();
+    let mut queue = VecDeque::new();
+
+    // Add all directly affected packages to the queue
+    for package in directly_affected_packages.keys() {
+        queue.push_back(package.clone());
+    }
+
+    // Build reverse dependency map (package -> packages that depend on it)
+    let mut reverse_deps: HashMap<String, Vec<String>> = HashMap::new();
+    for (package, deps) in &package_dependencies {
+        for dep in deps {
+            reverse_deps
+                .entry(dep.clone())
+                .or_default()
+                .push(package.clone());
+        }
+    }
+
+    // Process the queue to find all transitive dependents
+    while let Some(current_package) = queue.pop_front() {
+        if let Some(dependents) = reverse_deps.get(&current_package) {
+            for dependent in dependents {
+                if !all_affected_packages.contains(dependent) {
+                    log::trace!(
+                        "🔄 Package {dependent} depends on affected package {current_package}"
+                    );
+                    all_affected_packages.insert(dependent.clone());
+                    queue.push_back(dependent.clone());
+
+                    reasoning_map
+                        .entry(dependent.clone())
+                        .or_default()
+                        .push(format!("Depends on affected package: {current_package}"));
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<AffectedPackageInfo> = all_affected_packages
+        .into_iter()
+        .map(|name| {
+            let reasoning = reasoning_map.get(&name).cloned();
+            AffectedPackageInfo { name, reasoning }
+        })
+        .collect();
+
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+
+    log::trace!("🏁 Final affected packages with reasoning: {result:?}");
+
+    Ok(result)
+}
+
+/// Basic version of find affected packages with reasoning (no git-diff)
+#[cfg(not(feature = "git-diff"))]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
+fn find_affected_packages_basic_with_reasoning(
+    workspace_root: &Path,
+    changed_files: &[String],
+) -> Result<Vec<AffectedPackageInfo>, Box<dyn std::error::Error>> {
+    use std::collections::{HashMap, HashSet, VecDeque};
+
+    log::trace!("🔍 Finding affected packages with reasoning for changed files: {changed_files:?}");
+
+    // First, load the workspace and get all members
+    let workspace_cargo_path = workspace_root.join("Cargo.toml");
+    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_value: Value = toml::from_str(&workspace_source)?;
+
+    let workspace_members = workspace_value
+        .get("workspace")
+        .and_then(|x| x.get("members"))
+        .and_then(|x| x.as_array())
+        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+        .ok_or("No workspace members found")?;
+
+    log::trace!("🏢 Found {} workspace members", workspace_members.len());
+
+    // Create a map of package name -> package path and package_path -> package name
+    let mut package_path_to_name = HashMap::new();
+    let mut package_dependencies: HashMap<String, Vec<String>> = HashMap::new();
+
+    for member_path in workspace_members {
+        let full_path = workspace_root.join(member_path);
+        let cargo_path = full_path.join("Cargo.toml");
+
+        if !cargo_path.exists() {
+            log::trace!("⚠️  Skipping {member_path}: Cargo.toml not found");
+            continue;
+        }
+
+        log::trace!("📄 Processing package: {member_path}");
+        let source = std::fs::read_to_string(&cargo_path)?;
+        let value: Value = toml::from_str(&source)?;
+
+        // Get package name
+        if let Some(package_name) = value
+            .get("package")
+            .and_then(|x| x.get("name"))
+            .and_then(|x| x.as_str())
+        {
+            log::trace!("📦 Package name: {package_name} -> {member_path}");
+            package_path_to_name.insert(member_path.to_string(), package_name.to_string());
+
+            // Extract dependencies that are workspace members
+            let mut deps = Vec::new();
+
+            // Check regular dependencies
+            if let Some(dependencies) = value.get("dependencies").and_then(|x| x.as_table()) {
+                for (dep_name, dep_value) in dependencies {
+                    if is_workspace_dependency(dep_value) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            // Check dev dependencies
+            if let Some(dev_dependencies) = value.get("dev-dependencies").and_then(|x| x.as_table())
+            {
+                for (dep_name, dep_value) in dev_dependencies {
+                    if is_workspace_dependency(dep_value) && !deps.contains(dep_name) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            // Check build dependencies
+            if let Some(build_dependencies) =
+                value.get("build-dependencies").and_then(|x| x.as_table())
+            {
+                for (dep_name, dep_value) in build_dependencies {
+                    if is_workspace_dependency(dep_value) && !deps.contains(dep_name) {
+                        deps.push(dep_name.clone());
+                    }
+                }
+            }
+
+            log::trace!("📊 Dependencies for {package_name}: {deps:?}");
+            package_dependencies.insert(package_name.to_string(), deps);
+        }
+    }
+
+    // Find packages directly affected by changed files
+    let mut directly_affected_packages = HashMap::new(); // package name -> list of changed files
+    let mut reasoning_map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for changed_file in changed_files {
+        let changed_path = PathBuf::from(changed_file);
+
+        // Check if the changed file belongs to a workspace package
+        for (package_path, package_name) in &package_path_to_name {
+            let package_path_buf = PathBuf::from(package_path);
+
+            // Check if the changed file is within this package's directory
+            if changed_path.starts_with(&package_path_buf) {
+                log::trace!("📝 File {changed_file} affects package {package_name}");
+                directly_affected_packages
+                    .entry(package_name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(changed_file.clone());
+
+                reasoning_map
+                    .entry(package_name.clone())
+                    .or_default()
+                    .push(format!("Contains changed file: {changed_file}"));
+            }
+        }
+    }
+
+    log::trace!("🎯 Directly affected packages: {directly_affected_packages:?}");
+
+    // Now find all packages that depend on the directly affected packages (transitive dependencies)
+    let mut all_affected_packages = directly_affected_packages
+        .keys()
+        .cloned()
+        .collect::<HashSet<String>>();
+    let mut queue = VecDeque::new();
+
+    // Add all directly affected packages to the queue
+    for package in directly_affected_packages.keys() {
+        queue.push_back(package.clone());
+    }
+
+    // Build reverse dependency map (package -> packages that depend on it)
+    let mut reverse_deps: HashMap<String, Vec<String>> = HashMap::new();
+    for (package, deps) in &package_dependencies {
+        for dep in deps {
+            reverse_deps
+                .entry(dep.clone())
+                .or_default()
+                .push(package.clone());
+        }
+    }
+
+    // Process the queue to find all transitive dependents
+    while let Some(current_package) = queue.pop_front() {
+        if let Some(dependents) = reverse_deps.get(&current_package) {
+            for dependent in dependents {
+                if !all_affected_packages.contains(dependent) {
+                    log::trace!(
+                        "🔄 Package {dependent} depends on affected package {current_package}"
+                    );
+                    all_affected_packages.insert(dependent.clone());
+                    queue.push_back(dependent.clone());
+
+                    reasoning_map
+                        .entry(dependent.clone())
+                        .or_default()
+                        .push(format!("Depends on affected package: {current_package}"));
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<AffectedPackageInfo> = all_affected_packages
+        .into_iter()
+        .map(|name| {
+            let reasoning = reasoning_map.get(&name).cloned();
+            AffectedPackageInfo { name, reasoning }
+        })
+        .collect();
+
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+
+    log::trace!("🏁 Final affected packages with reasoning: {result:?}");
+
+    Ok(result)
 }
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]

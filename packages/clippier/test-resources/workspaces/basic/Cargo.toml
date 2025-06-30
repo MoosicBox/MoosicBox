@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "packages/api",
+    "packages/client",
+    "packages/models"
+]
+
+[workspace.dependencies]
+serde = "1.0"
+tokio = "1.0"
+reqwest = "0.11"

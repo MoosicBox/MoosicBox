@@ -27,6 +27,7 @@ log        = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }
 strum      = { workspace = true, features = ["derive"] }
+tempfile   = { workspace = true }
 toml       = { workspace = true }
 
 git2 = { workspace = true, optional = true }
@@ -34,7 +35,7 @@ git2 = { workspace = true, optional = true }
 [dev-dependencies]
 insta           = { workspace = true }
 similar-asserts = { workspace = true }
-tempfile        = { workspace = true }
+test-log        = { workspace = true }
 
 [features]
 default = ["git-diff"]
@@ -42,3 +43,17 @@ default = ["git-diff"]
 fail-on-warnings = []
 
 git-diff = ["dep:git2"]
+test-utils = []
+
+# Automatically enable test-utils when running tests
+[[test]]
+name = "integration_test"
+required-features = ["git-diff", "test-utils"]
+
+[[test]]
+name = "external_deps_test"
+required-features = ["git-diff", "test-utils"]
+
+[[test]]
+name = "real_world_test"
+required-features = ["git-diff", "test-utils"]

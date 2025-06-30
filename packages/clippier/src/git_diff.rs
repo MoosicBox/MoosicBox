@@ -1,7 +1,17 @@
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
+// Local definitions to avoid import issues
+fn parse_dependency_name(dep_spec: &str) -> String {
+    // Parse dependency name (remove version constraints, features, etc.)
+    dep_spec
+        .split_whitespace()
+        .next()
+        .unwrap_or(dep_spec)
+        .to_string()
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CargoLockPackage {
     pub name: String,
@@ -16,163 +26,304 @@ pub struct CargoLock {
     pub package: Vec<CargoLockPackage>,
 }
 
-/// Extract changed dependencies from git diff between two commits
-///
-/// # Errors
-///
-/// * If the repository path is not a valid git repository
-/// * If the base commit or head commit is not found in the repository
-/// * If the Cargo.lock file is not found in the repository
-/// * If the Cargo.lock file is not in the changed files
-/// * If the Cargo.lock file cannot be parsed
-/// * If the Cargo.lock file contains errors
-pub fn extract_changed_dependencies_from_git(
-    repo_path: &std::path::Path,
-    base_commit: &str,
-    head_commit: &str,
-    changed_files: &[String],
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    log::trace!("🔍 Extracting changed dependencies from git diff");
-    log::trace!("Repository path: {}", repo_path.display());
-    log::trace!("Base commit: {base_commit}");
-    log::trace!("Head commit: {head_commit}");
-    log::trace!("Changed files: {changed_files:?}");
+#[must_use]
+pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
+    let mut changed_packages = std::collections::HashSet::new();
+    let mut current_package = None;
+    let mut has_version_change = false;
+    let mut is_new_package = false;
 
-    // Check if Cargo.lock is in the changed files
-    if !changed_files.iter().any(|f| f == "Cargo.lock") {
-        log::trace!("Cargo.lock not in changed files, returning empty result");
-        return Ok(Vec::new());
+    for (op, line) in changes {
+        let line = line.trim();
+
+        if line.starts_with("name = \"") {
+            if let Some(name_start) = line.find('"') {
+                if let Some(name_end) = line.rfind('"') {
+                    if name_end > name_start {
+                        current_package = Some(line[name_start + 1..name_end].to_string());
+                        has_version_change = false;
+                        is_new_package = *op == '+'; // New package if the name line is added
+                    }
+                }
+            }
+        } else if line.starts_with("version = \"") && (*op == '-' || *op == '+') {
+            has_version_change = true;
+        } else if line.starts_with("[[package]]") {
+            // Include package if it has version changes OR if it's a newly added package
+            if let Some(package) = &current_package {
+                if has_version_change || is_new_package {
+                    changed_packages.insert(package.clone());
+                }
+            }
+            current_package = None;
+            has_version_change = false;
+            is_new_package = false;
+        } else if line.is_empty() {
+            // For empty lines, we process the current package and reset, but only if we haven't seen a new [[package]] marker
+            // This handles the case where a package section ends with an empty line rather than a new [[package]]
+            if let Some(package) = &current_package {
+                if has_version_change || is_new_package {
+                    changed_packages.insert(package.clone());
+                }
+            }
+            current_package = None;
+            has_version_change = false;
+            is_new_package = false;
+        }
+        // Ignore checksum-only changes - these don't indicate meaningful dependency changes
+        // that would require rebuilding dependent packages
     }
 
-    let repo = Repository::open(repo_path).map_err(|e| {
-        format!(
-            "Failed to open repository at {}: {}",
-            repo_path.display(),
-            e
-        )
-    })?;
-
-    // Parse commit references
-    let base_oid = repo
-        .revparse_single(base_commit)
-        .map_err(|e| format!("Failed to parse base commit '{base_commit}': {e}"))?
-        .id();
-    let head_oid = repo
-        .revparse_single(head_commit)
-        .map_err(|e| format!("Failed to parse head commit '{head_commit}': {e}"))?
-        .id();
-
-    log::trace!("Base OID: {base_oid}");
-    log::trace!("Head OID: {head_oid}");
-
-    // Get the diff between the commits
-    let base_commit = repo
-        .find_commit(base_oid)
-        .map_err(|e| format!("Failed to find base commit {base_oid}: {e}"))?;
-    let head_commit = repo
-        .find_commit(head_oid)
-        .map_err(|e| format!("Failed to find head commit {head_oid}: {e}"))?;
-
-    let base_tree = base_commit
-        .tree()
-        .map_err(|e| format!("Failed to get base tree: {e}"))?;
-    let head_tree = head_commit
-        .tree()
-        .map_err(|e| format!("Failed to get head tree: {e}"))?;
-
-    let diff = repo
-        .diff_tree_to_tree(Some(&base_tree), Some(&head_tree), None)
-        .map_err(|e| format!("Failed to create diff: {e}"))?;
-
-    // Find Cargo.lock changes
-    let mut cargo_lock_changes = Vec::new();
-    let mut found_cargo_lock = false;
-
-    // First, check if Cargo.lock is in the diff
-    for delta in diff.deltas() {
-        if let Some(path) = delta.new_file().path() {
-            if path.to_string_lossy() == "Cargo.lock" {
-                found_cargo_lock = true;
-                log::trace!("Found Cargo.lock in diff");
-                break;
-            }
+    // Handle the last package in the diff
+    if let Some(package) = current_package {
+        if has_version_change || is_new_package {
+            changed_packages.insert(package);
         }
     }
 
-    if !found_cargo_lock {
-        log::trace!("Cargo.lock not found in diff");
-        return Ok(Vec::new());
-    }
+    let mut result: Vec<String> = changed_packages.into_iter().collect();
+    result.sort();
+    result
+}
 
-    // Now extract the changes using print callback
+/// Parse Cargo.lock content
+///
+/// # Errors
+///
+/// * If the content cannot be parsed as TOML
+pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, Box<dyn std::error::Error>> {
+    let toml_value: toml::Value = toml::from_str(content)?;
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let version = toml_value
+        .get("version")
+        .and_then(toml::Value::as_integer)
+        .unwrap_or(1) as u32;
+
+    let packages = toml_value
+        .get("package")
+        .and_then(|p| p.as_array())
+        .map(|packages| {
+            packages
+                .iter()
+                .filter_map(|pkg| {
+                    let name = pkg.get("name")?.as_str()?.to_string();
+                    let version = pkg.get("version")?.as_str()?.to_string();
+                    let source = pkg
+                        .get("source")
+                        .and_then(|s| s.as_str())
+                        .map(ToString::to_string);
+                    let dependencies = pkg
+                        .get("dependencies")
+                        .and_then(|deps| deps.as_array())
+                        .map(|deps| {
+                            deps.iter()
+                                .filter_map(|d| d.as_str().map(ToString::to_string))
+                                .collect()
+                        });
+
+                    Some(CargoLockPackage {
+                        name,
+                        version,
+                        source,
+                        dependencies,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(CargoLock {
+        version,
+        package: packages,
+    })
+}
+
+/// Extract changed external dependencies from git diff
+///
+/// # Errors
+///
+/// * If the repository is not found
+/// * If the base commit is not found
+/// * If the head commit is not found
+pub fn extract_changed_dependencies_from_git(
+    workspace_root: &Path,
+    base_commit: &str,
+    head_commit: &str,
+    _changed_files: &[String],
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let repo = Repository::open(workspace_root)?;
+    let base_oid = repo.revparse_single(base_commit)?.id();
+    let head_oid = repo.revparse_single(head_commit)?.id();
+
+    let base_commit = repo.find_commit(base_oid)?;
+    let head_commit = repo.find_commit(head_oid)?;
+
+    let base_tree = base_commit.tree()?;
+    let head_tree = head_commit.tree()?;
+
+    let mut diff_opts = git2::DiffOptions::new();
+    diff_opts.pathspec("Cargo.lock"); // Only look at Cargo.lock changes
+
+    let diff = repo.diff_tree_to_tree(Some(&base_tree), Some(&head_tree), Some(&mut diff_opts))?;
+
+    let mut cargo_lock_changes = Vec::new();
+
+    // Extract changes from Cargo.lock only
     diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
         let content = std::str::from_utf8(line.content()).unwrap_or("");
         cargo_lock_changes.push((line.origin(), content.to_string()));
         true
     })?;
 
-    if cargo_lock_changes.is_empty() {
-        log::trace!("No Cargo.lock changes found in diff");
-        return Ok(Vec::new());
-    }
-
-    log::trace!(
-        "Found {} lines of Cargo.lock changes",
+    log::debug!(
+        "Found {} lines in Cargo.lock diff",
         cargo_lock_changes.len()
     );
 
-    // Parse the changes to extract dependency information
+    // Parse the changes to find affected external dependencies
     let directly_changed_deps = parse_cargo_lock_changes(&cargo_lock_changes);
 
-    // Get the current Cargo.lock to understand the full dependency graph
-    let cargo_lock_path = repo_path.join("Cargo.lock");
-    let all_transitively_affected_deps = if cargo_lock_path.exists() {
-        match std::fs::read_to_string(&cargo_lock_path) {
-            Ok(cargo_lock_content) => match parse_cargo_lock(&cargo_lock_content) {
-                Ok(cargo_lock) => {
-                    log::trace!(
-                        "Successfully parsed current Cargo.lock with {} packages",
-                        cargo_lock.package.len()
-                    );
-                    find_transitively_affected_external_deps(&cargo_lock, &directly_changed_deps)
+    log::debug!("Directly changed dependencies (before filtering): {directly_changed_deps:?}");
+
+    // Get the current and previous Cargo.lock
+    let current_cargo_lock_content = std::fs::read_to_string(workspace_root.join("Cargo.lock"))?;
+    let current_cargo_lock = parse_cargo_lock(&current_cargo_lock_content)?;
+
+    let previous_cargo_lock = get_cargo_lock_from_commit(&repo, base_oid)?;
+
+    // Use the enhanced function to analyze transitive dependencies
+    let all_affected = previous_cargo_lock.map_or_else(
+        || find_transitively_affected_external_deps(&current_cargo_lock, &directly_changed_deps),
+        |previous_cargo_lock| {
+            find_transitively_affected_external_deps_with_previous(
+                &current_cargo_lock,
+                Some(&previous_cargo_lock),
+                &directly_changed_deps,
+            )
+        },
+    );
+
+    // Filter out workspace packages - we only want actual external dependencies
+    // First, get the list of workspace package names
+    let workspace_cargo_path = workspace_root.join("Cargo.toml");
+    let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+    let workspace_value: toml::Value = toml::from_str(&workspace_source)?;
+
+    let mut workspace_package_names = std::collections::HashSet::new();
+
+    if let Some(workspace_members) = workspace_value
+        .get("workspace")
+        .and_then(|x| x.get("members"))
+        .and_then(|x| x.as_array())
+        .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+    {
+        for member_path in workspace_members {
+            let full_path = workspace_root.join(member_path);
+            let cargo_path = full_path.join("Cargo.toml");
+
+            if cargo_path.exists() {
+                if let Ok(source) = std::fs::read_to_string(&cargo_path) {
+                    if let Ok(value) = toml::from_str::<toml::Value>(&source) {
+                        if let Some(package_name) = value
+                            .get("package")
+                            .and_then(|x| x.get("name"))
+                            .and_then(|x| x.as_str())
+                        {
+                            workspace_package_names.insert(package_name.to_string());
+                        }
+                    }
                 }
-                Err(e) => {
-                    log::warn!("Failed to parse Cargo.lock: {e}");
-                    directly_changed_deps.clone()
-                }
-            },
+            }
+        }
+    }
+
+    // Filter out workspace packages from the affected dependencies
+    let result: Vec<String> = all_affected
+        .into_iter()
+        .filter(|dep| !workspace_package_names.contains(dep))
+        .collect();
+
+    log::debug!("External dependencies after filtering out workspace packages: {result:?}");
+    log::debug!("Total affected external dependencies: {}", result.len());
+    Ok(result)
+}
+
+/// Get Cargo.lock content from a specific commit
+///
+/// # Errors
+///
+/// * If the commit is not found
+/// * If the commit tree is not found
+/// * If the Cargo.lock file is not found in the commit
+/// * If the Cargo.lock file cannot be parsed
+pub fn get_cargo_lock_from_commit(
+    repo: &Repository,
+    commit_oid: git2::Oid,
+) -> Result<Option<CargoLock>, Box<dyn std::error::Error>> {
+    let commit = repo.find_commit(commit_oid)?;
+    let tree = commit.tree()?;
+
+    if let Some(entry) = tree.get_name("Cargo.lock") {
+        let blob = repo.find_blob(entry.id())?;
+        let content = std::str::from_utf8(blob.content())?;
+        match parse_cargo_lock(content) {
+            Ok(cargo_lock) => Ok(Some(cargo_lock)),
             Err(e) => {
-                log::warn!("Failed to read Cargo.lock: {e}");
-                directly_changed_deps.clone()
+                log::warn!("Failed to parse Cargo.lock from commit {commit_oid}: {e}");
+                Ok(None)
             }
         }
     } else {
-        log::trace!("Cargo.lock not found, using only directly changed dependencies");
-        directly_changed_deps.clone()
-    };
-
-    log::trace!("Directly changed dependencies: {directly_changed_deps:?}");
-    log::trace!("All transitively affected dependencies: {all_transitively_affected_deps:?}");
-
-    Ok(all_transitively_affected_deps)
+        log::trace!("Cargo.lock not found in commit {commit_oid}");
+        Ok(None)
+    }
 }
 
-/// Find all external dependencies that are transitively affected by the changed dependencies
+/// Find all external dependencies that are transitively affected by the changed dependencies,
+/// but distinguish between new and changed dependencies
 #[must_use]
-pub fn find_transitively_affected_external_deps(
-    cargo_lock: &CargoLock,
+pub fn find_transitively_affected_external_deps_with_previous(
+    current_cargo_lock: &CargoLock,
+    previous_cargo_lock: Option<&CargoLock>,
     directly_changed_deps: &[String],
 ) -> Vec<String> {
     use std::collections::VecDeque;
 
+    const MAX_DEPTH: usize = 5; // Reasonable depth for transitive analysis
+
+    // If we don't have the previous Cargo.lock, fall back to the old behavior
+    let Some(previous_cargo_lock) = previous_cargo_lock else {
+        return find_transitively_affected_external_deps(current_cargo_lock, directly_changed_deps);
+    };
+
+    log::trace!("Finding transitively affected external dependencies with previous context");
+    log::trace!("Directly changed dependencies: {directly_changed_deps:?}");
+
+    // Build a set of packages that existed in the previous Cargo.lock
+    let previous_packages: BTreeSet<String> = previous_cargo_lock
+        .package
+        .iter()
+        .map(|pkg| pkg.name.clone())
+        .collect();
+
+    // Separate newly added dependencies from existing ones that changed
+    let (new_deps, changed_deps): (Vec<_>, Vec<_>) =
+        directly_changed_deps.iter().partition(|&dep| {
+            // A dependency is "new" if it didn't exist in the previous Cargo.lock
+            !previous_packages.contains(dep)
+        });
+
+    log::trace!("New dependencies (direct analysis only): {new_deps:?}");
+    log::trace!("Changed dependencies (transitive analysis): {changed_deps:?}");
+
     // Build a reverse dependency map: dependency -> packages that depend on it
     let mut reverse_dep_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
-
-    for package in &cargo_lock.package {
+    for package in &current_cargo_lock.package {
         if let Some(dependencies) = &package.dependencies {
             for dep in dependencies {
                 // Parse dependency name (remove version constraints, features, etc.)
-                let dep_name = parse_dependency_name(dep);
+                let dep_name = dep.split_whitespace().next().unwrap_or(dep).to_string();
                 reverse_dep_map
                     .entry(dep_name)
                     .or_default()
@@ -186,26 +337,47 @@ pub fn find_transitively_affected_external_deps(
         reverse_dep_map.len()
     );
 
-    // Use BFS to find all transitively affected packages
     let mut affected_packages = BTreeSet::new();
-    let mut queue = VecDeque::new();
 
-    // Start with directly changed dependencies
-    for dep in directly_changed_deps {
-        affected_packages.insert(dep.clone());
-        queue.push_back(dep.clone());
+    // For new dependencies, include them but don't do transitive analysis
+    // (newly added dependencies shouldn't cause broad rebuilds)
+    for dep in &new_deps {
+        affected_packages.insert((*dep).clone());
     }
 
-    // Process the queue to find all transitive dependents
+    // For changed dependencies, include them and do full transitive analysis
+    let mut queue = VecDeque::new();
+    let mut depth_map = BTreeMap::new();
+
+    // Start with existing dependencies that changed
+    for dep in &changed_deps {
+        affected_packages.insert((*dep).clone());
+        queue.push_back((*dep).clone());
+        depth_map.insert((*dep).clone(), 0);
+    }
+
+    // Process the queue to find all transitive dependents with depth limit
     while let Some(current_dep) = queue.pop_front() {
+        let current_depth = depth_map[&current_dep];
+
+        if current_depth >= MAX_DEPTH {
+            continue;
+        }
+
         if let Some(dependents) = reverse_dep_map.get(&current_dep) {
             for dependent in dependents {
                 if !affected_packages.contains(dependent) {
                     log::trace!(
-                        "External package '{dependent}' is transitively affected by '{current_dep}'"
+                        "External package '{dependent}' is transitively affected by '{current_dep}' at depth {}",
+                        current_depth + 1
                     );
                     affected_packages.insert(dependent.clone());
-                    queue.push_back(dependent.clone());
+
+                    // Continue BFS if we haven't reached max depth
+                    if current_depth + 1 < MAX_DEPTH {
+                        queue.push_back(dependent.clone());
+                        depth_map.insert(dependent.clone(), current_depth + 1);
+                    }
                 }
             }
         }
@@ -214,91 +386,98 @@ pub fn find_transitively_affected_external_deps(
     let result: Vec<String> = affected_packages.into_iter().collect();
 
     log::trace!(
-        "Found {} total transitively affected external dependencies",
-        result.len()
+        "Found {} total affected external dependencies ({} new, {} changed with transitive analysis)",
+        result.len(),
+        new_deps.len(),
+        changed_deps.len()
     );
 
     result
 }
 
-/// Parse a dependency specification to extract just the package name
-/// Examples: "serde 1.0.0" -> "serde", "tokio 1.0.0 (registry+...)" -> "tokio"
+/// Find all external dependencies that are transitively affected by the changed dependencies
 #[must_use]
-pub fn parse_dependency_name(dep_spec: &str) -> String {
-    // Split by whitespace and take the first part (package name)
-    dep_spec
-        .split_whitespace()
-        .next()
-        .unwrap_or(dep_spec)
-        .to_string()
+pub fn find_transitively_affected_external_deps(
+    cargo_lock: &CargoLock,
+    directly_changed_deps: &[String],
+) -> Vec<String> {
+    find_transitively_affected_external_deps_with_depth(cargo_lock, 10, directly_changed_deps)
 }
 
-/// Parse Cargo.lock changes to extract changed dependencies
-#[must_use]
-pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
-    let mut changed_dependencies = BTreeSet::new();
-    let mut current_package = None;
-    let mut in_package_block = false;
+fn find_transitively_affected_external_deps_with_depth(
+    cargo_lock: &CargoLock,
+    max_depth: usize,
+    directly_changed_deps: &[String],
+) -> Vec<String> {
+    let mut all_affected = std::collections::HashSet::new();
+    let mut visited = std::collections::HashSet::new();
 
-    for (origin, line) in changes {
-        let line = line.trim();
+    // Add directly changed dependencies
+    for dep in directly_changed_deps {
+        all_affected.insert(dep.clone());
+    }
 
-        // Track package blocks
-        if line == "[[package]]" {
-            in_package_block = true;
-            current_package = None;
-            continue;
-        }
-
-        // Empty line ends the current package block
-        if line.is_empty() {
-            in_package_block = false;
-            current_package = None;
-            continue;
-        }
-
-        if !in_package_block {
-            continue;
-        }
-
-        // Parse package name
-        if line.starts_with("name = ") {
-            if let Some(name) = line
-                .strip_prefix("name = ")
-                .and_then(|s| s.strip_prefix('"'))
-                .and_then(|s| s.strip_suffix('"'))
-            {
-                current_package = Some(name.to_string());
-                log::trace!("Found package: {name}");
-            }
-        }
-
-        // Parse version changes
-        if line.starts_with("version = ") && current_package.is_some() {
-            match origin {
-                '+' | '-' => {
-                    // This is a version change for the current package
-                    if let Some(package_name) = &current_package {
-                        log::trace!("Version change for package {package_name}: {origin} {line}");
-                        changed_dependencies.insert(package_name.clone());
-                    }
-                }
-                _ => {}
+    // Build dependency map for faster lookup
+    let mut dep_map: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for package in &cargo_lock.package {
+        if let Some(deps) = &package.dependencies {
+            for dep_str in deps {
+                let dep_name = parse_dependency_name(dep_str);
+                dep_map
+                    .entry(dep_name)
+                    .or_default()
+                    .insert(package.name.clone());
             }
         }
     }
 
-    changed_dependencies.into_iter().collect()
+    // For each directly changed dependency, find what depends on it (with depth limit)
+    for changed_dep in directly_changed_deps {
+        find_recursive_dependents(
+            &dep_map,
+            changed_dep,
+            &mut all_affected,
+            &mut visited,
+            0,
+            max_depth,
+        );
+    }
+
+    let mut result: Vec<String> = all_affected.into_iter().collect();
+    result.sort();
+    result
 }
 
-/// Parse Cargo.lock file content
-///
-/// # Errors
-///
-/// * If the Cargo.lock file cannot be parsed
-pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, Box<dyn std::error::Error>> {
-    let cargo_lock: CargoLock = toml::from_str(content)?;
-    Ok(cargo_lock)
+fn find_recursive_dependents(
+    dep_map: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    current_dep: &str,
+    all_affected: &mut std::collections::HashSet<String>,
+    visited: &mut std::collections::HashSet<String>,
+    current_depth: usize,
+    max_depth: usize,
+) {
+    if current_depth >= max_depth || visited.contains(current_dep) {
+        return;
+    }
+
+    visited.insert(current_dep.to_string());
+
+    if let Some(dependents) = dep_map.get(current_dep) {
+        for dependent in dependents {
+            all_affected.insert(dependent.clone());
+            find_recursive_dependents(
+                dep_map,
+                dependent,
+                all_affected,
+                visited,
+                current_depth + 1,
+                max_depth,
+            );
+        }
+    }
+
+    visited.remove(current_dep);
 }
 
 /// Build a map of external dependencies to workspace packages that use them
@@ -427,4 +606,35 @@ pub fn find_packages_affected_by_external_deps(
     log::trace!("External dependencies {changed_external_deps:?} affect packages: {result:?}");
 
     result
+}
+
+/// Find packages affected by external dependency changes with specific mapping
+/// Returns a map of package name -> list of external dependencies that affect it
+#[must_use]
+pub fn find_packages_affected_by_external_deps_with_mapping(
+    external_dep_map: &BTreeMap<String, Vec<String>>,
+    changed_external_deps: &[String],
+) -> BTreeMap<String, Vec<String>> {
+    let mut package_to_deps: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    for dep in changed_external_deps {
+        if let Some(packages) = external_dep_map.get(dep) {
+            for package in packages {
+                package_to_deps
+                    .entry(package.clone())
+                    .or_default()
+                    .push(dep.clone());
+            }
+        }
+    }
+
+    // Sort dependencies for each package for consistent output
+    for deps in package_to_deps.values_mut() {
+        deps.sort();
+        deps.dedup();
+    }
+
+    log::trace!("Specific external dependency mapping: {package_to_deps:?}");
+
+    package_to_deps
 }

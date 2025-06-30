@@ -1,0 +1,41 @@
+{
+  "version": 3,
+  "package": [
+    {
+      "name": "tokio",
+      "version": "1.36.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "dependencies": null
+    },
+    {
+      "name": "hyper",
+      "version": "0.14.28",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "dependencies": ["tokio 1.36.0"]
+    },
+    {
+      "name": "reqwest",
+      "version": "0.11.24",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "dependencies": ["hyper 0.14.28"]
+    },
+    {
+      "name": "moosicbox_server",
+      "version": "0.1.0",
+      "source": null,
+      "dependencies": ["reqwest 0.11.24"]
+    },
+    {
+      "name": "moosicbox_models",
+      "version": "0.1.0",
+      "source": null,
+      "dependencies": ["serde 1.0.195"]
+    },
+    {
+      "name": "serde",
+      "version": "1.0.195",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "dependencies": null
+    }
+  ]
+}
