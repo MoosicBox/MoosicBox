@@ -1,6 +1,6 @@
 use git2::Repository;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CargoLockPackage {
@@ -17,6 +17,15 @@ pub struct CargoLock {
 }
 
 /// Extract changed dependencies from git diff between two commits
+///
+/// # Errors
+///
+/// * If the repository path is not a valid git repository
+/// * If the base commit or head commit is not found in the repository
+/// * If the Cargo.lock file is not found in the repository
+/// * If the Cargo.lock file is not in the changed files
+/// * If the Cargo.lock file cannot be parsed
+/// * If the Cargo.lock file contains errors
 pub fn extract_changed_dependencies_from_git(
     repo_path: &std::path::Path,
     base_commit: &str,
@@ -113,20 +122,121 @@ pub fn extract_changed_dependencies_from_git(
     );
 
     // Parse the changes to extract dependency information
-    let changed_deps = parse_cargo_lock_changes(&cargo_lock_changes);
+    let directly_changed_deps = parse_cargo_lock_changes(&cargo_lock_changes);
+
+    // Get the current Cargo.lock to understand the full dependency graph
+    let cargo_lock_path = repo_path.join("Cargo.lock");
+    let all_transitively_affected_deps = if cargo_lock_path.exists() {
+        match std::fs::read_to_string(&cargo_lock_path) {
+            Ok(cargo_lock_content) => match parse_cargo_lock(&cargo_lock_content) {
+                Ok(cargo_lock) => {
+                    log::trace!(
+                        "Successfully parsed current Cargo.lock with {} packages",
+                        cargo_lock.package.len()
+                    );
+                    find_transitively_affected_external_deps(&cargo_lock, &directly_changed_deps)
+                }
+                Err(e) => {
+                    log::warn!("Failed to parse Cargo.lock: {e}");
+                    directly_changed_deps.clone()
+                }
+            },
+            Err(e) => {
+                log::warn!("Failed to read Cargo.lock: {e}");
+                directly_changed_deps.clone()
+            }
+        }
+    } else {
+        log::trace!("Cargo.lock not found, using only directly changed dependencies");
+        directly_changed_deps.clone()
+    };
+
+    log::trace!("Directly changed dependencies: {directly_changed_deps:?}");
+    log::trace!("All transitively affected dependencies: {all_transitively_affected_deps:?}");
+
+    Ok(all_transitively_affected_deps)
+}
+
+/// Find all external dependencies that are transitively affected by the changed dependencies
+#[must_use]
+pub fn find_transitively_affected_external_deps(
+    cargo_lock: &CargoLock,
+    directly_changed_deps: &[String],
+) -> Vec<String> {
+    use std::collections::VecDeque;
+
+    // Build a reverse dependency map: dependency -> packages that depend on it
+    let mut reverse_dep_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+    for package in &cargo_lock.package {
+        if let Some(dependencies) = &package.dependencies {
+            for dep in dependencies {
+                // Parse dependency name (remove version constraints, features, etc.)
+                let dep_name = parse_dependency_name(dep);
+                reverse_dep_map
+                    .entry(dep_name)
+                    .or_default()
+                    .push(package.name.clone());
+            }
+        }
+    }
 
     log::trace!(
-        "Extracted {} changed dependencies: {:?}",
-        changed_deps.len(),
-        changed_deps
+        "Built reverse dependency map with {} entries",
+        reverse_dep_map.len()
     );
 
-    Ok(changed_deps)
+    // Use BFS to find all transitively affected packages
+    let mut affected_packages = BTreeSet::new();
+    let mut queue = VecDeque::new();
+
+    // Start with directly changed dependencies
+    for dep in directly_changed_deps {
+        affected_packages.insert(dep.clone());
+        queue.push_back(dep.clone());
+    }
+
+    // Process the queue to find all transitive dependents
+    while let Some(current_dep) = queue.pop_front() {
+        if let Some(dependents) = reverse_dep_map.get(&current_dep) {
+            for dependent in dependents {
+                if !affected_packages.contains(dependent) {
+                    log::trace!(
+                        "External package '{dependent}' is transitively affected by '{current_dep}'"
+                    );
+                    affected_packages.insert(dependent.clone());
+                    queue.push_back(dependent.clone());
+                }
+            }
+        }
+    }
+
+    let result: Vec<String> = affected_packages.into_iter().collect();
+
+    log::trace!(
+        "Found {} total transitively affected external dependencies",
+        result.len()
+    );
+
+    result
+}
+
+/// Parse a dependency specification to extract just the package name
+/// Examples: "serde 1.0.0" -> "serde", "tokio 1.0.0 (registry+...)" -> "tokio"
+#[must_use]
+pub fn parse_dependency_name(dep_spec: &str) -> String {
+    // Split by whitespace and take the first part (package name)
+    dep_spec
+        .split_whitespace()
+        .next()
+        .unwrap_or(dep_spec)
+        .to_string()
 }
 
 /// Parse Cargo.lock changes to extract changed dependencies
-fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
-    let mut changed_dependencies = HashSet::new();
+#[must_use]
+pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
+    let mut changed_dependencies = BTreeSet::new();
     let mut current_package = None;
     let mut in_package_block = false;
 
@@ -182,18 +292,28 @@ fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
 }
 
 /// Parse Cargo.lock file content
-#[allow(dead_code)]
+///
+/// # Errors
+///
+/// * If the Cargo.lock file cannot be parsed
 pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, Box<dyn std::error::Error>> {
     let cargo_lock: CargoLock = toml::from_str(content)?;
     Ok(cargo_lock)
 }
 
 /// Build a map of external dependencies to workspace packages that use them
+///
+/// # Errors
+///
+/// * If the workspace Cargo.toml file cannot be read
+/// * If the workspace Cargo.toml file cannot be parsed
+/// * If the workspace Cargo.toml file does not contain a workspace section
+/// * If the workspace Cargo.toml file does not contain a dependencies section
 pub fn build_external_dependency_map(
     workspace_root: &std::path::Path,
     workspace_members: &[String],
-) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
-    let mut external_dep_map: HashMap<String, Vec<String>> = HashMap::new();
+) -> Result<BTreeMap<String, Vec<String>>, Box<dyn std::error::Error>> {
+    let mut external_dep_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     // First, parse workspace-level Cargo.toml to get workspace dependencies
     let workspace_cargo_path = workspace_root.join("Cargo.toml");
@@ -201,7 +321,7 @@ pub fn build_external_dependency_map(
     let workspace_value: toml::Value = toml::from_str(&workspace_source)?;
 
     // Get workspace dependencies (these are external packages that can be referenced with workspace = true)
-    let mut workspace_external_deps = HashSet::new();
+    let mut workspace_external_deps = BTreeSet::new();
     if let Some(workspace_deps) = workspace_value
         .get("workspace")
         .and_then(|w| w.get("dependencies"))
@@ -287,11 +407,12 @@ pub fn build_external_dependency_map(
 }
 
 /// Find packages affected by external dependency changes
+#[must_use]
 pub fn find_packages_affected_by_external_deps(
-    external_dep_map: &HashMap<String, Vec<String>>,
+    external_dep_map: &BTreeMap<String, Vec<String>>,
     changed_external_deps: &[String],
 ) -> Vec<String> {
-    let mut affected_packages = HashSet::new();
+    let mut affected_packages = BTreeSet::new();
 
     for dep in changed_external_deps {
         if let Some(packages) = external_dep_map.get(dep) {
@@ -301,8 +422,7 @@ pub fn find_packages_affected_by_external_deps(
         }
     }
 
-    let mut result: Vec<String> = affected_packages.into_iter().collect();
-    result.sort();
+    let result: Vec<String> = affected_packages.into_iter().collect();
 
     log::trace!("External dependencies {changed_external_deps:?} affect packages: {result:?}");
 
