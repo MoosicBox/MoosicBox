@@ -42,18 +42,18 @@ default = ["git-diff"]
 
 fail-on-warnings = []
 
-git-diff = ["dep:git2"]
+git-diff   = ["dep:git2"]
 test-utils = []
 
 # Automatically enable test-utils when running tests
 [[test]]
-name = "integration_test"
+name              = "integration_test"
 required-features = ["git-diff", "test-utils"]
 
 [[test]]
-name = "external_deps_test"
+name              = "external_deps_test"
 required-features = ["git-diff", "test-utils"]
 
 [[test]]
-name = "real_world_test"
+name              = "real_world_test"
 required-features = ["git-diff", "test-utils"]
