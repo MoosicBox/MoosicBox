@@ -13,6 +13,9 @@ version     = "0.1.0"
 [package.metadata.workspaces]
 independent = true
 
+[package.metadata.cargo-machete]
+ignored-dirs = ["test-resources"]
+
 [[bin]]
 name              = "clippier"
 path              = "src/main.rs"
