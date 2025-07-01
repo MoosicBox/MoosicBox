@@ -573,7 +573,7 @@ jobs:
             - name: Install cargo-machete
               shell: bash
               run: |
-                  cargo install cargo-machete
+                  cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
 
             - uses: actions/upload-artifact@master
               if: ${{ matrix.os == 'macos-latest' }}

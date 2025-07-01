@@ -171,7 +171,7 @@ jobs:
               if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
-                  cargo install cargo-machete
+                  cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
@@ -272,7 +272,7 @@ jobs:
               if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' }}
               shell: bash
               run: |
-                  cargo install cargo-machete
+                  cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
               if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
