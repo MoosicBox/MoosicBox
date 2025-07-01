@@ -191,7 +191,7 @@ jobs:
                           WORKFLOW_RUNS=$(curl -s \
                               -H "Authorization: Bearer ${{ github.token }}" \
                               -H "Accept: application/vnd.github.v3+json" \
-                              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-and-test.yml/runs?branch=${{ github.ref_name }}&status=success&per_page=10")
+                              "https://api.github.com/repos/${{ github.repository }}/actions/workflows/build-and-test.yml/runs?branch=${{ github.ref_name }}&per_page=10")
 
                           for i in $(seq 0 9); do
                               RUN_SHA=$(echo "$WORKFLOW_RUNS" | jq -r ".workflow_runs[$i].head_sha // empty")
