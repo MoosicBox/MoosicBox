@@ -1213,9 +1213,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "1.81.0"
+version = "1.82.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1148f8f2e5a77baa212bf2a653d9dea8e1b231302ab1a2abf0a650d783f6592c"
+checksum = "313f85b8caadabece229d41dba78d088dcbd600818522d7f68851eaad69f4c1e"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1363,7 +1363,7 @@ dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "h2 0.3.26",
- "h2 0.4.10",
+ "h2 0.4.11",
  "http 0.2.12",
  "http 1.3.1",
  "http-body 0.4.6",
@@ -4742,9 +4742,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.10"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9421a676d1b147b16b82c9225157dc629087ef8ec4d5e2960f9437a90dac0a5"
+checksum = "17da50a276f1e01e0ba6c029e47b7100754904ee8a278f886546e98575380785"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -5141,7 +5141,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "h2 0.4.10",
+ "h2 0.4.11",
  "http 1.3.1",
  "http-body 1.0.1",
  "httparse",
@@ -10224,7 +10224,7 @@ dependencies = [
  "derivative",
  "flate2",
  "futures",
- "h2 0.4.10",
+ "h2 0.4.11",
  "http 1.3.1",
  "httparse",
  "httpdate",
@@ -10371,7 +10371,7 @@ dependencies = [
  "bytes",
  "clap 3.2.25",
  "futures",
- "h2 0.4.10",
+ "h2 0.4.11",
  "http 1.3.1",
  "log 0.4.27",
  "once_cell",
@@ -11462,9 +11462,9 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "reqwest"
-version = "0.12.20"
+version = "0.12.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eabf4c97d9130e2bf606614eb937e86edac8292eaa6f422f995d7e8de1eb1813"
+checksum = "4c8cea6b35bcceb099f30173754403d2eba0a5dc18cea3630fccd88251909288"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -12002,6 +12002,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "schemars"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1375ba8ef45a6f15d83fa8748f1079428295d403d6ea991d09ab100155fbc06d"
+dependencies = [
+ "dyn-clone",
+ "ref-cast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "schemars_derive"
 version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12259,9 +12271,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.13.0"
+version = "3.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf65a400f8f66fb7b0552869ad70157166676db75ed8181f8104ea91cf9d0b42"
+checksum = "f2c45cd61fefa9db6f254525d46e392b852e0e61d9a1fd36e5bd183450a556d5"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -12269,6 +12281,7 @@ dependencies = [
  "indexmap 1.9.3",
  "indexmap 2.10.0",
  "schemars 0.9.0",
+ "schemars 1.0.3",
  "serde",
  "serde_derive",
  "serde_json",
@@ -12278,9 +12291,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.13.0"
+version = "3.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81679d9ed988d5e9a5e6531dc3f2c28efbd639cbd1dfb628df08edea6004da77"
+checksum = "de90945e6565ce0d9a25098082ed4ee4002e047cb59892c318d66821e14bb30f"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -13201,9 +13214,9 @@ dependencies = [
 
 [[package]]
 name = "swc_common"
-version = "13.0.1"
+version = "13.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6865f71f363e63306cedec3f3cf1cb9e80acaa9229261ba2569467a19060c7c8"
+checksum = "fc28daa84b57762ecf28d8fdf6a3204ff04c8b8d98d35b9e8b9f56d4a7fafffa"
 dependencies = [
  "anyhow",
  "ast_node",
@@ -13320,9 +13333,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_lexer"
-version = "17.0.6"
+version = "17.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8f318a247bc2c4662dc10dccd7a4f64834add015d216e977a58665b0aad9772"
+checksum = "8ff2f560591181601f15316838bd5872b19902e7b4605a08743c6cb3e853b3db"
 dependencies = [
  "arrayvec",
  "ascii",
@@ -13370,9 +13383,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "23.0.4"
+version = "23.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "338cc99771aeb6b364698116333784245de44fa9ddf2cb3ba8d31d6535c534b9"
+checksum = "83acbd779994eff0c3fe70a556969a1c315afe49e4c0f7a928939f812e96c541"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -13408,9 +13421,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_parser"
-version = "17.2.0"
+version = "17.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e24a33266ba7045b372043f7fc0674f3b3464875463874b85618f9c276bbd654"
+checksum = "821520cc73106140a379ba2614e67e35f9c5dff40f078fa791b16ed92e00053d"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -13542,9 +13555,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_usage_analyzer"
-version = "19.0.0"
+version = "19.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c357c7ff7ae2bf50adbe89c04ed94c9b99d34563df69386aba15a05e4560fc9a"
+checksum = "209cc62665a5a6f7cded15c198a27b5aed49f8f4bc2b1c14ebec61c02889b2e6"
 dependencies = [
  "bitflags 2.9.1",
  "indexmap 2.10.0",
@@ -13560,9 +13573,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_utils"
-version = "18.0.1"
+version = "18.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "938751c806f23256256e6839914ab33e4ac6e79a3fa2e717d004469881d2e3df"
+checksum = "f9d4bc1a89ef29769cf3e16c79a79836f21a7a3975fa34a9b748d0a9d3771daf"
 dependencies = [
  "indexmap 2.10.0",
  "num_cpus",
@@ -14769,9 +14782,9 @@ dependencies = [
 
 [[package]]
 name = "test-log"
-version = "0.2.17"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7f46083d221181166e5b6f6b1e5f1d499f3a76888826e6cb1d057554157cd0f"
+checksum = "1e33b98a582ea0be1168eba097538ee8dd4bbe0f2b01b22ac92ea30054e5be7b"
 dependencies = [
  "env_logger 0.11.8",
  "test-log-macros",
@@ -14780,9 +14793,9 @@ dependencies = [
 
 [[package]]
 name = "test-log-macros"
-version = "0.2.17"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "888d0c3c6db53c0fdab160d2ed5e12ba745383d3e85813f2ea0f2b1475ab553f"
+checksum = "451b374529930d7601b1eef8d32bc79ae870b6079b069401709c2a8bf9e75f36"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -15206,7 +15219,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bytes",
- "h2 0.4.10",
+ "h2 0.4.11",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
