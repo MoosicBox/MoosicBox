@@ -462,7 +462,6 @@ serial_test = "3.2.0"
 sha2 = "0.10.9"
 sha2-const-stable = "0.1.0"
 shell-words = "1.1.0"
-similar-asserts = "1.7.0"
 sqlx = { version = "0.8.6", default-features = false, features = [
     "chrono",
     "runtime-tokio",

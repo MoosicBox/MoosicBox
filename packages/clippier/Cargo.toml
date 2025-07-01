@@ -36,9 +36,8 @@ toml       = { workspace = true }
 git2 = { workspace = true, optional = true }
 
 [dev-dependencies]
-insta           = { workspace = true }
-similar-asserts = { workspace = true }
-test-log        = { workspace = true }
+insta    = { workspace = true }
+test-log = { workspace = true }
 
 [features]
 default = ["git-diff"]
