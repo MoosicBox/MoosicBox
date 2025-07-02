@@ -1,0 +1,6 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: dependencies
+---
+apt-get update && apt-get install -y libsqlite3-dev
+apt-get update && apt-get install -y build-essential

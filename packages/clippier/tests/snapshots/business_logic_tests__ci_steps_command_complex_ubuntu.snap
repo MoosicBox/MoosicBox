@@ -1,0 +1,6 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: ci_steps
+---
+npm install
+npm run build

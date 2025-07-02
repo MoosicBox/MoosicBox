@@ -1,0 +1,37 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: configs
+---
+- dependencies: "apt-get update && apt-get install -y libsqlite3-dev\napt-get update && apt-get install -y build-essential"
+  env: "API_PORT=\"3000\"\nDATABASE_URL=\"sqlite://test.db\""
+  features:
+    - database
+    - default
+    - server
+  name: api
+  nightly: false
+  os: ubuntu
+  path: /tmp/nix-shell-16502-0/.tmpo7VdxP/packages/api
+  requiredFeatures: ~
+- dependencies: "vcpkg install sqlite3:x64-windows"
+  env: "API_PORT=\"3000\"\nBIND_ADDR=\"127.0.0.1\"\nDATABASE_URL=\"sqlite://test.db\""
+  features:
+    - database
+    - default
+    - server
+  name: api
+  nightly: false
+  os: windows
+  path: /tmp/nix-shell-16502-0/.tmpo7VdxP/packages/api
+  requiredFeatures: ~
+- dependencies: brew install sqlite3
+  env: "API_PORT=\"3000\"\nDATABASE_URL=\"sqlite://test.db\""
+  features:
+    - database
+    - default
+    - server
+  name: api
+  nightly: false
+  os: macos
+  path: /tmp/nix-shell-16502-0/.tmpo7VdxP/packages/api
+  requiredFeatures: ~

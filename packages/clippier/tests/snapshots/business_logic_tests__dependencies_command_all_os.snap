@@ -1,0 +1,9 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: dependencies
+---
+apt-get update && apt-get install -y libsqlite3-dev
+apt-get update && apt-get install -y build-essential
+vcpkg install sqlite3:x64-windows
+brew install sqlite3
+apt-get update && apt-get install -y nodejs npm

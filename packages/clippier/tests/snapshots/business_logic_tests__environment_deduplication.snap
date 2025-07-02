@@ -1,0 +1,6 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: env_vars
+---
+DATABASE_URL="sqlite:///tmp/test.db"
+PORT="8080"

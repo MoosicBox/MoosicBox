@@ -1,0 +1,96 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: configs
+---
+- dependencies: "apt-get update && apt-get install -y libsqlite3-dev\napt-get update && apt-get install -y build-essential"
+  env: "API_PORT=\"3000\"\nDATABASE_URL=\"sqlite://test.db\""
+  features:
+    - database
+    - default
+  name: api
+  nightly: false
+  os: ubuntu
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/api
+  requiredFeatures: ~
+- dependencies: apt-get update && apt-get install -y build-essential
+  env: "API_PORT=\"3000\""
+  features:
+    - server
+  name: api
+  nightly: false
+  os: ubuntu
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/api
+  requiredFeatures: ~
+- dependencies: "vcpkg install sqlite3:x64-windows"
+  env: "API_PORT=\"3000\"\nBIND_ADDR=\"127.0.0.1\"\nDATABASE_URL=\"sqlite://test.db\""
+  features:
+    - database
+    - default
+  name: api
+  nightly: false
+  os: windows
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/api
+  requiredFeatures: ~
+- env: "API_PORT=\"3000\"\nBIND_ADDR=\"127.0.0.1\""
+  features:
+    - server
+  name: api
+  nightly: false
+  os: windows
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/api
+  requiredFeatures: ~
+- dependencies: brew install sqlite3
+  env: "API_PORT=\"3000\"\nDATABASE_URL=\"sqlite://test.db\""
+  features:
+    - database
+    - default
+  name: api
+  nightly: false
+  os: macos
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/api
+  requiredFeatures: ~
+- env: "API_PORT=\"3000\""
+  features:
+    - server
+  name: api
+  nightly: false
+  os: macos
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/api
+  requiredFeatures: ~
+- ciSteps: "npm install\nnpm run build"
+  dependencies: apt-get update && apt-get install -y nodejs npm
+  env: "FRONTEND_BUILD=\"production\"\nWEB_PORT=\"8080\""
+  features:
+    - default
+    - frontend
+  name: frontend-build
+  nightly: false
+  os: ubuntu
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/web
+  requiredFeatures: ~
+- env: "WEB_PORT=\"8080\""
+  features:
+    - ssr
+  name: frontend-build
+  nightly: false
+  os: ubuntu
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/web
+  requiredFeatures: ~
+- env: "FRONTEND_BUILD=\"production\"\nSSR_ENABLED=\"true\"\nWEB_PORT=\"8080\""
+  features:
+    - default
+    - frontend
+  name: ssr-build
+  nightly: false
+  os: ubuntu
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/web
+  requiredFeatures: ~
+- dependencies: apt-get update && apt-get install -y nodejs npm
+  env: "SSR_ENABLED=\"true\"\nWEB_PORT=\"8080\""
+  features:
+    - ssr
+  name: ssr-build
+  nightly: false
+  os: ubuntu
+  path: /tmp/nix-shell-16502-0/.tmpjct6yP/packages/web
+  requiredFeatures: ~

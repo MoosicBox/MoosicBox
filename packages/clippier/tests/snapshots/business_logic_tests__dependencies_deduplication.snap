@@ -1,0 +1,8 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: dependencies
+---
+sudo apt-get update && sudo apt-get install build-essential
+sudo apt-get update && sudo apt-get install libssl-dev
+sudo apt-get update && sudo apt-get install build-essential
+sudo apt-get update && sudo apt-get install curl

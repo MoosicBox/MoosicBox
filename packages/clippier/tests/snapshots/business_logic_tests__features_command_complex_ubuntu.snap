@@ -1,0 +1,9 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: features
+---
+["database","default","server"]
+["default","frontend"]
+["ssr"]
+["default","frontend"]
+["ssr"]
