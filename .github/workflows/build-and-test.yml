@@ -68,6 +68,8 @@ jobs:
         if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' }}
         steps:
             - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
             - uses: dtolnay/rust-toolchain@stable
               with:
