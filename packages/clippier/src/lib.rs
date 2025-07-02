@@ -180,18 +180,21 @@ impl<'a, T> Iterator for SplitIter<'a, T> {
 
 #[must_use]
 pub fn process_features(features: Vec<String>, chunked: Option<u16>, spread: bool) -> FeaturesList {
-    if let Some(chunks) = chunked {
-        if spread && features.len() > 1 {
-            // Distribute features evenly across chunks
-            let chunk_count = chunks as usize;
-            let mut result = vec![Vec::new(); chunk_count];
+    if let Some(max_features_per_chunk) = chunked {
+        let chunk_size = max_features_per_chunk as usize;
+
+        if spread && features.len() > chunk_size {
+            // First, determine how many chunks we need based on chunk size
+            let num_chunks = features.len().div_ceil(chunk_size);
+
+            // Then distribute features evenly across those chunks
+            let mut result = vec![Vec::new(); num_chunks];
             for (i, feature) in features.into_iter().enumerate() {
-                result[i % chunk_count].push(feature);
+                result[i % num_chunks].push(feature);
             }
             FeaturesList::Chunked(result.into_iter().filter(|v| !v.is_empty()).collect())
         } else {
-            // Regular chunking
-            let chunk_size = features.len().div_ceil(chunks as usize);
+            // Regular chunking - up to max_features_per_chunk features per package
             let chunked_features: Vec<Vec<String>> = features
                 .chunks(chunk_size)
                 .map(<[std::string::String]>::to_vec)
@@ -413,8 +416,12 @@ pub fn process_configs(
     Ok(packages)
 }
 
-/// Applies max_parallel re-chunking by redistributing features across fewer packages
-/// instead of truncating results
+/// Handle chunking and `max_parallel` re-chunking by combining packages
+///
+/// Applies `max_parallel` re-chunking by combining packages when the total count
+/// exceeds `max_parallel`. Respects the original chunking constraint - only
+/// combines packages when necessary to meet the `max_parallel` limit, never
+/// creates packages with fewer features than the original chunking.
 ///
 /// # Errors
 ///
@@ -428,77 +435,75 @@ pub fn apply_max_parallel_rechunking(
         return Ok(packages);
     }
 
-    // Group packages by their metadata (everything except features)
-    let mut groups: BTreeMap<
-        String,
-        (serde_json::Map<String, serde_json::Value>, Vec<Vec<String>>),
-    > = BTreeMap::new();
-
-    for package in packages {
-        // Create a key from all metadata except features
-        let mut metadata = package.clone();
-        let features = metadata
-            .remove("features")
-            .and_then(|f| f.as_array().cloned())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect::<Vec<String>>()
-            })
-            .unwrap_or_default();
-
-        // Create a deterministic key from metadata
-        let key = serde_json::to_string(&metadata)?;
-
-        let entry = groups.entry(key).or_insert_with(|| (metadata, Vec::new()));
-        entry.1.push(features);
-    }
-
-    // If we have fewer groups than max_parallel, we can distribute chunks across groups
-    let total_groups = groups.len();
-    if total_groups == 0 {
-        return Ok(Vec::new());
-    }
-
-    // Calculate how many chunks each group should get
-    let chunks_per_group = max_parallel.div_ceil(total_groups);
     let mut result = Vec::new();
 
-    for (_, (mut metadata, feature_sets)) in groups {
-        // Flatten all features from this group
-        let all_features: Vec<String> = feature_sets.into_iter().flatten().collect();
+    // Distribute packages evenly across exactly max_parallel slots
+    let total_packages = packages.len();
+    let base_packages_per_slot = total_packages / max_parallel;
+    let extra_packages = total_packages % max_parallel;
 
-        if all_features.is_empty() {
-            // Keep entry with empty features
-            metadata.insert("features".to_string(), serde_json::json!([]));
-            result.push(metadata);
-            continue;
-        }
+    let mut package_index = 0;
 
-        // Calculate chunk size for this group
-        let actual_chunks = chunks_per_group.min(all_features.len());
-        let chunk_size = all_features.len().div_ceil(actual_chunks);
-
-        // Create chunks
-        for chunk in all_features.chunks(chunk_size) {
-            let mut new_package = metadata.clone();
-            new_package.insert("features".to_string(), serde_json::to_value(chunk)?);
-            result.push(new_package);
-
-            // Stop if we've reached max_parallel limit
-            if result.len() >= max_parallel {
-                break;
-            }
-        }
-
-        // Stop if we've reached max_parallel limit
-        if result.len() >= max_parallel {
+    for slot_index in 0..max_parallel {
+        if package_index >= total_packages {
             break;
         }
+
+        // Some slots get one extra package to distribute remainder evenly
+        let packages_for_this_slot = if slot_index < extra_packages {
+            base_packages_per_slot + 1
+        } else {
+            base_packages_per_slot
+        };
+
+        if packages_for_this_slot == 0 {
+            break;
+        }
+
+        let end_index = (package_index + packages_for_this_slot).min(total_packages);
+        let chunk_packages = &packages[package_index..end_index];
+
+        if chunk_packages.len() == 1 {
+            // Single package, no need to combine
+            result.push(chunk_packages[0].clone());
+        } else {
+            // Combine multiple packages - this increases features per package as expected
+            let mut combined_features = Vec::new();
+            let template_package = chunk_packages[0].clone();
+
+            for package in chunk_packages {
+                if let Some(features) = package.get("features").and_then(|f| f.as_array()) {
+                    for feature in features {
+                        if let Some(feature_str) = feature.as_str() {
+                            combined_features.push(feature_str.to_string());
+                        }
+                    }
+                }
+            }
+
+            // Remove duplicates while preserving order
+            combined_features.sort();
+            combined_features.dedup();
+
+            // Create the combined package
+            let mut combined_package = template_package;
+            combined_package.insert(
+                "features".to_string(),
+                serde_json::to_value(combined_features)?,
+            );
+
+            result.push(combined_package);
+        }
+
+        package_index = end_index;
     }
 
-    // Ensure we don't exceed max_parallel
-    result.truncate(max_parallel);
+    // Sort results by package name for consistent, predictable output
+    result.sort_by(|a, b| {
+        let name_a = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        let name_b = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+        name_a.cmp(name_b)
+    });
 
     Ok(result)
 }
@@ -2570,32 +2575,33 @@ pub fn process_workspace_configs(
             for member_path in members {
                 let full_path = workspace_path.join(member_path);
 
-                // Check if this member has a clippier.toml file
-                let clippier_path = full_path.join("clippier.toml");
-                if clippier_path.exists() {
-                    log::debug!("Processing workspace member: {member_path}");
+                // Check if this member has a Cargo.toml file (basic validation)
+                let cargo_path = full_path.join("Cargo.toml");
+                if !cargo_path.exists() {
+                    log::trace!("Skipping workspace member {member_path} (no Cargo.toml)");
+                    continue;
+                }
 
-                    // Process this member's configs
-                    match process_configs(
-                        &full_path,
-                        offset,
-                        max,
-                        chunked,
-                        spread,
-                        specific_features,
-                        skip_features_override,
-                        required_features_override,
-                    ) {
-                        Ok(mut packages) => {
-                            all_packages.append(&mut packages);
-                        }
-                        Err(e) => {
-                            log::warn!("Failed to process workspace member {member_path}: {e}");
-                            // Continue processing other members
-                        }
+                log::debug!("Processing workspace member: {member_path}");
+
+                // Process this member's configs (with default config if no clippier.toml)
+                match process_configs(
+                    &full_path,
+                    offset,
+                    max,
+                    chunked,
+                    spread,
+                    specific_features,
+                    skip_features_override,
+                    required_features_override,
+                ) {
+                    Ok(mut packages) => {
+                        all_packages.append(&mut packages);
                     }
-                } else {
-                    log::trace!("Skipping workspace member {member_path} (no clippier.toml)");
+                    Err(e) => {
+                        log::warn!("Failed to process workspace member {member_path}: {e}");
+                        // Continue processing other members
+                    }
                 }
             }
 

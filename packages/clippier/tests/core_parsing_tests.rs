@@ -206,9 +206,8 @@ fn test_process_features_spread() {
     let spread_result = clippier::process_features(features.clone(), Some(2), true);
     match spread_result {
         clippier::FeaturesList::Chunked(chunks) => {
-            assert_eq!(chunks.len(), 2);
-            assert_eq!(chunks[0], vec!["feat1"]);
-            assert_eq!(chunks[1], vec!["feat2"]);
+            assert_eq!(chunks.len(), 1);
+            assert_eq!(chunks[0], vec!["feat1", "feat2"]);
         }
         _ => panic!("Expected chunked result"),
     }
