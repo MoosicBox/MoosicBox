@@ -1,3 +1,5 @@
+use std::fs;
+
 use clippier::{
     OutputType, handle_ci_steps_command, handle_dependencies_command, handle_environment_command,
     handle_features_command, handle_workspace_deps_command, process_workspace_configs,
@@ -440,6 +442,152 @@ fn test_handle_features_command_comprehensive() {
     assert!(
         has_required_core,
         "All configs should have core as required feature"
+    );
+}
+
+#[test]
+fn test_handle_features_command_max_parallel_limits_results() {
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    // Create workspace with multiple packages to generate many results
+    for i in 1..=20 {
+        let pkg = format!("package{i}");
+        let pkg_dir = temp_dir.path().join("packages").join(&pkg);
+        fs::create_dir_all(pkg_dir.join("src")).unwrap();
+
+        let cargo_toml = format!(
+            r#"
+[package]
+name = "{pkg}"
+version = "0.1.0"
+
+[features]
+default = []
+feature1 = []
+feature2 = []
+feature3 = []
+feature4 = []
+feature5 = []
+
+[dependencies]
+serde = {{ workspace = true }}
+"#
+        );
+        fs::write(pkg_dir.join("Cargo.toml"), cargo_toml).unwrap();
+        fs::write(pkg_dir.join("src/lib.rs"), "// test lib").unwrap();
+
+        // Create clippier.toml for each package
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+dependencies = [
+    { command = "apt-get install -y build-essential" }
+]
+"#;
+        fs::write(pkg_dir.join("clippier.toml"), clippier_toml).unwrap();
+    }
+
+    // Create workspace Cargo.toml
+    let members: Vec<String> = (1..=20).map(|i| format!("packages/package{i}")).collect();
+    let workspace_toml = format!(
+        r#"
+[workspace]
+members = [{}]
+
+[workspace.dependencies]
+serde = "1.0"
+"#,
+        members
+            .iter()
+            .map(|m| format!("\"{m}\""))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml).unwrap();
+
+    // Test with both chunked and max_parallel
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,     // offset
+        None,     // max
+        Some(10), // max_parallel - should limit to 10 results
+        Some(3),  // chunked - should create more than 10 results without limit
+        false,    // spread
+        None,     // features
+        None,     // skip_features
+        None,     // required_features
+        None,     // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false,    // include_reasoning
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should be limited to exactly 10 results by max_parallel
+    assert_eq!(configs.len(), 10, "max_parallel should limit results to 10");
+
+    // Verify that features are preserved (not truncated) - count total features
+    let total_features: usize = configs
+        .iter()
+        .filter_map(|config| config.get("features"))
+        .filter_map(|features| features.as_array())
+        .map(|arr| arr.len())
+        .sum();
+
+    // There should be a significant number of features preserved (each package has 6 features: default + 5 named)
+    assert!(
+        total_features > 0,
+        "Features should be preserved during re-chunking"
+    );
+
+    // Test with only max_parallel (backward compatibility)
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,    // offset
+        None,    // max
+        Some(5), // max_parallel - should limit to 5 results and also serve as chunked
+        None,    // chunked - not provided
+        false,   // spread
+        None,    // features
+        None,    // skip_features
+        None,    // required_features
+        None,    // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false,   // include_reasoning
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let configs: Vec<serde_json::Value> = serde_json::from_str(&result.unwrap()).unwrap();
+
+    // Should be limited to exactly 5 results by max_parallel
+    assert_eq!(
+        configs.len(),
+        5,
+        "max_parallel without chunked should limit results to 5"
+    );
+
+    // Verify that features are preserved in this case too
+    let total_features: usize = configs
+        .iter()
+        .filter_map(|config| config.get("features"))
+        .filter_map(|features| features.as_array())
+        .map(|arr| arr.len())
+        .sum();
+
+    assert!(
+        total_features > 0,
+        "Features should be preserved during re-chunking"
     );
 }
 

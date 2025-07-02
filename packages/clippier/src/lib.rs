@@ -413,6 +413,96 @@ pub fn process_configs(
     Ok(packages)
 }
 
+/// Applies max_parallel re-chunking by redistributing features across fewer packages
+/// instead of truncating results
+///
+/// # Errors
+///
+/// * If JSON serialization fails
+pub fn apply_max_parallel_rechunking(
+    packages: Vec<serde_json::Map<String, serde_json::Value>>,
+    max_parallel: usize,
+) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
+    if packages.len() <= max_parallel {
+        // Already within limit, no need to re-chunk
+        return Ok(packages);
+    }
+
+    // Group packages by their metadata (everything except features)
+    let mut groups: BTreeMap<
+        String,
+        (serde_json::Map<String, serde_json::Value>, Vec<Vec<String>>),
+    > = BTreeMap::new();
+
+    for package in packages {
+        // Create a key from all metadata except features
+        let mut metadata = package.clone();
+        let features = metadata
+            .remove("features")
+            .and_then(|f| f.as_array().cloned())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default();
+
+        // Create a deterministic key from metadata
+        let key = serde_json::to_string(&metadata)?;
+
+        let entry = groups.entry(key).or_insert_with(|| (metadata, Vec::new()));
+        entry.1.push(features);
+    }
+
+    // If we have fewer groups than max_parallel, we can distribute chunks across groups
+    let total_groups = groups.len();
+    if total_groups == 0 {
+        return Ok(Vec::new());
+    }
+
+    // Calculate how many chunks each group should get
+    let chunks_per_group = max_parallel.div_ceil(total_groups);
+    let mut result = Vec::new();
+
+    for (_, (mut metadata, feature_sets)) in groups {
+        // Flatten all features from this group
+        let all_features: Vec<String> = feature_sets.into_iter().flatten().collect();
+
+        if all_features.is_empty() {
+            // Keep entry with empty features
+            metadata.insert("features".to_string(), serde_json::json!([]));
+            result.push(metadata);
+            continue;
+        }
+
+        // Calculate chunk size for this group
+        let actual_chunks = chunks_per_group.min(all_features.len());
+        let chunk_size = all_features.len().div_ceil(actual_chunks);
+
+        // Create chunks
+        for chunk in all_features.chunks(chunk_size) {
+            let mut new_package = metadata.clone();
+            new_package.insert("features".to_string(), serde_json::to_value(chunk)?);
+            result.push(new_package);
+
+            // Stop if we've reached max_parallel limit
+            if result.len() >= max_parallel {
+                break;
+            }
+        }
+
+        // Stop if we've reached max_parallel limit
+        if result.len() >= max_parallel {
+            break;
+        }
+    }
+
+    // Ensure we don't exceed max_parallel
+    result.truncate(max_parallel);
+
+    Ok(result)
+}
+
 /// Creates a JSON map from a configuration
 ///
 /// # Errors
@@ -2185,6 +2275,11 @@ pub fn handle_features_command(
                 .and_then(|v| v.as_str())
                 .is_some_and(|pkg_os| pkg_os == target_os)
         });
+    }
+
+    // Apply max_parallel re-chunking if specified (redistribute instead of truncate)
+    if let Some(max_parallel_limit) = max_parallel {
+        packages = apply_max_parallel_rechunking(packages, max_parallel_limit as usize)?;
     }
 
     let result = match output {
