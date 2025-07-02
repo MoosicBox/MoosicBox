@@ -1,0 +1,8 @@
+---
+source: packages/clippier/tests/command_tests.rs
+expression: test_data
+---
+fallback_features: []
+fallback_os: ubuntu
+has_clippier_toml: false
+package_name: models

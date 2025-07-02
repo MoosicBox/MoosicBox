@@ -1,0 +1,13 @@
+[package]
+edition = "2021"
+name    = "models"
+version = "0.1.0"
+
+[dependencies]
+core  = { path = "../core", features = ["json"] }
+serde = { workspace = true }
+
+[features]
+database   = ["core/database"]
+default    = []
+validation = []

@@ -1,0 +1,8 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+generation_errors:
+  dependency_resolution_failed: Circular dependency detected
+  invalid_package: Package not found in workspace
+  permission_denied: Cannot write to read-only directory

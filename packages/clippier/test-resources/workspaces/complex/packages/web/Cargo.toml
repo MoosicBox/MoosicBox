@@ -1,0 +1,15 @@
+[package]
+edition = "2021"
+name    = "web"
+version = "0.1.0"
+
+[dependencies]
+api          = { path = "../api", features = ["server"] }
+models       = { path = "../models" }
+reqwest      = { workspace = true }
+shared-utils = { path = "../shared-utils" }
+
+[features]
+default  = ["frontend"]
+frontend = []
+ssr      = ["api/database"]

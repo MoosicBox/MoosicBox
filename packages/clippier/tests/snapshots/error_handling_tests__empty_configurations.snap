@@ -1,0 +1,15 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+empty_configs:
+  empty_dependencies: {}
+  empty_workspace:
+    members: []
+  minimal_package:
+    content: "[package]\nname = \"api\"\nversion = \"0.1.0\""
+    features: {}
+    no_features: true
+  no_clippier_toml:
+    content: ""
+    fallback: default ubuntu configuration

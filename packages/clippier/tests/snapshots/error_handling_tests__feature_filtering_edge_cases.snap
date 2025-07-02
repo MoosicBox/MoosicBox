@@ -1,0 +1,21 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+filtering_edge_cases:
+  all_features_skipped:
+    all_features:
+      - feat1
+      - feat2
+    result: empty list
+    skip_features:
+      - feat1
+      - feat2
+  empty_features_table:
+    input: no features defined
+    output: empty feature list
+  invalid_offset:
+    features:
+      - feat1
+    offset: 10
+    result: empty list

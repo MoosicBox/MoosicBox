@@ -1,0 +1,11 @@
+---
+source: packages/clippier/tests/workspace_deps_tests.rs
+expression: test_data
+---
+api_path: packages/api
+cli_path: packages/cli
+core_path: packages/core
+models_path: packages/models
+note: Workspace root path excluded from snapshot as it changes per test run
+shared_utils_path: packages/shared-utils
+web_path: packages/web

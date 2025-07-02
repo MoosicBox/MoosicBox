@@ -1,0 +1,12 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+malformed_scenarios:
+  unquoted_string:
+    error: expecting quoted string
+    value: unquoted value
+  wrong_type:
+    error: type mismatch
+    expected: array
+    received: string

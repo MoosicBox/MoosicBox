@@ -1,0 +1,8 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+validation_scenarios:
+  invalid_os: Unsupported operating system
+  malformed_dependencies: Dependencies section is not an array
+  missing_members: No workspace members found

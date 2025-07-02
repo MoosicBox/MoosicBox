@@ -1,0 +1,14 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+parsing_failures:
+  binary_content:
+    content: binary garbage data
+    error: not valid UTF-8
+  invalid_toml:
+    content: invalid toml content
+    error: TOML syntax error
+  missing_version:
+    content: "[package]\nname = 'test'"
+    error: missing version field

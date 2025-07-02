@@ -1,0 +1,16 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+changed_files:
+  - packages/models/src/lib.rs
+note: "Each package includes reasoning for why it's affected"
+reasoning_chain:
+  api:
+    - "Depends on affected package: models"
+  cli:
+    - "Depends on affected package: api"
+  models:
+    - "Contains changed file: packages/models/src/lib.rs"
+  web:
+    - "Depends on affected package: api"

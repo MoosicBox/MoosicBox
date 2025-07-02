@@ -1,0 +1,10 @@
+---
+source: packages/clippier/tests/workspace_deps_tests.rs
+expression: test_data
+---
+api_dependencies:
+  - models
+models_dependencies: []
+workspace_members:
+  - api
+  - models

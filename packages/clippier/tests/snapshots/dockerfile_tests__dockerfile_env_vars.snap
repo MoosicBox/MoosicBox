@@ -1,0 +1,11 @@
+---
+source: packages/clippier/tests/dockerfile_tests.rs
+expression: test_data
+---
+custom_build_args:
+  - API_PORT
+  - DATABASE_URL
+default_env_vars:
+  ACTIX_WORKERS: "32"
+  MAX_THREADS: "64"
+  RUST_LOG: "info,moosicbox=debug,moosicbox_middleware::api_logger=trace"

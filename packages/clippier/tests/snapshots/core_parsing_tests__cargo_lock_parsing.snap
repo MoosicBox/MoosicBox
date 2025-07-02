@@ -1,0 +1,17 @@
+---
+source: packages/clippier/tests/core_parsing_tests.rs
+expression: test_data
+---
+new_packages:
+  - uuid
+  - chrono
+note: Cargo.lock changes can indicate external dependency updates
+removed_packages:
+  - old-dep
+version_updates:
+  serde:
+    from: 1.0.180
+    to: 1.0.190
+  tokio:
+    from: 1.28.0
+    to: 1.35.0

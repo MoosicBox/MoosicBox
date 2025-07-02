@@ -278,6 +278,9 @@ hyperchad_template_macros          = { version = "0.1.0", default-features = fal
 hyperchad_transformer              = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer" }
 hyperchad_transformer_models       = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer/models" }
 
+clippier                = { version = "0.1.0", default-features = false, path = "packages/clippier" }
+clippier_test_utilities = { version = "0.1.0", default-features = false, path = "packages/clippier/test_utilities" }
+
 # Internal Simvar
 simvar         = { version = "0.1.0", default-features = false, path = "packages/simvar" }
 simvar_harness = { version = "0.1.0", default-features = false, path = "packages/simvar/harness" }

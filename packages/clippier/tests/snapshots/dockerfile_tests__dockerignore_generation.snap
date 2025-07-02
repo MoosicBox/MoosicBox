@@ -1,0 +1,13 @@
+---
+source: packages/clippier/tests/dockerfile_tests.rs
+expression: test_data
+---
+excluded_patterns:
+  - /packages/*
+generate_dockerignore: true
+included_packages:
+  - "!/packages/web"
+  - "!/packages/api"
+  - "!/packages/models"
+  - "!/packages/core"
+target_package: web

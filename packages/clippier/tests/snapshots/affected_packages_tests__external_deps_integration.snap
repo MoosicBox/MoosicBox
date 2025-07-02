@@ -1,0 +1,26 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+external_deps_changed:
+  - serde
+  - tokio
+packages_using_serde:
+  - core
+  - models
+  - shared-utils
+packages_using_tokio:
+  - core
+  - api
+reasoning:
+  api:
+    - "External dependency changes: tokio"
+    - "Depends on affected package: models"
+  core:
+    - "External dependency changes: serde, tokio"
+  models:
+    - "Depends on affected package: core"
+transitively_affected:
+  - api
+  - web
+  - cli

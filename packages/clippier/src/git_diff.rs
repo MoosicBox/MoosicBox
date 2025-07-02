@@ -26,9 +26,10 @@ pub struct CargoLock {
     pub package: Vec<CargoLockPackage>,
 }
 
+/// Parse Cargo.lock changes into a `Vec` of package names
 #[must_use]
 pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
-    let mut changed_packages = std::collections::HashSet::new();
+    let mut changed_packages = std::collections::BTreeSet::new();
     let mut current_package = None;
     let mut has_version_change = false;
     let mut is_new_package = false;
@@ -86,19 +87,22 @@ pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
     result
 }
 
-/// Parse Cargo.lock content
+/// Parse Cargo.lock content into a `CargoLock` struct
 ///
 /// # Errors
 ///
-/// * If the content cannot be parsed as TOML
+/// * If the Cargo.lock content is not valid TOML
+/// * If the version is not a valid `u32`
 pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, Box<dyn std::error::Error>> {
     let toml_value: toml::Value = toml::from_str(content)?;
 
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    let version = toml_value
-        .get("version")
-        .and_then(toml::Value::as_integer)
-        .unwrap_or(1) as u32;
+    #[allow(clippy::cast_sign_loss)]
+    let version = u32::try_from(
+        toml_value
+            .get("version")
+            .and_then(toml::Value::as_integer)
+            .unwrap_or(3),
+    )?;
 
     let packages = toml_value
         .get("package")
@@ -137,6 +141,61 @@ pub fn parse_cargo_lock(content: &str) -> Result<CargoLock, Box<dyn std::error::
         version,
         package: packages,
     })
+}
+
+/// Extract list of changed files between two git commits
+///
+/// # Errors
+///
+/// * If the repository is not found
+/// * If the base commit is not found
+/// * If the head commit is not found
+pub fn get_changed_files_from_git(
+    workspace_root: &Path,
+    base_commit: &str,
+    head_commit: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let repo = Repository::open(workspace_root)?;
+    let base_oid = repo.revparse_single(base_commit)?.id();
+    let head_oid = repo.revparse_single(head_commit)?.id();
+
+    let base_commit = repo.find_commit(base_oid)?;
+    let head_commit = repo.find_commit(head_oid)?;
+
+    let base_tree = base_commit.tree()?;
+    let head_tree = head_commit.tree()?;
+
+    let diff = repo.diff_tree_to_tree(Some(&base_tree), Some(&head_tree), None)?;
+
+    let mut changed_files = Vec::new();
+
+    diff.foreach(
+        &mut |delta, _progress| {
+            if let Some(new_file) = delta.new_file().path() {
+                if let Some(path_str) = new_file.to_str() {
+                    changed_files.push(path_str.to_string());
+                }
+            } else if let Some(old_file) = delta.old_file().path() {
+                if let Some(path_str) = old_file.to_str() {
+                    changed_files.push(path_str.to_string());
+                }
+            }
+            true
+        },
+        None,
+        None,
+        None,
+    )?;
+
+    changed_files.sort();
+    changed_files.dedup();
+
+    log::debug!(
+        "Found {} changed files from git: {changed_files:?}",
+        changed_files.len()
+    );
+
+    Ok(changed_files)
 }
 
 /// Extract changed external dependencies from git diff
@@ -210,7 +269,7 @@ pub fn extract_changed_dependencies_from_git(
     let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
     let workspace_value: toml::Value = toml::from_str(&workspace_source)?;
 
-    let mut workspace_package_names = std::collections::HashSet::new();
+    let mut workspace_package_names = std::collections::BTreeSet::new();
 
     if let Some(workspace_members) = workspace_value
         .get("workspace")
@@ -409,8 +468,8 @@ fn find_transitively_affected_external_deps_with_depth(
     max_depth: usize,
     directly_changed_deps: &[String],
 ) -> Vec<String> {
-    let mut all_affected = std::collections::HashSet::new();
-    let mut visited = std::collections::HashSet::new();
+    let mut all_affected = std::collections::BTreeSet::new();
+    let mut visited = std::collections::BTreeSet::new();
 
     // Add directly changed dependencies
     for dep in directly_changed_deps {
@@ -418,8 +477,8 @@ fn find_transitively_affected_external_deps_with_depth(
     }
 
     // Build dependency map for faster lookup
-    let mut dep_map: std::collections::HashMap<String, std::collections::HashSet<String>> =
-        std::collections::HashMap::new();
+    let mut dep_map: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
     for package in &cargo_lock.package {
         if let Some(deps) = &package.dependencies {
             for dep_str in deps {
@@ -450,10 +509,10 @@ fn find_transitively_affected_external_deps_with_depth(
 }
 
 fn find_recursive_dependents(
-    dep_map: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+    dep_map: &std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
     current_dep: &str,
-    all_affected: &mut std::collections::HashSet<String>,
-    visited: &mut std::collections::HashSet<String>,
+    all_affected: &mut std::collections::BTreeSet<String>,
+    visited: &mut std::collections::BTreeSet<String>,
     current_depth: usize,
     max_depth: usize,
 ) {

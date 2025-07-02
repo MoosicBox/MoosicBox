@@ -1,0 +1,13 @@
+---
+source: packages/clippier/tests/command_tests.rs
+expression: test_data
+---
+expected_deps:
+  - libsqlite3-dev
+  - build-essential
+expected_env_vars:
+  - API_PORT
+  - DATABASE_URL
+has_clippier_toml: true
+os: ubuntu
+package_name: api

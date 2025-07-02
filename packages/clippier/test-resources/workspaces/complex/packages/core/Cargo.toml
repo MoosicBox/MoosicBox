@@ -1,0 +1,18 @@
+[package]
+edition = "2021"
+name    = "core"
+version = "0.1.0"
+
+[dependencies]
+serde = { workspace = true }
+tokio = { workspace = true }
+
+[features]
+async    = ["tokio/full"]
+database = ["sqlx"]
+default  = ["json"]
+json     = ["serde/derive"]
+
+[dependencies.sqlx]
+optional  = true
+workspace = true

@@ -1,0 +1,37 @@
+---
+source: packages/clippier/tests/core_parsing_tests.rs
+expression: test_data
+---
+all_features:
+  - default
+  - json
+  - async
+  - database
+  - server
+  - frontend
+required_features:
+  optional:
+    - database
+    - server
+    - frontend
+  required:
+    - json
+    - async
+skip_features:
+  remaining:
+    - json
+    - async
+    - database
+    - server
+    - frontend
+  skip:
+    - default
+    - _internal
+specific_features:
+  ignored:
+    - async
+    - server
+    - frontend
+  selected:
+    - json
+    - database

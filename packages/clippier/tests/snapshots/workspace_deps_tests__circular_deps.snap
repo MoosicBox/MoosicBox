@@ -1,0 +1,9 @@
+---
+source: packages/clippier/tests/workspace_deps_tests.rs
+expression: test_data
+---
+api_depends_on:
+  - models
+models_depends_on: []
+no_circular_deps: true
+note: Basic workspace has no circular dependencies

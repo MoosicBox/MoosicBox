@@ -1,0 +1,20 @@
+---
+source: packages/clippier/tests/command_tests.rs
+expression: api_cargo
+---
+[package]
+edition = "2021"
+name    = "api"
+version = "0.1.0"
+
+[dependencies]
+axum         = { workspace = true }
+core         = { path = "../core", features = ["async"] }
+models       = { path = "../models" }
+shared-utils = { path = "../shared-utils" }
+tokio        = { workspace = true }
+
+[features]
+database = ["core/database", "models/database"]
+default  = ["server"]
+server   = ["axum"]

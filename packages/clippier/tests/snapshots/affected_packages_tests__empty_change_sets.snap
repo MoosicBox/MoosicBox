@@ -1,0 +1,7 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+affected_packages: []
+changed_files: []
+note: No changes should result in no affected packages

@@ -1,10 +1,10 @@
 [package]
-name = "api"
-version = "0.1.0"
 edition = "2021"
+name    = "api"
+version = "0.1.0"
 
 [dependencies]
-models = { path = "../models" }
+models  = { path = "../models" }
 reqwest = { workspace = true }
-serde = { workspace = true }
-tokio = { workspace = true }
+serde   = { workspace = true }
+tokio   = { workspace = true }

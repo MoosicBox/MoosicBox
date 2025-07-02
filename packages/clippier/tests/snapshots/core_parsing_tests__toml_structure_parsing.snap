@@ -1,0 +1,23 @@
+---
+source: packages/clippier/tests/core_parsing_tests.rs
+expression: test_data
+---
+dependencies_section:
+  external_deps:
+    - serde
+    - tokio
+  workspace_deps:
+    - dep1
+    - dep2
+features_section:
+  custom_features:
+    - json
+    - async
+  default: []
+package_section:
+  name: test-package
+  required_fields:
+    - name
+    - version
+  version: 0.1.0
+validation: All sections parsed successfully

@@ -1,0 +1,14 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+validation_errors:
+  package_not_found:
+    available:
+      - api
+      - models
+      - core
+    requested: nonexistent-package
+  workspace_root:
+    cause: no workspace Cargo.toml found
+    type: invalid workspace structure

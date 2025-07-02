@@ -1,0 +1,12 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+edge_cases:
+  empty_features:
+    features: []
+    package: models
+    processing: should handle gracefully
+  invalid_package:
+    error: Package not found
+    package: nonexistent

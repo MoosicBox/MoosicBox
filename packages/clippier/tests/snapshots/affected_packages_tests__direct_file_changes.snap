@@ -1,0 +1,11 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+changed_files:
+  - packages/api/src/lib.rs
+directly_affected:
+  - api
+reasoning:
+  api:
+    - "Contains changed file: packages/api/src/lib.rs"

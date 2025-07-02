@@ -1,0 +1,12 @@
+---
+source: packages/clippier/tests/command_tests.rs
+expression: test_data
+---
+all_features:
+  - frontend
+  - ssr
+offset_0_max_1:
+  - frontend
+offset_1_max_1:
+  - ssr
+package_name: web

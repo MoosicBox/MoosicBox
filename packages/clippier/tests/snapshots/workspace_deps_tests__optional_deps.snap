@@ -1,0 +1,9 @@
+---
+source: packages/clippier/tests/workspace_deps_tests.rs
+expression: test_data
+---
+activated_via_features:
+  - database
+core_optional_deps:
+  - sqlx
+models_enables_core_database: true

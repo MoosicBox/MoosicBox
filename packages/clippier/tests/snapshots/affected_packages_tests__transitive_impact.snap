@@ -1,0 +1,18 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+changed_files:
+  - packages/core/src/lib.rs
+dependency_chain:
+  api: depends on models
+  cli: depends on api
+  models: depends on core
+  web: depends on api
+directly_affected:
+  - core
+transitively_affected:
+  - models
+  - api
+  - web
+  - cli

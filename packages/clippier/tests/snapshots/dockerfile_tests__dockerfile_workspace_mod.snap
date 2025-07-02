@@ -1,0 +1,18 @@
+---
+source: packages/clippier/tests/dockerfile_tests.rs
+expression: test_data
+---
+filtered_for_web:
+  - packages/api
+  - packages/models
+  - packages/core
+  - packages/shared-utils
+  - packages/web
+original_members:
+  - packages/core
+  - packages/models
+  - packages/api
+  - packages/web
+  - packages/cli
+  - packages/shared-utils
+sed_command: "sed -e '/^members = \\[/,/^\\]/c\\members = [...]' Cargo.toml"

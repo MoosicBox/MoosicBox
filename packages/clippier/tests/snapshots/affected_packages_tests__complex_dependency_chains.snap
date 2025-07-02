@@ -1,0 +1,19 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+changed_api_affects:
+  - web
+  - cli
+dependency_graph:
+  api:
+    - models
+    - shared-utils
+  cli:
+    - api
+  core: []
+  models:
+    - core
+  shared-utils: []
+  web:
+    - api

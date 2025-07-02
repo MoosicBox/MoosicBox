@@ -1,0 +1,11 @@
+---
+source: packages/clippier/tests/dockerfile_tests.rs
+expression: test_data
+---
+api_package:
+  consolidated_install: apt-get install libsqlite3-dev build-essential
+  ubuntu_deps:
+    - libsqlite3-dev
+    - build-essential
+fallback_deps:
+  - cmake

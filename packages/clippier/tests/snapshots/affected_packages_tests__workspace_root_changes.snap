@@ -1,0 +1,9 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+affected_packages: []
+changed_files:
+  - Cargo.toml
+  - Cargo.lock
+note: "Workspace-level changes don't map to specific packages"

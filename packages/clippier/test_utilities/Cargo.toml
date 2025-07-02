@@ -1,0 +1,22 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Test utilities for clippier package testing"
+edition     = { workspace = true }
+keywords    = ["clippier", "testing", "util"]
+license     = { workspace = true }
+name        = "clippier_test_utilities"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+clippier   = { workspace = true, features = ["test-utils"] }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+tempfile   = { workspace = true }
+toml       = { workspace = true }
+
+[features]
+default  = []
+git-diff = ["clippier/git-diff"]

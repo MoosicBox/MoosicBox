@@ -1,0 +1,17 @@
+[workspace]
+members = [
+    "packages/api",
+    "packages/cli",
+    "packages/core",
+    "packages/models",
+    "packages/shared-utils",
+    "packages/web",
+]
+
+[workspace.dependencies]
+axum    = "0.7"
+clap    = "4.0"
+reqwest = "0.11"
+serde   = "1.0"
+sqlx    = "0.7"
+tokio   = "1.0"

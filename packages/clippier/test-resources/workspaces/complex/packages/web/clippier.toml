@@ -1,0 +1,33 @@
+[parallelization]
+chunked = 2
+
+[env]
+FRONTEND_BUILD = { value = "production", features = ["frontend"] }
+WEB_PORT       = "8080"
+
+[[config]]
+name = "frontend-build"
+os   = "ubuntu"
+
+[[config.dependencies]]
+command  = "apt-get update && apt-get install -y nodejs npm"
+features = ["frontend"]
+
+[[config.ci-steps]]
+command  = "npm install"
+features = ["frontend"]
+
+[[config.ci-steps]]
+command  = "npm run build"
+features = ["frontend"]
+
+[[config]]
+name = "ssr-build"
+os   = "ubuntu"
+
+[[config.dependencies]]
+command  = "apt-get update && apt-get install -y nodejs npm"
+features = ["ssr"]
+
+[config.env]
+SSR_ENABLED = "true"

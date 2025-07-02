@@ -1,0 +1,11 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+affected_packages:
+  - api
+changed_files:
+  - packages/api/src/handlers/mod.rs
+  - packages/api/tests/integration.rs
+  - packages/api/benches/benchmark.rs
+note: All files within package directory should be detected

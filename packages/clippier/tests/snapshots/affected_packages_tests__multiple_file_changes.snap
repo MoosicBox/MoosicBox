@@ -1,0 +1,11 @@
+---
+source: packages/clippier/tests/affected_packages_tests.rs
+expression: test_data
+---
+changed_files:
+  - packages/core/src/lib.rs
+  - packages/shared-utils/src/lib.rs
+directly_affected:
+  - core
+  - shared-utils
+note: Multiple files can affect different dependency trees

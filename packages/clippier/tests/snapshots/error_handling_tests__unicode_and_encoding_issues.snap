@@ -1,0 +1,14 @@
+---
+source: packages/clippier/tests/error_handling_tests.rs
+expression: test_data
+---
+encoding_issues:
+  invalid_utf8: Should handle invalid UTF-8 gracefully
+  special_characters:
+    features:
+      - json-ü
+      - async-ñ
+    note: Unicode in feature names
+  utf8_package_names:
+    handling: should work with Unicode
+    package: 🦀-rust-package
