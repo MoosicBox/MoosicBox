@@ -660,12 +660,13 @@ jobs:
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
                               ${{ runner.debug && '-vv' }} \
+                              --all-targets \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
