@@ -92,11 +92,20 @@ runs:
               echo "cache-key=${CACHE_KEY}" >> $GITHUB_OUTPUT
               echo "🔑 Cache key: ${CACHE_KEY}"
 
+        - name: Expand output path
+          id: expand-path
+          shell: ${{ inputs.shell }}
+          run: |
+              # Expand tilde and any other shell expansions in the output path
+              EXPANDED_PATH=$(eval echo "${{ inputs.output-path }}")
+              echo "expanded-path=${EXPANDED_PATH}" >> $GITHUB_OUTPUT
+              echo "📍 Expanded output path: ${EXPANDED_PATH}"
+
         - name: Check for existing cache
           id: cache-check
           uses: actions/cache/restore@v4
           with:
-              path: ${{ inputs.output-path }}
+              path: ${{ steps.expand-path.outputs.expanded-path }}
               key: ${{ steps.set-cache-key.outputs.cache-key }}
               lookup-only: true
 
@@ -105,7 +114,7 @@ runs:
           id: cache-restore
           uses: actions/cache/restore@v4
           with:
-              path: ${{ inputs.output-path }}
+              path: ${{ steps.expand-path.outputs.expanded-path }}
               key: ${{ steps.set-cache-key.outputs.cache-key }}
 
         - name: Check for existing artifact
@@ -148,18 +157,19 @@ runs:
               echo "📂 Working directory: ${{ inputs.working-directory }}"
               ${{ inputs.command }}
 
-              # Verify the output was created
-              if [ ! -e "${{ inputs.output-path }}" ]; then
-                echo "❌ Output file ${{ inputs.output-path }} was not created by the command!"
+              # Verify the output was created (using expanded path)
+              EXPANDED_PATH="${{ steps.expand-path.outputs.expanded-path }}"
+              if [ ! -e "${EXPANDED_PATH}" ]; then
+                echo "❌ Output file ${EXPANDED_PATH} was not created by the command!"
                 exit 1
               fi
-              echo "✅ Command completed successfully, output created: ${{ inputs.output-path }}"
+              echo "✅ Command completed successfully, output created: ${EXPANDED_PATH}"
 
         - name: Save to cache
           if: steps.cache-check.outputs.cache-hit != 'true' && (steps.check-artifact.outputs.artifact-exists != 'true' || steps.download-artifact.outcome == 'failure')
           uses: actions/cache/save@v4
           with:
-              path: ${{ inputs.output-path }}
+              path: ${{ steps.expand-path.outputs.expanded-path }}
               key: ${{ steps.set-cache-key.outputs.cache-key }}
 
         - name: Upload artifact
@@ -167,43 +177,47 @@ runs:
           uses: actions/upload-artifact@v4
           with:
               name: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}
-              path: ${{ inputs.output-path }}
+              path: ${{ steps.expand-path.outputs.expanded-path }}
               retention-days: 30
               compression-level: 9
 
         - name: Setup output file
           shell: ${{ inputs.shell }}
           run: |
+              EXPANDED_PATH="${{ steps.expand-path.outputs.expanded-path }}"
+
               # Make executable if requested
               if [ "${{ inputs.make-executable }}" = "true" ]; then
                 echo "🔧 Making output file executable..."
-                chmod +x "${{ inputs.output-path }}"
+                chmod +x "${EXPANDED_PATH}"
               fi
 
               # Log detailed info
               echo "🔧 Output file status:"
               echo "  - Cache hit: ${{ steps.cache-check.outputs.cache-hit }}"
               echo "  - Checksum: ${{ steps.compute-checksum.outputs.checksum }}"
-              if [ -f "${{ inputs.output-path }}" ]; then
-                echo "  - File size: $(du -h "${{ inputs.output-path }}" | cut -f1)"
-                echo "  - File path: $(readlink -f "${{ inputs.output-path }}")"
+              if [ -f "${EXPANDED_PATH}" ]; then
+                echo "  - File size: $(du -h "${EXPANDED_PATH}" | cut -f1)"
+                echo "  - File path: $(readlink -f "${EXPANDED_PATH}")"
                 if [ "${{ inputs.make-executable }}" = "true" ]; then
-                  echo "  - Executable: $(ls -la "${{ inputs.output-path }}" | cut -d' ' -f1)"
+                  echo "  - Executable: $(ls -la "${EXPANDED_PATH}" | cut -d' ' -f1)"
                 fi
               fi
 
               # Verify the output works if verification command provided
               if [ -n "${{ inputs.verify-command }}" ]; then
                 echo "🧪 Verifying output file..."
-                "${{ inputs.output-path }}" ${{ inputs.verify-command }}
+                "${EXPANDED_PATH}" ${{ inputs.verify-command }}
                 echo "✅ Output file verification successful"
               fi
 
         - name: Report cache status
           shell: ${{ inputs.shell }}
           run: |
+              EXPANDED_PATH="${{ steps.expand-path.outputs.expanded-path }}"
+
               if [ "${{ steps.cache-check.outputs.cache-hit }}" = "true" ]; then
-                echo "🎯 Cache HIT! Using cached version of ${{ inputs.output-path }}"
+                echo "🎯 Cache HIT! Using cached version of ${EXPANDED_PATH}"
               elif [ "${{ steps.check-artifact.outputs.artifact-exists }}" = "true" ] && [ "${{ steps.download-artifact.outcome }}" = "success" ]; then
                 echo "📦 Artifact downloaded successfully"
               elif [ "${{ steps.check-artifact.outputs.artifact-exists }}" = "true" ] && [ "${{ steps.download-artifact.outcome }}" = "failure" ]; then
@@ -217,7 +231,7 @@ runs:
               echo "  - Checksum: ${{ steps.compute-checksum.outputs.checksum }}"
               echo "  - Cache Key: ${{ steps.set-cache-key.outputs.cache-key }}"
               echo "  - Artifact: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}"
-              echo "  - Output: ${{ inputs.output-path }}"
+              echo "  - Output: ${EXPANDED_PATH}"
               if [ "${{ steps.cache-check.outputs.cache-hit }}" != "true" ]; then
                 echo "  - Artifact exists: ${{ steps.check-artifact.outputs.artifact-exists }}"
               fi
