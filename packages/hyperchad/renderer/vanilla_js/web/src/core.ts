@@ -175,6 +175,12 @@ export function decodeHtml(html: string) {
     return txt.value;
 }
 
+let processedElements = new WeakSet<HTMLElement>();
+
+export function clearProcessedElements() {
+    processedElements = new WeakSet<HTMLElement>();
+}
+
 onElement(({ element }) => {
     for (const key in attrHandlers) {
         const attr = element.getAttribute(key);
@@ -187,11 +193,17 @@ onElement(({ element }) => {
     }
 });
 
-export function processElement(element: HTMLElement) {
+export function processElement(element: HTMLElement, force: boolean = false) {
+    if (!force && processedElements.has(element)) {
+        return;
+    }
+
+    processedElements.add(element);
+
     elementHandlers.forEach((handler) => handler({ element }));
 
     for (const child of element.children) {
-        processElement(child as HTMLElement);
+        processElement(child as HTMLElement, force);
     }
 }
 
@@ -203,7 +215,9 @@ export function handleError<T>(type: string, func: () => T): T | undefined {
     }
 }
 
-on('domLoad', ({ elements }) => elements.forEach(processElement));
+on('domLoad', ({ elements }) =>
+    elements.forEach((element) => processElement(element)),
+);
 on('swapStyle', ({ id, style }) => {
     removeElementStyles(id);
 

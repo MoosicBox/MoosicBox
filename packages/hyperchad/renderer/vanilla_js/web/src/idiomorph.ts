@@ -1,4 +1,9 @@
-import { on, triggerHandlers } from './core';
+import {
+    on,
+    triggerHandlers,
+    clearProcessedElements,
+    processElement,
+} from './core';
 import { Idiomorph } from './vendored/idiomorph.esm';
 
 on('swapDom', ({ html, url }) => {
@@ -9,9 +14,15 @@ on('swapDom', ({ html, url }) => {
     if (typeof html === 'string' && html.indexOf('<!DOCTYPE') === 0) {
         html = html.substring(html.indexOf('>') + 1);
     }
+
+    // Clear processed elements cache for full document swaps
+    // This ensures elements get reprocessed even when returning to cached pages
+    clearProcessedElements();
+
     Idiomorph.morph(document.documentElement, html, {
         head: { style: 'morph' },
     });
+
     triggerHandlers('domLoad', {
         initial: false,
         navigation: typeof url === 'string',
@@ -25,24 +36,37 @@ on('swapHtml', ({ target, html, inner }) => {
         target = element as HTMLElement;
     }
 
-    const elements: HTMLElement[] = [];
+    const addedElements: HTMLElement[] = [];
+    const morphedElements: HTMLElement[] = [];
 
     Idiomorph.morph(target, html, {
         morphStyle: inner ? 'innerHTML' : 'outerHTML',
         callbacks: {
             afterNodeAdded(node: Node) {
                 if (node instanceof HTMLElement) {
-                    elements.push(node);
+                    addedElements.push(node);
+                }
+            },
+            afterNodeMorphed(oldNode: Node, newNode: Node) {
+                if (
+                    oldNode instanceof HTMLElement &&
+                    newNode instanceof HTMLElement
+                ) {
+                    morphedElements.push(oldNode);
                 }
             },
         },
     });
 
-    if (elements.length > 0) {
+    if (addedElements.length > 0) {
         triggerHandlers('domLoad', {
             initial: false,
             navigation: false,
-            elements,
+            elements: addedElements,
         });
+    }
+
+    if (morphedElements.length > 0) {
+        morphedElements.forEach((element) => processElement(element, true));
     }
 });
