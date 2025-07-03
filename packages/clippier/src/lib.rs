@@ -1174,6 +1174,15 @@ pub fn generate_dockerfile_content(
 
     let mut content = String::new();
 
+    // Collect environment variables for the target package early
+    let env_vars = collect_environment_variables(
+        workspace_root,
+        target_package,
+        target_package_path,
+        enabled_features,
+        "ubuntu",
+    )?;
+
     // Builder stage
     writeln!(
         content,
@@ -1348,6 +1357,18 @@ pub fn generate_dockerfile_content(
         "COPY {target_package_path}/ {target_package_path}/"
     )?;
 
+    // Add environment variables for build-time access (like std::env! macro)
+    if !env_vars.is_empty() {
+        writeln!(
+            content,
+            "\n# Accept build args and set as env vars for build process"
+        )?;
+        for (key, _) in &env_vars {
+            writeln!(content, "ARG {key}")?;
+            writeln!(content, "ENV {key}=${{{key}}}")?;
+        }
+    }
+
     // Final build with actual source code
     writeln!(content, "\n# Final build with actual source")?;
     if features_flag.is_empty() {
@@ -1395,6 +1416,15 @@ pub fn generate_dockerfile_content(
             writeln!(content, "ARG {arg}\nENV {arg}=${{{arg}}}")?;
         }
     }
+
+    // Add package-specific environment variables at runtime
+    if !env_vars.is_empty() {
+        for (key, _) in &env_vars {
+            writeln!(content, "ARG {key}")?;
+            writeln!(content, "ENV {key}=${{{key}}}")?;
+        }
+    }
+
     writeln!(
         content,
         "ENV RUST_LOG=info,moosicbox=debug,moosicbox_middleware::api_logger=trace"
@@ -1769,6 +1799,70 @@ pub fn find_affected_packages_with_reasoning(
     log::trace!("🏁 Final affected packages with reasoning: {result:?}");
 
     Ok(result)
+}
+
+/// Collects environment variables for a target package
+///
+/// # Errors
+///
+/// * If fails to process configs
+pub fn collect_environment_variables(
+    workspace_root: &Path,
+    _target_package: &str,
+    target_package_path: &str,
+    enabled_features: Option<&[String]>,
+    target_os: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let path = workspace_root.join(target_package_path);
+
+    // Skip if no clippier.toml exists for this package
+    let clippier_path = path.join("clippier.toml");
+    if !clippier_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    // Convert features to comma-separated string for the dependencies command
+    let features_str = enabled_features.map(|f| f.join(",")).unwrap_or_default();
+    let specific_features = if features_str.is_empty() {
+        None
+    } else {
+        Some(
+            features_str
+                .split(',')
+                .map(str::to_string)
+                .collect::<Vec<_>>(),
+        )
+    };
+
+    let packages = process_configs(
+        &path,
+        None,
+        None,
+        None,
+        false,
+        specific_features.as_deref(),
+        None,
+        None,
+    )?;
+
+    let mut env_vars = Vec::new();
+
+    // Extract environment variables
+    for package in packages {
+        if let Some(os) = package.get("os").and_then(|v| v.as_str()) {
+            if os == target_os {
+                if let Some(env_str) = package.get("env").and_then(|v| v.as_str()) {
+                    for line in env_str.lines() {
+                        if let Some((key, value)) = line.split_once('=') {
+                            env_vars.push((key.to_string(), value.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(env_vars)
 }
 
 /// Collects system dependencies for a target package
