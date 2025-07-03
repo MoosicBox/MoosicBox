@@ -33,6 +33,10 @@ on:
                 description: 'Edge'
                 required: false
                 default: 'false'
+            seed:
+                description: 'Random seed for deterministic feature randomization (leave empty for random)'
+                required: false
+                type: string
 env:
     CARGO_TERM_COLOR: always
 
@@ -153,6 +157,7 @@ jobs:
             has-tauri-changes: ${{ steps.analyze-changes.outputs.has-tauri-changes }}
             reasoning: ${{ steps.analyze-changes.outputs.reasoning }}
             tauri-reasoning: ${{ steps.analyze-changes.outputs.tauri-reasoning }}
+            randomization-seed: ${{ steps.analyze-changes.outputs.randomization-seed }}
             docker-matrix: ${{ steps.analyze-docker-changes.outputs.docker-matrix }}
             has-docker-changes: ${{ steps.analyze-docker-changes.outputs.has-docker-changes }}
             docker-count: ${{ steps.analyze-docker-changes.outputs.docker-count }}
@@ -179,6 +184,16 @@ jobs:
               id: analyze-changes
               run: |
                   echo "🔍 Determining git comparison range and analyzing changes..."
+
+                  # Handle seed for deterministic randomization
+                  if [[ -n "${{ github.event.inputs.seed }}" ]]; then
+                      RANDOMIZATION_SEED="${{ github.event.inputs.seed }}"
+                      echo "🎲 Using provided seed: $RANDOMIZATION_SEED"
+                  else
+                      RANDOMIZATION_SEED=$(date +%s)$(echo $RANDOM)
+                      echo "🎲 Generated random seed: $RANDOMIZATION_SEED"
+                  fi
+                  echo "randomization-seed=$RANDOMIZATION_SEED" >> $GITHUB_OUTPUT
 
                   # Determine git comparison range using robust fallback logic
                   if [ "${{ github.event_name }}" == "pull_request" ]; then
@@ -286,17 +301,17 @@ jobs:
 
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       echo "🚀 Workflow dispatch detected - building all packages"
-                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread"
+                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED"
                       ANALYSIS_TYPE="full"
                       SHOULD_BUILD=true
                   elif [[ "${{ github.event_name }}" == "schedule" ]]; then
                       echo "⏰ Scheduled run - building all packages"
-                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread"
+                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED"
                       ANALYSIS_TYPE="full"
                       SHOULD_BUILD=true
                   elif [[ -n "$CHANGED_FILES" ]]; then
                       echo "🔍 Using smart dependency analysis for Cargo.lock/Cargo.toml changes"
-                      CLIPPIER_CMD="./target/release/clippier features . --changed-files \"$CHANGED_FILES\" --git-base \"$BASE_SHA\" --git-head \"$HEAD_SHA\" --chunked 15 --max-parallel 256 -o json --spread"
+                      CLIPPIER_CMD="./target/release/clippier features . --changed-files \"$CHANGED_FILES\" --git-base \"$BASE_SHA\" --git-head \"$HEAD_SHA\" --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED"
                       ANALYSIS_TYPE="smart"
                       SHOULD_BUILD=true
                   else
@@ -593,6 +608,7 @@ jobs:
                   HAS_CHANGES="${{ needs.determine-affected-packages.outputs.has-changes }}"
                   HAS_TAURI_CHANGES="${{ needs.determine-affected-packages.outputs.has-tauri-changes }}"
                   EVENT_NAME="${{ github.event_name }}"
+                  RANDOMIZATION_SEED="${{ needs.determine-affected-packages.outputs.randomization-seed }}"
 
                   # Show event type
                   case "$EVENT_NAME" in
@@ -610,6 +626,18 @@ jobs:
                           ;;
                   esac
                   echo "" >> $GITHUB_STEP_SUMMARY
+
+                  # Show randomization seed for reproducibility
+                  if [[ -n "$RANDOMIZATION_SEED" && "$RANDOMIZATION_SEED" != "null" ]]; then
+                      if [[ -n "${{ github.event.inputs.seed }}" ]]; then
+                          echo "🎲 **Randomization Seed**: $RANDOMIZATION_SEED (provided via workflow input)" >> $GITHUB_STEP_SUMMARY
+                      else
+                          echo "🎲 **Randomization Seed**: $RANDOMIZATION_SEED (auto-generated)" >> $GITHUB_STEP_SUMMARY
+                      fi
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                      echo "> To reproduce this exact matrix, run the workflow with seed: \`$RANDOMIZATION_SEED\`" >> $GITHUB_STEP_SUMMARY
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                  fi
 
                   # Main build matrix summary
                   if [[ "$HAS_CHANGES" == "true" ]]; then
