@@ -440,7 +440,7 @@ rand = "0.9"
 rangemap = "1.5.1"
 ratatui = "0.29.0"
 rb = "0.4.1"
-rcgen = "0.13.2"
+rcgen = "0.14.1"
 regex = "1.11.1"
 reqwest = { version = "0.12.22", default-features = false, features = [
     "rustls-tls",
@@ -478,15 +478,15 @@ sqlx-postgres = { version = "0.8.6", default-features = false, features = [
 static_init = "1.0.4"
 strum = "0.27.1"
 strum_macros = "0.27.1"
-swc_bundler = "22.0.0"
+swc_bundler = "23.0.0"
 swc_common = { version = "13.0.2", features = ["tty-emitter"] }
 swc_ecma_ast = "13.0.0"
 swc_ecma_codegen = "15.0.1"
 swc_ecma_loader = { version = "13.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "23.0.5"
-swc_ecma_parser = "17.2.1"
-swc_ecma_transforms_base = "18.0.0"
-swc_ecma_transforms_typescript = "20.0.0"
+swc_ecma_minifier = "24.0.1"
+swc_ecma_parser = "18.0.0"
+swc_ecma_transforms_base = "19.0.0"
+swc_ecma_transforms_typescript = "21.0.0"
 swc_ecma_visit = "13.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.104"
