@@ -6,5 +6,5 @@ command  = "sudo apt-get update && sudo apt-get install libasound2-dev"
 features = ["default", "player"]
 
 [[config.dependencies]]
-command  = "sudo apt-get update && sudo apt-get install pulseaudio"
+command  = "sudo apt-get update && sudo apt-get install libpulse-dev"
 features = ["default", "player"]
