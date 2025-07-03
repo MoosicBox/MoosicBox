@@ -463,6 +463,7 @@ jobs:
                       MATRIX_PROJECTS="[]"
                       AFFECTED_DOCKER_PACKAGES=""
                       DOCKER_PACKAGES_LIST=""
+                      REASONING_DATA='${{ steps.analyze-changes.outputs.reasoning }}'
 
                       for pkg in $AFFECTED_PACKAGE_NAMES; do
                           DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg\" // empty")
@@ -475,12 +476,25 @@ jobs:
 
                               MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
                               DOCKER_NAME=$(echo "$DOCKER_INFO" | jq -r '.name')
+
+                              # Get reasoning for this package
+                              if [[ -n "$REASONING_DATA" && "$REASONING_DATA" != "null" && "$REASONING_DATA" != "" ]]; then
+                                  PACKAGE_REASONING=$(echo "$REASONING_DATA" | jq -r --arg pkg "$pkg" '[.[] | select(.name == $pkg) | .reasoning // []] | flatten | unique | map("  - " + .) | join("\n")')
+                                  if [[ -n "$PACKAGE_REASONING" && "$PACKAGE_REASONING" != "" ]]; then
+                                      DOCKER_ENTRY_TEXT="- <details>\n  <summary>$DOCKER_NAME</summary>\n  \n$PACKAGE_REASONING\n  </details>"
+                                  else
+                                      DOCKER_ENTRY_TEXT="- $DOCKER_NAME"
+                                  fi
+                              else
+                                  DOCKER_ENTRY_TEXT="- $DOCKER_NAME"
+                              fi
+
                               if [ -z "$AFFECTED_DOCKER_PACKAGES" ]; then
                                   AFFECTED_DOCKER_PACKAGES="$pkg"
-                                  DOCKER_PACKAGES_LIST="- $DOCKER_NAME"
+                                  DOCKER_PACKAGES_LIST="$DOCKER_ENTRY_TEXT"
                               else
                                   AFFECTED_DOCKER_PACKAGES="$AFFECTED_DOCKER_PACKAGES, $pkg"
-                                  DOCKER_PACKAGES_LIST="$DOCKER_PACKAGES_LIST"$'\n'"- $DOCKER_NAME"
+                                  DOCKER_PACKAGES_LIST="$DOCKER_PACKAGES_LIST"$'\n'"$DOCKER_ENTRY_TEXT"
                               fi
                           fi
                       done
@@ -509,7 +523,8 @@ jobs:
                               echo "has-docker-changes=true" >> $GITHUB_OUTPUT
                               AFFECTED_DOCKER_PACKAGES="all (manual dispatch)"
                               DOCKER_COUNT=$(echo "$MATRIX_PROJECTS" | jq 'length')
-                              DOCKER_PACKAGES_LIST=$(echo "$DOCKER_PACKAGES" | jq -r '[.[] | "- " + .name] | join("\n")')
+                              # For manual dispatch, create simple list with manual reasoning
+                              DOCKER_PACKAGES_LIST=$(echo "$DOCKER_PACKAGES" | jq -r '[.[] | "- <details>\n  <summary>" + .name + "</summary>\n  \n  - Manual workflow dispatch - all Docker packages included\n  </details>"] | join("\n")')
                           else
                               echo "✨ No Docker packages are affected by the changes"
                               DOCKER_MATRIX='{"include": []}'
@@ -657,7 +672,7 @@ jobs:
                           echo "🐳 **Docker Images**: $DOCKER_COUNT Docker $DOCKER_PLURAL will be built" >> $GITHUB_STEP_SUMMARY
                           echo "" >> $GITHUB_STEP_SUMMARY
                           echo "**Docker images to build:**" >> $GITHUB_STEP_SUMMARY
-                          echo '${{ needs.determine-affected-packages.outputs.docker-packages-list }}' >> $GITHUB_STEP_SUMMARY
+                          echo -e '${{ needs.determine-affected-packages.outputs.docker-packages-list }}' >> $GITHUB_STEP_SUMMARY
                       else
                           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
                               echo "🐳 **Docker Images**: All Docker images will be built (manual dispatch)" >> $GITHUB_STEP_SUMMARY
