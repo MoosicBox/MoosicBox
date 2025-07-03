@@ -188,7 +188,7 @@ fn test_process_features_chunked() {
         "feat4".to_string(),
     ];
 
-    let chunked_result = clippier::process_features(features.clone(), Some(2), false);
+    let chunked_result = clippier::process_features(features.clone(), Some(2), false, false, None);
     match chunked_result {
         clippier::FeaturesList::Chunked(chunks) => {
             assert_eq!(chunks.len(), 2);
@@ -203,7 +203,7 @@ fn test_process_features_chunked() {
 fn test_process_features_spread() {
     let features = vec!["feat1".to_string(), "feat2".to_string()];
 
-    let spread_result = clippier::process_features(features.clone(), Some(2), true);
+    let spread_result = clippier::process_features(features.clone(), Some(2), true, false, None);
     match spread_result {
         clippier::FeaturesList::Chunked(chunks) => {
             assert_eq!(chunks.len(), 1);
@@ -217,7 +217,7 @@ fn test_process_features_spread() {
 fn test_process_features_not_chunked() {
     let features = vec!["feat1".to_string(), "feat2".to_string()];
 
-    let result = clippier::process_features(features.clone(), None, false);
+    let result = clippier::process_features(features.clone(), None, false, false, None);
     match result {
         clippier::FeaturesList::NotChunked(feats) => {
             assert_eq!(feats, features);
@@ -244,6 +244,55 @@ fn test_fetch_features_basic() {
     let features = clippier::fetch_features(&cargo_toml, None, None, None, None, None);
     assert!(features.contains(&"json".to_string()));
     assert!(features.contains(&"async".to_string()));
+}
+
+#[test]
+fn test_process_features_randomize() {
+    let features = vec![
+        "feat1".to_string(),
+        "feat2".to_string(),
+        "feat3".to_string(),
+        "feat4".to_string(),
+    ];
+
+    // Test randomization without chunking
+    let result_non_randomized =
+        clippier::process_features(features.clone(), None, false, false, None);
+    let result_randomized = clippier::process_features(features.clone(), None, false, true, None);
+
+    match (&result_non_randomized, &result_randomized) {
+        (
+            clippier::FeaturesList::NotChunked(non_random),
+            clippier::FeaturesList::NotChunked(randomized),
+        ) => {
+            // Both should contain the same features
+            assert_eq!(non_random.len(), randomized.len());
+            for feature in non_random {
+                assert!(randomized.contains(feature));
+            }
+            // Note: We can't guarantee they're in different orders since randomization might
+            // occasionally produce the same order, but the functionality is there
+        }
+        _ => panic!("Expected NotChunked results"),
+    }
+
+    // Test randomization with chunking
+    let result_chunked = clippier::process_features(features.clone(), Some(2), false, true, None);
+    match result_chunked {
+        clippier::FeaturesList::Chunked(chunks) => {
+            assert_eq!(chunks.len(), 2);
+            // Verify all features are present across chunks
+            let mut all_features_in_chunks = Vec::new();
+            for chunk in &chunks {
+                all_features_in_chunks.extend(chunk.clone());
+            }
+            assert_eq!(all_features_in_chunks.len(), features.len());
+            for feature in &features {
+                assert!(all_features_in_chunks.contains(feature));
+            }
+        }
+        _ => panic!("Expected chunked result"),
+    }
 }
 
 #[test]
@@ -518,4 +567,93 @@ fn test_feature_filtering_snapshot() {
     });
 
     insta::assert_yaml_snapshot!("feature_filtering", test_data);
+}
+
+#[test]
+fn test_process_features_seed_deterministic() {
+    // Test that same seed produces same randomized output
+    let features = vec![
+        "feature1".to_string(),
+        "feature2".to_string(),
+        "feature3".to_string(),
+        "feature4".to_string(),
+        "feature5".to_string(),
+        "feature6".to_string(),
+        "feature7".to_string(),
+        "feature8".to_string(),
+        "feature9".to_string(),
+        "feature10".to_string(),
+    ];
+
+    let seed = 12345u64;
+
+    // Run the same randomization twice with the same seed
+    let result1 = clippier::process_features(features.clone(), Some(3), false, true, Some(seed));
+    let result2 = clippier::process_features(features.clone(), Some(3), false, true, Some(seed));
+
+    // Both results should be identical when using the same seed
+    match (result1, result2) {
+        (clippier::FeaturesList::Chunked(chunks1), clippier::FeaturesList::Chunked(chunks2)) => {
+            assert_eq!(
+                chunks1, chunks2,
+                "Same seed should produce identical randomized output"
+            );
+        }
+        _ => panic!("Expected chunked features"),
+    }
+
+    // Test with different seeds to ensure they produce different outputs
+    let seed1 = 12345u64;
+    let seed2 = 54321u64;
+
+    let result1 = clippier::process_features(features.clone(), Some(3), false, true, Some(seed1));
+    let result2 = clippier::process_features(features.clone(), Some(3), false, true, Some(seed2));
+
+    match (result1, result2) {
+        (clippier::FeaturesList::Chunked(chunks1), clippier::FeaturesList::Chunked(chunks2)) => {
+            // Different seeds should produce different results
+            // We can't guarantee they'll be different, but with 10 features, it's very likely
+            // Just ensure both contain the same features in total
+            let mut all_features1: Vec<String> = chunks1.into_iter().flatten().collect();
+            let mut all_features2: Vec<String> = chunks2.into_iter().flatten().collect();
+            all_features1.sort();
+            all_features2.sort();
+            assert_eq!(
+                all_features1, all_features2,
+                "Different seeds should preserve all features"
+            );
+        }
+        _ => panic!("Expected chunked features"),
+    }
+}
+
+#[test]
+fn test_process_features_seed_with_spread() {
+    // Test that seed works with spreading as well
+    let features = vec![
+        "feature1".to_string(),
+        "feature2".to_string(),
+        "feature3".to_string(),
+        "feature4".to_string(),
+        "feature5".to_string(),
+        "feature6".to_string(),
+        "feature7".to_string(),
+        "feature8".to_string(),
+    ];
+
+    let seed = 98765u64;
+
+    // Test with spreading and seed
+    let result1 = clippier::process_features(features.clone(), Some(2), true, true, Some(seed));
+    let result2 = clippier::process_features(features.clone(), Some(2), true, true, Some(seed));
+
+    match (result1, result2) {
+        (clippier::FeaturesList::Chunked(chunks1), clippier::FeaturesList::Chunked(chunks2)) => {
+            assert_eq!(
+                chunks1, chunks2,
+                "Same seed with spreading should produce identical output"
+            );
+        }
+        _ => panic!("Expected chunked features"),
+    }
 }

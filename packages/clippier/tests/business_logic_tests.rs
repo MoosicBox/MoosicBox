@@ -217,6 +217,8 @@ fn test_handle_features_command_basic() {
         None,  // max_parallel
         None,  // chunked
         false, // spread
+        false, // randomize
+        None,  // seed
         None,  // features
         None,  // skip_features
         None,  // required_features
@@ -253,8 +255,18 @@ fn test_handle_workspace_deps_command_basic() {
 fn test_process_workspace_configs_workspace_root() {
     let (temp_dir, _) = load_test_workspace("complex");
 
-    let result =
-        process_workspace_configs(temp_dir.path(), None, None, None, false, None, None, None);
+    let result = process_workspace_configs(
+        temp_dir.path(),
+        None,
+        None,
+        None,
+        false,
+        false,
+        None,
+        None,
+        None,
+        None,
+    );
 
     assert!(result.is_ok());
     let configs = result.unwrap();
@@ -387,6 +399,8 @@ fn test_handle_features_command_comprehensive() {
         None,                 // max_parallel
         Some(2),              // chunked
         true,                 // spread
+        false,                // randomize
+        None,                 // seed
         Some("frontend,api"), // features
         Some("deprecated"),   // skip_features
         Some("core"),         // required_features
@@ -514,6 +528,8 @@ serde = "1.0"
         Some(10), // max_parallel - should limit to 10 results
         Some(3),  // chunked - should create more than 10 results without limit
         false,    // spread
+        false,    // randomize
+        None,     // seed
         None,     // features
         None,     // skip_features
         None,     // required_features
@@ -555,6 +571,8 @@ serde = "1.0"
         Some(5), // max_parallel - should limit to 5 results and also serve as chunked
         None,    // chunked - not provided
         false,   // spread
+        false,   // randomize
+        None,    // seed
         None,    // features
         None,    // skip_features
         None,    // required_features

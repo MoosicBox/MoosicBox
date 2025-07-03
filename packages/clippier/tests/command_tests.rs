@@ -9,6 +9,8 @@ fn test_process_configs_basic() {
         None,
         None,
         false,
+        false, // randomize = false for test
+        None,
         None,
         None,
         None,

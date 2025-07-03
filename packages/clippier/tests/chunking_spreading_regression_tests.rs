@@ -120,6 +120,8 @@ fn test_basic_chunking_respects_limit() {
         None,    // max_parallel
         Some(5), // chunked - limit to 5 features
         false,   // spread
+        false,   // randomize
+        None,    // seed
         None,    // features
         None,    // skip_features
         None,    // required_features
@@ -155,15 +157,17 @@ fn test_basic_chunking_respects_limit() {
         None,     // max_parallel
         Some(10), // chunked - limit to 10 features
         false,    // spread
-        None,     // features
-        None,     // skip_features
-        None,     // required_features
-        None,     // changed_files
+        false,
+        None,
+        None, // features
+        None, // skip_features
+        None, // required_features
+        None, // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
         #[cfg(feature = "git-diff")]
         None, // git_head
-        false,    // include_reasoning
+        false, // include_reasoning
         OutputType::Json,
     );
 
@@ -196,6 +200,8 @@ fn test_basic_spreading_distributes_features() {
         None, // max_parallel
         None, // chunked
         true, // spread - distribute features
+        false,
+        None,
         None, // features
         None, // skip_features
         None, // required_features
@@ -240,6 +246,8 @@ fn test_chunking_and_spreading_combination() {
         None,    // max_parallel
         Some(3), // chunked - limit to 3 features
         true,    // spread - distribute features
+        false,   // randomize
+        None,    // seed
         None,    // features
         None,    // skip_features
         None,    // required_features
@@ -287,6 +295,8 @@ fn test_max_parallel_with_chunking() {
         Some(8), // max_parallel - limit to 8 total packages
         Some(4), // chunked - limit to 4 features per package
         false,   // spread
+        false,   // randomize
+        None,    // seed
         None,    // features
         None,    // skip_features
         None,    // required_features
@@ -333,6 +343,8 @@ fn test_changed_files_respects_chunking_and_spreading() {
         None,    // max_parallel
         Some(6), // chunked - limit to 6 features
         true,    // spread - distribute features
+        false,   // randomize
+        None,    // seed
         None,    // features
         None,    // skip_features
         None,    // required_features
@@ -386,6 +398,8 @@ fn test_chunking_with_small_limit() {
         None,    // max_parallel
         Some(1), // chunked - limit to 1 feature per package
         false,   // spread
+        false,   // randomize
+        None,    // seed
         None,    // features
         None,    // skip_features
         None,    // required_features
@@ -427,15 +441,17 @@ fn test_empty_workspace_with_chunking_spreading() {
         None,     // max_parallel
         Some(10), // chunked
         true,     // spread
-        None,     // features
-        None,     // skip_features
-        None,     // required_features
-        None,     // changed_files
+        false,
+        None,
+        None, // features
+        None, // skip_features
+        None, // required_features
+        None, // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
         #[cfg(feature = "git-diff")]
         None, // git_head
-        false,    // include_reasoning
+        false, // include_reasoning
         OutputType::Json,
     );
 
@@ -510,6 +526,8 @@ serde = "1.0"
         None,    // max_parallel
         Some(3), // chunked - limit to 3 features
         true,    // spread
+        false,   // randomize
+        None,    // seed
         None,    // features
         None,    // skip_features
         None,    // required_features
@@ -556,6 +574,8 @@ fn test_complex_scenario_all_flags() {
         Some(5), // max_parallel - limit to 5 total packages
         Some(4), // chunked - limit to 4 features per package
         true,    // spread - distribute features
+        false,   // randomize
+        None,    // seed
         None,    // features
         None,    // skip_features
         None,    // required_features
@@ -600,15 +620,17 @@ fn test_chunking_without_spreading() {
         None,     // max_parallel
         Some(15), // chunked - limit to 15 features
         false,    // spread - don't distribute
-        None,     // features
-        None,     // skip_features
-        None,     // required_features
-        None,     // changed_files
+        false,
+        None,
+        None, // features
+        None, // skip_features
+        None, // required_features
+        None, // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
         #[cfg(feature = "git-diff")]
         None, // git_head
-        false,    // include_reasoning
+        false, // include_reasoning
         OutputType::Json,
     );
 
@@ -648,6 +670,8 @@ fn test_spreading_without_chunking() {
         None, // max_parallel
         None, // chunked - no limit
         true, // spread - distribute features
+        false,
+        None,
         None, // features
         None, // skip_features
         None, // required_features

@@ -66,10 +66,34 @@ clippier features Cargo.toml \
   --max 10 \
   --max-parallel 4 \
   --chunked 2 \
+  --spread \
+  --randomize \
   --features "default,audio,video" \
   --skip-features "test,dev" \
   --output json
 ```
+
+#### Deterministic Randomization with Seed
+
+Use a specific seed for reproducible randomized feature combinations:
+```bash
+clippier features Cargo.toml \
+  --chunked 3 \
+  --randomize \
+  --seed 12345 \
+  --output json
+```
+
+When `--randomize` is used without `--seed`, a random seed is generated and printed to stderr (not affecting JSON output):
+```bash
+clippier features Cargo.toml \
+  --chunked 3 \
+  --randomize \
+  --output json
+# Outputs: Generated seed: 1234567890 (to stderr)
+```
+
+This enables replaying the same randomized distribution by using the printed seed value.
 
 #### Enhanced Change Impact Analysis 
 
@@ -165,6 +189,45 @@ This enhanced mode:
 - Maps external dependency changes to affected workspace packages
 - Provides comprehensive impact analysis for both internal and external changes
 
+### Docker Deployment
+
+Generate production-ready Dockerfiles with comprehensive dependency analysis:
+
+```bash
+# Generate Dockerfile for server package with all potential dependencies
+clippier generate-dockerfile . server \
+  --features "production,postgres" \
+  --output docker/Dockerfile.server \
+  --port 8080 \
+  --build-args "--release --locked"
+```
+
+### Change Impact Analysis
+
+Determine test scope based on changed files and external dependencies:
+
+```bash
+# Find affected packages from git changes including external deps
+CHANGED=$(git diff --name-only HEAD~1)
+clippier affected-packages . \
+  --changed-files "$CHANGED" \
+  --git-base "HEAD~1" \
+  --git-head "HEAD" \
+  --output json
+```
+
+### Smart Workspace Dependency Management
+
+Analyze workspace dependencies with different levels of detail:
+
+```bash
+# Get minimal dependencies for current features
+clippier workspace-deps . my-package --features "default,feature1"
+
+# Get all potential dependencies for Docker builds
+clippier workspace-deps . my-package --all-potential-deps --format json
+```
+
 ## Command Line Options
 
 ### Global Options
@@ -183,6 +246,8 @@ This enhanced mode:
 | `--max-parallel` | Maximum parallel jobs | - |
 | `--chunked` | Group features into chunks | - |
 | `--spread` | Spread features across jobs | false |
+| `--randomize` | Randomize features before chunking/spreading | false |
+| `--seed` | Seed for deterministic randomization | - |
 | `--features` | Specific features to include | - |
 | `--skip-features` | Features to exclude | - |
 | `--required-features` | Always-required features | - |
@@ -273,9 +338,32 @@ clippier features Cargo.toml \
   --max-parallel 6 \
   --chunked 3 \
   --spread \
+  --randomize \
   --skip-features "dev,test" \
   --output json > feature-matrix.json
 ```
+
+The `--randomize` flag shuffles features before chunking, creating different feature combinations across CI runs. This helps catch issues with various feature groupings that might not be discovered with deterministic chunking.
+
+#### Reproducible CI Builds
+
+For reproducible builds (useful for debugging specific feature combinations), use the `--seed` parameter:
+
+```bash
+# Generate reproducible feature combinations using a specific seed
+clippier features Cargo.toml \
+  --changed-files "$CHANGED_FILES" \
+  --max 20 \
+  --max-parallel 6 \
+  --chunked 3 \
+  --spread \
+  --randomize \
+  --seed 1234567890 \
+  --skip-features "dev,test" \
+  --output json > feature-matrix.json
+```
+
+This ensures the same feature distribution is generated every time, enabling reproduction of specific CI failures.
 
 ### Docker Deployment
 
@@ -288,20 +376,6 @@ clippier generate-dockerfile . server \
   --output docker/Dockerfile.server \
   --port 8080 \
   --build-args "--release --locked"
-```
-
-### Change Impact Analysis
-
-Determine test scope based on changed files and external dependencies:
-
-```bash
-# Find affected packages from git changes including external deps
-CHANGED=$(git diff --name-only HEAD~1)
-clippier affected-packages . \
-  --changed-files "$CHANGED" \
-  --git-base "HEAD~1" \
-  --git-head "HEAD" \
-  --output json
 ```
 
 ### Smart Workspace Dependency Management

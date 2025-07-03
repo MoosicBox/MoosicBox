@@ -82,6 +82,14 @@ enum Commands {
         #[arg(short, long)]
         spread: bool,
 
+        /// Randomize features before chunking/spreading (useful for CI to test different feature combinations)
+        #[arg(long)]
+        randomize: bool,
+
+        /// Seed for randomization (enables deterministic randomization when provided)
+        #[arg(long)]
+        seed: Option<u64>,
+
         #[arg(long)]
         features: Option<String>,
 
@@ -213,6 +221,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_parallel,
             chunked,
             spread,
+            randomize,
+            seed,
             features,
             skip_features,
             required_features,
@@ -231,6 +241,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             max_parallel,
             chunked,
             spread,
+            randomize,
+            seed,
             features.as_deref(),
             skip_features.as_deref(),
             required_features.as_deref(),

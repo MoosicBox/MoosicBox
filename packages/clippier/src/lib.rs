@@ -9,6 +9,7 @@ use std::{
 
 use clap::ValueEnum;
 use itertools::Itertools;
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
@@ -179,7 +180,35 @@ impl<'a, T> Iterator for SplitIter<'a, T> {
 }
 
 #[must_use]
-pub fn process_features(features: Vec<String>, chunked: Option<u16>, spread: bool) -> FeaturesList {
+pub fn process_features(
+    features: Vec<String>,
+    chunked: Option<u16>,
+    spread: bool,
+    randomize: bool,
+    seed: Option<u64>,
+) -> FeaturesList {
+    let mut features = features;
+
+    // Randomize features if requested
+    if randomize {
+        use rand::SeedableRng;
+
+        let actual_seed = seed.unwrap_or_else(|| {
+            // Generate a random seed
+            let generated_seed = rand::random::<u64>();
+            eprintln!("Generated seed: {generated_seed}");
+            generated_seed
+        });
+
+        // Convert u64 seed to 32-byte array for StdRng
+        let mut seed_bytes = [0u8; 32];
+        seed_bytes[..8].copy_from_slice(&actual_seed.to_le_bytes());
+
+        // Use the seed (provided or generated) for deterministic randomization
+        let mut rng = rand::rngs::StdRng::from_seed(seed_bytes);
+        features.shuffle(&mut rng);
+    }
+
     if let Some(max_features_per_chunk) = chunked {
         let chunk_size = max_features_per_chunk as usize;
 
@@ -366,6 +395,8 @@ pub fn process_configs(
     max: Option<u16>,
     chunked: Option<u16>,
     spread: bool,
+    randomize: bool,
+    seed: Option<u64>,
     specific_features: Option<&[String]>,
     skip_features_override: Option<&[String]>,
     required_features_override: Option<&[String]>,
@@ -426,6 +457,8 @@ pub fn process_configs(
                     .and_then(|x| x.parallelization.as_ref().map(|x| x.chunked))
                     .or(chunked),
                 spread,
+                randomize,
+                seed,
             );
             match &features {
                 FeaturesList::Chunked(x) => {
@@ -1863,6 +1896,8 @@ pub fn collect_environment_variables(
         None,
         None,
         false,
+        false, // randomize = false for system dependencies collection
+        None,  // seed = None for system dependencies collection
         specific_features.as_deref(),
         None,
         None,
@@ -1931,6 +1966,8 @@ pub fn collect_system_dependencies(
             None,
             None,
             false,
+            false, // randomize = false for dependencies collection
+            None,  // seed = None for dependencies collection
             specific_features.as_deref(),
             None,
             None,
@@ -2019,6 +2056,8 @@ pub fn handle_dependencies_command(
         None,
         None,
         false,
+        false, // randomize = false for dependencies command
+        None,  // seed = None for dependencies command
         specific_features.as_deref(),
         None,
         None,
@@ -2069,6 +2108,8 @@ pub fn handle_environment_command(
         None,
         None,
         false,
+        false, // randomize = false for environment command
+        None,  // seed = None for environment command
         specific_features.as_deref(),
         None,
         None,
@@ -2119,6 +2160,8 @@ pub fn handle_ci_steps_command(
         None,
         None,
         false,
+        false, // randomize = false for ci steps command
+        None,  // seed = None for ci steps command
         specific_features.as_deref(),
         None,
         None,
@@ -2165,6 +2208,8 @@ pub fn handle_features_command(
     max_parallel: Option<u16>,
     chunked: Option<u16>,
     spread: bool,
+    randomize: bool,
+    seed: Option<u64>,
     features: Option<&str>,
     skip_features: Option<&str>,
     required_features: Option<&str>,
@@ -2377,8 +2422,10 @@ pub fn handle_features_command(
                     &package_dir,
                     offset,
                     max,
-                    chunked, // Respect chunking when filtering by changed files
-                    spread,  // Respect spreading when filtering by changed files
+                    chunked,   // Respect chunking when filtering by changed files
+                    spread,    // Respect spreading when filtering by changed files
+                    randomize, // Respect randomization when filtering by changed files
+                    seed,      // Respect seed when filtering by changed files
                     specific_features.as_deref(),
                     skip_features_list.as_deref(),
                     required_features_list.as_deref(),
@@ -2448,6 +2495,8 @@ pub fn handle_features_command(
         max,
         effective_chunked,
         spread,
+        randomize,
+        seed,
         specific_features.as_deref(),
         skip_features_list.as_deref(),
         required_features_list.as_deref(),
@@ -2716,6 +2765,8 @@ pub fn process_workspace_configs(
     max: Option<u16>,
     chunked: Option<u16>,
     spread: bool,
+    randomize: bool,
+    seed: Option<u64>,
     specific_features: Option<&[String]>,
     skip_features_override: Option<&[String]>,
     required_features_override: Option<&[String]>,
@@ -2744,6 +2795,8 @@ pub fn process_workspace_configs(
                 max,
                 chunked,
                 spread,
+                randomize,
+                seed,
                 specific_features,
                 skip_features_override,
                 required_features_override,
@@ -2772,6 +2825,8 @@ pub fn process_workspace_configs(
                     max,
                     chunked,
                     spread,
+                    randomize,
+                    seed,
                     specific_features,
                     skip_features_override,
                     required_features_override,
