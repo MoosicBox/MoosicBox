@@ -101,11 +101,43 @@ runs:
               echo "expanded-path=${EXPANDED_PATH}" >> $GITHUB_OUTPUT
               echo "📍 Expanded output path: ${EXPANDED_PATH}"
 
+        - name: Fix Windows path if needed
+          id: fix-windows-path
+          shell: ${{ inputs.shell }}
+          run: |
+              EXPANDED_PATH="${{ steps.expand-path.outputs.expanded-path }}"
+
+              # On Windows, convert Unix-style paths to Windows-style paths
+              if [ "${{ runner.os }}" = "Windows" ]; then
+                echo "🪟 Windows detected, checking path format..."
+
+                # Convert /c/Users/... to C:\Users\... format
+                if [[ "$EXPANDED_PATH" =~ ^/([a-zA-Z])/(.*)$ ]]; then
+                  DRIVE_LETTER="${BASH_REMATCH[1]}"
+                  REST_OF_PATH="${BASH_REMATCH[2]}"
+                  WINDOWS_PATH="${DRIVE_LETTER}:\\${REST_OF_PATH//\//\\}"
+                  echo "🔄 Converting Unix-style path to Windows-style:"
+                  echo "  From: ${EXPANDED_PATH}"
+                  echo "  To: ${WINDOWS_PATH}"
+                  EXPANDED_PATH="${WINDOWS_PATH}"
+                fi
+
+                # If the expanded path doesn't end with .exe and the file doesn't exist,
+                # but a .exe version does exist, use that instead
+                if [[ ! "$EXPANDED_PATH" =~ \.exe$ ]] && [ ! -f "$EXPANDED_PATH" ] && [ -f "${EXPANDED_PATH}.exe" ]; then
+                  echo "🪟 Windows detected: Found ${EXPANDED_PATH}.exe instead of ${EXPANDED_PATH}"
+                  EXPANDED_PATH="${EXPANDED_PATH}.exe"
+                fi
+              fi
+
+              echo "final-path=${EXPANDED_PATH}" >> $GITHUB_OUTPUT
+              echo "📍 Final output path: ${EXPANDED_PATH}"
+
         - name: Check for existing cache
           id: cache-check
           uses: actions/cache/restore@v4
           with:
-              path: ${{ steps.expand-path.outputs.expanded-path }}
+              path: ${{ steps.fix-windows-path.outputs.final-path }}
               key: ${{ steps.set-cache-key.outputs.cache-key }}
               lookup-only: true
 
@@ -114,7 +146,7 @@ runs:
           id: cache-restore
           uses: actions/cache/restore@v4
           with:
-              path: ${{ steps.expand-path.outputs.expanded-path }}
+              path: ${{ steps.fix-windows-path.outputs.final-path }}
               key: ${{ steps.set-cache-key.outputs.cache-key }}
 
         - name: Check for existing artifact
@@ -157,19 +189,19 @@ runs:
               echo "📂 Working directory: ${{ inputs.working-directory }}"
               ${{ inputs.command }}
 
-              # Verify the output was created (using expanded path)
-              EXPANDED_PATH="${{ steps.expand-path.outputs.expanded-path }}"
-              if [ ! -e "${EXPANDED_PATH}" ]; then
-                echo "❌ Output file ${EXPANDED_PATH} was not created by the command!"
+              # Verify the output was created (using final path)
+              FINAL_PATH="${{ steps.fix-windows-path.outputs.final-path }}"
+              if [ ! -e "${FINAL_PATH}" ]; then
+                echo "❌ Output file ${FINAL_PATH} was not created by the command!"
                 exit 1
               fi
-              echo "✅ Command completed successfully, output created: ${EXPANDED_PATH}"
+              echo "✅ Command completed successfully, output created: ${FINAL_PATH}"
 
         - name: Save to cache
           if: steps.cache-check.outputs.cache-hit != 'true' && (steps.check-artifact.outputs.artifact-exists != 'true' || steps.download-artifact.outcome == 'failure')
           uses: actions/cache/save@v4
           with:
-              path: ${{ steps.expand-path.outputs.expanded-path }}
+              path: ${{ steps.fix-windows-path.outputs.final-path }}
               key: ${{ steps.set-cache-key.outputs.cache-key }}
 
         - name: Upload artifact
@@ -177,47 +209,47 @@ runs:
           uses: actions/upload-artifact@v4
           with:
               name: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}
-              path: ${{ steps.expand-path.outputs.expanded-path }}
+              path: ${{ steps.fix-windows-path.outputs.final-path }}
               retention-days: 30
               compression-level: 9
 
         - name: Setup output file
           shell: ${{ inputs.shell }}
           run: |
-              EXPANDED_PATH="${{ steps.expand-path.outputs.expanded-path }}"
+              FINAL_PATH="${{ steps.fix-windows-path.outputs.final-path }}"
 
               # Make executable if requested
               if [ "${{ inputs.make-executable }}" = "true" ]; then
                 echo "🔧 Making output file executable..."
-                chmod +x "${EXPANDED_PATH}"
+                chmod +x "${FINAL_PATH}"
               fi
 
               # Log detailed info
               echo "🔧 Output file status:"
               echo "  - Cache hit: ${{ steps.cache-check.outputs.cache-hit }}"
               echo "  - Checksum: ${{ steps.compute-checksum.outputs.checksum }}"
-              if [ -f "${EXPANDED_PATH}" ]; then
-                echo "  - File size: $(du -h "${EXPANDED_PATH}" | cut -f1)"
-                echo "  - File path: $(readlink -f "${EXPANDED_PATH}")"
+              if [ -f "${FINAL_PATH}" ]; then
+                echo "  - File size: $(du -h "${FINAL_PATH}" | cut -f1)"
+                echo "  - File path: $(readlink -f "${FINAL_PATH}")"
                 if [ "${{ inputs.make-executable }}" = "true" ]; then
-                  echo "  - Executable: $(ls -la "${EXPANDED_PATH}" | cut -d' ' -f1)"
+                  echo "  - Executable: $(ls -la "${FINAL_PATH}" | cut -d' ' -f1)"
                 fi
               fi
 
               # Verify the output works if verification command provided
               if [ -n "${{ inputs.verify-command }}" ]; then
                 echo "🧪 Verifying output file..."
-                "${EXPANDED_PATH}" ${{ inputs.verify-command }}
+                "${FINAL_PATH}" ${{ inputs.verify-command }}
                 echo "✅ Output file verification successful"
               fi
 
         - name: Report cache status
           shell: ${{ inputs.shell }}
           run: |
-              EXPANDED_PATH="${{ steps.expand-path.outputs.expanded-path }}"
+              FINAL_PATH="${{ steps.fix-windows-path.outputs.final-path }}"
 
               if [ "${{ steps.cache-check.outputs.cache-hit }}" = "true" ]; then
-                echo "🎯 Cache HIT! Using cached version of ${EXPANDED_PATH}"
+                echo "🎯 Cache HIT! Using cached version of ${FINAL_PATH}"
               elif [ "${{ steps.check-artifact.outputs.artifact-exists }}" = "true" ] && [ "${{ steps.download-artifact.outcome }}" = "success" ]; then
                 echo "📦 Artifact downloaded successfully"
               elif [ "${{ steps.check-artifact.outputs.artifact-exists }}" = "true" ] && [ "${{ steps.download-artifact.outcome }}" = "failure" ]; then
@@ -231,7 +263,7 @@ runs:
               echo "  - Checksum: ${{ steps.compute-checksum.outputs.checksum }}"
               echo "  - Cache Key: ${{ steps.set-cache-key.outputs.cache-key }}"
               echo "  - Artifact: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}"
-              echo "  - Output: ${EXPANDED_PATH}"
+              echo "  - Output: ${FINAL_PATH}"
               if [ "${{ steps.cache-check.outputs.cache-hit }}" != "true" ]; then
                 echo "  - Artifact exists: ${{ steps.check-artifact.outputs.artifact-exists }}"
               fi
