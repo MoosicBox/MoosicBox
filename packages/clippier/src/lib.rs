@@ -1264,8 +1264,6 @@ pub fn generate_dockerfile_content(
         }
     }
 
-    content.push('\n');
-
     // Copy workspace manifest files
     writeln!(
         content,
