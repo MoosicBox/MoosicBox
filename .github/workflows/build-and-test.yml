@@ -727,7 +727,7 @@ jobs:
 
                   if [[ "$TAURI_REASONING" != "" && "$TAURI_REASONING" != "null" ]]; then
                       echo "- <details>" >> $GITHUB_STEP_SUMMARY
-                      echo "  <summary>**Tauri Release**: $TAURI_STATUS</summary>" >> $GITHUB_STEP_SUMMARY
+                      echo "  <summary>Tauri Release: $TAURI_STATUS</summary>" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
 
                       # Extract and display the reasoning
