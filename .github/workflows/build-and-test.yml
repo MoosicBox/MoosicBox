@@ -140,6 +140,8 @@ jobs:
             matrix: ${{ steps.analyze-changes.outputs.matrix }}
             has-changes: ${{ steps.analyze-changes.outputs.has-changes }}
             has-tauri-changes: ${{ steps.analyze-changes.outputs.has-tauri-changes }}
+            reasoning: ${{ steps.analyze-changes.outputs.reasoning }}
+            tauri-reasoning: ${{ steps.analyze-changes.outputs.tauri-reasoning }}
             docker-matrix: ${{ steps.analyze-docker-changes.outputs.docker-matrix }}
             has-docker-changes: ${{ steps.analyze-docker-changes.outputs.has-docker-changes }}
             docker-count: ${{ steps.analyze-docker-changes.outputs.docker-count }}
@@ -295,6 +297,22 @@ jobs:
                       # Log the formatted JSON output for debugging
                       echo "📋 Full clippier output with reasoning:"
                       echo "$FULL_OUTPUT" | jq .
+
+                      # For manual/scheduled runs, enhance the reasoning with manual context
+                      if [[ "$ANALYSIS_TYPE" == "full" ]]; then
+                          MANUAL_REASON=""
+                          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                              MANUAL_REASON="Manual workflow dispatch - all packages included"
+                          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+                              MANUAL_REASON="Scheduled workflow run - all packages included"
+                          fi
+
+                          # Add manual reasoning to each package in the output
+                          if [[ -n "$MANUAL_REASON" ]]; then
+                              echo "🔄 Adding manual reasoning to all packages: $MANUAL_REASON"
+                              FULL_OUTPUT=$(echo "$FULL_OUTPUT" | jq --arg reason "$MANUAL_REASON" 'map(. + {reasoning: [($reason)]})')
+                          fi
+                      fi
 
                       # Extract matrix (same as before, but preserve reasoning for later)
                       MATRIX=$(
@@ -564,29 +582,58 @@ jobs:
                       echo "📊 **Build Matrix**: $MATRIX_LENGTH $JOB_PLURAL for $PACKAGES_LENGTH $PACKAGE_PLURAL will be built/tested" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
                       echo "**Affected packages:**" >> $GITHUB_STEP_SUMMARY
-                      echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -r 'group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' >> $GITHUB_STEP_SUMMARY
 
-                      # Add reasoning details in collapsible sections
+                      # Combine matrix and reasoning data to show reasoning under each package
                       REASONING_DATA='${{ needs.determine-affected-packages.outputs.reasoning }}'
-                      if [[ "$REASONING_DATA" != "" && "$REASONING_DATA" != "null" ]]; then
-                          echo "" >> $GITHUB_STEP_SUMMARY
-                          echo "### 🔍 Dependency Analysis Details" >> $GITHUB_STEP_SUMMARY
-                          echo "" >> $GITHUB_STEP_SUMMARY
+                      echo "🔍 DEBUG: Reasoning data length: ${#REASONING_DATA}"
+                      echo "🔍 DEBUG: First 200 chars of reasoning data: ${REASONING_DATA:0:200}"
 
-                          # Group packages by name and show their reasoning
-                          echo "$REASONING_DATA" | jq -r '
+                      # Debug matrix structure
+                      echo "🔍 DEBUG: Matrix structure:"
+                      echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -c '.[0:3]'
+
+                      if [[ "$REASONING_DATA" != "" && "$REASONING_DATA" != "null" ]]; then
+                          # Generate packages list with inline reasoning - simplified approach
+                          echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -r --argjson reasoning "$REASONING_DATA" '
+                              # Group packages and get unique names with job counts
                               group_by(.name) |
                               map({
                                   name: .[0].name,
-                                  reasoning: (map(.reasoning) | unique)
+                                  job_count: length
                               }) |
+                              # Add reasoning by matching package names
                               map(
-                                  "<details>\n<summary><strong>" + (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")) + "</strong> - Why this package is affected</summary>\n\n" +
-                                  (.reasoning | map("- " + .) | join("\n")) +
-                                  "\n</details>"
+                                  . as $pkg |
+                                  $pkg + {
+                                      reasoning: (
+                                          $reasoning |
+                                          map(select(
+                                              .name == ("moosicbox_" + $pkg.name) or
+                                              .name == ("switchy_" + $pkg.name) or
+                                              .name == ("hyperchad_" + $pkg.name) or
+                                              .name == $pkg.name
+                                          )) |
+                                          map(.reasoning // []) |
+                                          flatten |
+                                          unique
+                                      )
+                                  }
                               ) |
-                              join("\n\n")
+                              # Generate the markdown output
+                              map(
+                                  if (.reasoning | length) > 0 then
+                                      "- <details>\n  <summary>" + .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")</summary>\n  \n" +
+                                      (.reasoning | map("  - " + .) | join("\n")) +
+                                      "\n  </details>"
+                                  else
+                                      "- " + .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")"
+                                  end
+                              ) |
+                              join("\n")
                           ' >> $GITHUB_STEP_SUMMARY
+                      else
+                          # Fallback to simple list without reasoning
+                          echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -r 'group_by(.name) | map("- \(.[0].name) (\(length) job\(if length > 1 then "s" else "" end))") | .[]' >> $GITHUB_STEP_SUMMARY
                       fi
                   else
                       if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "schedule" ]]; then
