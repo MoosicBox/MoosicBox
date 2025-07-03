@@ -153,8 +153,17 @@ jobs:
 
             - uses: dtolnay/rust-toolchain@stable
 
-            - name: Build clippier with git-diff support
-              run: cargo build --package clippier --features git-diff
+            - name: Build clippier with smart caching
+              id: build-clippier
+              uses: ./cache-artifact
+              with:
+                  directory: ./packages/clippier
+                  command: cargo build --package clippier --features git-diff --release
+                  output-path: ./target/release/clippier
+                  artifact-name: clippier-binary
+                  cache-key-prefix: moosicbox-clippier
+                  make-executable: true
+                  verify-command: --version
 
             - name: Analyze changes and generate matrix
               id: analyze-changes
@@ -267,17 +276,17 @@ jobs:
 
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       echo "🚀 Workflow dispatch detected - building all packages"
-                      CLIPPIER_CMD="./target/debug/clippier features . --chunked 15 --max-parallel 256 -o json --spread"
+                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread"
                       ANALYSIS_TYPE="full"
                       SHOULD_BUILD=true
                   elif [[ "${{ github.event_name }}" == "schedule" ]]; then
                       echo "⏰ Scheduled run - building all packages"
-                      CLIPPIER_CMD="./target/debug/clippier features . --chunked 15 --max-parallel 256 -o json --spread"
+                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread"
                       ANALYSIS_TYPE="full"
                       SHOULD_BUILD=true
                   elif [[ -n "$CHANGED_FILES" ]]; then
                       echo "🔍 Using smart dependency analysis for Cargo.lock/Cargo.toml changes"
-                      CLIPPIER_CMD="./target/debug/clippier features . --changed-files \"$CHANGED_FILES\" --git-base \"$BASE_SHA\" --git-head \"$HEAD_SHA\" --chunked 15 --max-parallel 256 -o json --spread"
+                      CLIPPIER_CMD="./target/release/clippier features . --changed-files \"$CHANGED_FILES\" --git-base \"$BASE_SHA\" --git-head \"$HEAD_SHA\" --chunked 15 --max-parallel 256 -o json --spread"
                       ANALYSIS_TYPE="smart"
                       SHOULD_BUILD=true
                   else
@@ -398,10 +407,10 @@ jobs:
 
                       if [[ "$ANALYSIS_TYPE" == "smart" ]]; then
                           echo "🔍 Using smart dependency analysis for Tauri check"
-                          TAURI_CHECK_RESULT=$(./target/debug/clippier affected-packages . --changed-files "$CHANGED_FILES" --git-base "$BASE_SHA" --git-head "$HEAD_SHA" --target-package moosicbox_app --output json --include-reasoning)
+                          TAURI_CHECK_RESULT=$(./target/release/clippier affected-packages . --changed-files "$CHANGED_FILES" --git-base "$BASE_SHA" --git-head "$HEAD_SHA" --target-package moosicbox_app --output json --include-reasoning)
                       else
                           echo "📝 Using file-based analysis for Tauri check"
-                          TAURI_CHECK_RESULT=$(./target/debug/clippier affected-packages . --changed-files "$CHANGED_FILES" --target-package moosicbox_app --output json --include-reasoning)
+                          TAURI_CHECK_RESULT=$(./target/release/clippier affected-packages . --changed-files "$CHANGED_FILES" --target-package moosicbox_app --output json --include-reasoning)
                       fi
 
                       echo "📋 Tauri check result with reasoning:"

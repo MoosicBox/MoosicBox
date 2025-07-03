@@ -28,6 +28,14 @@ inputs:
         description: 'Shell to use for running commands'
         required: false
         default: 'bash'
+    make-executable:
+        description: 'Whether to make the output file executable'
+        required: false
+        default: 'false'
+    verify-command:
+        description: 'Command to run to verify the output works (e.g., "--version")'
+        required: false
+        default: ''
 
 outputs:
     cache-hit:
@@ -162,6 +170,34 @@ runs:
               path: ${{ inputs.output-path }}
               retention-days: 30
               compression-level: 9
+
+        - name: Setup output file
+          shell: ${{ inputs.shell }}
+          run: |
+              # Make executable if requested
+              if [ "${{ inputs.make-executable }}" = "true" ]; then
+                echo "🔧 Making output file executable..."
+                chmod +x "${{ inputs.output-path }}"
+              fi
+
+              # Log detailed info
+              echo "🔧 Output file status:"
+              echo "  - Cache hit: ${{ steps.cache-check.outputs.cache-hit }}"
+              echo "  - Checksum: ${{ steps.compute-checksum.outputs.checksum }}"
+              if [ -f "${{ inputs.output-path }}" ]; then
+                echo "  - File size: $(du -h "${{ inputs.output-path }}" | cut -f1)"
+                echo "  - File path: $(readlink -f "${{ inputs.output-path }}")"
+                if [ "${{ inputs.make-executable }}" = "true" ]; then
+                  echo "  - Executable: $(ls -la "${{ inputs.output-path }}" | cut -d' ' -f1)"
+                fi
+              fi
+
+              # Verify the output works if verification command provided
+              if [ -n "${{ inputs.verify-command }}" ]; then
+                echo "🧪 Verifying output file..."
+                "${{ inputs.output-path }}" ${{ inputs.verify-command }}
+                echo "✅ Output file verification successful"
+              fi
 
         - name: Report cache status
           shell: ${{ inputs.shell }}
