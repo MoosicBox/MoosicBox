@@ -1194,71 +1194,68 @@ pub fn generate_dockerfile_content(
     let system_deps =
         collect_system_dependencies(workspace_root, dependencies, enabled_features, "ubuntu")?;
 
-    if system_deps.is_empty() {
-        // Fallback to basic dependencies if no clippier.toml found
-        writeln!(
-            content,
-            "# Install basic build dependencies (early for better Docker layer caching)\n",
-        )?;
-        writeln!(content, "RUN apt-get update && apt-get -y install cmake\n")?;
-    } else {
-        writeln!(
-            content,
-            "# Install system dependencies (early for better Docker layer caching)"
-        )?;
-        writeln!(content, "RUN apt-get update && \\")?;
+    // Always ensure essential build tools are available
+    writeln!(
+        content,
+        "# Install system dependencies (early for better Docker layer caching)"
+    )?;
+    writeln!(content, "RUN apt-get update && \\")?;
 
-        // Parse and consolidate apt-get install commands
-        let mut install_packages = BTreeSet::new();
-        let mut custom_commands = Vec::new();
+    // Parse and consolidate apt-get install commands
+    let mut install_packages = BTreeSet::new();
+    let mut custom_commands = Vec::new();
 
-        for dep in &system_deps {
-            if dep.contains("apt-get install") {
-                // Extract package names from apt-get install commands
-                if let Some(packages_part) = dep.split("apt-get install").nth(1) {
-                    for package in packages_part.split_whitespace() {
-                        if !package.is_empty() && !package.starts_with('-') {
-                            install_packages.insert(package.to_string());
-                        }
+    // Add essential build dependencies that are always needed
+    install_packages.insert("build-essential".to_string());
+    install_packages.insert("cmake".to_string());
+    install_packages.insert("pkg-config".to_string());
+
+    for dep in &system_deps {
+        if dep.contains("apt-get install") {
+            // Extract package names from apt-get install commands
+            if let Some(packages_part) = dep.split("apt-get install").nth(1) {
+                for package in packages_part.split_whitespace() {
+                    if !package.is_empty() && !package.starts_with('-') {
+                        install_packages.insert(package.to_string());
                     }
                 }
-            } else if !dep.contains("apt-get update") {
-                // Keep other custom commands
-                custom_commands.push(dep);
             }
+        } else if !dep.contains("apt-get update") {
+            // Keep other custom commands
+            custom_commands.push(dep);
         }
-
-        // Install all packages in one command
-        if !install_packages.is_empty() {
-            let mut packages: Vec<String> = install_packages.into_iter().collect();
-            packages.sort();
-            writeln!(content, "    apt-get -y install {}", packages.join(" "))?;
-            if custom_commands.is_empty() {
-                content.push('\n');
-            } else {
-                writeln!(content, " && \\")?;
-            }
-        }
-
-        // Add custom commands
-        for (i, cmd) in custom_commands.iter().enumerate() {
-            if cmd.starts_with("sudo ") {
-                // Remove sudo since we're already running as root in Docker
-                let cmd_without_sudo = cmd.strip_prefix("sudo ").unwrap_or(cmd);
-                writeln!(content, "    {cmd_without_sudo}")?;
-            } else {
-                writeln!(content, "    {cmd}")?;
-            }
-
-            if i < custom_commands.len() - 1 {
-                writeln!(content, " && \\")?;
-            } else {
-                content.push('\n');
-            }
-        }
-
-        content.push('\n');
     }
+
+    // Install all packages in one command
+    if !install_packages.is_empty() {
+        let mut packages: Vec<String> = install_packages.into_iter().collect();
+        packages.sort();
+        writeln!(content, "    apt-get -y install {}", packages.join(" "))?;
+        if custom_commands.is_empty() {
+            content.push('\n');
+        } else {
+            writeln!(content, " && \\")?;
+        }
+    }
+
+    // Add custom commands
+    for (i, cmd) in custom_commands.iter().enumerate() {
+        if cmd.starts_with("sudo ") {
+            // Remove sudo since we're already running as root in Docker
+            let cmd_without_sudo = cmd.strip_prefix("sudo ").unwrap_or(cmd);
+            writeln!(content, "    {cmd_without_sudo}")?;
+        } else {
+            writeln!(content, "    {cmd}")?;
+        }
+
+        if i < custom_commands.len() - 1 {
+            writeln!(content, " && \\")?;
+        } else {
+            content.push('\n');
+        }
+    }
+
+    content.push('\n');
 
     // Copy workspace manifest files
     writeln!(
@@ -1279,61 +1276,28 @@ pub fn generate_dockerfile_content(
         "RUN sed -e '/^members = \\[/,/^\\]/c\\members = [{members_list}]' Cargo.toml > Cargo2.toml && mv Cargo2.toml Cargo.toml\n"
     )?;
 
-    // Copy Cargo.toml files for all dependencies
-    for (_, path) in dependencies {
-        writeln!(content, "COPY {path}/Cargo.toml {path}/Cargo.toml")?;
-    }
-    content.push('\n');
+    // Copy packages folder (dockerignore will filter out irrelevant packages)
+    writeln!(content, "# Copy packages folder for Cargo.toml files")?;
+    writeln!(content, "COPY packages/ packages/")?;
 
-    // Copy build.rs for target package if it exists
-    writeln!(content, "# Copy build.rs for target package if it exists")?;
+    // Remove source files, keeping only Cargo.toml and build.rs files for caching
+    writeln!(
+        content,
+        "RUN find packages/ -name '*.rs' ! -name 'build.rs' -delete"
+    )?;
 
-    // Check if build.rs exists for the target package
-    let build_rs_path = workspace_root.join(target_package_path).join("build.rs");
-    if build_rs_path.exists() {
-        writeln!(
-            content,
-            "COPY {target_package_path}/build.rs {target_package_path}/build.rs"
-        )?;
-    }
     content.push('\n');
 
     // Create stub source files for dependencies to enable Docker layer caching
     writeln!(content, "# Create stub source files for dependencies")?;
 
-    // Collect all the dependency packages (excluding target package)
-    let dependency_packages: Vec<&str> = dependencies
-        .iter()
-        .filter_map(|(name, path)| {
-            if name == target_package {
-                None
-            } else {
-                Some(path.as_str())
-            }
-        })
-        .collect();
+    // Create stub files for all packages (directories already exist from packages copy)
+    writeln!(
+        content,
+        "RUN find packages/ -type d -name 'src' -exec sh -c 'echo \"\" > \"$1/lib.rs\"' _ {{}} \\;"
+    )?;
 
-    if !dependency_packages.is_empty() {
-        // Create all directories and stub files in a single RUN command
-        writeln!(content, "RUN touch /tmp/stub_lib.rs")?;
-
-        // Create a single RUN command that creates directories and copies files
-        write!(content, "RUN ")?;
-        for (i, path) in dependency_packages.iter().enumerate() {
-            write!(
-                content,
-                "mkdir -p {path}/src && cp /tmp/stub_lib.rs {path}/src/lib.rs"
-            )?;
-            if i < dependency_packages.len() - 1 {
-                writeln!(content, " && \\")?;
-                write!(content, "    ")?;
-            } else {
-                writeln!(content)?;
-            }
-        }
-    }
-
-    // Handle target package stub creation separately if it's a binary
+    // Handle target package - check if it's a binary and create main.rs
     let target_cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
     if target_cargo_path.exists() {
         let target_source = std::fs::read_to_string(&target_cargo_path)?;
@@ -1349,7 +1313,7 @@ pub fn generate_dockerfile_content(
         if has_binary {
             writeln!(
                 content,
-                "RUN mkdir -p {target_package_path}/src && echo 'fn main() {{}}' > {target_package_path}/src/main.rs"
+                "RUN echo 'fn main() {{}}' > {target_package_path}/src/main.rs"
             )?;
         }
     }
@@ -1375,20 +1339,9 @@ pub fn generate_dockerfile_content(
         "RUN cargo build --release --workspace --exclude {target_package}"
     )?;
 
-    // Now copy the actual source code for all packages
+    // Copy actual source code (dockerignore filters out irrelevant packages)
     writeln!(content, "\n# Copy actual source code")?;
-    for (_, path) in dependencies {
-        writeln!(content, "COPY {path}/src {path}/src")?;
-
-        // Copy any additional directories that might exist
-        let additional_dirs = ["tests", "benches", "examples"];
-        for dir in &additional_dirs {
-            let dir_path = workspace_root.join(path).join(dir);
-            if dir_path.exists() && dir_path.is_dir() {
-                writeln!(content, "COPY {path}/{dir} {path}/{dir}")?;
-            }
-        }
-    }
+    writeln!(content, "COPY packages/ packages/")?;
 
     // Final build with actual source code
     writeln!(content, "\n# Final build with actual source")?;
