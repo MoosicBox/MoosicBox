@@ -773,10 +773,19 @@ jobs:
         steps:
             - uses: dtolnay/rust-toolchain@stable
 
-            - name: Install cargo-machete
-              shell: bash
-              run: |
-                  cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+            - uses: actions/checkout@v4
+
+            - name: Setup cargo-machete
+              uses: ./cache-artifact
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-machete
+                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-machete${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+                  artifact-name: cargo-machete-${{ matrix.os }}-binary
+                  cache-key-prefix: cargo-machete
+                  make-executable: true
+                  verify-command: --version
 
             - uses: actions/upload-artifact@master
               if: ${{ matrix.os == 'macos-latest' }}
