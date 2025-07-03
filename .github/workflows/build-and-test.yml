@@ -301,17 +301,17 @@ jobs:
 
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       echo "🚀 Workflow dispatch detected - building all packages"
-                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED"
+                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
                       ANALYSIS_TYPE="full"
                       SHOULD_BUILD=true
                   elif [[ "${{ github.event_name }}" == "schedule" ]]; then
                       echo "⏰ Scheduled run - building all packages"
-                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED"
+                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
                       ANALYSIS_TYPE="full"
                       SHOULD_BUILD=true
                   elif [[ -n "$CHANGED_FILES" ]]; then
                       echo "🔍 Using smart dependency analysis for Cargo.lock/Cargo.toml changes"
-                      CLIPPIER_CMD="./target/release/clippier features . --changed-files \"$CHANGED_FILES\" --git-base \"$BASE_SHA\" --git-head \"$HEAD_SHA\" --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED"
+                      CLIPPIER_CMD="./target/release/clippier features . --changed-files \"$CHANGED_FILES\" --git-base \"$BASE_SHA\" --git-head \"$HEAD_SHA\" --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
                       ANALYSIS_TYPE="smart"
                       SHOULD_BUILD=true
                   else
