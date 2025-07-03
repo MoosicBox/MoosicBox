@@ -449,7 +449,13 @@ jobs:
                       for pkg in $AFFECTED_PACKAGE_NAMES; do
                           DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg\" // empty")
                           if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ] && [ "$DOCKER_INFO" != "empty" ]; then
-                              MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_INFO]")
+                              # Extract environment variables from the main matrix for this package
+                              PACKAGE_ENV=$(echo "$AFFECTED_MATRIX" | jq -r --arg pkg "$pkg" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .env // empty' | head -1)
+
+                              # Create the Docker matrix entry with environment variables
+                              DOCKER_ENTRY=$(echo "$DOCKER_INFO" | jq --arg env "$PACKAGE_ENV" '. + (if $env != "" and $env != "empty" then {env: $env} else {} end)')
+
+                              MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
                               DOCKER_NAME=$(echo "$DOCKER_INFO" | jq -r '.name')
                               if [ -z "$AFFECTED_DOCKER_PACKAGES" ]; then
                                   AFFECTED_DOCKER_PACKAGES="$pkg"
@@ -466,8 +472,21 @@ jobs:
                       if [ "$DOCKER_COUNT" -eq 0 ]; then
                           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
                               echo "🎯 Workflow dispatch: will build all Docker packages"
-                              # For manual dispatch, build all Docker packages
-                              MATRIX_PROJECTS=$(echo "$DOCKER_PACKAGES" | jq '[.[] | {name: .name, dockerfile: .dockerfile}]')
+                              # For manual dispatch, build all Docker packages with environment variables
+                              MATRIX_PROJECTS="[]"
+                              # Dynamically iterate over all packages in DOCKER_PACKAGES
+                              for pkg_name in $(echo "$DOCKER_PACKAGES" | jq -r 'keys[]'); do
+                                  DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg_name\" // empty")
+                                  if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ] && [ "$DOCKER_INFO" != "empty" ]; then
+                                      # Get environment variables for this package
+                                      PACKAGE_ENV=$(echo "$AFFECTED_MATRIX" | jq -r --arg pkg "$pkg_name" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .env // empty' | head -1)
+
+                                      # Create the Docker matrix entry with environment variables
+                                      DOCKER_ENTRY=$(echo "$DOCKER_INFO" | jq --arg env "$PACKAGE_ENV" '. + (if $env != "" and $env != "empty" then {env: $env} else {} end)')
+
+                                      MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
+                                  fi
+                              done
                               DOCKER_MATRIX="{\"include\": $MATRIX_PROJECTS}"
                               echo "has-docker-changes=true" >> $GITHUB_OUTPUT
                               AFFECTED_DOCKER_PACKAGES="all (manual dispatch)"
@@ -891,7 +910,23 @@ jobs:
             - name: Build Docker image
               shell: bash
               run: |
-                  docker build . -f ${{ matrix.dockerfile }}
+                  # Build Docker image with environment variables if they exist
+                  if [ -n "${{ matrix.env }}" ]; then
+                      echo "🌍 Building with environment variables: ${{ matrix.env }}"
+                      # Convert environment variables to Docker build args
+                      BUILD_ARGS=""
+                      while IFS='=' read -r key value; do
+                          if [ -n "$key" ] && [ -n "$value" ]; then
+                              BUILD_ARGS="$BUILD_ARGS --build-arg $key=$value"
+                          fi
+                      done < <(echo "${{ matrix.env }}" | tr ' ' '\n')
+
+                      echo "🐳 Docker build command: docker build $BUILD_ARGS . -f ${{ matrix.dockerfile }}"
+                      docker build $BUILD_ARGS . -f ${{ matrix.dockerfile }}
+                  else
+                      echo "🐳 Building without environment variables"
+                      docker build . -f ${{ matrix.dockerfile }}
+                  fi
 
     create-tauri-app-release:
         if: ${{ github.event_name != 'schedule' && !github.event.inputs.edge && needs.determine-affected-packages.outputs.has-tauri-changes == 'true' }}
