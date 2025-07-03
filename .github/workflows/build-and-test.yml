@@ -716,38 +716,47 @@ jobs:
                   echo "## 📱 Tauri Release Summary" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
 
+                  # Add Tauri reasoning details in collapsible section
+                  TAURI_REASONING='${{ needs.determine-affected-packages.outputs.tauri-reasoning }}'
+
                   if [[ "$HAS_TAURI_CHANGES" == "true" ]]; then
-                      echo "**Tauri Release**: Will be triggered" >> $GITHUB_STEP_SUMMARY
+                      TAURI_STATUS="Will be triggered"
                   else
-                      echo "**Tauri Release**: Will be skipped" >> $GITHUB_STEP_SUMMARY
+                      TAURI_STATUS="Will be skipped"
                   fi
 
-                  # Add Tauri reasoning details
-                  TAURI_REASONING='${{ needs.determine-affected-packages.outputs.tauri-reasoning }}'
                   if [[ "$TAURI_REASONING" != "" && "$TAURI_REASONING" != "null" ]]; then
+                      echo "- <details>" >> $GITHUB_STEP_SUMMARY
+                      echo "  <summary>**Tauri Release**: $TAURI_STATUS</summary>" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
 
                       # Extract and display the reasoning
                       TAURI_AFFECTED=$(echo "$TAURI_REASONING" | jq -r '.affected')
-                      echo "**🔍 Tauri Analysis Details - Why Tauri release is/isn't triggered**" >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
-                      echo "**Result**: moosicbox_app package is $([[ \"$TAURI_AFFECTED\" == \"true\" ]] && echo \"affected\" || echo \"not affected\")" >> $GITHUB_STEP_SUMMARY
+                      echo "  **Result**: moosicbox_app package is $([[ \"$TAURI_AFFECTED\" == \"true\" ]] && echo \"affected\" || echo \"not affected\")" >> $GITHUB_STEP_SUMMARY
 
                       # Show reasoning if available
                       REASONING_LIST=$(echo "$TAURI_REASONING" | jq -r '.reasoning[]? // empty')
                       if [[ -n "$REASONING_LIST" ]]; then
                           echo "" >> $GITHUB_STEP_SUMMARY
-                          echo "**Why this package is affected:**" >> $GITHUB_STEP_SUMMARY
-                          echo "$REASONING_LIST" | sed 's/^/  ○ /' >> $GITHUB_STEP_SUMMARY
+                          echo "  **Why this package is affected:**" >> $GITHUB_STEP_SUMMARY
+                          echo "$REASONING_LIST" | sed 's/^/    ○ /' >> $GITHUB_STEP_SUMMARY
                       fi
 
-                      # Show all affected packages if available
+                      # Show all affected packages if available (only if not empty)
                       ALL_AFFECTED_JSON=$(echo "$TAURI_REASONING" | jq -r '.all_affected // empty')
-                      if [[ -n "$ALL_AFFECTED_JSON" && "$ALL_AFFECTED_JSON" != "empty" && "$ALL_AFFECTED_JSON" != "null" ]]; then
-                          echo "" >> $GITHUB_STEP_SUMMARY
-                          echo "**All affected packages in dependency chain:**" >> $GITHUB_STEP_SUMMARY
-                          echo "$ALL_AFFECTED_JSON" | jq -r '.[] | "  • " + .name + (if .reasoning and (.reasoning | length) > 0 then "\n" + (.reasoning | map("    ○ " + .) | join("\n")) else "" end)' >> $GITHUB_STEP_SUMMARY
+                      if [[ -n "$ALL_AFFECTED_JSON" && "$ALL_AFFECTED_JSON" != "empty" && "$ALL_AFFECTED_JSON" != "null" && "$ALL_AFFECTED_JSON" != "[]" ]]; then
+                          # Check if the array actually has content
+                          AFFECTED_COUNT=$(echo "$ALL_AFFECTED_JSON" | jq 'length')
+                          if [[ "$AFFECTED_COUNT" -gt 0 ]]; then
+                              echo "" >> $GITHUB_STEP_SUMMARY
+                              echo "  **All affected packages in dependency chain:**" >> $GITHUB_STEP_SUMMARY
+                              echo "$ALL_AFFECTED_JSON" | jq -r '.[] | "    • " + .name + (if .reasoning and (.reasoning | length) > 0 then "\n" + (.reasoning | map("      ○ " + .) | join("\n")) else "" end)' >> $GITHUB_STEP_SUMMARY
+                          fi
                       fi
+
+                      echo "  </details>" >> $GITHUB_STEP_SUMMARY
+                  else
+                      echo "**Tauri Release**: $TAURI_STATUS" >> $GITHUB_STEP_SUMMARY
                   fi
 
     build-cargo-machete:
