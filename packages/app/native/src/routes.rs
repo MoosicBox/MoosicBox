@@ -421,6 +421,7 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
                 .map(String::as_str)
                 .unwrap_or_default(),
         )?;
+
         let sort = req
             .query
             .get("sort")
@@ -429,10 +430,17 @@ pub async fn albums_route(req: RouteRequest) -> Result<Container, RouteError> {
             .and_then(Result::ok)
             .unwrap_or(AlbumSort::NameAsc);
 
+        let search = req
+            .query
+            .get("search")
+            .filter(|x| !x.is_empty())
+            .map(String::as_str);
+
         moosicbox_app_native_ui::albums::albums(
             &convert_state(&STATE).await,
             &filtered_sources,
             sort,
+            search,
         )
         .into()
     })

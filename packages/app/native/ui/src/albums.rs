@@ -774,7 +774,11 @@ pub fn show_albums<'a>(
 
 #[allow(clippy::too_many_lines)]
 #[must_use]
-pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort) -> Containers {
+pub fn albums_page_content(
+    filtered_sources: &[TrackApiSource],
+    sort: AlbumSort,
+    search: Option<&str>,
+) -> Containers {
     let size: u16 = 200;
 
     container! {
@@ -889,6 +893,7 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                 input
                     type=text
                     placeholder="Filter..."
+                    value=[search]
                     fx-change=fx {
                         invoke(Action::FilterAlbums {
                             filtered_sources: filtered_sources.to_vec(),
@@ -897,13 +902,18 @@ pub fn albums_page_content(filtered_sources: &[TrackApiSource], sort: AlbumSort)
                     };
             }
         }
-        (load_albums(size, sort, filtered_sources, ""))
+        (load_albums(size, sort, filtered_sources, search.unwrap_or("")))
     }
 }
 
 #[must_use]
-pub fn albums(state: &State, filtered_sources: &[TrackApiSource], sort: AlbumSort) -> Containers {
-    page(state, &albums_page_content(filtered_sources, sort))
+pub fn albums(
+    state: &State,
+    filtered_sources: &[TrackApiSource],
+    sort: AlbumSort,
+    search: Option<&str>,
+) -> Containers {
+    page(state, &albums_page_content(filtered_sources, sort, search))
 }
 
 #[must_use]
