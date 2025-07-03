@@ -477,13 +477,17 @@ jobs:
                               MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
                               DOCKER_NAME=$(echo "$DOCKER_INFO" | jq -r '.name')
 
-                              # Get reasoning for this package
+                              # Get reasoning and job details for this package
                               if [[ -n "$REASONING_DATA" && "$REASONING_DATA" != "null" && "$REASONING_DATA" != "" ]]; then
                                   PACKAGE_REASONING=$(echo "$REASONING_DATA" | jq -r --arg pkg "$pkg" '[.[] | select(.name == $pkg) | .reasoning // []] | flatten | unique | map("  - " + .) | join("\n")')
+
+                                  # Get job details for this package from the matrix
+                                  PACKAGE_JOBS=$(echo "$AFFECTED_MATRIX" | jq -r --arg pkg "$pkg" '[.[] | select(.name == ($pkg | sub("^moosicbox_"; "")))] | map("  - **" + .os + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")')
+
                                   if [[ -n "$PACKAGE_REASONING" && "$PACKAGE_REASONING" != "" ]]; then
-                                      DOCKER_ENTRY_TEXT="- <details>\n  <summary>$DOCKER_NAME</summary>\n  \n$PACKAGE_REASONING\n  </details>"
+                                      DOCKER_ENTRY_TEXT="- <details>\n  <summary>$DOCKER_NAME</summary>\n  \n  **Why this package is affected:**\n$PACKAGE_REASONING\n  \n  **Jobs to run:**\n$PACKAGE_JOBS\n  </details>"
                                   else
-                                      DOCKER_ENTRY_TEXT="- $DOCKER_NAME"
+                                      DOCKER_ENTRY_TEXT="- <details>\n  <summary>$DOCKER_NAME</summary>\n  \n  **Jobs to run:**\n$PACKAGE_JOBS\n  </details>"
                                   fi
                               else
                                   DOCKER_ENTRY_TEXT="- $DOCKER_NAME"
@@ -523,8 +527,8 @@ jobs:
                               echo "has-docker-changes=true" >> $GITHUB_OUTPUT
                               AFFECTED_DOCKER_PACKAGES="all (manual dispatch)"
                               DOCKER_COUNT=$(echo "$MATRIX_PROJECTS" | jq 'length')
-                              # For manual dispatch, create simple list with manual reasoning
-                              DOCKER_PACKAGES_LIST=$(echo "$DOCKER_PACKAGES" | jq -r '[.[] | "- <details>\n  <summary>" + .name + "</summary>\n  \n  - Manual workflow dispatch - all Docker packages included\n  </details>"] | join("\n")')
+                              # For manual dispatch, create list with manual reasoning and job details
+                              DOCKER_PACKAGES_LIST=$(echo "$DOCKER_PACKAGES" | jq -r --argjson matrix "$AFFECTED_MATRIX" '[.[] as $docker | "- <details>\n  <summary>" + $docker.name + "</summary>\n  \n  **Why this package is affected:**\n  - Manual workflow dispatch - all Docker packages included\n  \n  **Jobs to run:**\n" + (($matrix | map(select(.name == $docker.name)) | map("  - **" + .os + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")) // "  - No specific jobs found") + "\n  </details>"] | join("\n")')
                           else
                               echo "✨ No Docker packages are affected by the changes"
                               DOCKER_MATRIX='{"include": []}'
@@ -608,13 +612,14 @@ jobs:
                       echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -c '.[0:3]'
 
                       if [[ "$REASONING_DATA" != "" && "$REASONING_DATA" != "null" ]]; then
-                          # Generate packages list with inline reasoning - simplified approach
+                                                    # Generate packages list with inline reasoning and job details
                           echo '${{ needs.determine-affected-packages.outputs.matrix }}' | jq -r --argjson reasoning "$REASONING_DATA" '
-                              # Group packages and get unique names with job counts
+                              # Group packages and collect all job details
                               group_by(.name) |
                               map({
                                   name: .[0].name,
-                                  job_count: length
+                                  job_count: length,
+                                  jobs: .
                               }) |
                               # Add reasoning by matching package names
                               map(
@@ -634,11 +639,14 @@ jobs:
                                       )
                                   }
                               ) |
-                              # Generate the markdown output
+                              # Generate the markdown output with job details
                               map(
                                   if (.reasoning | length) > 0 then
                                       "- <details>\n  <summary>" + .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")</summary>\n  \n" +
+                                      "  **Why this package is affected:**\n" +
                                       (.reasoning | map("  - " + .) | join("\n")) +
+                                      "\n  \n  **Jobs to run:**\n" +
+                                      (.jobs | map("  - **" + .os + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")) +
                                       "\n  </details>"
                                   else
                                       "- " + .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")"
