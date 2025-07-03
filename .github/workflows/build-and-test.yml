@@ -696,26 +696,30 @@ jobs:
                   echo "" >> $GITHUB_STEP_SUMMARY
                   echo "## 📱 Tauri Release Summary" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
-                  echo "**Tauri Release**: $([[ \"$HAS_TAURI_CHANGES\" == \"true\" ]] && echo \"Will be triggered\" || echo \"Will be skipped\")" >> $GITHUB_STEP_SUMMARY
+
+                  if [[ "$HAS_TAURI_CHANGES" == "true" ]]; then
+                      echo "**Tauri Release**: Will be triggered" >> $GITHUB_STEP_SUMMARY
+                  else
+                      echo "**Tauri Release**: Will be skipped" >> $GITHUB_STEP_SUMMARY
+                  fi
 
                   # Add Tauri reasoning details
                   TAURI_REASONING='${{ needs.determine-affected-packages.outputs.tauri-reasoning }}'
                   if [[ "$TAURI_REASONING" != "" && "$TAURI_REASONING" != "null" ]]; then
                       echo "" >> $GITHUB_STEP_SUMMARY
-                      echo "<details>" >> $GITHUB_STEP_SUMMARY
-                      echo "<summary><strong>🔍 Tauri Analysis Details</strong> - Why Tauri release is/isn't triggered</summary>" >> $GITHUB_STEP_SUMMARY
-                      echo "" >> $GITHUB_STEP_SUMMARY
 
                       # Extract and display the reasoning
                       TAURI_AFFECTED=$(echo "$TAURI_REASONING" | jq -r '.affected')
-                      echo "**Result**: moosicbox_app package is $([[ \"$TAURI_AFFECTED\" == \"true\" ]] && echo \"affected\" || echo \"not affected\")" >> $GITHUB_STEP_SUMMARY
+                      echo "**🔍 Tauri Analysis Details - Why Tauri release is/isn't triggered**" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
+                      echo "**Result**: moosicbox_app package is $([[ \"$TAURI_AFFECTED\" == \"true\" ]] && echo \"affected\" || echo \"not affected\")" >> $GITHUB_STEP_SUMMARY
 
                       # Show reasoning if available
                       REASONING_LIST=$(echo "$TAURI_REASONING" | jq -r '.reasoning[]? // empty')
                       if [[ -n "$REASONING_LIST" ]]; then
-                          echo "**Reasoning:**" >> $GITHUB_STEP_SUMMARY
-                          echo "$REASONING_LIST" | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+                          echo "" >> $GITHUB_STEP_SUMMARY
+                          echo "**Why this package is affected:**" >> $GITHUB_STEP_SUMMARY
+                          echo "$REASONING_LIST" | sed 's/^/  ○ /' >> $GITHUB_STEP_SUMMARY
                       fi
 
                       # Show all affected packages if available
@@ -723,10 +727,8 @@ jobs:
                       if [[ -n "$ALL_AFFECTED_JSON" && "$ALL_AFFECTED_JSON" != "empty" && "$ALL_AFFECTED_JSON" != "null" ]]; then
                           echo "" >> $GITHUB_STEP_SUMMARY
                           echo "**All affected packages in dependency chain:**" >> $GITHUB_STEP_SUMMARY
-                          echo "$ALL_AFFECTED_JSON" | jq -r '.[] | "- " + .name + (if .reasoning and (.reasoning | length) > 0 then " (" + (.reasoning | join(", ")) + ")" else "" end)' >> $GITHUB_STEP_SUMMARY
+                          echo "$ALL_AFFECTED_JSON" | jq -r '.[] | "  • " + .name + (if .reasoning and (.reasoning | length) > 0 then "\n" + (.reasoning | map("    ○ " + .) | join("\n")) else "" end)' >> $GITHUB_STEP_SUMMARY
                       fi
-
-                      echo "</details>" >> $GITHUB_STEP_SUMMARY
                   fi
 
     build-cargo-machete:
