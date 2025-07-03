@@ -148,7 +148,7 @@ main() {
 
     # Package configurations: name:port:features
     declare -a packages=(
-        "server:8010:cpal,format-flac,static-token-auth,all-apis"
+        "server:8010:cpal,format-flac,static-token-auth,all-apis,pulseaudio,sqlite"
         "load_balancer:8011:"
         "tunnel_server:8012:"
     )
