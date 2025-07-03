@@ -696,11 +696,11 @@ jobs:
                       fi
 
                       # Show all affected packages if available
-                      ALL_AFFECTED=$(echo "$TAURI_REASONING" | jq -r '.all_affected[]? // empty')
-                      if [[ -n "$ALL_AFFECTED" ]]; then
+                      ALL_AFFECTED_JSON=$(echo "$TAURI_REASONING" | jq -r '.all_affected // empty')
+                      if [[ -n "$ALL_AFFECTED_JSON" && "$ALL_AFFECTED_JSON" != "empty" && "$ALL_AFFECTED_JSON" != "null" ]]; then
                           echo "" >> $GITHUB_STEP_SUMMARY
                           echo "**All affected packages in dependency chain:**" >> $GITHUB_STEP_SUMMARY
-                          echo "$ALL_AFFECTED" | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+                          echo "$ALL_AFFECTED_JSON" | jq -r '.[] | "- " + .name + (if .reasoning and (.reasoning | length) > 0 then " (" + (.reasoning | join(", ")) + ")" else "" end)' >> $GITHUB_STEP_SUMMARY
                       fi
 
                       echo "</details>" >> $GITHUB_STEP_SUMMARY
