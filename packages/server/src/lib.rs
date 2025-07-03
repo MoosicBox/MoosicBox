@@ -465,7 +465,7 @@ pub async fn run<T>(
 
                     let subject_alt_names = vec!["localhost".to_string()];
 
-                    let CertifiedKey { cert, key_pair } =
+                    let CertifiedKey { cert, signing_key } =
                         generate_simple_self_signed(subject_alt_names).unwrap();
 
                     let mut cert_file = switchy_fs::sync::OpenOptions::new()
@@ -485,7 +485,7 @@ pub async fn run<T>(
                         .open(&key_path)
                         .unwrap();
                     key_file
-                        .write_all(key_pair.serialize_pem().as_bytes())
+                        .write_all(signing_key.serialize_pem().as_bytes())
                         .expect("Failed to create key file");
                 }
 
