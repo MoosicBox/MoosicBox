@@ -1288,16 +1288,15 @@ pub fn generate_dockerfile_content(
 
     content.push('\n');
 
-    // Create stub source files for dependencies to enable Docker layer caching
-    writeln!(content, "# Create stub source files for dependencies")?;
+    // Copy real source code for all packages (needed for dependency build)
+    writeln!(content, "# Copy real source code for building dependencies")?;
+    writeln!(content, "COPY packages/ packages/")?;
 
-    // Create stub files for all packages (directories already exist from packages copy)
+    // Create stub for target package only to prevent it from being built during dependency phase
     writeln!(
         content,
-        "RUN find packages/ -type d -name 'src' -exec sh -c 'echo \"\" > \"$1/lib.rs\"' _ {{}} \\;"
+        "# Create stub for target package to prevent premature build"
     )?;
-
-    // Handle target package - check if it's a binary and create main.rs
     let target_cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
     if target_cargo_path.exists() {
         let target_source = std::fs::read_to_string(&target_cargo_path)?;
@@ -1315,6 +1314,9 @@ pub fn generate_dockerfile_content(
                 content,
                 "RUN echo 'fn main() {{}}' > {target_package_path}/src/main.rs"
             )?;
+        } else {
+            // Create lib.rs stub for target package if it's a library
+            writeln!(content, "RUN echo '' > {target_package_path}/src/lib.rs")?;
         }
     }
 
@@ -1339,9 +1341,12 @@ pub fn generate_dockerfile_content(
         "RUN cargo build --release --workspace --exclude {target_package}"
     )?;
 
-    // Copy actual source code (dockerignore filters out irrelevant packages)
-    writeln!(content, "\n# Copy actual source code")?;
-    writeln!(content, "COPY packages/ packages/")?;
+    // Copy target package source code for final build
+    writeln!(content, "\n# Copy target package source code")?;
+    writeln!(
+        content,
+        "COPY {target_package_path}/ {target_package_path}/"
+    )?;
 
     // Final build with actual source code
     writeln!(content, "\n# Final build with actual source")?;
