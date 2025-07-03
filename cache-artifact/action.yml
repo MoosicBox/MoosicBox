@@ -92,6 +92,14 @@ runs:
               key: ${{ steps.set-cache-key.outputs.cache-key }}
               lookup-only: true
 
+        - name: Restore cache
+          if: steps.cache-check.outputs.cache-hit == 'true'
+          id: cache-restore
+          uses: actions/cache/restore@v4
+          with:
+              path: ${{ inputs.output-path }}
+              key: ${{ steps.set-cache-key.outputs.cache-key }}
+
         - name: Check for existing artifact
           if: steps.cache-check.outputs.cache-hit != 'true'
           id: check-artifact
