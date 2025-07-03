@@ -1,0 +1,364 @@
+name: Test Cache Artifact Builder Action
+
+on:
+    push:
+        paths:
+            - 'action.yml'
+            - 'examples/**'
+            - '.github/workflows/test-action.yml'
+    pull_request:
+        paths:
+            - 'action.yml'
+            - 'examples/**'
+            - '.github/workflows/test-action.yml'
+    workflow_dispatch:
+
+jobs:
+    test-basic-functionality:
+        runs-on: ubuntu-latest
+        name: Test Basic Functionality
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Create test directory and files
+              run: |
+                  mkdir -p test-input
+                  echo "console.log('Hello World');" > test-input/app.js
+                  echo "body { margin: 0; }" > test-input/style.css
+                  echo "Test content $(date)" > test-input/data.txt
+
+            - name: First run - should build
+              id: first-run
+              uses: ./cache-artifact
+              with:
+                  directory: ./test-input
+                  command: |
+                      echo "Building application..."
+                      mkdir -p output
+                      cat test-input/app.js test-input/style.css > output/bundle.txt
+                      echo "Build completed at $(date)" >> output/bundle.txt
+                  output-path: ./output/bundle.txt
+                  artifact-name: test-bundle
+                  cache-key-prefix: test-action
+
+            - name: Verify first run outputs
+              run: |
+                  echo "First run cache hit: ${{ steps.first-run.outputs.cache-hit }}"
+                  echo "First run checksum: ${{ steps.first-run.outputs.checksum }}"
+                  echo "First run artifact: ${{ steps.first-run.outputs.artifact-name }}"
+
+                  # Should be cache miss on first run
+                  if [ "${{ steps.first-run.outputs.cache-hit }}" = "true" ]; then
+                    echo "❌ First run should be cache miss"
+                    exit 1
+                  fi
+
+                  # Verify output exists
+                  if [ ! -f "./output/bundle.txt" ]; then
+                    echo "❌ Output file not created"
+                    exit 1
+                  fi
+
+                  echo "✅ First run validation passed"
+
+            - name: Second run - should use cache
+              id: second-run
+              uses: ./cache-artifact
+              with:
+                  directory: ./test-input
+                  command: |
+                      echo "This should not run due to cache hit"
+                      exit 1
+                  output-path: ./output/bundle.txt
+                  artifact-name: test-bundle
+                  cache-key-prefix: test-action
+
+            - name: Verify second run outputs
+              run: |
+                  echo "Second run cache hit: ${{ steps.second-run.outputs.cache-hit }}"
+                  echo "Second run checksum: ${{ steps.second-run.outputs.checksum }}"
+                  echo "Second run artifact: ${{ steps.second-run.outputs.artifact-name }}"
+
+                  # Should be cache hit on second run
+                  if [ "${{ steps.second-run.outputs.cache-hit }}" != "true" ]; then
+                    echo "❌ Second run should be cache hit"
+                    exit 1
+                  fi
+
+                  # Checksums should match
+                  if [ "${{ steps.first-run.outputs.checksum }}" != "${{ steps.second-run.outputs.checksum }}" ]; then
+                    echo "❌ Checksums should match"
+                    exit 1
+                  fi
+
+                  echo "✅ Second run validation passed"
+
+            - name: Modify input and test cache miss
+              run: |
+                  echo "Modified content $(date)" > test-input/new-file.txt
+                  echo "Content changed!"
+
+            - name: Third run - should rebuild due to changes
+              id: third-run
+              uses: ./cache-artifact
+              with:
+                  directory: ./test-input
+                  command: |
+                      echo "Rebuilding due to changes..."
+                      mkdir -p output
+                      cat test-input/*.txt test-input/*.js test-input/*.css > output/bundle.txt
+                      echo "Rebuild completed at $(date)" >> output/bundle.txt
+                  output-path: ./output/bundle.txt
+                  artifact-name: test-bundle
+                  cache-key-prefix: test-action
+
+            - name: Verify third run outputs
+              run: |
+                  echo "Third run cache hit: ${{ steps.third-run.outputs.cache-hit }}"
+                  echo "Third run checksum: ${{ steps.third-run.outputs.checksum }}"
+                  echo "Third run artifact: ${{ steps.third-run.outputs.artifact-name }}"
+
+                  # Should be cache miss due to changes
+                  if [ "${{ steps.third-run.outputs.cache-hit }}" = "true" ]; then
+                    echo "❌ Third run should be cache miss due to changes"
+                    exit 1
+                  fi
+
+                  # Checksums should be different
+                  if [ "${{ steps.first-run.outputs.checksum }}" = "${{ steps.third-run.outputs.checksum }}" ]; then
+                    echo "❌ Checksums should be different after changes"
+                    exit 1
+                  fi
+
+                  echo "✅ Third run validation passed"
+
+            - name: Final validation
+              run: |
+                  echo "🎉 All tests passed!"
+                  echo "📊 Test Summary:"
+                  echo "  - First run: Cache miss ✅"
+                  echo "  - Second run: Cache hit ✅"
+                  echo "  - Third run: Cache miss after changes ✅"
+                  echo "  - Checksum validation: ✅"
+                  echo "  - Output file creation: ✅"
+
+    test-error-handling:
+        runs-on: ubuntu-latest
+        name: Test Error Handling
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Test with non-existent directory
+              id: test-no-dir
+              continue-on-error: true
+              uses: ./cache-artifact
+              with:
+                  directory: ./non-existent-directory
+                  command: echo "This should not run"
+                  output-path: ./output.txt
+
+            - name: Verify error handling
+              run: |
+                  if [ "${{ steps.test-no-dir.outcome }}" = "success" ]; then
+                    echo "❌ Action should fail with non-existent directory"
+                    exit 1
+                  fi
+                  echo "✅ Error handling test passed"
+
+            - name: Test with command that fails to create output
+              id: test-no-output
+              continue-on-error: true
+              run: |
+                  mkdir -p test-input-error
+                  echo "test content" > test-input-error/file.txt
+
+            - name: Run action with failing command
+              id: test-fail-command
+              continue-on-error: true
+              uses: ./cache-artifact
+              with:
+                  directory: ./test-input-error
+                  command: |
+                      echo "Running command that doesn't create expected output"
+                      # This command doesn't create the expected output file
+                  output-path: ./non-existent-output.txt
+
+            - name: Verify command failure handling
+              run: |
+                  if [ "${{ steps.test-fail-command.outcome }}" = "success" ]; then
+                    echo "❌ Action should fail when command doesn't create output"
+                    exit 1
+                  fi
+                  echo "✅ Command failure handling test passed"
+
+    test-different-shells:
+        runs-on: ubuntu-latest
+        name: Test Different Shells
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Create test files
+              run: |
+                  mkdir -p test-shell
+                  echo "Test data" > test-shell/data.txt
+
+            - name: Test with bash shell
+              uses: ./cache-artifact
+              with:
+                  directory: ./test-shell
+                  command: |
+                      echo "Using bash shell"
+                      echo "Bash test output" > bash-output.txt
+                  output-path: ./bash-output.txt
+                  shell: bash
+                  artifact-name: bash-test
+
+            - name: Test with sh shell
+              uses: ./cache-artifact
+              with:
+                  directory: ./test-shell
+                  command: |
+                      echo "Using sh shell"
+                      echo "Sh test output" > sh-output.txt
+                  output-path: ./sh-output.txt
+                  shell: sh
+                  artifact-name: sh-test
+
+            - name: Verify shell tests
+              run: |
+                  if [ ! -f "./bash-output.txt" ] || [ ! -f "./sh-output.txt" ]; then
+                    echo "❌ Shell test outputs not created"
+                    exit 1
+                  fi
+                  echo "✅ Shell tests passed"
+
+    test-custom-working-directory:
+        runs-on: ubuntu-latest
+        name: Test Custom Working Directory
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Create test structure
+              run: |
+                  mkdir -p project/src
+                  mkdir -p project/build
+                  echo "Source code" > project/src/main.c
+                  echo "Makefile content" > project/Makefile
+
+            - name: Test custom working directory
+              uses: ./cache-artifact
+              with:
+                  directory: ./project/src
+                  command: |
+                      echo "Working in custom directory"
+                      pwd
+                      ls -la
+                      echo "Built in custom directory" > build/output.txt
+                  output-path: ./project/build/output.txt
+                  working-directory: ./project
+                  artifact-name: custom-wd-test
+
+            - name: Verify custom working directory
+              run: |
+                  if [ ! -f "./project/build/output.txt" ]; then
+                    echo "❌ Custom working directory test failed"
+                    exit 1
+                  fi
+                  echo "✅ Custom working directory test passed"
+
+    test-performance:
+        runs-on: ubuntu-latest
+        name: Test Performance
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Create large test directory
+              run: |
+                  mkdir -p large-test
+                  for i in {1..100}; do
+                    echo "File $i content $(date)" > large-test/file-$i.txt
+                  done
+                  echo "Created 100 test files"
+
+            - name: Performance test - First run
+              id: perf-first
+              uses: ./cache-artifact
+              with:
+                  directory: ./large-test
+                  command: |
+                      echo "Processing large directory..."
+                      find large-test -name "*.txt" | wc -l > file-count.txt
+                      echo "Processing completed"
+                  output-path: ./file-count.txt
+                  artifact-name: performance-test
+
+            - name: Performance test - Second run (cached)
+              id: perf-second
+              uses: ./cache-artifact
+              with:
+                  directory: ./large-test
+                  command: |
+                      echo "This should be cached"
+                      exit 1
+                  output-path: ./file-count.txt
+                  artifact-name: performance-test
+
+            - name: Verify performance test
+              run: |
+                  echo "Performance test results:"
+                  echo "  First run cache hit: ${{ steps.perf-first.outputs.cache-hit }}"
+                  echo "  Second run cache hit: ${{ steps.perf-second.outputs.cache-hit }}"
+
+                  if [ "${{ steps.perf-second.outputs.cache-hit }}" != "true" ]; then
+                    echo "❌ Performance test: Second run should be cached"
+                    exit 1
+                  fi
+
+                  echo "✅ Performance test passed"
+
+    summary:
+        runs-on: ubuntu-latest
+        name: Test Summary
+        needs:
+            [
+                test-basic-functionality,
+                test-error-handling,
+                test-different-shells,
+                test-custom-working-directory,
+                test-performance,
+            ]
+        if: always()
+
+        steps:
+            - name: Test Results Summary
+              run: |
+                  echo "🧪 Cache Artifact Builder Action Test Results"
+                  echo "=========================================="
+                  echo "Basic functionality: ${{ needs.test-basic-functionality.result }}"
+                  echo "Error handling: ${{ needs.test-error-handling.result }}"
+                  echo "Different shells: ${{ needs.test-different-shells.result }}"
+                  echo "Custom working directory: ${{ needs.test-custom-working-directory.result }}"
+                  echo "Performance: ${{ needs.test-performance.result }}"
+                  echo "=========================================="
+
+                  # Check if all tests passed
+                  if [ "${{ needs.test-basic-functionality.result }}" = "success" ] && \
+                     [ "${{ needs.test-error-handling.result }}" = "success" ] && \
+                     [ "${{ needs.test-different-shells.result }}" = "success" ] && \
+                     [ "${{ needs.test-custom-working-directory.result }}" = "success" ] && \
+                     [ "${{ needs.test-performance.result }}" = "success" ]; then
+                    echo "🎉 All tests passed! The Cache Artifact Builder action is working correctly."
+                  else
+                    echo "❌ Some tests failed. Please check the logs above."
+                    exit 1
+                  fi

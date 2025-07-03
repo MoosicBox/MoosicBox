@@ -1,0 +1,156 @@
+name: 'Cache Artifact'
+description: 'Checksums a directory and conditionally runs commands with intelligent artifact caching'
+author: 'MoosicBox'
+
+inputs:
+    directory:
+        description: 'Directory to checksum for change detection'
+        required: true
+    command:
+        description: 'Custom command to run when changes are detected'
+        required: true
+    output-path:
+        description: 'Path to the output file/artifact created by the command'
+        required: true
+    artifact-name:
+        description: 'Name for the artifact (defaults to directory name + checksum)'
+        required: false
+        default: ''
+    cache-key-prefix:
+        description: 'Prefix for cache keys (defaults to repository name)'
+        required: false
+        default: ''
+    working-directory:
+        description: 'Working directory to run the command in'
+        required: false
+        default: '.'
+    shell:
+        description: 'Shell to use for running commands'
+        required: false
+        default: 'bash'
+
+outputs:
+    cache-hit:
+        description: 'Whether the cache was hit (true/false)'
+        value: ${{ steps.cache-check.outputs.cache-hit }}
+    checksum:
+        description: 'The computed checksum of the directory'
+        value: ${{ steps.compute-checksum.outputs.checksum }}
+    artifact-name:
+        description: 'The name of the uploaded/downloaded artifact'
+        value: ${{ steps.set-artifact-name.outputs.artifact-name }}
+
+runs:
+    using: 'composite'
+    steps:
+        - name: Set up artifact name
+          id: set-artifact-name
+          shell: ${{ inputs.shell }}
+          run: |
+              if [ -n "${{ inputs.artifact-name }}" ]; then
+                ARTIFACT_NAME="${{ inputs.artifact-name }}"
+              else
+                DIR_NAME=$(basename "${{ inputs.directory }}")
+                ARTIFACT_NAME="${DIR_NAME}-cache"
+              fi
+              echo "artifact-name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+              echo "🏷️ Artifact name: ${ARTIFACT_NAME}"
+
+        - name: Compute directory checksum
+          id: compute-checksum
+          shell: ${{ inputs.shell }}
+          run: |
+              echo "📁 Computing checksum for directory: ${{ inputs.directory }}"
+              if [ ! -d "${{ inputs.directory }}" ]; then
+                echo "❌ Directory ${{ inputs.directory }} does not exist!"
+                exit 1
+              fi
+
+              # Create a deterministic checksum of the directory
+              # Using find to get all files, then checksumming their content and paths
+              CHECKSUM=$(find "${{ inputs.directory }}" -type f -exec sha256sum {} + | sort -k2 | sha256sum | cut -d' ' -f1)
+              echo "checksum=${CHECKSUM}" >> $GITHUB_OUTPUT
+              echo "✅ Directory checksum: ${CHECKSUM}"
+
+        - name: Set cache key
+          id: set-cache-key
+          shell: ${{ inputs.shell }}
+          run: |
+              PREFIX="${{ inputs.cache-key-prefix }}"
+              if [ -z "$PREFIX" ]; then
+                PREFIX="${{ github.repository }}"
+              fi
+              CACHE_KEY="${PREFIX}-${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}"
+              echo "cache-key=${CACHE_KEY}" >> $GITHUB_OUTPUT
+              echo "🔑 Cache key: ${CACHE_KEY}"
+
+        - name: Check for existing cache
+          id: cache-check
+          uses: actions/cache/restore@v4
+          with:
+              path: ${{ inputs.output-path }}
+              key: ${{ steps.set-cache-key.outputs.cache-key }}
+              lookup-only: true
+
+        - name: Download existing artifact if cache miss but artifact exists
+          if: steps.cache-check.outputs.cache-hit != 'true'
+          id: download-artifact
+          continue-on-error: true
+          uses: actions/download-artifact@v4
+          with:
+              name: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}
+              path: ${{ inputs.working-directory }}
+
+        - name: Run custom command
+          if: steps.cache-check.outputs.cache-hit != 'true' && steps.download-artifact.outcome == 'failure'
+          shell: ${{ inputs.shell }}
+          working-directory: ${{ inputs.working-directory }}
+          run: |
+              echo "🚀 Running custom command: ${{ inputs.command }}"
+              echo "📂 Working directory: ${{ inputs.working-directory }}"
+              ${{ inputs.command }}
+
+              # Verify the output was created
+              if [ ! -e "${{ inputs.output-path }}" ]; then
+                echo "❌ Output file ${{ inputs.output-path }} was not created by the command!"
+                exit 1
+              fi
+              echo "✅ Command completed successfully, output created: ${{ inputs.output-path }}"
+
+        - name: Save to cache
+          if: steps.cache-check.outputs.cache-hit != 'true' && steps.download-artifact.outcome == 'failure'
+          uses: actions/cache/save@v4
+          with:
+              path: ${{ inputs.output-path }}
+              key: ${{ steps.set-cache-key.outputs.cache-key }}
+
+        - name: Upload artifact
+          if: steps.cache-check.outputs.cache-hit != 'true' && steps.download-artifact.outcome == 'failure'
+          uses: actions/upload-artifact@v4
+          with:
+              name: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}
+              path: ${{ inputs.output-path }}
+              retention-days: 30
+              compression-level: 9
+
+        - name: Report cache status
+          shell: ${{ inputs.shell }}
+          run: |
+              if [ "${{ steps.cache-check.outputs.cache-hit }}" = "true" ]; then
+                echo "🎯 Cache HIT! Using cached version of ${{ inputs.output-path }}"
+              elif [ "${{ steps.download-artifact.outcome }}" = "success" ]; then
+                echo "📦 Artifact downloaded successfully"
+              else
+                echo "🔨 Built new version and cached it"
+              fi
+
+              echo "📊 Summary:"
+              echo "  - Directory: ${{ inputs.directory }}"
+              echo "  - Checksum: ${{ steps.compute-checksum.outputs.checksum }}"
+              echo "  - Cache Key: ${{ steps.set-cache-key.outputs.cache-key }}"
+              echo "  - Artifact: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}"
+              echo "  - Output: ${{ inputs.output-path }}"
+
+branding:
+    icon: 'package'
+    color: 'blue'

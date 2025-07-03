@@ -1,0 +1,48 @@
+name: Basic Cache Artifact Example
+
+on:
+    push:
+        branches: [main, develop]
+    pull_request:
+        branches: [main]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Rust
+              uses: actions-rust-lang/setup-rust-toolchain@v1
+              with:
+                  toolchain: stable
+
+            - name: Build Rust project with Cache Artifact
+              id: rust-build
+              uses: ./cache-artifact # Replace with your-org/repo-name/cache-artifact@v1 when published
+              with:
+                  directory: ./packages/server
+                  command: cargo build --release --bin server
+                  output-path: ./target/release/server
+                  artifact-name: server-binary
+
+            - name: Run tests with the built binary
+              run: |
+                  echo "Cache hit: ${{ steps.rust-build.outputs.cache-hit }}"
+                  echo "Build checksum: ${{ steps.rust-build.outputs.checksum }}"
+
+                  # Test the binary
+                  ./target/release/server --version
+
+                  # Run some basic tests
+                  echo "✅ Binary is working correctly!"
+
+            - name: Upload final artifact (if needed for other jobs)
+              if: success()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: server-final-${{ github.sha }}
+                  path: ./target/release/server
+                  retention-days: 7
