@@ -300,10 +300,35 @@ pub fn get_dependency_default_features(dep_value: &Value) -> Option<bool> {
 
 #[must_use]
 pub fn get_binary_name(
-    _workspace_root: &Path,
+    workspace_root: &Path,
     target_package: &str,
-    _target_package_path: &str,
+    target_package_path: &str,
 ) -> String {
+    // Try to read the target package's Cargo.toml to get the correct binary name
+    let cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
+
+    if let Ok(source) = std::fs::read_to_string(&cargo_path) {
+        if let Ok(value) = toml::from_str::<Value>(&source) {
+            // Check for explicit binary definitions
+            if let Some(bins) = value.get("bin").and_then(|b| b.as_array()) {
+                // Use the first binary definition if it has a name
+                if let Some(bin) = bins.first() {
+                    if let Some(bin_name) = bin.get("name").and_then(|n| n.as_str()) {
+                        return bin_name.to_string();
+                    }
+                }
+            }
+
+            // Check for a single binary definition (not array)
+            if let Some(bin) = value.get("bin").and_then(|b| b.as_table()) {
+                if let Some(bin_name) = bin.get("name").and_then(|n| n.as_str()) {
+                    return bin_name.to_string();
+                }
+            }
+        }
+    }
+
+    // Fallback: use package name with underscores converted to dashes
     target_package.replace('-', "_")
 }
 
@@ -752,8 +777,7 @@ pub fn find_workspace_dependencies(
     // Create a map of package name -> package path for all workspace members
     let mut package_paths = BTreeMap::new();
     let mut package_dependencies: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    // Track packages that should not use default features
-    let mut no_default_features: BTreeSet<String> = BTreeSet::new();
+    let mut package_cargo_values: BTreeMap<String, Value> = BTreeMap::new();
 
     for member_path in workspace_members {
         let full_path = workspace_root.join(member_path);
@@ -776,183 +800,34 @@ pub fn find_workspace_dependencies(
         {
             log::trace!("📦 Package name: {package_name} -> {member_path}");
             package_paths.insert(package_name.to_string(), member_path.to_string());
+            package_cargo_values.insert(package_name.to_string(), value.clone());
 
-            // Get features for this package to resolve feature-conditional dependencies
-            // For now, use simple feature resolution to avoid infinite loops
-            #[allow(clippy::unnecessary_unwrap)]
-            let package_features = if package_name == target_package && enabled_features.is_some() {
-                // For the target package with explicit features, use those features
-                enabled_features.unwrap().iter().cloned().collect()
-            } else {
-                // For other packages or target without explicit features, use empty set for now
-                // This avoids the complex feature resolution that was causing infinite loops
-                BTreeSet::new()
-            };
-            log::trace!("🎯 Active features for {package_name}: {package_features:?}");
-
-            // Extract dependencies that are workspace members
-            let mut deps = Vec::new();
-
-            // Check regular dependencies
-            if let Some(dependencies) = value.get("dependencies").and_then(|x| x.as_table()) {
-                log::trace!(
-                    "🔗 Checking {} regular dependencies for {}",
-                    dependencies.len(),
-                    package_name
-                );
-                for (dep_name, dep_value) in dependencies {
-                    // Check if this is a workspace dependency and if it's enabled by features
-                    if all_potential_deps {
-                        // Include all workspace dependencies regardless of feature activation
-                        if is_workspace_dependency(dep_value) {
-                            log::trace!(
-                                "  ✅ Adding workspace dependency (all-potential mode): {dep_name}"
-                            );
-                            deps.push(dep_name.clone());
-
-                            // Store dependency feature information for potential use
-                            no_default_features.insert(dep_name.clone());
-                        }
-                    } else if is_workspace_dependency_with_features(dep_value) {
-                        log::trace!("  ✅ Adding regular dependency: {dep_name}");
-                        deps.push(dep_name.clone());
-
-                        // Store dependency feature information
-                        let default_features = get_dependency_default_features(dep_value);
-                        if default_features == Some(false) {
-                            log::trace!(
-                                "    🚫 Dependency {dep_name} specified with default-features = false"
-                            );
-                            no_default_features.insert(dep_name.clone());
-                        }
-                    } else {
-                        log::trace!(
-                            "  ⏸️  Skipping regular dependency (not activated): {dep_name}"
-                        );
-                    }
-                }
-            }
-
-            // Check dev dependencies
-            if let Some(dev_dependencies) = value.get("dev-dependencies").and_then(|x| x.as_table())
-            {
-                log::trace!(
-                    "🔗 Checking {} dev dependencies for {}",
-                    dev_dependencies.len(),
-                    package_name
-                );
-                for (dep_name, dep_value) in dev_dependencies {
-                    if all_potential_deps {
-                        if is_workspace_dependency(dep_value) {
-                            log::trace!(
-                                "  ✅ Adding dev workspace dependency (all-potential mode): {dep_name}"
-                            );
-                            deps.push(dep_name.clone());
-
-                            let default_features = get_dependency_default_features(dep_value);
-                            if default_features == Some(false) {
-                                no_default_features.insert(dep_name.clone());
-                            }
-                        }
-                    } else if is_workspace_dependency_with_features(dep_value) {
-                        log::trace!("  ✅ Adding dev dependency: {dep_name}");
-                        deps.push(dep_name.clone());
-
-                        let default_features = get_dependency_default_features(dep_value);
-                        if default_features == Some(false) {
-                            log::trace!(
-                                "    🚫 Dev dependency {dep_name} specified with default-features = false"
-                            );
-                            no_default_features.insert(dep_name.clone());
-                        }
-                    } else {
-                        log::trace!("  ⏸️  Skipping dev dependency (not activated): {dep_name}");
-                    }
-                }
-            }
-
-            // Check build dependencies
-            if let Some(build_dependencies) =
-                value.get("build-dependencies").and_then(|x| x.as_table())
-            {
-                log::trace!(
-                    "🔗 Checking {} build dependencies for {}",
-                    build_dependencies.len(),
-                    package_name
-                );
-                for (dep_name, dep_value) in build_dependencies {
-                    if all_potential_deps {
-                        if is_workspace_dependency(dep_value) {
-                            log::trace!(
-                                "  ✅ Adding build workspace dependency (all-potential mode): {dep_name}"
-                            );
-                            deps.push(dep_name.clone());
-
-                            let default_features = get_dependency_default_features(dep_value);
-                            if default_features == Some(false) {
-                                no_default_features.insert(dep_name.clone());
-                            }
-                        }
-                    } else if is_workspace_dependency_with_features(dep_value) {
-                        log::trace!("  ✅ Adding build dependency: {dep_name}");
-                        deps.push(dep_name.clone());
-
-                        let default_features = get_dependency_default_features(dep_value);
-                        if default_features == Some(false) {
-                            log::trace!(
-                                "    🚫 Build dependency {dep_name} specified with default-features = false"
-                            );
-                            no_default_features.insert(dep_name.clone());
-                        }
-                    } else {
-                        log::trace!("  ⏸️  Skipping build dependency (not activated): {dep_name}");
-                    }
-                }
-            }
-
-            // Check feature-activated dependencies
-            let feature_deps = get_feature_dependencies(&value, &package_features);
-            log::trace!(
-                "🎭 Found {} feature-activated dependencies for {}",
-                feature_deps.len(),
-                package_name
-            );
-            for feature_dep in feature_deps {
-                if !deps.contains(&feature_dep) {
-                    if all_potential_deps {
-                        // In all-potential mode, feature deps are already included above
-                        log::trace!(
-                            "  ⏸️  Skipping feature-activated dependency (already included in all-potential mode): {feature_dep}"
-                        );
-                    } else {
-                        log::trace!("  ✅ Adding feature-activated dependency: {feature_dep}");
-                        deps.push(feature_dep);
-                    }
-                }
-            }
-
-            log::trace!("📊 Final dependencies for {package_name}: {deps:?}");
+            // Extract dependencies that are workspace members - we'll resolve them later
+            let deps = extract_workspace_dependencies(&value, all_potential_deps);
+            log::trace!("📊 Direct dependencies for {package_name}: {deps:?}");
             package_dependencies.insert(package_name.to_string(), deps);
         }
     }
 
-    log::trace!("🚫 Packages that should not use default features: {no_default_features:?}");
-
-    // ... continue with rest of implementation
     if !package_paths.contains_key(target_package) {
         return Err(format!("Package '{target_package}' not found in workspace").into());
     }
 
-    log::trace!("🚀 Starting BFS from target package: {target_package}");
+    log::trace!(
+        "🚀 Starting recursive dependency resolution from target package: {target_package}"
+    );
 
-    // Perform BFS to find all transitive dependencies
+    // Perform recursive dependency resolution to find all transitive dependencies
+    let mut resolved_dependencies = BTreeSet::new();
+    let mut processing_queue = VecDeque::new();
     let mut visited = BTreeSet::new();
-    let mut queue = VecDeque::new();
-    let mut result_paths = Vec::new();
 
-    queue.push_back(target_package.to_string());
+    processing_queue.push_back((
+        target_package.to_string(),
+        enabled_features.map(<[String]>::to_vec),
+    ));
 
-    while let Some(current_package) = queue.pop_front() {
+    while let Some((current_package, current_features)) = processing_queue.pop_front() {
         if visited.contains(&current_package) {
             continue;
         }
@@ -961,24 +836,210 @@ pub fn find_workspace_dependencies(
         // Add current package to result if it's not the target package
         if current_package != target_package {
             if let Some(package_path) = package_paths.get(&current_package) {
-                result_paths.push((current_package.clone(), package_path.clone()));
+                resolved_dependencies.insert((current_package.clone(), package_path.clone()));
             }
         }
 
-        // Add dependencies to queue
-        if let Some(deps) = package_dependencies.get(&current_package) {
-            for dep in deps {
-                if !visited.contains(dep) && package_paths.contains_key(dep) {
-                    queue.push_back(dep.clone());
+        // Get dependencies for current package
+        if let Some(direct_deps) = package_dependencies.get(&current_package) {
+            // For each direct dependency, check if it's activated and add to queue
+            for dep_name in direct_deps {
+                if !visited.contains(dep_name) && package_paths.contains_key(dep_name) {
+                    // Check if this dependency is activated by current features
+                    let is_activated = if all_potential_deps {
+                        true // Include all in potential mode
+                    } else {
+                        is_dependency_activated(
+                            &package_cargo_values,
+                            &current_package,
+                            dep_name,
+                            current_features.as_deref(),
+                        )
+                    };
+
+                    if is_activated {
+                        log::trace!("  ✅ Adding activated dependency: {dep_name}");
+                        // For the dependency, we need to determine what features to enable
+                        // For now, use default features (empty feature set)
+                        processing_queue.push_back((dep_name.clone(), None));
+                    } else {
+                        log::trace!("  ⏸️  Skipping dependency (not activated): {dep_name}");
+                    }
                 }
             }
         }
     }
 
+    let mut result_paths: Vec<(String, String)> = resolved_dependencies.into_iter().collect();
     result_paths.sort_by(|a, b| a.0.cmp(&b.0));
     log::trace!("🏁 Final workspace dependencies: {result_paths:?}");
 
     Ok(result_paths)
+}
+
+/// Extracts all workspace dependencies from a Cargo.toml value
+fn extract_workspace_dependencies(cargo_value: &Value, all_potential_deps: bool) -> Vec<String> {
+    let mut deps = Vec::new();
+
+    // Helper function to extract deps from a dependency section
+    let extract_from_section = |section: &Value| -> Vec<String> {
+        let mut section_deps = Vec::new();
+        if let Some(dependencies) = section.as_table() {
+            for (dep_name, dep_value) in dependencies {
+                if all_potential_deps {
+                    if is_workspace_dependency(dep_value) {
+                        section_deps.push(dep_name.clone());
+                    }
+                } else {
+                    // For non-all-potential mode, include workspace deps that are either:
+                    // 1. Non-optional, or
+                    // 2. Optional but activated by default features
+                    if is_workspace_dependency(dep_value) {
+                        if let Value::Table(table) = dep_value {
+                            if table.get("optional") == Some(&Value::Boolean(true)) {
+                                // Optional dependency - check if activated by default features
+                                if is_optional_dependency_activated(cargo_value, dep_name, None) {
+                                    section_deps.push(dep_name.clone());
+                                }
+                            } else {
+                                // Non-optional workspace dependency
+                                section_deps.push(dep_name.clone());
+                            }
+                        } else {
+                            // Simple workspace dependency (not a table)
+                            section_deps.push(dep_name.clone());
+                        }
+                    }
+                }
+            }
+        }
+        section_deps
+    };
+
+    // Check regular dependencies
+    if let Some(dependencies) = cargo_value.get("dependencies") {
+        deps.extend(extract_from_section(dependencies));
+    }
+
+    // Check dev dependencies
+    if let Some(dev_dependencies) = cargo_value.get("dev-dependencies") {
+        deps.extend(extract_from_section(dev_dependencies));
+    }
+
+    // Check build dependencies
+    if let Some(build_dependencies) = cargo_value.get("build-dependencies") {
+        deps.extend(extract_from_section(build_dependencies));
+    }
+
+    // Remove duplicates
+    deps.sort();
+    deps.dedup();
+    deps
+}
+
+/// Checks if a dependency is activated by the given features
+fn is_dependency_activated(
+    package_cargo_values: &BTreeMap<String, Value>,
+    package_name: &str,
+    dep_name: &str,
+    enabled_features: Option<&[String]>,
+) -> bool {
+    let Some(cargo_value) = package_cargo_values.get(package_name) else {
+        return false;
+    };
+
+    // Check if dependency is in regular dependencies and not optional
+    if let Some(dependencies) = cargo_value.get("dependencies").and_then(|d| d.as_table()) {
+        if let Some(dep_value) = dependencies.get(dep_name) {
+            if is_workspace_dependency(dep_value) {
+                // Check if it's optional
+                if let Value::Table(table) = dep_value {
+                    if table.get("optional") == Some(&Value::Boolean(true)) {
+                        // Optional dependency - check if activated by features
+                        return is_optional_dependency_activated(
+                            cargo_value,
+                            dep_name,
+                            enabled_features,
+                        );
+                    }
+                }
+                // Non-optional workspace dependency is always activated
+                return true;
+            }
+        }
+    }
+
+    // Check dev and build dependencies
+    for section_name in ["dev-dependencies", "build-dependencies"] {
+        if let Some(section) = cargo_value.get(section_name).and_then(|d| d.as_table()) {
+            if let Some(dep_value) = section.get(dep_name) {
+                if is_workspace_dependency(dep_value) {
+                    return true; // Dev and build deps are typically always enabled
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Checks if an optional dependency is activated by features
+fn is_optional_dependency_activated(
+    cargo_value: &Value,
+    dep_name: &str,
+    enabled_features: Option<&[String]>,
+) -> bool {
+    let Some(features_table) = cargo_value.get("features").and_then(|f| f.as_table()) else {
+        return false;
+    };
+
+    // Get the features to check - use default features if none specified
+    let Some(features_to_check) = enabled_features else {
+        // Get default features
+        if let Some(default_features) = features_table.get("default").and_then(|f| f.as_array()) {
+            let default_feature_names: Vec<String> = default_features
+                .iter()
+                .filter_map(|v| v.as_str())
+                .map(ToString::to_string)
+                .collect();
+            return check_features_activate_dependency(
+                features_table,
+                &default_feature_names,
+                dep_name,
+            );
+        }
+
+        return false;
+    };
+
+    check_features_activate_dependency(features_table, features_to_check, dep_name)
+}
+
+/// Helper function to check if any of the given features activate a dependency
+fn check_features_activate_dependency(
+    features_table: &toml::map::Map<String, Value>,
+    features_to_check: &[String],
+    dep_name: &str,
+) -> bool {
+    // Check if any enabled feature activates this dependency
+    for feature_name in features_to_check {
+        if let Some(feature_list) = features_table.get(feature_name).and_then(|f| f.as_array()) {
+            for feature_item in feature_list {
+                if let Some(feature_str) = feature_item.as_str() {
+                    // Check for "dep:package_name" syntax
+                    if feature_str == format!("dep:{dep_name}") {
+                        return true;
+                    }
+                    // Check for "package_name/feature" syntax
+                    if feature_str.starts_with(&format!("{dep_name}/")) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 /// Extracts feature-activated dependencies from a Cargo.toml file
@@ -1041,6 +1102,7 @@ pub fn generate_dockerfile(
     generate_dockerignore: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Get all potential dependencies for the target package (needed for Docker build compatibility)
+    // Docker builds require all possible dependencies to ensure proper layer caching
     let mut dependencies =
         find_workspace_dependencies(workspace_root, target_package, enabled_features, true)?;
 
@@ -1236,23 +1298,50 @@ pub fn generate_dockerfile_content(
     }
     content.push('\n');
 
-    // Create temporary lib file for stubbing
-    writeln!(content, "RUN touch temp_lib.rs\n")?;
+    // Create stub source files for dependencies to enable Docker layer caching
+    writeln!(content, "# Create stub source files for dependencies")?;
 
-    // Add lib path to packages for faster dependency builds (exclude target package)
-    let packages_pattern = dependencies
-        .iter()
-        .filter(|(name, _)| name != target_package) // Exclude target package from lib stubbing
-        .map(|(_, path)| path.as_str())
-        .collect::<Vec<_>>()
-        .join("|");
-
-    if !packages_pattern.is_empty() {
-        writeln!(
-            content,
-            "RUN find . -name \"Cargo.toml\" | grep -E \"({packages_pattern})\" | while read cargo; do pkg_dir=$(dirname \"$cargo\"); echo \"pub mod lib;\" > \"$pkg_dir/src/lib.rs\" 2>/dev/null || true; done\n"
-        )?;
+    // Create directories first
+    for (name, path) in dependencies {
+        if name != target_package {
+            writeln!(content, "RUN mkdir -p {path}/src")?;
+        }
     }
+
+    // Create stub lib.rs files for library dependencies
+    writeln!(content, "RUN touch /tmp/stub_lib.rs")?;
+    for (name, path) in dependencies {
+        if name != target_package {
+            writeln!(
+                content,
+                "RUN cp /tmp/stub_lib.rs {path}/src/lib.rs 2>/dev/null || true"
+            )?;
+        }
+    }
+
+    // Create stub main.rs for the target package if it's a binary
+    let target_cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
+    if target_cargo_path.exists() {
+        let target_source = std::fs::read_to_string(&target_cargo_path)?;
+        let target_value: Value = toml::from_str(&target_source)?;
+
+        // Check if this package has a binary target
+        let has_binary = target_value.get("bin").is_some()
+            || workspace_root
+                .join(target_package_path)
+                .join("src/main.rs")
+                .exists();
+
+        if has_binary {
+            writeln!(content, "RUN mkdir -p {target_package_path}/src")?;
+            writeln!(
+                content,
+                "RUN echo 'fn main() {{}}' > {target_package_path}/src/main.rs"
+            )?;
+        }
+    }
+
+    content.push('\n');
 
     // Check for feature flags
     let features = enabled_features.unwrap_or(&[]);
@@ -1262,39 +1351,34 @@ pub fn generate_dockerfile_content(
         format!("--features={}", features.join(","))
     };
 
-    // Build the target package
-    writeln!(content, "# Build dependencies first")?;
-    if features_flag.is_empty() {
-        writeln!(
-            content,
-            "RUN cargo build --release --package {target_package}"
-        )?;
-    } else {
-        writeln!(
-            content,
-            "RUN cargo build --release --package {target_package} {features_flag}"
-        )?;
-    }
+    // Build only dependencies first (not the target package)
+    // This allows Docker to cache the dependency compilation layer
+    writeln!(content, "# Build dependencies first (not target package)")?;
 
-    // Now copy the source code for the target package
-    writeln!(content, "\n# Copy source code for target package")?;
+    // Build all workspace packages except the target package
+    // This handles interdependencies between workspace packages correctly
     writeln!(
         content,
-        "COPY {target_package_path}/src {target_package_path}/src"
+        "RUN cargo build --release --workspace --exclude {target_package}"
     )?;
 
-    // Check if there are any additional source directories to copy
-    let src_path = workspace_root.join(target_package_path).join("src");
-    if src_path.exists() {
-        // Copy any additional files that might be needed
-        writeln!(
-            content,
-            "COPY {target_package_path}/ {target_package_path}/"
-        )?;
+    // Now copy the actual source code for all packages
+    writeln!(content, "\n# Copy actual source code")?;
+    for (_, path) in dependencies {
+        writeln!(content, "COPY {path}/src {path}/src")?;
+
+        // Copy any additional directories that might exist
+        let additional_dirs = ["tests", "benches", "examples"];
+        for dir in &additional_dirs {
+            let dir_path = workspace_root.join(path).join(dir);
+            if dir_path.exists() && dir_path.is_dir() {
+                writeln!(content, "COPY {path}/{dir} {path}/{dir}")?;
+            }
+        }
     }
 
-    // Final build with source code
-    writeln!(content, "\n# Final build")?;
+    // Final build with actual source code
+    writeln!(content, "\n# Final build with actual source")?;
     if features_flag.is_empty() {
         writeln!(
             content,

@@ -97,7 +97,7 @@ fn test_dockerfile_binary_name_detection() {
 
     // Test binary name detection from Cargo.toml
     let binary_name = clippier::get_binary_name(temp_dir.path(), "cli", "packages/cli");
-    assert_eq!(binary_name, "cli");
+    assert_eq!(binary_name, "cli-tool");
 }
 
 #[test]
