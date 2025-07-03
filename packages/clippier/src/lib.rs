@@ -1301,25 +1301,39 @@ pub fn generate_dockerfile_content(
     // Create stub source files for dependencies to enable Docker layer caching
     writeln!(content, "# Create stub source files for dependencies")?;
 
-    // Create directories first
-    for (name, path) in dependencies {
-        if name != target_package {
-            writeln!(content, "RUN mkdir -p {path}/src")?;
-        }
-    }
+    // Collect all the dependency packages (excluding target package)
+    let dependency_packages: Vec<&str> = dependencies
+        .iter()
+        .filter_map(|(name, path)| {
+            if name == target_package {
+                None
+            } else {
+                Some(path.as_str())
+            }
+        })
+        .collect();
 
-    // Create stub lib.rs files for library dependencies
-    writeln!(content, "RUN touch /tmp/stub_lib.rs")?;
-    for (name, path) in dependencies {
-        if name != target_package {
-            writeln!(
+    if !dependency_packages.is_empty() {
+        // Create all directories and stub files in a single RUN command
+        writeln!(content, "RUN touch /tmp/stub_lib.rs")?;
+
+        // Create a single RUN command that creates directories and copies files
+        write!(content, "RUN ")?;
+        for (i, path) in dependency_packages.iter().enumerate() {
+            write!(
                 content,
-                "RUN cp /tmp/stub_lib.rs {path}/src/lib.rs 2>/dev/null || true"
+                "mkdir -p {path}/src && cp /tmp/stub_lib.rs {path}/src/lib.rs"
             )?;
+            if i < dependency_packages.len() - 1 {
+                writeln!(content, " && \\")?;
+                write!(content, "    ")?;
+            } else {
+                writeln!(content)?;
+            }
         }
     }
 
-    // Create stub main.rs for the target package if it's a binary
+    // Handle target package stub creation separately if it's a binary
     let target_cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
     if target_cargo_path.exists() {
         let target_source = std::fs::read_to_string(&target_cargo_path)?;
@@ -1333,10 +1347,9 @@ pub fn generate_dockerfile_content(
                 .exists();
 
         if has_binary {
-            writeln!(content, "RUN mkdir -p {target_package_path}/src")?;
             writeln!(
                 content,
-                "RUN echo 'fn main() {{}}' > {target_package_path}/src/main.rs"
+                "RUN mkdir -p {target_package_path}/src && echo 'fn main() {{}}' > {target_package_path}/src/main.rs"
             )?;
         }
     }
