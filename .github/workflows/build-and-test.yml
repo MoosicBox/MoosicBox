@@ -79,10 +79,21 @@ jobs:
             - name: cargo install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
 
+            - name: Setup clippier
+              uses: ./cache-artifact
+              with:
+                  directory: ./packages/clippier
+                  command: cargo build --package clippier --features git-diff --release
+                  output-path: ./target/release/clippier
+                  artifact-name: clippier-binary
+                  cache-key-prefix: moosicbox-clippier
+                  make-executable: true
+                  verify-command: --version
+
             - name: Get dependencies
               id: dependencies
               run: |
-                  DEPENDENCIES="$(cargo run -p clippier dependencies . --os ubuntu)"
+                  DEPENDENCIES="$(./target/release/clippier dependencies . --os ubuntu)"
                   echo "Using dependencies:"
                   echo "$DEPENDENCIES"
                   echo 'dependencies<<EOF' >> $GITHUB_OUTPUT
@@ -92,7 +103,7 @@ jobs:
             - name: Get environment
               id: environment
               run: |
-                  ENVIRONMENT="$(cargo run -p clippier environment . --os ubuntu -o json | jq -cr 'join(" ")')"
+                  ENVIRONMENT="$(./target/release/clippier environment . --os ubuntu -o json | jq -cr 'join(" ")')"
                   echo "Using environment:"
                   echo "$ENVIRONMENT"
                   echo 'environment<<EOF' >> $GITHUB_OUTPUT
@@ -102,7 +113,7 @@ jobs:
             - name: Get ci_steps
               id: ci_steps
               run: |
-                  CI_STEPS="$(cargo run -p clippier ci-steps . --os ubuntu -o json | jq -cr 'join(" ")')"
+                  CI_STEPS="$(./target/release/clippier ci-steps . --os ubuntu -o json | jq -cr 'join(" ")')"
                   echo "Using ci_steps:"
                   echo "$CI_STEPS"
                   echo 'ci_steps<<EOF' >> $GITHUB_OUTPUT
@@ -153,8 +164,7 @@ jobs:
 
             - uses: dtolnay/rust-toolchain@stable
 
-            - name: Build clippier with smart caching
-              id: build-clippier
+            - name: Setup clippier
               uses: ./cache-artifact
               with:
                   directory: ./packages/clippier
