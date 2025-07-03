@@ -184,13 +184,29 @@ pub fn process_features(features: Vec<String>, chunked: Option<u16>, spread: boo
         let chunk_size = max_features_per_chunk as usize;
 
         if spread && features.len() > chunk_size {
-            // First, determine how many chunks we need based on chunk size
+            // When spread is true, we want to distribute features more evenly
+            // while still respecting the chunk_size limit
             let num_chunks = features.len().div_ceil(chunk_size);
-
-            // Then distribute features evenly across those chunks
             let mut result = vec![Vec::new(); num_chunks];
+
+            // Distribute features ensuring no chunk exceeds chunk_size
             for (i, feature) in features.into_iter().enumerate() {
-                result[i % num_chunks].push(feature);
+                let chunk_index = i % num_chunks;
+                // Only add if the chunk hasn't reached its limit
+                if result[chunk_index].len() < chunk_size {
+                    result[chunk_index].push(feature);
+                } else {
+                    // Find the first chunk that has space
+                    if let Some(available_chunk) =
+                        result.iter_mut().find(|chunk| chunk.len() < chunk_size)
+                    {
+                        available_chunk.push(feature);
+                    } else {
+                        // This shouldn't happen if our math is correct, but as a fallback
+                        // create a new chunk
+                        result.push(vec![feature]);
+                    }
+                }
             }
             FeaturesList::Chunked(result.into_iter().filter(|v| !v.is_empty()).collect())
         } else {
@@ -454,6 +470,7 @@ pub fn process_configs(
 pub fn apply_max_parallel_rechunking(
     packages: Vec<serde_json::Map<String, serde_json::Value>>,
     max_parallel: usize,
+    chunked: Option<u16>,
 ) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, Box<dyn std::error::Error>> {
     if packages.len() <= max_parallel {
         // Already within limit, no need to re-chunk
@@ -492,7 +509,7 @@ pub fn apply_max_parallel_rechunking(
             // Single package, no need to combine
             result.push(chunk_packages[0].clone());
         } else {
-            // Combine multiple packages - this increases features per package as expected
+            // Combine multiple packages while respecting chunking constraints
             let mut combined_features = Vec::new();
             let template_package = chunk_packages[0].clone();
 
@@ -509,6 +526,14 @@ pub fn apply_max_parallel_rechunking(
             // Remove duplicates while preserving order
             combined_features.sort();
             combined_features.dedup();
+
+            // Respect chunking constraint if specified
+            if let Some(chunk_limit) = chunked {
+                let chunk_limit = chunk_limit as usize;
+                if combined_features.len() > chunk_limit {
+                    combined_features.truncate(chunk_limit);
+                }
+            }
 
             // Create the combined package
             let mut combined_package = template_package;
@@ -2352,8 +2377,8 @@ pub fn handle_features_command(
                     &package_dir,
                     offset,
                     max,
-                    None,  // Don't chunk when filtering by changed files
-                    false, // Don't spread when filtering by changed files
+                    chunked, // Respect chunking when filtering by changed files
+                    spread,  // Respect spreading when filtering by changed files
                     specific_features.as_deref(),
                     skip_features_list.as_deref(),
                     required_features_list.as_deref(),
@@ -2388,6 +2413,15 @@ pub fn handle_features_command(
                     .and_then(|v| v.as_str())
                     .is_some_and(|pkg_os| pkg_os == target_os)
             });
+        }
+
+        // Apply max_parallel re-chunking if specified (redistribute instead of truncate)
+        if let Some(max_parallel_limit) = max_parallel {
+            all_filtered_packages = apply_max_parallel_rechunking(
+                all_filtered_packages,
+                max_parallel_limit as usize,
+                chunked,
+            )?;
         }
 
         let result = match output {
@@ -2431,7 +2465,7 @@ pub fn handle_features_command(
 
     // Apply max_parallel re-chunking if specified (redistribute instead of truncate)
     if let Some(max_parallel_limit) = max_parallel {
-        packages = apply_max_parallel_rechunking(packages, max_parallel_limit as usize)?;
+        packages = apply_max_parallel_rechunking(packages, max_parallel_limit as usize, chunked)?;
     }
 
     let result = match output {
