@@ -515,13 +515,10 @@ jobs:
                               if [[ -n "$REASONING_DATA" && "$REASONING_DATA" != "null" && "$REASONING_DATA" != "" ]]; then
                                   PACKAGE_REASONING=$(echo "$REASONING_DATA" | jq -r --arg pkg "$pkg" '[.[] | select(.name == $pkg) | .reasoning // []] | flatten | unique | map("  - " + .) | join("\n")')
 
-                                  # Get job details for this package from the matrix
-                                  PACKAGE_JOBS=$(echo "$AFFECTED_MATRIX" | jq -r --arg pkg "$pkg" '[.[] | select(.name == ($pkg | sub("^moosicbox_"; "")))] | map("  - **" + .os + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")')
-
                                   if [[ -n "$PACKAGE_REASONING" && "$PACKAGE_REASONING" != "" ]]; then
-                                      DOCKER_ENTRY_TEXT="- <details>\n  <summary>$DOCKER_NAME</summary>\n  \n  **Why this package is affected:**\n$PACKAGE_REASONING\n  \n  **Jobs to run:**\n$PACKAGE_JOBS\n  </details>"
+                                      DOCKER_ENTRY_TEXT="- <details>\n  <summary>$DOCKER_NAME</summary>\n  \n  **Why this package is affected:**\n$PACKAGE_REASONING\n  </details>"
                                   else
-                                      DOCKER_ENTRY_TEXT="- <details>\n  <summary>$DOCKER_NAME</summary>\n  \n  **Jobs to run:**\n$PACKAGE_JOBS\n  </details>"
+                                      DOCKER_ENTRY_TEXT="- $DOCKER_NAME"
                                   fi
                               else
                                   DOCKER_ENTRY_TEXT="- $DOCKER_NAME"
