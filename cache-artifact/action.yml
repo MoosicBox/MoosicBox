@@ -174,6 +174,8 @@ runs:
 
         - name: Upload artifact
           if: steps.cache-check.outputs.cache-hit != 'true' && (steps.check-artifact.outputs.artifact-exists != 'true' || steps.download-artifact.outcome == 'failure')
+          id: upload-artifact
+          continue-on-error: true
           uses: actions/upload-artifact@v4
           with:
               name: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}
@@ -223,7 +225,14 @@ runs:
               elif [ "${{ steps.check-artifact.outputs.artifact-exists }}" = "true" ] && [ "${{ steps.download-artifact.outcome }}" = "failure" ]; then
                 echo "⚠️ Artifact exists but download failed - built new version"
               else
-                echo "🔨 No existing cache or artifact found - built new version"
+                echo "🔨 Built new version"
+
+                # Report upload status
+                if [ "${{ steps.upload-artifact.outcome }}" = "success" ]; then
+                  echo "📤 Artifact uploaded successfully"
+                elif [ "${{ steps.upload-artifact.outcome }}" = "failure" ]; then
+                  echo "⚠️ Artifact upload failed (likely due to parallel job conflict - this is okay)"
+                fi
               fi
 
               echo "📊 Summary:"
@@ -234,6 +243,9 @@ runs:
               echo "  - Output: ${EXPANDED_PATH}"
               if [ "${{ steps.cache-check.outputs.cache-hit }}" != "true" ]; then
                 echo "  - Artifact exists: ${{ steps.check-artifact.outputs.artifact-exists }}"
+                if [ -n "${{ steps.upload-artifact.outcome }}" ]; then
+                  echo "  - Upload result: ${{ steps.upload-artifact.outcome }}"
+                fi
               fi
 
 branding:
