@@ -1,11 +1,16 @@
 name: 'Cache Artifact'
-description: 'Checksums a directory and conditionally runs commands with intelligent artifact caching'
+description: 'Checksums a directory or git repository and conditionally runs commands with intelligent artifact caching'
 author: 'MoosicBox'
 
 inputs:
     directory:
-        description: 'Directory to checksum for change detection'
-        required: true
+        description: 'Directory to checksum for change detection (mutually exclusive with repo)'
+        required: false
+        default: ''
+    repo:
+        description: 'Git repository URL to checksum for change detection (mutually exclusive with directory)'
+        required: false
+        default: ''
     command:
         description: 'Custom command to run when changes are detected'
         required: true
@@ -51,34 +56,63 @@ outputs:
 runs:
     using: 'composite'
     steps:
+        - name: Validate inputs
+          shell: ${{ inputs.shell }}
+          run: |
+              if [ -n "${{ inputs.directory }}" ] && [ -n "${{ inputs.repo }}" ]; then
+                echo "❌ Error: Both 'directory' and 'repo' inputs are provided. Please use only one."
+                exit 1
+              elif [ -z "${{ inputs.directory }}" ] && [ -z "${{ inputs.repo }}" ]; then
+                echo "❌ Error: Either 'directory' or 'repo' input must be provided."
+                exit 1
+              fi
+
         - name: Set up artifact name
           id: set-artifact-name
           shell: ${{ inputs.shell }}
           run: |
               if [ -n "${{ inputs.artifact-name }}" ]; then
                 ARTIFACT_NAME="${{ inputs.artifact-name }}"
-              else
+              elif [ -n "${{ inputs.directory }}" ]; then
                 DIR_NAME=$(basename "${{ inputs.directory }}")
                 ARTIFACT_NAME="${DIR_NAME}-cache"
+              else
+                REPO_NAME=$(basename "${{ inputs.repo }}" .git)
+                ARTIFACT_NAME="${REPO_NAME}-cache"
               fi
               echo "artifact-name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
               echo "🏷️ Artifact name: ${ARTIFACT_NAME}"
 
-        - name: Compute directory checksum
+        - name: Compute checksum
           id: compute-checksum
           shell: ${{ inputs.shell }}
           run: |
-              echo "📁 Computing checksum for directory: ${{ inputs.directory }}"
-              if [ ! -d "${{ inputs.directory }}" ]; then
-                echo "❌ Directory ${{ inputs.directory }} does not exist!"
-                exit 1
+              if [ -n "${{ inputs.directory }}" ]; then
+                echo "📁 Computing checksum for directory: ${{ inputs.directory }}"
+                if [ ! -d "${{ inputs.directory }}" ]; then
+                  echo "❌ Directory ${{ inputs.directory }} does not exist!"
+                  exit 1
+                fi
+
+                # Create a deterministic checksum of the directory
+                # Using find to get all files, then checksumming their content and paths
+                CHECKSUM=$(find "${{ inputs.directory }}" -type f -exec sha256sum {} + | sort -k2 | sha256sum | cut -d' ' -f1)
+                echo "✅ Directory checksum: ${CHECKSUM}"
+              else
+                echo "📦 Getting HEAD SHA for repository: ${{ inputs.repo }}"
+
+                # Use git ls-remote to get the HEAD SHA - much more efficient than cloning
+                CHECKSUM=$(git ls-remote "${{ inputs.repo }}" HEAD | cut -f1)
+
+                if [ -z "$CHECKSUM" ]; then
+                  echo "❌ Failed to get HEAD SHA for repository: ${{ inputs.repo }}"
+                  exit 1
+                fi
+
+                echo "✅ Repository HEAD SHA: ${CHECKSUM}"
               fi
 
-              # Create a deterministic checksum of the directory
-              # Using find to get all files, then checksumming their content and paths
-              CHECKSUM=$(find "${{ inputs.directory }}" -type f -exec sha256sum {} + | sort -k2 | sha256sum | cut -d' ' -f1)
               echo "checksum=${CHECKSUM}" >> $GITHUB_OUTPUT
-              echo "✅ Directory checksum: ${CHECKSUM}"
 
         - name: Set cache key
           id: set-cache-key
@@ -259,7 +293,11 @@ runs:
               fi
 
               echo "📊 Summary:"
-              echo "  - Directory: ${{ inputs.directory }}"
+              if [ -n "${{ inputs.directory }}" ]; then
+                echo "  - Source: Directory ${{ inputs.directory }}"
+              else
+                echo "  - Source: Repository ${{ inputs.repo }}"
+              fi
               echo "  - Checksum: ${{ steps.compute-checksum.outputs.checksum }}"
               echo "  - Cache Key: ${{ steps.set-cache-key.outputs.cache-key }}"
               echo "  - Artifact: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}"
