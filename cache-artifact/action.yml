@@ -92,17 +92,39 @@ runs:
               key: ${{ steps.set-cache-key.outputs.cache-key }}
               lookup-only: true
 
-        - name: Download existing artifact if cache miss but artifact exists
+        - name: Check for existing artifact
           if: steps.cache-check.outputs.cache-hit != 'true'
+          id: check-artifact
+          shell: ${{ inputs.shell }}
+          run: |
+              ARTIFACT_NAME="${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}"
+              echo "🔍 Checking for existing artifact: $ARTIFACT_NAME"
+
+              # Use GitHub API to check if artifact exists
+              ARTIFACT_EXISTS=$(curl -s \
+                  -H "Authorization: Bearer ${{ github.token }}" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+                  | jq -r '.artifacts | length > 0')
+
+              echo "artifact-exists=$ARTIFACT_EXISTS" >> $GITHUB_OUTPUT
+
+              if [ "$ARTIFACT_EXISTS" = "true" ]; then
+                  echo "✅ Artifact found: $ARTIFACT_NAME"
+              else
+                  echo "❌ Artifact not found: $ARTIFACT_NAME (will build from scratch)"
+              fi
+
+        - name: Download existing artifact
+          if: steps.cache-check.outputs.cache-hit != 'true' && steps.check-artifact.outputs.artifact-exists == 'true'
           id: download-artifact
-          continue-on-error: true
           uses: actions/download-artifact@v4
           with:
               name: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}
               path: ${{ inputs.working-directory }}
 
         - name: Run custom command
-          if: steps.cache-check.outputs.cache-hit != 'true' && steps.download-artifact.outcome == 'failure'
+          if: steps.cache-check.outputs.cache-hit != 'true' && (steps.check-artifact.outputs.artifact-exists != 'true' || steps.download-artifact.outcome == 'failure')
           shell: ${{ inputs.shell }}
           working-directory: ${{ inputs.working-directory }}
           run: |
@@ -118,14 +140,14 @@ runs:
               echo "✅ Command completed successfully, output created: ${{ inputs.output-path }}"
 
         - name: Save to cache
-          if: steps.cache-check.outputs.cache-hit != 'true' && steps.download-artifact.outcome == 'failure'
+          if: steps.cache-check.outputs.cache-hit != 'true' && (steps.check-artifact.outputs.artifact-exists != 'true' || steps.download-artifact.outcome == 'failure')
           uses: actions/cache/save@v4
           with:
               path: ${{ inputs.output-path }}
               key: ${{ steps.set-cache-key.outputs.cache-key }}
 
         - name: Upload artifact
-          if: steps.cache-check.outputs.cache-hit != 'true' && steps.download-artifact.outcome == 'failure'
+          if: steps.cache-check.outputs.cache-hit != 'true' && (steps.check-artifact.outputs.artifact-exists != 'true' || steps.download-artifact.outcome == 'failure')
           uses: actions/upload-artifact@v4
           with:
               name: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}
@@ -138,10 +160,12 @@ runs:
           run: |
               if [ "${{ steps.cache-check.outputs.cache-hit }}" = "true" ]; then
                 echo "🎯 Cache HIT! Using cached version of ${{ inputs.output-path }}"
-              elif [ "${{ steps.download-artifact.outcome }}" = "success" ]; then
+              elif [ "${{ steps.check-artifact.outputs.artifact-exists }}" = "true" ] && [ "${{ steps.download-artifact.outcome }}" = "success" ]; then
                 echo "📦 Artifact downloaded successfully"
+              elif [ "${{ steps.check-artifact.outputs.artifact-exists }}" = "true" ] && [ "${{ steps.download-artifact.outcome }}" = "failure" ]; then
+                echo "⚠️ Artifact exists but download failed - built new version"
               else
-                echo "🔨 Built new version and cached it"
+                echo "🔨 No existing cache or artifact found - built new version"
               fi
 
               echo "📊 Summary:"
@@ -150,6 +174,9 @@ runs:
               echo "  - Cache Key: ${{ steps.set-cache-key.outputs.cache-key }}"
               echo "  - Artifact: ${{ steps.set-artifact-name.outputs.artifact-name }}-${{ steps.compute-checksum.outputs.checksum }}"
               echo "  - Output: ${{ inputs.output-path }}"
+              if [ "${{ steps.cache-check.outputs.cache-hit }}" != "true" ]; then
+                echo "  - Artifact exists: ${{ steps.check-artifact.outputs.artifact-exists }}"
+              fi
 
 branding:
     icon: 'package'
