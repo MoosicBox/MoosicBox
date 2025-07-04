@@ -49,7 +49,12 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                         padding=10
                     {
                         div flex-grow=1 {
-                            input flex-grow=1 type=text name="query" placeholder="Search...";
+                            input
+                                type=text
+                                flex-grow=1
+                                autofocus
+                                name="query"
+                                placeholder="Search...";
                         }
                         button
                             type=submit
