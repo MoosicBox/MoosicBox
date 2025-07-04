@@ -341,6 +341,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
             }
             ActionType::NoOp
             | ActionType::Style { .. }
+            | ActionType::Input { .. }
             | ActionType::Navigate { .. }
             | ActionType::Let { .. }
             | ActionType::Log { .. }
@@ -2901,6 +2902,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         let response = match &action {
             ActionType::NoOp => true,
+            ActionType::Input { .. } => todo!(),
             ActionType::Style { target, action } => {
                 if let Some(ActionEffect {
                     delay_off: Some(delay),
@@ -3111,6 +3113,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         render_context.action_throttle.remove(&id);
 
         match &action {
+            ActionType::Input(..) => todo!(),
             ActionType::Style { target, action } => {
                 if let Some(id) = Self::get_element_target_id(target, id, render_context.container)
                 {

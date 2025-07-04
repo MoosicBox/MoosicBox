@@ -15,7 +15,8 @@ use hyperchad_renderer_html::{
 use hyperchad_transformer::{
     Container, ResponsiveTrigger,
     actions::{
-        ActionEffect, ActionTrigger, ActionType, ElementTarget, LogLevel, StyleAction, Target,
+        ActionEffect, ActionTrigger, ActionType, ElementTarget, InputActionType, LogLevel,
+        StyleAction, Target,
         dsl::{BinaryOp, Expression, Literal, UnaryOp},
         logic::{Arithmetic, CalcValue, Condition, Value},
     },
@@ -434,6 +435,12 @@ fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<St
         ActionType::Let { name, value } => {
             (format!("let {name}={};", expression_to_js(value)), None)
         }
+        ActionType::Input(action) => match action {
+            InputActionType::Select { target } => {
+                let target = element_target_to_js(target);
+                (format!("ctx.cf({target},'select');"), None)
+            }
+        },
         ActionType::Style { target, action } => {
             let target = element_target_to_js(target);
 

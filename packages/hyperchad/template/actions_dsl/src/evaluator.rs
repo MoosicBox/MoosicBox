@@ -783,6 +783,14 @@ fn generate_action_for_id(
                 hyperchad_actions::ActionType::focus_str_id(hyperchad_actions::Target::literal(#id))
             }
         }
+        "select" => {
+            if !args.is_empty() {
+                return Err("ElementReference.select() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::select_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
         unknown => {
             return Err(format!("Unknown method: {unknown}"));
         }
@@ -837,6 +845,14 @@ fn generate_action_for_class(
             }
             quote! {
                 hyperchad_actions::ActionType::focus_str_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "select" => {
+            if !args.is_empty() {
+                return Err("ElementReference.select() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::select_str_class(hyperchad_actions::Target::literal(#class))
             }
         }
         unknown => {

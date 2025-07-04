@@ -226,6 +226,12 @@ pub enum LogLevel {
     Trace,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum InputActionType {
+    Select { target: ElementTarget },
+}
+
 #[derive(Clone, Debug, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ActionType {
@@ -239,6 +245,7 @@ pub enum ActionType {
         target: ElementTarget,
         action: StyleAction,
     },
+    Input(InputActionType),
     Navigate {
         url: String,
     },
@@ -305,6 +312,27 @@ impl ActionType {
     }
 
     #[must_use]
+    pub fn select_str_id(target: impl Into<Target>) -> Self {
+        Self::Input(InputActionType::Select {
+            target: ElementTarget::StrId(target.into()),
+        })
+    }
+
+    #[must_use]
+    pub fn select_class(class: impl Into<Target>) -> Self {
+        Self::Input(InputActionType::Select {
+            target: ElementTarget::Class(class.into()),
+        })
+    }
+
+    #[must_use]
+    pub fn select_child_class(class: impl Into<Target>) -> Self {
+        Self::Input(InputActionType::Select {
+            target: ElementTarget::ChildClass(class.into()),
+        })
+    }
+
+    #[must_use]
     pub fn set_visibility_str_id(visibility: Visibility, target: impl Into<Target>) -> Self {
         Self::Style {
             target: ElementTarget::StrId(target.into()),
@@ -331,11 +359,6 @@ impl ActionType {
     }
 
     #[must_use]
-    pub fn focus_str_id(target: impl Into<Target>) -> Self {
-        Self::set_focus_str_id(true, target)
-    }
-
-    #[must_use]
     pub fn hide_class(class_name: impl Into<Target>) -> Self {
         Self::set_visibility_class(Visibility::Hidden, class_name)
     }
@@ -343,6 +366,11 @@ impl ActionType {
     #[must_use]
     pub fn show_class(class_name: impl Into<Target>) -> Self {
         Self::set_visibility_class(Visibility::Visible, class_name)
+    }
+
+    #[must_use]
+    pub fn focus_str_id(target: impl Into<Target>) -> Self {
+        Self::set_focus_str_id(true, target)
     }
 
     #[must_use]
