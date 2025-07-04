@@ -50,9 +50,9 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                     {
                         div flex-grow=1 {
                             input
+                                #search-input
                                 type=text
                                 flex-grow=1
-                                autofocus
                                 name="query"
                                 placeholder="Search...";
                         }
@@ -105,6 +105,7 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             fx-click=fx {
                 hide_self();
                 show("search");
+                element("#search-input").focus();
             }
         {
             image
