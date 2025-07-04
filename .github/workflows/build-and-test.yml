@@ -480,21 +480,78 @@ jobs:
               run: |
                   echo "🐳 Analyzing Docker package requirements..."
 
-                  # Only analyze Docker if we have changes
-                  if [[ "${{ steps.analyze-changes.outputs.has-changes }}" == "true" ]]; then
-                      # Define the packages that have Docker images (mapping from package name to docker info)
-                      DOCKER_PACKAGES='{"moosicbox_server": {"name": "server", "dockerfile": "packages/server/Server.Dockerfile"}, "moosicbox_tunnel_server": {"name": "tunnel_server", "dockerfile": "packages/tunnel_server/TunnelServer.Dockerfile"}, "moosicbox_load_balancer": {"name": "load_balancer", "dockerfile": "packages/load_balancer/LoadBalancer.Dockerfile"}}'
+                  # Define the packages that have Docker images (mapping from package name to docker info)
+                  DOCKER_PACKAGES='{"moosicbox_server": {"name": "server", "dockerfile": "packages/server/Server.Dockerfile"}, "moosicbox_tunnel_server": {"name": "tunnel_server", "dockerfile": "packages/tunnel_server/TunnelServer.Dockerfile"}, "moosicbox_load_balancer": {"name": "load_balancer", "dockerfile": "packages/load_balancer/LoadBalancer.Dockerfile"}}'
 
-                      # Get affected packages from the main analysis
-                      AFFECTED_MATRIX='${{ steps.analyze-changes.outputs.matrix }}'
+                  # Function to create Docker matrix entry with environment variables
+                  create_docker_entry() {
+                      local pkg_name="$1"
+                      local affected_matrix="$2"
 
+                      DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg_name\" // empty")
+                      if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ] && [ "$DOCKER_INFO" != "empty" ]; then
+                          # Get environment variables for this package from the matrix
+                          PACKAGE_ENV=$(echo "$affected_matrix" | jq -r --arg pkg "$pkg_name" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .env // empty' | head -1)
+
+                          # Create the Docker matrix entry with environment variables
+                          DOCKER_ENTRY=$(echo "$DOCKER_INFO" | jq --arg env "$PACKAGE_ENV" '. + (if $env != "" and $env != "empty" then {env: $env} else {} end)')
+
+                          MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
+                      fi
+                  }
+
+                  # Function to finalize Docker matrix and outputs
+                  finalize_docker_matrix() {
+                      local affected_packages="$1"
+                      local packages_list="$2"
+
+                      DOCKER_COUNT=$(echo "$MATRIX_PROJECTS" | jq 'length')
+
+                      if [ "$DOCKER_COUNT" -eq 0 ]; then
+                          echo "✨ No Docker packages are affected by the changes"
+                          DOCKER_MATRIX='{"include": []}'
+                          echo "has-docker-changes=false" >> $GITHUB_OUTPUT
+                          DOCKER_PACKAGES_LIST="none"
+                      else
+                          DOCKER_MATRIX="{\"include\": $MATRIX_PROJECTS}"
+                          echo "has-docker-changes=true" >> $GITHUB_OUTPUT
+                          DOCKER_PACKAGES_LIST="$packages_list"
+                          echo "🐳 Docker packages to build: $affected_packages"
+                          echo "📈 Docker matrix size: $DOCKER_COUNT packages"
+                      fi
+                  }
+
+                  # Get affected packages from the main analysis for environment variables
+                  AFFECTED_MATRIX='${{ steps.analyze-changes.outputs.matrix }}'
+                  MATRIX_PROJECTS="[]"
+
+                  # Determine which packages to build based on event type
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
+                      echo "🎯 Manual/scheduled run: will build all Docker packages"
+
+                      # Build all Docker packages
+                      for pkg_name in $(echo "$DOCKER_PACKAGES" | jq -r 'keys[]'); do
+                          create_docker_entry "$pkg_name" "$AFFECTED_MATRIX"
+                      done
+
+                      # Create list with manual reasoning
+                      if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                          MANUAL_REASON="Manual workflow dispatch - all Docker packages included"
+                      else
+                          MANUAL_REASON="Scheduled workflow run - all Docker packages included"
+                      fi
+
+                      DOCKER_PACKAGES_LIST=$(echo "$DOCKER_PACKAGES" | jq -r --arg reason "$MANUAL_REASON" '[.[] as $docker | "- <details>\n  <summary>" + $docker.name + "</summary>\n  \n  **Why this package is affected:**\n  - " + $reason + "\n  </details>"] | join("\n")')
+
+                      finalize_docker_matrix "all (manual/scheduled)" "$DOCKER_PACKAGES_LIST"
+
+                  elif [[ "${{ steps.analyze-changes.outputs.has-changes }}" == "true" ]]; then
                       # Extract unique package names from the affected matrix
                       AFFECTED_PACKAGE_NAMES=$(echo "$AFFECTED_MATRIX" | jq -r '[.[].name] | unique | .[]' | sed 's/^/moosicbox_/')
 
                       echo "📦 Checking affected packages for Docker images: $AFFECTED_PACKAGE_NAMES"
 
                       # Build the matrix with packages that both have Docker images and are affected
-                      MATRIX_PROJECTS="[]"
                       AFFECTED_DOCKER_PACKAGES=""
                       DOCKER_PACKAGES_LIST=""
                       REASONING_DATA='${{ steps.analyze-changes.outputs.reasoning }}'
@@ -502,13 +559,7 @@ jobs:
                       for pkg in $AFFECTED_PACKAGE_NAMES; do
                           DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg\" // empty")
                           if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ] && [ "$DOCKER_INFO" != "empty" ]; then
-                              # Extract environment variables from the main matrix for this package
-                              PACKAGE_ENV=$(echo "$AFFECTED_MATRIX" | jq -r --arg pkg "$pkg" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .env // empty' | head -1)
-
-                              # Create the Docker matrix entry with environment variables
-                              DOCKER_ENTRY=$(echo "$DOCKER_INFO" | jq --arg env "$PACKAGE_ENV" '. + (if $env != "" and $env != "empty" then {env: $env} else {} end)')
-
-                              MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
+                              create_docker_entry "$pkg" "$AFFECTED_MATRIX"
                               DOCKER_NAME=$(echo "$DOCKER_INFO" | jq -r '.name')
 
                               # Get reasoning and job details for this package
@@ -534,49 +585,7 @@ jobs:
                           fi
                       done
 
-                      # Check if any Docker packages are affected
-                      DOCKER_COUNT=$(echo "$MATRIX_PROJECTS" | jq 'length')
-                      if [ "$DOCKER_COUNT" -eq 0 ]; then
-                          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-                              echo "🎯 Workflow dispatch: will build all Docker packages"
-                              # For manual dispatch, build all Docker packages with environment variables
-                              MATRIX_PROJECTS="[]"
-                              # Dynamically iterate over all packages in DOCKER_PACKAGES
-                              for pkg_name in $(echo "$DOCKER_PACKAGES" | jq -r 'keys[]'); do
-                                  DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$pkg_name\" // empty")
-                                  if [ -n "$DOCKER_INFO" ] && [ "$DOCKER_INFO" != "null" ] && [ "$DOCKER_INFO" != "empty" ]; then
-                                      # Get environment variables for this package
-                                      PACKAGE_ENV=$(echo "$AFFECTED_MATRIX" | jq -r --arg pkg "$pkg_name" '.[] | select(.name == ($pkg | sub("^moosicbox_"; ""))) | .env // empty' | head -1)
-
-                                      # Create the Docker matrix entry with environment variables
-                                      DOCKER_ENTRY=$(echo "$DOCKER_INFO" | jq --arg env "$PACKAGE_ENV" '. + (if $env != "" and $env != "empty" then {env: $env} else {} end)')
-
-                                      MATRIX_PROJECTS=$(echo "$MATRIX_PROJECTS" | jq ". + [$DOCKER_ENTRY]")
-                                  fi
-                              done
-                              DOCKER_MATRIX="{\"include\": $MATRIX_PROJECTS}"
-                              echo "has-docker-changes=true" >> $GITHUB_OUTPUT
-                              AFFECTED_DOCKER_PACKAGES="all (manual dispatch)"
-                              DOCKER_COUNT=$(echo "$MATRIX_PROJECTS" | jq 'length')
-                              # For manual dispatch, create list with manual reasoning and job details
-                              DOCKER_PACKAGES_LIST=$(echo "$DOCKER_PACKAGES" | jq -r --argjson matrix "$AFFECTED_MATRIX" '[.[] as $docker | "- <details>\n  <summary>" + $docker.name + "</summary>\n  \n  **Why this package is affected:**\n  - Manual workflow dispatch - all Docker packages included\n  \n  **Jobs to run:**\n" + (($matrix | map(select(.name == $docker.name)) | map("  - **" + .os + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")) // "  - No specific jobs found") + "\n  </details>"] | join("\n")')
-                          else
-                              echo "✨ No Docker packages are affected by the changes"
-                              DOCKER_MATRIX='{"include": []}'
-                              echo "has-docker-changes=false" >> $GITHUB_OUTPUT
-                              AFFECTED_DOCKER_PACKAGES="none"
-                              DOCKER_PACKAGES_LIST="none"
-                          fi
-                      else
-                          DOCKER_MATRIX="{\"include\": $MATRIX_PROJECTS}"
-                          echo "has-docker-changes=true" >> $GITHUB_OUTPUT
-                      fi
-
-                      # Ensure the JSON is properly formatted and compact
-                      DOCKER_MATRIX=$(echo "$DOCKER_MATRIX" | jq -c .)
-
-                      echo "🐳 Docker packages to build: $AFFECTED_DOCKER_PACKAGES"
-                      echo "📈 Docker matrix size: $DOCKER_COUNT packages"
+                      finalize_docker_matrix "${AFFECTED_DOCKER_PACKAGES:-none}" "$DOCKER_PACKAGES_LIST"
                   else
                       echo "⏭️ No package changes detected - Docker builds will be skipped"
                       DOCKER_MATRIX='{"include": []}'
@@ -584,6 +593,9 @@ jobs:
                       DOCKER_COUNT=0
                       DOCKER_PACKAGES_LIST="none"
                   fi
+
+                  # Ensure the JSON is properly formatted and compact
+                  DOCKER_MATRIX=$(echo "$DOCKER_MATRIX" | jq -c .)
 
                   # Set outputs for reuse by other jobs
                   echo "docker-matrix=$DOCKER_MATRIX" >> $GITHUB_OUTPUT
@@ -715,25 +727,25 @@ jobs:
                   echo "## 🐳 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
 
-                  if [[ "$HAS_CHANGES" == "true" ]]; then
-                      HAS_DOCKER_CHANGES="${{ needs.determine-affected-packages.outputs.has-docker-changes }}"
-                      DOCKER_COUNT="${{ needs.determine-affected-packages.outputs.docker-count }}"
+                  HAS_DOCKER_CHANGES="${{ needs.determine-affected-packages.outputs.has-docker-changes }}"
+                  DOCKER_COUNT="${{ needs.determine-affected-packages.outputs.docker-count }}"
 
-                      if [[ "$HAS_DOCKER_CHANGES" == "true" && "$DOCKER_COUNT" -gt 0 ]]; then
-                          DOCKER_PLURAL=$([[ "$DOCKER_COUNT" -eq 1 ]] && echo "image" || echo "images")
-                          echo "🐳 **Docker Images**: $DOCKER_COUNT Docker $DOCKER_PLURAL will be built" >> $GITHUB_STEP_SUMMARY
-                          echo "" >> $GITHUB_STEP_SUMMARY
-                          echo "**Docker images to build:**" >> $GITHUB_STEP_SUMMARY
-                          echo -e '${{ needs.determine-affected-packages.outputs.docker-packages-list }}' >> $GITHUB_STEP_SUMMARY
-                      else
-                          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-                              echo "🐳 **Docker Images**: All Docker images will be built (manual dispatch)" >> $GITHUB_STEP_SUMMARY
-                          else
-                              echo "✨ **Docker Images**: No Docker-enabled packages affected - Docker builds will be skipped!" >> $GITHUB_STEP_SUMMARY
-                          fi
-                      fi
+                  if [[ "$HAS_DOCKER_CHANGES" == "true" && "$DOCKER_COUNT" -gt 0 ]]; then
+                      DOCKER_PLURAL=$([[ "$DOCKER_COUNT" -eq 1 ]] && echo "image" || echo "images")
+                      echo "🐳 **Docker Images**: $DOCKER_COUNT Docker $DOCKER_PLURAL will be built" >> $GITHUB_STEP_SUMMARY
+                      echo "" >> $GITHUB_STEP_SUMMARY
+                      echo "**Docker images to build:**" >> $GITHUB_STEP_SUMMARY
+                      echo -e '${{ needs.determine-affected-packages.outputs.docker-packages-list }}' >> $GITHUB_STEP_SUMMARY
                   else
-                      echo "⏭️ **Docker Images**: Skipped (no package changes detected)" >> $GITHUB_STEP_SUMMARY
+                      if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "schedule" ]]; then
+                          if [[ "$HAS_CHANGES" == "true" ]]; then
+                              echo "🐳 **Docker Images**: All Docker images will be built (manual/scheduled run)" >> $GITHUB_STEP_SUMMARY
+                          else
+                              echo "⚠️ **Docker Images**: Manual/scheduled run but no packages detected - Docker builds may be skipped" >> $GITHUB_STEP_SUMMARY
+                          fi
+                      else
+                          echo "✨ **Docker Images**: No Docker-enabled packages affected - Docker builds will be skipped!" >> $GITHUB_STEP_SUMMARY
+                      fi
                   fi
 
                   # Tauri release summary (separate section)
