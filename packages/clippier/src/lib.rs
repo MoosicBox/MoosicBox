@@ -443,12 +443,30 @@ pub fn process_configs(
         .map(str::to_string)
     {
         for config in configs {
+            // Combine skip_features from command line and config file
+            let combined_skip_features =
+                match (skip_features_override, config.skip_features.as_deref()) {
+                    (Some(override_features), Some(config_features)) => {
+                        // Combine both lists and remove duplicates
+                        let mut combined = override_features.to_vec();
+                        for feature in config_features {
+                            if !combined.contains(feature) {
+                                combined.push(feature.clone());
+                            }
+                        }
+                        Some(combined)
+                    }
+                    (Some(override_features), None) => Some(override_features.to_vec()),
+                    (None, Some(config_features)) => Some(config_features.to_vec()),
+                    (None, None) => None,
+                };
+
             let features = fetch_features(
                 &value,
                 offset,
                 max,
                 specific_features,
-                skip_features_override.or(config.skip_features.as_deref()),
+                combined_skip_features.as_deref(),
                 required_features_override.or(config.required_features.as_deref()),
             );
             let features = process_features(
@@ -2844,4 +2862,71 @@ pub fn process_workspace_configs(
             Ok(all_packages)
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_skip_features_combination() {
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a simple Cargo.toml with features
+        let cargo_toml = r#"
+[package]
+name = "test-package"
+version = "0.1.0"
+
+[features]
+default = []
+feature1 = []
+feature2 = []
+simd = []
+fail-on-warnings = []
+"#;
+        std::fs::write(temp_path.join("Cargo.toml"), cargo_toml).unwrap();
+
+        // Create a clippier.toml with skip_features
+        let clippier_toml = r#"
+[[config]]
+os = "ubuntu"
+skip-features = ["simd"]
+"#;
+        std::fs::write(temp_path.join("clippier.toml"), clippier_toml).unwrap();
+
+        // Test the combination: command line skip_features + config skip_features
+        let result = process_configs(
+            temp_path,
+            None,
+            None,
+            None,
+            false,
+            false,
+            None,
+            None,
+            Some(&["fail-on-warnings".to_string()]), // Command line skip_features
+            None,
+        )
+        .unwrap();
+
+        // Verify that both "simd" and "fail-on-warnings" are skipped
+        assert!(!result.is_empty());
+        let features = result[0].get("features").unwrap().as_array().unwrap();
+        let feature_names: Vec<String> = features
+            .iter()
+            .map(|f| f.as_str().unwrap().to_string())
+            .collect();
+
+        // Should not contain "simd" (from config) or "fail-on-warnings" (from command line)
+        assert!(!feature_names.contains(&"simd".to_string()));
+        assert!(!feature_names.contains(&"fail-on-warnings".to_string()));
+
+        // Should contain other features
+        assert!(feature_names.contains(&"feature1".to_string()));
+        assert!(feature_names.contains(&"feature2".to_string()));
+    }
 }
