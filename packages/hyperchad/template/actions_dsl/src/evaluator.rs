@@ -497,7 +497,7 @@ pub fn generate_expression_code(
                 Ok(quote! {
                     hyperchad_actions::dsl::Expression::ElementRef(
                         Box::new(hyperchad_actions::dsl::Expression::Literal(
-                            hyperchad_actions::dsl::Literal::String(#selector)
+                            hyperchad_actions::dsl::Literal::String(#selector.to_string())
                         ))
                     )
                 })
