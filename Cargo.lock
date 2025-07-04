@@ -737,9 +737,9 @@ dependencies = [
 
 [[package]]
 name = "ast_node"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6ea666cbca3830383d6ce836593e88ade6f61b12c6066c09dc1257c3079a5b6"
+checksum = "337b95505078e10730624c8d182b8564c745ba4b2ce398e626a4df3f8c9e6899"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -761,9 +761,9 @@ dependencies = [
 
 [[package]]
 name = "async-channel"
-version = "2.3.1"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89b47800b0be77592da0afd425cc03468052844aff33b84e33cc696f64e77b6a"
+checksum = "16c74e56284d2188cabb6ad99603d1ace887a5d7e7b695d01b728155ed9ed427"
 dependencies = [
  "concurrent-queue",
  "event-listener-strategy",
@@ -1115,9 +1115,9 @@ dependencies = [
 
 [[package]]
 name = "avif-serialize"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19135c0c7a60bfee564dbe44ab5ce0557c6bf3884e5291a50be76a15640c4fbd"
+checksum = "2ea8ef51aced2b9191c08197f55450d830876d9933f8f48a429b354f1d496b42"
 dependencies = [
  "arrayvec",
 ]
@@ -4959,9 +4959,9 @@ dependencies = [
 
 [[package]]
 name = "hstr"
-version = "1.1.1"
+version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d1638d2018a21b9ff65d7fc28c2271c76a5af6ff4f621b204d032bc649763a4"
+checksum = "ab73a92ae4a07d38866dbfd2537ea52a02d68df53b8b8d74595acc9cad6338dc"
 dependencies = [
  "hashbrown 0.14.5",
  "new_debug_unreachable",
@@ -6489,9 +6489,9 @@ checksum = "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776"
 
 [[package]]
 name = "libfuzzer-sys"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf78f52d400cf2d84a3a973a78a592b4adc535739e0a5597a0da6f0c357adc75"
+checksum = "5037190e1f70cbeef565bd267599242926f724d3b8a9f510fd7e0b540cfa4404"
 dependencies = [
  "arbitrary",
  "cc",
@@ -6840,9 +6840,9 @@ checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
 
 [[package]]
 name = "mac-notification-sys"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b95dfb34071d1592b45622bf93e315e3a72d414b6782aca9a015c12bec367ef"
+checksum = "1280f4ec61016b4960075c5c090085129647807a77a964bdb352c14903450589"
 dependencies = [
  "cc",
  "objc2 0.6.1",
@@ -13268,9 +13268,9 @@ dependencies = [
 
 [[package]]
 name = "swc_common"
-version = "13.0.2"
+version = "13.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc28daa84b57762ecf28d8fdf6a3204ff04c8b8d98d35b9e8b9f56d4a7fafffa"
+checksum = "f77288e8187be57e6ef487301b08cac12351a6e479c85d1d06f77e21df496bcb"
 dependencies = [
  "anyhow",
  "ast_node",
@@ -13387,9 +13387,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_lexer"
-version = "18.0.0"
+version = "18.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b009fbd9113e82513e8f85f8405a3eaf4836b0e2b1bf35e1d492dba48108441"
+checksum = "0913d1984836837bbf56c3fa958ac53014cb604fd82727584b5f92a75fcc700b"
 dependencies = [
  "arrayvec",
  "ascii",
@@ -13410,7 +13410,6 @@ dependencies = [
  "swc_common",
  "swc_ecma_ast",
  "tracing",
- "typed-arena",
 ]
 
 [[package]]
@@ -13437,9 +13436,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "24.0.1"
+version = "24.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efba6301e1675e1ab9e03d0dcd691695b62a0e6eb5841d88c770524e491a793a"
+checksum = "f7102ce09a912ca394650d0fb3c30421f775da1ef1b4be29128ea18527ea9d30"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -13475,9 +13474,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_parser"
-version = "18.0.0"
+version = "18.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4ebb9d932251ca0a4db5cd952a5134bef6e1f9853a914cf3bd1fbc4118f107a"
+checksum = "379ce1b189f85d9e6de482033750a1d7d6988ff55c9a984e560e75df6d8ef1e8"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -13496,14 +13495,13 @@ dependencies = [
  "swc_ecma_ast",
  "swc_ecma_lexer",
  "tracing",
- "typed-arena",
 ]
 
 [[package]]
 name = "swc_ecma_transforms_base"
-version = "19.0.0"
+version = "19.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abface3af9575e3849dce475189384d4b549335cb127fd5691d1c8f304f694c0"
+checksum = "4b3678545af8a4c757de91d1898d29134c0bf313410b0d2fb992d332a2d1e3df"
 dependencies = [
  "better_scoped_tls",
  "bitflags 2.9.1",
@@ -15631,12 +15629,6 @@ name = "typeable"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1410f6f91f21d1612654e7cc69193b0334f909dcf2c790c4826254fbb86f8887"
-
-[[package]]
-name = "typed-arena"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
 
 [[package]]
 name = "typeid"
@@ -17825,9 +17817,9 @@ dependencies = [
 
 [[package]]
 name = "zune-jpeg"
-version = "0.4.18"
+version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7384255a918371b5af158218d131530f694de9ad3815ebdd0453a940485cb0fa"
+checksum = "2c9e525af0a6a658e031e95f14b7f889976b74a11ba0eca5a5fc9ac8a1c43a6a"
 dependencies = [
  "zune-core",
 ]
