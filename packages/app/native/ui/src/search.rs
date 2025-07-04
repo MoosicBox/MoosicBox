@@ -204,10 +204,12 @@ fn artist_result(host: &str, artist: &ApiGlobalArtistSearchResult) -> Containers
     container! {
         div direction=row {
             @let size = 70;
-            image
-                src=(artist_cover_url(host, &artist_id, &source, artist.contains_cover, size, size))
-                width=(size)
-                height=(size);
+            anchor href={"/artists?artistId="(artist_id)"&source="(source)} {
+                image
+                    src=(artist_cover_url(host, &artist_id, &source, artist.contains_cover, size, size))
+                    width=(size)
+                    height=(size);
+            }
             anchor href={"/artists?artistId="(artist_id)"&source="(source)} {
                 (artist.title)
             }
@@ -222,10 +224,12 @@ fn album_result(host: &str, album: &ApiGlobalAlbumSearchResult) -> Containers {
     container! {
         div direction=row {
             @let size = 70;
-            image
-                src=(album_cover_url(host, &album_id, &source, album.contains_cover, size, size))
-                width=(size)
-                height=(size);
+            anchor href={"/albums?albumId="(album_id)"&source="(source)} {
+                image
+                    src=(album_cover_url(host, &album_id, &source, album.contains_cover, size, size))
+                    width=(size)
+                    height=(size);
+            }
             anchor href={"/albums?albumId="(album_id)"&source="(source)} {
                 (album.title)
             }
@@ -241,10 +245,12 @@ fn track_result(host: &str, track: &ApiGlobalTrackSearchResult) -> Containers {
     container! {
         div direction=row {
             @let size = 70;
-            image
-                src=(album_cover_url(host, &album_id, &source, track.contains_cover, size, size))
-                width=(size)
-                height=(size);
+            anchor href={"/albums?albumId="(album_id)"&source="(source)} {
+                image
+                    src=(album_cover_url(host, &album_id, &source, track.contains_cover, size, size))
+                    width=(size)
+                    height=(size);
+            }
             anchor href={"/albums?albumId="(album_id)"&source="(source)} {
                 (title)
             }
