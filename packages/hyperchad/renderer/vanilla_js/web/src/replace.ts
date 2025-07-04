@@ -1,4 +1,4 @@
-import { on, splitHtml, triggerHandlers } from './core';
+import { on, splitHtml, triggerHandlers, clearProcessedElements } from './core';
 
 export function htmlToElement(html: string): HTMLElement {
     const { html: elementText, style } = splitHtml(html);
@@ -78,6 +78,10 @@ export function swapDom(html: string | HTMLElement, url?: string | undefined) {
         console.debug('Navigating to', url);
         history.pushState({}, '', url);
     }
+
+    // Clear processed elements cache for full document swaps
+    clearProcessedElements();
+
     document.documentElement.innerHTML =
         typeof html === 'string' ? html : html.outerHTML;
     triggerHandlers('domLoad', {
