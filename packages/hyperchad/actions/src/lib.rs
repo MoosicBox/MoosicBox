@@ -281,6 +281,30 @@ impl ActionType {
     }
 
     #[must_use]
+    pub fn set_focus_str_id(focus: bool, target: impl Into<Target>) -> Self {
+        Self::Style {
+            target: ElementTarget::StrId(target.into()),
+            action: StyleAction::SetFocus(focus),
+        }
+    }
+
+    #[must_use]
+    pub fn set_focus_class(focus: bool, class: impl Into<Target>) -> Self {
+        Self::Style {
+            target: ElementTarget::Class(class.into()),
+            action: StyleAction::SetFocus(focus),
+        }
+    }
+
+    #[must_use]
+    pub fn set_focus_child_class(focus: bool, class: impl Into<Target>) -> Self {
+        Self::Style {
+            target: ElementTarget::ChildClass(class.into()),
+            action: StyleAction::SetFocus(focus),
+        }
+    }
+
+    #[must_use]
     pub fn set_visibility_str_id(visibility: Visibility, target: impl Into<Target>) -> Self {
         Self::Style {
             target: ElementTarget::StrId(target.into()),
@@ -307,6 +331,11 @@ impl ActionType {
     }
 
     #[must_use]
+    pub fn focus_str_id(target: impl Into<Target>) -> Self {
+        Self::set_focus_str_id(true, target)
+    }
+
+    #[must_use]
     pub fn hide_class(class_name: impl Into<Target>) -> Self {
         Self::set_visibility_class(Visibility::Hidden, class_name)
     }
@@ -314,6 +343,11 @@ impl ActionType {
     #[must_use]
     pub fn show_class(class_name: impl Into<Target>) -> Self {
         Self::set_visibility_class(Visibility::Visible, class_name)
+    }
+
+    #[must_use]
+    pub fn focus_class(class_name: impl Into<Target>) -> Self {
+        Self::set_focus_class(true, class_name)
     }
 
     #[must_use]
@@ -660,6 +694,7 @@ impl<'a> TryFrom<&'a str> for ActionType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StyleAction {
     SetVisibility(Visibility),
+    SetFocus(bool),
     SetDisplay(bool),
     SetBackground(Option<String>),
 }

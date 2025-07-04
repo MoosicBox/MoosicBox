@@ -3166,6 +3166,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             }
                         }
                     }
+                    StyleAction::SetFocus(..) => {
+                        // let mut overrides = render_context.focus_overrides.get_mut(&id).unwrap();
+                        // overrides.push(FocusOverride {
+                        //     trigger: trigger.clone(),
+                        //     focus: *focus,
+                        // });
+                        todo!()
+                    }
                 }
             }
             ActionType::Multi(actions) => {
@@ -3298,6 +3306,13 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 }
 
                 true
+            }
+            StyleAction::SetFocus(..) => {
+                // if let Some(id) = Self::get_element_target_id(target, id, container) {
+                //     focuses.insert(id, *focus);
+                // }
+
+                todo!()
             }
             StyleAction::SetBackground(background) => {
                 if let Some(id) = Self::get_element_target_id(target, id, container) {

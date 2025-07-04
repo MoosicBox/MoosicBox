@@ -90,6 +90,11 @@ impl ElementVariable {
         ActionType::hide_str_id(Target::reference(self.name))
     }
 
+    #[must_use]
+    pub fn focus(self) -> ActionType {
+        ActionType::focus_str_id(Target::reference(self.name))
+    }
+
     #[cfg(feature = "logic")]
     #[must_use]
     pub fn toggle_visibility(self) -> ActionType {

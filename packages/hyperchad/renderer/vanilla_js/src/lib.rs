@@ -448,6 +448,13 @@ fn action_to_js(action: &ActionType, trigger_action: bool) -> (String, Option<St
                     ),
                     Some(format!("ctx.rs({target},'visibility');")),
                 ),
+                StyleAction::SetFocus(focus) => (
+                    format!(
+                        "ctx.cf({target},'{}');",
+                        if *focus { "focus" } else { "blur" }
+                    ),
+                    None,
+                ),
                 StyleAction::SetDisplay(display) => (
                     if *display {
                         format!("ctx.ss({target},'display','initial');")

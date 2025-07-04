@@ -775,6 +775,14 @@ fn generate_action_for_id(
                 hyperchad_actions::ActionType::set_visibility_str_id(#visibility, hyperchad_actions::Target::literal(#id))
             }
         }
+        "focus" => {
+            if !args.is_empty() {
+                return Err("ElementReference.focus() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::focus_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
         unknown => {
             return Err(format!("Unknown method: {unknown}"));
         }
@@ -821,6 +829,14 @@ fn generate_action_for_class(
             let visibility = generate_expression_code(context, &args[0])?;
             quote! {
                 hyperchad_actions::ActionType::set_visibility_class(#visibility, hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "focus" => {
+            if !args.is_empty() {
+                return Err("ElementReference.focus() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::focus_str_class(hyperchad_actions::Target::literal(#class))
             }
         }
         unknown => {
