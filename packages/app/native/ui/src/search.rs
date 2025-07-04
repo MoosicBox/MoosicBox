@@ -105,7 +105,9 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
             fx-click=fx {
                 hide_self();
                 show("search");
-                element("#search-input").focus();
+                let element = element("#search-input");
+                element.focus();
+                element.select();
             }
         {
             image
