@@ -30,6 +30,17 @@ export function evaluate<T>(
         return `vReset${name[0].toUpperCase()}${name.slice(1)}`;
     }
 
+    // call_function
+    function cf(
+        elements: (HTMLElement | null)[],
+        name: keyof HTMLElement,
+        ...args: unknown[]
+    ) {
+        a(elements, (x) => {
+            (x[name] as (...x: unknown[]) => void).apply(x, args);
+        });
+    }
+
     // set_style
     function ss<
         T extends Exclude<keyof CSSStyleDeclaration, 'length' | 'parentRule'>,
@@ -98,6 +109,7 @@ export function evaluate<T>(
         'a': a,
         'drn': drn,
         'ss': ss,
+        'cf': cf,
         'rs': rs,
         'throttle': throttle,
         'delay': delay,
