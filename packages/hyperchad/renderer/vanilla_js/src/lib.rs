@@ -268,13 +268,13 @@ fn element_target_to_js(target: &ElementTarget) -> String {
         }
         ElementTarget::Class(class) => {
             match class {
-                Target::Literal(class) => format!("Array.from(document.querySelectorAll('{class}'))"),
+                Target::Literal(class) => format!("Array.from(document.querySelectorAll('.{class}'))"),
                 Target::Ref(ref_name) => format!("[{ref_name}]"),
             }
         }
         ElementTarget::ChildClass(class) => {
             match class {
-                Target::Literal(class) => format!("Array.from(ctx.element.querySelectorAll('{class}'))"),
+                Target::Literal(class) => format!("Array.from(ctx.element.querySelectorAll('.{class}'))"),
                 Target::Ref(ref_name) => format!("[{ref_name}]"),
             }
         }
