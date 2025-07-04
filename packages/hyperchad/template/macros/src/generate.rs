@@ -284,6 +284,7 @@ impl Generator {
                         | "placeholder"
                         | "name"
                         | "type"
+                        | "autofocus"
                         | "checked"
                         | "disabled"
                         | "readonly"
@@ -332,6 +333,7 @@ impl Generator {
         let mut value = None;
         let mut placeholder = None;
         let mut name = None;
+        let mut autofocus = None;
         let mut checked = None;
 
         for (attr_name, attr_type) in element_attrs {
@@ -362,6 +364,10 @@ impl Generator {
                         let name_tokens = Self::markup_to_string_tokens(attr_value);
                         name = Some(quote! { Some(#name_tokens) });
                     }
+                    "autofocus" => {
+                        let autofocus_tokens = Self::markup_to_bool_tokens(attr_value);
+                        autofocus = Some(quote! { Some(#autofocus_tokens) });
+                    }
                     "checked" => {
                         checked = Some(Self::markup_to_bool_tokens(attr_value));
                     }
@@ -385,6 +391,11 @@ impl Generator {
                                 quote! { if let Some(val) = (#cond) { Some(val.to_string()) } else { None } },
                             );
                         }
+                        "autofocus" => {
+                            autofocus = Some(
+                                quote! { if let Some(val) = (#cond) { Some(val) } else { None } },
+                            );
+                        }
                         "checked" => {
                             checked = Some(
                                 quote! { if let Some(val) = (#cond) { val.into() } else { false } },
@@ -393,16 +404,21 @@ impl Generator {
                         _ => {}
                     }
                 }
-                AttributeType::Empty(_) => {
-                    if name_str.as_str() == "checked" {
+                AttributeType::Empty(_) => match name_str.as_str() {
+                    "autofocus" => {
+                        autofocus = Some(quote! { Some(true) });
+                    }
+                    "checked" => {
                         checked = Some(quote! { true });
                     }
-                }
+                    _ => {}
+                },
             }
         }
 
         let input_type = input_type.ok_or("Missing input type")?;
         let name_field = name.unwrap_or_else(|| quote! { None });
+        let autofocus_field = autofocus.unwrap_or_else(|| quote! { None });
         let value_field = value.unwrap_or_else(|| quote! { None });
         let placeholder_field = placeholder.unwrap_or_else(|| quote! { None });
         let checked_field = checked.unwrap_or_else(|| quote! { false });
@@ -412,7 +428,7 @@ impl Generator {
             "text" | "tel" | "email" => quote! {
                 hyperchad_transformer::Input::Text {
                     value: #value_field,
-                    placeholder: #placeholder_field
+                    placeholder: #placeholder_field,
                 }
             },
             "checkbox" => quote! {
@@ -441,7 +457,8 @@ impl Generator {
         Ok(quote! {
             hyperchad_transformer::Element::Input {
                 input: #input_variant,
-                name: #name_field
+                name: #name_field,
+                autofocus: #autofocus_field
             }
         })
     }
@@ -1383,7 +1400,8 @@ impl Generator {
             } },
             "input" => quote! { hyperchad_transformer::Element::Input {
                 input: hyperchad_transformer::Input::Text { value: None, placeholder: None },
-                name: None
+                name: None,
+                autofocus: None
             } },
             "h1" => {
                 quote! { hyperchad_transformer::Element::Heading { size: hyperchad_transformer::HeaderSize::H1 } }

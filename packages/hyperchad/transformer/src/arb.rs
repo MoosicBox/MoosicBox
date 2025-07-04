@@ -148,6 +148,7 @@ impl Arbitrary for Element {
             8 => Self::Span,
             9 => Self::Input {
                 name: Option::arbitrary(g).map(|x: XmlString| x.0),
+                autofocus: Option::arbitrary(g),
                 input: Input::arbitrary(g),
             },
             10 => Self::Button {

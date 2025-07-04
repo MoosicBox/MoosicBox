@@ -1441,7 +1441,7 @@ fn parse_element(
             .map(parse_bool)
             .transpose()
             .map_err(|e| ParseAttrWrapperError::Parse {
-                name: "state".to_string(),
+                name: "debug".to_string(),
                 error: e,
             })?,
         cursor: pmrv(
@@ -1476,6 +1476,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                     Some("checkbox") => {
                         container.element = crate::Element::Input {
                             name: get_tag_attr_value_owned(tag, "name"),
+                            autofocus: get_tag_attr_value_decoded(tag, "autofocus")
+                                .as_deref()
+                                .map(parse_bool)
+                                .transpose()
+                                .ok()
+                                .flatten(),
                             input: crate::Input::Checkbox {
                                 checked: get_tag_attr_value_lower(tag, "checked")
                                     .as_deref()
@@ -1486,6 +1492,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                     Some("text") => {
                         container.element = crate::Element::Input {
                             name: get_tag_attr_value_owned(tag, "name"),
+                            autofocus: get_tag_attr_value_decoded(tag, "autofocus")
+                                .as_deref()
+                                .map(parse_bool)
+                                .transpose()
+                                .ok()
+                                .flatten(),
                             input: crate::Input::Text {
                                 value: get_tag_attr_value_owned(tag, "value"),
                                 placeholder: get_tag_attr_value_owned(tag, "placeholder"),
@@ -1495,6 +1507,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                     Some("password") => {
                         container.element = crate::Element::Input {
                             name: get_tag_attr_value_owned(tag, "name"),
+                            autofocus: get_tag_attr_value_decoded(tag, "autofocus")
+                                .as_deref()
+                                .map(parse_bool)
+                                .transpose()
+                                .ok()
+                                .flatten(),
                             input: crate::Input::Password {
                                 value: get_tag_attr_value_owned(tag, "value"),
                                 placeholder: get_tag_attr_value_owned(tag, "placeholder"),
@@ -1504,6 +1522,12 @@ fn parse_child(node: &Node<'_>, parser: &Parser<'_>) -> Option<crate::Container>
                     Some("hidden") => {
                         container.element = crate::Element::Input {
                             name: get_tag_attr_value_owned(tag, "name"),
+                            autofocus: get_tag_attr_value_decoded(tag, "autofocus")
+                                .as_deref()
+                                .map(parse_bool)
+                                .transpose()
+                                .ok()
+                                .flatten(),
                             input: crate::Input::Hidden {
                                 value: get_tag_attr_value_owned(tag, "value"),
                             },

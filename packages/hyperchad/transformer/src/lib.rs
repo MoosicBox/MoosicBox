@@ -2321,6 +2321,7 @@ pub enum Element {
     Input {
         input: Input,
         name: Option<String>,
+        autofocus: Option<bool>,
     },
     Button {
         r#type: Option<String>,
@@ -2506,8 +2507,11 @@ impl Container {
             Element::Anchor { target, .. } => {
                 attrs.add_opt("target", target.as_ref());
             }
-            Element::Input { name, .. } => {
+            Element::Input {
+                name, autofocus, ..
+            } => {
                 attrs.add_opt("name", name.as_ref());
+                attrs.add_opt("autofocus", autofocus.as_ref());
             }
             Element::Button { r#type } => {
                 attrs.add_opt("type", r#type.as_ref());

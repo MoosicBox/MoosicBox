@@ -12,9 +12,15 @@ fn test_input_value_expression() {
     // Check that we have one container with an Input element
     assert_eq!(result.len(), 1);
 
-    if let Element::Input { input, name } = &result[0].element {
+    if let Element::Input {
+        input,
+        name,
+        autofocus,
+    } = &result[0].element
+    {
         // Check that the name field is set correctly
         assert_eq!(name, &Some("connection".to_string()));
+        assert_eq!(autofocus, &None);
 
         // Check that the input is a Text variant with the correct value
         if let Input::Text {
@@ -104,8 +110,14 @@ fn test_mixed_expressions_and_literals() {
 
     assert_eq!(result.len(), 1);
 
-    if let Element::Input { input, name } = &result[0].element {
+    if let Element::Input {
+        input,
+        name,
+        autofocus,
+    } = &result[0].element
+    {
         assert_eq!(name, &Some("mixed".to_string()));
+        assert_eq!(autofocus, &None);
 
         if let Input::Text { value, placeholder } = input {
             assert_eq!(value, &Some("dynamic".to_string()));
