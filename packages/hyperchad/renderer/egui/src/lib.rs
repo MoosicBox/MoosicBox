@@ -169,7 +169,8 @@ fn map_element_target<R>(
     match target {
         ElementTarget::StrId(str_id) => {
             let Target::Literal(str_id) = str_id else {
-                unimplemented!("reference target")
+                // FIXME
+                return None;
             };
             if let Some(element) = container.find_element_by_str_id(str_id) {
                 return Some(func(element));
@@ -179,7 +180,8 @@ fn map_element_target<R>(
         }
         ElementTarget::Class(class) => {
             let Target::Literal(class) = class else {
-                unimplemented!("reference target")
+                // FIXME
+                return None;
             };
             if let Some(element) = container.find_element_by_class(class) {
                 return Some(func(element));
@@ -189,7 +191,8 @@ fn map_element_target<R>(
         }
         ElementTarget::ChildClass(class) => {
             let Target::Literal(class) = class else {
-                unimplemented!("reference target")
+                // FIXME
+                return None;
             };
             if let Some(container) = container.find_element_by_id(self_id) {
                 if let Some(element) = container.find_element_by_class(class) {
@@ -3113,7 +3116,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         render_context.action_throttle.remove(&id);
 
         match &action {
-            ActionType::Input(..) => todo!(),
             ActionType::Style { target, action } => {
                 if let Some(id) = Self::get_element_target_id(target, id, render_context.container)
                 {
@@ -3170,12 +3172,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         }
                     }
                     StyleAction::SetFocus(..) => {
+                        // FIXME
                         // let mut overrides = render_context.focus_overrides.get_mut(&id).unwrap();
                         // overrides.push(FocusOverride {
                         //     trigger: trigger.clone(),
                         //     focus: *focus,
                         // });
-                        todo!()
                     }
                 }
             }
@@ -3199,7 +3201,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             ActionType::Parameterized { action, .. } => {
                 Self::unhandle_action(action, effect, trigger, render_context, ctx, id);
             }
-            ActionType::NoOp
+            ActionType::Input(..) // FIXME
+            | ActionType::NoOp
             | ActionType::Navigate { .. }
             | ActionType::Log { .. }
             | ActionType::Custom { .. }
@@ -3218,7 +3221,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         match target {
             ElementTarget::StrId(str_id) => {
                 let Target::Literal(str_id) = str_id else {
-                    unimplemented!("reference target")
+                    // FIXME
+                    return None;
                 };
                 if let Some(element) = container.find_element_by_str_id(str_id) {
                     return Some(element.id);
@@ -3228,7 +3232,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             }
             ElementTarget::Class(class) => {
                 let Target::Literal(class) = class else {
-                    unimplemented!("reference target")
+                    // FIXME
+                    return None;
                 };
                 if let Some(element) = container.find_element_by_class(class) {
                     return Some(element.id);
@@ -3238,7 +3243,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             }
             ElementTarget::ChildClass(class) => {
                 let Target::Literal(class) = class else {
-                    unimplemented!("reference target")
+                    // FIXME
+                    return None;
                 };
                 if let Some(container) = container.find_element_by_id(self_id) {
                     if let Some(element) = container.find_element_by_class(class) {
