@@ -478,15 +478,15 @@ sqlx-postgres = { version = "0.8.6", default-features = false, features = [
 static_init = "1.0.4"
 strum = "0.27.1"
 strum_macros = "0.27.1"
-swc_bundler = "23.0.0"
-swc_common = { version = "13.0.3", features = ["tty-emitter"] }
-swc_ecma_ast = "13.0.0"
-swc_ecma_codegen = "15.0.1"
+swc_bundler = "23.0.1"
+swc_common = { version = "13.0.4", features = ["tty-emitter"] }
+swc_ecma_ast = "13.0.1"
+swc_ecma_codegen = "15.0.2"
 swc_ecma_loader = { version = "13.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "24.0.2"
-swc_ecma_parser = "18.0.1"
-swc_ecma_transforms_base = "19.0.1"
-swc_ecma_transforms_typescript = "21.0.0"
+swc_ecma_minifier = "24.0.3"
+swc_ecma_parser = "18.0.2"
+swc_ecma_transforms_base = "19.0.2"
+swc_ecma_transforms_typescript = "21.0.1"
 swc_ecma_visit = "13.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.104"
@@ -504,7 +504,7 @@ test-log = "0.2.18"
 thiserror = "2.0.12"
 throttle = "0.1.0"
 tl = "0.7.8"
-tokio = { version = "1.46.0" }
+tokio = { version = "1.46.1" }
 tokio-postgres = { version = "0.7.13", features = ["with-chrono-0_4"] }
 tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.27.0", features = [
