@@ -13,7 +13,7 @@ pub struct RemoteByteStream {
     pub finished: bool,
     pub seekable: bool,
     pub size: Option<u64>,
-    read_position: usize,
+    read_position: u64,
     fetcher: RemoteByteStreamFetcher,
     abort: CancellationToken,
 }
@@ -202,7 +202,7 @@ impl Read for RemoteByteStream {
         }
 
         let mut written = 0;
-        let mut read_position = self.read_position;
+        let mut read_position = usize::try_from(self.read_position).unwrap();
         let write_max = buf.len();
 
         while written < write_max {
@@ -252,7 +252,7 @@ impl Read for RemoteByteStream {
             read_position += bytes_written;
         }
 
-        self.read_position = read_position;
+        self.read_position = read_position as u64;
 
         Ok(written)
     }
@@ -260,8 +260,8 @@ impl Read for RemoteByteStream {
 
 impl Seek for RemoteByteStream {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        let seek_position: usize = match pos {
-            std::io::SeekFrom::Start(pos) => usize::try_from(pos).unwrap(),
+        let seek_position = match pos {
+            std::io::SeekFrom::Start(pos) => pos,
             std::io::SeekFrom::Current(pos) => {
                 #[allow(clippy::cast_possible_wrap)]
                 let pos = self.read_position as i64 + pos;
@@ -291,21 +291,18 @@ impl Seek for RemoteByteStream {
 
         self.read_position = seek_position;
 
-        if self
-            .size
-            .is_some_and(|size| seek_position >= usize::try_from(size).unwrap())
-        {
+        if self.size.is_some_and(|size| seek_position >= size) {
             self.fetcher.abort();
         } else {
             self.fetcher = RemoteByteStreamFetcher::new(
                 self.url.clone(),
-                seek_position as u64,
+                seek_position,
                 self.size,
                 true,
                 self.abort.clone(),
             );
         }
 
-        Ok(seek_position as u64)
+        Ok(seek_position)
     }
 }
