@@ -355,20 +355,18 @@ pub fn album_page_tracks_table_body(
                     set_visibility_child_class(Visibility::Hidden, "track-playing");
                     set_visibility_child_class(Visibility::Visible, "play-button");
                 }
-                fx-event=fx {
-                    on_event("play-track", |value| {
-                        if value == get_data_attr_value_self("track-id") {
-                            set_background_self("#333");
-                            set_visibility_child_class(Visibility::Hidden, "track-number");
-                            set_visibility_child_class(Visibility::Hidden, "play-button");
-                            set_visibility_child_class(Visibility::Visible, "track-playing");
-                        } else {
-                            remove_background_self();
-                            set_visibility_child_class(Visibility::Hidden, "play-button");
-                            set_visibility_child_class(Visibility::Hidden, "track-playing");
-                            set_visibility_child_class(Visibility::Visible, "track-number");
-                        }
-                    })
+                fx-global-play-track=fx {
+                    if get_event_value() == get_data_attr_value_self("track-id") {
+                        set_background_self("#333");
+                        set_visibility_child_class(Visibility::Hidden, "track-number");
+                        set_visibility_child_class(Visibility::Hidden, "play-button");
+                        set_visibility_child_class(Visibility::Visible, "track-playing");
+                    } else {
+                        remove_background_self();
+                        set_visibility_child_class(Visibility::Hidden, "play-button");
+                        set_visibility_child_class(Visibility::Hidden, "track-playing");
+                        set_visibility_child_class(Visibility::Visible, "track-number");
+                    }
                 }
                 background=[if current_track { Some("#333") } else { None }]
             {
