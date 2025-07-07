@@ -141,7 +141,7 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
                 "ctx.value".to_string()
             };
         }
-        CalcValue::Key { key } => return key.to_string(),
+        CalcValue::Key { key } => return format!("'{key}'"),
         CalcValue::MouseX { target: None } => return "ctx.event.clientX".to_string(),
         CalcValue::MouseY { target: None } => return "ctx.event.clientY".to_string(),
         CalcValue::Visibility { target }
@@ -224,7 +224,7 @@ fn value_to_js(value: &Value, serializable: bool) -> (String, bool) {
             },
             true,
         ),
-        Value::Key(key) => (key.as_str().to_string(), true),
+        Value::Key(key) => (format!("'{key}'"), true),
         Value::String(x) => (
             if serializable {
                 format!("{{String:'{x}'}}")
