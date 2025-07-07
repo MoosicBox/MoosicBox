@@ -246,9 +246,9 @@ impl Read for RemoteByteStream {
                 log::trace!("Received bytes {len}");
 
                 if len == 0 {
-                    // Only mark as finished if we have no expected size OR we've received the expected amount
+                    // HTTP stream ended - check if we have all expected bytes in buffer
                     if let Some(expected_size) = self.size {
-                        let total_received = self.read_position;
+                        let total_received = fetcher.buffer.len() as u64;
                         #[allow(
                             clippy::cast_precision_loss,
                             clippy::cast_possible_truncation,
@@ -261,7 +261,6 @@ impl Read for RemoteByteStream {
                                 expected_size,
                                 (total_received as f64 / expected_size as f64 * 100.0) as u32
                             );
-                            // Don't mark as finished - return an error to indicate incomplete download
                             return Err(std::io::Error::new(
                                 std::io::ErrorKind::UnexpectedEof,
                                 format!(
