@@ -1,6 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use hyperchad::{
+    actions::Key,
     template::{self as hyperchad_template, Containers, container},
     transformer::models::Visibility,
 };
@@ -15,6 +16,7 @@ use crate::{
     public_img, state::State,
 };
 
+#[allow(clippy::too_many_lines)]
 #[must_use]
 pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bool) -> Containers {
     container! {
@@ -54,7 +56,13 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                                 type=text
                                 flex-grow=1
                                 name="query"
-                                placeholder="Search...";
+                                placeholder="Search..."
+                                fx-key-down=fx {
+                                    if get_event_value() == Key::Escape {
+                                        hide("search");
+                                        show("search-button");
+                                    }
+                                };
                         }
                         button
                             type=submit
