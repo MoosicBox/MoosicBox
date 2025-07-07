@@ -198,7 +198,7 @@ impl RemoteByteStream {
             seekable,
             size,
             read_position: 0,
-            fetcher: RemoteByteStreamFetcher::new(url, 0, size, autostart_fetch, abort.clone()),
+            fetcher: RemoteByteStreamFetcher::new(url, 0, None, autostart_fetch, abort.clone()),
             abort,
         }
     }
@@ -336,7 +336,7 @@ impl Seek for RemoteByteStream {
             self.fetcher = RemoteByteStreamFetcher::new(
                 self.url.clone(),
                 seek_position,
-                self.size,
+                None,
                 true,
                 self.abort.clone(),
             );
