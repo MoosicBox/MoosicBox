@@ -57,10 +57,13 @@ pub fn search(state: &State, api_sources: &[ApiSource], searched: bool, open: bo
                                 flex-grow=1
                                 name="query"
                                 placeholder="Search..."
-                                fx-key-down=fx {
+                                fx-global-key-down=fx {
                                     if get_event_value() == Key::Escape {
-                                        hide("search");
-                                        show("search-button");
+                                        let search = element("#search");
+                                        if search.visibility() == visible() {
+                                            search.hide();
+                                            element("#search-button").show();
+                                        }
                                     }
                                 };
                         }
