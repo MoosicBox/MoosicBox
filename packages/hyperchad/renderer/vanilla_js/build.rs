@@ -76,6 +76,8 @@ fn main() {
         "actions-mouse-down",
         #[cfg(feature = "plugin-actions-mouse-over")]
         "actions-mouse-over",
+        #[cfg(feature = "plugin-actions-key-down")]
+        "actions-key-down",
         #[cfg(feature = "plugin-actions-resize")]
         "actions-resize",
     ];
