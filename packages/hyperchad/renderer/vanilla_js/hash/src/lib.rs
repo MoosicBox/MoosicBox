@@ -71,6 +71,11 @@ const PLUGIN_ACTIONS_EVENT_HASH: &str = "-actions-event";
 #[cfg(not(feature = "plugin-actions-event"))]
 const PLUGIN_ACTIONS_EVENT_HASH: &str = "";
 
+#[cfg(feature = "plugin-actions-event-key-down")]
+const PLUGIN_ACTIONS_EVENT_KEY_DOWN_HASH: &str = "-actions-event-key-down";
+#[cfg(not(feature = "plugin-actions-event-key-down"))]
+const PLUGIN_ACTIONS_EVENT_KEY_DOWN_HASH: &str = "";
+
 #[cfg(feature = "plugin-actions-immediate")]
 const PLUGIN_ACTIONS_IMMEDIATE_HASH: &str = "-actions-immediate";
 #[cfg(not(feature = "plugin-actions-immediate"))]
@@ -110,6 +115,7 @@ pub const PLUGIN_HASH: &str = const_format::concatcp!(
     PLUGIN_ACTIONS_CLICK_HASH,
     PLUGIN_ACTIONS_CLICK_OUTSIDE_HASH,
     PLUGIN_ACTIONS_EVENT_HASH,
+    PLUGIN_ACTIONS_EVENT_KEY_DOWN_HASH,
     PLUGIN_ACTIONS_IMMEDIATE_HASH,
     PLUGIN_ACTIONS_MOUSE_DOWN_HASH,
     PLUGIN_ACTIONS_MOUSE_OVER_HASH,

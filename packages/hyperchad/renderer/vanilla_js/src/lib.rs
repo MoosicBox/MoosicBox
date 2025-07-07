@@ -89,6 +89,8 @@ pub static SCRIPT_NAME_HASHED: std::sync::LazyLock<String> = std::sync::LazyLock
     bytes.extend(b"actions-click-outside");
     #[cfg(feature = "plugin-actions-event")]
     bytes.extend(b"actions-event");
+    #[cfg(feature = "plugin-actions-event-key-down")]
+    bytes.extend(b"actions-event-key-down");
     #[cfg(feature = "plugin-actions-immediate")]
     bytes.extend(b"actions-immediate");
     #[cfg(feature = "plugin-actions-mouse-down")]

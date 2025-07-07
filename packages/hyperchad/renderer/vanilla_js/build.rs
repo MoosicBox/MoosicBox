@@ -70,6 +70,8 @@ fn main() {
         "actions-click-outside",
         #[cfg(feature = "plugin-actions-event")]
         "actions-event",
+        #[cfg(feature = "plugin-actions-event-key-down")]
+        "actions-event-key-down",
         #[cfg(feature = "plugin-actions-immediate")]
         "actions-immediate",
         #[cfg(feature = "plugin-actions-mouse-down")]

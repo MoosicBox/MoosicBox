@@ -63,6 +63,7 @@ plugin-actions = [
     "plugin-actions-click",
     "plugin-actions-click-outside",
     "plugin-actions-event",
+    "plugin-actions-event-key-down",
     "plugin-actions-immediate",
     "plugin-actions-key-down",
     "plugin-actions-mouse-down",
@@ -84,6 +85,10 @@ plugin-actions-click-outside = [
 plugin-actions-event = [
     "_actions",
     "hyperchad_renderer_vanilla_js_hash/plugin-actions-event",
+]
+plugin-actions-event-key-down = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-event-key-down",
 ]
 plugin-actions-immediate = [
     "_actions",
