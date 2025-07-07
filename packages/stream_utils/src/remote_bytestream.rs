@@ -344,3 +344,266 @@ impl Seek for RemoteByteStream {
         Ok(seek_position)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Seek, SeekFrom};
+    use tokio_util::sync::CancellationToken;
+
+    #[test]
+    fn test_remote_bytestream_construction() {
+        // Test that RemoteByteStream can be constructed with proper parameters
+        let abort_token = CancellationToken::new();
+        let stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch for this test
+            true,  // Seekable
+            abort_token,
+        );
+
+        assert_eq!(stream.url, "https://example.com/file.mp3");
+        assert_eq!(stream.size, Some(1000));
+        assert_eq!(stream.read_position, 0);
+        assert!(!stream.finished);
+        assert!(stream.seekable);
+    }
+
+    #[tokio::test]
+    async fn test_seek_functionality() {
+        // Test seeking functionality
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Test seeking to start
+        let pos = stream.seek(SeekFrom::Start(100)).unwrap();
+        assert_eq!(pos, 100);
+        assert_eq!(stream.read_position, 100);
+
+        // Test seeking from current position
+        let pos = stream.seek(SeekFrom::Current(50)).unwrap();
+        assert_eq!(pos, 150);
+        assert_eq!(stream.read_position, 150);
+
+        // Test seeking from end
+        let pos = stream.seek(SeekFrom::End(100)).unwrap();
+        assert_eq!(pos, 900); // 1000 - 100
+        assert_eq!(stream.read_position, 900);
+    }
+
+    #[test]
+    fn test_seek_past_end_aborts_fetcher() {
+        // Test that seeking past end of file aborts the fetcher
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Seek past end of file
+        let pos = stream.seek(SeekFrom::Start(1500)).unwrap();
+        assert_eq!(pos, 1500);
+        assert_eq!(stream.read_position, 1500);
+
+        // The fetcher should be aborted (we can't easily test this without mocking)
+        // But we can verify the seek position was set correctly
+    }
+
+    #[tokio::test]
+    async fn test_seek_error_handling() {
+        // Test seek error handling for invalid positions
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Test seeking with negative current position (should fail)
+        let result = stream.seek(SeekFrom::Current(-2000));
+        assert!(result.is_err(), "Seeking to negative position should fail");
+
+        // Test seeking from end with positive offset that would result in negative position
+        let result = stream.seek(SeekFrom::End(2000));
+        assert!(
+            result.is_err(),
+            "Seeking with end offset larger than file size should fail"
+        );
+    }
+
+    #[test]
+    fn test_finished_stream_read_behavior() {
+        // Test that finished streams return 0 bytes on read
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Manually mark as finished
+        stream.finished = true;
+
+        // Reading from finished stream should return 0
+        let mut buf = [0u8; 100];
+        let result = stream.read(&mut buf).unwrap();
+        assert_eq!(result, 0, "Finished stream should return 0 bytes");
+    }
+
+    #[tokio::test]
+    async fn test_range_request_construction() {
+        // Test that range requests are constructed correctly
+        let abort_token = CancellationToken::new();
+
+        // Test full file download (should use None as end)
+        let stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token.clone(),
+        );
+
+        // The fetcher should be created with start=0, end=None
+        assert_eq!(stream.fetcher.start, 0);
+        assert_eq!(stream.fetcher.end, None);
+
+        // Test seeking creates new fetcher with correct start
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        stream.seek(SeekFrom::Start(500)).unwrap();
+        assert_eq!(stream.fetcher.start, 500);
+        assert_eq!(stream.fetcher.end, None);
+    }
+
+    #[test]
+    fn test_abort_token_propagation() {
+        // Test that abort tokens are properly propagated
+        let abort_token = CancellationToken::new();
+        let stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token.clone(),
+        );
+
+        // The stream should hold a reference to the same abort token
+        assert!(!stream.abort.is_cancelled());
+
+        // Cancelling the original token should affect the stream's token
+        abort_token.cancel();
+        assert!(stream.abort.is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn test_fetcher_abort_and_recreation() {
+        // Test that fetchers are properly aborted and recreated on seek
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        let original_start = stream.fetcher.start;
+        assert_eq!(original_start, 0);
+
+        // Seeking should create a new fetcher with different start position
+        stream.seek(SeekFrom::Start(200)).unwrap();
+        assert_eq!(stream.fetcher.start, 200);
+        assert_ne!(stream.fetcher.start, original_start);
+    }
+
+    #[test]
+    fn test_size_none_handling() {
+        // Test streams with no known size
+        let abort_token = CancellationToken::new();
+        let stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            None,  // No known size
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        assert_eq!(stream.size, None);
+
+        // Can't easily test seeking from end when size is unknown because it panics
+        // This is a known limitation of the current implementation
+    }
+
+    #[test]
+    #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+    fn test_seek_from_end_panics_when_size_unknown() {
+        // Test that seeking from end panics when size is unknown
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            None,  // No known size
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // This should panic because size is None
+        stream.seek(SeekFrom::End(100)).unwrap();
+    }
+
+    #[test]
+    fn test_buffer_initialization() {
+        // Test that the fetcher buffer is properly initialized
+        let abort_token = CancellationToken::new();
+        let stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Buffer should start empty
+        assert_eq!(stream.fetcher.buffer.len(), 0);
+        assert_eq!(stream.fetcher.start, 0);
+        assert_eq!(stream.fetcher.end, None);
+    }
+
+    #[test]
+    fn test_non_seekable_stream() {
+        // Test non-seekable stream behavior
+        let abort_token = CancellationToken::new();
+        let stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            false, // Not seekable
+            abort_token,
+        );
+
+        assert!(!stream.seekable);
+        // Note: The current implementation doesn't actually restrict seeking based on this flag
+        // but this test documents the intended behavior
+    }
+}
