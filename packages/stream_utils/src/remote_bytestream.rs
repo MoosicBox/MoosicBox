@@ -77,7 +77,8 @@ impl RemoteByteStreamFetcher {
             start,
             end.map_or_else(String::new, |n| n.to_string())
         );
-        log::debug!("Starting fetch for byte stream with range {bytes_range}");
+        let size_info = end.map_or_else(|| "unknown size".to_string(), |s| format!("{s} bytes"));
+        log::debug!("Starting fetch for byte stream with range {bytes_range} ({size_info})");
 
         self.abort_handle = Some(moosicbox_task::spawn(
             "stream_utils: RemoteByteStream Fetcher",
@@ -90,7 +91,7 @@ impl RemoteByteStreamFetcher {
                     .send()
                     .await;
 
-                let response = match response {
+                let mut response = match response {
                     Ok(response) => response,
                     Err(err) => {
                         log::error!("Failed to get stream response: {err:?}");
@@ -103,7 +104,14 @@ impl RemoteByteStreamFetcher {
 
                 match response.status() {
                     switchy_http::models::StatusCode::Ok
-                    | switchy_http::models::StatusCode::PartialContent => {}
+                    | switchy_http::models::StatusCode::PartialContent => {
+                        // Log the actual Content-Length from server
+                        if let Some(content_length) = response.headers().get("content-length") {
+                            log::debug!("Server reports Content-Length: {content_length:?}");
+                        } else {
+                            log::debug!("No Content-Length header in response");
+                        }
+                    }
                     _ => {
                         log::error!(
                             "Received error response ({}): {:?}",
@@ -170,6 +178,7 @@ impl RemoteByteStreamFetcher {
 
 impl Drop for RemoteByteStreamFetcher {
     fn drop(&mut self) {
+        log::trace!("Dropping RemoteByteStreamFetcher");
         self.abort();
     }
 }
@@ -237,6 +246,35 @@ impl Read for RemoteByteStream {
                 log::trace!("Received bytes {len}");
 
                 if len == 0 {
+                    // Only mark as finished if we have no expected size OR we've received the expected amount
+                    if let Some(expected_size) = self.size {
+                        let total_received = self.read_position;
+                        #[allow(
+                            clippy::cast_precision_loss,
+                            clippy::cast_possible_truncation,
+                            clippy::cast_sign_loss
+                        )]
+                        if total_received < expected_size {
+                            log::warn!(
+                                "Stream ended prematurely: received {} bytes, expected {} bytes ({}% complete)",
+                                total_received,
+                                expected_size,
+                                (total_received as f64 / expected_size as f64 * 100.0) as u32
+                            );
+                            // Don't mark as finished - return an error to indicate incomplete download
+                            return Err(std::io::Error::new(
+                                std::io::ErrorKind::UnexpectedEof,
+                                format!(
+                                    "Incomplete download: got {total_received} of {expected_size} bytes"
+                                ),
+                            ));
+                        }
+                        log::debug!(
+                            "Stream completed successfully: received {total_received} bytes as expected"
+                        );
+                    } else {
+                        log::debug!("Stream ended with no expected size - assuming complete");
+                    }
                     self.finished = true;
                     self.fetcher.ready.send(()).unwrap();
                     break;
@@ -292,6 +330,7 @@ impl Seek for RemoteByteStream {
         self.read_position = seek_position;
 
         if self.size.is_some_and(|size| seek_position >= size) {
+            log::debug!("Seeking past end of stream. Aborting fetcher.");
             self.fetcher.abort();
         } else {
             self.fetcher = RemoteByteStreamFetcher::new(
