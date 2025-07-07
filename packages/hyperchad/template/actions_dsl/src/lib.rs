@@ -67,7 +67,7 @@ pub fn actions_dsl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn expand_actions_dsl(input: &TokenStream) -> Result<TokenStream, String> {
-    // Parse the input tokens into our DSL AST
+    // Try to parse the DSL first
     let dsl = match Parser::parse2(parser::parse_dsl, input.clone()) {
         Ok(dsl) => dsl,
         Err(_e) => {
@@ -76,7 +76,7 @@ fn expand_actions_dsl(input: &TokenStream) -> Result<TokenStream, String> {
         }
     };
 
-    // Generate completely compile-time optimized code - ZERO runtime logic
+    // Generate pure compile-time DSL
     generate_pure_compile_time_dsl(&dsl)
 }
 
@@ -799,6 +799,43 @@ mod tests {
     }
 
     #[test]
+    fn test_simple_show_hide() {
+        let input = quote! {
+            show("search");
+            hide("search-button");
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("simple show/hide: {result}");
+
+        // Should handle show and hide function calls
+        assert!(result.contains("ActionType"));
+        assert!(result.contains("Style"));
+    }
+
+    #[test]
+    fn test_key_escape_comparison() {
+        let input = quote! {
+            if get_event_value() == Key::Escape {
+                hide("search");
+                show("search-button");
+            }
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("actual: {result}");
+
+        // The Key::Escape case now correctly transforms everything
+        assert!(result.contains("get_event_value"));
+        assert!(result.contains("Value :: Key"));
+        assert!(result.contains("Key :: Escape"));
+        assert!(result.contains("ActionType :: Style"));
+        assert!(result.contains("SetVisibility"));
+        assert!(result.contains("Visible"));
+        assert!(result.contains("Hidden"));
+    }
+
+    #[test]
     fn test_user_exact_pattern() {
         let input = quote! {
             on_event("play-track", |value| {
@@ -1120,5 +1157,131 @@ mod tests {
         // Should generate empty vec
         let result = result.to_string();
         assert_eq!(result, "hyperchad_actions :: ActionType :: NoOp");
+    }
+
+    #[test]
+    fn test_if_with_show_hide() {
+        let input = quote! {
+            if true {
+                show("search");
+                hide("search-button");
+            }
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("if with show/hide: {result}");
+
+        // Should handle if statement with show and hide function calls
+        assert!(result.contains("ActionType"));
+        assert!(result.contains("Style"));
+    }
+
+    #[test]
+    fn test_get_event_value_condition() {
+        let input = quote! {
+            if get_event_value() == "Escape" {
+                show("search");
+                hide("search-button");
+            }
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("get_event_value condition: {result}");
+
+        // Should handle get_event_value condition with show and hide function calls
+        assert!(result.contains("ActionType"));
+        assert!(result.contains("Style"));
+    }
+
+    #[test]
+    fn test_debug_key_escape() {
+        let input = quote! {
+            Key::Escape
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("debug Key::Escape: {result}");
+    }
+
+    #[test]
+    fn test_fx_dsl_structure() {
+        // This exactly matches the structure in search.rs
+        let input = quote! {
+            fx {
+                if get_event_value() == Key::Escape {
+                    hide("search");
+                    show("search-button");
+                }
+            }
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("fx dsl structure: {result}");
+
+        // Should handle the fx DSL structure correctly
+        assert!(result.contains("ActionType"));
+    }
+
+    #[test]
+    fn test_if_statement_with_semicolon() {
+        let input = quote! {
+            if get_event_value() == Key::Escape {
+                hide("search");
+                show("search-button");
+            };
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("if statement with semicolon: {result}");
+
+        // Should handle if statement with semicolon (transforms consistently)
+        assert!(result.contains("ActionType"));
+        assert!(result.contains("Value :: Key"));
+        assert!(result.contains("Key :: Escape"));
+        assert!(result.contains("SetVisibility"));
+    }
+
+    #[test]
+    fn test_simple_key_condition() {
+        let input = quote! {
+            if Key::Escape {
+                show("search");
+            }
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("simple key condition: {result}");
+
+        // Should handle simple Key condition
+        assert!(result.contains("ActionType"));
+    }
+
+    #[test]
+    fn test_key_escape_variable() {
+        let input = quote! {
+            let x = Key::Escape;
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("key escape variable: {result}");
+
+        // Should handle Key::Escape assignment
+        assert!(result.contains("Let"));
+        assert!(result.contains("Key :: Escape"));
+    }
+
+    #[test]
+    fn test_key_escape_comparison_in_let() {
+        let input = quote! {
+            let result = get_event_value() == Key::Escape;
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("key escape comparison in let: {result}");
+
+        // Should handle Key::Escape comparison
+        assert!(result.contains("Let"));
+        assert!(result.contains("eq"));
+        assert!(result.contains("Key :: Escape"));
     }
 }

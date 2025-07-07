@@ -875,6 +875,7 @@ impl Generator {
             "hover" => quote! { hyperchad_actions::ActionTrigger::Hover },
             "change" => quote! { hyperchad_actions::ActionTrigger::Change },
             "mouse-down" => quote! { hyperchad_actions::ActionTrigger::MouseDown },
+            "key-down" => quote! { hyperchad_actions::ActionTrigger::KeyDown },
             // TODO: Return error in this case. Just be strict about unknown events.
             // For all other triggers, use the Event variant
             _ => {

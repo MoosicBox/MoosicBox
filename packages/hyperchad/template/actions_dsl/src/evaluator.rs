@@ -64,6 +64,20 @@ fn generate_statement_push(
 ) -> Result<TokenStream, String> {
     match stmt {
         Statement::Expression(expr) => {
+            // Special handling for function calls that should become actions
+            if let Expression::Call { function, args } = expr {
+                match function.as_str() {
+                    "show" | "hide" | "show_self" | "hide_self" => {
+                        // These should be converted to ActionType constructors
+                        let action_code = generate_function_call_code(context, function, args)?;
+                        return Ok(quote! {
+                            #output_var.push((#action_code).into());
+                        });
+                    }
+                    _ => {}
+                }
+            }
+
             let expr_code = generate_expression_code(context, expr)?;
 
             Ok(quote! {
@@ -75,10 +89,7 @@ fn generate_statement_push(
             let value_code = generate_expression_code(context, value)?;
             context.add_variable(name);
             Ok(quote! {
-                hyperchad_actions::ActionType::Let {
-                    name: #var_name.to_string(),
-                    value: #value_code,
-                }.into()
+                let #var_name = #value_code;
             })
         }
         Statement::If {
@@ -479,17 +490,28 @@ pub fn generate_expression_code(
             Ok(quote! { hyperchad_actions::dsl::Expression::Literal(#lit_code) })
         }
         Expression::Variable(name) => {
-            if context.is_variable_defined(name) {
-                let name = syn::LitStr::new(name, proc_macro2::Span::call_site());
-                Ok(quote! {
-                    hyperchad_actions::dsl::ElementVariable {
-                        name: #name.to_string(),
+            // Handle Key enum variants
+            name.strip_prefix("Key::").map_or_else(
+                || {
+                    if context.is_variable_defined(name) {
+                        let name = syn::LitStr::new(name, proc_macro2::Span::call_site());
+                        Ok(quote! {
+                            hyperchad_actions::dsl::ElementVariable {
+                                name: #name.to_string(),
+                            }
+                        })
+                    } else {
+                        let var_name = format_ident!("{name}");
+                        Ok(quote! { #var_name })
                     }
-                })
-            } else {
-                let var_name = format_ident!("{name}");
-                Ok(quote! { #var_name })
-            }
+                },
+                |variant| {
+                    let variant_ident = format_ident!("{}", variant);
+                    Ok(quote! {
+                        hyperchad_actions::logic::Value::Key(hyperchad_actions::Key::#variant_ident)
+                    })
+                },
+            )
         }
         Expression::ElementRef(element_ref) => match &**element_ref {
             Expression::Literal(Literal::String(selector)) => {
@@ -714,7 +736,8 @@ pub fn generate_expression_code(
             })
         }
         Expression::RawRust(code) => {
-            // Parse the raw Rust code as tokens and insert directly
+            // For raw Rust code, just parse it as tokens and return directly
+            // This preserves the original behavior for cases that can't be parsed by the DSL
             let tokens: TokenStream = match code.parse() {
                 Ok(tokens) => tokens,
                 Err(e) => {
@@ -1591,6 +1614,15 @@ fn generate_function_call_code(
                     })
                 }
             }
+        }
+
+        // Key enum variants
+        name if name.starts_with("Key::") => {
+            let variant = name.strip_prefix("Key::").unwrap();
+            let variant_ident = format_ident!("{}", variant);
+            Ok(quote! {
+                hyperchad_actions::logic::Value::Key(hyperchad_actions::Key::#variant_ident)
+            })
         }
 
         // Self-targeting functions

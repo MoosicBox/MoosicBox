@@ -253,6 +253,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
                 | hyperchad_actions::logic::CalcValue::EventValue
                 | hyperchad_actions::logic::CalcValue::WidthPx { .. }
                 | hyperchad_actions::logic::CalcValue::HeightPx { .. }
+                | hyperchad_actions::logic::CalcValue::Key { .. }
                 | hyperchad_actions::logic::CalcValue::MouseX { target: None }
                 | hyperchad_actions::logic::CalcValue::MouseY { target: None } => {}
                 hyperchad_actions::logic::CalcValue::PositionX { target }
@@ -315,6 +316,7 @@ fn add_watch_pos(root: &Container, container: &Container, watch_positions: &mut 
             | Value::Visibility(..)
             | Value::Display(..)
             | Value::String(..)
+            | Value::Key(..)
             | Value::LayoutDirection(..) => {}
         }
     }
@@ -2508,6 +2510,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             true
                         });
                     }
+                    ActionTrigger::KeyDown => {
+                        todo!()
+                    }
                     ActionTrigger::Hover => {
                         #[cfg(feature = "profiling")]
                         profiling::scope!("hover side effects");
@@ -2790,6 +2795,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                 .flatten()
                 .map(Value::String)
             }
+            CalcValue::Key { key } => Some(Value::String(key.to_string())),
             CalcValue::EventValue => event_value.map(ToString::to_string).map(Value::String),
             CalcValue::WidthPx { target } => {
                 let width = map_element_target(target, id, render_context.container, |element| {
@@ -2865,6 +2871,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             | Value::Visibility(..)
             | Value::Display(..)
             | Value::String(..)
+            | Value::Key(..)
             | Value::LayoutDirection(..) => Some(x.clone()),
         }
     }

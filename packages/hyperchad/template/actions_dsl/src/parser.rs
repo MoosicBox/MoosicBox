@@ -27,6 +27,11 @@ pub fn parse_dsl(input: ParseStream) -> Result<Dsl> {
 
 /// Parse a single statement
 fn parse_statement(input: ParseStream) -> Result<Statement> {
+    // Check if input is empty first
+    if input.is_empty() {
+        return Err(input.error("Unexpected end of input"));
+    }
+
     // Try to parse the statement normally first
     try_parse_statement_normal(input).map_or_else(|_| try_parse_statement_as_raw_rust(input), Ok)
 }
@@ -467,14 +472,17 @@ fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
         if input.peek(token::PathSep) {
             input.parse::<token::PathSep>()?;
 
-            if input.peek(Ident) || (input.peek(token::Brace) || input.peek(token::Paren)) {
-                let variant: Ident = if input.peek(Ident) {
-                    input.parse()?
-                } else {
-                    return Err(input.error("Expected enum variant name"));
-                };
+            if input.peek(Ident) {
+                let variant: Ident = input.parse()?;
+
+                // Special handling for Key enum variants - treat as variables
+                // Do this BEFORE checking for struct-like variants
+                if ident_str == "Key" {
+                    return Ok(Expression::Variable(format!("{ident_str}::{variant}")));
+                }
 
                 // Check for struct-like variant with fields { field: value }
+                // Only if the brace immediately follows the variant (no spaces)
                 if input.peek(token::Brace) {
                     let content;
                     braced!(content in input);
@@ -521,6 +529,8 @@ fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
                     args: vec![],
                 });
             }
+
+            return Err(input.error("Expected enum variant name"));
         }
 
         Ok(Expression::Variable(ident_str))
@@ -801,7 +811,7 @@ fn try_parse_as_raw_rust(input: ParseStream) -> Result<Expression> {
 /// Fallback parsing function that wraps complex expressions as raw Rust code
 /// but tries to preserve DSL function calls
 pub fn parse_dsl_with_fallback(input: &TokenStream) -> Dsl {
-    // Check if the input starts with a known DSL function
+    // Check if the input starts with a known DSL function or control flow construct
     let input_str = input.to_string();
     let known_dsl_functions = [
         "navigate",
@@ -817,11 +827,17 @@ pub fn parse_dsl_with_fallback(input: &TokenStream) -> Dsl {
         "remove_background",
     ];
 
+    let known_dsl_keywords = ["if", "match", "for", "while", "let"];
+
     let starts_with_dsl_function = known_dsl_functions
         .iter()
         .any(|func| input_str.trim_start().starts_with(func));
 
-    if starts_with_dsl_function {
+    let starts_with_dsl_keyword = known_dsl_keywords
+        .iter()
+        .any(|keyword| input_str.trim_start().starts_with(keyword));
+
+    if starts_with_dsl_function || starts_with_dsl_keyword {
         // Try to parse individual arguments with fallback
         if let Ok(dsl) = parse_dsl_with_argument_fallback(input.clone()) {
             return dsl;

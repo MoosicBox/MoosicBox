@@ -2745,6 +2745,9 @@ impl Container {
                 hyperchad_actions::ActionTrigger::MouseDown => {
                     attrs.add("fx-mouse-down", action.effect.to_string());
                 }
+                hyperchad_actions::ActionTrigger::KeyDown => {
+                    attrs.add("fx-key-down", action.effect.to_string());
+                }
                 hyperchad_actions::ActionTrigger::Hover => {
                     attrs.add("fx-hover", action.effect.to_string());
                 }

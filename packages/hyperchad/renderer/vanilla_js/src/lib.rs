@@ -141,6 +141,7 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
                 "ctx.value".to_string()
             };
         }
+        CalcValue::Key { key } => return key.to_string(),
         CalcValue::MouseX { target: None } => return "ctx.event.clientX".to_string(),
         CalcValue::MouseY { target: None } => return "ctx.event.clientY".to_string(),
         CalcValue::Visibility { target }
@@ -163,6 +164,7 @@ fn calc_value_to_js(value: &CalcValue, serializable: bool) -> String {
         || "null".to_string(),
         |target| match value {
             CalcValue::EventValue
+            | CalcValue::Key { .. }
             | CalcValue::MouseX { target: None }
             | CalcValue::MouseY { target: None } => unreachable!(),
             CalcValue::Visibility { .. } => {
@@ -222,6 +224,7 @@ fn value_to_js(value: &Value, serializable: bool) -> (String, bool) {
             },
             true,
         ),
+        Value::Key(key) => (key.as_str().to_string(), true),
         Value::String(x) => (
             if serializable {
                 format!("{{String:'{x}'}}")
@@ -760,6 +763,13 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
                         f,
                         b"v-onevent",
                         format!("{name}:{}", action_effect_to_js_attr(&action.effect)).as_bytes(),
+                    )?;
+                }
+                ActionTrigger::KeyDown => {
+                    write_attr(
+                        f,
+                        b"v-onkeydown",
+                        action_effect_to_js_attr(&action.effect).as_bytes(),
                     )?;
                 }
                 ActionTrigger::Immediate => {

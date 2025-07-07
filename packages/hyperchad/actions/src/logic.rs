@@ -2,7 +2,7 @@ use hyperchad_transformer_models::{LayoutDirection, Visibility};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{Action, ActionEffect, ActionType, ElementTarget, Target};
+use crate::{Action, ActionEffect, ActionType, ElementTarget, Key, Target};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -18,6 +18,7 @@ pub enum CalcValue {
     PositionY { target: ElementTarget },
     MouseX { target: Option<ElementTarget> },
     MouseY { target: Option<ElementTarget> },
+    Key { key: Key },
 }
 
 impl CalcValue {
@@ -81,6 +82,13 @@ pub enum Value {
     Display(bool),
     LayoutDirection(LayoutDirection),
     String(String),
+    Key(Key),
+}
+
+impl From<Key> for Value {
+    fn from(value: Key) -> Self {
+        Self::Key(value)
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -149,6 +157,7 @@ impl Value {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::String(str) => Some(str),
+            Self::Key(key) => Some(key.as_str()),
             Self::Arithmetic(..)
             | Self::Calc(..)
             | Self::Real(..)
@@ -169,6 +178,7 @@ impl Value {
             Self::Visibility(..)
             | Self::Display(..)
             | Self::String(..)
+            | Self::Key(..)
             | Self::LayoutDirection(..) => None,
         }
     }
