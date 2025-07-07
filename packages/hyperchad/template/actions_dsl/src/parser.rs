@@ -457,10 +457,11 @@ fn parse_postfix_expression(input: ParseStream) -> Result<Expression> {
 fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
     let lookahead = input.lookahead1();
 
-    if lookahead.peek(syn::LitStr)
-        || lookahead.peek(syn::LitInt)
+    if lookahead.peek(syn::LitInt)
         || lookahead.peek(syn::LitFloat)
+        || lookahead.peek(syn::LitStr)
         || lookahead.peek(syn::LitBool)
+        || lookahead.peek(syn::LitChar)
     {
         let lit: Lit = input.parse()?;
         Ok(Expression::Literal(parse_literal(lit)?))
@@ -475,59 +476,68 @@ fn parse_primary_expression(input: ParseStream) -> Result<Expression> {
             if input.peek(Ident) {
                 let variant: Ident = input.parse()?;
 
-                // Special handling for Key enum variants - treat as variables
-                // Do this BEFORE checking for struct-like variants
-                if ident_str == "Key" {
-                    return Ok(Expression::Variable(format!("{ident_str}::{variant}")));
-                }
-
                 // Check for struct-like variant with fields { field: value }
-                // Only if the brace immediately follows the variant (no spaces)
+                // Only parse as struct variant if the brace contains field assignments
+                // (identifiers followed by colons), not arbitrary statements
                 if input.peek(token::Brace) {
+                    // Look ahead to see if this looks like a struct variant or just a block
+                    let fork = input.fork();
                     let content;
-                    braced!(content in input);
+                    braced!(content in fork);
 
-                    let mut fields = Vec::new();
-                    while !content.is_empty() {
-                        let field_name: Ident = content.parse()?;
+                    // Check if the first token in the brace looks like a field assignment
+                    if content.peek(Ident) {
+                        let field_fork = content.fork();
+                        if field_fork.parse::<Ident>().is_ok()
+                            && (field_fork.peek(token::Colon)
+                                || field_fork.peek(token::Comma)
+                                || field_fork.is_empty())
+                        {
+                            // This looks like a struct variant - parse it
+                            let content;
+                            braced!(content in input);
 
-                        let field_value = if content.peek(token::Colon) {
-                            // Full syntax: field: value
-                            content.parse::<token::Colon>()?;
-                            parse_expression(&content)?
-                        } else {
-                            // Shorthand syntax: field (equivalent to field: field)
-                            Expression::Variable(field_name.to_string())
-                        };
+                            let mut fields = Vec::new();
+                            while !content.is_empty() {
+                                let field_name: Ident = content.parse()?;
 
-                        fields.push((field_name.to_string(), field_value));
+                                let field_value = if content.peek(token::Colon) {
+                                    // Full syntax: field: value
+                                    content.parse::<token::Colon>()?;
+                                    parse_expression(&content)?
+                                } else {
+                                    // Shorthand syntax: field (equivalent to field: field)
+                                    Expression::Variable(field_name.to_string())
+                                };
 
-                        if content.peek(token::Comma) {
-                            content.parse::<token::Comma>()?;
+                                fields.push((field_name.to_string(), field_value));
+
+                                if content.peek(token::Comma) {
+                                    content.parse::<token::Comma>()?;
+                                }
+                            }
+
+                            // Represent struct variants as function calls with named arguments
+                            return Ok(Expression::Call {
+                                function: format!("{ident_str}::{variant}"),
+                                args: fields
+                                    .into_iter()
+                                    .map(|(name, value)| {
+                                        // Create a tuple expression for named fields
+                                        Expression::Tuple(vec![
+                                            Expression::Literal(Literal::String(name)),
+                                            value,
+                                        ])
+                                    })
+                                    .collect(),
+                            });
                         }
                     }
-
-                    // For now, represent struct variants as method calls with named arguments
-                    return Ok(Expression::Call {
-                        function: format!("{ident_str}::{variant}"),
-                        args: fields
-                            .into_iter()
-                            .map(|(name, value)| {
-                                // Create a tuple expression for named fields
-                                Expression::Tuple(vec![
-                                    Expression::Literal(Literal::String(name)),
-                                    value,
-                                ])
-                            })
-                            .collect(),
-                    });
                 }
 
-                // Simple enum variant
-                return Ok(Expression::Call {
-                    function: format!("{ident_str}::{variant}"),
-                    args: vec![],
-                });
+                // Simple enum variant - treat any Type::Variant as a variable
+                // This allows Key::Escape, ActionType::SomeAction, MyEnum::Variant, etc.
+                return Ok(Expression::Variable(format!("{ident_str}::{variant}")));
             }
 
             return Err(input.error("Expected enum variant name"));

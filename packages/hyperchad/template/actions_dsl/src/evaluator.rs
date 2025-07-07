@@ -45,6 +45,18 @@ impl Context {
             .iter()
             .any(|scope| scope.variables.iter().any(|x| x == name))
     }
+
+    /// Resolve enum variants generically (`Type::Variant` -> appropriate representation)
+    fn resolve_enum_variant(enum_type: &str, variant: &str) -> TokenStream {
+        let enum_ident = format_ident!("{}", enum_type);
+        let variant_ident = format_ident!("{}", variant);
+
+        // Generate the enum variant directly without conversion
+        // Let the context determine if conversion to Value is needed
+        quote! {
+            #enum_ident::#variant_ident
+        }
+    }
 }
 
 macro_rules! push_scope {
@@ -490,28 +502,24 @@ pub fn generate_expression_code(
             Ok(quote! { hyperchad_actions::dsl::Expression::Literal(#lit_code) })
         }
         Expression::Variable(name) => {
-            // Handle Key enum variants
-            name.strip_prefix("Key::").map_or_else(
-                || {
-                    if context.is_variable_defined(name) {
-                        let name = syn::LitStr::new(name, proc_macro2::Span::call_site());
-                        Ok(quote! {
-                            hyperchad_actions::dsl::ElementVariable {
-                                name: #name.to_string(),
-                            }
-                        })
-                    } else {
-                        let var_name = format_ident!("{name}");
-                        Ok(quote! { #var_name })
+            // Generic enum variant handling: Type::Variant pattern
+            if let Some((enum_type, variant)) = name.split_once("::") {
+                return Ok(Context::resolve_enum_variant(enum_type, variant));
+            }
+
+            // Regular variable handling
+            if context.is_variable_defined(name) {
+                let name = syn::LitStr::new(name, proc_macro2::Span::call_site());
+                Ok(quote! {
+                    hyperchad_actions::dsl::ElementVariable {
+                        name: #name.to_string(),
                     }
-                },
-                |variant| {
-                    let variant_ident = format_ident!("{}", variant);
-                    Ok(quote! {
-                        hyperchad_actions::logic::Value::Key(hyperchad_actions::Key::#variant_ident)
-                    })
-                },
-            )
+                })
+            } else {
+                // Check if this is a valid Rust identifier that should be used directly
+                let var_name = format_ident!("{name}");
+                Ok(quote! { #var_name })
+            }
         }
         Expression::ElementRef(element_ref) => match &**element_ref {
             Expression::Literal(Literal::String(selector)) => {
@@ -588,12 +596,26 @@ pub fn generate_expression_code(
             let left_code = generate_expression_code(context, left)?;
             let right_code = generate_expression_code(context, right)?;
 
+            // Helper function to wrap enum variants in Value::from for logical operations
+            let wrap_for_logic = |expr: &Expression, code: TokenStream| -> TokenStream {
+                match expr {
+                    Expression::Variable(name) if name.contains("::") => {
+                        // This is an enum variant, wrap it in Value::from for logical operations
+                        quote! { hyperchad_actions::logic::Value::from(#code) }
+                    }
+                    _ => code,
+                }
+            };
+
             // Handle special cases for logic operations
             match op {
                 BinaryOp::Equal => {
                     // For equality, we need to use the logic::eq function to create a Condition
+                    // Wrap enum variants in Value::from for logical operations
+                    let left_wrapped = wrap_for_logic(left, left_code);
+                    let right_wrapped = wrap_for_logic(right, right_code);
                     Ok(quote! {
-                        hyperchad_actions::logic::eq(#left_code, #right_code)
+                        hyperchad_actions::logic::eq(#left_wrapped, #right_wrapped)
                     })
                 }
                 BinaryOp::NotEqual => {
@@ -806,6 +828,14 @@ fn generate_action_for_id(
                 hyperchad_actions::ActionType::focus_str_id(hyperchad_actions::Target::literal(#id))
             }
         }
+        "get_visibility" => {
+            if !args.is_empty() {
+                return Err("ElementReference.get_visibility() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::get_visibility_str_id(hyperchad_actions::Target::literal(#id))
+            }
+        }
         "select" => {
             if !args.is_empty() {
                 return Err("ElementReference.select() expects no arguments".to_string());
@@ -868,6 +898,14 @@ fn generate_action_for_class(
             }
             quote! {
                 hyperchad_actions::ActionType::focus_str_class(hyperchad_actions::Target::literal(#class))
+            }
+        }
+        "get_visibility" => {
+            if !args.is_empty() {
+                return Err("ElementReference.get_visibility() expects no arguments".to_string());
+            }
+            quote! {
+                hyperchad_actions::ActionType::get_visibility_str_class(hyperchad_actions::Target::literal(#class))
             }
         }
         "select" => {
@@ -942,6 +980,43 @@ fn generate_function_call_code(
     function: &str,
     args: &[Expression],
 ) -> Result<TokenStream, String> {
+    // Handle struct-like enum variants: Type::Variant with named field arguments
+    if function.contains("::") {
+        let (enum_type, variant) = function.split_once("::").unwrap();
+
+        // Check if this is a struct-like variant (args are tuples with field names)
+        if !args.is_empty() && args.iter().all(|arg| matches!(arg, Expression::Tuple(_))) {
+            let enum_ident = format_ident!("{}", enum_type);
+            let variant_ident = format_ident!("{}", variant);
+
+            // Generate field assignments from tuple arguments
+            let mut field_assignments = Vec::new();
+            for arg in args {
+                if let Expression::Tuple(tuple_args) = arg {
+                    if tuple_args.len() == 2 {
+                        if let Expression::Literal(Literal::String(field_name)) = &tuple_args[0] {
+                            let field_ident = format_ident!("{}", field_name);
+                            let field_value = generate_expression_code(context, &tuple_args[1])?;
+                            field_assignments.push(quote! { #field_ident: #field_value });
+                        }
+                    }
+                }
+            }
+
+            // Generate the struct-like enum construction
+            return Ok(quote! {
+                #enum_ident::#variant_ident {
+                    #(#field_assignments),*
+                }
+            });
+        }
+
+        // For simple enum variants without fields, fall back to generic enum resolution
+        if args.is_empty() {
+            return Ok(Context::resolve_enum_variant(enum_type, variant));
+        }
+    }
+
     match function {
         // Element reference function
         "element" => {
@@ -1883,6 +1958,14 @@ fn generate_method_call_code(
             }
             Ok(quote! {
                 #receiver.visibility()
+            })
+        }
+        "get_visibility" => {
+            if !args.is_empty() {
+                return Err("ElementReference.get_visibility() expects no arguments".to_string());
+            }
+            Ok(quote! {
+                #receiver.get_visibility()
             })
         }
         "set_visibility" => {

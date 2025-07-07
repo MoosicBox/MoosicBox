@@ -495,16 +495,8 @@ mod tests {
         // Should handle complex event handlers with multiple actions
         assert!(result.contains("Event"));
         assert!(result.contains("set_background_self"));
-        assert!(
-            result.contains(
-                ":: SetVisibility (hyperchad_transformer_models :: Visibility :: Hidden)"
-            )
-        );
-        assert!(
-            result.contains(
-                ":: SetVisibility (hyperchad_transformer_models :: Visibility :: Visible)"
-            )
-        );
+        assert!(result.contains(":: SetVisibility (Visibility :: Hidden)"));
+        assert!(result.contains(":: SetVisibility (Visibility :: Visible)"));
         assert!(result.contains("remove_background_self"));
     }
 
@@ -827,8 +819,7 @@ mod tests {
 
         // The Key::Escape case now correctly transforms everything
         assert!(result.contains("get_event_value"));
-        assert!(result.contains("Value :: Key"));
-        assert!(result.contains("Key :: Escape"));
+        assert!(result.contains("hyperchad_actions :: logic :: Value :: from (Key :: Escape)"));
         assert!(result.contains("ActionType :: Style"));
         assert!(result.contains("SetVisibility"));
         assert!(result.contains("Visible"));
@@ -858,16 +849,8 @@ mod tests {
         assert!(result.contains("play-track"));
         assert!(result.contains("get_data_attr_value_self"));
         assert!(result.contains("set_background_self"));
-        assert!(
-            result.contains(
-                ":: SetVisibility (hyperchad_transformer_models :: Visibility :: Hidden)"
-            )
-        );
-        assert!(
-            result.contains(
-                ":: SetVisibility (hyperchad_transformer_models :: Visibility :: Visible)"
-            )
-        );
+        assert!(result.contains(":: SetVisibility (Visibility :: Hidden)"));
+        assert!(result.contains(":: SetVisibility (Visibility :: Visible)"));
         assert!(result.contains("remove_background_self"));
         assert!(result.contains("Visibility :: Hidden"));
         assert!(result.contains("Visibility :: Visible"));
@@ -1015,7 +998,7 @@ mod tests {
         println!("actual: {result}");
 
         // Should contain optimized visibility call
-        assert!(result.contains(r#"hyperchad_actions :: ActionType :: set_visibility_class (hyperchad_transformer_models :: Visibility :: Visible , hyperchad_actions :: Target :: literal ("highlight"))"#));
+        assert!(result.contains(r#"hyperchad_actions :: ActionType :: set_visibility_class (Visibility :: Visible , hyperchad_actions :: Target :: literal ("highlight"))"#));
     }
 
     #[test]
@@ -1029,9 +1012,9 @@ mod tests {
         let result = result.to_string();
         println!("actual: {result}");
 
-        assert!(result.contains("element (\".modal\")"));
-        assert!(result.contains("get_visibility"));
-        assert!(result.contains("element (\".modal\") . show ()"));
+        assert!(result.contains("get_visibility_str_class"));
+        assert!(result.contains("show_str_class"));
+        assert!(result.contains("modal"));
     }
 
     #[test]
@@ -1236,8 +1219,7 @@ mod tests {
 
         // Should handle if statement with semicolon (transforms consistently)
         assert!(result.contains("ActionType"));
-        assert!(result.contains("Value :: Key"));
-        assert!(result.contains("Key :: Escape"));
+        assert!(result.contains("hyperchad_actions :: logic :: Value :: from (Key :: Escape)"));
         assert!(result.contains("SetVisibility"));
     }
 
@@ -1283,5 +1265,29 @@ mod tests {
         assert!(result.contains("Let"));
         assert!(result.contains("eq"));
         assert!(result.contains("Key :: Escape"));
+    }
+
+    #[test]
+    fn test_generic_enum_variants() {
+        let input = quote! {
+            // Test different enum types to prove the solution is generic
+            if get_event_value() == Key::Enter {
+                show("modal");
+            }
+            if get_visibility("element") == Visibility::Hidden {
+                log("Element is hidden");
+            }
+        };
+        let result = expand_actions_dsl(&input).unwrap();
+        let result = result.to_string();
+        println!("generic enum variants: {result}");
+
+        // Should handle different enum types generically
+        assert!(result.contains("hyperchad_actions :: logic :: Value :: from (Key :: Enter)"));
+        assert!(
+            result.contains("hyperchad_actions :: logic :: Value :: from (Visibility :: Hidden)")
+        );
+        assert!(result.contains("ActionType :: Style"));
+        assert!(result.contains("ActionType :: Log"));
     }
 }
