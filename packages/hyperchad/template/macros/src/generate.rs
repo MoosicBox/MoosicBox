@@ -879,6 +879,10 @@ impl Generator {
             // TODO: Return error in this case. Just be strict about unknown events.
             // For all other triggers, use the Event variant
             _ => {
+                if let Some(event_name) = trigger_name.strip_prefix("global-") {
+                    return quote! { hyperchad_actions::ActionTrigger::Event(#event_name.to_string()) };
+                }
+
                 quote! { hyperchad_actions::ActionTrigger::Event(#trigger_name.to_string()) }
             }
         }
