@@ -326,19 +326,35 @@ impl Seek for RemoteByteStream {
             self.read_position
         );
 
-        self.read_position = seek_position;
+        // Check if we're seeking within already received data
+        let fetcher_start = self.fetcher.start;
+        let fetcher_end = fetcher_start + self.fetcher.buffer.len() as u64;
 
-        if self.size.is_some_and(|size| seek_position >= size) {
-            log::debug!("Seeking past end of stream. Aborting fetcher.");
-            self.fetcher.abort();
-        } else {
-            self.fetcher = RemoteByteStreamFetcher::new(
-                self.url.clone(),
-                seek_position,
-                None,
-                true,
-                self.abort.clone(),
+        if seek_position >= fetcher_start && seek_position < fetcher_end {
+            // Seeking within already received data - just update read position
+            log::debug!(
+                "Seeking within received data: pos[{seek_position}] in range[{fetcher_start}..{fetcher_end})"
             );
+            self.read_position = seek_position;
+        } else {
+            // Seeking outside received data - need new fetcher
+            log::debug!(
+                "Seeking outside received data: pos[{seek_position}] not in range[{fetcher_start}..{fetcher_end})"
+            );
+            self.read_position = seek_position;
+
+            if self.size.is_some_and(|size| seek_position >= size) {
+                log::debug!("Seeking past end of stream. Aborting fetcher.");
+                self.fetcher.abort();
+            } else {
+                self.fetcher = RemoteByteStreamFetcher::new(
+                    self.url.clone(),
+                    seek_position,
+                    None,
+                    true,
+                    self.abort.clone(),
+                );
+            }
         }
 
         Ok(seek_position)
@@ -605,5 +621,66 @@ mod tests {
         assert!(!stream.seekable);
         // Note: The current implementation doesn't actually restrict seeking based on this flag
         // but this test documents the intended behavior
+    }
+
+    #[test]
+    fn test_seek_within_downloaded_data_preserves_fetcher() {
+        // Test that seeking within already downloaded data doesn't create a new fetcher
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Simulate some downloaded data
+        stream.fetcher.start = 0;
+        stream.fetcher.buffer = vec![0u8; 500]; // 500 bytes downloaded starting from position 0
+
+        // Seek within the downloaded data
+        let pos = stream.seek(SeekFrom::Start(100)).unwrap();
+        assert_eq!(pos, 100);
+        assert_eq!(stream.read_position, 100);
+
+        // Fetcher should still have the same start position and buffer
+        assert_eq!(stream.fetcher.start, 0);
+        assert_eq!(stream.fetcher.buffer.len(), 500);
+
+        // Seek to another position within downloaded data
+        let pos = stream.seek(SeekFrom::Start(250)).unwrap();
+        assert_eq!(pos, 250);
+        assert_eq!(stream.read_position, 250);
+
+        // Fetcher should still be the same
+        assert_eq!(stream.fetcher.start, 0);
+        assert_eq!(stream.fetcher.buffer.len(), 500);
+    }
+
+    #[tokio::test]
+    async fn test_seek_outside_downloaded_data_creates_new_fetcher() {
+        // Test that seeking outside downloaded data creates a new fetcher
+        let abort_token = CancellationToken::new();
+        let mut stream = RemoteByteStream::new(
+            "https://example.com/file.mp3".to_string(),
+            Some(1000),
+            false, // Don't auto-start fetch
+            true,  // Seekable
+            abort_token,
+        );
+
+        // Simulate some downloaded data
+        stream.fetcher.start = 0;
+        stream.fetcher.buffer = vec![0u8; 500]; // 500 bytes downloaded starting from position 0
+
+        // Seek outside the downloaded data
+        let pos = stream.seek(SeekFrom::Start(600)).unwrap();
+        assert_eq!(pos, 600);
+        assert_eq!(stream.read_position, 600);
+
+        // Fetcher should have been recreated with new start position
+        assert_eq!(stream.fetcher.start, 600);
+        assert_eq!(stream.fetcher.buffer.len(), 0); // New fetcher starts with empty buffer
     }
 }
