@@ -72,6 +72,8 @@ fn main() {
         "actions-event",
         #[cfg(feature = "plugin-actions-event-key-down")]
         "actions-event-key-down",
+        #[cfg(feature = "plugin-actions-event-key-up")]
+        "actions-event-key-up",
         #[cfg(feature = "plugin-actions-immediate")]
         "actions-immediate",
         #[cfg(feature = "plugin-actions-mouse-down")]
@@ -80,6 +82,8 @@ fn main() {
         "actions-mouse-over",
         #[cfg(feature = "plugin-actions-key-down")]
         "actions-key-down",
+        #[cfg(feature = "plugin-actions-key-up")]
+        "actions-key-up",
         #[cfg(feature = "plugin-actions-resize")]
         "actions-resize",
     ];

@@ -64,8 +64,10 @@ plugin-actions = [
     "plugin-actions-click-outside",
     "plugin-actions-event",
     "plugin-actions-event-key-down",
+    "plugin-actions-event-key-up",
     "plugin-actions-immediate",
     "plugin-actions-key-down",
+    "plugin-actions-key-up",
     "plugin-actions-mouse-down",
     "plugin-actions-mouse-over",
     "plugin-actions-resize",
@@ -90,6 +92,10 @@ plugin-actions-event-key-down = [
     "_actions",
     "hyperchad_renderer_vanilla_js_hash/plugin-actions-event-key-down",
 ]
+plugin-actions-event-key-up = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-event-key-up",
+]
 plugin-actions-immediate = [
     "_actions",
     "hyperchad_renderer_vanilla_js_hash/plugin-actions-immediate",
@@ -97,6 +103,10 @@ plugin-actions-immediate = [
 plugin-actions-key-down = [
     "_actions",
     "hyperchad_renderer_vanilla_js_hash/plugin-actions-key-down",
+]
+plugin-actions-key-up = [
+    "_actions",
+    "hyperchad_renderer_vanilla_js_hash/plugin-actions-key-up",
 ]
 plugin-actions-mouse-down = [
     "_actions",
