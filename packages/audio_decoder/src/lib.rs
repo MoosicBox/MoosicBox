@@ -137,7 +137,7 @@ impl AudioDecodeHandler {
 
     /// # Errors
     ///
-    /// * None
+    /// * If the audio failed to write
     pub const fn flush(&mut self) -> Result<(), AudioDecodeError> {
         Ok(())
     }
@@ -445,7 +445,11 @@ pub fn decode(
 }
 
 #[cfg_attr(feature = "profiling", profiling::function)]
-#[allow(clippy::similar_names)]
+#[allow(
+    clippy::similar_names,
+    clippy::cognitive_complexity,
+    clippy::too_many_lines
+)]
 fn play_track(
     reader: &mut Box<dyn FormatReader>,
     audio_output_handler: &mut AudioDecodeHandler,
@@ -466,6 +470,13 @@ fn play_track(
     // Create a decoder for the track.
     let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &decode_opts)?;
 
+    log::debug!(
+        "Starting packet decode loop with verification={}",
+        decode_opts.verify
+    );
+    let mut packet_count = 0;
+    let mut decode_errors = 0;
+
     // Decode and play the packets belonging to the selected track.
     let result = loop {
         #[cfg(feature = "profiling")]
@@ -476,21 +487,52 @@ fn play_track(
             .as_ref()
             .is_some_and(CancellationToken::is_cancelled)
         {
+            log::debug!("Decoder loop cancelled via cancellation token");
             return Ok(2);
         }
+
         // Get the next packet from the format reader.
         let packet = {
             #[cfg(feature = "profiling")]
             profiling::function_scope!("read");
 
             match reader.next_packet() {
-                Ok(packet) => packet,
-                Err(err) => break Err(DecodeError::Symphonia(err)),
+                Ok(packet) => {
+                    packet_count += 1;
+                    log::trace!(
+                        "Successfully read packet #{packet_count} for track {}",
+                        packet.track_id()
+                    );
+                    packet
+                }
+                Err(err) => {
+                    log::debug!("Failed to read next packet after {packet_count} packets: {err:?}");
+                    // Check if this is an expected end-of-stream vs unexpected error
+                    match &err {
+                        Error::IoError(io_err)
+                            if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
+                        {
+                            log::debug!("Received UnexpectedEof - stream appears to be finished");
+                        }
+                        Error::ResetRequired => {
+                            log::debug!("Received ResetRequired");
+                        }
+                        _ => {
+                            log::warn!("Unexpected reader error: {err:?}");
+                        }
+                    }
+                    break Err(DecodeError::Symphonia(err));
+                }
             }
         };
 
         // If the packet does not belong to the selected track, skip it.
         if packet.track_id() != play_opts.track_id {
+            log::trace!(
+                "Skipping packet for track {} (want track {})",
+                packet.track_id(),
+                play_opts.track_id
+            );
             continue;
         }
 
@@ -505,7 +547,11 @@ fn play_track(
         // Decode the packet into audio samples.
         match decoded {
             Ok(decoded) => {
-                log::trace!("Decoded packet");
+                log::trace!(
+                    "Decoded packet - frames: {}, spec: {:?}",
+                    decoded.frames(),
+                    decoded.spec()
+                );
 
                 if audio_output_handler.contains_outputs_to_open() {
                     #[cfg(feature = "profiling")]
@@ -529,7 +575,10 @@ fn play_track(
                 // Write the decoded audio samples to the audio output if the presentation timestamp
                 // for the packet is >= the seeked position (0 if not seeking).
                 if ts >= play_opts.seek_ts {
-                    log::trace!("Writing decoded to audio output");
+                    log::trace!(
+                        "Writing decoded to audio output - ts: {ts}, seek_ts: {}",
+                        play_opts.seek_ts
+                    );
                     let mut buf = {
                         #[cfg(feature = "profiling")]
                         profiling::function_scope!("make_equivalent");
@@ -550,24 +599,42 @@ fn play_track(
                     }
                     log::trace!("Wrote decoded to audio output");
                 } else {
-                    log::trace!("Not to seeked position yet. Continuing decode");
+                    log::trace!(
+                        "Not to seeked position yet. Continuing decode - ts: {ts}, seek_ts: {}",
+                        play_opts.seek_ts
+                    );
                 }
             }
             Err(Error::DecodeError(err)) => {
                 // Decode errors are not fatal. Print the error message and try to decode the next
                 // packet as usual.
-                log::warn!("decode error: {err}");
+                decode_errors += 1;
+                log::warn!("decode error #{decode_errors}: {err}");
             }
-            Err(err) => break Err(DecodeError::Symphonia(err)),
+            Err(err) => {
+                log::debug!("Fatal decode error after {packet_count} packets: {err:?}");
+                break Err(DecodeError::Symphonia(err));
+            }
         }
-        log::trace!("Finished processing packet");
+        log::trace!("Finished processing packet #{packet_count}");
     };
+
+    log::debug!(
+        "Decode loop finished - processed {packet_count} packets, {decode_errors} decode errors, result: {result:?}"
+    );
 
     // Return if a fatal error occurred.
     ignore_end_of_stream_error(result)?;
 
+    log::debug!("Starting decoder finalization for verification");
+    let finalization_result = decoder.finalize();
+    log::debug!(
+        "Decoder finalized - verify_ok: {:?}",
+        finalization_result.verify_ok
+    );
+
     // Finalize the decoder and return the verification result if it's been enabled.
-    Ok(do_verification(decoder.finalize()))
+    Ok(do_verification(finalization_result))
 }
 
 fn first_supported_track(tracks: &[Track]) -> Option<&Track> {
@@ -584,17 +651,43 @@ fn ignore_end_of_stream_error(result: Result<(), DecodeError>) -> Result<(), Dec
         {
             // Do not treat "end of stream" as a fatal error. It's the currently only way a
             // format reader can indicate the media is complete.
+            log::debug!("Ignoring expected 'end of stream' UnexpectedEof error");
             Ok(())
         }
-        _ => result,
+        Err(DecodeError::Symphonia(Error::IoError(err)))
+            if err.kind() == std::io::ErrorKind::UnexpectedEof =>
+        {
+            log::debug!(
+                "Received UnexpectedEof with message: '{err}' - NOT ignoring (not 'end of stream')"
+            );
+            Err(DecodeError::Symphonia(Error::IoError(err)))
+        }
+        Err(err) => {
+            log::debug!("Received non-EOF error: {err:?}");
+            Err(err)
+        }
+        Ok(()) => {
+            log::debug!("No error to ignore");
+            Ok(())
+        }
     }
 }
 
 fn do_verification(finalization: FinalizeResult) -> i32 {
-    finalization.verify_ok.map_or(0, |is_ok| {
+    finalization.verify_ok.map_or_else(|| {
+        log::debug!("verification: no verification performed (verify_ok is None)");
+        0
+    }, |is_ok| {
         // Got a verification result.
-        log::debug!("verification: {}", if is_ok { "passed" } else { "failed" });
-
+        log::debug!(
+            "verification result received: {}",
+            if is_ok { "passed" } else { "failed" }
+        );
+        if !is_ok {
+            log::warn!(
+                "Verification failed - this may indicate data corruption, incomplete stream processing, or premature stream termination"
+            );
+        }
         i32::from(!is_ok)
     })
 }
