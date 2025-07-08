@@ -345,6 +345,7 @@ impl TrackBytesSource {
         let finished = self.finished.clone();
         let writers = self.writers.clone();
         let bytes = self.bytes.clone();
+        log::debug!("Starting stream processing for track bytes for key={key}");
         log::trace!("Starting stream listen for track bytes for key={key}");
         stream
             .filter(|_| async { !finished.load(std::sync::atomic::Ordering::SeqCst) })
@@ -365,16 +366,29 @@ impl TrackBytesSource {
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         );
+
+                        let initial_writer_count = writers.len();
                         writers.retain_mut(|x| {
                             log::debug!(
                                 "Writing {} track bytes to writer id={} for key={key}",
                                 new_bytes.len(),
                                 x.id
                             );
-                            x.write_all(&new_bytes).is_ok()
+                            let write_result = x.write_all(&new_bytes);
+                            if let Err(ref err) = write_result {
+                                log::warn!("Writer id={} failed to write {} bytes for key={key}: {:?} - dropping writer", x.id, new_bytes.len(), err);
+                            }
+                            write_result.is_ok()
                         });
+
+                        let remaining_writer_count = writers.len();
+                        if remaining_writer_count < initial_writer_count {
+                            log::warn!("Track pool key={key}: {} writer(s) dropped, {} remaining",
+                                initial_writer_count - remaining_writer_count, remaining_writer_count);
+                        }
+
                         if writers.is_empty() {
-                            log::debug!("All writers have been dropped. Finished.");
+                            log::error!("Track pool key={key}: All writers have been dropped - marking stream as finished prematurely! This may cause audio playback to end early.");
                             finished.store(true, std::sync::atomic::Ordering::SeqCst);
                         }
                     }
@@ -388,12 +402,19 @@ impl TrackBytesSource {
             .await;
 
         finished.store(true, std::sync::atomic::Ordering::SeqCst);
-        writers.lock().await.retain_mut(|x| {
-            log::debug!("Closing writer id={}", x.id);
+        let mut final_writers = writers.lock().await;
+        log::debug!(
+            "Track pool stream processing completed for key={key} - {} writer(s) remaining",
+            final_writers.len()
+        );
+        final_writers.retain_mut(|x| {
+            log::debug!("Closing writer id={} for key={key}", x.id);
             x.close();
             false
         });
+        drop(final_writers);
 
+        log::debug!("Track pool stream processing fully finished for key={key}");
         Ok(())
     }
 }
