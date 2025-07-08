@@ -17,6 +17,7 @@ switchy_http = { workspace = true, optional = true, features = [
     "stream",
 ] }
 
+async-trait = { workspace = true }
 bytes       = { workspace = true }
 flume       = { workspace = true, optional = true }
 futures     = { workspace = true }

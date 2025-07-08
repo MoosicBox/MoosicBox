@@ -8397,6 +8397,7 @@ dependencies = [
 name = "moosicbox_stream_utils"
 version = "0.1.1"
 dependencies = [
+ "async-trait",
  "bytes",
  "flume",
  "futures",

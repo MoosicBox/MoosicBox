@@ -8,17 +8,93 @@ use switchy_http::Client;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-pub struct RemoteByteStream {
+// Trait for HTTP fetching to enable dependency injection in tests
+#[async_trait::async_trait]
+pub trait HttpFetcher: Send + Sync + Clone + 'static {
+    async fn fetch_range(
+        &self,
+        url: &str,
+        start: u64,
+        end: Option<u64>,
+    ) -> Result<
+        Box<
+            dyn futures::Stream<Item = Result<Bytes, Box<dyn std::error::Error + Send + Sync>>>
+                + Send
+                + Unpin,
+        >,
+        Box<dyn std::error::Error + Send + Sync>,
+    >;
+}
+
+// Default implementation using switchy_http::Client
+#[derive(Clone)]
+pub struct DefaultHttpFetcher;
+
+#[async_trait::async_trait]
+impl HttpFetcher for DefaultHttpFetcher {
+    async fn fetch_range(
+        &self,
+        url: &str,
+        start: u64,
+        end: Option<u64>,
+    ) -> Result<
+        Box<
+            dyn futures::Stream<Item = Result<Bytes, Box<dyn std::error::Error + Send + Sync>>>
+                + Send
+                + Unpin,
+        >,
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
+        let bytes_range = format!(
+            "bytes={}-{}",
+            start,
+            end.map_or_else(String::new, |n| n.to_string())
+        );
+
+        log::debug!("Fetching byte stream with range {bytes_range}");
+
+        let mut response = Client::new()
+            .get(url)
+            .header("Range", &bytes_range)
+            .send()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+
+        match response.status() {
+            switchy_http::models::StatusCode::Ok
+            | switchy_http::models::StatusCode::PartialContent => {
+                // Log the actual Content-Length from server
+                if let Some(content_length) = response.headers().get("content-length") {
+                    log::debug!("Server reports Content-Length: {content_length:?}");
+                } else {
+                    log::debug!("No Content-Length header in response");
+                }
+            }
+            _ => {
+                let error_msg = format!("Received error response ({})", response.status());
+                log::error!("{error_msg}");
+                return Err(error_msg.into());
+            }
+        }
+
+        let stream = response.bytes_stream();
+        Ok(Box::new(Box::pin(stream.map(|item| {
+            item.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+        }))))
+    }
+}
+
+pub struct RemoteByteStream<F: HttpFetcher = DefaultHttpFetcher> {
     url: String,
     pub finished: bool,
     pub seekable: bool,
     pub size: Option<u64>,
-    read_position: u64,
-    fetcher: RemoteByteStreamFetcher,
+    pub read_position: u64,
+    fetcher: RemoteByteStreamFetcher<F>,
     abort: CancellationToken,
 }
 
-struct RemoteByteStreamFetcher {
+struct RemoteByteStreamFetcher<F: HttpFetcher> {
     url: String,
     start: u64,
     end: Option<u64>,
@@ -30,15 +106,17 @@ struct RemoteByteStreamFetcher {
     abort_handle: Option<JoinHandle<()>>,
     abort: CancellationToken,
     stream_abort: CancellationToken,
+    http_fetcher: F,
 }
 
-impl RemoteByteStreamFetcher {
+impl<F: HttpFetcher> RemoteByteStreamFetcher<F> {
     pub fn new(
         url: String,
         start: u64,
         end: Option<u64>,
         autostart: bool,
         stream_abort: CancellationToken,
+        http_fetcher: F,
     ) -> Self {
         let (tx, rx) = unbounded();
         let (tx_ready, rx_ready) = bounded(1);
@@ -55,6 +133,7 @@ impl RemoteByteStreamFetcher {
             abort_handle: None,
             abort: CancellationToken::new(),
             stream_abort,
+            http_fetcher,
         };
 
         if autostart {
@@ -72,6 +151,7 @@ impl RemoteByteStreamFetcher {
         let stream_abort = self.stream_abort.clone();
         let start = self.start;
         let end = self.end;
+        let http_fetcher = self.http_fetcher.clone();
         let bytes_range = format!(
             "bytes={}-{}",
             start,
@@ -83,16 +163,8 @@ impl RemoteByteStreamFetcher {
         self.abort_handle = Some(moosicbox_task::spawn(
             "stream_utils: RemoteByteStream Fetcher",
             async move {
-                log::debug!("Fetching byte stream with range {bytes_range}");
-
-                let response = Client::new()
-                    .get(&url)
-                    .header("Range", &bytes_range)
-                    .send()
-                    .await;
-
-                let mut response = match response {
-                    Ok(response) => response,
+                let mut stream = match http_fetcher.fetch_range(&url, start, end).await {
+                    Ok(stream) => stream,
                     Err(err) => {
                         log::error!("Failed to get stream response: {err:?}");
                         if let Err(err) = sender.send_async(Bytes::new()).await {
@@ -101,31 +173,6 @@ impl RemoteByteStreamFetcher {
                         return;
                     }
                 };
-
-                match response.status() {
-                    switchy_http::models::StatusCode::Ok
-                    | switchy_http::models::StatusCode::PartialContent => {
-                        // Log the actual Content-Length from server
-                        if let Some(content_length) = response.headers().get("content-length") {
-                            log::debug!("Server reports Content-Length: {content_length:?}");
-                        } else {
-                            log::debug!("No Content-Length header in response");
-                        }
-                    }
-                    _ => {
-                        log::error!(
-                            "Received error response ({}): {:?}",
-                            response.status(),
-                            response.text().await
-                        );
-                        if let Err(err) = sender.send_async(Bytes::new()).await {
-                            log::warn!("Failed to send empty bytes: {err:?}");
-                        }
-                        return;
-                    }
-                }
-
-                let mut stream = response.bytes_stream();
 
                 while let Some(item) = tokio::select! {
                     resp = stream.next() => resp,
@@ -176,14 +223,43 @@ impl RemoteByteStreamFetcher {
     }
 }
 
-impl Drop for RemoteByteStreamFetcher {
+impl<F: HttpFetcher> Drop for RemoteByteStreamFetcher<F> {
     fn drop(&mut self) {
         log::trace!("Dropping RemoteByteStreamFetcher");
         self.abort();
     }
 }
 
-impl RemoteByteStream {
+impl<F: HttpFetcher> RemoteByteStream<F> {
+    #[must_use]
+    pub fn new_with_fetcher(
+        url: String,
+        size: Option<u64>,
+        autostart_fetch: bool,
+        seekable: bool,
+        abort: CancellationToken,
+        http_fetcher: F,
+    ) -> Self {
+        Self {
+            url: url.clone(),
+            finished: false,
+            seekable,
+            size,
+            read_position: 0,
+            fetcher: RemoteByteStreamFetcher::new(
+                url,
+                0,
+                None,
+                autostart_fetch,
+                abort.clone(),
+                http_fetcher,
+            ),
+            abort,
+        }
+    }
+}
+
+impl RemoteByteStream<DefaultHttpFetcher> {
     #[must_use]
     pub fn new(
         url: String,
@@ -192,27 +268,51 @@ impl RemoteByteStream {
         seekable: bool,
         abort: CancellationToken,
     ) -> Self {
-        Self {
-            url: url.clone(),
-            finished: false,
-            seekable,
+        Self::new_with_fetcher(
+            url,
             size,
-            read_position: 0,
-            fetcher: RemoteByteStreamFetcher::new(url, 0, None, autostart_fetch, abort.clone()),
+            autostart_fetch,
+            seekable,
             abort,
-        }
+            DefaultHttpFetcher,
+        )
     }
 }
 
-impl Read for RemoteByteStream {
+impl<F: HttpFetcher> Read for RemoteByteStream<F> {
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        // Check if stream has been finished for a grace period
         if self.finished {
-            return Ok(0);
+            let read_position = usize::try_from(self.read_position).unwrap();
+            let fetcher_start = usize::try_from(self.fetcher.start).unwrap();
+            let buffer_len = self.fetcher.buffer.len();
+
+            let remaining_in_buffer = if fetcher_start + buffer_len > read_position {
+                let fetcher_buf_start = read_position - fetcher_start;
+                buffer_len - fetcher_buf_start
+            } else {
+                0
+            };
+
+            if remaining_in_buffer == 0 {
+                log::debug!(
+                    "Read attempted on finished stream with no remaining buffer data - returning 0 bytes (read_position: {}, stream_size: {:?})",
+                    self.read_position,
+                    self.size
+                );
+                return Ok(0);
+            }
+
+            log::debug!(
+                "Read attempted on finished stream but {remaining_in_buffer} bytes remain in buffer - continuing read"
+            );
         }
 
         let mut written = 0;
         let mut read_position = usize::try_from(self.read_position).unwrap();
         let write_max = buf.len();
+        let mut http_stream_ended = false;
 
         while written < write_max {
             let receiver = self.fetcher.receiver.clone();
@@ -228,61 +328,76 @@ impl Read for RemoteByteStream {
                 let fetcher_buf_start = read_position - fetcher_start;
                 let bytes_to_read_from_buf = buffer_len - fetcher_buf_start;
                 log::trace!(
-                    "Reading bytes from buffer: {bytes_to_read_from_buf} (max {write_max})"
+                    "Reading bytes from buffer: {} (max {})",
+                    bytes_to_read_from_buf,
+                    write_max - written
                 );
-                let bytes_to_write = min(bytes_to_read_from_buf, write_max);
+                let bytes_to_write = min(bytes_to_read_from_buf, write_max - written);
                 buf[written..written + bytes_to_write].copy_from_slice(
                     &fetcher.buffer[fetcher_buf_start..fetcher_buf_start + bytes_to_write],
                 );
                 bytes_to_write
             } else {
+                // No more data in buffer - if stream is finished, we're done
+                if self.finished {
+                    log::debug!(
+                        "No more data in buffer and stream is finished - ending read with {written} bytes"
+                    );
+                    break;
+                }
+
                 log::trace!("Waiting for bytes...");
                 let new_bytes = receiver.recv().unwrap();
                 if fetcher.abort.is_cancelled() {
+                    log::debug!("Fetcher aborted during read - returning {written} bytes");
                     return Ok(written);
                 }
-                fetcher.buffer.extend_from_slice(&new_bytes);
                 let len = new_bytes.len();
                 log::trace!("Received bytes {len}");
 
                 if len == 0 {
-                    // HTTP stream ended - check if we have all expected bytes in buffer
+                    // HTTP stream ended - check if we have all expected bytes
+                    http_stream_ended = true;
+                    let total_buffer_bytes = fetcher.buffer.len() as u64;
+                    let fetcher_start_u64 = fetcher.start;
+                    let total_available_bytes = fetcher_start_u64 + total_buffer_bytes;
+
                     if let Some(expected_size) = self.size {
-                        let total_received = fetcher.buffer.len() as u64;
-                        #[allow(
-                            clippy::cast_precision_loss,
-                            clippy::cast_possible_truncation,
-                            clippy::cast_sign_loss
-                        )]
-                        if total_received < expected_size {
+                        if total_available_bytes < expected_size {
                             log::warn!(
-                                "Stream ended prematurely: received {} bytes, expected {} bytes ({}% complete)",
-                                total_received,
+                                "Stream ended prematurely: fetcher has {} bytes from position {}, total available {}, expected {} bytes ({}% complete)",
+                                total_buffer_bytes,
+                                fetcher_start_u64,
+                                total_available_bytes,
                                 expected_size,
-                                (total_received as f64 / expected_size as f64 * 100.0) as u32
+                                (total_available_bytes * 100) / expected_size
                             );
+
                             return Err(std::io::Error::new(
                                 std::io::ErrorKind::UnexpectedEof,
                                 format!(
-                                    "Incomplete download: got {total_received} of {expected_size} bytes"
+                                    "Stream ended prematurely: expected {expected_size} bytes, got {total_available_bytes} bytes"
                                 ),
                             ));
                         }
+
                         log::debug!(
-                            "Stream completed successfully: received {total_received} bytes as expected"
+                            "HTTP stream completed successfully: received {} bytes as expected (current read_pos: {}, buffer has {} unread bytes)",
+                            total_available_bytes,
+                            self.read_position,
+                            (fetcher_start_u64 + total_buffer_bytes)
+                                .saturating_sub(self.read_position)
                         );
-                    } else {
-                        log::debug!("Stream ended with no expected size - assuming complete");
                     }
-                    self.finished = true;
-                    self.fetcher.ready.send(()).unwrap();
+
+                    // HTTP stream has ended - break out of waiting loop
+                    // We'll check if stream should be finished after reading all available data
                     break;
                 }
 
-                let bytes_to_write = min(len, write_max - written);
-                buf[written..written + bytes_to_write]
-                    .copy_from_slice(&new_bytes[..bytes_to_write]);
-                bytes_to_write
+                fetcher.buffer.extend_from_slice(&new_bytes);
+                // Continue the loop to read from the buffer
+                continue;
             };
 
             written += bytes_written;
@@ -291,11 +406,47 @@ impl Read for RemoteByteStream {
 
         self.read_position = read_position as u64;
 
+        // Check if stream should be marked as finished now that we've read all available data
+        if !self.finished {
+            // Only mark as finished if HTTP stream ended and no more data available
+            let fetcher_start = usize::try_from(self.fetcher.start).unwrap();
+            let buffer_len = self.fetcher.buffer.len();
+            let current_read_position = usize::try_from(self.read_position).unwrap();
+
+            let remaining_in_buffer = if fetcher_start + buffer_len > current_read_position {
+                let fetcher_buf_start = current_read_position - fetcher_start;
+                buffer_len - fetcher_buf_start
+            } else {
+                0
+            };
+
+            // Use the flag we set when we received 0 bytes from the HTTP stream
+
+            if http_stream_ended && remaining_in_buffer == 0 {
+                log::debug!(
+                    "HTTP stream finished and all buffer data consumed - marking stream as finished"
+                );
+                self.finished = true;
+                self.fetcher.ready.send(()).unwrap();
+            } else if remaining_in_buffer > 0 {
+                log::debug!(
+                    "HTTP stream finished but {remaining_in_buffer} bytes remain unread in buffer - NOT marking as finished yet"
+                );
+            }
+        }
+
+        log::debug!(
+            "Read completed: returned {} bytes, new read_position: {}, finished: {}",
+            written,
+            self.read_position,
+            self.finished
+        );
+
         Ok(written)
     }
 }
 
-impl Seek for RemoteByteStream {
+impl<F: HttpFetcher> Seek for RemoteByteStream<F> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let seek_position = match pos {
             std::io::SeekFrom::Start(pos) => pos,
@@ -333,27 +484,42 @@ impl Seek for RemoteByteStream {
         if seek_position >= fetcher_start && seek_position < fetcher_end {
             // Seeking within already received data - just update read position
             log::debug!(
-                "Seeking within received data: pos[{seek_position}] in range[{fetcher_start}..{fetcher_end})"
+                "Seeking within already downloaded data - preserving fetcher (start={fetcher_start}, end={fetcher_end})"
             );
             self.read_position = seek_position;
+            self.finished = false;
         } else {
-            // Seeking outside received data - need new fetcher
-            log::debug!(
-                "Seeking outside received data: pos[{seek_position}] not in range[{fetcher_start}..{fetcher_end})"
-            );
-            self.read_position = seek_position;
-
-            if self.size.is_some_and(|size| seek_position >= size) {
-                log::debug!("Seeking past end of stream. Aborting fetcher.");
-                self.fetcher.abort();
+            // Seeking outside already received data - need new fetcher
+            if seek_position > self.read_position {
+                log::debug!(
+                    "Seeking forward outside downloaded data - creating new fetcher (current={}, target={})",
+                    self.read_position,
+                    seek_position
+                );
             } else {
+                log::debug!(
+                    "Seeking backward - creating new fetcher (current={}, target={})",
+                    self.read_position,
+                    seek_position
+                );
+            }
+
+            self.read_position = seek_position;
+            self.finished = false;
+            self.fetcher.abort();
+
+            // Create a new fetcher to handle the seek
+            if seek_position < self.size.unwrap_or(u64::MAX) {
                 self.fetcher = RemoteByteStreamFetcher::new(
                     self.url.clone(),
                     seek_position,
                     None,
                     true,
                     self.abort.clone(),
+                    self.fetcher.http_fetcher.clone(),
                 );
+            } else {
+                self.fetcher.abort();
             }
         }
 
@@ -682,5 +848,316 @@ mod tests {
         // Fetcher should have been recreated with new start position
         assert_eq!(stream.fetcher.start, 600);
         assert_eq!(stream.fetcher.buffer.len(), 0); // New fetcher starts with empty buffer
+    }
+
+    // ==== REGRESSION TESTS FOR STREAM FINISHING LOGIC ====
+    // These tests prevent the race condition bug where streams would be marked as finished
+    // when HTTP stream ended but there was still data in the buffer to be consumed.
+    // The bug caused tracks to end prematurely (about 0.5 seconds early) in audio playback.
+    // Key scenarios tested:
+    // 1. Stream NOT finished when HTTP ends but buffer has data
+    // 2. Stream finished when HTTP ends and buffer is empty
+    // 3. Multiple reads working correctly when HTTP ends during one
+    // 4. Reading all data even when HTTP ends during the call
+
+    // Test HTTP fetcher that allows controlled data delivery
+    use futures::stream;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct TestHttpFetcher {
+        data_chunks: Arc<Mutex<Vec<Bytes>>>,
+        current_index: Arc<Mutex<usize>>,
+    }
+
+    impl TestHttpFetcher {
+        pub fn new(data_chunks: Vec<Bytes>) -> Self {
+            Self {
+                data_chunks: Arc::new(Mutex::new(data_chunks)),
+                current_index: Arc::new(Mutex::new(0)),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl HttpFetcher for TestHttpFetcher {
+        async fn fetch_range(
+            &self,
+            _url: &str,
+            _start: u64,
+            _end: Option<u64>,
+        ) -> Result<
+            Box<
+                dyn futures::Stream<Item = Result<Bytes, Box<dyn std::error::Error + Send + Sync>>>
+                    + Send
+                    + Unpin,
+            >,
+            Box<dyn std::error::Error + Send + Sync>,
+        > {
+            let data_chunks = self.data_chunks.clone();
+            let current_index = self.current_index.clone();
+
+            let stream = stream::unfold((), move |()| {
+                let data_chunks = data_chunks.clone();
+                let current_index = current_index.clone();
+
+                async move {
+                    let mut index = current_index.lock().unwrap();
+                    let chunks = data_chunks.lock().unwrap();
+
+                    if *index < chunks.len() {
+                        let chunk = chunks[*index].clone();
+                        drop(chunks);
+                        *index += 1;
+                        drop(index);
+                        Some((Ok(chunk), ()))
+                    } else {
+                        None
+                    }
+                }
+            });
+
+            Ok(Box::new(Box::pin(stream)))
+        }
+    }
+
+    /// Test that stream is NOT marked as finished when HTTP stream ends but buffer has data
+    #[tokio::test]
+    async fn test_regression_stream_not_finished_with_buffer_data() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("hello world test data")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(21), // Total size: 21 bytes (length of "hello world test data")
+            true,     // Auto-start fetch
+            true,     // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        // Give time for fetch to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // Read only part of the data (first 10 bytes)
+        let mut buf = [0u8; 10];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 10);
+        assert_eq!(&buf[..bytes_read], b"hello worl");
+
+        // Stream should NOT be finished because there's still data in buffer
+        assert!(
+            !stream.finished,
+            "Stream should not be finished when buffer has data"
+        );
+
+        // Read the remaining data
+        let mut buf2 = [0u8; 15];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 11);
+        assert_eq!(&buf2[..bytes_read2], b"d test data");
+
+        // NOW the stream should be marked as finished
+        assert!(
+            stream.finished,
+            "Stream should be finished after all buffer data is consumed"
+        );
+    }
+
+    /// Test that stream IS marked as finished when HTTP stream ends and buffer is empty
+    #[tokio::test]
+    async fn test_regression_stream_finished_with_empty_buffer() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("hello test")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(10), // Total size: 10 bytes
+            true,     // Auto-start fetch
+            true,     // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        // Give time for fetch to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // Read all the data
+        let mut buf = [0u8; 10];
+        let bytes_read = stream.read(&mut buf).unwrap();
+        assert_eq!(bytes_read, 10);
+        assert_eq!(&buf[..bytes_read], b"hello test");
+
+        // Stream should be finished when all data is consumed
+        // (The real stream will mark as finished when HTTP stream ends and buffer is empty)
+        // This happens after reading all data when the stream is properly sized
+
+        // Try to read again - should get 0 bytes
+        let mut buf2 = [0u8; 10];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 0);
+
+        // After attempting to read from finished stream, it should definitely be finished
+        assert!(
+            stream.finished,
+            "Stream should be finished after reading all data"
+        );
+    }
+
+    /// Test that multiple reads work correctly when HTTP stream ends during one of them
+    #[tokio::test]
+    async fn test_regression_multiple_reads_with_http_end() {
+        let abort_token = CancellationToken::new();
+        let fetcher =
+            TestHttpFetcher::new(vec![Bytes::from("first chunk"), Bytes::from(" second end")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(22), // Total size: 22 bytes ("first chunk second end")
+            true,     // Auto-start fetch
+            true,     // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        // Give time for fetch to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // First read - should get all available data at once (both chunks)
+        let mut buf1 = [0u8; 25];
+        let bytes_read1 = stream.read(&mut buf1).unwrap();
+        assert_eq!(bytes_read1, 22);
+        assert_eq!(&buf1[..bytes_read1], b"first chunk second end");
+        assert!(
+            stream.finished,
+            "Stream should be finished after consuming all data"
+        );
+
+        // Second read - should return 0 bytes
+        let mut buf2 = [0u8; 20];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 0);
+        assert!(stream.finished, "Stream should remain finished");
+    }
+
+    /// Test that read returns all available data even when HTTP stream ends during the call
+    #[tokio::test]
+    async fn test_regression_read_all_data_on_http_end() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![
+            Bytes::from("chunk1"),
+            Bytes::from("chunk2"),
+            Bytes::from("chunk3"),
+        ]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(18), // Total size: 18 bytes ("chunk1chunk2chunk3")
+            true,     // Auto-start fetch
+            true,     // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        // Give time for fetch to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // Read only part of available data
+        let mut buf1 = [0u8; 10];
+        let bytes_read1 = stream.read(&mut buf1).unwrap();
+        assert_eq!(bytes_read1, 10);
+        assert_eq!(&buf1[..bytes_read1], b"chunk1chun");
+
+        // This read should get all remaining data in one call
+        let mut buf2 = [0u8; 20];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 8);
+        assert_eq!(&buf2[..bytes_read2], b"k2chunk3");
+
+        // Stream should be finished since all data was consumed
+        assert!(
+            stream.finished,
+            "Stream should be finished after consuming all buffered data"
+        );
+    }
+
+    /// Test the exact bug scenario: stream finishing logic race condition
+    #[tokio::test]
+    async fn test_regression_stream_finishing_race_condition() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("test data"), Bytes::from("end")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(12), // Total size: 12 bytes
+            true,     // Auto-start fetch
+            true,     // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        // Give time for fetch to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // Read some data but not all
+        let mut buf1 = [0u8; 5];
+        let bytes_read1 = stream.read(&mut buf1).unwrap();
+        assert_eq!(bytes_read1, 5);
+        assert_eq!(&buf1[..bytes_read1], b"test ");
+
+        // This was the critical bug: stream would be marked finished prematurely
+        // even though there was still data in the buffer
+        let mut buf2 = [0u8; 10];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 7);
+        assert_eq!(&buf2[..bytes_read2], b"dataend");
+
+        // Only now should the stream be marked as finished
+        assert!(
+            stream.finished,
+            "Stream should be finished only after all data is consumed"
+        );
+
+        // Verify no more data available
+        let mut buf3 = [0u8; 10];
+        let bytes_read3 = stream.read(&mut buf3).unwrap();
+        assert_eq!(bytes_read3, 0);
+    }
+
+    /// Test that finished stream with remaining buffer data continues to return data
+    #[tokio::test]
+    async fn test_regression_finished_stream_with_buffer_data() {
+        let abort_token = CancellationToken::new();
+        let fetcher = TestHttpFetcher::new(vec![Bytes::from("testdata12")]);
+        let mut stream = RemoteByteStream::new_with_fetcher(
+            "https://example.com/file.mp3".to_string(),
+            Some(10), // Total size: 10 bytes
+            true,     // Auto-start fetch
+            true,     // Seekable
+            abort_token,
+            fetcher,
+        );
+
+        // Give time for fetch to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        // Read only part of the data
+        let mut buf1 = [0u8; 4];
+        let bytes_read1 = stream.read(&mut buf1).unwrap();
+        assert_eq!(bytes_read1, 4);
+        assert_eq!(&buf1[..bytes_read1], b"test");
+
+        // At this point, stream should NOT be finished because there's still buffer data
+        assert!(
+            !stream.finished,
+            "Stream should not be finished with remaining buffer data"
+        );
+
+        // Continue reading
+        let mut buf2 = [0u8; 10];
+        let bytes_read2 = stream.read(&mut buf2).unwrap();
+        assert_eq!(bytes_read2, 6);
+        assert_eq!(&buf2[..bytes_read2], b"data12");
+
+        // Now stream should be finished
+        assert!(
+            stream.finished,
+            "Stream should be finished after consuming all buffer data"
+        );
     }
 }
