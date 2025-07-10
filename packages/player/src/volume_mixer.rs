@@ -9,6 +9,7 @@ where
     S: Sample + FromSample<f32> + IntoSample<f32>,
 {
     let channels = input.spec().channels.count();
+    let frames = input.frames();
 
     for c in 0..channels {
         let src = input.chan_mut(c);
@@ -18,4 +19,8 @@ where
             *x = s.into_sample();
         }
     }
+
+    log::trace!(
+        "Volume mixer: applied volume {volume:.3} to {frames} frames with {channels} channels"
+    );
 }

@@ -932,6 +932,18 @@ impl PlaybackHandler {
     /// * If failed to handle logic in the `before_update_playback`
     #[allow(clippy::unused_async)]
     pub async fn before_update_playback(&mut self) -> Result<(), PlayerError> {
+        self.player.before_update_playback().await?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    /// * If failed to handle logic in the `after_update_playback`
+    #[allow(clippy::unused_async)]
+    pub async fn after_update_playback(&mut self) -> Result<(), PlayerError> {
+        self.player.after_update_playback().await?;
+
         Ok(())
     }
 
@@ -1054,6 +1066,10 @@ impl PlaybackHandler {
         log::debug!("update_playback: updating active playback to {playback:?}");
         self.playback.write().unwrap().replace(playback.clone());
 
+        // Call after_update_playback AFTER the volume has been updated
+        // This ensures the player can sync the correct volume to shared atomics
+        self.after_update_playback().await?;
+
         if !modify_playback {
             return Ok(());
         }
@@ -1161,6 +1177,10 @@ pub trait Player: std::fmt::Debug + Send {
     async fn trigger_seek(&self, seek: f64) -> Result<(), PlayerError>;
 
     async fn before_update_playback(&self) -> Result<(), PlayerError> {
+        Ok(())
+    }
+
+    async fn after_update_playback(&self) -> Result<(), PlayerError> {
         Ok(())
     }
 

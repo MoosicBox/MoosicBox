@@ -5,6 +5,8 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
+use atomic_float::AtomicF64;
+
 use async_trait::async_trait;
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
@@ -18,7 +20,6 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     ApiPlaybackStatus, Playback, PlaybackHandler, PlaybackType, Player, PlayerError, PlayerSource,
     send_playback_event, symphonia::play_media_source_async, track_or_id_to_playable,
-    volume_mixer::mix_volume,
 };
 
 #[derive(Clone)]
@@ -33,6 +34,7 @@ pub struct LocalPlayer {
     pub consumed_samples: Arc<AtomicUsize>,
     pub sample_rate: Arc<AtomicUsize>,
     pub channels: Arc<AtomicUsize>,
+    pub shared_volume: Arc<AtomicF64>, // Shared volume for immediate audio output updates
 }
 
 impl std::fmt::Debug for LocalPlayer {
@@ -44,12 +46,36 @@ impl std::fmt::Debug for LocalPlayer {
             .field("output", &self.output)
             .field("receiver", &self.receiver)
             .field("playback", &self.playback)
+            .field(
+                "shared_volume",
+                &self.shared_volume.load(std::sync::atomic::Ordering::SeqCst),
+            )
             .finish_non_exhaustive()
     }
 }
 
 #[async_trait]
 impl Player for LocalPlayer {
+    async fn before_update_playback(&self) -> Result<(), PlayerError> {
+        Ok(())
+    }
+
+    async fn after_update_playback(&self) -> Result<(), PlayerError> {
+        // Sync current playback volume to shared volume atomic
+        // This ensures audio output gets the correct volume immediately after update
+        if let Some(playback) = self.playback.read().unwrap().as_ref() {
+            let current_volume = playback.volume.load(std::sync::atomic::Ordering::SeqCst);
+            self.shared_volume
+                .store(current_volume, std::sync::atomic::Ordering::SeqCst);
+            log::debug!(
+                "🔊 LocalPlayer {}: synced volume to shared atomic after update: {:.3}",
+                self.id,
+                current_volume
+            );
+        }
+        Ok(())
+    }
+
     async fn before_play_playback(&self, seek: Option<f64>) -> Result<(), PlayerError> {
         let playing = {
             self.playback
@@ -106,12 +132,30 @@ impl Player for LocalPlayer {
         let consumed_samples = self.consumed_samples.clone();
         let sample_rate = self.sample_rate.clone();
         let channels = self.channels.clone();
+        let shared_volume = self.shared_volume.clone(); // Move outside closure
 
         if self.output.is_none() {
             return Err(PlayerError::NoAudioOutputs);
         }
 
         let open_func = self.output.clone().unwrap();
+
+        // Initialize shared volume with the current playback volume
+        let initial_volume = {
+            active_playback
+                .read()
+                .unwrap()
+                .as_ref()
+                .map_or(1.0, |playback| {
+                    playback.volume.load(std::sync::atomic::Ordering::SeqCst)
+                })
+        };
+
+        shared_volume.store(initial_volume, std::sync::atomic::Ordering::SeqCst);
+        log::info!(
+            "LocalPlayer: initialized shared volume to {:.3} (from current playback)",
+            initial_volume
+        );
 
         // Start progress tracking task
         let progress_playback = active_playback.clone();
@@ -270,18 +314,12 @@ impl Player for LocalPlayer {
                         Ok(())
                     }
                 }))
-                .with_filter(Box::new(move |decoded, _packet, _track| {
-                    mix_volume(
-                        decoded,
-                        playback.volume.load(std::sync::atomic::Ordering::SeqCst),
-                    );
-                    Ok(())
-                }))
                 .with_output(Box::new({
                     let consumed_samples = consumed_samples.clone();
                     let sample_rate = sample_rate.clone();
                     let channels = channels.clone();
                     let seek_position = seek.unwrap_or(0.0);
+                    let shared_volume_local = shared_volume.clone();
                     move |spec, _duration| {
                         use moosicbox_audio_output::AudioWrite;
 
@@ -308,6 +346,11 @@ impl Player for LocalPlayer {
                         // Set the consumed samples counter on the audio output
                         output.set_consumed_samples(consumed_samples.clone());
                         log::debug!("Audio output creation: set consumed_samples counter on output");
+
+                        // Pass the shared volume atomic to the audio output
+                        // This allows the CPAL callback to read volume changes immediately
+                        output.set_shared_volume(shared_volume_local.clone());
+                        log::info!("Audio output creation: set shared volume reference");
 
                         Ok(Box::new(output))
                     }
@@ -495,11 +538,16 @@ impl LocalPlayer {
         source: PlayerSource,
         playback_type: Option<PlaybackType>,
     ) -> Result<Self, PlayerError> {
+        let id = moosicbox_task::spawn_blocking("player: local player rng", || {
+            switchy_random::rng().next_u64()
+        })
+        .await?;
+
+        let shared_volume = Arc::new(AtomicF64::new(1.0));
+        log::info!("LocalPlayer {id}: initialized shared volume to 1.0 (full volume)");
+
         Ok(Self {
-            id: moosicbox_task::spawn_blocking("player: local player rng", || {
-                switchy_random::rng().next_u64()
-            })
-            .await?,
+            id,
             playback_type: playback_type.unwrap_or_default(),
             source,
             output: None,
@@ -509,6 +557,7 @@ impl LocalPlayer {
             consumed_samples: Arc::new(AtomicUsize::new(0)),
             sample_rate: Arc::new(AtomicUsize::new(0)),
             channels: Arc::new(AtomicUsize::new(0)),
+            shared_volume,
         })
     }
 

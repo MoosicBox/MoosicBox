@@ -36,6 +36,14 @@ impl AudioWrite for CpalAudioOutput {
     ) {
         self.write.set_consumed_samples(consumed_samples);
     }
+
+    fn set_volume(&mut self, volume: f64) {
+        self.write.set_volume(volume);
+    }
+
+    fn set_shared_volume(&mut self, shared_volume: std::sync::Arc<atomic_float::AtomicF64>) {
+        self.write.set_shared_volume(shared_volume);
+    }
 }
 
 trait AudioOutputSample:
@@ -127,6 +135,7 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     buffering_threshold: usize, // 10 seconds worth of samples
     consumed_samples_shared:
         std::sync::Arc<std::sync::RwLock<std::sync::Arc<std::sync::atomic::AtomicUsize>>>, // Track actual consumption by CPAL
+    volume_shared: std::sync::Arc<std::sync::RwLock<std::sync::Arc<atomic_float::AtomicF64>>>, // For immediate volume changes
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -176,6 +185,11 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         let consumed_samples_shared = std::sync::Arc::new(std::sync::RwLock::new(consumed_samples));
         let consumed_samples_callback = consumed_samples_shared.clone();
 
+        // Create volume atomic for immediate volume changes - wrapped in RwLock so it can be replaced
+        let volume_atomic = std::sync::Arc::new(atomic_float::AtomicF64::new(1.0));
+        let volume_shared = std::sync::Arc::new(std::sync::RwLock::new(volume_atomic));
+        let volume_callback = volume_shared.clone();
+
         let stream = device
             .build_output_stream(
                 &config,
@@ -184,6 +198,30 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                     // output.
                     let written = ring_buf_consumer.read(data).unwrap_or(0);
 
+                    // Apply volume immediately in the CPAL callback for instant effect
+                    // This bypasses the 10-15s ring buffer delay
+                    let volume = volume_callback.read().map_or(1.0, |atomic| {
+                        atomic.load(std::sync::atomic::Ordering::SeqCst)
+                    });
+
+                    // Apply volume to the written samples if volume is not 1.0
+                    if written > 0 && volume <= 0.999 {
+                        log::debug!(
+                            "CPAL: applying volume to written samples - volume={volume:.3}"
+                        );
+                        // Apply proper volume scaling to all samples
+                        for data in data.iter_mut().take(written) {
+                            let original_sample: f32 = (*data).into_sample();
+                            #[allow(clippy::cast_possible_truncation)]
+                            let adjusted_sample = original_sample * volume as f32;
+
+                            // Apply the volume-adjusted sample
+                            *data = <T as symphonia::core::conv::FromSample<f32>>::from_sample(
+                                adjusted_sample,
+                            );
+                        }
+                    }
+
                     // Track actual consumption by CPAL - get the current counter
                     if let Ok(counter) = consumed_samples_callback.read() {
                         let old_value =
@@ -191,8 +229,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                         // Only log the first few times to avoid spam
                         if written > 0 && old_value < 10000 {
                             log::debug!(
-                                "CPAL callback: wrote {} samples, total consumed: {}",
-                                written,
+                                "CPAL callback: wrote {written} samples, total consumed: {}",
                                 old_value + written
                             );
                         }
@@ -230,6 +267,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             buffered_samples: 0,
             buffering_threshold,
             consumed_samples_shared,
+            volume_shared,
         })
     }
 
@@ -343,6 +381,30 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
             );
         } else {
             log::error!("CPAL: failed to acquire write lock for consumed_samples");
+        }
+    }
+
+    fn set_volume(&mut self, volume: f64) {
+        // Set volume on the current volume atomic
+        if let Ok(atomic) = self.volume_shared.read() {
+            atomic.store(volume, std::sync::atomic::Ordering::SeqCst);
+            log::debug!("CPAL impl: volume set to {volume}");
+        } else {
+            log::error!("CPAL impl: failed to acquire read lock for volume");
+        }
+    }
+
+    fn set_shared_volume(&mut self, shared_volume: std::sync::Arc<atomic_float::AtomicF64>) {
+        // Replace the volume atomic with the shared one
+        if let Ok(mut atomic) = self.volume_shared.write() {
+            let old_volume = atomic.load(std::sync::atomic::Ordering::SeqCst);
+            let new_volume = shared_volume.load(std::sync::atomic::Ordering::SeqCst);
+            *atomic = shared_volume;
+            log::info!(
+                "CPAL impl: shared volume reference set - old volume: {old_volume:.3}, new volume: {new_volume:.3}"
+            );
+        } else {
+            log::error!("CPAL impl: failed to acquire write lock for shared volume");
         }
     }
 }

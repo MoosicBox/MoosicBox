@@ -34,6 +34,16 @@ pub struct AudioOutput {
     writer: Box<dyn AudioWrite>,
 }
 
+impl std::fmt::Debug for AudioOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudioOutput")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("spec", &self.spec)
+            .finish_non_exhaustive()
+    }
+}
+
 impl AudioOutput {
     #[must_use]
     pub fn new(id: String, name: String, spec: SignalSpec, writer: Box<dyn AudioWrite>) -> Self {
@@ -103,6 +113,14 @@ impl AudioWrite for AudioOutput {
 
     fn set_consumed_samples(&mut self, consumed_samples: Arc<std::sync::atomic::AtomicUsize>) {
         self.writer.set_consumed_samples(consumed_samples);
+    }
+
+    fn set_volume(&mut self, volume: f64) {
+        self.writer.set_volume(volume);
+    }
+
+    fn set_shared_volume(&mut self, shared_volume: std::sync::Arc<atomic_float::AtomicF64>) {
+        self.writer.set_shared_volume(shared_volume);
     }
 }
 
@@ -232,6 +250,14 @@ pub trait AudioWrite {
     /// Set the consumed samples counter for progress tracking
     /// Default implementation does nothing
     fn set_consumed_samples(&mut self, _consumed_samples: Arc<std::sync::atomic::AtomicUsize>) {}
+
+    /// Set the volume for immediate effect
+    /// Default implementation does nothing
+    fn set_volume(&mut self, _volume: f64) {}
+
+    /// Set a shared volume atomic for immediate volume changes
+    /// Default implementation does nothing
+    fn set_shared_volume(&mut self, _shared_volume: std::sync::Arc<atomic_float::AtomicF64>) {}
 }
 
 impl AudioDecode for Box<dyn AudioWrite> {
