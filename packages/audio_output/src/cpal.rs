@@ -9,7 +9,7 @@ use symphonia::core::audio::{
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
 use symphonia::core::units::Duration;
 
-use crate::{AudioOutputError, AudioOutputFactory, AudioWrite};
+use crate::{AudioOutputError, AudioOutputFactory, AudioWrite, ProgressTracker};
 
 const INITIAL_BUFFER_SECONDS: usize = 10;
 
@@ -54,6 +54,13 @@ impl AudioWrite for CpalAudioOutput {
 
     fn get_output_spec(&self) -> Option<SignalSpec> {
         self.write.get_output_spec()
+    }
+
+    fn set_progress_callback(
+        &mut self,
+        callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
+    ) {
+        self.write.set_progress_callback(callback);
     }
 }
 
@@ -155,6 +162,8 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     completion_condvar: std::sync::Arc<std::sync::Condvar>,
     completion_mutex: std::sync::Arc<std::sync::Mutex<()>>,
     completion_target: std::sync::Arc<std::sync::atomic::AtomicUsize>, // Target sample count for completion
+    // Centralized progress tracking
+    progress_tracker: ProgressTracker,
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -225,6 +234,19 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         let completion_mutex_callback = completion_mutex.clone();
         let completion_target_callback = completion_target.clone();
 
+        // Progress tracking setup using ProgressTracker
+        let progress_tracker = ProgressTracker::new(Some(0.1)); // 0.1 second threshold
+        progress_tracker.set_audio_spec(config.sample_rate.0, u32::try_from(num_channels).unwrap());
+
+        // Get callback references for use in the audio callback
+        let (
+            progress_consumed_samples,
+            progress_sample_rate,
+            progress_channels,
+            progress_callback,
+            progress_last_position,
+        ) = progress_tracker.get_callback_refs();
+
         let stream = device
             .build_output_stream(
                 &config,
@@ -272,6 +294,17 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                                 completion_condvar_callback.notify_all();
                             }
                         }
+
+                        // Progress callback logic using ProgressTracker
+                        ProgressTracker::update_from_callback_refs(
+                            &progress_consumed_samples,
+                            &progress_sample_rate,
+                            &progress_channels,
+                            &progress_callback,
+                            &progress_last_position,
+                            written,
+                            0.1, // threshold
+                        );
                     }
 
                     // Mute any remaining samples.
@@ -338,6 +371,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             completion_condvar,
             completion_mutex,
             completion_target,
+            progress_tracker,
         })
     }
 
@@ -407,26 +441,18 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                         }
                     }
 
+                    if written == samples.len() {
+                        break;
+                    }
                     samples = &samples[written..];
                 }
-                Ok(None) => break,
-                Err(_err) => {
-                    log::warn!("Ring buffer write timeout - attempting non-blocking write");
-                    // Try a non-blocking write as fallback
-                    match self.ring_buf_producer.write(samples) {
-                        Ok(written) => {
-                            if written > 0 {
-                                // Track total samples written to ring buffer
-                                self.total_samples_written.fetch_add(written, std::sync::atomic::Ordering::SeqCst);
-                                log::debug!("Non-blocking write succeeded, wrote {written} samples");
-                                samples = &samples[written..];
-                            } else {
-                                log::warn!("Ring buffer full - audio may be truncated");
-                                break;
-                            }
-                        }
-                        Err(_) => return Err(AudioOutputError::Interrupt),
-                    }
+                Ok(None) => {
+                    // Buffer is full, wait a bit and try again
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(err) => {
+                    log::error!("Ring buffer write error: {err}");
+                    return Err(AudioOutputError::StreamClosed);
                 }
             }
         }
@@ -461,6 +487,9 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
             counter.store(0, std::sync::atomic::Ordering::SeqCst);
         }
 
+        // Reset progress tracker for next track
+        self.progress_tracker.reset();
+
         Ok(())
     }
 
@@ -474,16 +503,19 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
     ) {
         let current_value = consumed_samples.load(std::sync::atomic::Ordering::SeqCst);
         log::debug!("CPAL: set_consumed_samples called with value: {current_value}");
+
         // Replace the existing consumed_samples counter with the new one
         if let Ok(mut counter) = self.consumed_samples_shared.write() {
             *counter = consumed_samples;
-            // DON'T reset the counter - preserve whatever value was already in it
             log::debug!(
                 "CPAL: consumed_samples counter replaced, preserving value: {current_value}"
             );
         } else {
             log::error!("CPAL: failed to acquire write lock for consumed_samples");
         }
+
+        // Also update the progress tracker with the initial value
+        self.progress_tracker.set_consumed_samples(current_value);
     }
 
     fn set_volume(&mut self, volume: f64) {
@@ -513,19 +545,19 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
     fn get_output_spec(&self) -> Option<symphonia::core::audio::SignalSpec> {
         Some(self.get_output_audio_spec())
     }
+
+    fn set_progress_callback(
+        &mut self,
+        callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
+    ) {
+        self.progress_tracker.set_callback(callback);
+    }
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
     /// Get the actual playback position in seconds based on consumed samples
     pub fn get_playback_position(&self) -> f64 {
-        #[allow(clippy::cast_precision_loss)]
-        self.consumed_samples_shared.read().map_or(0.0, |counter| {
-            let consumed_samples = counter.load(std::sync::atomic::Ordering::SeqCst);
-            // Use the actual output sample rate for accurate progress calculation
-            let output_rate = self.get_output_sample_rate();
-            let output_channels = self.get_output_channels();
-            consumed_samples as f64 / (f64::from(output_rate) * f64::from(output_channels))
-        })
+        self.progress_tracker.get_position().unwrap_or(0.0)
     }
 
     /// Get the actual output sample rate (not the input sample rate)

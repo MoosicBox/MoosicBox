@@ -18,6 +18,9 @@ pub use symphonia::core::audio::{Channels, SignalSpec};
 pub use symphonia::core::conv::{ConvertibleSample, IntoSample};
 pub use symphonia::core::units::Duration;
 
+// Export ProgressTracker for use by AudioOutput implementations
+pub use progress_tracker::ProgressTracker;
+
 pub mod encoder;
 
 #[cfg(feature = "api")]
@@ -29,6 +32,8 @@ pub mod pulseaudio;
 
 #[cfg(feature = "cpal")]
 pub mod cpal;
+
+pub mod progress_tracker;
 
 pub struct AudioOutput {
     pub id: String,
@@ -129,6 +134,13 @@ impl AudioWrite for AudioOutput {
 
     fn get_output_spec(&self) -> Option<symphonia::core::audio::SignalSpec> {
         self.writer.get_output_spec()
+    }
+
+    fn set_progress_callback(
+        &mut self,
+        callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
+    ) {
+        self.writer.set_progress_callback(callback);
     }
 }
 
@@ -275,6 +287,15 @@ pub trait AudioWrite {
     /// Returns None if not supported by the audio output implementation
     fn get_output_spec(&self) -> Option<SignalSpec> {
         None
+    }
+
+    /// Set a progress callback that will be called when playback position changes significantly
+    /// The callback receives the current position in seconds
+    /// Default implementation does nothing
+    fn set_progress_callback(
+        &mut self,
+        _callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
+    ) {
     }
 }
 

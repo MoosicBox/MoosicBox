@@ -15,7 +15,7 @@ use symphonia::core::units::Duration;
 use thiserror::Error;
 
 use crate::pulseaudio::common::map_channels_to_pa_channelmap;
-use crate::{AudioOutputError, AudioOutputFactory, AudioWrite};
+use crate::{AudioOutputError, AudioOutputFactory, AudioWrite, ProgressTracker};
 
 static SAMPLE_RATE: Option<u32> = option_env_u32!("PULSEAUDIO_RESAMPLE_RATE");
 
@@ -26,6 +26,7 @@ pub struct PulseAudioOutput {
     sample_buf: Option<RawSampleBuffer<f32>>,
     spec: SignalSpec,
     bytes: AtomicUsize,
+    progress_tracker: ProgressTracker,
 }
 
 impl PulseAudioOutput {
@@ -149,6 +150,11 @@ impl PulseAudioOutput {
             sample_buf: None,
             spec,
             bytes: AtomicUsize::new(0),
+            progress_tracker: {
+                let tracker = ProgressTracker::new(Some(0.1));
+                tracker.set_audio_spec(spec.rate, u32::try_from(spec.channels.count()).unwrap());
+                tracker
+            },
         })
     }
 
@@ -401,6 +407,14 @@ impl AudioWrite for PulseAudioOutput {
             "Successfully wrote to pulseaudio (total {total_bytes} bytes). Took {took_ms}ms"
         );
 
+        // Update progress tracker with consumed samples
+        // Calculate samples from bytes written
+        let bytes_per_sample = std::mem::size_of::<f32>();
+        let channels = self.spec.channels.count();
+        let samples_written = bytes_written / (bytes_per_sample * channels);
+        self.progress_tracker
+            .update_consumed_samples(samples_written);
+
         if took_ms >= 500 {
             log::error!("Detected audio interrupt");
             return Err(AudioOutputError::Interrupt);
@@ -410,10 +424,51 @@ impl AudioWrite for PulseAudioOutput {
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
-        drain(
+        let result = drain(
             &mut self.mainloop.borrow_mut(),
             &mut self.stream.borrow_mut(),
-        )
+        );
+
+        // Reset progress tracker for next track
+        self.progress_tracker.reset();
+
+        result
+    }
+
+    fn get_playback_position(&self) -> Option<f64> {
+        self.progress_tracker.get_position()
+    }
+
+    fn set_consumed_samples(
+        &mut self,
+        consumed_samples: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        let current_value = consumed_samples.load(std::sync::atomic::Ordering::SeqCst);
+        log::debug!("PulseAudio: set_consumed_samples called with value: {current_value}");
+
+        // Update the progress tracker with the initial value
+        self.progress_tracker.set_consumed_samples(current_value);
+    }
+
+    fn set_volume(&mut self, _volume: f64) {
+        // PulseAudio volume control could be implemented here
+        log::debug!("PulseAudio: set_volume called but not implemented");
+    }
+
+    fn set_shared_volume(&mut self, _shared_volume: std::sync::Arc<atomic_float::AtomicF64>) {
+        // PulseAudio shared volume could be implemented here
+        log::debug!("PulseAudio: set_shared_volume called but not implemented");
+    }
+
+    fn get_output_spec(&self) -> Option<crate::SignalSpec> {
+        Some(self.spec)
+    }
+
+    fn set_progress_callback(
+        &mut self,
+        callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
+    ) {
+        self.progress_tracker.set_callback(callback);
     }
 }
 
