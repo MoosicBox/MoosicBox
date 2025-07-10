@@ -1741,7 +1741,7 @@ dependencies = [
  "anyhow",
  "bytesize",
  "cargo_metadata 0.20.0",
- "clap 4.5.40",
+ "clap 4.5.41",
  "glob",
  "log 0.4.27",
  "pretty_env_logger",
@@ -2336,19 +2336,19 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.40"
+version = "4.5.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40b6887a1d8685cebccf115538db5c0efe625ccac9696ad45c409d96566e910f"
+checksum = "be92d32e80243a54711e5d7ce823c35c41c9d929dc4ab58e1276f625841aadf9"
 dependencies = [
  "clap_builder",
- "clap_derive 4.5.40",
+ "clap_derive 4.5.41",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.5.40"
+version = "4.5.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0c66c08ce9f0c698cbce5c0279d0bb6ac936d8674174fe48f736533b964f59e"
+checksum = "707eab41e9622f9139419d573eca0900137718000c517d47da73045f54331c3d"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2371,9 +2371,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.40"
+version = "4.5.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2c7947ae4cc3d851207c1adb5b5e260ff0cca11446b1d6d1423788e442257ce"
+checksum = "ef4f52386a59ca4c860f7393bcf8abd8dfd91ecccc0f774635ff68e92eeef491"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -2409,7 +2409,7 @@ dependencies = [
 name = "clippier"
 version = "0.1.0"
 dependencies = [
- "clap 4.5.40",
+ "clap 4.5.41",
  "clippier_test_utilities",
  "git2",
  "insta",
@@ -5263,7 +5263,7 @@ name = "hyperchad_app"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "clap 4.5.40",
+ "clap 4.5.41",
  "flume",
  "hyperchad_actions",
  "hyperchad_renderer",
@@ -7152,7 +7152,7 @@ dependencies = [
 name = "moosicbox_aconverter"
 version = "0.1.1"
 dependencies = [
- "clap 4.5.40",
+ "clap 4.5.41",
  "futures",
  "log 0.4.27",
  "moosicbox_assert",
@@ -7244,7 +7244,7 @@ dependencies = [
 name = "moosicbox_app_create_config"
 version = "0.1.1"
 dependencies = [
- "clap 4.5.40",
+ "clap 4.5.41",
  "log 0.4.27",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -7711,7 +7711,7 @@ name = "moosicbox_image"
 version = "0.1.1"
 dependencies = [
  "bytes",
- "clap 4.5.40",
+ "clap 4.5.41",
  "image",
  "libvips",
  "log 0.4.27",
@@ -13735,7 +13735,7 @@ dependencies = [
 name = "switchy_async_cargo"
 version = "0.1.3"
 dependencies = [
- "clap 4.5.40",
+ "clap 4.5.41",
  "log 0.4.27",
  "pretty_env_logger",
  "syn 2.0.104",
@@ -17420,9 +17420,9 @@ dependencies = [
 
 [[package]]
 name = "xml-rs"
-version = "0.8.26"
+version = "0.8.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a62ce76d9b56901b19a74f19431b0d8b3bc7ca4ad685a746dfd78ca8f4fc6bda"
+checksum = "6fd8403733700263c6eb89f192880191f1b83e332f7a20371ddcf421c4a337c7"
 
 [[package]]
 name = "xmlparser"
