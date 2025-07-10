@@ -11,6 +11,8 @@ use symphonia::core::units::Duration;
 
 use crate::{AudioOutputError, AudioOutputFactory, AudioWrite};
 
+const INITIAL_BUFFER_SECONDS: usize = 10;
+
 pub struct CpalAudioOutput {
     #[allow(unused)]
     device: cpal::Device,
@@ -141,7 +143,7 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     stream: cpal::Stream,
     initial_buffering: bool,
     buffered_samples: usize,
-    buffering_threshold: usize, // 10 seconds worth of samples
+    buffering_threshold: usize,
     consumed_samples_shared:
         std::sync::Arc<std::sync::RwLock<std::sync::Arc<std::sync::atomic::AtomicUsize>>>, // Track actual consumption by CPAL
     volume_shared: std::sync::Arc<std::sync::RwLock<std::sync::Arc<atomic_float::AtomicF64>>>, // For immediate volume changes
@@ -285,7 +287,8 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             })?;
 
         // Calculate buffering threshold for 10 seconds of audio (REQUIRED to prevent start truncation)
-        let buffering_threshold = 10 * config.sample_rate.0 as usize * num_channels;
+        let buffering_threshold =
+            INITIAL_BUFFER_SECONDS * config.sample_rate.0 as usize * num_channels;
 
         // DON'T start the stream yet - wait until we have 10 seconds buffered
         log::debug!(
