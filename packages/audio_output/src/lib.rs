@@ -96,6 +96,14 @@ impl AudioWrite for AudioOutput {
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         self.writer.flush()
     }
+
+    fn get_playback_position(&self) -> Option<f64> {
+        self.writer.get_playback_position()
+    }
+
+    fn set_consumed_samples(&mut self, consumed_samples: Arc<std::sync::atomic::AtomicUsize>) {
+        self.writer.set_consumed_samples(consumed_samples);
+    }
 }
 
 impl AudioDecode for AudioOutput {
@@ -214,6 +222,16 @@ pub trait AudioWrite {
     ///
     /// * If fails to flush the `AudioWrite`
     fn flush(&mut self) -> Result<(), AudioOutputError>;
+
+    /// Get the actual playback position in seconds based on consumed samples
+    /// Returns None if not supported by the audio output implementation
+    fn get_playback_position(&self) -> Option<f64> {
+        None
+    }
+
+    /// Set the consumed samples counter for progress tracking
+    /// Default implementation does nothing
+    fn set_consumed_samples(&mut self, _consumed_samples: Arc<std::sync::atomic::AtomicUsize>) {}
 }
 
 impl AudioDecode for Box<dyn AudioWrite> {

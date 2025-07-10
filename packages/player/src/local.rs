@@ -1,6 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::sync::{Arc, Mutex, RwLock, atomic::AtomicBool};
+use std::sync::{
+    Arc, Mutex, RwLock,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+};
 
 use async_trait::async_trait;
 use flume::Receiver;
@@ -15,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     ApiPlaybackStatus, Playback, PlaybackHandler, PlaybackType, Player, PlayerError, PlayerSource,
     send_playback_event, symphonia::play_media_source_async, track_or_id_to_playable,
-    trigger_playback_event, volume_mixer::mix_volume,
+    volume_mixer::mix_volume,
 };
 
 #[derive(Clone)]
@@ -27,6 +30,9 @@ pub struct LocalPlayer {
     pub receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
     pub playback: Arc<RwLock<Option<Playback>>>,
     pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
+    pub consumed_samples: Arc<AtomicUsize>,
+    pub sample_rate: Arc<AtomicUsize>,
+    pub channels: Arc<AtomicUsize>,
 }
 
 impl std::fmt::Debug for LocalPlayer {
@@ -97,6 +103,9 @@ impl Player for LocalPlayer {
 
         let active_playback = self.playback.clone();
         let sent_playback_start_event = AtomicBool::new(false);
+        let consumed_samples = self.consumed_samples.clone();
+        let sample_rate = self.sample_rate.clone();
+        let channels = self.channels.clone();
 
         if self.output.is_none() {
             return Err(PlayerError::NoAudioOutputs);
@@ -104,52 +113,158 @@ impl Player for LocalPlayer {
 
         let open_func = self.output.clone().unwrap();
 
+        // Start progress tracking task
+        let progress_playback = active_playback.clone();
+        let progress_consumed = consumed_samples.clone();
+        let progress_sample_rate = sample_rate.clone();
+        let progress_channels = channels.clone();
+        let progress_abort = playback.abort.clone();
+        let initial_position = seek.unwrap_or(0.0);
+
+        moosicbox_task::spawn("player: progress_tracker", async move {
+            let mut last_position = initial_position;
+
+            log::debug!(
+                "Progress tracking task started with initial_position={initial_position:.2}s"
+            );
+
+            // Wait for audio output to be available (sample rate > 0)
+            let mut wait_iterations = 0;
+            loop {
+                if progress_abort.is_cancelled() {
+                    log::debug!("Progress tracking task: abort requested during initialization");
+                    return;
+                }
+
+                let sample_rate_val = progress_sample_rate.load(Ordering::SeqCst);
+                log::debug!(
+                    "Progress tracking task: waiting for initialization, sample_rate={sample_rate_val}, iteration={wait_iterations}"
+                );
+
+                if sample_rate_val > 0 {
+                    log::debug!(
+                        "Progress tracking task: initialization complete, sample_rate={sample_rate_val}"
+                    );
+                    break;
+                }
+
+                wait_iterations += 1;
+                if wait_iterations > 100 {
+                    log::warn!(
+                        "Progress tracking task: timeout waiting for initialization after 10 seconds"
+                    );
+                    return;
+                }
+
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+
+            log::debug!("Progress tracking task: starting main loop");
+
+            // Track progress while playback is active
+            let mut first_calculation = true;
+            while !progress_abort.is_cancelled() {
+                let consumed = progress_consumed.load(Ordering::SeqCst);
+                let sample_rate_val = progress_sample_rate.load(Ordering::SeqCst);
+                let channels_val = progress_channels.load(Ordering::SeqCst);
+
+                if sample_rate_val > 0 && channels_val > 0 {
+                    #[allow(clippy::cast_precision_loss)]
+                    let position = consumed as f64 / (sample_rate_val as f64 * channels_val as f64);
+
+                    // Debug logging
+                    log::debug!(
+                        "Progress tracking: consumed={consumed}, sample_rate={sample_rate_val}, channels={channels_val}, position={position:.2}s, last_position={last_position:.2}s"
+                    );
+
+                    if first_calculation {
+                        log::debug!(
+                            "Progress tracking task: first position calculation - position={position:.2}s, last_position={last_position:.2}s"
+                        );
+                        first_calculation = false;
+                    }
+
+                    // Only update if position has changed significantly (avoid spam)
+                    if (position - last_position).abs() > 0.01 {
+                        last_position = position;
+
+                        let old = {
+                            let mut binding = progress_playback.write().unwrap();
+                            if let Some(playback) = binding.as_mut() {
+                                let old = playback.clone();
+                                playback.progress = position;
+                                Some(old)
+                            } else {
+                                None
+                            }
+                        };
+
+                        // Trigger progress event
+                        if let Some(old) = old {
+                            log::debug!(
+                                "Progress tracking: triggering progress event with position={position:.2}s"
+                            );
+                            if let Some(playback_target) = old.playback_target.clone() {
+                                let update = UpdateSession {
+                                    session_id: old.session_id,
+                                    profile: old.profile.clone(),
+                                    playback_target,
+                                    play: None,
+                                    stop: None,
+                                    name: None,
+                                    active: None,
+                                    playing: None,
+                                    position: None,
+                                    seek: Some(position),
+                                    volume: None,
+                                    playlist: None,
+                                    quality: None,
+                                };
+                                send_playback_event(&update, &old);
+                            }
+                        }
+                    }
+                }
+
+                // Poll every 500ms for smooth progress updates
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+        });
+
         let get_handler = move || {
             #[allow(unused_mut)]
             let mut audio_decode_handler = AudioDecodeHandler::new()
                 .with_filter(Box::new({
                     let active_playback = active_playback.clone();
-                    move |_decoded, packet, track| {
-                        if let Some(tb) = track.codec_params.time_base {
-                            let ts = packet.ts();
-                            let t = tb.calc_time(ts);
-                            let secs = f64::from(u32::try_from(t.seconds).unwrap()) + t.frac;
+                    let initial_seek_position = seek.unwrap_or(0.0);
+                    move |_decoded, _packet, _track| {
+                        // Just send the initial playback start event, don't track progress here
+                        if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst) {
+                            let binding = active_playback.read().unwrap();
+                            if let Some(playback) = binding.as_ref() {
+                                if let Some(playback_target) = playback.playback_target.clone() {
+                                    sent_playback_start_event
+                                        .store(true, std::sync::atomic::Ordering::SeqCst);
 
-                            let mut binding = active_playback.write().unwrap();
-                            if let Some(playback) = binding.as_mut() {
-                                if !sent_playback_start_event
-                                    .load(std::sync::atomic::Ordering::SeqCst)
-                                {
-                                    if let Some(playback_target) = playback.playback_target.clone() {
-                                        sent_playback_start_event
-                                            .store(true, std::sync::atomic::Ordering::SeqCst);
+                                    log::debug!("trigger_play: Sending initial playback start event with seek={initial_seek_position:.2}s");
 
-                                        log::debug!(
-                                            "trigger_play: Sending initial progress event seek={secs}"
-                                        );
-
-                                        let update = UpdateSession {
-                                            session_id: playback.session_id,
-                                            profile: playback.profile.clone(),
-                                            playback_target,
-                                            play: None,
-                                            stop: None,
-                                            name: None,
-                                            active: None,
-                                            playing: Some(true),
-                                            position: None,
-                                            seek: Some(secs),
-                                            volume: None,
-                                            playlist: None,
-                                            quality: None,
-                                        };
-                                        send_playback_event(&update, playback);
-                                    }
+                                    let update = UpdateSession {
+                                        session_id: playback.session_id,
+                                        profile: playback.profile.clone(),
+                                        playback_target,
+                                        play: None,
+                                        stop: None,
+                                        name: None,
+                                        active: None,
+                                        playing: Some(true),
+                                        position: None,
+                                        seek: Some(initial_seek_position),
+                                        volume: None,
+                                        playlist: None,
+                                        quality: None,
+                                    };
+                                    send_playback_event(&update, playback);
                                 }
-
-                                let old = playback.clone();
-                                playback.progress = secs;
-                                trigger_playback_event(playback, &old);
                             }
                         }
                         Ok(())
@@ -162,12 +277,40 @@ impl Player for LocalPlayer {
                     );
                     Ok(())
                 }))
-                .with_output(Box::new(move |_spec, _duration| {
-                    let output: AudioOutput = (open_func.lock().unwrap())
-                        .try_into_output()
-                        .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
+                .with_output(Box::new({
+                    let consumed_samples = consumed_samples.clone();
+                    let sample_rate = sample_rate.clone();
+                    let channels = channels.clone();
+                    let seek_position = seek.unwrap_or(0.0);
+                    move |spec, _duration| {
+                        use moosicbox_audio_output::AudioWrite;
 
-                    Ok(Box::new(output))
+                        let mut output: AudioOutput = (open_func.lock().unwrap())
+                            .try_into_output()
+                            .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
+
+                        // Store audio format info for progress tracking
+                        log::debug!("Audio output creation: setting sample_rate={}, channels={}",
+                            spec.rate, spec.channels.count());
+                        sample_rate.store(spec.rate as usize, Ordering::SeqCst);
+                        channels.store(spec.channels.count(), Ordering::SeqCst);
+
+                        // Initialize consumed samples based on seek position
+                        #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                        let initial_consumed_samples = if seek_position > 0.0 {
+                            (seek_position * f64::from(spec.rate) * spec.channels.count() as f64) as usize
+                        } else {
+                            0
+                        };
+                        consumed_samples.store(initial_consumed_samples, Ordering::SeqCst);
+                        log::debug!("Audio output creation: initialized consumed_samples counter to {initial_consumed_samples} (seek_position={seek_position:.2}s)");
+
+                        // Set the consumed samples counter on the audio output
+                        output.set_consumed_samples(consumed_samples.clone());
+                        log::debug!("Audio output creation: set consumed_samples counter on output");
+
+                        Ok(Box::new(output))
+                    }
                 }))
                 .with_cancellation_token(playback.abort);
 
@@ -235,6 +378,11 @@ impl Player for LocalPlayer {
             }
         }
 
+        // Clear the audio info to stop progress tracking
+        self.sample_rate.store(0, Ordering::SeqCst);
+        self.channels.store(0, Ordering::SeqCst);
+        self.consumed_samples.store(0, Ordering::SeqCst);
+
         self.playback.write().unwrap().as_mut().unwrap().abort = CancellationToken::new();
 
         Ok(())
@@ -264,20 +412,37 @@ impl Player for LocalPlayer {
             log::trace!("Playback successfully paused");
         }
 
+        // Don't clear audio info on pause - keep the progress tracking alive at the paused position
+        // The progress tracking task will continue to show the current position
+
         self.playback.write().unwrap().as_mut().unwrap().abort = CancellationToken::new();
 
         Ok(())
     }
 
     async fn trigger_resume(&self) -> Result<(), PlayerError> {
+        // Get the current actual playback position from our progress tracking
         let progress = {
-            self.playback
-                .read()
-                .unwrap()
-                .as_ref()
-                .ok_or(PlayerError::NoPlayersPlaying)?
-                .progress
+            let consumed_samples = self.consumed_samples.load(Ordering::SeqCst);
+            let sample_rate = self.sample_rate.load(Ordering::SeqCst);
+            let channels = self.channels.load(Ordering::SeqCst);
+
+            #[allow(clippy::cast_precision_loss)]
+            if sample_rate > 0 && channels > 0 {
+                // Calculate actual position from consumed samples
+                consumed_samples as f64 / (sample_rate * channels) as f64
+            } else {
+                // Fallback to stored progress if no audio info
+                self.playback
+                    .read()
+                    .unwrap()
+                    .as_ref()
+                    .ok_or(PlayerError::NoPlayersPlaying)?
+                    .progress
+            }
         };
+
+        log::info!("Resuming playback from position: {:.2}s", progress);
 
         let mut playback_handler = { self.playback_handler.read().unwrap().clone().unwrap() };
         playback_handler.play_playback(Some(progress), None).await?;
@@ -341,6 +506,9 @@ impl LocalPlayer {
             playback: Arc::new(RwLock::new(None)),
             receiver: Arc::new(tokio::sync::RwLock::new(None)),
             playback_handler: Arc::new(RwLock::new(None)),
+            consumed_samples: Arc::new(AtomicUsize::new(0)),
+            sample_rate: Arc::new(AtomicUsize::new(0)),
+            channels: Arc::new(AtomicUsize::new(0)),
         })
     }
 

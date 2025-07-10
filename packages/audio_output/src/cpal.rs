@@ -25,6 +25,17 @@ impl AudioWrite for CpalAudioOutput {
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         self.write.flush()
     }
+
+    fn get_playback_position(&self) -> Option<f64> {
+        self.write.get_playback_position()
+    }
+
+    fn set_consumed_samples(
+        &mut self,
+        consumed_samples: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        self.write.set_consumed_samples(consumed_samples);
+    }
 }
 
 trait AudioOutputSample:
@@ -111,6 +122,11 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     ring_buf_producer: rb::Producer<T>,
     sample_buf: Option<SampleBuffer<T>>,
     stream: cpal::Stream,
+    initial_buffering: bool,
+    buffered_samples: usize,
+    buffering_threshold: usize, // 10 seconds worth of samples
+    consumed_samples_shared:
+        std::sync::Arc<std::sync::RwLock<std::sync::Arc<std::sync::atomic::AtomicUsize>>>, // Track actual consumption by CPAL
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -143,11 +159,22 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             },
         };
 
-        // Create a ring buffer with a capacity for up-to 200ms of audio.
-        let ring_len = ((200 * config.sample_rate.0 as usize) / 1000) * num_channels;
+        // Create a ring buffer with a capacity for up-to 15 seconds of audio (need more than 10s for buffering).
+        let ring_len = (15 * config.sample_rate.0 as usize) * num_channels;
+        log::debug!(
+            "Creating ring buffer with {} samples capacity (15 seconds at {}Hz, {} channels)",
+            ring_len,
+            config.sample_rate.0,
+            num_channels
+        );
 
         let ring_buf = SpscRb::new(ring_len);
         let (ring_buf_producer, ring_buf_consumer) = (ring_buf.producer(), ring_buf.consumer());
+
+        // Create atomic counter for tracking consumed samples - wrapped in RwLock so it can be replaced
+        let consumed_samples = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let consumed_samples_shared = std::sync::Arc::new(std::sync::RwLock::new(consumed_samples));
+        let consumed_samples_callback = consumed_samples_shared.clone();
 
         let stream = device
             .build_output_stream(
@@ -156,6 +183,20 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                     // Write out as many samples as possible from the ring buffer to the audio
                     // output.
                     let written = ring_buf_consumer.read(data).unwrap_or(0);
+
+                    // Track actual consumption by CPAL - get the current counter
+                    if let Ok(counter) = consumed_samples_callback.read() {
+                        let old_value =
+                            counter.fetch_add(written, std::sync::atomic::Ordering::SeqCst);
+                        // Only log the first few times to avoid spam
+                        if written > 0 && old_value < 10000 {
+                            log::debug!(
+                                "CPAL callback: wrote {} samples, total consumed: {}",
+                                written,
+                                old_value + written
+                            );
+                        }
+                    }
 
                     // Mute any remaining samples.
                     data[written..].iter_mut().for_each(|s| *s = T::MID);
@@ -169,18 +210,26 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                 AudioOutputError::OpenStream
             })?;
 
-        // Start the output stream.
-        if let Err(err) = stream.play() {
-            log::error!("Audio output stream play error: {err}");
+        // Calculate buffering threshold for 10 seconds of audio
+        let buffering_threshold = 10 * config.sample_rate.0 as usize * num_channels;
 
-            return Err(AudioOutputError::PlayStream);
-        }
+        // DON'T start the stream yet - wait until we have 10 seconds buffered
+        log::debug!(
+            "CPAL stream created but not started - buffering threshold: {} samples (10 seconds at {}Hz, {} channels)",
+            buffering_threshold,
+            config.sample_rate.0,
+            num_channels
+        );
 
         Ok(Self {
             spec,
             ring_buf_producer,
             stream,
             sample_buf: None,
+            initial_buffering: true,
+            buffered_samples: 0,
+            buffering_threshold,
+            consumed_samples_shared,
         })
     }
 
@@ -218,6 +267,36 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                 .write_blocking_timeout(samples, std::time::Duration::from_millis(5000))
             {
                 Ok(Some(written)) => {
+                    // Track buffered samples during initial buffering
+                    if self.initial_buffering {
+                        self.buffered_samples += written;
+                        #[allow(clippy::cast_precision_loss)]
+                        let buffered_seconds = self.buffered_samples as f32
+                            / (self.spec.rate as f32 * self.spec.channels.count() as f32);
+
+                        // Log progress every 2 seconds
+                        if self.buffered_samples
+                            % (2 * self.spec.rate as usize * self.spec.channels.count())
+                            == 0
+                        {
+                            log::debug!(
+                                "Buffering progress: {buffered_seconds:.2} seconds buffered"
+                            );
+                        }
+
+                        // Start stream once we have 10 seconds buffered
+                        if self.buffered_samples >= self.buffering_threshold {
+                            log::debug!(
+                                "Initial buffering complete: {buffered_seconds:.2} seconds buffered, starting stream now"
+                            );
+                            if let Err(err) = self.stream.play() {
+                                log::error!("Audio output stream play error: {err}");
+                                return Err(AudioOutputError::PlayStream);
+                            }
+                            self.initial_buffering = false;
+                        }
+                    }
+
                     samples = &samples[written..];
                 }
                 Ok(None) => break,
@@ -235,7 +314,48 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
         // Flush is best-effort, ignore the returned result.
         let _ = self.stream.pause();
 
+        // Reset buffering state for next track
+        self.initial_buffering = true;
+        self.buffered_samples = 0;
+        if let Ok(counter) = self.consumed_samples_shared.read() {
+            counter.store(0, std::sync::atomic::Ordering::SeqCst);
+        }
+
         Ok(())
+    }
+
+    fn get_playback_position(&self) -> Option<f64> {
+        Some(self.get_playback_position())
+    }
+
+    fn set_consumed_samples(
+        &mut self,
+        consumed_samples: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        let current_value = consumed_samples.load(std::sync::atomic::Ordering::SeqCst);
+        log::debug!("CPAL: set_consumed_samples called with value: {current_value}");
+        // Replace the existing consumed_samples counter with the new one
+        if let Ok(mut counter) = self.consumed_samples_shared.write() {
+            *counter = consumed_samples;
+            // DON'T reset the counter - preserve whatever value was already in it
+            log::debug!(
+                "CPAL: consumed_samples counter replaced, preserving value: {current_value}"
+            );
+        } else {
+            log::error!("CPAL: failed to acquire write lock for consumed_samples");
+        }
+    }
+}
+
+impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
+    /// Get the actual playback position in seconds based on consumed samples
+    pub fn get_playback_position(&self) -> f64 {
+        #[allow(clippy::cast_precision_loss)]
+        self.consumed_samples_shared.read().map_or(0.0, |counter| {
+            let consumed_samples = counter.load(std::sync::atomic::Ordering::SeqCst);
+            consumed_samples as f64
+                / (f64::from(self.spec.rate) * self.spec.channels.count() as f64)
+        })
     }
 }
 
