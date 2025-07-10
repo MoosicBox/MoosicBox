@@ -52,6 +52,14 @@ pub trait AudioDecode {
         packet: &Packet,
         track: &Track,
     ) -> Result<(), AudioDecodeError>;
+
+    /// # Errors
+    ///
+    /// * If the audio failed to flush
+    fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        // Default implementation does nothing
+        Ok(())
+    }
 }
 
 type InnerType = Box<dyn AudioDecode>;
@@ -138,7 +146,21 @@ impl AudioDecodeHandler {
     /// # Errors
     ///
     /// * If the audio failed to write
-    pub const fn flush(&mut self) -> Result<(), AudioDecodeError> {
+    pub fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        let outputs_count = self.outputs.len();
+        log::debug!("🔊 AudioDecodeHandler::flush() called - flushing {outputs_count} outputs");
+
+        // Flush all audio outputs to ensure complete playback
+        for (i, output) in self.outputs.iter_mut().enumerate() {
+            log::debug!(
+                "🔊 AudioDecodeHandler: flushing output {}/{}",
+                i + 1,
+                outputs_count
+            );
+            output.flush()?;
+        }
+
+        log::debug!("🔊 AudioDecodeHandler::flush() completed");
         Ok(())
     }
 
@@ -427,17 +449,17 @@ pub fn decode(
     match &result {
         Ok(code) => {
             if *code == 2 {
-                log::debug!("Aborted");
+                log::debug!("🔊 AUDIO DECODE ABORTED - not flushing");
             } else {
-                log::debug!("Attempting to get audio_output to flush");
+                log::debug!("🔊 AUDIO DECODE COMPLETED - attempting to flush audio outputs");
                 audio_output_handler.flush()?;
             }
         }
         Err(DecodeError::AudioDecode(AudioDecodeError::Interrupt)) => {
-            log::info!("Audio interrupt detected. Not flushing");
+            log::debug!("🔊 AUDIO INTERRUPT DETECTED - not flushing");
         }
         Err(err) => {
-            log::error!("Encountered error {err:?}");
+            log::error!("🔊 AUDIO DECODE ERROR - not flushing: {err:?}");
         }
     }
 

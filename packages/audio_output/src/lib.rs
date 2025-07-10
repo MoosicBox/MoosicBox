@@ -7,12 +7,16 @@ use std::sync::{Arc, LazyLock};
 use moosicbox_audio_decoder::{AudioDecode, AudioDecodeError};
 use moosicbox_resampler::{Resampler, to_audio_buffer};
 use symphonia::core::audio::{AudioBuffer, Signal as _};
-pub use symphonia::core::audio::{Channels, SignalSpec};
-use symphonia::core::conv::{FromSample, IntoSample as _};
+use symphonia::core::conv::FromSample;
 use symphonia::core::formats::{Packet, Track};
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tokio::task::JoinError;
+
+// Reexport commonly used Symphonia types for centralized imports
+pub use symphonia::core::audio::{Channels, SignalSpec};
+pub use symphonia::core::conv::{ConvertibleSample, IntoSample};
+pub use symphonia::core::units::Duration;
 
 pub mod encoder;
 
@@ -104,7 +108,7 @@ impl AudioWrite for AudioOutput {
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
-        self.writer.flush()
+        AudioWrite::flush(&mut *self.writer)
     }
 
     fn get_playback_position(&self) -> Option<f64> {
@@ -121,6 +125,10 @@ impl AudioWrite for AudioOutput {
 
     fn set_shared_volume(&mut self, shared_volume: std::sync::Arc<atomic_float::AtomicF64>) {
         self.writer.set_shared_volume(shared_volume);
+    }
+
+    fn get_output_spec(&self) -> Option<symphonia::core::audio::SignalSpec> {
+        self.writer.get_output_spec()
     }
 }
 
@@ -144,6 +152,10 @@ impl AudioDecode for AudioOutput {
             .write(buf)
             .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
         Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        AudioWrite::flush(self).map_err(|e| AudioDecodeError::Other(Box::new(e)))
     }
 }
 
@@ -258,6 +270,12 @@ pub trait AudioWrite {
     /// Set a shared volume atomic for immediate volume changes
     /// Default implementation does nothing
     fn set_shared_volume(&mut self, _shared_volume: std::sync::Arc<atomic_float::AtomicF64>) {}
+
+    /// Get the actual output audio specification (for accurate progress calculation)
+    /// Returns None if not supported by the audio output implementation
+    fn get_output_spec(&self) -> Option<SignalSpec> {
+        None
+    }
 }
 
 impl AudioDecode for Box<dyn AudioWrite> {
@@ -271,6 +289,12 @@ impl AudioDecode for Box<dyn AudioWrite> {
             .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
         Ok(())
     }
+
+    fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        (**self)
+            .flush()
+            .map_err(|e| AudioDecodeError::Other(Box::new(e)))
+    }
 }
 
 impl AudioDecode for &mut dyn AudioWrite {
@@ -283,6 +307,12 @@ impl AudioDecode for &mut dyn AudioWrite {
         self.write(decoded)
             .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
         Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), AudioDecodeError> {
+        (*self)
+            .flush()
+            .map_err(|e| AudioDecodeError::Other(Box::new(e)))
     }
 }
 

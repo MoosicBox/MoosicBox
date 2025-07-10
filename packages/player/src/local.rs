@@ -10,7 +10,7 @@ use atomic_float::AtomicF64;
 use async_trait::async_trait;
 use flume::Receiver;
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
-use moosicbox_audio_output::{AudioOutput, AudioOutputFactory};
+use moosicbox_audio_output::{AudioOutput, AudioOutputFactory, AudioWrite};
 use moosicbox_music_api::models::TrackAudioQuality;
 use moosicbox_music_models::TrackApiSource;
 use moosicbox_session::models::UpdateSession;
@@ -163,6 +163,7 @@ impl Player for LocalPlayer {
         let progress_sample_rate = sample_rate.clone();
         let progress_channels = channels.clone();
         let progress_abort = playback.abort.clone();
+        let progress_output = self.output.clone(); // Need this to get CPAL output sample rate
         let initial_position = seek.unwrap_or(0.0);
 
         moosicbox_task::spawn("player: progress_tracker", async move {
@@ -205,31 +206,50 @@ impl Player for LocalPlayer {
 
             log::debug!("Progress tracking task: starting main loop");
 
-            // Track progress while playback is active
-            let mut first_calculation = true;
             while !progress_abort.is_cancelled() {
                 let consumed = progress_consumed.load(Ordering::SeqCst);
-                let sample_rate_val = progress_sample_rate.load(Ordering::SeqCst);
-                let channels_val = progress_channels.load(Ordering::SeqCst);
+                let input_sample_rate = progress_sample_rate.load(Ordering::SeqCst);
+                let input_channels = progress_channels.load(Ordering::SeqCst);
 
-                if sample_rate_val > 0 && channels_val > 0 {
+                if input_sample_rate > 0 && input_channels > 0 {
+                    // Use actual output sample rate for accurate progress calculation
                     #[allow(clippy::cast_precision_loss)]
-                    let position = consumed as f64 / (sample_rate_val as f64 * channels_val as f64);
+                    let (actual_sample_rate, actual_channels) = progress_output
+                        .as_ref()
+                        .and_then(|output_guard| {
+                            output_guard.lock().ok().and_then(|output| {
+                                output.try_into_output().ok().and_then(|audio_output| {
+                                    audio_output.get_output_spec().map(|output_spec| {
+                                        (
+                                            f64::from(output_spec.rate),
+                                            output_spec.channels.count() as f64,
+                                        )
+                                    })
+                                })
+                            })
+                        })
+                        .unwrap_or((input_sample_rate as f64, input_channels as f64));
 
-                    // Debug logging
+                    #[allow(clippy::cast_precision_loss)]
+                    let position = consumed as f64 / (actual_sample_rate * actual_channels);
+
+                    // Enhanced debug logging to diagnose sample rate issues
                     log::debug!(
-                        "Progress tracking: consumed={consumed}, sample_rate={sample_rate_val}, channels={channels_val}, position={position:.2}s, last_position={last_position:.2}s"
+                        "🔍 Progress tracking: consumed={consumed}, input_rate={input_sample_rate}, input_channels={input_channels}, cpal_rate={actual_sample_rate}, cpal_channels={actual_channels}, position={position:.2}s, last_position={last_position:.2}s"
                     );
 
-                    if first_calculation {
-                        log::debug!(
-                            "Progress tracking task: first position calculation - position={position:.2}s, last_position={last_position:.2}s"
-                        );
-                        first_calculation = false;
-                    }
+                    // Calculate the time until the next second boundary for smooth visual updates
+                    let fractional_part = position - position.floor();
+                    let next_second_boundary = position.floor() + 1.0;
+                    let time_to_next_second = next_second_boundary - position;
 
-                    // Only update if position has changed significantly (avoid spam)
-                    if (position - last_position).abs() > 0.01 {
+                    // If we're very close to a second boundary (within 50ms), update immediately
+                    let should_update_now = time_to_next_second <= 0.05 || fractional_part <= 0.05;
+
+                    // Only update if we're at a second boundary or position has changed significantly
+                    let significant_change = (position - last_position).abs() > 0.01;
+
+                    if should_update_now || significant_change {
                         last_position = position;
 
                         let old = {
@@ -245,9 +265,16 @@ impl Player for LocalPlayer {
 
                         // Trigger progress event
                         if let Some(old) = old {
-                            log::debug!(
-                                "Progress tracking: triggering progress event with position={position:.2}s"
-                            );
+                            if should_update_now {
+                                log::debug!(
+                                    "Progress tracking: second boundary update at position={position:.2}s (fractional={fractional_part:.3})"
+                                );
+                            } else {
+                                log::debug!(
+                                    "Progress tracking: significant change update at position={position:.2}s"
+                                );
+                            }
+
                             if let Some(playback_target) = old.playback_target.clone() {
                                 let update = UpdateSession {
                                     session_id: old.session_id,
@@ -270,8 +297,49 @@ impl Player for LocalPlayer {
                     }
                 }
 
-                // Poll every 500ms for smooth progress updates
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                // Calculate precise sleep duration to hit the next second boundary
+                let consumed = progress_consumed.load(Ordering::SeqCst);
+                let input_sample_rate = progress_sample_rate.load(Ordering::SeqCst);
+                let input_channels = progress_channels.load(Ordering::SeqCst);
+
+                let sleep_duration = if input_sample_rate > 0 && input_channels > 0 {
+                    // Get the actual output sample rate for accurate timing
+                    #[allow(clippy::cast_precision_loss)]
+                    let (actual_sample_rate, actual_channels) = progress_output
+                        .as_ref()
+                        .and_then(|output_guard| {
+                            output_guard.lock().ok().and_then(|output| {
+                                output.try_into_output().ok().and_then(|audio_output| {
+                                    audio_output.get_output_spec().map(|output_spec| {
+                                        (
+                                            f64::from(output_spec.rate),
+                                            output_spec.channels.count() as f64,
+                                        )
+                                    })
+                                })
+                            })
+                        })
+                        .unwrap_or((input_sample_rate as f64, input_channels as f64));
+
+                    #[allow(clippy::cast_precision_loss)]
+                    let current_position = consumed as f64 / (actual_sample_rate * actual_channels);
+                    let fractional_part = current_position - current_position.floor();
+                    let time_to_next_second = 1.0 - fractional_part;
+
+                    // Ensure we don't sleep for more than 1 second or less than 10ms
+                    let sleep_seconds = time_to_next_second.clamp(0.01, 1.0);
+
+                    log::trace!(
+                        "Progress tracking: calculated sleep duration={sleep_seconds:.3}s (current_pos={current_position:.3}s, fractional={fractional_part:.3}s, time_to_next={time_to_next_second:.3}s)"
+                    );
+
+                    std::time::Duration::from_secs_f64(sleep_seconds)
+                } else {
+                    // Fallback to 100ms if we don't have audio info yet
+                    std::time::Duration::from_millis(100)
+                };
+
+                tokio::time::sleep(sleep_duration).await;
             }
         });
 
@@ -328,7 +396,7 @@ impl Player for LocalPlayer {
                             .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
 
                         // Store audio format info for progress tracking
-                        log::debug!("Audio output creation: setting sample_rate={}, channels={}",
+                        log::debug!("🔍 Audio output creation: setting sample_rate={}, channels={}",
                             spec.rate, spec.channels.count());
                         sample_rate.store(spec.rate as usize, Ordering::SeqCst);
                         channels.store(spec.channels.count(), Ordering::SeqCst);
@@ -341,7 +409,9 @@ impl Player for LocalPlayer {
                             0
                         };
                         consumed_samples.store(initial_consumed_samples, Ordering::SeqCst);
-                        log::debug!("Audio output creation: initialized consumed_samples counter to {initial_consumed_samples} (seek_position={seek_position:.2}s)");
+                        log::warn!("🔍 Audio output creation: initialized consumed_samples counter to {initial_consumed_samples} (seek_position={seek_position:.2}s, rate={}, channels={}, calculation={:.2}*{}*{})",
+                            spec.rate, spec.channels.count(),
+                            seek_position, spec.rate, spec.channels.count());
 
                         // Set the consumed samples counter on the audio output
                         output.set_consumed_samples(consumed_samples.clone());
@@ -467,13 +537,31 @@ impl Player for LocalPlayer {
         // Get the current actual playback position from our progress tracking
         let progress = {
             let consumed_samples = self.consumed_samples.load(Ordering::SeqCst);
-            let sample_rate = self.sample_rate.load(Ordering::SeqCst);
-            let channels = self.channels.load(Ordering::SeqCst);
+            let input_sample_rate = self.sample_rate.load(Ordering::SeqCst);
+            let input_channels = self.channels.load(Ordering::SeqCst);
 
             #[allow(clippy::cast_precision_loss)]
-            if sample_rate > 0 && channels > 0 {
-                // Calculate actual position from consumed samples
-                consumed_samples as f64 / (sample_rate * channels) as f64
+            if input_sample_rate > 0 && input_channels > 0 {
+                // Use actual output sample rate for accurate progress calculation
+                let (actual_sample_rate, actual_channels) = self
+                    .output
+                    .as_ref()
+                    .and_then(|output_guard| {
+                        output_guard.lock().ok().and_then(|output| {
+                            output.try_into_output().ok().and_then(|audio_output| {
+                                audio_output.get_output_spec().map(|output_spec| {
+                                    (
+                                        f64::from(output_spec.rate),
+                                        output_spec.channels.count() as f64,
+                                    )
+                                })
+                            })
+                        })
+                    })
+                    .unwrap_or((input_sample_rate as f64, input_channels as f64));
+
+                // Calculate actual position from consumed samples using CPAL output sample rate
+                consumed_samples as f64 / (actual_sample_rate * actual_channels)
             } else {
                 // Fallback to stored progress if no audio info
                 self.playback

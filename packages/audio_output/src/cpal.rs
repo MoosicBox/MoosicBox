@@ -23,7 +23,12 @@ impl AudioWrite for CpalAudioOutput {
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
-        self.write.flush()
+        log::debug!(
+            "🔊 CpalAudioOutput flush called - delegating to underlying CPAL implementation"
+        );
+        let result = self.write.flush();
+        log::debug!("🔊 CpalAudioOutput flush completed - result: {result:?}");
+        result
     }
 
     fn get_playback_position(&self) -> Option<f64> {
@@ -43,6 +48,10 @@ impl AudioWrite for CpalAudioOutput {
 
     fn set_shared_volume(&mut self, shared_volume: std::sync::Arc<atomic_float::AtomicF64>) {
         self.write.set_shared_volume(shared_volume);
+    }
+
+    fn get_output_spec(&self) -> Option<SignalSpec> {
+        self.write.get_output_spec()
     }
 }
 
@@ -136,9 +145,18 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     consumed_samples_shared:
         std::sync::Arc<std::sync::RwLock<std::sync::Arc<std::sync::atomic::AtomicUsize>>>, // Track actual consumption by CPAL
     volume_shared: std::sync::Arc<std::sync::RwLock<std::sync::Arc<atomic_float::AtomicF64>>>, // For immediate volume changes
+    total_samples_written: std::sync::Arc<std::sync::atomic::AtomicUsize>, // Track total samples written to ring buffer
+    // Track the actual CPAL output sample rate for accurate progress calculation
+    cpal_output_sample_rate: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    cpal_output_channels: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    // Event-driven completion notification
+    completion_condvar: std::sync::Arc<std::sync::Condvar>,
+    completion_mutex: std::sync::Arc<std::sync::Mutex<()>>,
+    completion_target: std::sync::Arc<std::sync::atomic::AtomicUsize>, // Target sample count for completion
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
+    #[allow(clippy::too_many_lines)]
     pub fn new(device: &cpal::Device) -> Result<Self, AudioOutputError> {
         let config = device
             .default_output_config()
@@ -168,10 +186,10 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             },
         };
 
-        // Create a ring buffer with a capacity for up-to 15 seconds of audio (need more than 10s for buffering).
-        let ring_len = (15 * config.sample_rate.0 as usize) * num_channels;
+        // Create a ring buffer with a capacity for up-to 30 seconds of audio (larger buffer to prevent underruns).
+        let ring_len = (30 * config.sample_rate.0 as usize) * num_channels;
         log::debug!(
-            "Creating ring buffer with {} samples capacity (15 seconds at {}Hz, {} channels)",
+            "Creating ring buffer with {} samples capacity (30 seconds at {}Hz, {} channels)",
             ring_len,
             config.sample_rate.0,
             num_channels
@@ -190,6 +208,21 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         let volume_shared = std::sync::Arc::new(std::sync::RwLock::new(volume_atomic));
         let volume_callback = volume_shared.clone();
 
+        // Create completion notification primitives
+        let completion_condvar = std::sync::Arc::new(std::sync::Condvar::new());
+        let completion_mutex = std::sync::Arc::new(std::sync::Mutex::new(()));
+        let completion_target = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+        // Track the actual CPAL output sample rate and channels for accurate progress calculation
+        let cpal_output_sample_rate =
+            std::sync::Arc::new(std::sync::atomic::AtomicU32::new(config.sample_rate.0));
+        #[allow(clippy::cast_possible_truncation)]
+        let cpal_output_channels =
+            std::sync::Arc::new(std::sync::atomic::AtomicU32::new(num_channels as u32));
+        let completion_condvar_callback = completion_condvar.clone();
+        let completion_mutex_callback = completion_mutex.clone();
+        let completion_target_callback = completion_target.clone();
+
         let stream = device
             .build_output_stream(
                 &config,
@@ -206,7 +239,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
                     // Apply volume to the written samples if volume is not 1.0
                     if written > 0 && volume <= 0.999 {
-                        log::debug!(
+                        log::trace!(
                             "CPAL: applying volume to written samples - volume={volume:.3}"
                         );
                         // Apply proper volume scaling to all samples
@@ -226,12 +259,16 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                     if let Ok(counter) = consumed_samples_callback.read() {
                         let old_value =
                             counter.fetch_add(written, std::sync::atomic::Ordering::SeqCst);
-                        // Only log the first few times to avoid spam
-                        if written > 0 && old_value < 10000 {
-                            log::debug!(
-                                "CPAL callback: wrote {written} samples, total consumed: {}",
-                                old_value + written
-                            );
+                        let new_consumed = old_value + written;
+
+                        // Check if we've reached the completion target and notify waiting thread
+                        let target =
+                            completion_target_callback.load(std::sync::atomic::Ordering::SeqCst);
+                        if target > 0 && new_consumed >= target {
+                            // We've reached the target - notify the waiting flush thread immediately
+                            if let Ok(_guard) = completion_mutex_callback.try_lock() {
+                                completion_condvar_callback.notify_all();
+                            }
                         }
                     }
 
@@ -247,15 +284,39 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                 AudioOutputError::OpenStream
             })?;
 
-        // Calculate buffering threshold for 10 seconds of audio
+        // Calculate buffering threshold for 10 seconds of audio (REQUIRED to prevent start truncation)
         let buffering_threshold = 10 * config.sample_rate.0 as usize * num_channels;
 
         // DON'T start the stream yet - wait until we have 10 seconds buffered
         log::debug!(
-            "CPAL stream created but not started - buffering threshold: {} samples (10 seconds at {}Hz, {} channels)",
+            "🔍 CPAL stream created but not started - buffering threshold: {} samples (10 seconds at {}Hz, {} channels)",
             buffering_threshold,
             config.sample_rate.0,
             num_channels
+        );
+
+        // Debug the actual config vs expected spec for progress calculation
+        log::debug!(
+            "🔍 CPAL CONFIG: actual_sample_rate={}, actual_channels={}, expected_spec_rate={}, expected_spec_channels={}",
+            config.sample_rate.0,
+            num_channels,
+            spec.rate,
+            spec.channels.count()
+        );
+
+        // Check for potential sample rate mismatch that could cause progress calculation issues
+        moosicbox_assert::assert!(
+            config.sample_rate.0 == spec.rate,
+            "🚨 SAMPLE RATE MISMATCH: CPAL config sample rate ({}) != expected spec rate ({}) - this will cause progress calculation errors!",
+            config.sample_rate.0,
+            spec.rate
+        );
+
+        moosicbox_assert::assert!(
+            num_channels == spec.channels.count(),
+            "🚨 CHANNEL COUNT MISMATCH: CPAL config channels ({}) != expected spec channels ({}) - this will cause progress calculation errors!",
+            num_channels,
+            spec.channels.count()
         );
 
         Ok(Self {
@@ -268,6 +329,12 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             buffering_threshold,
             consumed_samples_shared,
             volume_shared,
+            total_samples_written: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            cpal_output_sample_rate,
+            cpal_output_channels,
+            completion_condvar,
+            completion_mutex,
+            completion_target,
         })
     }
 
@@ -298,29 +365,31 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
 
         let bytes = samples.len();
 
+        // Debug sample buffer details for progress calculation troubleshooting
+        log::trace!(
+            "🔍 Sample buffer: decoded.frames()={}, decoded.spec.channels={}, samples.len()={}, bytes={}",
+            decoded.frames(),
+            decoded.spec().channels.count(),
+            samples.len(),
+            bytes
+        );
+
         // Write all samples to the ring buffer.
         loop {
             match self
                 .ring_buf_producer
-                .write_blocking_timeout(samples, std::time::Duration::from_millis(5000))
+                .write_blocking_timeout(samples, std::time::Duration::from_millis(30000)) // Increased timeout for end-of-track
             {
                 Ok(Some(written)) => {
+                    // Track total samples written to ring buffer
+                    self.total_samples_written.fetch_add(written, std::sync::atomic::Ordering::SeqCst);
+
                     // Track buffered samples during initial buffering
                     if self.initial_buffering {
                         self.buffered_samples += written;
                         #[allow(clippy::cast_precision_loss)]
                         let buffered_seconds = self.buffered_samples as f32
                             / (self.spec.rate as f32 * self.spec.channels.count() as f32);
-
-                        // Log progress every 2 seconds
-                        if self.buffered_samples
-                            % (2 * self.spec.rate as usize * self.spec.channels.count())
-                            == 0
-                        {
-                            log::debug!(
-                                "Buffering progress: {buffered_seconds:.2} seconds buffered"
-                            );
-                        }
 
                         // Start stream once we have 10 seconds buffered
                         if self.buffered_samples >= self.buffering_threshold {
@@ -338,7 +407,24 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                     samples = &samples[written..];
                 }
                 Ok(None) => break,
-                Err(_err) => return Err(AudioOutputError::Interrupt),
+                Err(_err) => {
+                    log::warn!("Ring buffer write timeout - attempting non-blocking write");
+                    // Try a non-blocking write as fallback
+                    match self.ring_buf_producer.write(samples) {
+                        Ok(written) => {
+                            if written > 0 {
+                                // Track total samples written to ring buffer
+                                self.total_samples_written.fetch_add(written, std::sync::atomic::Ordering::SeqCst);
+                                log::debug!("Non-blocking write succeeded, wrote {written} samples");
+                                samples = &samples[written..];
+                            } else {
+                                log::warn!("Ring buffer full - audio may be truncated");
+                                break;
+                            }
+                        }
+                        Err(_) => return Err(AudioOutputError::Interrupt),
+                    }
+                }
             }
         }
 
@@ -349,12 +435,25 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
         // If there is a resampler, then it may need to be flushed
         // depending on the number of samples it has.
 
-        // Flush is best-effort, ignore the returned result.
+        // PROPERLY WAIT FOR ALL SAMPLES TO BE CONSUMED
+        // This prevents audio truncation at track endings
+
+        log::debug!(
+            "🔊 CPAL FLUSH: Audio decoder finished - waiting for all samples to be consumed"
+        );
+
+        // Wait for all written samples to be consumed (prevents truncation)
+        self.wait_for_completion();
+
+        // Now pause the stream since all audio has been played
+        log::debug!("🔊 CPAL FLUSH: All samples consumed - pausing stream");
         let _ = self.stream.pause();
 
-        // Reset buffering state for next track
+        // Reset state for next track
         self.initial_buffering = true;
         self.buffered_samples = 0;
+        self.total_samples_written
+            .store(0, std::sync::atomic::Ordering::SeqCst);
         if let Ok(counter) = self.consumed_samples_shared.read() {
             counter.store(0, std::sync::atomic::Ordering::SeqCst);
         }
@@ -407,6 +506,10 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
             log::error!("CPAL impl: failed to acquire write lock for shared volume");
         }
     }
+
+    fn get_output_spec(&self) -> Option<symphonia::core::audio::SignalSpec> {
+        Some(self.get_output_audio_spec())
+    }
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -415,9 +518,121 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         #[allow(clippy::cast_precision_loss)]
         self.consumed_samples_shared.read().map_or(0.0, |counter| {
             let consumed_samples = counter.load(std::sync::atomic::Ordering::SeqCst);
-            consumed_samples as f64
-                / (f64::from(self.spec.rate) * self.spec.channels.count() as f64)
+            // Use the actual output sample rate for accurate progress calculation
+            let output_rate = self.get_output_sample_rate();
+            let output_channels = self.get_output_channels();
+            consumed_samples as f64 / (f64::from(output_rate) * f64::from(output_channels))
         })
+    }
+
+    /// Get the actual output sample rate (not the input sample rate)
+    pub fn get_output_sample_rate(&self) -> u32 {
+        self.cpal_output_sample_rate
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Get the actual output channel count
+    pub fn get_output_channels(&self) -> u32 {
+        self.cpal_output_channels
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Get the actual output audio specification
+    pub fn get_output_audio_spec(&self) -> symphonia::core::audio::SignalSpec {
+        let rate = self.get_output_sample_rate();
+        let channels = self.get_output_channels();
+
+        // Create channels based on channel count
+        let symphonia_channels = match channels {
+            1 => symphonia::core::audio::Layout::Mono.into_channels(),
+            2 => symphonia::core::audio::Layout::Stereo.into_channels(),
+            // For other channel counts, use the spec field channels as fallback
+            _ => self.spec.channels,
+        };
+
+        symphonia::core::audio::SignalSpec {
+            rate,
+            channels: symphonia_channels,
+        }
+    }
+
+    /// Wait for all written samples to be consumed by the CPAL callback
+    /// This ensures complete playback without truncation - uses event-driven completion
+    pub fn wait_for_completion(&self) {
+        let total_written = self
+            .total_samples_written
+            .load(std::sync::atomic::Ordering::SeqCst);
+        if total_written == 0 {
+            log::debug!("No samples written, skipping completion wait");
+            return;
+        }
+
+        log::debug!("Waiting for {total_written} samples to be consumed");
+
+        // Check if already completed to avoid unnecessary waiting
+        let consumed = self.consumed_samples_shared.read().map_or(0, |counter| {
+            counter.load(std::sync::atomic::Ordering::SeqCst)
+        });
+
+        if consumed >= total_written {
+            log::debug!(
+                "✅ All samples already consumed! Total: {total_written}, Consumed: {consumed}"
+            );
+            return;
+        }
+
+        // Set the completion target for the CPAL callback to check
+        self.completion_target
+            .store(total_written, std::sync::atomic::Ordering::SeqCst);
+
+        let start_time = std::time::Instant::now();
+
+        // Wait for the CPAL callback to signal completion
+        if let Ok(guard) = self.completion_mutex.lock() {
+            // Use a timeout as a safety fallback (but this should never be needed)
+            let timeout = std::time::Duration::from_secs(60); // Very generous timeout for safety
+
+            match self.completion_condvar.wait_timeout(guard, timeout) {
+                Ok((_, timeout_result)) => {
+                    let elapsed = start_time.elapsed();
+
+                    if timeout_result.timed_out() {
+                        log::warn!(
+                            "⚠️ Completion wait timed out after 60s - this should not happen!"
+                        );
+                        // Check final state
+                        let final_consumed =
+                            self.consumed_samples_shared.read().map_or(0, |counter| {
+                                counter.load(std::sync::atomic::Ordering::SeqCst)
+                            });
+                        log::warn!(
+                            "Final state: {total_written} written, {final_consumed} consumed"
+                        );
+                    } else {
+                        // Verify completion
+                        let final_consumed =
+                            self.consumed_samples_shared.read().map_or(0, |counter| {
+                                counter.load(std::sync::atomic::Ordering::SeqCst)
+                            });
+                        log::debug!(
+                            "✅ All samples consumed! Total: {}, Consumed: {}, Wait time: {:.3}s",
+                            total_written,
+                            final_consumed,
+                            elapsed.as_secs_f64()
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::error!("Completion wait mutex error: {e}");
+                }
+            }
+        } else {
+            log::error!("Failed to acquire completion mutex");
+        }
+
+        // Clear the completion target
+        self.completion_target
+            .store(0, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
