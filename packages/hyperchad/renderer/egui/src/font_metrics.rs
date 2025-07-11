@@ -28,10 +28,10 @@ impl FontMetrics for EguiFontMetrics {
     }
 }
 
-fn from_row(value: &egui::epaint::text::Row) -> FontMetricsRow {
+fn from_row(value: &egui::epaint::text::PlacedRow) -> FontMetricsRow {
     FontMetricsRow {
-        width: value.rect.width(),
-        height: value.rect.height(),
+        width: value.visuals.mesh_bounds.width(),
+        height: value.visuals.mesh_bounds.height(),
     }
 }
 

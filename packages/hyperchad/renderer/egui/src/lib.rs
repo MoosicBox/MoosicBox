@@ -1954,7 +1954,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             );
 
             return ui
-                .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+                .scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                     inner(ui, relative_container)
                 })
                 .inner;
@@ -4055,7 +4055,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             }
 
             ctx.memory_mut(|x| {
-                x.options.line_scroll_speed = 100.0;
+                x.options.input_options.line_scroll_speed = 100.0;
             });
 
             ctx.style_mut(|style| {
