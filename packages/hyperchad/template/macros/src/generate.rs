@@ -71,12 +71,14 @@ impl Generator {
                     syn::Lit::Bool(lit_bool) => lit_bool.value.to_string(),
                     _ => lit.lit.to_token_stream().to_string(),
                 };
-                build.push_container(quote! {
-                    hyperchad_transformer::Container {
-                        element: hyperchad_transformer::Element::Raw { value: #value.to_string() },
-                        ..Default::default()
-                    }
-                });
+                if !value.is_empty() {
+                    build.push_container(quote! {
+                        hyperchad_transformer::Container {
+                            element: hyperchad_transformer::Element::Raw { value: #value.to_string() },
+                            ..Default::default()
+                        }
+                    });
+                }
             }
             Markup::NumericLit(numeric_lit) => {
                 // For numeric literals, create a Raw element with the value

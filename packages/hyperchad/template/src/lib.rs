@@ -272,6 +272,9 @@ impl RenderContainer for &str {
     type Error = core::fmt::Error;
 
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
+        if self.is_empty() {
+            return Ok(());
+        }
         containers.push(Container {
             element: hyperchad_transformer::Element::Raw {
                 value: (*self).to_string(),
@@ -286,6 +289,9 @@ impl RenderContainer for String {
     type Error = core::fmt::Error;
 
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
+        if self.is_empty() {
+            return Ok(());
+        }
         containers.push(Container {
             element: hyperchad_transformer::Element::Raw {
                 value: self.clone(),
@@ -300,6 +306,9 @@ impl RenderContainer for Cow<'_, str> {
     type Error = core::fmt::Error;
 
     fn render_to(&self, containers: &mut Vec<Container>) -> Result<(), Self::Error> {
+        if self.is_empty() {
+            return Ok(());
+        }
         <&str as RenderContainer>::render_to(&self.as_ref(), containers)
     }
 }
