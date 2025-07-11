@@ -133,8 +133,16 @@ impl From<Container> for Content {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<Vec<Container>> for Content {
     fn from(value: Vec<Container>) -> Self {
+        if value.len() == 1 {
+            return Self::View(View {
+                future: None,
+                immediate: value.into_iter().next().unwrap(),
+            });
+        }
+
         Container {
             children: value,
             ..Default::default()
@@ -186,8 +194,16 @@ impl From<Container> for View {
     }
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl From<Vec<Container>> for View {
     fn from(value: Vec<Container>) -> Self {
+        if value.len() == 1 {
+            return Self {
+                future: None,
+                immediate: value.into_iter().next().unwrap(),
+            };
+        }
+
         Self {
             future: None,
             immediate: value.into(),
