@@ -14,7 +14,7 @@ version     = "0.1.0"
 group = "hyperchad"
 
 [package.metadata.cargo-machete]
-ignored = ["hyperchad_color", "image", "tracy-client"]
+ignored = ["hyperchad_color", "image", "tracy-client", "wgpu"]
 
 [dependencies]
 hyperchad_actions = { workspace = true, features = ["logic"] }
@@ -53,13 +53,15 @@ tracy-client = { workspace = true, default-features = false, optional = true, fe
     "enable",
 ] }
 
+wgpu = { version = "25.0.0", optional = true }
+
 [features]
 default = ["debug", "wgpu"]
 
 fail-on-warnings = []
 
 glow = ["eframe/glow"]
-wgpu = ["eframe/wgpu"]
+wgpu = ["dep:wgpu", "eframe/wgpu"]
 
 wayland = ["eframe/wayland"]
 x11     = ["eframe/x11"]
