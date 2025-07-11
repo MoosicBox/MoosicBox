@@ -2047,6 +2047,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             let width = container.calculated_width.unwrap();
                             let height = container.calculated_height.unwrap();
 
+                            moosicbox_assert::assert_or_panic!(
+                                width >= 0.0,
+                                "Width must be >= 0.0. Got {width} for container:\n{container}\n{container:?}"
+                            );
+                            moosicbox_assert::assert_or_panic!(
+                                height >= 0.0,
+                                "Height must be >= 0.0. Got {height} for container:\n{container}\n{container:?}"
+                            );
                             ui.set_width(width);
                             ui.set_height(height);
 
