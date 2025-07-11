@@ -531,6 +531,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
 
             element.calculated_width = app.width.read().unwrap().or(width);
             element.calculated_height = app.height.read().unwrap().or(height);
+            log::debug!(
+                "render: calculated_width={:?} calculated_height={:?}",
+                element.calculated_width,
+                element.calculated_height
+            );
             app.calculator.read().unwrap().calc(&mut element);
             moosicbox_assert::assert!(element.calculated_font_size.is_some());
 
