@@ -1,4 +1,5 @@
 use clippier_test_utilities::test_resources::load_test_workspace;
+use itertools::Itertools;
 
 #[test]
 fn test_process_configs_basic() {
@@ -172,6 +173,7 @@ fn test_workspace_loads_successfully() {
             std::fs::read_dir(temp_dir.path().join("packages"))
                 .unwrap()
                 .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+                .sorted()
                 .collect::<Vec<_>>()
         )
     );
@@ -190,6 +192,7 @@ fn test_complex_workspace_loads_successfully() {
     let mut packages: Vec<String> = std::fs::read_dir(temp_dir.path().join("packages"))
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+        .sorted()
         .collect();
 
     packages.sort();

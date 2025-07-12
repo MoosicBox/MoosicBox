@@ -1,5 +1,5 @@
 ---
 source: packages/clippier/tests/command_tests.rs
-expression: "format!(\"{:?}\",\nstd::fs::read_dir(temp_dir.path().join(\"packages\")).unwrap().map(|entry|\nentry.unwrap().file_name().to_string_lossy().to_string()).collect::<Vec<_>>())"
+expression: "format!(\"{:?}\",\nstd::fs::read_dir(temp_dir.path().join(\"packages\")).unwrap().map(|entry|\nentry.unwrap().file_name().to_string_lossy().to_string()).sorted().collect::<Vec<_>>())"
 ---
-["api", "models", "client"]
+["api", "client", "models"]
