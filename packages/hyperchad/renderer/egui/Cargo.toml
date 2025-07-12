@@ -56,7 +56,7 @@ tracy-client = { workspace = true, default-features = false, optional = true, fe
 wgpu = { version = "=25.0.2", optional = true }
 
 [features]
-default = ["debug", "wgpu"]
+default = ["debug", "v1", "v2", "wgpu"]
 
 fail-on-warnings = []
 
@@ -72,3 +72,6 @@ profiling-tracing = ["dep:tracing-subscriber", "profiling"]
 profiling-tracy   = ["dep:tracy-client", "profiling"]
 
 debug = []
+
+v1 = []
+v2 = []

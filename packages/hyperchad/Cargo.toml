@@ -124,6 +124,8 @@ renderer-egui-profiling-tracy = [
     "hyperchad_app?/profiling-tracy",
     "hyperchad_renderer_egui?/profiling-tracy",
 ]
+renderer-egui-v1 = ["hyperchad_app?/egui-v1", "hyperchad_renderer_egui?/v1"]
+renderer-egui-v2 = ["hyperchad_app?/egui-v2", "hyperchad_renderer_egui?/v2"]
 renderer-egui-wayland = [
     "hyperchad_app?/wayland",
     "hyperchad_renderer_egui?/wayland",

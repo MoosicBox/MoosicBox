@@ -58,6 +58,8 @@ fail-on-warnings = []
 
 egui = ["dep:hyperchad_renderer_egui", "logic"]
 egui-glow = ["egui", "hyperchad_renderer_egui/glow"]
+egui-v1 = ["egui", "hyperchad_renderer_egui/v1"]
+egui-v2 = ["egui", "hyperchad_renderer_egui/v2"]
 egui-wgpu = ["egui", "hyperchad_renderer_egui/wgpu"]
 fltk = ["dep:hyperchad_renderer_fltk", "logic"]
 html = ["dep:hyperchad_renderer_html"]

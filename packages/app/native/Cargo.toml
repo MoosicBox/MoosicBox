@@ -118,6 +118,8 @@ _sse = [
 
 egui = ["_calculated_canvas", "hyperchad/renderer-egui"]
 egui-glow = ["egui", "hyperchad/renderer-egui-glow"]
+egui-v1 = ["egui", "hyperchad/renderer-egui-v1"]
+egui-v2 = ["egui", "hyperchad/renderer-egui-v2"]
 egui-wgpu = ["egui", "hyperchad/renderer-egui-wgpu"]
 fltk = ["_calculated_canvas", "hyperchad/renderer-fltk"]
 html = ["_canvas", "hyperchad/renderer-html"]
