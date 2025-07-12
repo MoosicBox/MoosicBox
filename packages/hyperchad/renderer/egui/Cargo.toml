@@ -53,7 +53,7 @@ tracy-client = { workspace = true, default-features = false, optional = true, fe
     "enable",
 ] }
 
-wgpu = { version = "26.0.1", optional = true }
+wgpu = { version = "=25.0.2", optional = true }
 
 [features]
 default = ["debug", "wgpu"]
