@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::{Arc, RwLock},
 };
 
@@ -18,6 +18,11 @@ use hyperchad_transformer::{Container, Element, Input, models::Visibility};
 
 pub use eframe;
 pub use hyperchad_renderer::*;
+
+pub enum RenderView {
+    View(Container),
+    PartialView(hyperchad_renderer::PartialView),
+}
 
 #[derive(Clone)]
 pub struct EguiRenderer<C: EguiCalc + Clone + Send + Sync> {
@@ -140,6 +145,7 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     container: Arc<RwLock<Option<Container>>>,
     width: Arc<RwLock<Option<f32>>>,
     height: Arc<RwLock<Option<f32>>>,
+    render_queue: Arc<RwLock<Option<VecDeque<RenderView>>>>,
 
     // App state
     title: Option<String>,
@@ -169,6 +175,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             container: Arc::new(RwLock::new(None)),
             width: Arc::new(RwLock::new(None)),
             height: Arc::new(RwLock::new(None)),
+            render_queue: Arc::new(RwLock::new(Some(VecDeque::new()))),
             title: None,
             description: None,
             background: None,
@@ -497,6 +504,19 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         log::debug!("EguiRenderer: render called");
 
+        // Check if context is ready
+        if self.app.ctx.read().unwrap().is_none() {
+            log::debug!("EguiRenderer: context not ready, queuing render");
+            self.app
+                .render_queue
+                .write()
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .push_back(RenderView::View(view.immediate));
+            return Ok(());
+        }
+
         let mut container = view.immediate;
 
         // Set container size
@@ -525,6 +545,19 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
             "EguiRenderer: render_partial called for target: {}",
             view.target
         );
+
+        // Check if context is ready
+        if self.app.ctx.read().unwrap().is_none() {
+            log::debug!("EguiRenderer: context not ready, queuing render_partial");
+            self.app
+                .render_queue
+                .write()
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .push_back(RenderView::PartialView(view));
+            return Ok(());
+        }
 
         // Simplified partial rendering - replace element with matching ID
         if let Some(container) = self.app.container.write().unwrap().as_mut() {
@@ -563,6 +596,51 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for EguiApp<C> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Process queued renders if context is ready
+        let render_queue = self.render_queue.write().unwrap().take();
+        if let Some(render_queue) = render_queue {
+            for render_view in render_queue {
+                match render_view {
+                    RenderView::View(view) => {
+                        let mut container = view;
+
+                        // Set container size
+                        container.calculated_width = self.width.read().unwrap().or(Some(800.0));
+                        container.calculated_height = self.height.read().unwrap().or(Some(600.0));
+
+                        // Calculate layout
+                        self.calculator.read().unwrap().calc(&mut container);
+
+                        // Store container
+                        *self.container.write().unwrap() = Some(container);
+                    }
+                    RenderView::PartialView(view) => {
+                        // Process partial view
+                        if let Some(container) = self.container.write().unwrap().as_mut() {
+                            let value = container.replace_str_id_with_elements_calc(
+                                &*self.calculator.read().unwrap(),
+                                view.container.children,
+                                &view.target,
+                            );
+                            if value.is_some() {
+                                log::debug!(
+                                    "EguiRenderer: replaced element with ID: {}",
+                                    view.target
+                                );
+                            } else {
+                                log::warn!(
+                                    "EguiRenderer: could not find element with ID: {}",
+                                    view.target
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            // Reset the render queue
+            *self.render_queue.write().unwrap() = Some(VecDeque::new());
+        }
+
         // Check for resize
         self.check_frame_resize(ctx);
 
