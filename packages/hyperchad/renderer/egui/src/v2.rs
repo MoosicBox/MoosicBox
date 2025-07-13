@@ -4,7 +4,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{Arc, RwLock},
+    sync::{Arc, LazyLock, RwLock},
 };
 
 use crate::layout::EguiCalc;
@@ -22,6 +22,17 @@ pub use hyperchad_renderer::*;
 pub enum RenderView {
     View(Container),
     PartialView(hyperchad_renderer::PartialView),
+}
+
+#[derive(Debug)]
+enum AppEvent {
+    LoadImage { source: String },
+}
+
+#[derive(Clone)]
+enum AppImage {
+    Loading,
+    Bytes(Arc<[u8]>),
 }
 
 #[derive(Clone)]
@@ -156,10 +167,13 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     sender: Sender<String>,
     request_action: Sender<(String, Option<Value>)>,
     on_resize: Sender<(f32, f32)>,
+    event: Sender<AppEvent>,
+    event_receiver: flume::Receiver<AppEvent>,
 
     // UI state
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
     text_inputs: Arc<RwLock<HashMap<egui::Id, String>>>,
+    images: Arc<RwLock<HashMap<String, AppImage>>>,
 }
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
@@ -169,6 +183,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         on_resize: Sender<(f32, f32)>,
         calculator: C,
     ) -> Self {
+        let (event_tx, event_rx) = flume::unbounded();
         Self {
             ctx: Arc::new(RwLock::new(None)),
             calculator: Arc::new(RwLock::new(calculator)),
@@ -182,8 +197,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             sender,
             request_action,
             on_resize,
+            event: event_tx,
+            event_receiver: event_rx,
             checkboxes: Arc::new(RwLock::new(HashMap::new())),
             text_inputs: Arc::new(RwLock::new(HashMap::new())),
+            images: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -262,6 +280,19 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                     return Some(response);
                 }
+            }
+            Element::Image {
+                source: Some(source),
+                ..
+            } => {
+                let mut images = self.images.write().unwrap();
+                return Some(Self::render_image(
+                    &mut images,
+                    ui,
+                    source,
+                    container,
+                    &self.event,
+                ));
             }
             _ => {}
         }
@@ -453,6 +484,116 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             }
         });
     }
+
+    fn render_image(
+        images: &mut HashMap<String, AppImage>,
+        ui: &mut Ui,
+        source: &str,
+        container: &Container,
+        event: &Sender<AppEvent>,
+    ) -> Response {
+        egui::Frame::new()
+            .show(ui, |ui| {
+                ui.set_width(container.calculated_width.unwrap());
+                ui.set_height(container.calculated_height.unwrap());
+
+                match images.get(source) {
+                    Some(AppImage::Bytes(bytes)) => {
+                        log::trace!(
+                            "render_image: showing image for source={source} ({}, {})",
+                            container.calculated_width.unwrap(),
+                            container.calculated_height.unwrap(),
+                        );
+
+                        egui::Image::from_bytes(
+                            format!("bytes://{source}"),
+                            egui::load::Bytes::Shared(bytes.clone()),
+                        )
+                        .max_width(container.calculated_width.unwrap())
+                        .max_height(container.calculated_height.unwrap())
+                        .ui(ui);
+                    }
+                    Some(AppImage::Loading) => {
+                        log::trace!("render_image: image loading for source={source}");
+                        ui.label("Loading...");
+                    }
+                    None => {
+                        log::trace!("render_image: triggering image load for source={source}");
+                        images.insert(source.to_string(), AppImage::Loading);
+                        if let Err(e) = event.send(AppEvent::LoadImage {
+                            source: source.to_string(),
+                        }) {
+                            log::error!("Failed to send LoadImage event: {e:?}");
+                        }
+                        ui.label("Loading...");
+                    }
+                }
+            })
+            .response
+    }
+
+    async fn listen(&self) {
+        while let Ok(event) = self.event_receiver.recv_async().await {
+            log::trace!("received event {event:?}");
+            match event {
+                AppEvent::LoadImage { source } => {
+                    let images = self.images.clone();
+                    let ctx = self.ctx.clone();
+                    if let Some(file) = moosicbox_app_native_image::Asset::get(&source) {
+                        log::trace!("loading image {source}");
+                        images
+                            .write()
+                            .unwrap()
+                            .insert(source, AppImage::Bytes(file.data.to_vec().into()));
+
+                        if let Some(ctx) = &*ctx.read().unwrap() {
+                            ctx.request_repaint();
+                        }
+                    } else {
+                        moosicbox_task::spawn("renderer: load_image", async move {
+                            static CLIENT: LazyLock<switchy_http::Client> =
+                                LazyLock::new(switchy_http::Client::new);
+
+                            log::trace!("loading image {source}");
+                            match CLIENT.get(&source).send().await {
+                                Ok(response) => {
+                                    if !response.status().is_success() {
+                                        log::error!(
+                                            "Failed to load image: {}",
+                                            response.text().await.unwrap_or_else(|e| {
+                                                format!("(failed to get response text: {e:?})")
+                                            })
+                                        );
+                                        return;
+                                    }
+
+                                    match response.bytes().await {
+                                        Ok(bytes) => {
+                                            let bytes = bytes.to_vec().into();
+
+                                            let mut binding = images.write().unwrap();
+                                            binding.insert(source, AppImage::Bytes(bytes));
+                                            drop(binding);
+
+                                            if let Some(ctx) = &*ctx.read().unwrap() {
+                                                ctx.request_repaint();
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to fetch image ({source}): {e:?}");
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to fetch image ({source}): {e:?}");
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -485,6 +626,18 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
         self.app.background = background.map(Into::into);
 
         log::debug!("EguiRenderer: initialized with size {width}x{height}");
+
+        // Start listening for events
+        log::debug!("EguiRenderer: spawning listen thread");
+        moosicbox_task::spawn("renderer_egui::init: listen", {
+            let app = self.app.clone();
+            async move {
+                log::debug!("EguiRenderer: listening");
+                app.listen().await;
+                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+            }
+        });
+
         Ok(())
     }
 
