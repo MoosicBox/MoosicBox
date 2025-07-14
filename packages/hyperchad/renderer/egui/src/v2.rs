@@ -11,7 +11,11 @@ use crate::layout::EguiCalc;
 use async_trait::async_trait;
 use eframe::egui::{self, Color32, Response, Ui, Widget};
 use flume::{Receiver, Sender};
-use hyperchad_actions::{ActionTrigger, ActionType, logic::Value};
+use hyperchad_actions::handler::{
+    ActionContext, ActionHandler, BTreeMapStyleManager, ElementFinder, LogLevel as ActionLogLevel,
+    StyleTrigger,
+};
+use hyperchad_actions::{ActionTrigger, logic::Value};
 use hyperchad_renderer::canvas::CanvasUpdate;
 use hyperchad_router::{ClientInfo, Router};
 use hyperchad_transformer::{Container, Element, Input, models::Visibility};
@@ -184,6 +188,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         calculator: C,
     ) -> Self {
         let (event_tx, event_rx) = flume::unbounded();
+
         Self {
             ctx: Arc::new(RwLock::new(None)),
             calculator: Arc::new(RwLock::new(calculator)),
@@ -412,59 +417,72 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     }
 
     fn handle_actions(&self, _ui: &Ui, container: &Container, response: &Response) {
+        // Use shared action handler system
         for action in &container.actions {
-            match action.trigger {
-                ActionTrigger::Click => {
-                    if response.clicked() {
-                        self.execute_action(&action.effect.action);
-                    }
-                }
-                ActionTrigger::Hover => {
-                    if response.hovered() {
-                        self.execute_action(&action.effect.action);
-                    }
-                }
-                ActionTrigger::Change => {
-                    if response.changed() {
-                        self.execute_action(&action.effect.action);
-                    }
-                }
-                // Add other triggers as needed
-                _ => {}
+            let should_trigger = match action.trigger {
+                ActionTrigger::Click => response.clicked(),
+                ActionTrigger::Hover => response.hovered(),
+                ActionTrigger::Change => response.changed(),
+                _ => false,
+            };
+
+            if should_trigger {
+                self.handle_action_with_handler(action, container);
             }
         }
     }
 
-    fn execute_action(&self, action: &ActionType) {
-        match action {
-            ActionType::Navigate { url } => {
-                let _ = self.sender.send(url.clone());
-            }
-            ActionType::Custom { action } => {
-                let _ = self.request_action.send((action.clone(), None));
-            }
-            ActionType::Log { message, level } => match level {
-                hyperchad_actions::LogLevel::Error => log::error!("{message}"),
-                hyperchad_actions::LogLevel::Warn => log::warn!("{message}"),
-                hyperchad_actions::LogLevel::Info => log::info!("{message}"),
-                hyperchad_actions::LogLevel::Debug => log::debug!("{message}"),
-                hyperchad_actions::LogLevel::Trace => log::trace!("{message}"),
-            },
-            ActionType::Multi(actions) => {
-                for action in actions {
-                    self.execute_action(action);
-                }
-            }
-            ActionType::MultiEffect(effects) => {
-                for effect in effects {
-                    self.execute_action(&effect.action);
-                }
-            }
-            // Add other action types as needed
-            _ => {
-                log::debug!("Unhandled action type: {action:?}");
-            }
-        }
+    fn handle_action_with_handler(
+        &self,
+        action: &hyperchad_actions::Action,
+        root_container: &Container,
+    ) {
+        // Create action context
+        let action_context = EguiActionContext {
+            ctx: Arc::new(RwLock::new(None)), // Will be set when context is available
+            navigation_sender: Some(self.sender.clone()),
+            action_sender: Some(self.request_action.clone()),
+        };
+
+        // Create element finder
+        let element_finder = EguiElementFinder::new(root_container);
+
+        // Create style managers
+        let visibility_manager = BTreeMapStyleManager::default();
+        let background_manager = BTreeMapStyleManager::default();
+        let display_manager = BTreeMapStyleManager::default();
+
+        // Create action handler
+        let mut action_handler = ActionHandler::new(
+            element_finder,
+            visibility_manager,
+            background_manager,
+            display_manager,
+        );
+
+        // Convert action trigger to style trigger
+        let style_trigger = match action.trigger {
+            ActionTrigger::Event(_) => StyleTrigger::CustomEvent,
+            ActionTrigger::Click
+            | ActionTrigger::Hover
+            | ActionTrigger::Change
+            | ActionTrigger::ClickOutside
+            | ActionTrigger::MouseDown
+            | ActionTrigger::KeyDown
+            | ActionTrigger::Resize
+            | ActionTrigger::Immediate => StyleTrigger::UiEvent,
+        };
+
+        // Handle the action
+        action_handler.handle_action(
+            &action.effect.action,
+            Some(&action.effect),
+            style_trigger,
+            0, // self_id - would need to be determined from context
+            &action_context,
+            None, // event_value
+            None, // value
+        );
     }
 
     fn get_container_text(container: &Container) -> Option<String> {
@@ -817,5 +835,234 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> eframe::App for EguiApp<C> {
                     self.render_container(ui, container);
                 }
             });
+    }
+}
+
+/// `ActionContext` implementation for egui renderer
+#[derive(Clone)]
+struct EguiActionContext {
+    ctx: Arc<RwLock<Option<egui::Context>>>,
+    navigation_sender: Option<Sender<String>>,
+    action_sender: Option<Sender<(String, Option<Value>)>>,
+}
+
+impl ActionContext for EguiActionContext {
+    fn request_repaint(&self) {
+        if let Some(ctx) = &*self.ctx.read().unwrap() {
+            ctx.request_repaint();
+        }
+    }
+
+    fn get_mouse_position(&self) -> Option<(f32, f32)> {
+        // TODO: Implement mouse position tracking
+        None
+    }
+
+    fn get_mouse_position_relative(&self, _element_id: usize) -> Option<(f32, f32)> {
+        // TODO: Implement relative mouse position
+        None
+    }
+
+    fn navigate(&self, url: String) -> Result<(), Box<dyn std::error::Error + Send>> {
+        self.navigation_sender.as_ref().map_or_else(
+            || {
+                Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Navigation sender not available",
+                )) as Box<dyn std::error::Error + Send>)
+            },
+            |sender| {
+                sender
+                    .send(url)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
+            },
+        )
+    }
+
+    fn request_custom_action(
+        &self,
+        action: String,
+        value: Option<Value>,
+    ) -> Result<(), Box<dyn std::error::Error + Send>> {
+        self.action_sender.as_ref().map_or_else(
+            || {
+                Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Action sender not available",
+                )) as Box<dyn std::error::Error + Send>)
+            },
+            |sender| {
+                sender
+                    .send((action, value))
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
+            },
+        )
+    }
+
+    fn log(&self, level: ActionLogLevel, message: &str) {
+        match level {
+            ActionLogLevel::Error => log::error!("{message}"),
+            ActionLogLevel::Warn => log::warn!("{message}"),
+            ActionLogLevel::Info => log::info!("{message}"),
+            ActionLogLevel::Debug => log::debug!("{message}"),
+            ActionLogLevel::Trace => log::trace!("{message}"),
+        }
+    }
+}
+
+/// `ElementFinder` implementation for egui renderer
+struct EguiElementFinder<'a> {
+    container: &'a Container,
+}
+
+impl<'a> EguiElementFinder<'a> {
+    const fn new(container: &'a Container) -> Self {
+        Self { container }
+    }
+
+    fn find_element_recursive(
+        container: &Container,
+        predicate: &dyn Fn(&Container) -> bool,
+    ) -> Option<usize> {
+        if predicate(container) {
+            return Some(container.id);
+        }
+
+        for child in &container.children {
+            if let Some(id) = Self::find_element_recursive(child, predicate) {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+}
+
+impl ElementFinder for EguiElementFinder<'_> {
+    fn find_by_str_id(&self, str_id: &str) -> Option<usize> {
+        Self::find_element_recursive(self.container, &|container| {
+            container.str_id.as_ref().is_some_and(|id| id == str_id)
+        })
+    }
+
+    fn find_by_class(&self, class: &str) -> Option<usize> {
+        Self::find_element_recursive(self.container, &|container| {
+            container.classes.iter().any(|c| c == class)
+        })
+    }
+
+    fn find_child_by_class(&self, parent_id: usize, class: &str) -> Option<usize> {
+        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
+            if container.id == id {
+                return Some(container);
+            }
+            for child in &container.children {
+                if let Some(found) = find_by_id(child, id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let parent = find_by_id(self.container, parent_id)?;
+
+        for child in &parent.children {
+            if child.classes.iter().any(|c| c == class) {
+                return Some(child.id);
+            }
+        }
+
+        None
+    }
+
+    fn get_last_child(&self, parent_id: usize) -> Option<usize> {
+        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
+            if container.id == id {
+                return Some(container);
+            }
+            for child in &container.children {
+                if let Some(found) = find_by_id(child, id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let parent = find_by_id(self.container, parent_id)?;
+        parent.children.last().map(|child| child.id)
+    }
+
+    fn get_data_attr(&self, element_id: usize, attr: &str) -> Option<String> {
+        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
+            if container.id == id {
+                return Some(container);
+            }
+            for child in &container.children {
+                if let Some(found) = find_by_id(child, id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let element = find_by_id(self.container, element_id)?;
+        element.data.get(attr).cloned()
+    }
+
+    fn get_str_id(&self, element_id: usize) -> Option<String> {
+        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
+            if container.id == id {
+                return Some(container);
+            }
+            for child in &container.children {
+                if let Some(found) = find_by_id(child, id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let element = find_by_id(self.container, element_id)?;
+        element.str_id.clone()
+    }
+
+    fn get_dimensions(&self, element_id: usize) -> Option<(f32, f32)> {
+        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
+            if container.id == id {
+                return Some(container);
+            }
+            for child in &container.children {
+                if let Some(found) = find_by_id(child, id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let element = find_by_id(self.container, element_id)?;
+        Some((
+            element.calculated_width.unwrap_or(0.0),
+            element.calculated_height.unwrap_or(0.0),
+        ))
+    }
+
+    fn get_position(&self, element_id: usize) -> Option<(f32, f32)> {
+        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
+            if container.id == id {
+                return Some(container);
+            }
+            for child in &container.children {
+                if let Some(found) = find_by_id(child, id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        let element = find_by_id(self.container, element_id)?;
+        Some((
+            element.calculated_x.unwrap_or(0.0),
+            element.calculated_y.unwrap_or(0.0),
+        ))
     }
 }
