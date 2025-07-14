@@ -936,6 +936,18 @@ impl<'a> EguiElementFinder<'a> {
 
         None
     }
+
+    fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
+        if container.id == id {
+            return Some(container);
+        }
+        for child in &container.children {
+            if let Some(found) = Self::find_by_id(child, id) {
+                return Some(found);
+            }
+        }
+        None
+    }
 }
 
 impl ElementFinder for EguiElementFinder<'_> {
@@ -952,19 +964,7 @@ impl ElementFinder for EguiElementFinder<'_> {
     }
 
     fn find_child_by_class(&self, parent_id: usize, class: &str) -> Option<usize> {
-        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
-            if container.id == id {
-                return Some(container);
-            }
-            for child in &container.children {
-                if let Some(found) = find_by_id(child, id) {
-                    return Some(found);
-                }
-            }
-            None
-        }
-
-        let parent = find_by_id(self.container, parent_id)?;
+        let parent = Self::find_by_id(self.container, parent_id)?;
 
         for child in &parent.children {
             if child.classes.iter().any(|c| c == class) {
@@ -976,70 +976,22 @@ impl ElementFinder for EguiElementFinder<'_> {
     }
 
     fn get_last_child(&self, parent_id: usize) -> Option<usize> {
-        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
-            if container.id == id {
-                return Some(container);
-            }
-            for child in &container.children {
-                if let Some(found) = find_by_id(child, id) {
-                    return Some(found);
-                }
-            }
-            None
-        }
-
-        let parent = find_by_id(self.container, parent_id)?;
+        let parent = Self::find_by_id(self.container, parent_id)?;
         parent.children.last().map(|child| child.id)
     }
 
     fn get_data_attr(&self, element_id: usize, attr: &str) -> Option<String> {
-        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
-            if container.id == id {
-                return Some(container);
-            }
-            for child in &container.children {
-                if let Some(found) = find_by_id(child, id) {
-                    return Some(found);
-                }
-            }
-            None
-        }
-
-        let element = find_by_id(self.container, element_id)?;
+        let element = Self::find_by_id(self.container, element_id)?;
         element.data.get(attr).cloned()
     }
 
     fn get_str_id(&self, element_id: usize) -> Option<String> {
-        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
-            if container.id == id {
-                return Some(container);
-            }
-            for child in &container.children {
-                if let Some(found) = find_by_id(child, id) {
-                    return Some(found);
-                }
-            }
-            None
-        }
-
-        let element = find_by_id(self.container, element_id)?;
+        let element = Self::find_by_id(self.container, element_id)?;
         element.str_id.clone()
     }
 
     fn get_dimensions(&self, element_id: usize) -> Option<(f32, f32)> {
-        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
-            if container.id == id {
-                return Some(container);
-            }
-            for child in &container.children {
-                if let Some(found) = find_by_id(child, id) {
-                    return Some(found);
-                }
-            }
-            None
-        }
-
-        let element = find_by_id(self.container, element_id)?;
+        let element = Self::find_by_id(self.container, element_id)?;
         Some((
             element.calculated_width.unwrap_or(0.0),
             element.calculated_height.unwrap_or(0.0),
@@ -1047,19 +999,7 @@ impl ElementFinder for EguiElementFinder<'_> {
     }
 
     fn get_position(&self, element_id: usize) -> Option<(f32, f32)> {
-        fn find_by_id(container: &Container, id: usize) -> Option<&Container> {
-            if container.id == id {
-                return Some(container);
-            }
-            for child in &container.children {
-                if let Some(found) = find_by_id(child, id) {
-                    return Some(found);
-                }
-            }
-            None
-        }
-
-        let element = find_by_id(self.container, element_id)?;
+        let element = Self::find_by_id(self.container, element_id)?;
         Some((
             element.calculated_x.unwrap_or(0.0),
             element.calculated_y.unwrap_or(0.0),
