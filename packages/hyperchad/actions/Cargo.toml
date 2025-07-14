@@ -14,6 +14,7 @@ version     = "0.1.0"
 group = "hyperchad"
 
 [dependencies]
+hyperchad_color = { workspace = true, optional = true }
 hyperchad_transformer_models = { workspace = true }
 moosicbox_arb = { workspace = true, optional = true, features = [
     "serde",
@@ -26,13 +27,13 @@ quickcheck = { workspace = true, optional = true }
 serde      = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
-
 [dev-dependencies]
+flume                        = { workspace = true }
 hyperchad_transformer_models = { workspace = true, features = ["arb"] }
 moosicbox_arb                = { workspace = true, features = ["serde", "xml"] }
 
 [features]
-default = ["arb", "logic", "serde"]
+default = ["arb", "handler", "logic", "serde"]
 
 fail-on-warnings = []
 
@@ -44,3 +45,5 @@ arb = [
 logic = []
 
 serde = ["dep:serde", "dep:serde_json", "hyperchad_transformer_models/serde"]
+
+handler = ["dep:hyperchad_color", "logic"]

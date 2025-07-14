@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, LazyLock, Mutex, RwLock},
-    time::Instant,
 };
 
 use crate::layout::EguiCalc;
@@ -9,7 +8,9 @@ use async_trait::async_trait;
 use eframe::egui::{self, Color32, CursorIcon, Response, Ui, Widget};
 use flume::{Receiver, Sender};
 use hyperchad_actions::{
-    ActionEffect, ActionTrigger, ActionType, ElementTarget, StyleAction, Target, logic::Value,
+    ActionEffect, ActionTrigger, ActionType, ElementTarget, Target,
+    handler::{ActionContext, StyleTrigger},
+    logic::Value,
 };
 use hyperchad_renderer::{
     Color, Content, Handle, PartialView, RenderRunner, Renderer, ToRenderRunner, View,
@@ -51,6 +52,7 @@ pub struct EguiRenderer<C: EguiCalc + Clone + Send + Sync> {
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(
         router: Router,
         request_action: Sender<(String, Option<Value>)>,
@@ -70,7 +72,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiRenderer<C> {
                 tx,
                 event_tx,
                 event_rx,
-                request_action,
+                &request_action,
                 on_resize,
                 client_info,
                 calculator,
@@ -538,14 +540,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
 
             *app.container.write().unwrap() = Some(element);
             app.images.write().unwrap().clear();
-            app.backgrounds.write().unwrap().clear();
-            app.visibilities.write().unwrap().clear();
             app.viewport_listeners.write().unwrap().clear();
             app.route_requests.write().unwrap().clear();
             app.checkboxes.write().unwrap().clear();
             app.positions.write().unwrap().clear();
-            app.action_delay_off.write().unwrap().clear();
             app.immediate_elements_handled.write().unwrap().clear();
+            // Removed: action_handler field was removed
 
             log::debug!("render: finished");
             if let Some(ctx) = &*app.ctx.read().unwrap() {
@@ -588,41 +588,25 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
             let Some(page) = binding.as_mut() else {
                 return Ok(());
             };
-            let ids = view
-                .container
-                .children
-                .as_slice()
-                .iter()
-                .map(|x| x.id)
-                .collect::<Vec<_>>();
-
             let calculator = app.calculator.read().unwrap();
 
-            if let Some(removed) = page.replace_str_id_with_elements_calc(
-                &*calculator,
-                view.container.children,
-                &view.target,
-            ) {
+            if page
+                .replace_str_id_with_elements_calc(
+                    &*calculator,
+                    view.container.children,
+                    &view.target,
+                )
+                .is_some()
+            {
                 drop(calculator);
                 let mut watch_positions = app.watch_positions.write().unwrap();
                 watch_positions.clear();
                 add_watch_pos(page, page, &mut watch_positions);
                 drop(watch_positions);
 
-                let mut visibilities = app.visibilities.write().unwrap();
-                if let Some(visibility) = visibilities.remove(&removed.id) {
-                    for id in &ids {
-                        visibilities.insert(*id, visibility.clone());
-                    }
-                }
-                drop(visibilities);
-                let mut backgrounds = app.backgrounds.write().unwrap();
-                if let Some(background) = backgrounds.remove(&removed.id) {
-                    for id in &ids {
-                        backgrounds.insert(*id, background.clone());
-                    }
-                }
-                drop(backgrounds);
+                // TODO: Handle style transfer with shared action handler
+                // For now, clear the action handler to reset state
+                // Removed: action_handler field was removed
 
                 drop(binding);
                 if let Some(ctx) = &*app.ctx.read().unwrap() {
@@ -734,32 +718,18 @@ enum AppImage {
     Bytes(Arc<[u8]>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StyleTrigger {
-    UiEvent,
-    CustomEvent,
-}
-
-#[derive(Debug, Clone)]
-struct StyleOverride<T> {
-    trigger: StyleTrigger,
-    value: T,
-}
-
 struct RenderContext<'a> {
-    container: &'a Container,
     viewport_listeners: &'a mut HashMap<usize, ViewportListener>,
     images: &'a mut HashMap<String, AppImage>,
     canvas_actions: &'a mut HashMap<String, Vec<CanvasAction>>,
     route_requests: &'a mut Vec<usize>,
-    visibilities: &'a mut HashMap<usize, Vec<StyleOverride<Option<Visibility>>>>,
-    displays: &'a mut HashMap<usize, bool>,
-    backgrounds: &'a mut HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
     checkboxes: &'a mut HashMap<egui::Id, bool>,
     positions: &'a mut HashMap<usize, egui::Rect>,
     watch_positions: &'a mut HashSet<usize>,
-    action_delay_off: &'a mut HashMap<usize, (Instant, u64)>,
-    action_throttle: &'a mut HashMap<usize, (Instant, u64)>,
+    // Shared action handler for all action processing
+    action_handler: EguiActionHandler<'a>,
+    // Action context for UI operations
+    action_context: &'a EguiActionContext,
 }
 
 #[allow(clippy::type_complexity)]
@@ -780,19 +750,15 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
     images: Arc<RwLock<HashMap<String, AppImage>>>,
     canvas_actions: Arc<RwLock<HashMap<String, Vec<CanvasAction>>>>,
     route_requests: Arc<RwLock<Vec<usize>>>,
-    visibilities: Arc<RwLock<HashMap<usize, Vec<StyleOverride<Option<Visibility>>>>>>,
-    displays: Arc<RwLock<HashMap<usize, bool>>>,
-    backgrounds: Arc<RwLock<HashMap<usize, Vec<StyleOverride<Option<Color>>>>>>,
+    // Removed: action_handler - now created locally as needed to avoid lifetime issues
+    action_context: EguiActionContext,
     checkboxes: Arc<RwLock<HashMap<egui::Id, bool>>>,
     positions: Arc<RwLock<HashMap<usize, egui::Rect>>>,
     watch_positions: Arc<RwLock<HashSet<usize>>>,
-    action_delay_off: Arc<RwLock<HashMap<usize, (Instant, u64)>>>,
-    action_throttle: Arc<RwLock<HashMap<usize, (Instant, u64)>>>,
     router: Router,
     background: Option<Color32>,
     title: Option<String>,
     description: Option<String>,
-    request_action: Sender<(String, Option<Value>)>,
     on_resize: Sender<(f32, f32)>,
     side_effects: Arc<Mutex<VecDeque<Handler>>>,
     event_handlers: Arc<RwLock<Vec<(String, EventHandler)>>>,
@@ -804,6 +770,175 @@ struct EguiApp<C: EguiCalc + Clone + Send + Sync> {
 
 type Handler = Box<dyn Fn(&mut RenderContext) -> bool + Send + Sync>;
 type EventHandler = Box<dyn Fn(&mut RenderContext, Option<&str>) + Send + Sync>;
+type EguiActionHandler<'a> = hyperchad_actions::handler::ActionHandler<
+    EguiElementFinder<'a>,
+    hyperchad_actions::handler::BTreeMapStyleManager<Option<Visibility>>,
+    hyperchad_actions::handler::BTreeMapStyleManager<Option<hyperchad_color::Color>>,
+    hyperchad_actions::handler::BTreeMapStyleManager<bool>,
+>;
+
+/// `ActionContext` implementation for egui renderer
+#[derive(Clone)]
+struct EguiActionContext {
+    ctx: Arc<RwLock<Option<egui::Context>>>,
+    sender: Sender<String>,
+    request_action: Sender<(String, Option<Value>)>,
+}
+
+impl ActionContext for EguiActionContext {
+    fn request_repaint(&self) {
+        if let Some(ctx) = &*self.ctx.read().unwrap() {
+            ctx.request_repaint();
+        }
+    }
+
+    fn navigate(&self, url: String) -> Result<(), Box<dyn std::error::Error + Send>> {
+        self.sender
+            .send(url)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
+    }
+
+    fn request_custom_action(
+        &self,
+        action: String,
+        value: Option<Value>,
+    ) -> Result<(), Box<dyn std::error::Error + Send>> {
+        self.request_action
+            .send((action, value))
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)
+    }
+
+    fn log(&self, level: hyperchad_actions::handler::LogLevel, message: &str) {
+        match level {
+            hyperchad_actions::handler::LogLevel::Error => log::error!("{message}"),
+            hyperchad_actions::handler::LogLevel::Warn => log::warn!("{message}"),
+            hyperchad_actions::handler::LogLevel::Info => log::info!("{message}"),
+            hyperchad_actions::handler::LogLevel::Debug => log::debug!("{message}"),
+            hyperchad_actions::handler::LogLevel::Trace => log::trace!("{message}"),
+        }
+    }
+
+    fn get_mouse_position(&self) -> Option<(f32, f32)> {
+        // TODO: Implement mouse position tracking
+        None
+    }
+
+    fn get_mouse_position_relative(&self, _element_id: usize) -> Option<(f32, f32)> {
+        // TODO: Implement relative mouse position
+        None
+    }
+}
+
+/// Custom element finder for Container since we can't use the wrapper approach effectively
+struct EguiElementFinder<'a> {
+    container: &'a Container,
+    positions: std::collections::BTreeMap<usize, (f32, f32)>,
+    dimensions: std::collections::BTreeMap<usize, (f32, f32)>,
+}
+
+impl<'a> EguiElementFinder<'a> {
+    const fn new(container: &'a Container) -> Self {
+        Self {
+            container,
+            positions: std::collections::BTreeMap::new(),
+            dimensions: std::collections::BTreeMap::new(),
+        }
+    }
+}
+
+impl hyperchad_actions::handler::ElementFinder for EguiElementFinder<'_> {
+    fn find_by_str_id(&self, str_id: &str) -> Option<usize> {
+        Self::find_element_by_str_id(self.container, str_id).map(|c| c.id)
+    }
+
+    fn find_by_class(&self, class: &str) -> Option<usize> {
+        Self::find_element_by_class(self.container, class).map(|c| c.id)
+    }
+
+    fn find_child_by_class(&self, parent_id: usize, class: &str) -> Option<usize> {
+        let parent = Self::find_element_by_id(self.container, parent_id)?;
+        Self::find_element_by_class(parent, class).map(|c| c.id)
+    }
+
+    fn get_last_child(&self, parent_id: usize) -> Option<usize> {
+        let parent = Self::find_element_by_id(self.container, parent_id)?;
+        parent.children.last().map(|c| c.id)
+    }
+
+    fn get_str_id(&self, element_id: usize) -> Option<String> {
+        Self::find_element_by_id(self.container, element_id)?
+            .str_id
+            .clone()
+    }
+
+    fn get_data_attr(&self, element_id: usize, key: &str) -> Option<String> {
+        Self::find_element_by_id(self.container, element_id)?
+            .data
+            .get(key)
+            .cloned()
+    }
+
+    fn get_dimensions(&self, element_id: usize) -> Option<(f32, f32)> {
+        self.dimensions.get(&element_id).copied().or_else(|| {
+            let element = Self::find_element_by_id(self.container, element_id)?;
+            Some((
+                element.calculated_width.unwrap_or(0.0),
+                element.calculated_height.unwrap_or(0.0),
+            ))
+        })
+    }
+
+    fn get_position(&self, element_id: usize) -> Option<(f32, f32)> {
+        self.positions.get(&element_id).copied().or_else(|| {
+            let element = Self::find_element_by_id(self.container, element_id)?;
+            Some((
+                element.calculated_x.unwrap_or(0.0),
+                element.calculated_y.unwrap_or(0.0),
+            ))
+        })
+    }
+}
+
+impl EguiElementFinder<'_> {
+    fn find_element_by_id(container: &Container, id: usize) -> Option<&Container> {
+        if container.id == id {
+            return Some(container);
+        }
+
+        for child in &container.children {
+            if let Some(found) = Self::find_element_by_id(child, id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    fn find_element_by_str_id<'b>(container: &'b Container, str_id: &str) -> Option<&'b Container> {
+        if container.str_id.as_deref() == Some(str_id) {
+            return Some(container);
+        }
+
+        for child in &container.children {
+            if let Some(found) = Self::find_element_by_str_id(child, str_id) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    fn find_element_by_class<'b>(container: &'b Container, class: &str) -> Option<&'b Container> {
+        if container.classes.iter().any(|c| c == class) {
+            return Some(container);
+        }
+
+        for child in &container.children {
+            if let Some(found) = Self::find_element_by_class(child, class) {
+                return Some(found);
+            }
+        }
+        None
+    }
+}
 
 impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     #[allow(clippy::too_many_arguments)]
@@ -812,13 +947,14 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         sender: Sender<String>,
         event: Sender<AppEvent>,
         event_receiver: Receiver<AppEvent>,
-        request_action: Sender<(String, Option<Value>)>,
+        request_action: &Sender<(String, Option<Value>)>,
         on_resize: Sender<(f32, f32)>,
         client_info: Arc<ClientInfo>,
         calculator: C,
     ) -> Self {
+        let ctx = Arc::new(RwLock::new(None));
         Self {
-            ctx: Arc::new(RwLock::new(None)),
+            ctx: ctx.clone(),
             calculator: Arc::new(RwLock::new(calculator)),
             render_queue: Arc::new(RwLock::new(Some(VecDeque::new()))),
             view_tx: Arc::new(RwLock::new(None)),
@@ -826,26 +962,26 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
             width: Arc::new(RwLock::new(None)),
             height: Arc::new(RwLock::new(None)),
             container: Arc::new(RwLock::new(None)),
-            sender,
+            sender: sender.clone(),
             event,
             event_receiver,
             viewport_listeners: Arc::new(RwLock::new(HashMap::new())),
             images: Arc::new(RwLock::new(HashMap::new())),
             canvas_actions: Arc::new(RwLock::new(HashMap::new())),
             route_requests: Arc::new(RwLock::new(vec![])),
-            visibilities: Arc::new(RwLock::new(HashMap::new())),
-            displays: Arc::new(RwLock::new(HashMap::new())),
-            backgrounds: Arc::new(RwLock::new(HashMap::new())),
+            // Removed: action_handler initialization
+            action_context: EguiActionContext {
+                ctx,
+                sender,
+                request_action: request_action.clone(),
+            },
             checkboxes: Arc::new(RwLock::new(HashMap::new())),
             positions: Arc::new(RwLock::new(HashMap::new())),
             watch_positions: Arc::new(RwLock::new(HashSet::new())),
-            action_delay_off: Arc::new(RwLock::new(HashMap::new())),
-            action_throttle: Arc::new(RwLock::new(HashMap::new())),
             router,
             background: None,
             title: None,
             description: None,
-            request_action,
             on_resize,
             side_effects: Arc::new(Mutex::new(VecDeque::new())),
             event_handlers: Arc::new(RwLock::new(vec![])),
@@ -870,29 +1006,24 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         let mut images = self.images.write().unwrap();
         let mut canvas_actions = self.canvas_actions.write().unwrap();
         let mut route_requests = self.route_requests.write().unwrap();
-        let mut visibilities = self.visibilities.write().unwrap();
-        let mut displays = self.displays.write().unwrap();
-        let mut backgrounds = self.backgrounds.write().unwrap();
         let mut checkboxes = self.checkboxes.write().unwrap();
         let mut positions = self.positions.write().unwrap();
         let mut watch_positions = self.watch_positions.write().unwrap();
-        let mut action_delay_off = self.action_delay_off.write().unwrap();
-        let mut action_throttle = self.action_throttle.write().unwrap();
+        // Create action handler for event processing
+        let element_finder = EguiElementFinder::new(container);
+        let action_handler =
+            hyperchad_actions::handler::utils::create_default_handler(element_finder);
 
         let mut render_context = RenderContext {
-            container,
             viewport_listeners: &mut viewport_listeners,
             images: &mut images,
             canvas_actions: &mut canvas_actions,
             route_requests: &mut route_requests,
-            visibilities: &mut visibilities,
-            backgrounds: &mut backgrounds,
-            displays: &mut displays,
             checkboxes: &mut checkboxes,
             positions: &mut positions,
             watch_positions: &mut watch_positions,
-            action_delay_off: &mut action_delay_off,
-            action_throttle: &mut action_throttle,
+            action_handler,
+            action_context: &self.action_context,
         };
 
         let ctx = self.ctx.read().unwrap().clone();
@@ -1280,11 +1411,15 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     fn container_hidden(render_context: &mut RenderContext, container: &Container) -> bool {
-        Self::get_container_style_override(container, render_context.visibilities)
+        // Check visibility override via action handler
+        let visibility = render_context
+            .action_handler
+            .get_visibility_override(container.id)
             .copied()
-            .flatten()
-            .unwrap_or_else(|| container.visibility.unwrap_or_default())
-            == Visibility::Hidden
+            .unwrap_or(container.visibility)
+            .unwrap_or_default();
+
+        visibility == Visibility::Hidden
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -1960,19 +2095,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         inner(ui, relative_container)
     }
 
-    fn get_container_style_override<'a, T>(
-        container: &'a Container,
-        overrides: &'a HashMap<usize, Vec<StyleOverride<T>>>,
-    ) -> Option<&'a T> {
-        if let Some(overrides) = overrides.get(&container.id) {
-            if let Some(StyleOverride { value, .. }) = overrides.last() {
-                return Some(value);
-            }
-        }
-
-        None
-    }
-
     #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn render_container_contents<'a>(
@@ -2009,10 +2131,11 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         .map_or(0, |x| x.round() as i8),
                 });
 
-                if let Some(background) =
-                    Self::get_container_style_override(container, render_context.backgrounds)
-                        .copied()
-                        .unwrap_or(container.background)
+                if let Some(background) = render_context
+                    .action_handler
+                    .get_background_override(container.id)
+                    .copied()
+                    .unwrap_or(container.background)
                 {
                     frame = frame.fill(background.into());
                 }
@@ -2424,8 +2547,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         if container.is_visible() {
             for fx_action in &container.actions {
-                let request_action = self.request_action.clone();
-
                 match fx_action.trigger {
                     ActionTrigger::Click | ActionTrigger::ClickOutside => {
                         #[cfg(feature = "profiling")]
@@ -2434,9 +2555,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         let action = fx_action.effect.clone();
                         let id = container.id;
                         let pointer = ctx.input(|x| x.pointer.clone());
-                        let ctx = ctx.clone();
                         let responses = responses.clone();
-                        let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
                             if responses
                                 .iter()
@@ -2450,10 +2569,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     Some(&action),
                                     StyleTrigger::UiEvent,
                                     render_context,
-                                    &ctx,
                                     id,
-                                    &sender,
-                                    &request_action,
                                     None,
                                     None,
                                 );
@@ -2462,10 +2578,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                             Self::unhandle_action(
                                 &action.action,
-                                Some(&action),
                                 StyleTrigger::UiEvent,
                                 render_context,
-                                &ctx,
                                 id,
                             );
 
@@ -2478,9 +2592,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         let action = fx_action.effect.clone();
                         let id = container.id;
                         let pointer = ctx.input(|x| x.pointer.clone());
-                        let ctx = ctx.clone();
                         let responses = responses.clone();
-                        let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
                             if responses
                                 .iter()
@@ -2493,10 +2605,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     Some(&action),
                                     StyleTrigger::UiEvent,
                                     render_context,
-                                    &ctx,
                                     id,
-                                    &sender,
-                                    &request_action,
                                     None,
                                     None,
                                 );
@@ -2505,10 +2614,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                             Self::unhandle_action(
                                 &action.action,
-                                Some(&action),
                                 StyleTrigger::UiEvent,
                                 render_context,
-                                &ctx,
                                 id,
                             );
 
@@ -2525,8 +2632,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         let id = container.id;
                         let responses = responses.clone();
                         let pointer = ctx.input(|x| x.pointer.clone());
-                        let ctx = ctx.clone();
-                        let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
                             if responses
                                 .iter()
@@ -2538,10 +2643,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                     Some(&action),
                                     StyleTrigger::UiEvent,
                                     render_context,
-                                    &ctx,
                                     id,
-                                    &sender,
-                                    &request_action,
                                     None,
                                     None,
                                 );
@@ -2549,10 +2651,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                             Self::unhandle_action(
                                 &action.action,
-                                Some(&action),
                                 StyleTrigger::UiEvent,
                                 render_context,
-                                &ctx,
                                 id,
                             );
 
@@ -2571,8 +2671,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                 ui.and_then(|ui| ui.data(|data| data.get_temp::<String>(x.id)))
                             })
                             .collect::<Vec<_>>();
-                        let ctx = ctx.clone();
-                        let sender = self.sender.clone();
                         self.trigger_side_effect(move |render_context| {
                             if !changed.is_empty() {
                                 for value in &changed {
@@ -2582,10 +2680,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                         Some(&action),
                                         StyleTrigger::UiEvent,
                                         render_context,
-                                        &ctx,
                                         id,
-                                        &sender,
-                                        &request_action,
                                         value.as_deref(),
                                         None,
                                     ) {
@@ -2598,10 +2693,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
                             Self::unhandle_action(
                                 &action.action,
-                                Some(&action),
                                 StyleTrigger::UiEvent,
                                 render_context,
-                                &ctx,
                                 id,
                             );
 
@@ -2609,21 +2702,15 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         });
                     }
                     ActionTrigger::Resize => {
-                        let request_action = self.request_action.clone();
                         let action = fx_action.effect.clone();
                         let id = container.id;
-                        let ctx = self.ctx.read().unwrap().clone().unwrap();
-                        let sender = self.sender.clone();
                         self.add_resize_handler(move |render_context| {
                             if !Self::handle_action(
                                 &action.action,
                                 Some(&action),
                                 StyleTrigger::CustomEvent,
                                 render_context,
-                                &ctx,
                                 id,
-                                &sender,
-                                &request_action,
                                 None,
                                 None,
                             ) {
@@ -2633,21 +2720,15 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                         });
                     }
                     ActionTrigger::Immediate => {
-                        let request_action = self.request_action.clone();
                         let action = fx_action.effect.clone();
                         let id = container.id;
-                        let ctx = self.ctx.read().unwrap().clone().unwrap();
-                        let sender = self.sender.clone();
                         self.add_immediate_handler(id, move |render_context| {
                             if !Self::handle_action(
                                 &action.action,
                                 Some(&action),
                                 StyleTrigger::CustomEvent,
                                 render_context,
-                                &ctx,
                                 id,
-                                &sender,
-                                &request_action,
                                 None,
                                 None,
                             ) {
@@ -2665,11 +2746,8 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
     fn handle_custom_event_side_effects(&self, container: &Container) {
         for fx_action in &container.actions {
             if let ActionTrigger::Event(event_name) = &fx_action.trigger {
-                let request_action = self.request_action.clone();
                 let action = fx_action.effect.clone();
                 let id = container.id;
-                let ctx = self.ctx.read().unwrap().clone().unwrap();
-                let sender = self.sender.clone();
                 self.add_event_handler(event_name.to_string(), move |render_context, value| {
                     let effect = &action;
                     if let ActionType::Event { action, .. } = &action.action {
@@ -2678,10 +2756,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             Some(effect),
                             StyleTrigger::CustomEvent,
                             render_context,
-                            &ctx,
                             id,
-                            &sender,
-                            &request_action,
                             value,
                             None,
                         );
@@ -2756,131 +2831,6 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    fn calc_value(
-        x: &Value,
-        render_context: &mut RenderContext,
-        ctx: &egui::Context,
-        id: usize,
-        event_value: Option<&str>,
-    ) -> Option<Value> {
-        use hyperchad_actions::logic::{CalcValue, Value};
-
-        let calc_func = |calc_value: &CalcValue| match calc_value {
-            CalcValue::Visibility { target } => Some(Value::Visibility(
-                map_element_target(target, id, render_context.container, |element| {
-                    Self::get_container_style_override(element, render_context.visibilities)
-                        .copied()
-                        .unwrap_or(element.visibility)
-                        .unwrap_or_default()
-                })
-                .unwrap_or_default(),
-            )),
-            CalcValue::Display { target } => Some(Value::Display(
-                map_element_target(target, id, render_context.container, |element| {
-                    render_context
-                        .displays
-                        .get(&element.id)
-                        .copied()
-                        .unwrap_or_else(|| element.hidden.unwrap_or_default())
-                })
-                .unwrap_or_default(),
-            )),
-            CalcValue::Id { target } => {
-                map_element_target(target, id, render_context.container, |element| {
-                    element.str_id.clone()
-                })
-                .flatten()
-                .map(Value::String)
-            }
-            CalcValue::DataAttrValue { attr, target } => {
-                map_element_target(target, id, render_context.container, |element| {
-                    element.data.get(attr).cloned()
-                })
-                .flatten()
-                .map(Value::String)
-            }
-            CalcValue::Key { key } => Some(Value::String(key.to_string())),
-            CalcValue::EventValue => event_value.map(ToString::to_string).map(Value::String),
-            CalcValue::WidthPx { target } => {
-                let width = map_element_target(target, id, render_context.container, |element| {
-                    Value::Real(element.calculated_width.unwrap())
-                });
-                log::debug!("calc_value: getting width px for element id={id} width={width:?}");
-                width
-            }
-            CalcValue::HeightPx { target } => {
-                let height = map_element_target(target, id, render_context.container, |element| {
-                    Value::Real(element.calculated_height.unwrap())
-                });
-                log::debug!("calc_value: getting height px for element id={id} height={height:?}");
-                height
-            }
-            CalcValue::PositionX { target } | CalcValue::PositionY { target } => {
-                let position =
-                    map_element_target(target, id, render_context.container, |element| {
-                        render_context.positions.get(&element.id).map(|rect| {
-                            Value::Real(match calc_value {
-                                CalcValue::PositionX { .. } => rect.min.x,
-                                CalcValue::PositionY { .. } => rect.min.y,
-                                _ => unreachable!(),
-                            })
-                        })
-                    })
-                    .flatten();
-                log::debug!(
-                    "calc_value: getting position for element id={id} position={position:?}"
-                );
-                position
-            }
-            CalcValue::MouseX { target } | CalcValue::MouseY { target } => {
-                let pos = ctx.input(|x| {
-                    x.pointer.latest_pos().map_or(0.0, |x| match calc_value {
-                        CalcValue::MouseX { .. } => x.x,
-                        CalcValue::MouseY { .. } => x.y,
-                        _ => unreachable!(),
-                    })
-                });
-                if let Some(target) = target {
-                    let position =
-                        map_element_target(target, id, render_context.container, |element| {
-                            render_context.positions.get(&element.id).map(|rect| {
-                                Value::Real(
-                                    pos - match calc_value {
-                                        CalcValue::MouseX { .. } => rect.min.x,
-                                        CalcValue::MouseY { .. } => rect.min.y,
-                                        _ => unreachable!(),
-                                    },
-                                )
-                            })
-                        })
-                        .flatten();
-                    log::debug!(
-                        "calc_value: getting position for element id={id} position={position:?}"
-                    );
-                    position
-                } else {
-                    let global_position = Some(Value::Real(pos));
-                    log::debug!("calc_value: got global_position={global_position:?}");
-                    global_position
-                }
-            }
-        };
-
-        log::debug!("calc_value: calculating {x:?}");
-
-        match x {
-            Value::Calc(x) => calc_func(x),
-            Value::Arithmetic(x) => x.as_f32(Some(&calc_func)).map(Value::Real),
-            Value::Real(..)
-            | Value::Visibility(..)
-            | Value::Display(..)
-            | Value::String(..)
-            | Value::Key(..)
-            | Value::LayoutDirection(..) => Some(x.clone()),
-        }
-    }
-
     #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(
         clippy::too_many_lines,
@@ -2892,496 +2842,49 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         effect: Option<&ActionEffect>,
         trigger: StyleTrigger,
         render_context: &mut RenderContext,
-        ctx: &egui::Context,
         id: usize,
-        sender: &Sender<String>,
-        request_action: &Sender<(String, Option<Value>)>,
         event_value: Option<&str>,
         value: Option<&Value>,
     ) -> bool {
-        log::trace!("handle_action: action={action}");
-
-        if let Some(ActionEffect {
-            throttle: Some(..), ..
-        }) = effect
-        {
-            if let Some((instant, throttle)) = render_context.action_throttle.get(&id) {
-                let ms = Instant::now().duration_since(*instant).as_millis();
-                if ms < u128::from(*throttle) {
-                    log::debug!("handle_action: throttle={throttle} not past throttle yet ms={ms}");
-                    ctx.request_repaint();
-                    return true;
-                }
-            }
-        }
-
-        let response = match &action {
-            ActionType::NoOp => true,
-            ActionType::Input { .. } => todo!(),
-            ActionType::Style { target, action } => {
-                if let Some(ActionEffect {
-                    delay_off: Some(delay),
-                    ..
-                }) = effect
-                {
-                    if let Some(id) =
-                        Self::get_element_target_id(target, id, render_context.container)
-                    {
-                        render_context
-                            .action_delay_off
-                            .insert(id, (std::time::Instant::now(), *delay));
-                    }
-                }
-
-                Self::handle_style_action(
-                    action,
-                    target,
-                    trigger,
-                    id,
-                    render_context.container,
-                    render_context.visibilities,
-                    render_context.displays,
-                    render_context.backgrounds,
-                )
-            }
-            ActionType::Let { .. } => {
-                // let value = Self::calc_value(value, render_context, ctx, id, event_value);
-                // render_context.variables.insert(name.clone(), value);
-                // true
-                unimplemented!("let action");
-            }
-            ActionType::Navigate { url } => {
-                if let Err(e) = sender.send(url.to_owned()) {
-                    log::error!("Failed to navigate via action: {e:?}");
-                }
-                true
-            }
-            ActionType::Log { message, level } => {
-                match level {
-                    hyperchad_actions::LogLevel::Error => {
-                        log::error!("{message}");
-                    }
-                    hyperchad_actions::LogLevel::Warn => {
-                        log::warn!("{message}");
-                    }
-                    hyperchad_actions::LogLevel::Info => {
-                        log::info!("{message}");
-                    }
-                    hyperchad_actions::LogLevel::Debug => {
-                        log::debug!("{message}");
-                    }
-                    hyperchad_actions::LogLevel::Trace => {
-                        log::trace!("{message}");
-                    }
-                }
-
-                true
-            }
-            ActionType::Custom { action } => {
-                if let Err(e) = request_action.send((action.clone(), value.cloned())) {
-                    moosicbox_assert::die_or_error!("Failed to request action: {action} ({e:?})");
-                }
-                true
-            }
-            ActionType::Logic(eval) => {
-                use hyperchad_actions::logic::Condition;
-
-                let success = match &eval.condition {
-                    Condition::Eq(a, b) => {
-                        log::debug!("handle_action: checking eq a={a:?} b={b:?}");
-
-                        let a = Self::calc_value(a, render_context, ctx, id, event_value);
-                        let b = Self::calc_value(b, render_context, ctx, id, event_value);
-
-                        log::debug!("handle_action: inner checking eq a={a:?} b={b:?}");
-
-                        a == b
-                    }
-                    Condition::Bool(b) => *b,
-                };
-
-                log::debug!("handle_action: success={success}");
-
-                if success {
-                    for action in &eval.actions {
-                        if !Self::handle_action(
-                            &action.action,
-                            Some(action),
-                            trigger,
-                            render_context,
-                            ctx,
-                            id,
-                            sender,
-                            request_action,
-                            event_value,
-                            value,
-                        ) {
-                            return false;
-                        }
-                    }
-                } else {
-                    for action in &eval.else_actions {
-                        if !Self::handle_action(
-                            &action.action,
-                            Some(action),
-                            trigger,
-                            render_context,
-                            ctx,
-                            id,
-                            sender,
-                            request_action,
-                            event_value,
-                            value,
-                        ) {
-                            return false;
-                        }
-                    }
-                }
-
-                true
-            }
-            ActionType::Event { name, .. } => {
-                log::trace!("handle_action: event '{name}' will be handled elsewhere");
-                true
-            }
-            ActionType::Multi(actions) => {
-                for action in actions {
-                    if !Self::handle_action(
-                        action,
-                        effect,
-                        trigger,
-                        render_context,
-                        ctx,
-                        id,
-                        sender,
-                        request_action,
-                        event_value,
-                        value,
-                    ) {
-                        return false;
-                    }
-                }
-
-                true
-            }
-            ActionType::MultiEffect(effects) => {
-                for effect in effects {
-                    if !Self::handle_action(
-                        &effect.action,
-                        Some(effect),
-                        trigger,
-                        render_context,
-                        ctx,
-                        id,
-                        sender,
-                        request_action,
-                        event_value,
-                        value,
-                    ) {
-                        return false;
-                    }
-                }
-
-                true
-            }
-            ActionType::Parameterized { action, value } => {
-                let value = Self::calc_value(value, render_context, ctx, id, event_value);
-                Self::handle_action(
-                    action,
-                    effect,
-                    trigger,
-                    render_context,
-                    ctx,
-                    id,
-                    sender,
-                    request_action,
-                    event_value,
-                    value.as_ref(),
-                )
-            }
+        // Convert local StyleTrigger to shared StyleTrigger
+        let shared_trigger = match trigger {
+            StyleTrigger::UiEvent => hyperchad_actions::handler::StyleTrigger::UiEvent,
+            StyleTrigger::CustomEvent => hyperchad_actions::handler::StyleTrigger::CustomEvent,
         };
 
-        if let Some(ActionEffect {
-            throttle: Some(throttle),
-            ..
-        }) = effect
-        {
-            log::debug!("handle_action: beginning action throttle with throttle={throttle}");
-            render_context
-                .action_throttle
-                .insert(id, (std::time::Instant::now(), *throttle));
-        }
-
-        response
+        // Use the shared action handler
+        render_context.action_handler.handle_action(
+            action,
+            effect,
+            shared_trigger,
+            id,
+            render_context.action_context,
+            event_value,
+            value,
+        )
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
     #[allow(clippy::only_used_in_recursion)]
     fn unhandle_action(
         action: &ActionType,
-        effect: Option<&ActionEffect>,
         trigger: StyleTrigger,
         render_context: &mut RenderContext,
-        ctx: &egui::Context,
         id: usize,
     ) {
-        render_context.action_throttle.remove(&id);
+        // Convert local StyleTrigger to shared StyleTrigger
+        let shared_trigger = match trigger {
+            StyleTrigger::UiEvent => hyperchad_actions::handler::StyleTrigger::UiEvent,
+            StyleTrigger::CustomEvent => hyperchad_actions::handler::StyleTrigger::CustomEvent,
+        };
 
-        match &action {
-            ActionType::Style { target, action } => {
-                if let Some(id) = Self::get_element_target_id(target, id, render_context.container)
-                {
-                    if let Some((instant, delay)) = render_context.action_delay_off.get(&id) {
-                        let ms = Instant::now().duration_since(*instant).as_millis();
-                        if ms < u128::from(*delay) {
-                            log::debug!(
-                                "unhandle_action: delay={delay} not past delay yet ms={ms}"
-                            );
-                            ctx.request_repaint();
-                            return;
-                        }
-                    }
-                }
-
-                match action {
-                    StyleAction::SetVisibility { .. } => {
-                        if let Some(id) =
-                            Self::get_element_target_id(target, id, render_context.container)
-                        {
-                            if let Some(overrides) = render_context.visibilities.get_mut(&id) {
-                                overrides.retain(|x| x.trigger != trigger);
-
-                                // TODO: don't delete the corresponding entry. just check for if it
-                                // is empty in places this is read from.
-                                if overrides.is_empty() {
-                                    render_context.visibilities.remove(&id);
-                                }
-                            }
-                        }
-                    }
-                    StyleAction::SetDisplay { .. } => {
-                        if let Some(id) =
-                            Self::get_element_target_id(target, id, render_context.container)
-                        {
-                            if render_context.displays.contains_key(&id) {
-                                render_context.displays.remove(&id);
-                            }
-                        }
-                    }
-                    StyleAction::SetBackground(..) => {
-                        if let Some(id) =
-                            Self::get_element_target_id(target, id, render_context.container)
-                        {
-                            if let Some(overrides) = render_context.backgrounds.get_mut(&id) {
-                                overrides.retain(|x| x.trigger != trigger);
-
-                                // TODO: don't delete the corresponding entry. just check for if it
-                                // is empty in places this is read from.
-                                if overrides.is_empty() {
-                                    render_context.backgrounds.remove(&id);
-                                }
-                            }
-                        }
-                    }
-                    StyleAction::SetFocus(..) => {
-                        // FIXME
-                        // let mut overrides = render_context.focus_overrides.get_mut(&id).unwrap();
-                        // overrides.push(FocusOverride {
-                        //     trigger: trigger.clone(),
-                        //     focus: *focus,
-                        // });
-                    }
-                }
-            }
-            ActionType::Multi(actions) => {
-                for action in actions {
-                    Self::unhandle_action(action, effect, trigger, render_context, ctx, id);
-                }
-            }
-            ActionType::MultiEffect(effects) => {
-                for effect in effects {
-                    Self::unhandle_action(
-                        &effect.action,
-                        Some(effect),
-                        trigger,
-                        render_context,
-                        ctx,
-                        id,
-                    );
-                }
-            }
-            ActionType::Parameterized { action, .. } => {
-                Self::unhandle_action(action, effect, trigger, render_context, ctx, id);
-            }
-            ActionType::Input(..) // FIXME
-            | ActionType::NoOp
-            | ActionType::Navigate { .. }
-            | ActionType::Log { .. }
-            | ActionType::Custom { .. }
-            | ActionType::Event { .. }
-            | ActionType::Let { .. }
-            | ActionType::Logic(..) => {}
-        }
-    }
-
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    fn get_element_target_id(
-        target: &ElementTarget,
-        self_id: usize,
-        container: &Container,
-    ) -> Option<usize> {
-        match target {
-            ElementTarget::StrId(str_id) => {
-                let Target::Literal(str_id) = str_id else {
-                    // FIXME
-                    return None;
-                };
-                if let Some(element) = container.find_element_by_str_id(str_id) {
-                    return Some(element.id);
-                }
-
-                log::warn!("Could not find element with str id '{str_id}'");
-            }
-            ElementTarget::Class(class) => {
-                let Target::Literal(class) = class else {
-                    // FIXME
-                    return None;
-                };
-                if let Some(element) = container.find_element_by_class(class) {
-                    return Some(element.id);
-                }
-
-                log::warn!("Could not find element with class '{class}'");
-            }
-            ElementTarget::ChildClass(class) => {
-                let Target::Literal(class) = class else {
-                    // FIXME
-                    return None;
-                };
-                if let Some(container) = container.find_element_by_id(self_id) {
-                    if let Some(element) = container.find_element_by_class(class) {
-                        return Some(element.id);
-                    }
-                }
-
-                log::warn!("Could not find element with class '{class}'");
-            }
-            ElementTarget::Id(id) => {
-                return Some(*id);
-            }
-            ElementTarget::SelfTarget => {
-                return Some(self_id);
-            }
-            ElementTarget::LastChild => {
-                if let Some(element) = container
-                    .find_element_by_id(self_id)
-                    .and_then(|x| x.children.iter().last())
-                {
-                    return Some(element.id);
-                }
-
-                log::warn!("Could not find element last child for id '{self_id}'");
-            }
-        }
-
-        None
-    }
-
-    #[cfg_attr(feature = "profiling", profiling::function)]
-    #[allow(clippy::too_many_arguments)]
-    fn handle_style_action(
-        action: &StyleAction,
-        target: &ElementTarget,
-        trigger: StyleTrigger,
-        id: usize,
-        container: &Container,
-        visibilities: &mut HashMap<usize, Vec<StyleOverride<Option<Visibility>>>>,
-        displays: &mut HashMap<usize, bool>,
-        backgrounds: &mut HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
-    ) -> bool {
-        match action {
-            StyleAction::SetVisibility(visibility) => {
-                if let Some(id) = Self::get_element_target_id(target, id, container) {
-                    log::trace!(
-                        "handle_style_action: set visibility id={id} visibility={visibility} trigger={trigger:?}"
-                    );
-                    let style_override = StyleOverride {
-                        trigger,
-                        value: Some(*visibility),
-                    };
-                    match visibilities.entry(id) {
-                        std::collections::hash_map::Entry::Occupied(mut entry) => {
-                            entry.get_mut().push(style_override);
-                        }
-                        std::collections::hash_map::Entry::Vacant(entry) => {
-                            entry.insert(vec![style_override]);
-                        }
-                    }
-                }
-
-                true
-            }
-            StyleAction::SetDisplay(display) => {
-                if let Some(id) = Self::get_element_target_id(target, id, container) {
-                    displays.insert(id, *display);
-                }
-
-                true
-            }
-            StyleAction::SetFocus(..) => {
-                // if let Some(id) = Self::get_element_target_id(target, id, container) {
-                //     focuses.insert(id, *focus);
-                // }
-
-                todo!()
-            }
-            StyleAction::SetBackground(background) => {
-                if let Some(id) = Self::get_element_target_id(target, id, container) {
-                    if let Some(background) = background {
-                        match Color::try_from_hex(background) {
-                            Ok(color) => {
-                                log::trace!(
-                                    "handle_style_action: set background color id={id} color={color} trigger={trigger:?}"
-                                );
-                                let style_override = StyleOverride {
-                                    trigger,
-                                    value: Some(color),
-                                };
-                                match backgrounds.entry(id) {
-                                    std::collections::hash_map::Entry::Occupied(mut entry) => {
-                                        entry.get_mut().push(style_override);
-                                    }
-                                    std::collections::hash_map::Entry::Vacant(entry) => {
-                                        entry.insert(vec![style_override]);
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                log::error!("handle_style_action: invalid background color: {e:?}");
-                            }
-                        }
-                    } else {
-                        log::trace!(
-                            "handle_style_action: remove background color id={id} trigger={trigger:?}"
-                        );
-                        let style_override = StyleOverride {
-                            trigger,
-                            value: None,
-                        };
-                        match backgrounds.entry(id) {
-                            std::collections::hash_map::Entry::Occupied(mut entry) => {
-                                entry.get_mut().push(style_override);
-                            }
-                            std::collections::hash_map::Entry::Vacant(entry) => {
-                                entry.insert(vec![style_override]);
-                            }
-                        }
-                    }
-                }
-
-                true
-            }
-        }
+        // Use the shared action handler
+        render_context.action_handler.unhandle_action(
+            action,
+            shared_trigger,
+            id,
+            render_context.action_context,
+        );
     }
 
     #[cfg_attr(feature = "profiling", profiling::function)]
@@ -3722,9 +3225,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         mut frame: egui::Frame,
         start: bool,
         end: bool,
-        backgrounds: &HashMap<usize, Vec<StyleOverride<Option<Color>>>>,
+        action_handler: &EguiActionHandler,
     ) -> egui::Frame {
-        if let Some(background) = Self::get_container_style_override(container, backgrounds)
+        if let Some(background) = action_handler
+            .get_background_override(container.id)
             .copied()
             .unwrap_or(container.background)
         {
@@ -3849,7 +3353,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                 frame,
                                 first,
                                 heading.peek().is_none(),
-                                render_context.backgrounds,
+                                &render_context.action_handler,
                             );
                         }
 
@@ -3909,7 +3413,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                                 frame,
                                 first,
                                 row.peek().is_none(),
-                                render_context.backgrounds,
+                                &render_context.action_handler,
                             );
                         }
 
@@ -4013,15 +3517,9 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         let mut images = self.images.write().unwrap();
         let mut canvas_actions = self.canvas_actions.write().unwrap();
         let mut route_requests = self.route_requests.write().unwrap();
-        let mut visibilities = self.visibilities.write().unwrap();
-        let mut backgrounds = self.backgrounds.write().unwrap();
-        let mut displays = self.displays.write().unwrap();
         let mut checkboxes = self.checkboxes.write().unwrap();
         let mut positions = self.positions.write().unwrap();
         let mut watch_positions = self.watch_positions.write().unwrap();
-        let mut action_delay_off = self.action_delay_off.write().unwrap();
-        let mut action_throttle = self.action_throttle.write().unwrap();
-
         #[cfg(feature = "debug")]
         if ctx.input(|i| i.key_pressed(egui::Key::F3)) {
             let value = {
@@ -4035,20 +3533,21 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         }
 
         {
+            // Create action handler for rendering
+            let element_finder = EguiElementFinder::new(container);
+            let action_handler =
+                hyperchad_actions::handler::utils::create_default_handler(element_finder);
+
             let mut render_context = RenderContext {
-                container,
                 viewport_listeners: &mut viewport_listeners,
                 images: &mut images,
                 canvas_actions: &mut canvas_actions,
                 route_requests: &mut route_requests,
-                visibilities: &mut visibilities,
-                backgrounds: &mut backgrounds,
-                displays: &mut displays,
                 checkboxes: &mut checkboxes,
                 positions: &mut positions,
                 watch_positions: &mut watch_positions,
-                action_delay_off: &mut action_delay_off,
-                action_throttle: &mut action_throttle,
+                action_handler,
+                action_context: &self.action_context,
             };
 
             if resized {
@@ -4152,13 +3651,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
         drop(images);
         drop(canvas_actions);
         drop(route_requests);
-        drop(visibilities);
-        drop(displays);
         drop(checkboxes);
         drop(positions);
         drop(watch_positions);
-        drop(action_delay_off);
-        drop(action_throttle);
+        // Removed: action_handler was removed
 
         #[cfg(feature = "profiling")]
         profiling::finish_frame!();

@@ -17,7 +17,7 @@ group = "hyperchad"
 ignored = ["hyperchad_color", "image", "tracy-client", "wgpu"]
 
 [dependencies]
-hyperchad_actions = { workspace = true, features = ["logic"] }
+hyperchad_actions = { workspace = true, features = ["handler", "logic"] }
 hyperchad_color = { workspace = true, features = ["egui"] }
 hyperchad_renderer = { workspace = true, features = [
     "canvas",

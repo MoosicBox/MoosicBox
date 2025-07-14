@@ -10,6 +10,9 @@ pub mod logic;
 #[cfg(feature = "arb")]
 pub mod arb;
 
+#[cfg(feature = "handler")]
+pub mod handler;
+
 pub mod dsl;
 
 #[cfg(feature = "serde")]

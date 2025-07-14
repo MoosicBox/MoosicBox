@@ -5243,6 +5243,8 @@ dependencies = [
 name = "hyperchad_actions"
 version = "0.1.0"
 dependencies = [
+ "flume",
+ "hyperchad_color",
  "hyperchad_transformer_models",
  "log 0.4.27",
  "moosicbox_arb",
