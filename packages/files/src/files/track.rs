@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use flume::RecvError;
 use futures::prelude::*;
 use futures_core::Stream;
@@ -23,6 +23,7 @@ use moosicbox_stream_utils::{
     ByteWriter, new_byte_writer_id, remote_bytestream::RemoteByteStream,
     stalled_monitor::StalledReadMonitor,
 };
+use moosicbox_task;
 use serde::{Deserialize, Serialize};
 use symphonia::core::{
     audio::{AudioBuffer, Signal},
@@ -33,11 +34,8 @@ use symphonia::core::{
     util::clamp::clamp_i16,
 };
 use thiserror::Error;
-use tokio::io::AsyncSeekExt;
-use tokio_util::{
-    codec::{BytesCodec, FramedRead},
-    sync::CancellationToken,
-};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio_util::sync::CancellationToken;
 
 use crate::files::{
     filename_from_path_str, track_bytes_media_source::TrackBytesMediaSource,
@@ -607,6 +605,7 @@ pub async fn get_audio_bytes(
     .await
 }
 
+#[allow(clippy::too_many_lines)]
 async fn request_audio_bytes_from_file(
     path: String,
     format: AudioFormat,
@@ -645,12 +644,86 @@ async fn request_audio_bytes_from_file(
         "request_audio_bytes_from_file calculated size={size} original_size={original_size}"
     );
 
-    let framed_read =
-        FramedRead::with_capacity(file, BytesCodec::new(), usize::try_from(size).unwrap());
+    // Use manual chunk-based reading instead of ReaderStream to eliminate potential truncation issues
+    let (sender, receiver) = flume::unbounded();
+    let file_path = path.clone();
+
+    moosicbox_task::spawn("files: Manual file reader", async move {
+        let mut file = match tokio::fs::File::open(&file_path).await {
+            Ok(file) => file,
+            Err(e) => {
+                log::error!("Failed to open file for manual reading: {e}");
+                return;
+            }
+        };
+
+        if let Some(start) = start {
+            if let Err(e) = file.seek(std::io::SeekFrom::Start(start)).await {
+                log::error!("Failed to seek to start position: {e}");
+                return;
+            }
+        }
+
+        let mut bytes_read = 0u64;
+        let mut buffer = vec![0u8; 8192]; // 8KB chunks
+
+        log::debug!("Manual file reader starting for {file_path}, target size: {size}");
+
+        loop {
+            match file.read(&mut buffer).await {
+                Ok(0) => {
+                    log::debug!("Manual file reader: EOF reached after reading {bytes_read} bytes");
+                    break;
+                }
+                Ok(n) => {
+                    bytes_read += n as u64;
+
+                    // Check if we should stop due to size limit
+                    if bytes_read > size {
+                        let excess = bytes_read - size;
+                        let send_bytes = n - usize::try_from(excess).unwrap();
+                        if send_bytes > 0
+                            && sender
+                                .send_async(Ok(Bytes::copy_from_slice(&buffer[..send_bytes])))
+                                .await
+                                .is_err()
+                        {
+                            log::debug!("Manual file reader: receiver dropped (final chunk)");
+                        }
+                        log::debug!("Manual file reader: reached size limit {size} bytes");
+                        break;
+                    }
+
+                    log::trace!("Manual file reader: read {n} bytes (total: {bytes_read})");
+
+                    if sender
+                        .send_async(Ok(Bytes::copy_from_slice(&buffer[..n])))
+                        .await
+                        .is_err()
+                    {
+                        log::debug!("Manual file reader: receiver dropped");
+                        break;
+                    }
+                }
+                Err(e) => {
+                    log::error!("Manual file reader: read error after {bytes_read} bytes: {e}");
+                    let _ = sender.send_async(Err(e)).await;
+                    break;
+                }
+            }
+        }
+
+        log::debug!("Manual file reader finished: read {bytes_read} bytes total");
+    });
+
+    let stream = futures::stream::unfold(receiver, |receiver| async move {
+        receiver.recv_async().await.ok().map(|x| (x, receiver))
+    })
+    .boxed();
 
     Ok(TrackBytes {
         id: new_byte_writer_id(),
-        stream: StalledReadMonitor::new(framed_read.map_ok(BytesMut::freeze).boxed()),
+        stream: StalledReadMonitor::new(stream),
         size: Some(size),
         original_size: Some(original_size),
         format,
