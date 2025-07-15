@@ -43,9 +43,9 @@ impl TrackBytesMediaSource {
         moosicbox_task::spawn("files: TrackBytesMediaSource", async move {
             log::trace!("Starting stream listen for track bytes for writer id={id}");
             loop {
-                log::debug!("Acquiring lock for inner bytes for writer id={id}");
+                log::trace!("Acquiring lock for inner bytes for writer id={id}");
                 let mut bytes = bytes.lock().await;
-                log::debug!("Acquired lock for inner bytes for writer id={id}");
+                log::trace!("Acquired lock for inner bytes for writer id={id}");
 
                 tokio::select!(
                     () = tokio::time::sleep(Duration::from_millis(15000)) => {
@@ -124,7 +124,7 @@ impl Read for TrackBytesMediaSource {
         buf[..end].copy_from_slice(&bytes[..end]);
         self.buf.extend_from_slice(&bytes[end..]);
 
-        log::debug!(
+        log::trace!(
             "TrackBytesMediaSource::read end={end} bytes.len={} buf.len={} self.buf.len={} writer id={}",
             bytes.len(),
             buf.len(),
