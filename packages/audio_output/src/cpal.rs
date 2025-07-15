@@ -158,10 +158,11 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     // Track the actual CPAL output sample rate for accurate progress calculation
     cpal_output_sample_rate: std::sync::Arc<std::sync::atomic::AtomicU32>,
     cpal_output_channels: std::sync::Arc<std::sync::atomic::AtomicU32>,
-    // Event-driven completion notification
+    // Event-driven ring buffer empty notification
     completion_condvar: std::sync::Arc<std::sync::Condvar>,
-    completion_mutex: std::sync::Arc<std::sync::Mutex<()>>,
-    completion_target: std::sync::Arc<std::sync::atomic::AtomicUsize>, // Target sample count for completion
+    completion_mutex: std::sync::Arc<std::sync::Mutex<bool>>, // true when ring buffer becomes empty
+    // Flag to indicate we're in drain mode (flush called, no more data coming)
+    draining: std::sync::Arc<std::sync::atomic::AtomicBool>,
     // Centralized progress tracking
     progress_tracker: ProgressTracker,
 }
@@ -219,20 +220,21 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         let volume_shared = std::sync::Arc::new(std::sync::RwLock::new(volume_atomic));
         let volume_callback = volume_shared.clone();
 
-        // Create completion notification primitives
-        let completion_condvar = std::sync::Arc::new(std::sync::Condvar::new());
-        let completion_mutex = std::sync::Arc::new(std::sync::Mutex::new(()));
-        let completion_target = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-
         // Track the actual CPAL output sample rate and channels for accurate progress calculation
         let cpal_output_sample_rate =
             std::sync::Arc::new(std::sync::atomic::AtomicU32::new(config.sample_rate.0));
         #[allow(clippy::cast_possible_truncation)]
         let cpal_output_channels =
             std::sync::Arc::new(std::sync::atomic::AtomicU32::new(num_channels as u32));
-        let completion_condvar_callback = completion_condvar.clone();
-        let completion_mutex_callback = completion_mutex.clone();
-        let completion_target_callback = completion_target.clone();
+
+        // Event-driven ring buffer empty notification
+        let (completion_mutex, completion_condvar) = (
+            std::sync::Arc::new(std::sync::Mutex::new(false)),
+            std::sync::Arc::new(std::sync::Condvar::new()),
+        );
+
+        // Flag to indicate we're in drain mode (flush called, no more data coming)
+        let draining = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         // Progress tracking setup using ProgressTracker
         let progress_tracker = ProgressTracker::new(Some(0.1)); // 0.1 second threshold
@@ -246,6 +248,10 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             progress_callback,
             progress_last_position,
         ) = progress_tracker.get_callback_refs();
+
+        let completion_mutex_callback = completion_mutex.clone();
+        let completion_condvar_callback = completion_condvar.clone();
+        let draining_callback = draining.clone();
 
         let stream = device
             .build_output_stream(
@@ -281,19 +287,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
                     // Track actual consumption by CPAL - get the current counter
                     if let Ok(counter) = consumed_samples_callback.read() {
-                        let old_value =
-                            counter.fetch_add(written, std::sync::atomic::Ordering::SeqCst);
-                        let new_consumed = old_value + written;
-
-                        // Check if we've reached the completion target and notify waiting thread
-                        let target =
-                            completion_target_callback.load(std::sync::atomic::Ordering::SeqCst);
-                        if target > 0 && new_consumed >= target {
-                            // We've reached the target - notify the waiting flush thread immediately
-                            if let Ok(_guard) = completion_mutex_callback.try_lock() {
-                                completion_condvar_callback.notify_all();
-                            }
-                        }
+                        counter.fetch_add(written, std::sync::atomic::Ordering::SeqCst);
 
                         // Progress callback logic using ProgressTracker
                         ProgressTracker::update_from_callback_refs(
@@ -309,6 +303,16 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
                     // Mute any remaining samples.
                     data[written..].iter_mut().for_each(|s| *s = T::MID);
+
+                    // Signal ring buffer empty when draining AND no data was available to read
+                    if written == 0 && draining_callback.load(std::sync::atomic::Ordering::SeqCst) {
+                        if let Ok(mut empty_flag) = completion_mutex_callback.try_lock() {
+                            if !*empty_flag {
+                                *empty_flag = true;
+                                completion_condvar_callback.notify_one();
+                            }
+                        }
+                    }
                 },
                 move |err| log::error!("Audio output error: {err}"),
                 None,
@@ -370,7 +374,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             cpal_output_channels,
             completion_condvar,
             completion_mutex,
-            completion_target,
+            draining,
             progress_tracker,
         })
     }
@@ -428,7 +432,8 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                         let buffered_seconds = self.buffered_samples as f32
                             / (self.spec.rate as f32 * self.spec.channels.count() as f32);
 
-                        // Start stream once we have 10 seconds buffered
+                        // Start stream once we have 10 seconds buffered OR when flush is called
+                        // (which indicates we have all the available audio data)
                         if self.buffered_samples >= self.buffering_threshold {
                             log::debug!(
                                 "Initial buffering complete: {buffered_seconds:.2} seconds buffered, starting stream now"
@@ -464,15 +469,79 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
         // If there is a resampler, then it may need to be flushed
         // depending on the number of samples it has.
 
-        // PROPERLY WAIT FOR ALL SAMPLES TO BE CONSUMED
-        // This prevents audio truncation at track endings
+        // FORCE STREAM START if still in initial buffering when flush is called
+        // This handles cases where total audio content is less than the buffering threshold
+        // (e.g., seeking near the end of tracks)
+        if self.initial_buffering {
+            #[allow(clippy::cast_precision_loss)]
+            let buffered_seconds = self.buffered_samples as f32
+                / (self.spec.rate as f32 * self.spec.channels.count() as f32);
 
-        log::debug!(
-            "🔊 CPAL FLUSH: Audio decoder finished - waiting for all samples to be consumed"
-        );
+            log::debug!(
+                "🔊 FLUSH: Stream still in initial buffering with {buffered_seconds:.2}s - forcing stream start for short audio content"
+            );
 
-        // Wait for all written samples to be consumed (prevents truncation)
-        self.wait_for_completion();
+            if let Err(err) = self.stream.play() {
+                log::error!("Audio output stream play error during flush: {err}");
+                return Err(AudioOutputError::PlayStream);
+            }
+            self.initial_buffering = false;
+        }
+
+        let total_written = self
+            .total_samples_written
+            .load(std::sync::atomic::Ordering::SeqCst);
+
+        if total_written == 0 {
+            log::debug!("No samples written, skipping ring buffer drain");
+        } else {
+            log::debug!(
+                "🔊 CPAL FLUSH: Entering drain mode and waiting for ring buffer to empty ({total_written} samples were written)"
+            );
+
+            // Set draining mode and reset the empty flag
+            self.draining
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            if let Ok(mut empty_flag) = self.completion_mutex.lock() {
+                *empty_flag = false;
+            }
+
+            let start_time = std::time::Instant::now();
+
+            // Wait for the CPAL callback to signal ring buffer empty
+            if let Ok(mut empty_flag) = self.completion_mutex.lock() {
+                while !*empty_flag {
+                    match self
+                        .completion_condvar
+                        .wait_timeout(empty_flag, std::time::Duration::from_secs(30))
+                    {
+                        Ok((new_flag, timeout_result)) => {
+                            empty_flag = new_flag;
+                            if timeout_result.timed_out() {
+                                log::warn!(
+                                    "⚠️ Ring buffer drain timeout after 30s - proceeding anyway"
+                                );
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Ring buffer drain wait error: {e}");
+                            break;
+                        }
+                    }
+                }
+            }
+
+            let elapsed = start_time.elapsed();
+            log::debug!(
+                "✅ Ring buffer drained! Wait time: {:.3}s",
+                elapsed.as_secs_f64()
+            );
+
+            // Clear draining mode
+            self.draining
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+        }
 
         // Now pause the stream since all audio has been played
         log::debug!("🔊 CPAL FLUSH: All samples consumed - pausing stream");
@@ -589,85 +658,6 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             rate,
             channels: symphonia_channels,
         }
-    }
-
-    /// Wait for all written samples to be consumed by the CPAL callback
-    /// This ensures complete playback without truncation - uses event-driven completion
-    pub fn wait_for_completion(&self) {
-        let total_written = self
-            .total_samples_written
-            .load(std::sync::atomic::Ordering::SeqCst);
-        if total_written == 0 {
-            log::debug!("No samples written, skipping completion wait");
-            return;
-        }
-
-        log::debug!("Waiting for {total_written} samples to be consumed");
-
-        // Check if already completed to avoid unnecessary waiting
-        let consumed = self.consumed_samples_shared.read().map_or(0, |counter| {
-            counter.load(std::sync::atomic::Ordering::SeqCst)
-        });
-
-        if consumed >= total_written {
-            log::debug!(
-                "✅ All samples already consumed! Total: {total_written}, Consumed: {consumed}"
-            );
-            return;
-        }
-
-        // Set the completion target for the CPAL callback to check
-        self.completion_target
-            .store(total_written, std::sync::atomic::Ordering::SeqCst);
-
-        let start_time = std::time::Instant::now();
-
-        // Wait for the CPAL callback to signal completion
-        if let Ok(guard) = self.completion_mutex.lock() {
-            // Use a timeout as a safety fallback (but this should never be needed)
-            let timeout = std::time::Duration::from_secs(60); // Very generous timeout for safety
-
-            match self.completion_condvar.wait_timeout(guard, timeout) {
-                Ok((_, timeout_result)) => {
-                    let elapsed = start_time.elapsed();
-
-                    if timeout_result.timed_out() {
-                        log::warn!(
-                            "⚠️ Completion wait timed out after 60s - this should not happen!"
-                        );
-                        // Check final state
-                        let final_consumed =
-                            self.consumed_samples_shared.read().map_or(0, |counter| {
-                                counter.load(std::sync::atomic::Ordering::SeqCst)
-                            });
-                        log::warn!(
-                            "Final state: {total_written} written, {final_consumed} consumed"
-                        );
-                    } else {
-                        // Verify completion
-                        let final_consumed =
-                            self.consumed_samples_shared.read().map_or(0, |counter| {
-                                counter.load(std::sync::atomic::Ordering::SeqCst)
-                            });
-                        log::debug!(
-                            "✅ All samples consumed! Total: {}, Consumed: {}, Wait time: {:.3}s",
-                            total_written,
-                            final_consumed,
-                            elapsed.as_secs_f64()
-                        );
-                    }
-                }
-                Err(e) => {
-                    log::error!("Completion wait mutex error: {e}");
-                }
-            }
-        } else {
-            log::error!("Failed to acquire completion mutex");
-        }
-
-        // Clear the completion target
-        self.completion_target
-            .store(0, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
