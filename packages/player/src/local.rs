@@ -354,6 +354,26 @@ impl Player for LocalPlayer {
 
         log::info!("Finished playback for track_id={}", track_id);
 
+        // Assert that track playback finished close to the expected duration
+        // This helps catch cases where tracks are being truncated early
+        let playback_progress = {
+            self.playback
+                .read()
+                .unwrap()
+                .as_ref()
+                .map_or(0.0, |p| p.progress)
+        };
+
+        let expected_duration = track.duration;
+        let duration_tolerance = 1.0; // Allow 1 second tolerance
+
+        moosicbox_assert::assert!(
+            playback_progress >= (expected_duration - duration_tolerance),
+            "Track playback finished prematurely! Expected duration: {expected_duration:.2}s, Actual position: {playback_progress:.2}s, Difference: {difference:.2}s. Track: {track_id} '{title}'",
+            difference = expected_duration - playback_progress,
+            title = track.title
+        );
+
         Ok(())
     }
 
