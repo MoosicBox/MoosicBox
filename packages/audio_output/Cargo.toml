@@ -28,7 +28,6 @@ utoipa           = { workspace = true, optional = true }
 
 # CPAL
 cpal = { workspace = true, optional = true }
-rb   = { workspace = true, optional = true }
 
 # Encoders
 fdk-aac                 = { workspace = true, optional = true }
@@ -61,7 +60,7 @@ api     = ["dep:actix-web", "dep:moosicbox_paging", "dep:serde"]
 openapi = ["dep:utoipa", "moosicbox_paging/openapi"]
 
 asio                = ["cpal/asio"]
-cpal                = ["dep:cpal", "dep:rb"]
+cpal                = ["dep:cpal"]
 jack                = ["cpal/jack"]
 oboe-shared-stdcxx  = ["cpal/oboe-shared-stdcxx"]
 pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
