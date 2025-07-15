@@ -132,7 +132,8 @@ impl Read for TrackBytesMediaSource {
             self.id,
         );
 
-        if end == 0 {
+        // Only mark as finished if we received empty bytes (end of stream) AND there's no more buffered data
+        if bytes.is_empty() && self.buf.is_empty() {
             self.finished = true;
         }
 
