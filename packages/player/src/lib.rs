@@ -1537,12 +1537,7 @@ async fn track_id_to_playable_stream(
         url,
         size,
         true,
-        #[cfg(feature = "format-flac")]
-        {
-            format.format == moosicbox_music_models::AudioFormat::Flac
-        },
-        #[cfg(not(feature = "format-flac"))]
-        false,
+        size.is_some(), // HTTP range requests work for any format when size is known
         abort,
     )
     .into();

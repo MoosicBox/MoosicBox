@@ -356,37 +356,35 @@ impl<F: HttpFetcher> Read for RemoteByteStream<F> {
                 log::trace!("Received bytes {len}");
 
                 if len == 0 {
-                    // HTTP stream ended - check if we have all expected bytes
+                    // HTTP stream ended - check if we have all expected bytes from fetcher start to file end
                     http_stream_ended = true;
                     let total_buffer_bytes = fetcher.buffer.len() as u64;
                     let fetcher_start_u64 = fetcher.start;
-                    let total_available_bytes = fetcher_start_u64 + total_buffer_bytes;
+                    let fetcher_end_position = fetcher_start_u64 + total_buffer_bytes;
 
                     if let Some(expected_size) = self.size {
-                        if total_available_bytes < expected_size {
+                        // When seeking, we only need data from fetcher start to file end
+                        // The fetcher should contain all data from its start position to EOF
+                        if fetcher_end_position < expected_size {
                             log::warn!(
-                                "Stream ended prematurely: fetcher has {} bytes from position {}, total available {}, expected {} bytes ({}% complete)",
-                                total_buffer_bytes,
+                                "Stream ended prematurely: fetcher starts at {}, has {} bytes, reaches position {}, but file size is {} bytes (missing {} bytes)",
                                 fetcher_start_u64,
-                                total_available_bytes,
+                                total_buffer_bytes,
+                                fetcher_end_position,
                                 expected_size,
-                                (total_available_bytes * 100) / expected_size
+                                expected_size - fetcher_end_position
                             );
 
                             return Err(std::io::Error::new(
                                 std::io::ErrorKind::UnexpectedEof,
                                 format!(
-                                    "Stream ended prematurely: expected {expected_size} bytes, got {total_available_bytes} bytes"
+                                    "Stream ended prematurely: got {total_buffer_bytes} bytes from position {fetcher_start_u64}, expected {expected_size} bytes total (reaches {fetcher_end_position}/{expected_size})"
                                 ),
                             ));
                         }
 
                         log::debug!(
-                            "HTTP stream completed successfully: received {} bytes as expected (current read_pos: {}, buffer has {} unread bytes)",
-                            total_available_bytes,
-                            self.read_position,
-                            (fetcher_start_u64 + total_buffer_bytes)
-                                .saturating_sub(self.read_position)
+                            "HTTP stream completed successfully: fetcher received {total_buffer_bytes} bytes from position {fetcher_start_u64}, reaches file end at {fetcher_end_position} (file size {expected_size})"
                         );
                     }
 

@@ -534,12 +534,7 @@ pub async fn get_audio_bytes(
                                 url.to_string(),
                                 size,
                                 true,
-                                #[cfg(feature = "format-flac")]
-                                {
-                                    format == AudioFormat::Flac
-                                },
-                                #[cfg(not(feature = "format-flac"))]
-                                false,
+                                size.is_some(), // HTTP range requests work for any format when size is known
                                 CancellationToken::new(),
                             )
                             .into();

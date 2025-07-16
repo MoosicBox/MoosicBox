@@ -1449,12 +1449,7 @@ impl TunnelSender {
                                 url,
                                 None,
                                 true,
-                                #[cfg(feature = "format-flac")]
-                                query
-                                    .format
-                                    .is_some_and(|format| format == AudioFormat::Flac),
-                                #[cfg(not(feature = "format-flac"))]
-                                false,
+                                true, // HTTP range requests work for any format
                                 CancellationToken::new(),
                             )
                             .into();
