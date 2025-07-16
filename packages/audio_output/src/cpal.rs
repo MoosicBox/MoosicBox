@@ -158,12 +158,9 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     // Track the actual CPAL output sample rate for accurate progress calculation
     cpal_output_sample_rate: std::sync::Arc<std::sync::atomic::AtomicU32>,
     cpal_output_channels: std::sync::Arc<std::sync::atomic::AtomicU32>,
-    // Event-driven ring buffer empty notification
     completion_condvar: std::sync::Arc<std::sync::Condvar>,
-    completion_mutex: std::sync::Arc<std::sync::Mutex<bool>>, // true when ring buffer becomes empty
-    // Flag to indicate we're in drain mode (flush called, no more data coming)
-    draining: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    // Centralized progress tracking
+    completion_mutex: std::sync::Arc<std::sync::Mutex<bool>>, // true when ring buffer is empty
+    draining: std::sync::Arc<std::sync::atomic::AtomicBool>,  // true when we're in flush/drain mode
     progress_tracker: ProgressTracker,
 }
 
@@ -304,12 +301,15 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                     // Mute any remaining samples.
                     data[written..].iter_mut().for_each(|s| *s = T::MID);
 
-                    // Signal ring buffer empty when draining AND no data was available to read
-                    if written == 0 && draining_callback.load(std::sync::atomic::Ordering::SeqCst) {
-                        if let Ok(mut empty_flag) = completion_mutex_callback.try_lock() {
-                            if !*empty_flag {
-                                *empty_flag = true;
-                                completion_condvar_callback.notify_one();
+                    // Check if we're in draining mode
+                    if draining_callback.load(std::sync::atomic::Ordering::SeqCst) {
+                        // Signal ring buffer empty when no data was available to read
+                        if written == 0 {
+                            if let Ok(mut empty_flag) = completion_mutex_callback.try_lock() {
+                                if !*empty_flag {
+                                    *empty_flag = true;
+                                    completion_condvar_callback.notify_one();
+                                }
                             }
                         }
                     }
@@ -532,10 +532,10 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                 }
             }
 
-            let elapsed = start_time.elapsed();
+            let drain_time = start_time.elapsed();
             log::debug!(
-                "✅ Ring buffer drained! Wait time: {:.3}s",
-                elapsed.as_secs_f64()
+                "✅ Ring buffer drained! Wait time: {:.3}s - completing immediately to avoid silence",
+                drain_time.as_secs_f64()
             );
 
             // Clear draining mode
