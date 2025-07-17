@@ -312,8 +312,8 @@ atomic_float = "1.1.0"
 audiopus = "0.2.0"
 awc = "3.7.0"
 aws-config = "1.8.2"
-aws-sdk-apigatewaymanagement = "1.75.0"
-aws-sdk-ssm = "1.84.0"
+aws-sdk-apigatewaymanagement = "1.76.0"
+aws-sdk-ssm = "1.85.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.0"
@@ -491,7 +491,7 @@ swc_ecma_visit = "14.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.104"
 syntect = "5.2.0"
-tantivy = "0.24.1"
+tantivy = "0.24.2"
 tauri = { version = "2.6.2", features = ["protocol-asset"] }
 tauri-build = { version = "2.3.0", features = [] }
 tauri-plugin = { version = "2.3.0", features = ["build"] }
