@@ -47,6 +47,9 @@ tokio            = { workspace = true, features = ["macros", "rt", "time", "trac
 tokio-util       = { workspace = true }
 url              = { workspace = true }
 
+[dev-dependencies]
+env_logger = { workspace = true }
+
 [features]
 default = [
     "all-decoders",
