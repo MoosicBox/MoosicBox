@@ -479,11 +479,11 @@ static_init = "1.0.4"
 strum = "0.27.1"
 strum_macros = "0.27.1"
 swc_bundler = "25.0.0"
-swc_common = { version = "14.0.0", features = ["tty-emitter"] }
+swc_common = { version = "14.0.1", features = ["tty-emitter"] }
 swc_ecma_ast = "14.0.0"
 swc_ecma_codegen = "16.0.0"
 swc_ecma_loader = { version = "14.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "26.0.2"
+swc_ecma_minifier = "26.0.3"
 swc_ecma_parser = "20.0.0"
 swc_ecma_transforms_base = "21.0.0"
 swc_ecma_transforms_typescript = "23.0.0"
