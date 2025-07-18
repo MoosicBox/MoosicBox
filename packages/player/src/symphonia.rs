@@ -126,8 +126,11 @@ pub async fn play_media_source_async(
     .await?
 }
 
+/// # Errors
+///
+/// * If failed to play the `MediaSourceStream`
 #[allow(clippy::too_many_arguments)]
-fn play_media_source(
+pub fn play_media_source(
     media_source_stream: MediaSourceStream,
     hint: &Hint,
     audio_decode_handler: &mut AudioDecodeHandler,
