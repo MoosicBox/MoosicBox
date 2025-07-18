@@ -9,10 +9,6 @@ command  = "sudo apt-get update && sudo apt-get install libasound2-dev"
 features = ["cpal", "default"]
 
 [[config.dependencies]]
-command  = "sudo apt-get update && sudo apt-get install libpulse-dev"
-features = ["default", "pulseaudio", "pulseaudio-simple", "pulseaudio-standard"]
-
-[[config.dependencies]]
 command  = "sudo apt-get update && sudo apt-get install libsqlite3-dev"
 features = ["default", "sqlite", "sqlite-rusqlite", "sqlite-sqlx"]
 
@@ -38,7 +34,7 @@ command  = "brew install jack"
 features = ["jack"]
 
 [[config.dependencies]]
-command = "brew install automake autoconf libtool pulseaudio"
+command = "brew install automake autoconf libtool"
 features = [
     "all-encoders",
     "all-formats",
@@ -46,7 +42,4 @@ features = [
     "all-os-formats",
     "default",
     "encoder-opus",
-    "pulseaudio",
-    "pulseaudio-simple",
-    "pulseaudio-standard",
 ]

@@ -41,16 +41,6 @@ os = "macos"
 command  = "brew install jack"
 features = ["jack"]
 
-[[config.dependencies]]
-command = "brew install automake autoconf libtool pulseaudio"
-features = [
-    "default",
-    "default-windows",
-    "pulseaudio",
-    "pulseaudio-simple",
-    "pulseaudio-standard",
-]
-
 [[config]]
 os = "windows"
 

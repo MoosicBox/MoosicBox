@@ -130,7 +130,6 @@ default = [
     "cpal",
     "openapi",
     "profiling",
-    "pulseaudio",
     "sqlite-sqlx",
     "telemetry",
     "tunnel",
@@ -151,12 +150,9 @@ tunnel = [
 ]
 
 # Player audio outputs
-asio                = ["moosicbox_player?/asio"]
-cpal                = ["moosicbox_player?/cpal"]
-jack                = ["moosicbox_player?/jack"]
-pulseaudio          = ["moosicbox_player?/pulseaudio"]
-pulseaudio-simple   = ["moosicbox_player?/pulseaudio-simple"]
-pulseaudio-standard = ["moosicbox_player?/pulseaudio-standard"]
+asio = ["moosicbox_player?/asio"]
+cpal = ["moosicbox_player?/cpal"]
+jack = ["moosicbox_player?/jack"]
 
 static-token-auth = ["dep:qstring"]
 

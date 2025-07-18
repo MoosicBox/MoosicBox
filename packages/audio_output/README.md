@@ -156,9 +156,6 @@ async fn setup_real_time_processing() -> Result<(), Box<dyn std::error::Error>> 
 
 ### Audio Backends
 - `cpal` - Enable CPAL backend (cross-platform)
-- `pulseaudio` - Enable PulseAudio backend (Linux)
-- `pulseaudio-simple` - Enable simplified PulseAudio backend
-- `pulseaudio-standard` - Enable full PulseAudio backend
 - `jack` - Enable JACK backend (professional audio)
 - `asio` - Enable ASIO backend (Windows professional)
 

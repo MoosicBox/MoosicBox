@@ -6,16 +6,6 @@ command  = "sudo apt-get update && sudo apt-get install jackd2 libjack-jackd2-de
 features = ["jack"]
 
 [[config.dependencies]]
-command = "sudo apt-get update && sudo apt-get install libpulse-dev"
-features = [
-    "default",
-    "default-windows",
-    "pulseaudio",
-    "pulseaudio-simple",
-    "pulseaudio-standard",
-]
-
-[[config.dependencies]]
 command  = "sudo apt-get update && sudo apt-get install libasound2-dev"
 features = ["asio", "cpal", "default", "default-windows", "oboe-shared-stdcxx"]
 
@@ -27,14 +17,8 @@ command  = "brew install jack"
 features = ["jack"]
 
 [[config.dependencies]]
-command = "brew install automake autoconf libtool pulseaudio"
-features = [
-    "default",
-    "default-windows",
-    "pulseaudio",
-    "pulseaudio-simple",
-    "pulseaudio-standard",
-]
+command  = "brew install automake autoconf libtool"
+features = ["default", "default-windows", "opus"]
 
 [[config]]
 os = "windows"

@@ -59,7 +59,6 @@ default = [
     "local",
     "oboe-shared-stdcxx",
     "openapi",
-    "pulseaudio",
 ]
 
 fail-on-warnings = []
@@ -78,9 +77,6 @@ asio                = ["moosicbox_audio_output/asio"]
 cpal                = ["moosicbox_audio_output/cpal"]
 jack                = ["moosicbox_audio_output/jack"]
 oboe-shared-stdcxx  = ["moosicbox_audio_output/oboe-shared-stdcxx"]
-pulseaudio          = ["pulseaudio-simple", "pulseaudio-standard"]
-pulseaudio-simple   = ["moosicbox_audio_output/pulseaudio-simple"]
-pulseaudio-standard = ["moosicbox_audio_output/pulseaudio-standard"]
 
 all-encoders    = ["all-os-encoders", "encoder-mp3"]
 all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]

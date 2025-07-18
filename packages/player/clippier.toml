@@ -15,7 +15,3 @@ features = [
     "jack",
     "oboe-shared-stdcxx",
 ]
-
-[[config.dependencies]]
-command  = "sudo apt-get update && sudo apt-get install libpulse-dev"
-features = ["default", "pulseaudio", "pulseaudio-simple", "pulseaudio-standard"]
