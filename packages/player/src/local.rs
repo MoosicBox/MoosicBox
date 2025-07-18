@@ -132,28 +132,25 @@ impl Player for LocalPlayer {
         let mss =
             MediaSourceStream::new(playable_track.source, MediaSourceStreamOptions::default());
 
-        let handler_arc = Arc::new(Mutex::new(self.get_audio_decode_handler(seek)?));
-
-        let response = moosicbox_task::spawn_blocking("player: Play media source", {
-            let handler_arc = handler_arc.clone();
+        moosicbox_task::spawn_blocking("player: Play media source", {
+            let playback = self.playback.clone();
+            let shared_volume = self.shared_volume.clone();
+            let output = self.output.clone().unwrap();
             move || {
+                let mut handler = get_audio_decode_handler(&playback, shared_volume, output, seek)?;
                 play_media_source(
                     mss,
                     &playable_track.hint,
-                    &mut handler_arc.lock().unwrap(),
+                    &mut handler,
                     true,
                     true,
                     None,
                     seek,
                 )
+                .map_err(PlayerError::PlaybackError)
             }
         })
-        .await?;
-
-        if let Err(e) = response {
-            log::error!("Failed to play playback: {e:?}");
-            return Err(e.into());
-        }
+        .await??;
 
         log::info!("Finished playback for track_id={}", track_id);
 
@@ -343,213 +340,228 @@ impl LocalPlayer {
         self
     }
 
+    /// # Errors
+    ///
+    /// * If failed to get the audio decode handler
+    ///
+    /// # Panics
+    ///
+    /// * If the `playback` `RwLock` is poisoned
     #[allow(clippy::too_many_lines)]
-    fn get_audio_decode_handler(
+    pub fn get_audio_decode_handler(
         &self,
         seek: Option<f64>,
     ) -> Result<AudioDecodeHandler, PlayerError> {
-        let Some(playback) = self.playback.read().unwrap().clone() else {
-            return Err(PlayerError::NoPlayersPlaying);
-        };
-
-        let active_playback = self.playback.clone();
-        let sent_playback_start_event = AtomicBool::new(false);
         let shared_volume = self.shared_volume.clone();
 
         if self.output.is_none() {
             return Err(PlayerError::NoAudioOutputs);
         }
 
-        // Initialize shared volume with the current playback volume
-        let initial_volume = {
-            active_playback
-                .read()
-                .unwrap()
-                .as_ref()
-                .map_or(1.0, |playback| {
-                    playback.volume.load(std::sync::atomic::Ordering::SeqCst)
-                })
-        };
+        get_audio_decode_handler(
+            &self.playback,
+            shared_volume,
+            self.output.clone().unwrap(),
+            seek,
+        )
+    }
+}
 
-        shared_volume.store(initial_volume, std::sync::atomic::Ordering::SeqCst);
-        log::info!(
-            "LocalPlayer: initialized shared volume to {initial_volume:.3} (from current playback)"
-        );
+#[allow(clippy::too_many_lines)]
+fn get_audio_decode_handler(
+    playback: &Arc<RwLock<Option<Playback>>>,
+    shared_volume: Arc<AtomicF64>,
+    output: Arc<Mutex<AudioOutputFactory>>,
+    seek: Option<f64>,
+) -> Result<AudioDecodeHandler, PlayerError> {
+    // Initialize shared volume with the current playback volume
+    let initial_volume = {
+        playback.read().unwrap().as_ref().map_or(1.0, |playback| {
+            playback.volume.load(std::sync::atomic::Ordering::SeqCst)
+        })
+    };
 
-        let open_func = self.output.clone().unwrap();
+    shared_volume.store(initial_volume, std::sync::atomic::Ordering::SeqCst);
+    log::info!(
+        "LocalPlayer: initialized shared volume to {initial_volume:.3} (from current playback)"
+    );
 
-        let audio_decode_handler = AudioDecodeHandler::new()
-            .with_filter(Box::new({
-                let active_playback = active_playback.clone();
-                let initial_seek_position = seek.unwrap_or(0.0);
-                move |_decoded, _packet, _track| {
-                    // Just send the initial playback start event, don't track progress here
-                    if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst) {
-                        let binding = active_playback.read().unwrap();
-                        if let Some(playback) = binding.as_ref() {
-                            if let Some(playback_target) = playback.playback_target.clone() {
-                                sent_playback_start_event
-                                    .store(true, std::sync::atomic::Ordering::SeqCst);
+    let sent_playback_start_event = AtomicBool::new(false);
 
-                                log::debug!("trigger_play: Sending initial playback start event with seek={initial_seek_position:.2}s");
+    let mut audio_decode_handler = AudioDecodeHandler::new()
+        .with_filter(Box::new({
+            let playback = playback.clone();
+            let initial_seek_position = seek.unwrap_or(0.0);
+            move |_decoded, _packet, _track| {
+                // Just send the initial playback start event, don't track progress here
+                if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst) {
+                    let binding = playback.read().unwrap();
+                    if let Some(playback) = binding.as_ref() {
+                        if let Some(playback_target) = playback.playback_target.clone() {
+                            sent_playback_start_event
+                                .store(true, std::sync::atomic::Ordering::SeqCst);
+
+                            log::debug!("trigger_play: Sending initial playback start event with seek={initial_seek_position:.2}s");
+
+                            let update = UpdateSession {
+                                session_id: playback.session_id,
+                                profile: playback.profile.clone(),
+                                playback_target,
+                                play: None,
+                                stop: None,
+                                name: None,
+                                active: None,
+                                playing: Some(true),
+                                position: None,
+                                seek: Some(initial_seek_position),
+                                volume: None,
+                                playlist: None,
+                                quality: None,
+                            };
+                            send_playback_event(&update, playback);
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }))
+        .with_output(Box::new({
+            let seek_position = seek.unwrap_or(0.0);
+            let shared_volume_local = shared_volume;
+            let playback_for_callback = playback.clone();
+            move |spec, _duration| {
+                use moosicbox_audio_output::AudioWrite;
+
+                let mut output: AudioOutput = (output.lock().unwrap())
+                    .try_into_output()
+                    .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
+
+                log::debug!("🔍 Audio output creation: spec rate={}, channels={}",
+                    spec.rate, spec.channels.count());
+
+                // Initialize consumed samples based on seek position for the AudioOutput
+                let consumed_samples = Arc::new(AtomicUsize::new(0));
+
+                #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                let initial_consumed_samples = if seek_position > 0.0 {
+                    (seek_position * f64::from(spec.rate) * spec.channels.count() as f64) as usize
+                } else {
+                    0
+                };
+                consumed_samples.store(initial_consumed_samples, Ordering::SeqCst);
+                log::debug!("Audio output creation: initialized consumed_samples to {initial_consumed_samples} (seek_position={seek_position:.2}s)");
+
+                // Set the consumed samples counter on the audio output
+                output.set_consumed_samples(consumed_samples);
+
+                // Pass the shared volume atomic to the audio output
+                output.set_shared_volume(shared_volume_local.clone());
+                log::info!("Audio output creation: set shared volume reference");
+
+                // Set up progress callback to handle progress events from AudioOutput
+                // Create a channel for progress updates to avoid calling async code from audio thread
+                let (progress_tx, progress_rx) = flume::unbounded::<ProgressUpdate>();
+
+                // Spawn a task to handle progress updates from the audio thread
+                let playback_for_handler = playback_for_callback.clone();
+                moosicbox_task::spawn("player: Progress handler", async move {
+                    let mut last_reported_second: Option<u64> = None;
+
+                    while let Ok(progress_update) = progress_rx.recv_async().await {
+                        let old = {
+                            let mut binding = playback_for_handler.write().unwrap();
+                            if let Some(playback) = binding.as_mut() {
+                                let old = playback.clone();
+                                playback.progress = progress_update.current_position;
+                                Some(old)
+                            } else {
+                                None
+                            }
+                        };
+
+                        // Only trigger progress event when the second changes
+                        if let Some(old) = old {
+                            #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                            let current_second = progress_update.current_position as u64;
+                            let should_send_update = last_reported_second != Some(current_second);
+
+                            if should_send_update {
+                                last_reported_second = Some(current_second);
+
+                                log::debug!(
+                                    "Progress callback: position={:.2}s (from AudioOutput) - sending session update",
+                                    progress_update.current_position
+                                );
 
                                 let update = UpdateSession {
-                                    session_id: playback.session_id,
-                                    profile: playback.profile.clone(),
-                                    playback_target,
+                                    session_id: progress_update.session_id,
+                                    profile: progress_update.profile,
+                                    playback_target: progress_update.playback_target,
                                     play: None,
                                     stop: None,
                                     name: None,
                                     active: None,
-                                    playing: Some(true),
+                                    playing: None,
                                     position: None,
-                                    seek: Some(initial_seek_position),
+                                    seek: Some(progress_update.current_position),
                                     volume: None,
                                     playlist: None,
                                     quality: None,
                                 };
-                                send_playback_event(&update, playback);
+                                send_playback_event(&update, &old);
+                            } else {
+                                log::trace!(
+                                    "Progress callback: position={:.2}s (from AudioOutput) - skipping session update (same second)",
+                                    progress_update.current_position
+                                );
                             }
                         }
                     }
-                    Ok(())
-                }
-            }))
-            .with_output(Box::new({
-                let seek_position = seek.unwrap_or(0.0);
-                let shared_volume_local = shared_volume;
-                let playback_for_callback = active_playback;
-                move |spec, _duration| {
-                    use moosicbox_audio_output::AudioWrite;
+                });
 
-                    let mut output: AudioOutput = (open_func.lock().unwrap())
-                        .try_into_output()
-                        .map_err(|e| AudioDecodeError::Other(Box::new(e)))?;
+                let progress_callback = {
+                    let playback_ref = playback_for_callback.clone();
+                    Box::new(move |current_position: f64| {
+                        // Get the current playback info to send with the progress update
+                        let playback_info = {
+                            let binding = playback_ref.read().unwrap();
+                            binding.as_ref().and_then(|playback| {
+                                playback.playback_target.clone().map(|target| {
+                                    ProgressUpdate {
+                                        current_position,
+                                        session_id: playback.session_id,
+                                        profile: playback.profile.clone(),
+                                        playback_target: target,
+                                    }
+                                })
+                            })
+                        };
 
-                    log::debug!("🔍 Audio output creation: spec rate={}, channels={}",
-                        spec.rate, spec.channels.count());
-
-                    // Initialize consumed samples based on seek position for the AudioOutput
-                    let consumed_samples = Arc::new(AtomicUsize::new(0));
-
-                    #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                    let initial_consumed_samples = if seek_position > 0.0 {
-                        (seek_position * f64::from(spec.rate) * spec.channels.count() as f64) as usize
-                    } else {
-                        0
-                    };
-                    consumed_samples.store(initial_consumed_samples, Ordering::SeqCst);
-                    log::debug!("Audio output creation: initialized consumed_samples to {initial_consumed_samples} (seek_position={seek_position:.2}s)");
-
-                    // Set the consumed samples counter on the audio output
-                    output.set_consumed_samples(consumed_samples);
-
-                    // Pass the shared volume atomic to the audio output
-                    output.set_shared_volume(shared_volume_local.clone());
-                    log::info!("Audio output creation: set shared volume reference");
-
-                    // Set up progress callback to handle progress events from AudioOutput
-                    // Create a channel for progress updates to avoid calling async code from audio thread
-                    let (progress_tx, progress_rx) = flume::unbounded::<ProgressUpdate>();
-
-                    // Spawn a task to handle progress updates from the audio thread
-                    let playback_for_handler = playback_for_callback.clone();
-                    moosicbox_task::spawn("player: Progress handler", async move {
-                        let mut last_reported_second: Option<u64> = None;
-
-                        while let Ok(progress_update) = progress_rx.recv_async().await {
-                            let old = {
-                                let mut binding = playback_for_handler.write().unwrap();
-                                if let Some(playback) = binding.as_mut() {
-                                    let old = playback.clone();
-                                    playback.progress = progress_update.current_position;
-                                    Some(old)
-                                } else {
-                                    None
-                                }
-                            };
-
-                            // Only trigger progress event when the second changes
-                            if let Some(old) = old {
-                                #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                                let current_second = progress_update.current_position as u64;
-                                let should_send_update = last_reported_second != Some(current_second);
-
-                                if should_send_update {
-                                    last_reported_second = Some(current_second);
-
-                                    log::debug!(
-                                        "Progress callback: position={:.2}s (from AudioOutput) - sending session update",
-                                        progress_update.current_position
-                                    );
-
-                                    let update = UpdateSession {
-                                        session_id: progress_update.session_id,
-                                        profile: progress_update.profile,
-                                        playback_target: progress_update.playback_target,
-                                        play: None,
-                                        stop: None,
-                                        name: None,
-                                        active: None,
-                                        playing: None,
-                                        position: None,
-                                        seek: Some(progress_update.current_position),
-                                        volume: None,
-                                        playlist: None,
-                                        quality: None,
-                                    };
-                                    send_playback_event(&update, &old);
-                                } else {
-                                    log::trace!(
-                                        "Progress callback: position={:.2}s (from AudioOutput) - skipping session update (same second)",
-                                        progress_update.current_position
-                                    );
-                                }
+                        // Send progress update through channel to avoid async calls from audio thread
+                        if let Some(progress_info) = playback_info {
+                            if let Err(e) = progress_tx.send(progress_info) {
+                                log::error!("Failed to send progress update: {e}");
                             }
                         }
-                    });
+                    })
+                };
 
-                    let progress_callback = {
-                        let playback_ref = playback_for_callback.clone();
-                        Box::new(move |current_position: f64| {
-                            // Get the current playback info to send with the progress update
-                            let playback_info = {
-                                let binding = playback_ref.read().unwrap();
-                                binding.as_ref().and_then(|playback| {
-                                    playback.playback_target.clone().map(|target| {
-                                        ProgressUpdate {
-                                            current_position,
-                                            session_id: playback.session_id,
-                                            profile: playback.profile.clone(),
-                                            playback_target: target,
-                                        }
-                                    })
-                                })
-                            };
+                output.set_progress_callback(Some(progress_callback));
+                log::debug!("Audio output creation: set progress callback");
 
-                            // Send progress update through channel to avoid async calls from audio thread
-                            if let Some(progress_info) = playback_info {
-                                if let Err(e) = progress_tx.send(progress_info) {
-                                    log::error!("Failed to send progress update: {e}");
-                                }
-                            }
-                        })
-                    };
+                Ok(Box::new(output))
+            }
+        }));
 
-                    output.set_progress_callback(Some(progress_callback));
-                    log::debug!("Audio output creation: set progress callback");
-
-                    Ok(Box::new(output))
-                }
-            }))
-            .with_cancellation_token(playback.abort);
-
-        moosicbox_assert::assert_or_err!(
-            audio_decode_handler.contains_outputs_to_open(),
-            crate::symphonia::PlaybackError::NoAudioOutputs.into(),
-            "No outputs set for the audio_decode_handler"
-        );
-
-        Ok(audio_decode_handler)
+    if let Some(playback) = playback.read().unwrap().as_ref() {
+        audio_decode_handler = audio_decode_handler.with_cancellation_token(playback.abort.clone());
     }
+
+    moosicbox_assert::assert_or_err!(
+        audio_decode_handler.contains_outputs_to_open(),
+        crate::symphonia::PlaybackError::NoAudioOutputs.into(),
+        "No outputs set for the audio_decode_handler"
+    );
+
+    Ok(audio_decode_handler)
 }
