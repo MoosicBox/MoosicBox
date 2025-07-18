@@ -250,7 +250,7 @@ impl TryFrom<&AudioOutputFactory> for AudioOutput {
     }
 }
 
-pub trait AudioWrite: Send {
+pub trait AudioWrite {
     /// # Errors
     ///
     /// * If fails to write the `AudioBuffer`

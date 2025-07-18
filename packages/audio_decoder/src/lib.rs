@@ -42,7 +42,7 @@ pub enum AudioDecodeError {
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
-pub trait AudioDecode: Send {
+pub trait AudioDecode {
     /// # Errors
     ///
     /// * If the audio failed to decode
