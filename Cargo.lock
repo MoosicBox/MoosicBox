@@ -1898,9 +1898,9 @@ checksum = "2e2c71c44e5bbc64de4ecfac946e05f9bba5cc296ea7bab4d3eda242a3ffa73c"
 
 [[package]]
 name = "built"
-version = "0.7.7"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
+checksum = "38d17f4d6e4dc36d1a02fbedc2753a096848e7c1b0772f7654eab8e2c927dd53"
 
 [[package]]
 name = "bumpalo"
@@ -3900,12 +3900,12 @@ checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
 
 [[package]]
 name = "flacenc"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb6da14d3c6605689b5c9ed5187a5218a6d3888e14b747bc18fd4e4bafd452bd"
+checksum = "22846e369206f5c3caa4c59071041fe70c1c2863ebdd2341e6ad17490d53772b"
 dependencies = [
  "built",
- "crc 2.1.0",
+ "crc 3.3.0",
  "crossbeam-channel",
  "heapless",
  "log 0.4.27",
