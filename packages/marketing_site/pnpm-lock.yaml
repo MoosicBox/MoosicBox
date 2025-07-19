@@ -18,8 +18,8 @@ importers:
         specifier: ^6.83.0
         version: 6.83.0(typescript@5.8.3)
       '@pulumi/pulumi':
-        specifier: ^3.183.0
-        version: 3.183.0(typescript@5.8.3)
+        specifier: ^3.184.0
+        version: 3.184.0(typescript@5.8.3)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -33,8 +33,8 @@ importers:
         specifier: ^9.31.0
         version: 9.31.0
       eslint-config-prettier:
-        specifier: ^9.1.0
-        version: 9.1.0(eslint@9.31.0)
+        specifier: ^9.1.2
+        version: 9.1.2(eslint@9.31.0)
       eslint-plugin-import:
         specifier: ^2.32.0
         version: 2.32.0(@typescript-eslint/parser@8.37.0(eslint@9.31.0)(typescript@5.8.3))(eslint@9.31.0)
@@ -324,8 +324,8 @@ packages:
   '@pulumi/aws@6.83.0':
     resolution: {integrity: sha512-uYpYSA5aaDERFuxy3D+FDWiwH7YYNHSwGLpHVuARAzBfQ/SQDkS/tfJI5NNo7/+KCmje3rloKE2enUK/Q9bVBg==}
 
-  '@pulumi/pulumi@3.183.0':
-    resolution: {integrity: sha512-2NHuf2LfEv6kvgePg6l6vkwNfjGcfTT+0H0kVVkaBKhB9hOE32OgDSURobHjNrBKdbKmXJLHL9/eP9C/9KDziw==}
+  '@pulumi/pulumi@3.184.0':
+    resolution: {integrity: sha512-hseyV9cDUcu6MgXnnuKibIx5DtZVjS0judMYQdy74vau8CCKIAoIJGoURaKIl0KCT8OuvaMCHS+iOG/8o8VSCg==}
     engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -406,8 +406,8 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
-  '@types/node@24.0.14':
-    resolution: {integrity: sha512-4zXMWD91vBLGRtHK3YbIoFMia+1nqEz72coM42C5ETjnNCa/heoj7NT1G67iAfOqMmcfhuCZ4uNpyz8EjlAejw==}
+  '@types/node@24.0.15':
+    resolution: {integrity: sha512-oaeTSbCef7U/z7rDeJA138xpG3NuKc64/rZ2qmUFkFJmnMsAPaluIifqyWd8hSSMxyP9oie3dLAqYPblag9KgA==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -833,8 +833,8 @@ packages:
     resolution: {integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==}
     engines: {node: '>=10'}
 
-  eslint-config-prettier@9.1.0:
-    resolution: {integrity: sha512-NSWl5BFQWEPi1j4TjVNItzYV7dZXZ+wP6I6ZhrBGpChQhZRUaElihE9uRRkcbRnNb76UMKDF3r+WTmNcGPKsqw==}
+  eslint-config-prettier@9.1.2:
+    resolution: {integrity: sha512-iI1f+D2ViGn+uvv5HuHVUamg8ll4tN+JRHGc6IJi4TP9Kl976C57fzPXgseXNs8v0iA8aSJpHsTWjDb9QJamGQ==}
     hasBin: true
     peerDependencies:
       eslint: '>=7.0.0'
@@ -2705,7 +2705,7 @@ snapshots:
 
   '@pulumi/aws@6.83.0(typescript@5.8.3)':
     dependencies:
-      '@pulumi/pulumi': 3.183.0(typescript@5.8.3)
+      '@pulumi/pulumi': 3.184.0(typescript@5.8.3)
       mime: 2.6.0
     transitivePeerDependencies:
       - bluebird
@@ -2713,7 +2713,7 @@ snapshots:
       - ts-node
       - typescript
 
-  '@pulumi/pulumi@3.183.0(typescript@5.8.3)':
+  '@pulumi/pulumi@3.184.0(typescript@5.8.3)':
     dependencies:
       '@grpc/grpc-js': 1.13.4
       '@logdna/tail-file': 2.2.0
@@ -2804,7 +2804,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.0.4
       '@types/keyv': 3.1.4
-      '@types/node': 24.0.14
+      '@types/node': 24.0.15
       '@types/responselike': 1.0.3
 
   '@types/estree@1.0.8': {}
@@ -2819,15 +2819,15 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 24.0.14
+      '@types/node': 24.0.15
 
-  '@types/node@24.0.14':
+  '@types/node@24.0.15':
     dependencies:
       undici-types: 7.8.0
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 24.0.14
+      '@types/node': 24.0.15
 
   '@types/semver@7.7.0': {}
 
@@ -3365,7 +3365,7 @@ snapshots:
 
   escape-string-regexp@4.0.0: {}
 
-  eslint-config-prettier@9.1.0(eslint@9.31.0):
+  eslint-config-prettier@9.1.2(eslint@9.31.0):
     dependencies:
       eslint: 9.31.0
 
@@ -4431,7 +4431,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 24.0.14
+      '@types/node': 24.0.15
       long: 5.3.2
 
   proxy-addr@2.0.7:
