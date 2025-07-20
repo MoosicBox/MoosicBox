@@ -95,7 +95,7 @@ clippier features Cargo.toml \
 
 This enables replaying the same randomized distribution by using the printed seed value.
 
-#### Enhanced Change Impact Analysis 
+#### Enhanced Change Impact Analysis
 
 Include only features for packages affected by specific file changes:
 ```bash
@@ -407,7 +407,7 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 When the `git-diff` feature is enabled (default), Clippier can:
 
 - **Parse Cargo.lock changes**: Detect version updates in external dependencies
-- **Map external to internal dependencies**: Understand which workspace packages use which external dependencies  
+- **Map external to internal dependencies**: Understand which workspace packages use which external dependencies
 - **Provide comprehensive impact analysis**: Include both file-based and dependency-based changes
 - **Optimize CI/CD pipelines**: Test only packages actually affected by changes
 
@@ -483,16 +483,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Build clippier
         run: cargo build --release --package clippier
-      
+
       - name: Analyze changes and generate matrix
         id: analysis
         run: |
           # Get changed files
           CHANGED_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }} | tr '\n' ',' | sed 's/,$//')
-          
+
           # Use enhanced analysis if Cargo.lock changed
           if echo "$CHANGED_FILES" | grep -q "Cargo.lock"; then
             echo "method=hybrid" >> $GITHUB_OUTPUT
@@ -502,12 +502,12 @@ jobs:
               --git-head "${{ github.sha }}" \
               --max 15 --output json)
           else
-            echo "method=file-based" >> $GITHUB_OUTPUT  
+            echo "method=file-based" >> $GITHUB_OUTPUT
             matrix=$(./target/release/clippier features Cargo.toml \
               --changed-files "$CHANGED_FILES" \
               --max 15 --output json)
           fi
-          
+
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   test:
@@ -532,18 +532,18 @@ PACKAGES=("server" "tunnel-server" "load-balancer")
 
 for package in "${PACKAGES[@]}"; do
   echo "Generating Dockerfile for $package..."
-  
+
   # Show dependency analysis
   echo "Dependencies analysis:"
   echo "  Normal: $(./clippier workspace-deps . "moosicbox_$package" | wc -l) packages"
   echo "  All potential: $(./clippier workspace-deps . "moosicbox_$package" --all-potential-deps | wc -l) packages"
-  
+
   # Generate Dockerfile
   ./clippier generate-dockerfile . "moosicbox_$package" \
     --output "docker/Dockerfile.$package" \
     --port 8080 \
     --generate-dockerignore
-    
+
   echo "Generated docker/Dockerfile.$package"
 done
 ```
@@ -595,6 +595,6 @@ echo "🧪 Test matrix: $MATRIX"
 ## See Also
 
 - [MoosicBox Server](../server/README.md) - Example of complex workspace package
-- [Cargo Workspaces](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) - Rust workspace documentation  
+- [Cargo Workspaces](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) - Rust workspace documentation
 - [GitHub Actions](https://docs.github.com/en/actions) - CI/CD platform integration
 - [Docker Multi-stage Builds](https://docs.docker.com/develop/dev-best-practices/dockerfile_best-practices/#use-multi-stage-builds) - Docker optimization techniques
