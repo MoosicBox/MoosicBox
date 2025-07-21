@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::sync::{
-    Arc, Mutex, RwLock,
+    Arc, LazyLock, Mutex, RwLock,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
@@ -21,6 +21,11 @@ use crate::{
     ApiPlaybackStatus, Playback, PlaybackHandler, PlaybackType, Player, PlayerError, PlayerSource,
     send_playback_event, symphonia::play_media_source, track_or_id_to_playable,
 };
+
+// Global storage for session command forwarding to thread-local processors
+static SESSION_COMMAND_FORWARDER: LazyLock<
+    Arc<RwLock<Option<flume::Sender<moosicbox_audio_output::CommandMessage>>>>,
+> = LazyLock::new(|| Arc::new(RwLock::new(None)));
 
 #[derive(Debug, Clone)]
 struct ProgressUpdate {
@@ -138,19 +143,23 @@ impl Player for LocalPlayer {
             let output = self.output.clone().unwrap();
             let audio_handle_storage = self.audio_handle.clone();
             move || {
-                // CREATE AUDIO HANDLE IMMEDIATELY - before any decode operations
-                let (command_sender, command_receiver) = flume::unbounded();
-                let handle = moosicbox_audio_output::AudioHandle::new(command_sender);
+                // CREATE AUDIO HANDLE AND SESSION COORDINATOR
+                let (session_command_sender, session_command_receiver) = flume::unbounded();
+                let handle = moosicbox_audio_output::AudioHandle::new(session_command_sender);
 
                 // STORE HANDLE IMMEDIATELY - available for pause() right now
                 *audio_handle_storage.write().unwrap() = Some(handle);
                 log::debug!("trigger_play: created and stored audio handle immediately");
 
+                // START SESSION COMMAND COORDINATOR (no CPAL streams involved)
+                let _coordinator_handle =
+                    Self::start_session_command_coordinator(session_command_receiver);
+                log::debug!("trigger_play: started session command coordinator");
+
                 let mut handler = get_audio_decode_handler_with_command_receiver(
                     &playback,
                     shared_volume,
                     output,
-                    command_receiver,
                     seek,
                 )?;
                 play_media_source(
@@ -350,6 +359,113 @@ impl LocalPlayer {
     fn get_current_audio_handle(&self) -> Option<AudioHandle> {
         self.audio_handle.read().unwrap().clone()
     }
+
+    /// Starts a session command coordinator that forwards commands to thread-local processors.
+    /// This ensures only one active processor per session while maintaining macOS CPAL compatibility.
+    fn start_session_command_coordinator(
+        session_command_receiver: flume::Receiver<moosicbox_audio_output::CommandMessage>,
+    ) -> tokio::task::JoinHandle<()> {
+        moosicbox_task::spawn("session_command_coordinator", async move {
+            log::debug!("Session command coordinator started");
+
+            while let Ok(command_msg) = session_command_receiver.recv_async().await {
+                log::trace!("Coordinating session command: {:?}", command_msg.command);
+
+                // Forward command to the currently registered thread-local processor
+                let forwarder = SESSION_COMMAND_FORWARDER.read().unwrap().clone();
+
+                if let Some(forwarder) = forwarder {
+                    // Forward the command to the thread-local processor
+                    if let Err(e) = forwarder.send_async(command_msg).await {
+                        log::warn!("Failed to forward command to thread-local processor: {e}");
+                    }
+                } else {
+                    log::warn!(
+                        "No thread-local processor registered for session command: {:?}",
+                        command_msg.command
+                    );
+                    // Send error response if requested
+                    if let Some(response_sender) = command_msg.response_sender {
+                        let _ = response_sender
+                            .send_async(moosicbox_audio_output::AudioResponse::Error(
+                                "No audio processor available".to_string(),
+                            ))
+                            .await;
+                    }
+                }
+            }
+
+            log::debug!("Session command coordinator stopped");
+        })
+    }
+
+    /// Registers a thread-local processor with the session coordinator.
+    /// The processor stays on its original thread (macOS CPAL compatible).
+    fn register_thread_local_processor(audio_output_handle: AudioHandle) {
+        // Create a channel for this thread-local processor
+        let (thread_local_sender, thread_local_receiver) = flume::unbounded();
+
+        // Register this processor as the active forwarder
+        *SESSION_COMMAND_FORWARDER.write().unwrap() = Some(thread_local_sender);
+        log::debug!("Registered thread-local processor with session coordinator");
+
+        // Start the thread-local processor (stays on current thread)
+        moosicbox_task::spawn("thread_local_audio_processor", async move {
+            log::debug!("Thread-local audio processor started");
+
+            while let Ok(command_msg) = thread_local_receiver.recv_async().await {
+                log::trace!(
+                    "Processing thread-local audio command: {:?}",
+                    command_msg.command
+                );
+
+                let response = match command_msg.command {
+                    moosicbox_audio_output::AudioCommand::Pause => {
+                        match audio_output_handle.pause().await {
+                            Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                            Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                                "Failed to pause: {e}"
+                            )),
+                        }
+                    }
+                    moosicbox_audio_output::AudioCommand::Resume => {
+                        match audio_output_handle.resume().await {
+                            Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                            Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                                "Failed to resume: {e}"
+                            )),
+                        }
+                    }
+                    moosicbox_audio_output::AudioCommand::SetVolume(volume) => {
+                        match audio_output_handle.set_volume(volume).await {
+                            Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                            Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                                "Failed to set volume: {e}"
+                            )),
+                        }
+                    }
+                    moosicbox_audio_output::AudioCommand::Reset => {
+                        match audio_output_handle.reset().await {
+                            Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                            Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                                "Failed to reset: {e}"
+                            )),
+                        }
+                    }
+                    _ => moosicbox_audio_output::AudioResponse::Error(
+                        "Command not supported".to_string(),
+                    ),
+                };
+
+                // Send response if requested
+                if let Some(response_sender) = command_msg.response_sender {
+                    let _ = response_sender.send_async(response).await;
+                }
+            }
+
+            log::debug!("Thread-local audio processor stopped");
+        });
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -357,7 +473,6 @@ fn get_audio_decode_handler_with_command_receiver(
     playback: &Arc<RwLock<Option<Playback>>>,
     shared_volume: Arc<AtomicF64>,
     output: Arc<Mutex<AudioOutputFactory>>,
-    command_receiver: flume::Receiver<moosicbox_audio_output::CommandMessage>,
     seek: Option<f64>,
 ) -> Result<AudioDecodeHandler, PlayerError> {
     // Initialize shared volume with the current playback volume
@@ -373,9 +488,6 @@ fn get_audio_decode_handler_with_command_receiver(
     );
 
     let sent_playback_start_event = AtomicBool::new(false);
-
-    // Store command receiver for later use in command processor
-    let command_receiver = Arc::new(Mutex::new(Some(command_receiver)));
 
     let mut audio_decode_handler = AudioDecodeHandler::new()
         .with_filter(Box::new({
@@ -418,7 +530,6 @@ fn get_audio_decode_handler_with_command_receiver(
             let seek_position = seek.unwrap_or(0.0);
             let shared_volume_local = shared_volume;
             let playback_for_callback = playback.clone();
-            let command_receiver_for_output = command_receiver;
             move |spec, _duration| {
                 use moosicbox_audio_output::AudioWrite;
 
@@ -448,15 +559,9 @@ fn get_audio_decode_handler_with_command_receiver(
                 output.set_shared_volume(shared_volume_local.clone());
                 log::info!("Audio output creation: set shared volume reference");
 
-                // START COMMAND PROCESSOR for the actual audio output
-                let cmd_receiver_option = command_receiver_for_output.lock().unwrap().take();
-                if let Some(cmd_receiver) = cmd_receiver_option {
-                    let output_handle = output.handle();
-                    process_commands(cmd_receiver, output_handle);
-                    log::debug!("Audio output creation: started command processor");
-                } else {
-                    log::warn!("Audio output creation: command receiver already taken");
-                }
+                // REGISTER THREAD-LOCAL PROCESSOR with session coordinator
+                LocalPlayer::register_thread_local_processor(output.handle());
+                log::debug!("Audio output creation: registered thread-local processor");
 
                 // Set up progress callback to handle progress events from AudioOutput
                 // Create a channel for progress updates to avoid calling async code from audio thread
@@ -564,56 +669,4 @@ fn get_audio_decode_handler_with_command_receiver(
     );
 
     Ok(audio_decode_handler)
-}
-
-fn process_commands(
-    cmd_receiver: flume::Receiver<moosicbox_audio_output::CommandMessage>,
-    output_handle: AudioHandle,
-) -> tokio::task::JoinHandle<()> {
-    moosicbox_task::spawn("audio_output_command_processor", async move {
-        log::debug!("Audio output command processor started");
-        while let Ok(command_msg) = cmd_receiver.recv_async().await {
-            log::trace!("Processing audio command: {:?}", command_msg.command);
-
-            let response = match command_msg.command {
-                moosicbox_audio_output::AudioCommand::Pause => match output_handle.pause().await {
-                    Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                    Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
-                        "Failed to pause: {e}"
-                    )),
-                },
-                moosicbox_audio_output::AudioCommand::Resume => {
-                    match output_handle.resume().await {
-                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
-                            "Failed to resume: {e}"
-                        )),
-                    }
-                }
-                moosicbox_audio_output::AudioCommand::SetVolume(volume) => {
-                    match output_handle.set_volume(volume).await {
-                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
-                            "Failed to set volume: {e}"
-                        )),
-                    }
-                }
-                moosicbox_audio_output::AudioCommand::Reset => match output_handle.reset().await {
-                    Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                    Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
-                        "Failed to reset: {e}"
-                    )),
-                },
-                _ => moosicbox_audio_output::AudioResponse::Error(
-                    "Command not supported".to_string(),
-                ),
-            };
-
-            // Send response if requested
-            if let Some(response_sender) = command_msg.response_sender {
-                let _ = response_sender.send_async(response).await;
-            }
-        }
-        log::debug!("Audio output command processor stopped");
-    })
 }
