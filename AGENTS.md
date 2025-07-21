@@ -6,6 +6,13 @@
 - **Example**: `nix-shell --run "cargo build"` or `nix-shell --run "pnpm lint"`
 - **Shell provides**: Rust toolchain, Node.js, audio libraries, databases, system dependencies
 
+## Git Usage Restrictions
+
+- **READ-ONLY git operations**: Only use `git status`, `git log`, `git diff`, `git show`, `git branch -v`
+- **NO modifications**: Never use `git add`, `git commit`, `git push`, `git pull`, `git rebase`, `git reset`, `git merge`, `git stash`
+- **NO history changes**: Never modify git history or working tree state
+- **View only**: Agents should only inspect git state, never change it
+
 ## Build/Test Commands
 
 - **Rust build**: `cargo build` (fastest), `cargo build --profile fast` (optimized for speed)
