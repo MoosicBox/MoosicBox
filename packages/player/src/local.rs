@@ -452,46 +452,7 @@ fn get_audio_decode_handler_with_command_receiver(
                 let cmd_receiver_option = command_receiver_for_output.lock().unwrap().take();
                 if let Some(cmd_receiver) = cmd_receiver_option {
                     let output_handle = output.handle();
-                    moosicbox_task::spawn("audio_output_command_processor", async move {
-                        log::debug!("Audio output command processor started");
-                        while let Ok(command_msg) = cmd_receiver.recv_async().await {
-                            log::trace!("Processing audio command: {:?}", command_msg.command);
-
-                            let response = match command_msg.command {
-                                moosicbox_audio_output::AudioCommand::Pause => {
-                                    match output_handle.pause().await {
-                                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!("Failed to pause: {e}")),
-                                    }
-                                }
-                                moosicbox_audio_output::AudioCommand::Resume => {
-                                    match output_handle.resume().await {
-                                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!("Failed to resume: {e}")),
-                                    }
-                                }
-                                moosicbox_audio_output::AudioCommand::SetVolume(volume) => {
-                                    match output_handle.set_volume(volume).await {
-                                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!("Failed to set volume: {e}")),
-                                    }
-                                }
-                                moosicbox_audio_output::AudioCommand::Reset => {
-                                    match output_handle.reset().await {
-                                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!("Failed to reset: {e}")),
-                                    }
-                                }
-                                _ => moosicbox_audio_output::AudioResponse::Error("Command not supported".to_string()),
-                            };
-
-                            // Send response if requested
-                            if let Some(response_sender) = command_msg.response_sender {
-                                let _ = response_sender.send_async(response).await;
-                            }
-                        }
-                        log::debug!("Audio output command processor stopped");
-                    });
+                    process_commands(cmd_receiver, output_handle);
                     log::debug!("Audio output creation: started command processor");
                 } else {
                     log::warn!("Audio output creation: command receiver already taken");
@@ -603,4 +564,56 @@ fn get_audio_decode_handler_with_command_receiver(
     );
 
     Ok(audio_decode_handler)
+}
+
+fn process_commands(
+    cmd_receiver: flume::Receiver<moosicbox_audio_output::CommandMessage>,
+    output_handle: AudioHandle,
+) -> tokio::task::JoinHandle<()> {
+    moosicbox_task::spawn("audio_output_command_processor", async move {
+        log::debug!("Audio output command processor started");
+        while let Ok(command_msg) = cmd_receiver.recv_async().await {
+            log::trace!("Processing audio command: {:?}", command_msg.command);
+
+            let response = match command_msg.command {
+                moosicbox_audio_output::AudioCommand::Pause => match output_handle.pause().await {
+                    Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                    Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                        "Failed to pause: {e}"
+                    )),
+                },
+                moosicbox_audio_output::AudioCommand::Resume => {
+                    match output_handle.resume().await {
+                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                            "Failed to resume: {e}"
+                        )),
+                    }
+                }
+                moosicbox_audio_output::AudioCommand::SetVolume(volume) => {
+                    match output_handle.set_volume(volume).await {
+                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                            "Failed to set volume: {e}"
+                        )),
+                    }
+                }
+                moosicbox_audio_output::AudioCommand::Reset => match output_handle.reset().await {
+                    Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                    Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                        "Failed to reset: {e}"
+                    )),
+                },
+                _ => moosicbox_audio_output::AudioResponse::Error(
+                    "Command not supported".to_string(),
+                ),
+            };
+
+            // Send response if requested
+            if let Some(response_sender) = command_msg.response_sender {
+                let _ = response_sender.send_async(response).await;
+            }
+        }
+        log::debug!("Audio output command processor stopped");
+    })
 }
