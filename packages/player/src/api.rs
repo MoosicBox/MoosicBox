@@ -114,6 +114,7 @@ impl From<PlayerError> for actix_web::Error {
             | PlayerError::MissingProfile => ErrorInternalServerError(err),
             PlayerError::Acquire(err) => ErrorInternalServerError(err),
             PlayerError::Seek(err) => ErrorInternalServerError(err),
+            PlayerError::AudioOutput(err) => ErrorInternalServerError(err),
         }
     }
 }
@@ -164,12 +165,10 @@ async fn get_player(
 
                 let playback = local_player.playback.clone();
                 let output = local_player.output.clone();
-                let receiver = local_player.receiver.clone();
 
                 let handler = PlaybackHandler::new(local_player.clone())
                     .with_playback(playback)
-                    .with_output(output)
-                    .with_receiver(receiver);
+                    .with_output(output);
 
                 local_player
                     .playback_handler
@@ -189,12 +188,10 @@ async fn get_player(
 
                 let playback = local_player.playback.clone();
                 let output = local_player.output.clone();
-                let receiver = local_player.receiver.clone();
 
                 let handler = PlaybackHandler::new(local_player.clone())
                     .with_playback(playback)
-                    .with_output(output)
-                    .with_receiver(receiver);
+                    .with_output(output);
 
                 local_player
                     .playback_handler

@@ -21,6 +21,10 @@ pub use symphonia::core::units::Duration;
 // Export ProgressTracker for use by AudioOutput implementations
 pub use progress_tracker::ProgressTracker;
 
+// Export command types for use by AudioOutput implementations
+pub use command::{AudioCommand, AudioError, AudioHandle, AudioResponse, CommandMessage};
+
+pub mod command;
 pub mod encoder;
 
 #[cfg(feature = "api")]
@@ -137,6 +141,10 @@ impl AudioWrite for AudioOutput {
         callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
     ) {
         self.writer.set_progress_callback(callback);
+    }
+
+    fn handle(&self) -> AudioHandle {
+        self.writer.handle()
     }
 }
 
@@ -293,6 +301,9 @@ pub trait AudioWrite {
         _callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
     ) {
     }
+
+    /// Get a communication handle for sending commands to this audio output
+    fn handle(&self) -> AudioHandle;
 }
 
 impl AudioDecode for Box<dyn AudioWrite> {

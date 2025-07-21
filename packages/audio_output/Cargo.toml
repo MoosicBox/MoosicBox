@@ -38,6 +38,7 @@ ogg                     = { workspace = true, optional = true }
 opus                    = { workspace = true, optional = true }
 
 bytes     = { workspace = true }
+flume     = { workspace = true }
 log       = { workspace = true }
 symphonia = { workspace = true }
 thiserror = { workspace = true }

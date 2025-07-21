@@ -241,6 +241,10 @@ impl AudioWrite for Mp3Encoder {
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         Ok(())
     }
+
+    fn handle(&self) -> crate::AudioHandle {
+        unimplemented!("Mp3Encoder does not support command handling")
+    }
 }
 
 #[must_use]

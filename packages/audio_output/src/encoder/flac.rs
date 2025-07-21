@@ -243,6 +243,10 @@ impl AudioWrite for FlacEncoder {
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         Ok(())
     }
+
+    fn handle(&self) -> crate::AudioHandle {
+        unimplemented!("FlacEncoder does not support command handling")
+    }
 }
 
 #[must_use]

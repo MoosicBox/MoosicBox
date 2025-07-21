@@ -8,9 +8,9 @@ use std::sync::{
 use atomic_float::AtomicF64;
 
 use async_trait::async_trait;
-use flume::Receiver;
+
 use moosicbox_audio_decoder::{AudioDecodeError, AudioDecodeHandler};
-use moosicbox_audio_output::{AudioOutput, AudioOutputFactory};
+use moosicbox_audio_output::{AudioHandle, AudioOutput, AudioOutputFactory};
 use moosicbox_music_api::models::TrackAudioQuality;
 use moosicbox_music_models::TrackApiSource;
 use moosicbox_session::models::UpdateSession;
@@ -36,10 +36,11 @@ pub struct LocalPlayer {
     playback_type: PlaybackType,
     source: PlayerSource,
     pub output: Option<Arc<Mutex<AudioOutputFactory>>>,
-    pub receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
+
     pub playback: Arc<RwLock<Option<Playback>>>,
     pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
     pub shared_volume: Arc<AtomicF64>, // Shared volume for immediate audio output updates
+    pub audio_handle: Arc<RwLock<Option<AudioHandle>>>, // Handle for immediate audio control
 }
 
 impl std::fmt::Debug for LocalPlayer {
@@ -49,7 +50,6 @@ impl std::fmt::Debug for LocalPlayer {
             .field("playback_type", &self.playback_type)
             .field("source", &self.source)
             .field("output", &self.output)
-            .field("receiver", &self.receiver)
             .field("playback", &self.playback)
             .field(
                 "shared_volume",
@@ -136,8 +136,23 @@ impl Player for LocalPlayer {
             let playback = self.playback.clone();
             let shared_volume = self.shared_volume.clone();
             let output = self.output.clone().unwrap();
+            let audio_handle_storage = self.audio_handle.clone();
             move || {
-                let mut handler = get_audio_decode_handler(&playback, shared_volume, output, seek)?;
+                // CREATE AUDIO HANDLE IMMEDIATELY - before any decode operations
+                let (command_sender, command_receiver) = flume::unbounded();
+                let handle = moosicbox_audio_output::AudioHandle::new(command_sender);
+
+                // STORE HANDLE IMMEDIATELY - available for pause() right now
+                *audio_handle_storage.write().unwrap() = Some(handle);
+                log::debug!("trigger_play: created and stored audio handle immediately");
+
+                let mut handler = get_audio_decode_handler_with_command_receiver(
+                    &playback,
+                    shared_volume,
+                    output,
+                    command_receiver,
+                    seek,
+                )?;
                 play_media_source(
                     mss,
                     &playable_track.hint,
@@ -180,6 +195,17 @@ impl Player for LocalPlayer {
     async fn trigger_stop(&self) -> Result<(), PlayerError> {
         log::info!("Stopping playback");
 
+        // 1. Use the handle for immediate control
+        if let Some(handle) = self.get_current_audio_handle() {
+            handle.reset().await?;
+            log::debug!("Audio output reset successfully via handle");
+            // Clear the handle since playback is stopping
+            *self.audio_handle.write().unwrap() = None;
+        } else {
+            log::warn!("No audio output handle available to stop");
+        }
+
+        // 2. Cancel the decode/playback task (existing logic)
         {
             let Some(playback) = self.playback.read().unwrap().clone() else {
                 return Err(PlayerError::NoPlayersPlaying);
@@ -187,28 +213,6 @@ impl Player for LocalPlayer {
 
             log::debug!("Aborting playback {playback:?} for stop");
             playback.abort.cancel();
-
-            log::trace!("Waiting for playback completion response");
-            let receiver = self.receiver.write().await.take();
-            if let Some(receiver) = receiver {
-                tokio::select! {
-                    resp = receiver.recv_async() => {
-                        match resp {
-                            Ok(()) => {
-                                log::trace!("Playback successfully stopped");
-                            }
-                            Err(e) => {
-                                log::info!("Sender associated with playback disconnected: {e:?}");
-                            }
-                        }
-                    }
-                    () = tokio::time::sleep(std::time::Duration::from_millis(5000)) => {
-                        log::error!("Playback timed out waiting for abort completion");
-                    }
-                }
-            } else {
-                log::debug!("No receiver to wait for completion response with");
-            }
         }
 
         // Progress tracking is now handled by AudioOutput implementations
@@ -219,7 +223,17 @@ impl Player for LocalPlayer {
     }
 
     async fn trigger_pause(&self) -> Result<(), PlayerError> {
-        log::info!("Pausing playback id");
+        log::info!("Pausing playback");
+
+        // 1. Immediately pause audio output via handle
+        if let Some(handle) = self.get_current_audio_handle() {
+            handle.pause().await?;
+            log::debug!("Audio output paused successfully via handle");
+        } else {
+            log::warn!("No audio output handle available to pause");
+        }
+
+        // 2. Cancel the decode/playback task (existing logic)
         {
             let Some(playback) = self.playback.read().unwrap().clone() else {
                 return Err(PlayerError::NoPlayersPlaying);
@@ -230,15 +244,6 @@ impl Player for LocalPlayer {
             log::info!("Aborting playback id {id} for pause");
             playback.abort.cancel();
 
-            log::trace!("Waiting for playback completion response");
-            let receiver = self.receiver.write().await.take();
-            if let Some(receiver) = receiver {
-                if let Err(err) = receiver.recv_async().await {
-                    log::trace!("Sender correlated with receiver has dropped: {err:?}");
-                }
-            } else {
-                log::debug!("No receiver to wait for completion response with");
-            }
             log::trace!("Playback successfully paused");
         }
 
@@ -328,9 +333,10 @@ impl LocalPlayer {
             source,
             output: None,
             playback: Arc::new(RwLock::new(None)),
-            receiver: Arc::new(tokio::sync::RwLock::new(None)),
+
             playback_handler: Arc::new(RwLock::new(None)),
             shared_volume,
+            audio_handle: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -340,38 +346,18 @@ impl LocalPlayer {
         self
     }
 
-    /// # Errors
-    ///
-    /// * If failed to get the audio decode handler
-    ///
-    /// # Panics
-    ///
-    /// * If the `playback` `RwLock` is poisoned
-    #[allow(clippy::too_many_lines)]
-    pub fn get_audio_decode_handler(
-        &self,
-        seek: Option<f64>,
-    ) -> Result<AudioDecodeHandler, PlayerError> {
-        let shared_volume = self.shared_volume.clone();
-
-        if self.output.is_none() {
-            return Err(PlayerError::NoAudioOutputs);
-        }
-
-        get_audio_decode_handler(
-            &self.playback,
-            shared_volume,
-            self.output.clone().unwrap(),
-            seek,
-        )
+    #[must_use]
+    fn get_current_audio_handle(&self) -> Option<AudioHandle> {
+        self.audio_handle.read().unwrap().clone()
     }
 }
 
 #[allow(clippy::too_many_lines)]
-fn get_audio_decode_handler(
+fn get_audio_decode_handler_with_command_receiver(
     playback: &Arc<RwLock<Option<Playback>>>,
     shared_volume: Arc<AtomicF64>,
     output: Arc<Mutex<AudioOutputFactory>>,
+    command_receiver: flume::Receiver<moosicbox_audio_output::CommandMessage>,
     seek: Option<f64>,
 ) -> Result<AudioDecodeHandler, PlayerError> {
     // Initialize shared volume with the current playback volume
@@ -387,6 +373,9 @@ fn get_audio_decode_handler(
     );
 
     let sent_playback_start_event = AtomicBool::new(false);
+
+    // Store command receiver for later use in command processor
+    let command_receiver = Arc::new(Mutex::new(Some(command_receiver)));
 
     let mut audio_decode_handler = AudioDecodeHandler::new()
         .with_filter(Box::new({
@@ -429,6 +418,7 @@ fn get_audio_decode_handler(
             let seek_position = seek.unwrap_or(0.0);
             let shared_volume_local = shared_volume;
             let playback_for_callback = playback.clone();
+            let command_receiver_for_output = command_receiver;
             move |spec, _duration| {
                 use moosicbox_audio_output::AudioWrite;
 
@@ -457,6 +447,55 @@ fn get_audio_decode_handler(
                 // Pass the shared volume atomic to the audio output
                 output.set_shared_volume(shared_volume_local.clone());
                 log::info!("Audio output creation: set shared volume reference");
+
+                // START COMMAND PROCESSOR for the actual audio output
+                let cmd_receiver_option = command_receiver_for_output.lock().unwrap().take();
+                if let Some(cmd_receiver) = cmd_receiver_option {
+                    let output_handle = output.handle();
+                    moosicbox_task::spawn("audio_output_command_processor", async move {
+                        log::debug!("Audio output command processor started");
+                        while let Ok(command_msg) = cmd_receiver.recv_async().await {
+                            log::trace!("Processing audio command: {:?}", command_msg.command);
+
+                            let response = match command_msg.command {
+                                moosicbox_audio_output::AudioCommand::Pause => {
+                                    match output_handle.pause().await {
+                                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!("Failed to pause: {e}")),
+                                    }
+                                }
+                                moosicbox_audio_output::AudioCommand::Resume => {
+                                    match output_handle.resume().await {
+                                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!("Failed to resume: {e}")),
+                                    }
+                                }
+                                moosicbox_audio_output::AudioCommand::SetVolume(volume) => {
+                                    match output_handle.set_volume(volume).await {
+                                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!("Failed to set volume: {e}")),
+                                    }
+                                }
+                                moosicbox_audio_output::AudioCommand::Reset => {
+                                    match output_handle.reset().await {
+                                        Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                                        Err(e) => moosicbox_audio_output::AudioResponse::Error(format!("Failed to reset: {e}")),
+                                    }
+                                }
+                                _ => moosicbox_audio_output::AudioResponse::Error("Command not supported".to_string()),
+                            };
+
+                            // Send response if requested
+                            if let Some(response_sender) = command_msg.response_sender {
+                                let _ = response_sender.send_async(response).await;
+                            }
+                        }
+                        log::debug!("Audio output command processor stopped");
+                    });
+                    log::debug!("Audio output creation: started command processor");
+                } else {
+                    log::warn!("Audio output creation: command receiver already taken");
+                }
 
                 // Set up progress callback to handle progress events from AudioOutput
                 // Create a channel for progress updates to avoid calling async code from audio thread

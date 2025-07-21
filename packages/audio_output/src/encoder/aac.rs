@@ -240,6 +240,10 @@ impl AudioWrite for AacEncoder {
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         Ok(())
     }
+
+    fn handle(&self) -> crate::AudioHandle {
+        unimplemented!("AacEncoder does not support command handling")
+    }
 }
 
 #[must_use]

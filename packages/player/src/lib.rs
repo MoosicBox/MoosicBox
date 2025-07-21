@@ -12,7 +12,7 @@ use std::{
 use ::symphonia::core::{io::MediaSource, probe::Hint};
 use async_trait::async_trait;
 use atomic_float::AtomicF64;
-use flume::{Receiver, SendError, bounded};
+use flume::SendError;
 use futures::{Future, StreamExt as _, TryStreamExt as _};
 use local_ip_address::local_ip;
 use moosicbox_audio_decoder::media_sources::{
@@ -122,6 +122,8 @@ pub enum PlayerError {
     MissingSessionId,
     #[error("Missing profile")]
     MissingProfile,
+    #[error("Audio output error: {0}")]
+    AudioOutput(#[from] moosicbox_audio_output::AudioError),
 }
 
 impl std::fmt::Debug for PlayableTrack {
@@ -372,7 +374,6 @@ pub struct PlaybackHandler {
     pub playback: Arc<std::sync::RwLock<Option<Playback>>>,
     pub output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>>,
     pub player: Arc<Box<dyn Player + Sync>>,
-    receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
 }
 
 #[cfg_attr(feature = "profiling", profiling::all_functions)]
@@ -385,14 +386,12 @@ impl PlaybackHandler {
     pub fn new_boxed(player: Box<dyn Player + Sync>) -> Self {
         let playback = Arc::new(std::sync::RwLock::new(None));
         let output = None;
-        let receiver = Arc::new(tokio::sync::RwLock::new(None));
 
         Self {
             id: switchy_random::rng().next_u64(),
             playback,
             output,
             player: Arc::new(player),
-            receiver,
         }
     }
 
@@ -408,15 +407,6 @@ impl PlaybackHandler {
         output: Option<Arc<std::sync::Mutex<AudioOutputFactory>>>,
     ) -> Self {
         self.output = output;
-        self
-    }
-
-    #[must_use]
-    pub fn with_receiver(
-        mut self,
-        receiver: Arc<tokio::sync::RwLock<Option<Receiver<()>>>>,
-    ) -> Self {
-        self.receiver = receiver;
         self
     }
 }
@@ -656,9 +646,6 @@ impl PlaybackHandler {
     ) -> Result<(), PlayerError> {
         self.player.before_play_playback(seek).await?;
 
-        let (tx, rx) = bounded(1);
-        self.receiver.write().await.replace(rx);
-
         let (playback, old) = {
             let mut binding = self.playback.write().unwrap();
             let playback = binding.as_mut().ok_or(PlayerError::NoPlayersPlaying)?;
@@ -722,7 +709,7 @@ impl PlaybackHandler {
                                 trigger_playback_event(&playback, &old);
                             }
 
-                            tx.send_async(()).await?;
+
                             return Err(err);
                         }
                     }
@@ -762,8 +749,6 @@ impl PlaybackHandler {
                 player.playback.write().unwrap().replace(playback.clone());
                 trigger_playback_event(&playback, &old);
             }
-
-            tx.send_async(()).await?;
 
             Ok::<_, PlayerError>(0)
         });

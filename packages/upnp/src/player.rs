@@ -621,6 +621,10 @@ impl AudioWrite for UpnpPlayer {
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         unimplemented!("UpnpPlayer AudioWrite flush is not implemented")
     }
+
+    fn handle(&self) -> moosicbox_audio_output::AudioHandle {
+        unimplemented!("UpnpPlayer does not support command handling")
+    }
 }
 
 impl TryFrom<UpnpPlayer> for AudioOutputFactory {
@@ -655,6 +659,10 @@ impl AudioWrite for UpnpAvTransportService {
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
         unimplemented!("UpnpAvTransportService AudioWrite flush is not implemented")
+    }
+
+    fn handle(&self) -> moosicbox_audio_output::AudioHandle {
+        unimplemented!("UpnpAvTransportService does not support command handling")
     }
 }
 

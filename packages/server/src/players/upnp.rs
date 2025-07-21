@@ -103,8 +103,6 @@ pub async fn load_upnp_players() -> Result<(), switchy_upnp::UpnpDeviceScannerEr
             );
 
             let playback = player.playback.clone();
-            let receiver = player.receiver.clone();
-
             let output: AudioOutputFactory = player
                 .clone()
                 .try_into()
@@ -112,8 +110,7 @@ pub async fn load_upnp_players() -> Result<(), switchy_upnp::UpnpDeviceScannerEr
 
             let handler = PlaybackHandler::new(player.clone())
                 .with_playback(playback)
-                .with_output(Some(Arc::new(std::sync::Mutex::new(output.clone()))))
-                .with_receiver(receiver);
+                .with_output(Some(Arc::new(std::sync::Mutex::new(output.clone()))));
 
             player
                 .playback_handler

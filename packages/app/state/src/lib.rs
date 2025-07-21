@@ -633,12 +633,10 @@ impl AppState {
                     .with_output(output.clone());
 
                 let playback = local_player.playback.clone();
-                let receiver = local_player.receiver.clone();
 
                 let handler = PlaybackHandler::new(local_player.clone())
                     .with_playback(playback)
-                    .with_output(Some(Arc::new(std::sync::Mutex::new(output))))
-                    .with_receiver(receiver);
+                    .with_output(Some(Arc::new(std::sync::Mutex::new(output))));
 
                 local_player
                     .playback_handler
@@ -664,12 +662,10 @@ impl AppState {
                 );
 
                 let playback = upnp_player.playback.clone();
-                let receiver = upnp_player.receiver.clone();
 
                 let handler = PlaybackHandler::new(upnp_player.clone())
                     .with_playback(playback)
-                    .with_output(Some(Arc::new(std::sync::Mutex::new(output))))
-                    .with_receiver(receiver);
+                    .with_output(Some(Arc::new(std::sync::Mutex::new(output))));
 
                 upnp_player
                     .playback_handler

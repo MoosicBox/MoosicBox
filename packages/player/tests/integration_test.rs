@@ -196,11 +196,9 @@ mod local {
 
         // Create a simple playback handler
         let playback_ref = player.playback.clone();
-        let receiver = Arc::new(tokio::sync::RwLock::new(None));
         let handler = moosicbox_player::PlaybackHandler::new(player.clone())
             .with_playback(playback_ref)
-            .with_output(player.output.clone())
-            .with_receiver(receiver);
+            .with_output(player.output.clone());
 
         *player.playback_handler.write().unwrap() = Some(handler.clone());
 
@@ -352,11 +350,9 @@ mod local {
 
         // Create a simple playback handler
         let playback_ref = player.playback.clone();
-        let receiver = Arc::new(tokio::sync::RwLock::new(None));
         let handler = moosicbox_player::PlaybackHandler::new(player.clone())
             .with_playback(playback_ref)
-            .with_output(player.output.clone())
-            .with_receiver(receiver);
+            .with_output(player.output.clone());
 
         *player.playback_handler.write().unwrap() = Some(handler.clone());
 
@@ -783,6 +779,10 @@ mod local {
         fn get_output_spec(&self) -> Option<symphonia::core::audio::SignalSpec> {
             Some(self.spec)
         }
+
+        fn handle(&self) -> moosicbox_audio_output::AudioHandle {
+            unimplemented!("SlowDrainAudioOutput does not support command handling")
+        }
     }
 
     /// Mock AudioWrite implementation for testing
@@ -811,6 +811,10 @@ mod local {
 
         fn flush(&mut self) -> Result<(), moosicbox_audio_output::AudioOutputError> {
             Ok(())
+        }
+
+        fn handle(&self) -> moosicbox_audio_output::AudioHandle {
+            unimplemented!("MockAudioWrite does not support command handling")
         }
     }
 }

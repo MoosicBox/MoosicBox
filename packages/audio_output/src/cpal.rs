@@ -9,7 +9,18 @@ use symphonia::core::audio::{
 use symphonia::core::conv::{ConvertibleSample, IntoSample};
 use symphonia::core::units::Duration;
 
-use crate::{AudioOutputError, AudioOutputFactory, AudioWrite, ProgressTracker};
+use crate::{
+    AudioOutputError, AudioOutputFactory, AudioWrite, ProgressTracker,
+    command::{AudioCommand, AudioHandle, AudioResponse, CommandMessage},
+};
+
+// Stream command types for immediate processing
+#[derive(Debug, Clone)]
+pub enum StreamCommand {
+    Pause,
+    Resume,
+    Reset,
+}
 
 const INITIAL_BUFFER_SECONDS: usize = 10;
 
@@ -61,6 +72,10 @@ impl AudioWrite for CpalAudioOutput {
         callback: Option<Box<dyn Fn(f64) + Send + Sync + 'static>>,
     ) {
         self.write.set_progress_callback(callback);
+    }
+
+    fn handle(&self) -> AudioHandle {
+        self.write.handle()
     }
 }
 
@@ -147,7 +162,6 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     spec: SignalSpec,
     ring_buf_producer: rb::Producer<T>,
     sample_buf: Option<SampleBuffer<T>>,
-    stream: cpal::Stream,
     initial_buffering: bool,
     buffered_samples: usize,
     buffering_threshold: usize,
@@ -162,6 +176,9 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     completion_mutex: std::sync::Arc<std::sync::Mutex<bool>>, // true when ring buffer is empty
     draining: std::sync::Arc<std::sync::atomic::AtomicBool>,  // true when we're in flush/drain mode
     progress_tracker: ProgressTracker,
+    // Command handling
+    command_receiver: Option<flume::Receiver<CommandMessage>>,
+    command_handle: AudioHandle,
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -236,6 +253,10 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         // Progress tracking setup using ProgressTracker
         let progress_tracker = ProgressTracker::new(Some(0.1)); // 0.1 second threshold
         progress_tracker.set_audio_spec(config.sample_rate.0, u32::try_from(num_channels).unwrap());
+
+        // Command handling setup
+        let (command_sender, command_receiver) = flume::unbounded();
+        let command_handle = AudioHandle::new(command_sender);
 
         // Get callback references for use in the audio callback
         let (
@@ -323,6 +344,45 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                 AudioOutputError::OpenStream
             })?;
 
+        // Create stream command channel for immediate event-driven processing
+        let (stream_command_sender, stream_command_receiver) = flume::unbounded::<StreamCommand>();
+
+        // Spawn dedicated thread that owns the stream for immediate command processing
+        // This ensures commands work on macOS (thread safety) and eliminates polling delays
+        std::thread::spawn(move || {
+            log::debug!("CPAL stream control thread started");
+
+            // Event-driven loop - immediate response to commands, no polling!
+            while let Ok(command) = stream_command_receiver.recv() {
+                log::trace!("CPAL stream control: processing command: {command:?}");
+                match command {
+                    StreamCommand::Pause => {
+                        if let Err(e) = stream.pause() {
+                            log::error!("Failed to pause CPAL stream: {e:?}");
+                        } else {
+                            log::debug!("CPAL stream paused");
+                        }
+                    }
+                    StreamCommand::Resume => {
+                        if let Err(e) = stream.play() {
+                            log::error!("Failed to resume CPAL stream: {e:?}");
+                        } else {
+                            log::debug!("CPAL stream resumed");
+                        }
+                    }
+                    StreamCommand::Reset => {
+                        if let Err(e) = stream.pause() {
+                            log::error!("Failed to reset CPAL stream: {e:?}");
+                        } else {
+                            log::debug!("CPAL stream reset");
+                        }
+                    }
+                }
+            }
+
+            log::debug!("CPAL stream control thread stopped");
+        });
+
         // Calculate buffering threshold for 10 seconds of audio (REQUIRED to prevent start truncation)
         let buffering_threshold =
             INITIAL_BUFFER_SECONDS * config.sample_rate.0 as usize * num_channels;
@@ -359,10 +419,9 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             spec.channels.count()
         );
 
-        Ok(Self {
+        let mut instance = Self {
             spec,
             ring_buf_producer,
-            stream,
             sample_buf: None,
             initial_buffering: true,
             buffered_samples: 0,
@@ -376,7 +435,14 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             completion_mutex,
             draining,
             progress_tracker,
-        })
+            command_receiver: Some(command_receiver),
+            command_handle,
+        };
+
+        // Start the command processor task
+        instance.start_command_processor(stream_command_sender);
+
+        Ok(instance)
     }
 
     fn init_sample_buf(&mut self, duration: Duration) -> &mut SampleBuffer<T> {
@@ -391,6 +457,9 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
 
 impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
     fn write(&mut self, decoded: AudioBuffer<f32>) -> Result<usize, AudioOutputError> {
+        // Stream commands are now processed immediately by the dedicated thread
+        // No need for lazy processing here
+
         // Do nothing if there are no audio frames.
         if decoded.frames() == 0 {
             return Ok(0);
@@ -438,10 +507,15 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                             log::debug!(
                                 "Initial buffering complete: {buffered_seconds:.2} seconds buffered, starting stream now"
                             );
-                            if let Err(err) = self.stream.play() {
-                                log::error!("Audio output stream play error: {err}");
-                                return Err(AudioOutputError::PlayStream);
+
+                            // Use existing command infrastructure to start the stream
+                            if let Err(e) = self.command_handle.resume_immediate() {
+                                log::error!("Failed to start stream: {e}");
+                                return Err(AudioOutputError::StreamClosed);
                             }
+
+                            log::debug!("Stream started successfully");
+
                             self.initial_buffering = false;
                         }
                     }
@@ -466,6 +540,9 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
     }
 
     fn flush(&mut self) -> Result<(), AudioOutputError> {
+        // Stream commands are now processed immediately by the dedicated thread
+        // No need for lazy processing here
+
         // If there is a resampler, then it may need to be flushed
         // depending on the number of samples it has.
 
@@ -481,10 +558,14 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                 "🔊 FLUSH: Stream still in initial buffering with {buffered_seconds:.2}s - forcing stream start for short audio content"
             );
 
-            if let Err(err) = self.stream.play() {
-                log::error!("Audio output stream play error during flush: {err}");
-                return Err(AudioOutputError::PlayStream);
+            // Use existing command infrastructure to start the stream
+            if let Err(e) = self.command_handle.resume_immediate() {
+                log::error!("Failed to start stream for short audio: {e}");
+                return Err(AudioOutputError::StreamClosed);
             }
+
+            log::debug!("Stream started successfully for short audio content");
+
             self.initial_buffering = false;
         }
 
@@ -543,9 +624,8 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                 .store(false, std::sync::atomic::Ordering::SeqCst);
         }
 
-        // Now pause the stream since all audio has been played
-        log::debug!("🔊 CPAL FLUSH: All samples consumed - pausing stream");
-        let _ = self.stream.pause();
+        // Stream control is now handled via commands
+        log::debug!("🔊 CPAL FLUSH: All samples consumed");
 
         // Reset state for next track
         self.initial_buffering = true;
@@ -621,6 +701,10 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
     ) {
         self.progress_tracker.set_callback(callback);
     }
+
+    fn handle(&self) -> AudioHandle {
+        self.command_handle.clone()
+    }
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -657,6 +741,86 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         symphonia::core::audio::SignalSpec {
             rate,
             channels: symphonia_channels,
+        }
+    }
+
+    fn start_command_processor(&mut self, stream_command_sender: flume::Sender<StreamCommand>) {
+        if let Some(command_receiver) = self.command_receiver.take() {
+            let volume_shared = self.volume_shared.clone();
+
+            moosicbox_task::spawn("cpal_command_processor", async move {
+                while let Ok(command_msg) = command_receiver.recv_async().await {
+                    let response = Self::process_command(
+                        &command_msg.command,
+                        &volume_shared,
+                        &stream_command_sender,
+                    );
+
+                    // Send response if requested
+                    if let Some(response_sender) = command_msg.response_sender {
+                        let _ = response_sender.send_async(response.clone()).await;
+                    }
+                }
+            });
+        }
+    }
+
+    fn process_command(
+        command: &AudioCommand,
+        volume_shared: &std::sync::Arc<std::sync::RwLock<std::sync::Arc<atomic_float::AtomicF64>>>,
+        stream_command_sender: &flume::Sender<StreamCommand>,
+    ) -> AudioResponse {
+        match command {
+            AudioCommand::SetVolume(volume) => volume_shared.read().map_or_else(
+                |_| AudioResponse::Error("Failed to set volume".to_string()),
+                |atomic| {
+                    atomic.store(*volume, std::sync::atomic::Ordering::SeqCst);
+                    log::debug!("CPAL command processor: volume set to {volume}");
+                    AudioResponse::Success
+                },
+            ),
+            AudioCommand::Pause => match stream_command_sender.try_send(StreamCommand::Pause) {
+                Ok(()) => {
+                    log::debug!("CPAL command processor: sent pause command");
+                    AudioResponse::Success
+                }
+                Err(e) => {
+                    log::error!("Failed to send pause command: {e}");
+                    AudioResponse::Error("Failed to send pause command".to_string())
+                }
+            },
+            AudioCommand::Resume => match stream_command_sender.try_send(StreamCommand::Resume) {
+                Ok(()) => {
+                    log::debug!("CPAL command processor: sent resume command");
+                    AudioResponse::Success
+                }
+                Err(e) => {
+                    log::error!("Failed to send resume command: {e}");
+                    AudioResponse::Error("Failed to send resume command".to_string())
+                }
+            },
+            AudioCommand::Seek(_position) => {
+                // Seeking would require coordination with the audio decoder
+                // For now, return an error as this needs to be implemented at a higher level
+                AudioResponse::Error("Seek not implemented at CPAL level".to_string())
+            }
+
+            AudioCommand::Flush => {
+                // Flush would need to coordinate with the main audio thread
+                // For now, just return success
+                log::debug!("CPAL command processor: flush requested");
+                AudioResponse::Success
+            }
+            AudioCommand::Reset => match stream_command_sender.try_send(StreamCommand::Reset) {
+                Ok(()) => {
+                    log::debug!("CPAL command processor: sent reset command");
+                    AudioResponse::Success
+                }
+                Err(e) => {
+                    log::error!("Failed to send reset command: {e}");
+                    AudioResponse::Error("Failed to send reset command".to_string())
+                }
+            },
         }
     }
 }

@@ -136,12 +136,10 @@ fn handle_server_playback_update(
 
                     let playback = local_player.playback.clone();
                     let output = local_player.output.clone();
-                    let receiver = local_player.receiver.clone();
 
                     let mut player = PlaybackHandler::new(local_player.clone())
                         .with_playback(playback)
-                        .with_output(output)
-                        .with_receiver(receiver);
+                        .with_output(output);
 
                     local_player
                         .playback_handler

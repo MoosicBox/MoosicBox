@@ -7495,6 +7495,7 @@ dependencies = [
  "bytes",
  "cpal",
  "fdk-aac",
+ "flume",
  "log 0.4.27",
  "moosicbox_assert",
  "moosicbox_audio_decoder",
