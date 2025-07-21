@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, Host, SampleFormat, SizedSample, StreamConfig};
 use rb::{RB, RbConsumer, RbProducer, SpscRb};
 use symphonia::core::audio::{
@@ -179,6 +179,8 @@ struct CpalAudioOutputImpl<T: AudioOutputSample> {
     // Command handling
     command_receiver: Option<flume::Receiver<CommandMessage>>,
     command_handle: AudioHandle,
+    stream_handle: crate::cpal_daemon::StreamHandle,
+    _stream_daemon: crate::cpal_daemon::CpalStreamDaemon,
 }
 
 impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
@@ -227,12 +229,9 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         // Create atomic counter for tracking consumed samples - wrapped in RwLock so it can be replaced
         let consumed_samples = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let consumed_samples_shared = std::sync::Arc::new(std::sync::RwLock::new(consumed_samples));
-        let consumed_samples_callback = consumed_samples_shared.clone();
-
         // Create volume atomic for immediate volume changes - wrapped in RwLock so it can be replaced
         let volume_atomic = std::sync::Arc::new(atomic_float::AtomicF64::new(1.0));
         let volume_shared = std::sync::Arc::new(std::sync::RwLock::new(volume_atomic));
-        let volume_callback = volume_shared.clone();
 
         // Track the actual CPAL output sample rate and channels for accurate progress calculation
         let cpal_output_sample_rate =
@@ -258,142 +257,11 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         let (command_sender, command_receiver) = flume::unbounded();
         let command_handle = AudioHandle::new(command_sender);
 
-        // Get callback references for use in the audio callback
-        let (
-            progress_consumed_samples,
-            progress_sample_rate,
-            progress_channels,
-            progress_callback,
-            progress_last_position,
-        ) = progress_tracker.get_callback_refs();
-
-        let completion_mutex_callback = completion_mutex.clone();
-        let completion_condvar_callback = completion_condvar.clone();
-        let draining_callback = draining.clone();
-
-        let stream = device
-            .build_output_stream(
-                &config,
-                move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                    // Write out as many samples as possible from the ring buffer to the audio
-                    // output.
-                    let written = ring_buf_consumer.read(data).unwrap_or(0);
-
-                    // Apply volume immediately in the CPAL callback for instant effect
-                    // This bypasses the 10-15s ring buffer delay
-                    let volume = volume_callback.read().map_or(1.0, |atomic| {
-                        atomic.load(std::sync::atomic::Ordering::SeqCst)
-                    });
-
-                    // Apply volume to the written samples if volume is not 1.0
-                    if written > 0 && volume <= 0.999 {
-                        log::trace!(
-                            "CPAL: applying volume to written samples - volume={volume:.3}"
-                        );
-                        // Apply proper volume scaling to all samples
-                        for data in data.iter_mut().take(written) {
-                            let original_sample: f32 = (*data).into_sample();
-                            #[allow(clippy::cast_possible_truncation)]
-                            let adjusted_sample = original_sample * volume as f32;
-
-                            // Apply the volume-adjusted sample
-                            *data = <T as symphonia::core::conv::FromSample<f32>>::from_sample(
-                                adjusted_sample,
-                            );
-                        }
-                    }
-
-                    // Track actual consumption by CPAL - get the current counter
-                    if let Ok(counter) = consumed_samples_callback.read() {
-                        counter.fetch_add(written, std::sync::atomic::Ordering::SeqCst);
-
-                        // Progress callback logic using ProgressTracker
-                        ProgressTracker::update_from_callback_refs(
-                            &progress_consumed_samples,
-                            &progress_sample_rate,
-                            &progress_channels,
-                            &progress_callback,
-                            &progress_last_position,
-                            written,
-                            0.1, // threshold
-                        );
-                    }
-
-                    // Mute any remaining samples.
-                    data[written..].iter_mut().for_each(|s| *s = T::MID);
-
-                    // Check if we're in draining mode
-                    if draining_callback.load(std::sync::atomic::Ordering::SeqCst) {
-                        // Signal ring buffer empty when no data was available to read
-                        if written == 0 {
-                            if let Ok(mut empty_flag) = completion_mutex_callback.try_lock() {
-                                if !*empty_flag {
-                                    *empty_flag = true;
-                                    completion_condvar_callback.notify_one();
-                                }
-                            }
-                        }
-                    }
-                },
-                move |err| log::error!("Audio output error: {err}"),
-                None,
-            )
-            .map_err(|e| {
-                log::error!("Audio output stream open error: {e:?}");
-
-                AudioOutputError::OpenStream
-            })?;
-
-        // Create stream command channel for immediate event-driven processing
-        let (stream_command_sender, stream_command_receiver) = flume::unbounded::<StreamCommand>();
-
-        // Spawn dedicated thread that owns the stream for immediate command processing
-        // This ensures commands work on macOS (thread safety) and eliminates polling delays
-        std::thread::spawn(move || {
-            log::debug!("CPAL stream control thread started");
-
-            // Event-driven loop - immediate response to commands, no polling!
-            while let Ok(command) = stream_command_receiver.recv() {
-                log::trace!("CPAL stream control: processing command: {command:?}");
-                match command {
-                    StreamCommand::Pause => {
-                        if let Err(e) = stream.pause() {
-                            log::error!("Failed to pause CPAL stream: {e:?}");
-                        } else {
-                            log::debug!("CPAL stream paused");
-                        }
-                    }
-                    StreamCommand::Resume => {
-                        if let Err(e) = stream.play() {
-                            log::error!("Failed to resume CPAL stream: {e:?}");
-                        } else {
-                            log::debug!("CPAL stream resumed");
-                        }
-                    }
-                    StreamCommand::Reset => {
-                        if let Err(e) = stream.pause() {
-                            log::error!("Failed to reset CPAL stream: {e:?}");
-                        } else {
-                            log::debug!("CPAL stream reset");
-                        }
-                    }
-                }
-            }
-
-            log::debug!("CPAL stream control thread stopped");
-        });
+        // Progress tracking variables will be moved into the daemon closure
 
         // Calculate buffering threshold for 10 seconds of audio (REQUIRED to prevent start truncation)
         let buffering_threshold =
             INITIAL_BUFFER_SECONDS * config.sample_rate.0 as usize * num_channels;
-
-        // DON'T start the stream yet - wait until we have 10 seconds buffered
-        log::debug!(
-            "🔍 CPAL stream created but not started - buffering threshold: {} samples (10 seconds at {}Hz, {} channels)",
-            buffering_threshold,
-            config.sample_rate.0,
-            num_channels
-        );
 
         // Debug the actual config vs expected spec for progress calculation
         log::debug!(
@@ -419,6 +287,142 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             spec.channels.count()
         );
 
+        // Create the stream daemon - this solves the !Send issue on macOS
+        let device_clone = device.clone();
+        let config_clone = config.clone();
+        let ring_buf_consumer_clone = ring_buf_consumer;
+        let volume_shared_for_daemon = volume_shared.clone();
+        let consumed_samples_callback = consumed_samples_shared.clone();
+        let completion_mutex_callback = completion_mutex.clone();
+        let completion_condvar_callback = completion_condvar.clone();
+        let draining_callback = draining.clone();
+
+        // Move progress tracking variables into the daemon closure
+        let (
+            progress_consumed_samples,
+            progress_sample_rate,
+            progress_channels,
+            progress_callback,
+            progress_last_position,
+        ) = progress_tracker.get_callback_refs();
+
+        let (stream_daemon, stream_handle) = crate::cpal_daemon::CpalStreamDaemon::new(
+            move || {
+                device_clone
+                    .build_output_stream(
+                        &config_clone,
+                        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                            // Write out as many samples as possible from the ring buffer to the audio output
+                            let written = ring_buf_consumer_clone.read(data).unwrap_or(0);
+
+                            // Apply volume immediately in the CPAL callback for instant effect
+                            // This bypasses the 10-15s ring buffer delay
+                            let volume = volume_shared_for_daemon.read().map_or(1.0, |atomic| {
+                                atomic.load(std::sync::atomic::Ordering::SeqCst)
+                            });
+
+                            // Apply volume to the written samples if volume is not 1.0
+                            if written > 0 && volume <= 0.999 {
+                                log::trace!("CPAL: applying volume to written samples - volume={volume:.3}");
+                                // Apply proper volume scaling to all samples
+                                for data in data.iter_mut().take(written) {
+                                    let original_sample: f32 = (*data).into_sample();
+                                    #[allow(clippy::cast_possible_truncation)]
+                                    let adjusted_sample = original_sample * volume as f32;
+
+                                    // Apply the volume-adjusted sample
+                                    *data =
+                                        <T as symphonia::core::conv::FromSample<f32>>::from_sample(
+                                            adjusted_sample,
+                                        );
+                                }
+                            }
+
+                            // Update consumed samples counter for progress tracking
+                            consumed_samples_callback.read().unwrap().fetch_add(written, std::sync::atomic::Ordering::SeqCst);
+
+                            // Progress tracking - call the progress callback with consumed samples
+                            if written > 0 {
+                                let total_consumed = progress_consumed_samples
+                                    .load(std::sync::atomic::Ordering::SeqCst);
+                                let new_consumed = total_consumed + written;
+                                progress_consumed_samples
+                                    .store(new_consumed, std::sync::atomic::Ordering::SeqCst);
+
+                                // Calculate current position in seconds
+                                let sample_rate = f64::from(progress_sample_rate
+                                    .load(std::sync::atomic::Ordering::SeqCst));
+                                let channels = f64::from(progress_channels
+                                    .load(std::sync::atomic::Ordering::SeqCst));
+
+                                if sample_rate > 0.0 && channels > 0.0 {
+                                    #[allow(clippy::cast_precision_loss, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                                    let current_position =
+                                        new_consumed as f64 / (sample_rate * channels);
+
+                                    // Check if we should trigger a progress callback (avoid too frequent calls)
+                                    let last_position = progress_last_position
+                                        .load(std::sync::atomic::Ordering::SeqCst);
+                                    let position_diff = (current_position - last_position).abs();
+
+                                    // Trigger callback if position changed by more than 0.1 seconds
+                                    if position_diff >= 0.1 {
+                                        log::debug!(
+                                            "CPAL daemon: progress update - position: {current_position:.2}s (written: {written}, total_consumed: {new_consumed}, sample_rate: {sample_rate}, channels: {channels})"
+                                        );
+
+                                        progress_last_position.store(
+                                            current_position,
+                                            std::sync::atomic::Ordering::SeqCst,
+                                        );
+
+                                        // Call the progress callback if it exists
+                                        if let Ok(callback_guard) = progress_callback.read() {
+                                            if let Some(callback) = callback_guard.as_ref() {
+                                                log::debug!("CPAL daemon: calling progress callback with position {current_position:.2}s");
+                                                callback(current_position);
+                                            } else {
+                                                log::warn!("CPAL daemon: progress callback is None");
+                                            }
+                                        } else {
+                                            log::warn!("CPAL daemon: failed to acquire progress callback lock");
+                                        }
+                                    }
+                                } else {
+                                    log::warn!("CPAL daemon: invalid audio spec for progress - sample_rate: {sample_rate}, channels: {channels}");
+                                }
+                            }
+
+                            // If we're draining and no data was written, signal completion
+                            if draining_callback.load(std::sync::atomic::Ordering::SeqCst)
+                                && written == 0
+                            {
+                                // Signal ring buffer empty when no data was available to read
+                                let mut completion = completion_mutex_callback.lock().unwrap();
+                                *completion = true;
+                                drop(completion);
+                                completion_condvar_callback.notify_one();
+                            }
+                        },
+                        move |err| log::error!("Audio output error: {err}"),
+                        None,
+                    )
+                    .map_err(|e| format!("Failed to create CPAL stream: {e:?}"))
+            },
+            volume_shared.clone(),
+        )
+        .map_err(|e| {
+            log::error!("Failed to create CPAL stream daemon: {e:?}");
+            AudioOutputError::OpenStream
+        })?;
+
+        log::debug!(
+            "🔍 CPAL stream daemon created - buffering threshold: {} samples (10 seconds at {}Hz, {} channels)",
+            buffering_threshold,
+            config.sample_rate.0,
+            num_channels
+        );
+
         let mut instance = Self {
             spec,
             ring_buf_producer,
@@ -437,10 +441,12 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             progress_tracker,
             command_receiver: Some(command_receiver),
             command_handle,
+            stream_handle,
+            _stream_daemon: stream_daemon,
         };
 
         // Start the command processor task
-        instance.start_command_processor(stream_command_sender);
+        instance.start_command_processor();
 
         Ok(instance)
     }
@@ -744,17 +750,16 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         }
     }
 
-    fn start_command_processor(&mut self, stream_command_sender: flume::Sender<StreamCommand>) {
+    fn start_command_processor(&mut self) {
         if let Some(command_receiver) = self.command_receiver.take() {
             let volume_shared = self.volume_shared.clone();
+            let stream_handle = self.stream_handle.clone();
 
             moosicbox_task::spawn("cpal_command_processor", async move {
                 while let Ok(command_msg) = command_receiver.recv_async().await {
-                    let response = Self::process_command(
-                        &command_msg.command,
-                        &volume_shared,
-                        &stream_command_sender,
-                    );
+                    let response =
+                        Self::process_command(&command_msg.command, &volume_shared, &stream_handle)
+                            .await;
 
                     // Send response if requested
                     if let Some(response_sender) = command_msg.response_sender {
@@ -765,38 +770,40 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         }
     }
 
-    fn process_command(
+    async fn process_command(
         command: &AudioCommand,
-        volume_shared: &std::sync::Arc<std::sync::RwLock<std::sync::Arc<atomic_float::AtomicF64>>>,
-        stream_command_sender: &flume::Sender<StreamCommand>,
+        _volume_shared: &std::sync::Arc<std::sync::RwLock<std::sync::Arc<atomic_float::AtomicF64>>>,
+        stream_handle: &crate::cpal_daemon::StreamHandle,
     ) -> AudioResponse {
         match command {
-            AudioCommand::SetVolume(volume) => volume_shared.read().map_or_else(
-                |_| AudioResponse::Error("Failed to set volume".to_string()),
-                |atomic| {
-                    atomic.store(*volume, std::sync::atomic::Ordering::SeqCst);
+            AudioCommand::SetVolume(volume) => match stream_handle.set_volume(*volume).await {
+                Ok(()) => {
                     log::debug!("CPAL command processor: volume set to {volume}");
                     AudioResponse::Success
-                },
-            ),
-            AudioCommand::Pause => match stream_command_sender.try_send(StreamCommand::Pause) {
-                Ok(()) => {
-                    log::debug!("CPAL command processor: sent pause command");
-                    AudioResponse::Success
                 }
                 Err(e) => {
-                    log::error!("Failed to send pause command: {e}");
-                    AudioResponse::Error("Failed to send pause command".to_string())
+                    log::error!("Failed to set volume via stream handle: {e:?}");
+                    AudioResponse::Error("Failed to set volume".to_string())
                 }
             },
-            AudioCommand::Resume => match stream_command_sender.try_send(StreamCommand::Resume) {
+            AudioCommand::Pause => match stream_handle.pause().await {
                 Ok(()) => {
-                    log::debug!("CPAL command processor: sent resume command");
+                    log::debug!("CPAL command processor: stream paused");
                     AudioResponse::Success
                 }
                 Err(e) => {
-                    log::error!("Failed to send resume command: {e}");
-                    AudioResponse::Error("Failed to send resume command".to_string())
+                    log::error!("Failed to pause stream via handle: {e:?}");
+                    AudioResponse::Error("Failed to pause stream".to_string())
+                }
+            },
+            AudioCommand::Resume => match stream_handle.resume().await {
+                Ok(()) => {
+                    log::debug!("CPAL command processor: stream resumed");
+                    AudioResponse::Success
+                }
+                Err(e) => {
+                    log::error!("Failed to resume stream via handle: {e:?}");
+                    AudioResponse::Error("Failed to resume stream".to_string())
                 }
             },
             AudioCommand::Seek(_position) => {
@@ -811,14 +818,14 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
                 log::debug!("CPAL command processor: flush requested");
                 AudioResponse::Success
             }
-            AudioCommand::Reset => match stream_command_sender.try_send(StreamCommand::Reset) {
+            AudioCommand::Reset => match stream_handle.reset().await {
                 Ok(()) => {
-                    log::debug!("CPAL command processor: sent reset command");
+                    log::debug!("CPAL command processor: stream reset");
                     AudioResponse::Success
                 }
                 Err(e) => {
-                    log::error!("Failed to send reset command: {e}");
-                    AudioResponse::Error("Failed to send reset command".to_string())
+                    log::error!("Failed to reset stream via handle: {e:?}");
+                    AudioResponse::Error("Failed to reset stream".to_string())
                 }
             },
         }

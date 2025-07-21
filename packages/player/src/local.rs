@@ -162,6 +162,7 @@ impl Player for LocalPlayer {
                     output,
                     seek,
                 )?;
+
                 play_media_source(
                     mss,
                     &playable_track.hint,
@@ -190,6 +191,11 @@ impl Player for LocalPlayer {
 
         let expected_duration = track.duration;
         let duration_tolerance = 1.0; // Allow 1 second tolerance
+
+        log::debug!(
+            "Playback completion check: track_id={track_id}, expected_duration={expected_duration:.2}s, actual_progress={playback_progress:.2}s, difference={difference:.2}s",
+            difference = expected_duration - playback_progress
+        );
 
         moosicbox_assert::assert!(
             playback_progress >= (expected_duration - duration_tolerance),
@@ -580,6 +586,7 @@ fn get_audio_decode_handler_with_command_receiver(
                                 playback.progress = progress_update.current_position;
                                 Some(old)
                             } else {
+                                log::warn!("Progress handler: no playback available to update");
                                 None
                             }
                         };
@@ -647,6 +654,8 @@ fn get_audio_decode_handler_with_command_receiver(
                             if let Err(e) = progress_tx.send(progress_info) {
                                 log::error!("Failed to send progress update: {e}");
                             }
+                        } else {
+                            log::warn!("Progress callback: no playback info available");
                         }
                     })
                 };
