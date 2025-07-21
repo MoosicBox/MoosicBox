@@ -8,7 +8,7 @@ license     = { workspace = true }
 name        = "hyperchad_app"
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.1.0"
+version     = "0.1.4"
 
 [package.metadata.workspaces]
 group = "hyperchad"

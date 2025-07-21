@@ -8,7 +8,7 @@ license     = { workspace = true }
 name        = "moosicbox_task"
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.1.1"
+version     = "0.1.4"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }

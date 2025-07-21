@@ -9,7 +9,7 @@ license     = { workspace = true }
 name        = "moosicbox_app_native"
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.1.1"
+version     = "0.1.4"
 
 [[bin]]
 name              = "moosicbox_app_native"

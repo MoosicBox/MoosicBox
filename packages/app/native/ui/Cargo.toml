@@ -8,7 +8,7 @@ license     = { workspace = true }
 name        = "moosicbox_app_native_ui"
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.1.1"
+version     = "0.1.4"
 
 [dependencies]
 hyperchad = { workspace = true, features = [

@@ -8,7 +8,7 @@ license     = { workspace = true }
 name        = "moosicbox_auth"
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.1.1"
+version     = "0.1.4"
 
 [dependencies]
 moosicbox_json_utils = { workspace = true, features = [

@@ -8,7 +8,7 @@ license     = { workspace = true }
 name        = "moosicbox_ws"
 readme      = "README.md"
 repository  = { workspace = true }
-version     = "0.1.1"
+version     = "0.1.4"
 
 [package.metadata.cargo-machete]
 ignored = ["strum"]
