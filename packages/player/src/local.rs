@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::sync::{
-    Arc, LazyLock, Mutex, RwLock,
+    Arc, Mutex, RwLock,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
@@ -22,11 +22,6 @@ use crate::{
     send_playback_event, symphonia::play_media_source, track_or_id_to_playable,
 };
 
-// Global storage for session command forwarding to thread-local processors
-static SESSION_COMMAND_FORWARDER: LazyLock<
-    Arc<RwLock<Option<flume::Sender<moosicbox_audio_output::CommandMessage>>>>,
-> = LazyLock::new(|| Arc::new(RwLock::new(None)));
-
 #[derive(Debug, Clone)]
 struct ProgressUpdate {
     current_position: f64,
@@ -46,6 +41,9 @@ pub struct LocalPlayer {
     pub playback_handler: Arc<RwLock<Option<PlaybackHandler>>>,
     pub shared_volume: Arc<AtomicF64>, // Shared volume for immediate audio output updates
     pub audio_handle: Arc<RwLock<Option<AudioHandle>>>, // Handle for immediate audio control
+    session_command_forwarder:
+        Arc<RwLock<Option<flume::Sender<moosicbox_audio_output::CommandMessage>>>>,
+    session_coordinator_handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 impl std::fmt::Debug for LocalPlayer {
@@ -137,11 +135,16 @@ impl Player for LocalPlayer {
         let mss =
             MediaSourceStream::new(playable_track.source, MediaSourceStreamOptions::default());
 
+        // Cleanup old session coordinator before creating new one
+        self.cleanup_session_coordinator().await;
+
         moosicbox_task::spawn_blocking("player: Play media source", {
             let playback = self.playback.clone();
             let shared_volume = self.shared_volume.clone();
             let output = self.output.clone().unwrap();
             let audio_handle_storage = self.audio_handle.clone();
+            let session_coordinator_handle_storage = self.session_coordinator_handle.clone();
+            let player_self = self.clone();
             move || {
                 // CREATE AUDIO HANDLE AND SESSION COORDINATOR
                 let (session_command_sender, session_command_receiver) = flume::unbounded();
@@ -151,16 +154,18 @@ impl Player for LocalPlayer {
                 *audio_handle_storage.write().unwrap() = Some(handle);
                 log::debug!("trigger_play: created and stored audio handle immediately");
 
-                // START SESSION COMMAND COORDINATOR (no CPAL streams involved)
-                let _coordinator_handle =
-                    Self::start_session_command_coordinator(session_command_receiver);
-                log::debug!("trigger_play: started session command coordinator");
+                // START INSTANCE SESSION COMMAND COORDINATOR (no CPAL streams involved)
+                let coordinator_handle =
+                    player_self.start_instance_session_coordinator(session_command_receiver);
+                *session_coordinator_handle_storage.write().unwrap() = Some(coordinator_handle);
+                log::debug!("trigger_play: started instance session command coordinator");
 
                 let mut handler = get_audio_decode_handler_with_command_receiver(
                     &playback,
                     shared_volume,
                     output,
                     seek,
+                    player_self.clone(),
                 )?;
 
                 play_media_source(
@@ -210,12 +215,11 @@ impl Player for LocalPlayer {
     async fn trigger_stop(&self) -> Result<(), PlayerError> {
         log::info!("Stopping playback");
 
-        // 1. Use the handle for immediate control
-        if let Some(handle) = self.get_current_audio_handle() {
+        // 1. Take ownership of the handle for immediate control and cleanup
+        if let Some(handle) = self.take_current_audio_handle() {
             handle.reset().await?;
             log::debug!("Audio output reset successfully via handle");
-            // Clear the handle since playback is stopping
-            *self.audio_handle.write().unwrap() = None;
+            // Handle is automatically dropped here, ensuring cleanup
         } else {
             log::warn!("No audio output handle available to stop");
         }
@@ -240,10 +244,11 @@ impl Player for LocalPlayer {
     async fn trigger_pause(&self) -> Result<(), PlayerError> {
         log::info!("Pausing playback");
 
-        // 1. Immediately pause audio output via handle
-        if let Some(handle) = self.get_current_audio_handle() {
+        // 1. Take ownership of the handle to pause and cleanup
+        if let Some(handle) = self.take_current_audio_handle() {
             handle.pause().await?;
             log::debug!("Audio output paused successfully via handle");
+            // Handle is automatically dropped here, ensuring cleanup
         } else {
             log::warn!("No audio output handle available to pause");
         }
@@ -352,6 +357,8 @@ impl LocalPlayer {
             playback_handler: Arc::new(RwLock::new(None)),
             shared_volume,
             audio_handle: Arc::new(RwLock::new(None)),
+            session_command_forwarder: Arc::new(RwLock::new(None)),
+            session_coordinator_handle: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -362,23 +369,45 @@ impl LocalPlayer {
     }
 
     #[must_use]
-    fn get_current_audio_handle(&self) -> Option<AudioHandle> {
-        self.audio_handle.read().unwrap().clone()
+    fn take_current_audio_handle(&self) -> Option<AudioHandle> {
+        self.audio_handle.write().unwrap().take()
     }
 
-    /// Starts a session command coordinator that forwards commands to thread-local processors.
-    /// This ensures only one active processor per session while maintaining macOS CPAL compatibility.
-    fn start_session_command_coordinator(
+    /// Cleanup old session coordinator and forwarder before creating new ones
+    async fn cleanup_session_coordinator(&self) {
+        // Take the handle outside the lock to avoid holding it across await
+        let handle = self.session_coordinator_handle.write().unwrap().take();
+
+        if let Some(handle) = handle {
+            log::debug!("Aborting old session coordinator");
+            handle.abort();
+            // Wait for it to finish
+            let _ = handle.await;
+        }
+
+        // Clear old forwarder
+        *self.session_command_forwarder.write().unwrap() = None;
+        log::debug!("Cleaned up old session coordinator and forwarder");
+    }
+
+    /// Starts an instance-level session command coordinator that forwards commands to thread-local processors.
+    /// This ensures only one active processor per `LocalPlayer` instance while maintaining macOS CPAL compatibility.
+    fn start_instance_session_coordinator(
+        &self,
         session_command_receiver: flume::Receiver<moosicbox_audio_output::CommandMessage>,
     ) -> tokio::task::JoinHandle<()> {
-        moosicbox_task::spawn("session_command_coordinator", async move {
-            log::debug!("Session command coordinator started");
+        let session_command_forwarder = self.session_command_forwarder.clone();
+        moosicbox_task::spawn("instance_session_coordinator", async move {
+            log::debug!("Instance session command coordinator started");
 
             while let Ok(command_msg) = session_command_receiver.recv_async().await {
-                log::trace!("Coordinating session command: {:?}", command_msg.command);
+                log::trace!(
+                    "Coordinating instance session command: {:?}",
+                    command_msg.command
+                );
 
-                // Forward command to the currently registered thread-local processor
-                let forwarder = SESSION_COMMAND_FORWARDER.read().unwrap().clone();
+                // Forward command to the currently registered thread-local processor for this instance
+                let forwarder = session_command_forwarder.read().unwrap().clone();
 
                 if let Some(forwarder) = forwarder {
                     // Forward the command to the thread-local processor
@@ -387,7 +416,7 @@ impl LocalPlayer {
                     }
                 } else {
                     log::warn!(
-                        "No thread-local processor registered for session command: {:?}",
+                        "No thread-local processor registered for instance session command: {:?}",
                         command_msg.command
                     );
                     // Send error response if requested
@@ -401,18 +430,17 @@ impl LocalPlayer {
                 }
             }
 
-            log::debug!("Session command coordinator stopped");
+            log::debug!("Instance session command coordinator stopped");
         })
     }
 
     /// Registers a thread-local processor with the session coordinator.
     /// The processor stays on its original thread (macOS CPAL compatible).
-    fn register_thread_local_processor(audio_output_handle: AudioHandle) {
-        // Create a channel for this thread-local processor
+    fn register_thread_local_processor(&self, audio_output_handle: AudioHandle) {
         let (thread_local_sender, thread_local_receiver) = flume::unbounded();
 
-        // Register this processor as the active forwarder
-        *SESSION_COMMAND_FORWARDER.write().unwrap() = Some(thread_local_sender);
+        // Replace the instance forwarder with this thread-local processor
+        *self.session_command_forwarder.write().unwrap() = Some(thread_local_sender);
         log::debug!("Registered thread-local processor with session coordinator");
 
         // Start the thread-local processor (stays on current thread)
@@ -480,6 +508,7 @@ fn get_audio_decode_handler_with_command_receiver(
     shared_volume: Arc<AtomicF64>,
     output: Arc<Mutex<AudioOutputFactory>>,
     seek: Option<f64>,
+    player: LocalPlayer,
 ) -> Result<AudioDecodeHandler, PlayerError> {
     // Initialize shared volume with the current playback volume
     let initial_volume = {
@@ -565,8 +594,8 @@ fn get_audio_decode_handler_with_command_receiver(
                 output.set_shared_volume(shared_volume_local.clone());
                 log::info!("Audio output creation: set shared volume reference");
 
-                // REGISTER THREAD-LOCAL PROCESSOR with session coordinator
-                LocalPlayer::register_thread_local_processor(output.handle());
+                // REGISTER THREAD-LOCAL PROCESSOR with instance session coordinator
+                player.register_thread_local_processor(output.handle());
                 log::debug!("Audio output creation: registered thread-local processor");
 
                 // Set up progress callback to handle progress events from AudioOutput
