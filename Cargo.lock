@@ -13702,7 +13702,7 @@ dependencies = [
 
 [[package]]
 name = "switchy"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "switchy_async",
  "switchy_async_macros",
