@@ -1398,9 +1398,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.4"
+version = "1.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3aaec682eb189e43c8a19c3dab2fe54590ad5f2cc2d26ab27608a20f2acf81c"
+checksum = "660f70d9d8af6876b4c9aa8dcb0dbaf0f89b04ee9a4455bea1b4ba03b15f26f6"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -1422,9 +1422,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.3"
+version = "1.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9852b9226cb60b78ce9369022c0df678af1cac231c882d5da97a0c4e03be6e67"
+checksum = "38280ac228bc479f347fcfccf4bf4d22d68f3bb4629685cb591cabd856567bbc"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -1488,9 +1488,9 @@ dependencies = [
 
 [[package]]
 name = "aws_lambda_events"
-version = "0.16.1"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "144ec7565561115498a288850cc6a42b279e09b6c4b88f623eecb9c8ca96c08c"
+checksum = "f3cd5d79ca6be17e6cdc157fccf22a0190a8c83ea0e04dc8a4429aea65627740"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -3770,6 +3770,15 @@ dependencies = [
  "cfg-if 1.0.1",
  "home",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "euclid"
+version = "0.22.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad9cdb4b747e485a12abb0e6566612956c7a1bafa3bdb8d682c5b6d403589e48"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]
@@ -6296,25 +6305,24 @@ dependencies = [
 
 [[package]]
 name = "kurbo"
-version = "0.11.2"
+version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1077d333efea6170d9ccb96d3c3026f300ca0773da4938cc4c811daa6df68b0c"
+checksum = "c62026ae44756f8a599ba21140f350303d4f08dcdcc71b5ad9c9bb8128c13c62"
 dependencies = [
  "arrayvec",
+ "euclid",
  "smallvec",
 ]
 
 [[package]]
 name = "lambda_http"
-version = "0.15.1"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dfc9f1bd9a56576319c1fe37f84e8551c9f9757f7f2307aa03c5b5d4a3c4d1c"
+checksum = "23610909b90cf7e6b4c11b169596289643f8d1d6bf1010bc124f70f3dd5449ac"
 dependencies = [
  "aws_lambda_events",
- "base64 0.22.1",
  "bytes",
  "encoding_rs",
- "futures",
  "futures-util",
  "http 1.3.1",
  "http-body 1.0.1",
@@ -6333,20 +6341,18 @@ dependencies = [
 
 [[package]]
 name = "lambda_runtime"
-version = "0.14.2"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c64945a7a718d04acbbd06fa8acdc37576f4dfbd8982932365b72907e7b2b27e"
+checksum = "b155960b864ababcc5ab553c9336e46db8ed0ad1cd38dc3be9e7c37b177aa310"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
  "bytes",
  "futures",
  "http 1.3.1",
- "http-body 1.0.1",
  "http-body-util",
  "http-serde",
  "hyper 1.6.0",
- "hyper-util",
  "lambda_runtime_api_client",
  "pin-project",
  "serde",
@@ -6355,15 +6361,14 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tower 0.5.2",
- "tower-layer",
  "tracing",
 ]
 
 [[package]]
 name = "lambda_runtime_api_client"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df2589b440f900f61fc6d5cd26f71f0e75dcc7610bdbb88a56f0d308e1c35b42"
+checksum = "5e55fdc596aea5afeb406e549990b4fb4bfd7bbfe4f574282c4c3aacf22e73e7"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -6373,9 +6378,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.6.0",
  "hyper-util",
- "tokio",
  "tower 0.5.2",
- "tower-service",
  "tracing",
  "tracing-subscriber",
 ]
@@ -6580,7 +6583,7 @@ checksum = "4488594b9328dee448adb906d8b126d9b7deb7cf5c22161ee591610bb1be83c0"
 dependencies = [
  "bitflags 2.9.1",
  "libc",
- "redox_syscall 0.5.14",
+ "redox_syscall 0.5.15",
 ]
 
 [[package]]
@@ -9917,7 +9920,7 @@ checksum = "bc838d2a56b5b1a6c25f55575dfc605fabb63bb2365f6c2353ef9159aa69e4a5"
 dependencies = [
  "cfg-if 1.0.1",
  "libc",
- "redox_syscall 0.5.14",
+ "redox_syscall 0.5.15",
  "smallvec",
  "windows-targets 0.52.6",
 ]
@@ -11360,9 +11363,9 @@ checksum = "56cf8381505b60ae18a4097f1d0be093287ca3bf4fbb23d36ac5ad3bba335daa"
 
 [[package]]
 name = "rcgen"
-version = "0.14.2"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49bc8ffa8a832eb1d7c8000337f8b0d2f4f2f5ec3cf4ddc26f125e3ad2451824"
+checksum = "0068c5b3cab1d4e271e0bb6539c87563c43411cad90b057b15c79958fbeb41f7"
 dependencies = [
  "pem",
  "ring",
@@ -11397,9 +11400,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.14"
+version = "0.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de3a5d9f0aba1dbcec1cc47f0ff94a4b778fe55bca98a6dfa92e4e094e57b1c4"
+checksum = "7e8af0dde094006011e6a740d4879319439489813bd0bcdc7d821beaeeff48ec"
 dependencies = [
  "bitflags 2.9.1",
 ]
@@ -12757,7 +12760,7 @@ dependencies = [
  "objc2-foundation 0.2.2",
  "objc2-quartz-core 0.2.2",
  "raw-window-handle",
- "redox_syscall 0.5.14",
+ "redox_syscall 0.5.15",
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.59.0",
@@ -13234,9 +13237,9 @@ dependencies = [
 
 [[package]]
 name = "swc_bundler"
-version = "26.0.0"
+version = "26.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70ec8f2e30142f56ca852d32e729aa83c062c0fc20b58254d181c1ddbd8aa6a9"
+checksum = "05d5999ab4409b8024649843e5ec758fcf0b8aeea935f6d6e8817c8ecde1ce19"
 dependencies = [
  "anyhow",
  "crc 2.1.0",
@@ -13378,9 +13381,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_lexer"
-version = "21.0.0"
+version = "21.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11758fd42a7313734ad713a39d320693ab181a42fc6dd6ad3d473cded40ca9af"
+checksum = "5606f09fead1e1824ae7a7129b6fa376b20d5e811b822d9ba7bd3b05ef3bb024"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -13424,9 +13427,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "27.0.3"
+version = "27.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "686e7d50313aac28b0108be2b60f4c2aa2549cb8fa23367e819571065e256161"
+checksum = "a7bbd82682a05972b9333ba4842d6153da88acab73280b13f516c74d7e87d090"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -13476,9 +13479,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_base"
-version = "22.0.0"
+version = "22.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70af89987ce2d0c05d031a014608cd1e9af3bd18292453c659ae27b6fb19f8f8"
+checksum = "3cb04f42a6761960e818d85b7b47204422541c83955ea6f38751b23745bbf291"
 dependencies = [
  "better_scoped_tls",
  "indexmap 2.10.0",
@@ -13498,9 +13501,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_optimization"
-version = "23.0.0"
+version = "23.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da7d21c354b7e67589915c35774a3ef147fd22ecf43a876940032a05afb387cb"
+checksum = "68bd07e1d548d2a7c7e798b858432aa6f714a6691f69bb6bb0d585609241e57a"
 dependencies = [
  "bytes-str",
  "dashmap",
@@ -13522,9 +13525,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_react"
-version = "24.0.0"
+version = "24.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b7c2d9188eaeac8a15f338faafa9e3aeba2ee96749d626d9316c97e45046bb"
+checksum = "3fc8e7810dc246c3ee54323719cce2ed8104ebdccd25456315bc2189e885e64f"
 dependencies = [
  "base64 0.22.1",
  "bytes-str",
@@ -16656,7 +16659,7 @@ version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6994d13118ab492c3c80c1f81928718159254c53c472bf9ce36f8dae4add02a7"
 dependencies = [
- "redox_syscall 0.5.14",
+ "redox_syscall 0.5.15",
  "wasite",
  "web-sys",
 ]
