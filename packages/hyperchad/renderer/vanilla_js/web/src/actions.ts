@@ -128,3 +128,35 @@ declare global {
 }
 
 window['triggerAction'] = triggerAction;
+
+const setupListeners = new Set<string>();
+
+export function createEventDelegator(
+    eventType: string,
+    attrName: string,
+    handler: (element: HTMLElement, attr: string, event: Event) => void,
+) {
+    if (!setupListeners.has(eventType)) {
+        document.addEventListener(
+            eventType,
+            (event: Event) => {
+                const target = event.target as HTMLElement;
+                if (!target) return;
+
+                // Find the element with the attribute by walking up the DOM tree
+                let currentElement = target;
+                while (currentElement && currentElement !== document.body) {
+                    const attr = currentElement.getAttribute(attrName);
+                    if (attr) {
+                        handler(currentElement, attr, event);
+                        return;
+                    }
+                    currentElement =
+                        currentElement.parentElement as HTMLElement;
+                }
+            },
+            true,
+        );
+        setupListeners.add(eventType);
+    }
+}

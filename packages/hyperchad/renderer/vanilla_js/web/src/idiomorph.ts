@@ -1,9 +1,4 @@
-import {
-    on,
-    triggerHandlers,
-    clearProcessedElements,
-    processElement,
-} from './core';
+import { on, triggerHandlers, clearProcessedElements } from './core';
 import { Idiomorph } from './vendored/idiomorph.esm';
 
 on('swapDom', ({ html, url }) => {
@@ -64,9 +59,5 @@ on('swapHtml', ({ target, html, inner }) => {
             navigation: false,
             elements: addedElements,
         });
-    }
-
-    if (morphedElements.length > 0) {
-        morphedElements.forEach((element) => processElement(element, true));
     }
 });

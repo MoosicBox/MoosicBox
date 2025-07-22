@@ -1,4 +1,4 @@
-import { triggerHandlers, onAttr } from './core';
+import { triggerHandlers } from './core';
 
 export const cache: { [url: string]: string } = {};
 export const pending: { [url: string]: Promise<string | void> } = {};
@@ -47,22 +47,47 @@ export function setupLinkHandlers(
     initiateFetch: (url: string) => Promise<string | void>,
     navigate: (url: string) => void,
 ) {
-    onAttr('href', ({ element, attr }) => {
-        if (attr[0] !== '/') return; // Only handle links for this site
-        if (!isSelfTarget(element.getAttribute('target'))) return; // Don't handle for new tab
-        if (element.getAttribute('hx-preload') === 'false') return;
+    // Use global event delegation for link handling
+    document.addEventListener(
+        'mouseenter',
+        (event) => {
+            const target = event.target;
+            if (!target || !(target instanceof HTMLElement)) return;
 
-        element.onmouseenter = (_event) => {
-            const existing = typeof cache[attr] === 'string' || pending[attr];
+            const link = target.closest('a');
+            if (!link) return;
+
+            const href = link.getAttribute('href');
+            if (!href || href[0] !== '/') return; // Only handle links for this site
+            if (!isSelfTarget(link.getAttribute('target'))) return; // Don't handle for new tab
+            if (link.getAttribute('hx-preload') === 'false') return;
+
+            const existing = typeof cache[href] === 'string' || pending[href];
             if (!existing) {
-                pending[attr] = initiateFetch(attr);
+                pending[href] = initiateFetch(href);
             }
-        };
+        },
+        true,
+    );
 
-        element.onclick = (event) => {
+    document.addEventListener(
+        'click',
+        (event) => {
+            const target = event.target;
+            if (!target || !(target instanceof HTMLElement)) return;
+
+            const link = target.closest('a');
+            if (!link) return;
+
+            const href = link.getAttribute('href');
+            if (!href || href[0] !== '/') return; // Only handle links for this site
+            if (!isSelfTarget(link.getAttribute('target'))) return; // Don't handle for new tab
+            if (link.getAttribute('hx-preload') === 'false') return;
             if (event.ctrlKey) return; // Don't handle for new tab
+
             event.preventDefault();
-            navigate(attr);
-        };
-    });
+            navigate(href);
+        },
+        true,
+    );
 }

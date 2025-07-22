@@ -1,32 +1,23 @@
 import { evaluate } from './actions';
-import { handleError, onAttr } from './core';
-
-const clickOutsideElements: {
-    element: HTMLElement;
-    f: (event: Event) => void;
-}[] = [];
+import { handleError, decodeHtml } from './core';
 
 document.addEventListener('click', (event: MouseEvent) => {
-    for (let i = clickOutsideElements.length - 1; i >= 0; i--) {
-        const { element, f } = clickOutsideElements[i];
-        if (!document.contains(element)) {
-            clickOutsideElements.splice(i, 1);
-            continue;
-        }
+    // Find all elements with v-onclickoutside attribute
+    const elementsWithClickOutside =
+        document.querySelectorAll('[v-onclickoutside]');
 
-        f(event);
-    }
-});
-
-onAttr('v-onclickoutside', ({ element, attr }) => {
-    clickOutsideElements.push({
-        element,
-        f: (event) => {
-            if (event.target && !element.contains(event.target as Node)) {
+    for (const element of elementsWithClickOutside) {
+        if (event.target && !element.contains(event.target as Node)) {
+            // Read the current attribute value from the element
+            const attr = element.getAttribute('v-onclickoutside');
+            if (attr) {
                 handleError('onclickoutside', () =>
-                    evaluate(attr, { element, event }),
+                    evaluate(decodeHtml(attr), {
+                        element: element as HTMLElement,
+                        event,
+                    }),
                 );
             }
-        },
-    });
+        }
+    }
 });

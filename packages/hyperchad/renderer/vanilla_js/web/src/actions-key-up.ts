@@ -1,14 +1,13 @@
-import { evaluate } from './actions';
-import { handleError, onAttr } from './core';
+import { evaluate, createEventDelegator } from './actions';
+import { handleError, decodeHtml } from './core';
 
-onAttr('v-onkeyup', ({ element, attr }) => {
-    element.onkeyup = (event) => {
-        handleError('onkeyup', () =>
-            evaluate(attr, {
-                element,
-                event: event,
-                value: event.key,
-            }),
-        );
-    };
+createEventDelegator('keyup', 'v-onkeyup', (element, attr, event) => {
+    const keyEvent = event as KeyboardEvent;
+    handleError('onkeyup', () =>
+        evaluate(decodeHtml(attr), {
+            element,
+            event: keyEvent,
+            value: keyEvent.key,
+        }),
+    );
 });
