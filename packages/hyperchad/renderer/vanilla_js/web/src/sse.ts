@@ -14,7 +14,7 @@ const streamId = getClientStreamId();
 
 document.cookie = `v-sse-stream-id=${streamId}; path=/; SameSite=Strict`;
 
-fetchEventSource('$sse', {
+fetchEventSource('/$sse', {
     method: 'GET',
     onopen: async (response: Response) => {
         if (response.status >= 400) {
