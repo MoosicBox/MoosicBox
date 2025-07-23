@@ -22,6 +22,9 @@ mod actix;
 #[cfg(feature = "openapi")]
 pub mod openapi;
 
+#[cfg(feature = "simulator")]
+pub mod simulation;
+
 #[derive(Debug)]
 pub struct WebServerBuilder {
     addr: String,
@@ -155,8 +158,18 @@ impl HttpRequest {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Stub;
+#[derive(Debug, Clone)]
+pub enum Stub {
+    Empty,
+    #[cfg(feature = "simulator")]
+    Simulation(simulation::SimulationStub),
+}
+
+impl Default for Stub {
+    fn default() -> Self {
+        Self::Empty
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum HttpRequestRef<'a> {

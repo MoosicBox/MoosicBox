@@ -5276,8 +5276,10 @@ dependencies = [
  "hyperchad_renderer_html_lambda",
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
+ "hyperchad_simulator",
  "hyperchad_state",
  "hyperchad_template",
+ "hyperchad_test_utils",
  "hyperchad_transformer",
  "hyperchad_transformer_models",
 ]
@@ -5555,6 +5557,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperchad_simulator"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "hyperchad_test_utils",
+ "log 0.4.27",
+ "moosicbox_assert",
+ "serde",
+ "serde_json",
+ "simvar",
+ "thiserror 2.0.12",
+ "tokio",
+ "web_server_simulator",
+]
+
+[[package]]
 name = "hyperchad_state"
 version = "0.1.4"
 dependencies = [
@@ -5610,6 +5628,17 @@ dependencies = [
  "proc-macro2-diagnostics",
  "quote",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "hyperchad_test_utils"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_assert",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "url 2.5.4",
 ]
 
 [[package]]
@@ -16361,6 +16390,22 @@ name = "web_server_simple_get"
 version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
+ "tokio",
+]
+
+[[package]]
+name = "web_server_simulator"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "log 0.4.27",
+ "moosicbox_assert",
+ "moosicbox_web_server_core",
+ "serde",
+ "serde_json",
+ "switchy",
+ "switchy_http_models",
+ "thiserror 2.0.12",
  "tokio",
 ]
 

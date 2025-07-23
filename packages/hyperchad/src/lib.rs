@@ -36,3 +36,9 @@ pub use hyperchad_template as template;
 pub use hyperchad_transformer as transformer;
 #[cfg(feature = "transformer-models")]
 pub use hyperchad_transformer_models as transformer_models;
+
+// Simulation modules
+#[cfg(feature = "simulator")]
+pub use hyperchad_simulator as simulator;
+#[cfg(feature = "test-utils")]
+pub use hyperchad_test_utils as test_utils;

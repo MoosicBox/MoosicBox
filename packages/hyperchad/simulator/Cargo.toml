@@ -1,0 +1,43 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "simulation"]
+description = "MoosicBox HyperChad Simulator package"
+edition     = { workspace = true }
+keywords    = ["hyperchad", "simulation", "testing"]
+license     = { workspace = true }
+name        = "hyperchad_simulator"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+hyperchad_test_utils = { workspace = true, optional = true }
+moosicbox_assert     = { workspace = true }
+simvar               = { workspace = true }
+web_server_simulator = { workspace = true }
+
+log        = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
+
+[dev-dependencies]
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = ["fail-on-warnings"]
+
+fail-on-warnings = []
+
+# Renderer simulation features
+renderer-egui       = []
+renderer-fltk       = []
+renderer-html       = []
+renderer-vanilla-js = []
+
+# Test utilities
+test-utils = ["dep:hyperchad_test_utils"]

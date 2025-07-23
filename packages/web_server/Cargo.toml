@@ -68,3 +68,5 @@ openapi-rapidoc = ["dep:const_format", "dep:utoipa-rapidoc", "openapi"]
 openapi-redoc = ["dep:utoipa-redoc", "openapi"]
 openapi-scalar = ["dep:utoipa-scalar", "openapi"]
 openapi-swagger-ui = ["dep:const_format", "dep:utoipa-swagger-ui", "openapi"]
+
+simulator = []

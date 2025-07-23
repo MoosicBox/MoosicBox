@@ -27,8 +27,10 @@ hyperchad_renderer_html_http   = { workspace = true, optional = true }
 hyperchad_renderer_html_lambda = { workspace = true, optional = true }
 hyperchad_renderer_vanilla_js  = { workspace = true, optional = true }
 hyperchad_router               = { workspace = true, optional = true }
+hyperchad_simulator            = { workspace = true, optional = true }
 hyperchad_state                = { workspace = true, optional = true }
 hyperchad_template             = { workspace = true, optional = true }
+hyperchad_test_utils           = { workspace = true, optional = true }
 hyperchad_transformer          = { workspace = true, optional = true }
 hyperchad_transformer_models   = { workspace = true, optional = true }
 
@@ -308,3 +310,8 @@ profiling-tracing = [
 profiling-tracy = ["renderer-egui-profiling-tracy", "renderer-profiling-tracy"]
 
 logic = ["actions-logic", "renderer-logic", "transformer-logic"]
+
+# Simulation features
+simulation = ["simulator", "test-utils"]
+simulator  = ["dep:hyperchad_simulator"]
+test-utils = ["dep:hyperchad_test_utils"]
