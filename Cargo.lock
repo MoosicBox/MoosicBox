@@ -5272,6 +5272,7 @@ dependencies = [
  "hyperchad_renderer_fltk",
  "hyperchad_renderer_html",
  "hyperchad_renderer_html_actix",
+ "hyperchad_renderer_html_cdn",
  "hyperchad_renderer_html_http",
  "hyperchad_renderer_html_lambda",
  "hyperchad_renderer_vanilla_js",
@@ -5464,6 +5465,15 @@ dependencies = [
  "moosicbox_middleware",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "hyperchad_renderer_html_cdn"
+version = "0.1.4"
+dependencies = [
+ "hyperchad_renderer",
+ "hyperchad_router",
+ "log 0.4.27",
 ]
 
 [[package]]

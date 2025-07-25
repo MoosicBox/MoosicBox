@@ -52,6 +52,7 @@ members = [
     "packages/hyperchad/renderer/fltk",
     "packages/hyperchad/renderer/html",
     "packages/hyperchad/renderer/html/actix",
+    "packages/hyperchad/renderer/html/cdn",
     "packages/hyperchad/renderer/html/http",
     "packages/hyperchad/renderer/html/lambda",
     "packages/hyperchad/renderer/vanilla_js",
@@ -269,6 +270,7 @@ hyperchad_renderer_egui            = { version = "0.1.0", default-features = fal
 hyperchad_renderer_fltk            = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/fltk" }
 hyperchad_renderer_html            = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/html" }
 hyperchad_renderer_html_actix      = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/html/actix" }
+hyperchad_renderer_html_cdn        = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/html/cdn" }
 hyperchad_renderer_html_http       = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/html/http" }
 hyperchad_renderer_html_lambda     = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/html/lambda" }
 hyperchad_renderer_vanilla_js      = { version = "0.1.0", default-features = false, path = "packages/hyperchad/renderer/vanilla_js" }

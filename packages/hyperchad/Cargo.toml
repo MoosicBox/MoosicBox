@@ -23,6 +23,7 @@ hyperchad_renderer_egui        = { workspace = true, optional = true }
 hyperchad_renderer_fltk        = { workspace = true, optional = true }
 hyperchad_renderer_html        = { workspace = true, optional = true }
 hyperchad_renderer_html_actix  = { workspace = true, optional = true }
+hyperchad_renderer_html_cdn    = { workspace = true, optional = true }
 hyperchad_renderer_html_http   = { workspace = true, optional = true }
 hyperchad_renderer_html_lambda = { workspace = true, optional = true }
 hyperchad_renderer_vanilla_js  = { workspace = true, optional = true }
@@ -49,6 +50,7 @@ all = [
     "renderer-fltk",
     "renderer-html",
     "renderer-html-actix",
+    "renderer-html-cdn",
     "renderer-html-http",
     "renderer-html-lambda",
     "renderer-vanilla-js",
@@ -169,6 +171,8 @@ renderer-html-actix = [
     "hyperchad_app?/actix",
     "hyperchad_renderer_html?/actix",
 ]
+
+renderer-html-cdn = ["dep:hyperchad_renderer_html_cdn", "renderer-html"]
 
 renderer-html-lambda = [
     "dep:hyperchad_renderer_html_lambda",

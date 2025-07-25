@@ -762,7 +762,11 @@ impl Router {
         self
     }
 
-    fn get_route_func(&self, path: &str) -> Option<RouteFunc> {
+    /// # Panics
+    ///
+    /// * If the `routes` `RwLock` is poisoned
+    #[must_use]
+    pub fn get_route_func(&self, path: &str) -> Option<RouteFunc> {
         let dyn_route = self
             .routes
             .read()
@@ -904,6 +908,66 @@ impl Router {
     #[must_use]
     pub async fn wait_for_navigation(&self) -> Option<Content> {
         self.receiver.recv_async().await.ok()
+    }
+
+    /// Check if a dynamic route exists for the given path
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `routes` `RwLock` is poisoned.
+    #[must_use]
+    pub fn has_route(&self, path: &str) -> bool {
+        self.routes
+            .read()
+            .unwrap()
+            .iter()
+            .any(|(route, _)| route.matches(path))
+    }
+
+    /// Check if a static route exists for the given path
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `static_routes` `RwLock` is poisoned.
+    #[allow(clippy::missing_const_for_fn)]
+    #[must_use]
+    pub fn has_static_route(&self, path: &str) -> bool {
+        #[cfg(feature = "static-routes")]
+        {
+            self.static_routes
+                .read()
+                .unwrap()
+                .iter()
+                .any(|(route, _)| route.matches(path))
+        }
+        #[cfg(not(feature = "static-routes"))]
+        {
+            let _ = path;
+            false
+        }
+    }
+
+    /// Add a route to an existing router (modifies in-place)
+    ///
+    /// # Panics
+    ///
+    /// Will panic if routes `RwLock` is poisoned.
+    pub fn add_route_result<
+        C: TryInto<Content>,
+        Response: Into<Option<C>>,
+        F: Future<Output = Result<Response, BoxE>> + Send + 'static,
+        BoxE: Into<Box<dyn std::error::Error>>,
+    >(
+        &self,
+        route: impl Into<RoutePath>,
+        handler: impl Fn(RouteRequest) -> F + Send + Sync + Clone + 'static,
+    ) where
+        C::Error: Into<Box<dyn std::error::Error>>,
+    {
+        self.routes
+            .write()
+            .unwrap()
+            .push((route.into(), gen_route_func_result(handler)));
     }
 }
 
