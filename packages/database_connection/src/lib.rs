@@ -16,6 +16,20 @@ pub struct Credentials {
     password: Option<String>,
 }
 
+#[derive(Debug, Error)]
+pub enum CredentialsParseError {
+    #[error("Invalid URL format")]
+    InvalidUrl,
+    #[error("Missing host")]
+    MissingHost,
+    #[error("Missing database name")]
+    MissingDatabase,
+    #[error("Missing username")]
+    MissingUsername,
+    #[error("Unsupported scheme: {0}")]
+    UnsupportedScheme(String),
+}
+
 impl Credentials {
     #[must_use]
     pub const fn new(host: String, name: String, user: String, password: Option<String>) -> Self {
@@ -25,6 +39,85 @@ impl Credentials {
             user,
             password,
         }
+    }
+
+    /// Parse credentials from a database URL
+    ///
+    /// Supports formats like:
+    /// * `postgres://user:pass@host:port/dbname`
+    /// * `mysql://user:pass@host:port/dbname`
+    /// * `sqlite://path/to/db.sqlite`
+    ///
+    /// # Errors
+    ///
+    /// * If the URL format is invalid
+    /// * If required components are missing
+    /// * If the scheme is unsupported
+    pub fn from_url(url: &str) -> Result<Self, CredentialsParseError> {
+        // Simple URL parsing without external dependencies
+        let url = url.trim();
+
+        // Find scheme
+        let scheme_end = url.find("://").ok_or(CredentialsParseError::InvalidUrl)?;
+        let scheme = &url[..scheme_end];
+        let rest = &url[scheme_end + 3..];
+
+        match scheme {
+            "postgres" | "postgresql" | "mysql" => {
+                // Format: user:pass@host:port/dbname
+                let (auth_host, dbname) = rest
+                    .rsplit_once('/')
+                    .ok_or(CredentialsParseError::MissingDatabase)?;
+
+                let Some((auth, host)) = auth_host.rsplit_once('@') else {
+                    return Err(CredentialsParseError::MissingUsername);
+                };
+
+                let (user, password) = if let Some((user, pass)) = auth.split_once(':') {
+                    (user, Some(pass.to_string()))
+                } else {
+                    (auth, None)
+                };
+
+                if user.is_empty() {
+                    return Err(CredentialsParseError::MissingUsername);
+                }
+                if host.is_empty() {
+                    return Err(CredentialsParseError::MissingHost);
+                }
+                if dbname.is_empty() {
+                    return Err(CredentialsParseError::MissingDatabase);
+                }
+
+                Ok(Self::new(
+                    host.to_string(),
+                    dbname.to_string(),
+                    user.to_string(),
+                    password,
+                ))
+            }
+            _ => Err(CredentialsParseError::UnsupportedScheme(scheme.to_string())),
+        }
+    }
+
+    #[must_use]
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[must_use]
+    pub fn user(&self) -> &str {
+        &self.user
+    }
+
+    #[must_use]
+    pub fn password(&self) -> Option<&str> {
+        self.password.as_deref()
     }
 }
 

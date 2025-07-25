@@ -113,7 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use database_connection::Credentials;
 
-// Create credentials
+// Create credentials manually
 let creds = Credentials::new(
     "database.example.com".to_string(),  // host
     "production_db".to_string(),         // database name
@@ -121,7 +121,51 @@ let creds = Credentials::new(
     Some("secure_password".to_string()), // password (optional)
 );
 
+// Or parse from connection string
+let creds = Credentials::from_url("postgres://user:pass@localhost:5432/mydb")?;
+
 // Use with database initialization
+let db = database_connection::init(None, Some(creds)).await?;
+```
+
+### Environment Variables
+
+The package supports multiple ways to provide credentials:
+
+```bash
+# Option 1: Connection string (recommended)
+export DATABASE_URL="postgres://user:password@localhost:5432/mydb"
+
+# Option 2: Individual environment variables
+export DB_HOST="localhost"
+export DB_NAME="mydb"
+export DB_USER="user"
+export DB_PASSWORD="password"
+
+# Option 3: AWS SSM Parameters (requires 'creds' feature)
+export SSM_DB_HOST_PARAM_NAME="myapp_db_host"
+export SSM_DB_NAME_PARAM_NAME="myapp_db_name"
+export SSM_DB_USER_PARAM_NAME="myapp_db_user"
+export SSM_DB_PASSWORD_PARAM_NAME="myapp_db_password"
+```
+
+### AWS Credentials (Optional)
+
+To use AWS SSM parameter store for credentials, enable the `creds` feature:
+
+```toml
+[dependencies]
+database_connection = {
+    path = "../database_connection",
+    features = ["postgres", "creds"]
+}
+```
+
+```rust
+use database_connection::creds::get_db_creds;
+
+// Automatically fetches from DATABASE_URL, env vars, or AWS SSM
+let creds = get_db_creds().await?;
 let db = database_connection::init(None, Some(creds)).await?;
 ```
 
@@ -291,19 +335,33 @@ match init(None, None).await {
 
 ### Other Features
 - **`simulator`**: Mock database for testing
-- **`creds`**: Credential management utilities
+- **`creds`**: AWS SSM credential management (optional)
 
 ## Connection Strings
 
-### PostgreSQL Connection Format
-```
-host=localhost dbname=mydb user=username password=password
+### Supported URL Formats
+
+```bash
+# PostgreSQL
+postgres://user:password@host:port/database
+postgresql://user:password@host:port/database
+
+# MySQL
+mysql://user:password@host:port/database
+
+# Examples
+DATABASE_URL="postgres://myuser:mypass@localhost:5432/mydb"
+DATABASE_URL="mysql://root:secret@127.0.0.1:3306/app_db"
 ```
 
-### SQLite Connection Format
-```
-./path/to/database.db  (file-based)
-:memory:               (in-memory)
+### Individual Environment Variables
+
+```bash
+# Individual variables
+DB_HOST="localhost"
+DB_NAME="mydb"
+DB_USER="username"
+DB_PASSWORD="password"
 ```
 
 ## Dependencies

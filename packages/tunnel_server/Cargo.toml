@@ -80,6 +80,7 @@ sqlite = [
 ]
 
 postgres = [
+    "switchy_database_connection/creds",
     "switchy_database_connection/postgres",
     "switchy_database_connection/tls",
 ]

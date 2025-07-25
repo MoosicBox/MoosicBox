@@ -2,12 +2,14 @@
 
 use thiserror::Error;
 
-use crate::Credentials;
+use crate::{Credentials, CredentialsParseError};
 
 #[derive(Debug, Error)]
 pub enum GetDbCredsError {
     #[error("Invalid Connection Options")]
     InvalidConnectionOptions,
+    #[error(transparent)]
+    CredentialsParseError(#[from] CredentialsParseError),
     #[error("Failed to fetch SSM Parameters: {0:?}")]
     FailedSsmParameters(
         #[from]
@@ -31,6 +33,13 @@ pub enum GetDbCredsError {
 /// * If failed to retrieve the credentials from the SSM parameters
 pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
     log::trace!("get_db_creds");
+
+    // First try DATABASE_URL
+    if let Ok(database_url) = std::env::var("DATABASE_URL") {
+        log::debug!("get_db_creds: Using DATABASE_URL");
+        return Credentials::from_url(&database_url)
+            .map_err(GetDbCredsError::CredentialsParseError);
+    }
 
     let env_db_host = std::env::var("DB_HOST").ok();
     let env_db_name = std::env::var("DB_NAME").ok();

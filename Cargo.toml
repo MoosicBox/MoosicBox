@@ -57,14 +57,14 @@ members = [
     "packages/hyperchad/renderer/vanilla_js",
     "packages/hyperchad/renderer/vanilla_js/hash",
     "packages/hyperchad/router",
+    "packages/hyperchad/simulator",
     "packages/hyperchad/state",
     "packages/hyperchad/template",
     "packages/hyperchad/template/actions_dsl",
     "packages/hyperchad/template/macros",
+    "packages/hyperchad/test_utils",
     "packages/hyperchad/transformer",
     "packages/hyperchad/transformer/models",
-    "packages/hyperchad/simulator",
-    "packages/hyperchad/test_utils",
     "packages/image",
     "packages/json_utils",
     "packages/library",
@@ -118,10 +118,10 @@ members = [
     "packages/web_server",
     "packages/web_server/core",
     "packages/web_server/cors",
-    "packages/web_server/simulator",
     "packages/web_server/examples/nested_get",
     "packages/web_server/examples/openapi",
     "packages/web_server/examples/simple_get",
+    "packages/web_server/simulator",
     "packages/ws",
     "packages/yt",
 ]
@@ -281,9 +281,9 @@ hyperchad_template_macros          = { version = "0.1.0", default-features = fal
 hyperchad_transformer              = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer" }
 hyperchad_transformer_models       = { version = "0.1.0", default-features = false, path = "packages/hyperchad/transformer/models" }
 
-hyperchad_simulator      = { version = "0.1.0", default-features = false, path = "packages/hyperchad/simulator" }
-hyperchad_test_utils     = { version = "0.1.0", default-features = false, path = "packages/hyperchad/test_utils" }
-web_server_simulator     = { version = "0.1.0", default-features = false, path = "packages/web_server/simulator" }
+hyperchad_simulator  = { version = "0.1.0", default-features = false, path = "packages/hyperchad/simulator" }
+hyperchad_test_utils = { version = "0.1.0", default-features = false, path = "packages/hyperchad/test_utils" }
+web_server_simulator = { version = "0.1.0", default-features = false, path = "packages/web_server/simulator" }
 
 clippier                = { version = "0.1.0", default-features = false, path = "packages/clippier" }
 clippier_test_utilities = { version = "0.1.0", default-features = false, path = "packages/clippier/test_utilities" }
