@@ -19,6 +19,10 @@ pub use lambda_runtime;
 
 pub enum Content {
     Html(String),
+    Raw {
+        data: Bytes,
+        content_type: String,
+    },
     #[cfg(feature = "json")]
     Json(serde_json::Value),
 }
@@ -130,6 +134,10 @@ impl<
                         Content::Html(x) => {
                             gz.write_all(x.as_bytes())?;
                             response = response.header(CONTENT_TYPE, "text/html");
+                        }
+                        Content::Raw { data, content_type } => {
+                            gz.write_all(&data)?;
+                            response = response.header(CONTENT_TYPE, content_type);
                         }
                         #[cfg(feature = "json")]
                         Content::Json(x) => {

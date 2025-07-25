@@ -247,6 +247,12 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
                     self.background,
                 )
             }
+            Content::Raw { data, content_type } => {
+                return Ok(Response::builder()
+                    .status(200)
+                    .header("Content-Type", content_type)
+                    .body(data.to_vec())?);
+            }
             #[cfg(feature = "json")]
             Content::Json(json) => {
                 let mut bytes: Vec<u8> = Vec::new();

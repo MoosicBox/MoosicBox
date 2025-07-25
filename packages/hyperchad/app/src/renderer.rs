@@ -411,6 +411,14 @@ pub mod html {
                                 file.write_all(html.as_bytes())
                                     .expect("Failed to write file");
                             }
+                            Content::Raw { data, .. } => {
+                                log::debug!(
+                                    "generate: path={path_str} -> {}:\n{data:?}",
+                                    output_path.display()
+                                );
+
+                                file.write_all(&data).expect("Failed to write file");
+                            }
                             #[cfg(feature = "json")]
                             Content::Json(value) => {
                                 log::debug!(

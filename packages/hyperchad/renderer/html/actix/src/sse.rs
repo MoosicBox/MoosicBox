@@ -133,7 +133,10 @@ pub async fn handle_sse<
                             ("handle_sse: SSE sending view"),
                             ("handle_sse: SSE sending view={view:?}")
                         );
-                        let body = app.processor.to_body(Content::View(view), data).await?;
+                        let (body, _content_type) =
+                            app.processor.to_body(Content::View(view), data).await?;
+
+                        let body = str::from_utf8(&body).map_err(ErrorInternalServerError)?;
 
                         crate::sse::EventData::new(body).event("view")
                     }
@@ -146,10 +149,12 @@ pub async fn handle_sse<
                             ("handle_sse: SSE sending partial_view={partial_view:?}")
                         );
                         let id = partial_view.target.to_string();
-                        let body = app
+                        let (body, _content_type) = app
                             .processor
                             .to_body(Content::PartialView(partial_view), data)
                             .await?;
+
+                        let body = str::from_utf8(&body).map_err(ErrorInternalServerError)?;
 
                         crate::sse::EventData::new(body)
                             .id(id)

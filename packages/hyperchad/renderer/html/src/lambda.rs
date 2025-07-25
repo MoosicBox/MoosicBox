@@ -236,7 +236,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
 
     fn headers(&self, content: &hyperchad_renderer::Content) -> Option<Vec<(String, String)>> {
         match content {
-            hyperchad_renderer::Content::View(..) => None,
+            hyperchad_renderer::Content::View(..) | hyperchad_renderer::Content::Raw { .. } => None,
             hyperchad_renderer::Content::PartialView(view) => {
                 Some(vec![("v-fragment".to_string(), view.target.clone())])
             }
@@ -281,6 +281,9 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                         self.background,
                     )
                 })
+            }
+            hyperchad_renderer::Content::Raw { data, content_type } => {
+                Content::Raw { data, content_type }
             }
             #[cfg(feature = "json")]
             hyperchad_renderer::Content::Json(value) => Content::Json(value),

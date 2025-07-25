@@ -19,7 +19,7 @@ hyperchad_transformer = { workspace = true, features = ["html"] }
 switchy_async         = { workspace = true, features = ["rt-multi-thread", "tokio"] }
 
 async-trait = { workspace = true }
-bytes       = { workspace = true, optional = true }
+bytes       = { workspace = true }
 log         = { workspace = true }
 serde       = { workspace = true, optional = true }
 serde_json  = { workspace = true, optional = true }
@@ -51,7 +51,7 @@ viewport-retained  = ["viewport"]
 html = []
 json = ["dep:serde_json"]
 
-assets = ["dep:bytes"]
+assets = []
 
 logic = ["hyperchad_transformer/logic"]
 

@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use actix_web::{HttpResponse, http::header::ContentType};
+use actix_web::HttpResponse;
 use async_trait::async_trait;
 use bytes::Bytes;
 use flume::Receiver;
@@ -231,24 +231,27 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         match content {
             Some(content) => match &content {
                 hyperchad_renderer::Content::View(..) => {
-                    let body = self.to_body(content, req).await?;
+                    let (body, content_type) = self.to_body(content, req).await?;
                     Ok(HttpResponse::Ok()
-                        .content_type(ContentType::html())
+                        .content_type(content_type.as_str())
                         .body(body))
                 }
                 hyperchad_renderer::Content::PartialView(PartialView { target, .. }) => {
                     let target = format!("#{target}");
-                    let body = self.to_body(content, req).await?;
+                    let (body, content_type) = self.to_body(content, req).await?;
                     Ok(HttpResponse::Ok()
                         .append_header(("v-fragment", target))
-                        .content_type(ContentType::html())
+                        .content_type(content_type.as_str())
                         .body(body))
                 }
+                hyperchad_renderer::Content::Raw { data, content_type } => Ok(HttpResponse::Ok()
+                    .content_type(content_type.as_str())
+                    .body(data.to_vec())),
                 #[cfg(feature = "json")]
                 hyperchad_renderer::Content::Json(..) => {
-                    let body = self.to_body(content, req).await?;
+                    let (body, content_type) = self.to_body(content, req).await?;
                     Ok(HttpResponse::Ok()
-                        .content_type(ContentType::json())
+                        .content_type(content_type.as_str())
                         .body(body))
                 }
             },
@@ -260,7 +263,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         &self,
         content: Content,
         req: PreparedRequest,
-    ) -> Result<String, actix_web::Error> {
+    ) -> Result<(Bytes, String), actix_web::Error> {
         static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
 
         Ok(match content {
@@ -273,7 +276,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 let content = container_element_to_html(&view, &self.tag_renderer)
                     .map_err(ErrorInternalServerError)?;
 
-                if req.full {
+                let content = if req.full {
                     self.tag_renderer.root_html(
                         &HEADERS,
                         &view,
@@ -292,11 +295,27 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                         self.background,
                     )
                 }
+                .as_bytes()
+                .to_vec()
+                .into();
+
+                let content_type = "text/html".to_string();
+
+                (content, content_type)
             }
             #[cfg(feature = "json")]
             hyperchad_renderer::Content::Json(x) => {
-                serde_json::to_string(&x).map_err(ErrorInternalServerError)?
+                let content = serde_json::to_string(&x)
+                    .map_err(ErrorInternalServerError)?
+                    .as_bytes()
+                    .to_vec()
+                    .into();
+
+                let content_type = "application/json".to_string();
+
+                (content, content_type)
             }
+            hyperchad_renderer::Content::Raw { data, content_type } => (data, content_type),
         })
     }
 }

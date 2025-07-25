@@ -620,7 +620,8 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
                         hyperchad_renderer::Content::View(view) => {
                             renderer.render(view).await?;
                         }
-                        hyperchad_renderer::Content::PartialView(..) => {
+                        hyperchad_renderer::Content::PartialView(..)
+                        | hyperchad_renderer::Content::Raw { .. } => {
                             moosicbox_assert::die_or_warn!("Received invalid content type");
                         }
                         #[cfg(feature = "json")]

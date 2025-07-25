@@ -12,6 +12,7 @@ pub mod viewport;
 use std::{future::Future, pin::Pin};
 
 use async_trait::async_trait;
+use bytes::Bytes;
 pub use hyperchad_color::Color;
 use hyperchad_transformer::{Container, ResponsiveTrigger, html::ParseError};
 pub use switchy_async::runtime::Handle;
@@ -35,6 +36,10 @@ pub enum Content {
     PartialView(PartialView),
     #[cfg(feature = "json")]
     Json(serde_json::Value),
+    Raw {
+        data: Bytes,
+        content_type: String,
+    },
 }
 
 impl Content {
@@ -106,10 +111,10 @@ impl<'a> TryFrom<&'a str> for Content {
     type Error = ParseError;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        Ok(Self::View(View {
-            future: None,
-            immediate: value.try_into()?,
-        }))
+        Ok(Self::Raw {
+            data: value.as_bytes().to_vec().into(),
+            content_type: "text/html".to_string(),
+        })
     }
 }
 
@@ -117,10 +122,7 @@ impl TryFrom<String> for Content {
     type Error = ParseError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        Ok(Self::View(View {
-            future: None,
-            immediate: value.try_into()?,
-        }))
+        value.as_str().try_into()
     }
 }
 

@@ -39,7 +39,8 @@ pub trait ActixResponseProcessor<T: Send + Sync + Clone> {
 
     async fn to_response(&self, data: T) -> Result<HttpResponse, actix_web::Error>;
 
-    async fn to_body(&self, content: Content, data: T) -> Result<String, actix_web::Error>;
+    async fn to_body(&self, content: Content, data: T)
+    -> Result<(Bytes, String), actix_web::Error>;
 }
 
 #[derive(Clone)]
