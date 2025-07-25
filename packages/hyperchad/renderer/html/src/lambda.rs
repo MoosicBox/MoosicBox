@@ -109,19 +109,21 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.processor.background = background;
     }
 
-    #[cfg(feature = "extend")]
+    #[cfg(all(feature = "extend", feature = "sse"))]
     fn with_html_renderer_event_rx(
-        self,
-        _rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
+        mut self,
+        rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
     ) -> Self {
+        self = self.with_renderer_event_rx(rx);
         self
     }
 
-    #[cfg(feature = "extend")]
+    #[cfg(all(feature = "extend", feature = "sse"))]
     fn set_html_renderer_event_rx(
         &mut self,
-        _rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
+        rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
     ) {
+        *self = self.clone().with_renderer_event_rx(rx);
     }
 
     #[cfg(feature = "assets")]

@@ -5504,6 +5504,8 @@ dependencies = [
  "async-trait",
  "bytes",
  "flate2",
+ "flume",
+ "futures-util",
  "hyperchad_renderer",
  "lambda_http",
  "lambda_runtime",
@@ -5511,6 +5513,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "serde_json",
+ "switchy",
 ]
 
 [[package]]

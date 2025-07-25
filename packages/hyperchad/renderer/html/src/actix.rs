@@ -7,8 +7,7 @@ use std::{
 use actix_web::HttpResponse;
 use async_trait::async_trait;
 use bytes::Bytes;
-use flume::Receiver;
-use hyperchad_renderer::{Color, Content, HtmlTagRenderer, PartialView, RendererEvent, View};
+use hyperchad_renderer::{Color, Content, HtmlTagRenderer, PartialView, View};
 use hyperchad_renderer_html_actix::actix_web::{
     error::ErrorInternalServerError, http::header::USER_AGENT,
 };
@@ -117,12 +116,20 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> HtmlApp
         self.processor.background = background;
     }
 
-    fn with_html_renderer_event_rx(mut self, rx: Receiver<RendererEvent>) -> Self {
+    #[cfg(all(feature = "extend", feature = "sse"))]
+    fn with_html_renderer_event_rx(
+        mut self,
+        rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
+    ) -> Self {
         self.renderer_event_rx = rx;
         self
     }
 
-    fn set_html_renderer_event_rx(&mut self, rx: Receiver<RendererEvent>) {
+    #[cfg(all(feature = "extend", feature = "sse"))]
+    fn set_html_renderer_event_rx(
+        &mut self,
+        rx: flume::Receiver<hyperchad_renderer::RendererEvent>,
+    ) {
         self.renderer_event_rx = rx;
     }
 
