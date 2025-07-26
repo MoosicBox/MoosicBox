@@ -27,32 +27,31 @@ export function createHyperChadSite(
 
     console.log('Using dynamic route paths:', dynamicRoutes);
 
-    const apiName = `${name}-api`;
+    const lambdaName = `${name}-lambda`;
 
-    const api = new sst.aws.ApiGatewayV2(apiName, {
+    const lambda = new sst.aws.Function(lambdaName, {
+        handler: `src/${RENDERERS[renderer].bin}.handler`,
+        runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
+        timeout: '5 minutes',
+        environment: {
+            RUST_LOG: 'moosicbox=debug,hyperchad=debug',
+        },
         transform: {
-            route: {
-                handler: {
-                    runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
-                    transform: {
-                        function: {
-                            runtime: 'provided.al2023',
-                            timeout: 300,
-                        },
-                    },
-                },
+            function: {
+                runtime: 'provided.al2023',
             },
         },
-    });
-
-    dynamicRoutes.forEach((route) => {
-        api.route(`GET ${route}`, {
-            handler: `src/${RENDERERS[renderer].bin}.handler`,
-            runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
-            environment: {
-                RUST_LOG: 'moosicbox=debug,hyperchad=debug',
+        streaming: true,
+        url: {
+            cors: {
+                allowCredentials: false,
+                allowHeaders: ['*'],
+                allowMethods: ['GET', 'HEAD', 'OPTIONS'],
+                allowOrigins: ['*'],
+                exposeHeaders: ['*'],
+                maxAge: '1 day',
             },
-        });
+        },
     });
 
     const staticSiteName = `${name}-static`;
@@ -75,8 +74,8 @@ export function createHyperChadSite(
                         ...origins,
                         {
                             originId: 'api',
-                            domainName: api.url.apply(
-                                (url) => new URL(url!).host,
+                            domainName: lambda.url.apply(
+                                (url: string) => new URL(url!).host,
                             ),
                             customOriginConfig: {
                                 httpPort: 80,
@@ -107,7 +106,7 @@ export function createHyperChadSite(
     );
 
     return {
-        api,
+        lambda,
         staticSite,
         linkable: new sst.Linkable(name, {
             properties: {},
