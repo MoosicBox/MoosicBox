@@ -347,13 +347,13 @@ cpal = "0.16.0"
 ctrlc = "3.4.7"
 debounce = "0.2.2"
 derive_more = "2.0.1"
-dotenv = "0.15"
+dotenv = "0.15.0"
 dyn-clone = "1.0.19"
 eframe = { version = "0.32.0", default-features = false }
 egui = { version = "0.32.0", default-features = false }
 egui_extras = { version = "0.32.0", default-features = false }
 enum-as-inner = "0.6.1"
-env_logger = "0.11"
+env_logger = "0.11.8"
 fdk-aac = "0.7.0"
 flacenc = "0.5.0"
 flate2 = "1.1.2"
@@ -361,7 +361,7 @@ fltk = "1.5.10"
 fltk-sys = "1.5.10"
 flume = "0.11.1"
 free_log_client = { version = "0.5.0", default-features = false }
-futures = "0.3"
+futures = "0.3.31"
 futures-channel = "0.3.31"
 futures-core = "0.3.31"
 futures-sink = "0.3.31"
@@ -391,7 +391,7 @@ libpulse-binding = "2.30.1"
 libpulse-simple-binding = "2.29.0"
 libvips = { version = "1.7.1" }
 local-ip-address = "0.6.5"
-log = { version = "0.4", features = ["release_max_level_trace"] }
+log = { version = "0.4.27", features = ["release_max_level_trace"] }
 maud = "0.27.0"
 md5 = "0.8.0"
 mdns-sd = "0.13.11"
@@ -433,7 +433,7 @@ postgres-native-tls = "0.5.1"
 postgres-openssl = "0.5.1"
 postgres-protocol = "0.6.8"
 pretty_assertions = "1.4.1"
-pretty_env_logger = "0.5"
+pretty_env_logger = "0.5.0"
 proc-macro2 = "1.0.95"
 proc-macro2-diagnostics = { version = "0.10.1", default-features = false }
 profiling = "1.0.17"
@@ -445,7 +445,7 @@ qstring = "0.7.2"
 quickcheck = "1.0.3"
 quickcheck_macros = "1.1.0"
 quote = "1.0.40"
-rand = "0.9"
+rand = "0.9.2"
 rangemap = "1.6.0"
 ratatui = "0.29.0"
 rb = "0.4.1"
@@ -455,17 +455,17 @@ reqwest = { version = "0.12.22", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
-roxmltree = "0.20"
+roxmltree = "0.20.0"
 rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rust-embed = "8.7.2"
 rust_decimal = { version = "1.37.2", default-features = false }
 rust_decimal_macros = { version = "1.37.1", default-features = false }
-rustls = "0.23"
+rustls = "0.23.30"
 ryu = "1.0.20"
 scoped-tls = "1.0.1"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"] }
 serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
 serde_json = "1.0.141"
