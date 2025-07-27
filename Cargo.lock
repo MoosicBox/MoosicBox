@@ -3943,9 +3943,9 @@ checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 
 [[package]]
 name = "fltk"
-version = "1.5.9"
+version = "1.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecfe1d97c0be7585b46d52c1e563226a6495a993be2c72dcdd03fe79d29b1f2a"
+checksum = "04bc56dba2b1eddc0e1890b30eb65315484edcdae5044c3ee0e4dbd12c5e3694"
 dependencies = [
  "bitflags 2.9.1",
  "crossbeam-channel",
@@ -3957,9 +3957,9 @@ dependencies = [
 
 [[package]]
 name = "fltk-sys"
-version = "1.5.9"
+version = "1.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de39f27a66d3ceefca611ee2db890369c6846fde4de7b5fd7cdedd9ce0c432f8"
+checksum = "fdfd7cdacacea6074214cbb2309ca8fa114d4c8b9bb96f2fa50bf675d6de7dbd"
 dependencies = [
  "cmake",
  "cmk",
@@ -6625,7 +6625,7 @@ checksum = "4488594b9328dee448adb906d8b126d9b7deb7cf5c22161ee591610bb1be83c0"
 dependencies = [
  "bitflags 2.9.1",
  "libc",
- "redox_syscall 0.5.15",
+ "redox_syscall 0.5.16",
 ]
 
 [[package]]
@@ -9962,7 +9962,7 @@ checksum = "bc838d2a56b5b1a6c25f55575dfc605fabb63bb2365f6c2353ef9159aa69e4a5"
 dependencies = [
  "cfg-if 1.0.1",
  "libc",
- "redox_syscall 0.5.15",
+ "redox_syscall 0.5.16",
  "smallvec",
  "windows-targets 0.52.6",
 ]
@@ -11442,9 +11442,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.15"
+version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e8af0dde094006011e6a740d4879319439489813bd0bcdc7d821beaeeff48ec"
+checksum = "7251471db004e509f4e75a62cca9435365b5ec7bcdff530d612ac7c87c44a792"
 dependencies = [
  "bitflags 2.9.1",
 ]
@@ -12802,7 +12802,7 @@ dependencies = [
  "objc2-foundation 0.2.2",
  "objc2-quartz-core 0.2.2",
  "raw-window-handle",
- "redox_syscall 0.5.15",
+ "redox_syscall 0.5.16",
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.59.0",
@@ -15047,9 +15047,9 @@ checksum = "b130bd8a58c163224b44e217b4239ca7b927d82bf6cc2fea1fc561d15056e3f7"
 
 [[package]]
 name = "tokio"
-version = "1.46.1"
+version = "1.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
+checksum = "43864ed400b6043a4757a25c7a64a8efde741aed79a056a2fb348a406701bb35"
 dependencies = [
  "backtrace",
  "bytes",
@@ -15060,10 +15060,10 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "slab",
- "socket2 0.5.10",
+ "socket2 0.6.0",
  "tokio-macros",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -16716,7 +16716,7 @@ version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6994d13118ab492c3c80c1f81928718159254c53c472bf9ce36f8dae4add02a7"
 dependencies = [
- "redox_syscall 0.5.15",
+ "redox_syscall 0.5.16",
  "wasite",
  "web-sys",
 ]
