@@ -1170,6 +1170,7 @@ pub fn generate_dockerfile(
     workspace_root: &Path,
     target_package: &str,
     enabled_features: Option<&[String]>,
+    no_default_features: bool,
     dockerfile_path: &Path,
     base_image: &str,
     final_image: &str,
@@ -1205,6 +1206,7 @@ pub fn generate_dockerfile(
         &dependencies,
         target_package,
         enabled_features,
+        no_default_features,
         base_image,
         final_image,
         args,
@@ -1241,6 +1243,7 @@ pub fn generate_dockerfile_content(
     dependencies: &[(String, String)],
     target_package: &str,
     enabled_features: Option<&[String]>,
+    no_default_features: bool,
     base_image: &str,
     final_image: &str,
     args: &[String],
@@ -1408,13 +1411,20 @@ pub fn generate_dockerfile_content(
 
     content.push('\n');
 
-    // Check for feature flags
-    let features = enabled_features.unwrap_or(&[]);
-    let features_flag = if features.is_empty() {
-        String::new()
-    } else {
-        format!("--features={}", features.join(","))
-    };
+    // Build feature flags
+    let mut feature_flags = Vec::new();
+
+    if no_default_features {
+        feature_flags.push("--no-default-features".to_string());
+    }
+
+    if let Some(features) = enabled_features {
+        if !features.is_empty() {
+            feature_flags.push(format!("--features={}", features.join(",")));
+        }
+    }
+
+    let features_flag = feature_flags.join(" ");
 
     // Build only dependencies first (not the target package)
     // This allows Docker to cache the dependency compilation layer
@@ -2602,6 +2612,7 @@ pub fn handle_generate_dockerfile_command(
     workspace_root: &Path,
     package: &str,
     features: Option<&[String]>,
+    no_default_features: bool,
     output: &Path,
     base_image: &str,
     final_image: &str,
@@ -2614,6 +2625,7 @@ pub fn handle_generate_dockerfile_command(
         workspace_root,
         package,
         features,
+        no_default_features,
         output,
         base_image,
         final_image,

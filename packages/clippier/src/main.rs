@@ -143,6 +143,9 @@ enum Commands {
         /// Features to enable for the target package (optional)
         #[arg(long)]
         features: Option<Vec<String>>,
+        /// Do not activate the `default` feature
+        #[arg(long)]
+        no_default_features: bool,
         /// Output path for the generated Dockerfile
         #[arg(long)]
         output: PathBuf,
@@ -274,6 +277,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             workspace_root,
             package,
             features,
+            no_default_features,
             output,
             base_image,
             final_image,
@@ -285,6 +289,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &workspace_root,
             &package,
             features.as_deref(),
+            no_default_features,
             &output,
             &base_image,
             &final_image,
