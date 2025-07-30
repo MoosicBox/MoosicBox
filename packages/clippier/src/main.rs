@@ -170,6 +170,9 @@ enum Commands {
         /// Environment variables to set during the build process (format: KEY=VALUE)
         #[arg(long, action = clap::ArgAction::Append)]
         build_env: Vec<String>,
+        /// Specify the binary name to build and use in the Dockerfile (overrides automatic detection)
+        #[arg(long)]
+        bin: Option<String>,
     },
     AffectedPackages {
         /// Path to the workspace root
@@ -289,6 +292,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             generate_dockerignore,
             env,
             build_env,
+            bin,
         } => handle_generate_dockerfile_command(
             &workspace_root,
             &package,
@@ -302,6 +306,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             generate_dockerignore,
             &env,
             &build_env,
+            bin.as_deref(),
         )?,
         Commands::AffectedPackages {
             workspace_root,

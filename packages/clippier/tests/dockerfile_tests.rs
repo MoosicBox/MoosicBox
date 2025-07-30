@@ -18,6 +18,7 @@ fn test_basic_dockerfile_generation() {
         false,
         &[],
         &[],
+        None,
     );
     assert!(result.is_ok());
 }
@@ -40,6 +41,7 @@ fn test_dockerfile_feature_inclusion() {
         false,
         &[],
         &[],
+        None,
     );
     assert!(result.is_ok());
 }
@@ -102,7 +104,7 @@ fn test_dockerfile_binary_name_detection() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test binary name detection from Cargo.toml
-    let binary_name = clippier::get_binary_name(temp_dir.path(), "cli", "packages/cli");
+    let binary_name = clippier::get_binary_name(temp_dir.path(), "cli", "packages/cli", None);
     assert_eq!(binary_name, "cli-tool");
 }
 
@@ -138,6 +140,7 @@ fn test_dockerfile_custom_images() {
         true,
         &[],
         &[],
+        None,
     );
     assert!(result.is_ok());
 }
@@ -174,6 +177,61 @@ fn test_dockerfile_minimal_workspace() {
         false,
         &[],
         &[],
+        None,
     );
     assert!(result.is_ok());
+}
+
+#[test]
+fn test_dockerfile_with_custom_binary_name() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    // Test Dockerfile generation with custom binary name
+    let result = clippier::generate_dockerfile(
+        temp_dir.path(),
+        "api",
+        None,
+        false,
+        &temp_dir.path().join("Dockerfile.custom_bin"),
+        "rust:1-bookworm",
+        "debian:bookworm-slim",
+        &[],
+        None,
+        false,
+        &[],
+        &[],
+        Some("my-custom-binary"),
+    );
+    assert!(result.is_ok());
+
+    // Read the generated Dockerfile and verify it uses the custom binary name
+    let dockerfile_content = std::fs::read_to_string(temp_dir.path().join("Dockerfile.custom_bin"))
+        .expect("Failed to read generated Dockerfile");
+
+    // Check that the custom binary name is used in the COPY command
+    assert!(
+        dockerfile_content.contains("COPY --from=builder /app/target/release/my-custom-binary /")
+    );
+
+    // Check that the custom binary name is used in the CMD command
+    assert!(dockerfile_content.contains("CMD [\"./my-custom-binary\"]"));
+}
+
+#[test]
+fn test_get_binary_name_with_override() {
+    let (temp_dir, _) = load_test_workspace("complex");
+
+    // Test that binary name override takes precedence
+    let binary_name = clippier::get_binary_name(
+        temp_dir.path(),
+        "api",
+        "packages/api",
+        Some("custom-override-name"),
+    );
+    assert_eq!(binary_name, "custom-override-name");
+
+    // Test that None falls back to normal detection
+    let binary_name = clippier::get_binary_name(temp_dir.path(), "api", "packages/api", None);
+    // Should fall back to package name transformation since no explicit binary is defined
+    assert_eq!(binary_name, "api");
 }

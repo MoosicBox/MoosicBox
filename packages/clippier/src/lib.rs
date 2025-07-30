@@ -348,7 +348,13 @@ pub fn get_binary_name(
     workspace_root: &Path,
     target_package: &str,
     target_package_path: &str,
+    bin_override: Option<&str>,
 ) -> String {
+    // If a binary name override is provided, use it directly
+    if let Some(bin_name) = bin_override {
+        return bin_name.to_string();
+    }
+
     // Try to read the target package's Cargo.toml to get the correct binary name
     let cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
 
@@ -1179,6 +1185,7 @@ pub fn generate_dockerfile(
     generate_dockerignore: bool,
     custom_env_vars: &[String],
     build_env_vars: &[String],
+    bin: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Get all potential dependencies for the target package (needed for Docker build compatibility)
     // Docker builds require all possible dependencies to ensure proper layer caching
@@ -1216,6 +1223,7 @@ pub fn generate_dockerfile(
         target_package_path,
         custom_env_vars,
         build_env_vars,
+        bin,
     )?;
 
     // Write the Dockerfile
@@ -1254,6 +1262,7 @@ pub fn generate_dockerfile_content(
     target_package_path: &str,
     custom_env_vars: &[String],
     build_env_vars: &[String],
+    bin: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::fmt::Write as _;
 
@@ -1499,7 +1508,7 @@ pub fn generate_dockerfile_content(
     )?;
 
     // Copy binary from builder
-    let binary_name = get_binary_name(workspace_root, target_package, target_package_path);
+    let binary_name = get_binary_name(workspace_root, target_package, target_package_path, bin);
     writeln!(
         content,
         "COPY --from=builder /app/target/release/{binary_name} /"
@@ -2635,6 +2644,7 @@ pub fn handle_generate_dockerfile_command(
     generate_dockerignore: bool,
     env: &[String],
     build_env: &[String],
+    bin: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     generate_dockerfile(
         workspace_root,
@@ -2649,6 +2659,7 @@ pub fn handle_generate_dockerfile_command(
         generate_dockerignore,
         env,
         build_env,
+        bin,
     )?;
 
     Ok(format!("Generated Dockerfile at: {}", output.display()))

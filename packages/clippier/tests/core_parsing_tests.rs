@@ -483,12 +483,13 @@ fn test_binary_name_detection() {
     let (temp_dir, _) = load_test_workspace("complex");
 
     // Test custom binary name detection
-    let binary_name = clippier::get_binary_name(temp_dir.path(), "my-package", "custom/path");
+    let binary_name = clippier::get_binary_name(temp_dir.path(), "my-package", "custom/path", None);
     // Should fall back to package name transformation
     assert_eq!(binary_name, "my_package");
 
     // Test with actual package
-    let binary_name = clippier::get_binary_name(temp_dir.path(), "default-package", "default/path");
+    let binary_name =
+        clippier::get_binary_name(temp_dir.path(), "default-package", "default/path", None);
     assert_eq!(binary_name, "default_package");
 }
 
