@@ -136,10 +136,13 @@ enum Commands {
         all_potential_deps: bool,
     },
     GenerateDockerfile {
-        /// Path to the workspace root
+        /// Path to the workspace root OR git URL
         workspace_root: PathBuf,
         /// Name of the target package to build
         package: String,
+        /// Git reference (branch/tag/commit) when using git URL
+        #[arg(long, default_value = "master")]
+        git_ref: String,
         /// Features to enable for the target package (optional)
         #[arg(long)]
         features: Option<Vec<String>>,
@@ -282,6 +285,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::GenerateDockerfile {
             workspace_root,
             package,
+            git_ref,
             features,
             no_default_features,
             output,
@@ -296,6 +300,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => handle_generate_dockerfile_command(
             &workspace_root,
             &package,
+            &git_ref,
             features.as_deref(),
             no_default_features,
             &output,

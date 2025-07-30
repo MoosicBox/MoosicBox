@@ -343,6 +343,16 @@ pub fn get_dependency_default_features(dep_value: &Value) -> Option<bool> {
     }
 }
 
+/// Determines if a path string is a git URL
+#[must_use]
+pub fn is_git_url(path: &str) -> bool {
+    path.starts_with("http://")
+        || path.starts_with("https://")
+        || path.starts_with("git@")
+        || path.starts_with("ssh://git@")
+        || path.starts_with("git://")
+}
+
 #[must_use]
 pub fn get_binary_name(
     workspace_root: &Path,
@@ -1237,6 +1247,216 @@ pub fn generate_dockerfile(
     }
 
     Ok(())
+}
+
+/// Generates a Dockerfile for a target package from a git URL
+///
+/// # Errors
+///
+/// * If fails to generate the dockerfile content
+/// * If fails to write the dockerfile to the specified path
+#[allow(clippy::too_many_arguments)]
+pub fn generate_dockerfile_from_git(
+    git_url: &str,
+    git_ref: &str,
+    target_package: &str,
+    enabled_features: Option<&[String]>,
+    no_default_features: bool,
+    dockerfile_path: &Path,
+    base_image: &str,
+    final_image: &str,
+    args: &[String],
+    build_args: Option<&str>,
+    generate_dockerignore: bool,
+    custom_env_vars: &[String],
+    build_env_vars: &[String],
+    bin: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Create the Dockerfile content
+    let dockerfile_content = generate_dockerfile_content_from_git(
+        git_url,
+        git_ref,
+        target_package,
+        enabled_features,
+        no_default_features,
+        base_image,
+        final_image,
+        args,
+        build_args,
+        custom_env_vars,
+        build_env_vars,
+        bin,
+    )?;
+
+    // Write the Dockerfile
+    std::fs::write(dockerfile_path, dockerfile_content)?;
+
+    if generate_dockerignore {
+        // For git mode, create a minimal dockerignore
+        let dockerignore_content = generate_dockerignore_content_for_git()?;
+        let dockerignore_path = dockerfile_path.with_extension("dockerignore");
+        std::fs::write(dockerignore_path, dockerignore_content)?;
+    }
+
+    Ok(())
+}
+
+/// Generates the content of a Dockerfile for a target package from git
+///
+/// # Errors
+///
+/// * If IO error occurs
+#[allow(
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::cognitive_complexity
+)]
+pub fn generate_dockerfile_content_from_git(
+    git_url: &str,
+    git_ref: &str,
+    target_package: &str,
+    enabled_features: Option<&[String]>,
+    no_default_features: bool,
+    base_image: &str,
+    final_image: &str,
+    args: &[String],
+    _build_args: Option<&str>,
+    custom_env_vars: &[String],
+    build_env_vars: &[String],
+    bin: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    use std::fmt::Write as _;
+
+    let mut content = String::new();
+
+    // Builder stage
+    writeln!(content, "# Builder")?;
+    writeln!(content, "FROM {base_image} AS builder")?;
+    writeln!(content, "WORKDIR /app\n")?;
+
+    // System dependencies
+    writeln!(content, "# Install system dependencies")?;
+    writeln!(content, "RUN apt-get update && \\")?;
+    writeln!(
+        content,
+        "    apt-get install -y git build-essential cmake pkg-config && \\"
+    )?;
+    writeln!(content, "    rm -rf /var/lib/apt/lists/*\n")?;
+
+    // Set build-time environment variables
+    if !build_env_vars.is_empty() {
+        writeln!(content, "# Set build-time environment variables")?;
+        for env_var in build_env_vars {
+            if let Some((key, value)) = env_var.split_once('=') {
+                writeln!(content, "ENV {key}={value}")?;
+            }
+        }
+        content.push('\n');
+    }
+
+    // Hardcoded git clone
+    writeln!(content, "# Clone specific repository and ref")?;
+    writeln!(
+        content,
+        "RUN git clone --depth 1 --branch {git_ref} {git_url} . || \\"
+    )?;
+    writeln!(
+        content,
+        "    (git clone --filter=blob:none --no-checkout {git_url} . && \\"
+    )?;
+    writeln!(content, "     git checkout {git_ref})\n")?;
+
+    // Remove git directory
+    writeln!(content, "# Remove .git directory to save space")?;
+    writeln!(content, "RUN rm -rf .git\n")?;
+
+    // Build dependencies first
+    writeln!(content, "# Build dependencies first (better caching)")?;
+    writeln!(content, "RUN cargo fetch\n")?;
+
+    // Build the package
+    writeln!(content, "# Build the specific package")?;
+    let mut build_cmd = format!("RUN cargo build --release --package {target_package}");
+
+    if no_default_features {
+        build_cmd.push_str(" --no-default-features");
+    }
+
+    if let Some(features) = enabled_features {
+        if !features.is_empty() {
+            use std::fmt::Write as _;
+            write!(build_cmd, " --features=\"{}\"", features.join(","))?;
+        }
+    }
+
+    writeln!(content, "{build_cmd}\n")?;
+
+    // Runtime stage
+    writeln!(content, "# Runtime")?;
+    writeln!(content, "FROM {final_image}")?;
+    writeln!(content, "WORKDIR /")?;
+    writeln!(
+        content,
+        "RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*\n"
+    )?;
+
+    // Get binary name - use override if provided, otherwise use package name conversion
+    let binary_name = bin.map_or_else(|| target_package.replace('-', "_"), ToString::to_string);
+    writeln!(content, "# Copy the built binary")?;
+    writeln!(
+        content,
+        "COPY --from=builder /app/target/release/{binary_name} /\n"
+    )?;
+
+    // Environment variables
+    writeln!(content, "# Set runtime environment")?;
+    writeln!(
+        content,
+        "ENV RUST_LOG=info,moosicbox=debug,moosicbox_middleware::api_logger=trace"
+    )?;
+
+    // Custom environment variables
+    for env_var in custom_env_vars {
+        if let Some((key, value)) = env_var.split_once('=') {
+            writeln!(content, "ENV {key}={value}")?;
+        }
+    }
+
+    // Final command
+    if args.is_empty() {
+        writeln!(content, "\n# Run the binary")?;
+        writeln!(content, "CMD [\"./{binary_name}\"]")?;
+    } else {
+        let args_json = args
+            .iter()
+            .map(|arg| format!("\"{arg}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(content, "\n# Run the binary with args")?;
+        writeln!(content, "CMD [\"./{binary_name}\", {args_json}]")?;
+    }
+
+    Ok(content)
+}
+
+/// Generates the content of a .dockerignore file for git mode
+///
+/// # Errors
+///
+/// * If IO error occurs
+pub fn generate_dockerignore_content_for_git() -> Result<String, Box<dyn std::error::Error>> {
+    use std::fmt::Write as _;
+
+    let mut content = String::new();
+
+    // For git mode, we don't need to exclude much since everything is cloned fresh
+    writeln!(content, "# Git mode dockerignore - minimal exclusions")?;
+    writeln!(content, ".git")?;
+    writeln!(content, "target/")?;
+    writeln!(content, "*.dockerfile")?;
+    writeln!(content, "*.dockerignore")?;
+
+    Ok(content)
 }
 
 /// Generates the content of a Dockerfile for a target package
@@ -2634,6 +2854,7 @@ pub fn handle_workspace_deps_command(
 pub fn handle_generate_dockerfile_command(
     workspace_root: &Path,
     package: &str,
+    git_ref: &str,
     features: Option<&[String]>,
     no_default_features: bool,
     output: &Path,
@@ -2646,21 +2867,44 @@ pub fn handle_generate_dockerfile_command(
     build_env: &[String],
     bin: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    generate_dockerfile(
-        workspace_root,
-        package,
-        features,
-        no_default_features,
-        output,
-        base_image,
-        final_image,
-        args,
-        build_args,
-        generate_dockerignore,
-        env,
-        build_env,
-        bin,
-    )?;
+    let workspace_root_str = workspace_root.to_string_lossy();
+
+    if is_git_url(&workspace_root_str) {
+        // Git mode - generate dockerfile that clones from git
+        generate_dockerfile_from_git(
+            &workspace_root_str,
+            git_ref,
+            package,
+            features,
+            no_default_features,
+            output,
+            base_image,
+            final_image,
+            args,
+            build_args,
+            generate_dockerignore,
+            env,
+            build_env,
+            bin,
+        )?;
+    } else {
+        // Local mode - existing logic unchanged
+        generate_dockerfile(
+            workspace_root,
+            package,
+            features,
+            no_default_features,
+            output,
+            base_image,
+            final_image,
+            args,
+            build_args,
+            generate_dockerignore,
+            env,
+            build_env,
+            bin,
+        )?;
+    }
 
     Ok(format!("Generated Dockerfile at: {}", output.display()))
 }
