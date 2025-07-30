@@ -167,6 +167,9 @@ enum Commands {
         /// Environment variables to include in the generated Dockerfile (format: KEY=VALUE)
         #[arg(long, action = clap::ArgAction::Append)]
         env: Vec<String>,
+        /// Environment variables to set during the build process (format: KEY=VALUE)
+        #[arg(long, action = clap::ArgAction::Append)]
+        build_env: Vec<String>,
     },
     AffectedPackages {
         /// Path to the workspace root
@@ -285,6 +288,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             build_args,
             generate_dockerignore,
             env,
+            build_env,
         } => handle_generate_dockerfile_command(
             &workspace_root,
             &package,
@@ -297,6 +301,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             build_args.as_deref(),
             generate_dockerignore,
             &env,
+            &build_env,
         )?,
         Commands::AffectedPackages {
             workspace_root,

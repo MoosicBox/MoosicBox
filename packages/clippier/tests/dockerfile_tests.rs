@@ -17,6 +17,7 @@ fn test_basic_dockerfile_generation() {
         None,
         false,
         &[],
+        &[],
     );
     assert!(result.is_ok());
 }
@@ -37,6 +38,7 @@ fn test_dockerfile_feature_inclusion() {
         &["3000".to_string()],
         None,
         false,
+        &[],
         &[],
     );
     assert!(result.is_ok());
@@ -135,6 +137,7 @@ fn test_dockerfile_custom_images() {
         Some("ENVIRONMENT=production,DEBUG=false"),
         true,
         &[],
+        &[],
     );
     assert!(result.is_ok());
 }
@@ -169,6 +172,7 @@ fn test_dockerfile_minimal_workspace() {
         &[],
         None,
         false,
+        &[],
         &[],
     );
     assert!(result.is_ok());
