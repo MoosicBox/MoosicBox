@@ -161,6 +161,9 @@ enum Commands {
         /// Generate dockerignore file alongside Dockerfile
         #[arg(long, default_value = "true")]
         generate_dockerignore: bool,
+        /// Environment variables to include in the generated Dockerfile (format: KEY=VALUE)
+        #[arg(long, action = clap::ArgAction::Append)]
+        env: Vec<String>,
     },
     AffectedPackages {
         /// Path to the workspace root
@@ -277,6 +280,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             port,
             build_args,
             generate_dockerignore,
+            env,
         } => handle_generate_dockerfile_command(
             &workspace_root,
             &package,
@@ -287,6 +291,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             port,
             build_args.as_deref(),
             generate_dockerignore,
+            &env,
         )?,
         Commands::AffectedPackages {
             workspace_root,

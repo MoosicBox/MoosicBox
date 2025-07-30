@@ -1176,6 +1176,7 @@ pub fn generate_dockerfile(
     port: Option<u16>,
     build_args: Option<&str>,
     generate_dockerignore: bool,
+    custom_env_vars: &[String],
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Get all potential dependencies for the target package (needed for Docker build compatibility)
     // Docker builds require all possible dependencies to ensure proper layer caching
@@ -1210,6 +1211,7 @@ pub fn generate_dockerfile(
         build_args,
         workspace_root,
         target_package_path,
+        custom_env_vars,
     )?;
 
     // Write the Dockerfile
@@ -1245,6 +1247,7 @@ pub fn generate_dockerfile_content(
     build_args: Option<&str>,
     workspace_root: &Path,
     target_package_path: &str,
+    custom_env_vars: &[String],
 ) -> Result<String, Box<dyn std::error::Error>> {
     use std::fmt::Write as _;
 
@@ -1503,8 +1506,13 @@ pub fn generate_dockerfile_content(
         content,
         "ENV RUST_LOG=info,moosicbox=debug,moosicbox_middleware::api_logger=trace"
     )?;
-    writeln!(content, "ENV MAX_THREADS=64")?;
-    writeln!(content, "ENV ACTIX_WORKERS=32")?;
+
+    // Add custom environment variables if provided
+    for env_var in custom_env_vars {
+        if let Some((key, value)) = env_var.split_once('=') {
+            writeln!(content, "ENV {key}={value}")?;
+        }
+    }
 
     // Final command
     if let Some(port) = port {
@@ -2600,6 +2608,7 @@ pub fn handle_generate_dockerfile_command(
     port: Option<u16>,
     build_args: Option<&str>,
     generate_dockerignore: bool,
+    env: &[String],
 ) -> Result<String, Box<dyn std::error::Error>> {
     generate_dockerfile(
         workspace_root,
@@ -2611,6 +2620,7 @@ pub fn handle_generate_dockerfile_command(
         port,
         build_args,
         generate_dockerignore,
+        env,
     )?;
 
     Ok(format!("Generated Dockerfile at: {}", output.display()))

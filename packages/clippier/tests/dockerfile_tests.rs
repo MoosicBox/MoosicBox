@@ -15,6 +15,7 @@ fn test_basic_dockerfile_generation() {
         Some(8080),
         None,
         false,
+        &[],
     );
     assert!(result.is_ok());
 }
@@ -34,6 +35,7 @@ fn test_dockerfile_feature_inclusion() {
         Some(3000),
         None,
         false,
+        &[],
     );
     assert!(result.is_ok());
 }
@@ -129,6 +131,7 @@ fn test_dockerfile_custom_images() {
         Some(8080),
         Some("ENVIRONMENT=production,DEBUG=false"),
         true,
+        &[],
     );
     assert!(result.is_ok());
 }
@@ -162,6 +165,7 @@ fn test_dockerfile_minimal_workspace() {
         None,
         None,
         false,
+        &[],
     );
     assert!(result.is_ok());
 }
