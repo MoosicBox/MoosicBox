@@ -152,9 +152,9 @@ enum Commands {
         /// Docker base image for the final stage
         #[arg(long, default_value = "debian:bookworm-slim")]
         final_image: String,
-        /// Port to expose in the container
-        #[arg(long)]
-        port: Option<u16>,
+        /// Arguments to pass to the binary in the CMD instruction
+        #[arg(long, action = clap::ArgAction::Append)]
+        arg: Vec<String>,
         /// Build arguments to pass to cargo build
         #[arg(long)]
         build_args: Option<String>,
@@ -277,7 +277,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             output,
             base_image,
             final_image,
-            port,
+            arg,
             build_args,
             generate_dockerignore,
             env,
@@ -288,7 +288,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &output,
             &base_image,
             &final_image,
-            port,
+            &arg,
             build_args.as_deref(),
             generate_dockerignore,
             &env,

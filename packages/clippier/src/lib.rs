@@ -1173,7 +1173,7 @@ pub fn generate_dockerfile(
     dockerfile_path: &Path,
     base_image: &str,
     final_image: &str,
-    port: Option<u16>,
+    args: &[String],
     build_args: Option<&str>,
     generate_dockerignore: bool,
     custom_env_vars: &[String],
@@ -1207,7 +1207,7 @@ pub fn generate_dockerfile(
         enabled_features,
         base_image,
         final_image,
-        port,
+        args,
         build_args,
         workspace_root,
         target_package_path,
@@ -1243,7 +1243,7 @@ pub fn generate_dockerfile_content(
     enabled_features: Option<&[String]>,
     base_image: &str,
     final_image: &str,
-    port: Option<u16>,
+    args: &[String],
     build_args: Option<&str>,
     workspace_root: &Path,
     target_package_path: &str,
@@ -1481,11 +1481,6 @@ pub fn generate_dockerfile_content(
         "COPY --from=builder /app/target/release/{binary_name} /"
     )?;
 
-    // Expose port if specified
-    if let Some(port) = port {
-        writeln!(content, "EXPOSE {port}")?;
-    }
-
     // Runtime environment
     if let Some(args) = build_args {
         for arg in args.split(',') {
@@ -1515,10 +1510,15 @@ pub fn generate_dockerfile_content(
     }
 
     // Final command
-    if let Some(port) = port {
-        writeln!(content, "CMD [\"./{binary_name}\", \"{port}\"]")?;
-    } else {
+    if args.is_empty() {
         writeln!(content, "CMD [\"./{binary_name}\"]")?;
+    } else {
+        let args_json = args
+            .iter()
+            .map(|arg| format!("\"{arg}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(content, "CMD [\"./{binary_name}\", {args_json}]")?;
     }
 
     Ok(content)
@@ -2605,7 +2605,7 @@ pub fn handle_generate_dockerfile_command(
     output: &Path,
     base_image: &str,
     final_image: &str,
-    port: Option<u16>,
+    args: &[String],
     build_args: Option<&str>,
     generate_dockerignore: bool,
     env: &[String],
@@ -2617,7 +2617,7 @@ pub fn handle_generate_dockerfile_command(
         output,
         base_image,
         final_image,
-        port,
+        args,
         build_args,
         generate_dockerignore,
         env,

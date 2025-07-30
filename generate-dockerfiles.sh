@@ -94,7 +94,7 @@ generate_dockerfile() {
     fi
 
     # Build the command
-    local cmd="./target/release/clippier generate-dockerfile . moosicbox_${package_name} --output $dockerfile_path --port $port --build-args STATIC_TOKEN,WS_HOST,TUNNEL_ACCESS_TOKEN --env MAX_THREADS=64 --env ACTIX_WORKERS=32"
+    local cmd="./target/release/clippier generate-dockerfile . moosicbox_${package_name} --output $dockerfile_path --arg $port --build-args STATIC_TOKEN,WS_HOST,TUNNEL_ACCESS_TOKEN --env MAX_THREADS=64 --env ACTIX_WORKERS=32"
     if [[ -n "$features" ]]; then
         cmd="$cmd --features=$features"
     fi
