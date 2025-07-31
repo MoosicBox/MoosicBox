@@ -390,7 +390,7 @@ moosicbox_audiotags = { version = "0.1.0" }
 moosicbox_lofty = { version = "0.1.0" }
 mp3-duration = "0.1.10"
 mp3lame-encoder = "0.2.1"
-mysql = { version = "26.0.0", features = [
+mysql = { version = "26.0.1", features = [
     "default-rustls",
     "rustls-tls",
 ], default-features = false }
@@ -476,7 +476,7 @@ swc_ecma_ast = "14.0.0"
 swc_ecma_codegen = "16.0.0"
 swc_ecma_loader = { version = "14.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "28.0.2"
-swc_ecma_parser = "22.0.2"
+swc_ecma_parser = "22.0.3"
 swc_ecma_transforms_base = "23.0.0"
 swc_ecma_transforms_typescript = "25.0.0"
 swc_ecma_visit = "14.0.0"
