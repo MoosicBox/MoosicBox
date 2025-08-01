@@ -66,6 +66,7 @@ impl ToValueType<String> for &DatabaseValue {
 impl ToValueType<bool> for &DatabaseValue {
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
+            DatabaseValue::Bool(value) => Ok(*value),
             DatabaseValue::Number(num) => Ok(*num == 1),
             _ => Err(ParseError::ConvertType("bool".into())),
         }
@@ -399,6 +400,7 @@ impl ToValueType<String> for DatabaseValue {
 impl ToValueType<bool> for DatabaseValue {
     fn to_value_type(self) -> Result<bool, ParseError> {
         match self {
+            Self::Bool(value) => Ok(value),
             Self::Number(num) => Ok(num == 1),
             _ => Err(ParseError::ConvertType("bool".into())),
         }
@@ -757,6 +759,32 @@ mod tests {
         // Test completely invalid format
         let value = &DatabaseValue::String("invalid-date".to_string());
         let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_to_value_type_bool() {
+        // Test DatabaseValue::Bool variants (PostgreSQL style)
+        let value = &DatabaseValue::Bool(true);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(result.unwrap());
+
+        let value = &DatabaseValue::Bool(false);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(!result.unwrap());
+
+        // Test DatabaseValue::Number variants (SQLite style)
+        let value = &DatabaseValue::Number(1);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(result.unwrap());
+
+        let value = &DatabaseValue::Number(0);
+        let result: Result<bool, ParseError> = value.to_value_type();
+        assert!(!result.unwrap());
+
+        // Test invalid type
+        let value = &DatabaseValue::String("true".to_string());
+        let result: Result<bool, ParseError> = value.to_value_type();
         assert!(result.is_err());
     }
 }
