@@ -278,6 +278,7 @@ impl MissingValue<&str> for &Row {}
 impl MissingValue<f32> for &Row {}
 impl MissingValue<f64> for &Row {}
 impl MissingValue<NaiveDateTime> for &Row {}
+impl MissingValue<chrono::DateTime<chrono::Utc>> for &Row {}
 
 pub trait ToValue<Type> {
     /// # Errors
@@ -550,6 +551,38 @@ impl ToValueType<NaiveDateTime> for DatabaseValue {
     }
 }
 
+impl ToValueType<chrono::DateTime<chrono::Utc>> for DatabaseValue {
+    fn to_value_type(self) -> Result<chrono::DateTime<chrono::Utc>, ParseError> {
+        (&self).to_value_type()
+    }
+}
+
+impl ToValueType<chrono::DateTime<chrono::Utc>> for &DatabaseValue {
+    fn to_value_type(self) -> Result<chrono::DateTime<chrono::Utc>, ParseError> {
+        match self {
+            DatabaseValue::DateTime(naive_dt) => Ok(naive_dt.and_utc()),
+            DatabaseValue::String(datetime_str) => {
+                // First try RFC3339 (ISO 8601 with timezone)
+                if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(datetime_str) {
+                    return Ok(dt.with_timezone(&chrono::Utc));
+                }
+
+                // If no timezone, try ISO 8601 format and assume UTC
+                if let Ok(naive_dt) =
+                    chrono::NaiveDateTime::parse_from_str(datetime_str, "%Y-%m-%dT%H:%M:%S%.f")
+                {
+                    return Ok(naive_dt.and_utc());
+                }
+
+                Err(ParseError::ConvertType(format!(
+                    "DateTime<Utc> (expected ISO 8601 format, got '{datetime_str}')"
+                )))
+            }
+            _ => Err(ParseError::ConvertType("DateTime<Utc>".into())),
+        }
+    }
+}
+
 pub trait AsModel<T> {
     fn as_model(&self) -> T;
 }
@@ -686,5 +719,44 @@ mod tests {
             ToValueType::<Option<u64>>::to_value_type(value).err(),
             Some(ParseError::ConvertType("u64".into())),
         );
+    }
+
+    #[test]
+    fn test_to_value_type_datetime_utc_from_string() {
+        use chrono::{DateTime, Datelike, Timelike, Utc};
+
+        // Test ISO 8601 format with milliseconds (database format)
+        let value = &DatabaseValue::String("2025-08-01T20:06:35.421".to_string());
+        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(result.is_ok());
+
+        let datetime = result.unwrap();
+        assert_eq!(datetime.year(), 2025);
+        assert_eq!(datetime.month(), 8);
+        assert_eq!(datetime.day(), 1);
+        assert_eq!(datetime.hour(), 20);
+        assert_eq!(datetime.minute(), 6);
+        assert_eq!(datetime.second(), 35);
+        assert_eq!(datetime.nanosecond(), 421_000_000); // 421 milliseconds
+
+        // Test ISO 8601 format without milliseconds
+        let value = &DatabaseValue::String("2025-08-01T20:06:35".to_string());
+        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(result.is_ok());
+
+        // Test RFC3339 format with timezone
+        let value = &DatabaseValue::String("2025-08-01T20:06:35.421Z".to_string());
+        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(result.is_ok());
+
+        // Test invalid format (non-ISO 8601)
+        let value = &DatabaseValue::String("2025-08-01 20:06:35.421".to_string());
+        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(result.is_err());
+
+        // Test completely invalid format
+        let value = &DatabaseValue::String("invalid-date".to_string());
+        let result: Result<DateTime<Utc>, ParseError> = value.to_value_type();
+        assert!(result.is_err());
     }
 }
