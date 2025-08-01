@@ -452,14 +452,9 @@ impl Database for PostgresSqlxDatabase {
 
         let connection = self.get_connection().await?;
         let mut connection = connection.lock().await;
-        let statement = connection
-            .prepare(statement)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
-        let query = statement.query();
 
         connection
-            .execute(query)
+            .execute(statement)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
 
