@@ -9,8 +9,6 @@ use flume::Receiver;
 use html::{
     element_classes_to_html, element_style_to_html, number_to_html_string, write_css_attr_important,
 };
-#[cfg(feature = "sse")]
-use hyperchad_renderer::RendererEvent;
 use hyperchad_renderer::{
     Color, Handle, HtmlTagRenderer, PartialView, RenderRunner, Renderer, ToRenderRunner, View,
     canvas::CanvasUpdate,
@@ -404,11 +402,10 @@ pub trait HtmlApp {
     fn with_background(self, background: Option<Color>) -> Self;
     fn set_background(&mut self, background: Option<Color>);
 
-    #[cfg(feature = "sse")]
+    #[cfg(feature = "extend")]
     #[must_use]
     fn with_html_renderer_event_rx(self, rx: Receiver<hyperchad_renderer::RendererEvent>) -> Self;
-
-    #[cfg(feature = "sse")]
+    #[cfg(feature = "extend")]
     fn set_html_renderer_event_rx(&mut self, rx: Receiver<hyperchad_renderer::RendererEvent>);
 }
 
@@ -424,8 +421,6 @@ pub struct HtmlRenderer<T: HtmlApp + ToRenderRunner + Send + Sync> {
     extend: Option<std::sync::Arc<Box<dyn extend::ExtendHtmlRenderer + Send + Sync>>>,
     #[cfg(feature = "extend")]
     publisher: Option<extend::HtmlRendererEventPub>,
-    #[cfg(feature = "sse")]
-    sse_event_tx: Option<flume::Sender<RendererEvent>>,
 }
 
 impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
@@ -433,29 +428,6 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
     pub fn new(app: T) -> Self {
         let (_tx, rx) = flume::unbounded();
 
-        #[cfg(feature = "sse")]
-        let (app, sse_event_tx) = {
-            let (sse_tx, sse_rx) = flume::unbounded::<RendererEvent>();
-            let configured_app = app.with_html_renderer_event_rx(sse_rx);
-            (configured_app, Some(sse_tx))
-        };
-
-        #[cfg(feature = "sse")]
-        return Self {
-            width: None,
-            height: None,
-            x: None,
-            y: None,
-            app,
-            receiver: rx,
-            #[cfg(feature = "extend")]
-            extend: None,
-            #[cfg(feature = "extend")]
-            publisher: None,
-            sse_event_tx,
-        };
-
-        #[cfg(not(feature = "sse"))]
         Self {
             width: None,
             height: None,
@@ -525,29 +497,6 @@ impl<T: HtmlApp + ToRenderRunner + Send + Sync> HtmlRenderer<T> {
     pub fn with_html_renderer_event_pub(mut self, publisher: extend::HtmlRendererEventPub) -> Self {
         self.publisher = Some(publisher);
         self
-    }
-
-    /// Send an SSE event to connected clients
-    ///
-    /// # Errors
-    ///
-    /// Will error if SSE is not configured or if the channel is closed
-    #[cfg(feature = "sse")]
-    pub fn send_sse_event(
-        &self,
-        event: RendererEvent,
-    ) -> Result<(), Box<flume::SendError<RendererEvent>>> {
-        if let Some(tx) = &self.sse_event_tx {
-            tx.send(event).map_err(Box::new)
-        } else {
-            Err(Box::new(flume::SendError(event)))
-        }
-    }
-
-    /// Check if SSE is configured and ready to use
-    #[cfg(feature = "sse")]
-    pub const fn is_sse_configured(&self) -> bool {
-        self.sse_event_tx.is_some()
     }
 }
 

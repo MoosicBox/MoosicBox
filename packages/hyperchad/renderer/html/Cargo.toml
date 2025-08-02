@@ -36,7 +36,7 @@ thiserror   = { workspace = true, optional = true }
 uaparser    = { workspace = true }
 
 [features]
-default = ["actix", "assets", "debug", "extend", "json", "lambda", "sse"]
+default = ["actix", "assets", "debug", "extend", "json", "lambda"]
 
 fail-on-warnings = []
 
@@ -59,9 +59,6 @@ assets = [
 ]
 
 actions = ["hyperchad_renderer_html_actix?/actions"]
-sse = [
-    "hyperchad_renderer_html_actix?/sse",
-    "hyperchad_renderer_html_lambda?/sse",
-]
+sse     = ["hyperchad_renderer_html_actix?/sse"]
 
 extend = ["dep:thiserror"]
