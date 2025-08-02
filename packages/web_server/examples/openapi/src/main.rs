@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )))
         // The order matters here. Make sure to add the root scope last
         .with_scope(Scope::new("").with_route(GET_EXAMPLE))
-        .build_actix();
+        .build();
 
     server.start().await;
 

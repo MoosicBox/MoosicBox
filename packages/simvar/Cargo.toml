@@ -35,18 +35,20 @@ all = [
     "tui",
     "upnp",
     "utils",
+    "web-server",
 ]
 
-async     = ["simvar_harness/async"]
-database  = ["simvar_harness/database"]
-fs        = ["simvar_harness/fs"]
-http      = ["simvar_harness/http"]
-mdns      = ["simvar_harness/mdns"]
-random    = ["simvar_harness/random"]
-tcp       = ["simvar_harness/tcp"]
-telemetry = ["simvar_harness/telemetry"]
-time      = ["simvar_harness/time"]
-upnp      = ["simvar_harness/upnp"]
+async      = ["simvar_harness/async"]
+database   = ["simvar_harness/database"]
+fs         = ["simvar_harness/fs"]
+http       = ["simvar_harness/http"]
+mdns       = ["simvar_harness/mdns"]
+random     = ["simvar_harness/random"]
+tcp        = ["simvar_harness/tcp"]
+telemetry  = ["simvar_harness/telemetry"]
+time       = ["simvar_harness/time"]
+upnp       = ["simvar_harness/upnp"]
+web-server = ["simvar_harness/web-server"]
 
 utils = ["dep:simvar_utils"]
 

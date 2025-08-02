@@ -10,10 +10,14 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.4"
 
+[package.metadata.cargo-machete]
+ignored = ["moosicbox_web_server"]
+
 [package.metadata.workspaces]
 group = "simvar"
 
 [dependencies]
+moosicbox_web_server = { workspace = true, optional = true }
 simvar_utils = { workspace = true }
 switchy = { workspace = true, features = [
     "async",
@@ -43,15 +47,16 @@ default = ["pretty_env_logger", "tui"]
 
 fail-on-warnings = []
 
-async     = []
-database  = ["switchy/database", "switchy/database-connection"]
-fs        = ["switchy/fs"]
-http      = ["switchy/http"]
-mdns      = ["switchy/mdns"]
-random    = []
-tcp       = []
-telemetry = ["switchy/telemetry"]
-time      = []
-upnp      = ["switchy/upnp"]
+async      = []
+database   = ["switchy/database", "switchy/database-connection"]
+fs         = ["switchy/fs"]
+http       = ["switchy/http"]
+mdns       = ["switchy/mdns"]
+random     = []
+tcp        = []
+telemetry  = ["switchy/telemetry"]
+time       = []
+upnp       = ["switchy/upnp"]
+web-server = ["dep:moosicbox_web_server", "moosicbox_web_server/simulator"]
 
 tui = ["dep:oneshot", "dep:ratatui"]

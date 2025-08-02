@@ -1,7 +1,10 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, pin::Pin};
 
 use bytes::Bytes;
+use moosicbox_web_server_core::WebServer;
 use switchy_http_models::Method;
+
+use crate::WebServerBuilder;
 
 /// Simulation-specific implementation of HTTP request data
 #[derive(Debug, Clone)]
@@ -79,5 +82,24 @@ impl SimulationStub {
     #[must_use]
     pub const fn body(&self) -> Option<&Bytes> {
         self.request.body.as_ref()
+    }
+}
+
+struct SimulatorWebServer {}
+
+impl WebServer for SimulatorWebServer {
+    fn start(&self) -> Pin<Box<dyn Future<Output = ()>>> {
+        Box::pin(async {})
+    }
+
+    fn stop(&self) -> Pin<Box<dyn Future<Output = ()>>> {
+        Box::pin(async {})
+    }
+}
+
+impl WebServerBuilder {
+    #[must_use]
+    pub fn build_simulator(self) -> Box<dyn WebServer> {
+        Box::new(SimulatorWebServer {})
     }
 }

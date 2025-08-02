@@ -12645,6 +12645,7 @@ dependencies = [
  "color-backtrace",
  "ctrlc",
  "log 0.4.27",
+ "moosicbox_web_server",
  "oneshot",
  "pretty_env_logger",
  "ratatui",

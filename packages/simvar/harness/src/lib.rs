@@ -33,10 +33,10 @@ pub use simvar_utils as utils;
 
 pub use switchy;
 
-mod client;
+pub mod client;
 mod config;
 mod formatting;
-mod host;
+pub mod host;
 mod logging;
 pub mod plan;
 #[cfg(feature = "tui")]

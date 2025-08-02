@@ -23,7 +23,7 @@ mod actix;
 pub mod openapi;
 
 #[cfg(feature = "simulator")]
-pub mod simulation;
+pub mod simulator;
 
 #[derive(Debug)]
 pub struct WebServerBuilder {
@@ -162,7 +162,7 @@ impl HttpRequest {
 pub enum Stub {
     Empty,
     #[cfg(feature = "simulator")]
-    Simulation(simulation::SimulationStub),
+    Simulator(simulator::SimulationStub),
 }
 
 impl Default for Stub {
@@ -482,3 +482,28 @@ impl std::fmt::Debug for Route {
             .finish_non_exhaustive()
     }
 }
+
+#[allow(unused)]
+macro_rules! impl_web_server {
+    ($module:ident $(,)?) => {
+        use moosicbox_web_server_core::WebServer;
+
+        impl WebServerBuilder {
+            /// # Errors
+            ///
+            /// * If the underlying `WebServer` fails to build
+            #[must_use]
+            pub fn build(self) -> Box<dyn WebServer> {
+                paste::paste! {
+                    Self::[< build_ $module >](self)
+                }
+            }
+        }
+    };
+}
+
+#[cfg(feature = "simulator")]
+impl_web_server!(simulator);
+
+#[cfg(all(not(feature = "simulator"), feature = "actix"))]
+impl_web_server!(actix);

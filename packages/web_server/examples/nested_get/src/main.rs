@@ -11,7 +11,7 @@ async fn main() {
     let server = moosicbox_web_server::WebServerBuilder::new()
         .with_cors(cors)
         .with_scope(Scope::new("/nested").with_route(GET_EXAMPLE))
-        .build_actix();
+        .build();
 
     server.start().await;
 }
