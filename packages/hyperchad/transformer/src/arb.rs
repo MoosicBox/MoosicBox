@@ -249,6 +249,7 @@ fn override_item_of_type(g: &mut Gen, value: OverrideItemType) -> OverrideItem {
                 .filter(|x| !x.chars().any(|x| matches!(x, ',')))
                 .collect(),
         ),
+        OverrideItemType::FontWeight => OverrideItem::FontWeight(Arbitrary::arbitrary(g)),
         OverrideItemType::Width => OverrideItem::Width(Arbitrary::arbitrary(g)),
         OverrideItemType::MinWidth => OverrideItem::MinWidth(Arbitrary::arbitrary(g)),
         OverrideItemType::MaxWidth => OverrideItem::MaxWidth(Arbitrary::arbitrary(g)),
@@ -427,6 +428,14 @@ impl Arbitrary for Container {
                         .collect()
                 })
             }),
+            font_weight: default_value(&overrides, |x| {
+                if let OverrideItem::FontWeight(x) = x {
+                    Some(x)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| Option::arbitrary(g)),
             classes: default_value(&overrides, |x| {
                 if let OverrideItem::Classes(x) = x {
                     Some(x)

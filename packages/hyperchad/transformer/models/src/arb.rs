@@ -2,9 +2,9 @@ use moosicbox_arb::xml::XmlString;
 use quickcheck::{Arbitrary, Gen};
 
 use crate::{
-    AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection, LayoutOverflow,
-    LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle,
-    Visibility,
+    AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
+    LayoutOverflow, LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine,
+    TextDecorationStyle, Visibility,
 };
 
 impl Arbitrary for LayoutDirection {
@@ -50,6 +50,34 @@ impl Arbitrary for TextAlign {
     fn arbitrary(g: &mut Gen) -> Self {
         *g.choose(&[Self::Start, Self::Center, Self::End, Self::Justify])
             .unwrap()
+    }
+}
+
+impl Arbitrary for FontWeight {
+    fn arbitrary(g: &mut Gen) -> Self {
+        *g.choose(&[
+            Self::Thin,
+            Self::ExtraLight,
+            Self::Light,
+            Self::Normal,
+            Self::Medium,
+            Self::SemiBold,
+            Self::Bold,
+            Self::ExtraBold,
+            Self::Black,
+            Self::Lighter,
+            Self::Bolder,
+            Self::Weight100,
+            Self::Weight200,
+            Self::Weight300,
+            Self::Weight400,
+            Self::Weight500,
+            Self::Weight600,
+            Self::Weight700,
+            Self::Weight800,
+            Self::Weight900,
+        ])
+        .unwrap()
     }
 }
 

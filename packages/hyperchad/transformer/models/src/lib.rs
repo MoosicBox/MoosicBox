@@ -436,3 +436,86 @@ impl std::fmt::Display for LinkTarget {
         }
     }
 }
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type"))]
+pub enum FontWeight {
+    Thin,
+    ExtraLight,
+    Light,
+    #[default]
+    Normal,
+    Medium,
+    SemiBold,
+    Bold,
+    ExtraBold,
+    Black,
+    Lighter,
+    Bolder,
+    Weight100,
+    Weight200,
+    Weight300,
+    Weight400,
+    Weight500,
+    Weight600,
+    Weight700,
+    Weight800,
+    Weight900,
+}
+
+impl std::fmt::Display for FontWeight {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            // Named variants output their semantic names
+            Self::Thin => f.write_str("thin"),
+            Self::ExtraLight => f.write_str("extra-light"),
+            Self::Light => f.write_str("light"),
+            Self::Normal => f.write_str("normal"),
+            Self::Medium => f.write_str("medium"),
+            Self::SemiBold => f.write_str("semi-bold"),
+            Self::Bold => f.write_str("bold"),
+            Self::ExtraBold => f.write_str("extra-bold"),
+            Self::Black => f.write_str("black"),
+            Self::Lighter => f.write_str("lighter"),
+            Self::Bolder => f.write_str("bolder"),
+            // Numeric variants output their numbers
+            Self::Weight100 => f.write_str("100"),
+            Self::Weight200 => f.write_str("200"),
+            Self::Weight300 => f.write_str("300"),
+            Self::Weight400 => f.write_str("400"),
+            Self::Weight500 => f.write_str("500"),
+            Self::Weight600 => f.write_str("600"),
+            Self::Weight700 => f.write_str("700"),
+            Self::Weight800 => f.write_str("800"),
+            Self::Weight900 => f.write_str("900"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_font_weight_display() {
+        // Named variants output semantic names
+        assert_eq!(FontWeight::Normal.to_string(), "normal");
+        assert_eq!(FontWeight::Bold.to_string(), "bold");
+        assert_eq!(FontWeight::Thin.to_string(), "thin");
+        assert_eq!(FontWeight::Black.to_string(), "black");
+        assert_eq!(FontWeight::Lighter.to_string(), "lighter");
+        assert_eq!(FontWeight::Bolder.to_string(), "bolder");
+
+        // Numeric variants output numbers
+        assert_eq!(FontWeight::Weight100.to_string(), "100");
+        assert_eq!(FontWeight::Weight400.to_string(), "400");
+        assert_eq!(FontWeight::Weight700.to_string(), "700");
+        assert_eq!(FontWeight::Weight900.to_string(), "900");
+    }
+
+    #[test]
+    fn test_font_weight_default() {
+        assert_eq!(FontWeight::default(), FontWeight::Normal);
+    }
+}

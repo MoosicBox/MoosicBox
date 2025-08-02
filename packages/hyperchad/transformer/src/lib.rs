@@ -7,8 +7,9 @@ use std::{any::Any, collections::BTreeMap, io::Write};
 use hyperchad_actions::Action;
 use hyperchad_color::Color;
 use hyperchad_transformer_models::{
-    AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection, LayoutOverflow,
-    LinkTarget, Position, Route, TextAlign, TextDecorationLine, TextDecorationStyle, Visibility,
+    AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
+    LayoutOverflow, LinkTarget, Position, Route, TextAlign, TextDecorationLine,
+    TextDecorationStyle, Visibility,
 };
 use parse::parse_number;
 use serde::{Deserialize, Serialize, de::Error};
@@ -763,6 +764,7 @@ pub enum OverrideItem {
     TextAlign(TextAlign),
     TextDecoration(TextDecoration),
     FontFamily(Vec<String>),
+    FontWeight(FontWeight),
     Width(Number),
     MinWidth(Number),
     MaxWidth(Number),
@@ -818,6 +820,7 @@ impl OverrideItem {
             Self::TextAlign(x) => serde_json::to_string(x),
             Self::TextDecoration(x) => serde_json::to_string(x),
             Self::Classes(x) | Self::FontFamily(x) => serde_json::to_string(x),
+            Self::FontWeight(x) => serde_json::to_string(x),
             Self::Flex(x) => serde_json::to_string(x),
             Self::Width(x)
             | Self::MinWidth(x)
@@ -873,6 +876,7 @@ impl OverrideItem {
             Self::TextAlign(x) => serde_json::to_value(x),
             Self::TextDecoration(x) => serde_json::to_value(x),
             Self::Classes(x) | Self::FontFamily(x) => serde_json::to_value(x),
+            Self::FontWeight(x) => serde_json::to_value(x),
             Self::Flex(x) => serde_json::to_value(x),
             Self::Width(x)
             | Self::MinWidth(x)
@@ -929,6 +933,7 @@ impl OverrideItem {
             Self::TextAlign(x) => Box::new(x),
             Self::TextDecoration(x) => Box::new(x),
             Self::Classes(x) | Self::FontFamily(x) => Box::new(x),
+            Self::FontWeight(x) => Box::new(x),
             Self::Flex(x) => Box::new(x),
             Self::Width(x)
             | Self::MinWidth(x)
@@ -1049,6 +1054,15 @@ impl OverrideItem {
                 let mut expr = responsive.then::<&Vec<String>>(x);
 
                 if let Some(Self::Classes(default) | Self::FontFamily(default)) = default {
+                    expr = expr.or_else(default);
+                }
+
+                serde_json::to_string(&expr)
+            }
+            Self::FontWeight(x) => {
+                let mut expr = responsive.then::<&FontWeight>(x);
+
+                if let Some(Self::FontWeight(default)) = default {
                     expr = expr.or_else(default);
                 }
 
@@ -1211,6 +1225,7 @@ macro_rules! override_item {
             OverrideItem::TextAlign($name) => $action,
             OverrideItem::TextDecoration($name) => $action,
             OverrideItem::Classes($name) | OverrideItem::FontFamily($name) => $action,
+            OverrideItem::FontWeight($name) => $action,
             OverrideItem::Flex($name) => $action,
             OverrideItem::Width($name)
             | OverrideItem::MinWidth($name)
@@ -1271,6 +1286,7 @@ pub struct Container {
     pub text_align: Option<TextAlign>,
     pub text_decoration: Option<TextDecoration>,
     pub font_family: Option<Vec<String>>,
+    pub font_weight: Option<FontWeight>,
     pub width: Option<Number>,
     pub min_width: Option<Number>,
     pub max_width: Option<Number>,
@@ -2627,6 +2643,8 @@ impl Container {
             attrs.add("sx-font-family", font_family.join(","));
         }
 
+        attrs.add_opt("sx-font-weight", self.font_weight);
+
         match self.element {
             Element::TR => {
                 if self.direction != LayoutDirection::Row {
@@ -3351,6 +3369,7 @@ const fn override_item_to_attr_name(item: &OverrideItem) -> &'static str {
         OverrideItem::TextAlign(..) => "sx-text-align",
         OverrideItem::TextDecoration(..) => "sx-text-decoration",
         OverrideItem::FontFamily(..) => "sx-font-family",
+        OverrideItem::FontWeight(..) => "sx-font-weight",
         OverrideItem::Width(..) => "sx-width",
         OverrideItem::MinWidth(..) => "sx-min-width",
         OverrideItem::MaxWidth(..) => "sx-max-width",

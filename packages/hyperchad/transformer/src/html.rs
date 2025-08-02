@@ -3,9 +3,9 @@ use std::{borrow::Cow, collections::BTreeMap, iter::once};
 use hyperchad_actions::{Action, ActionEffect, ActionTrigger, ActionType};
 use hyperchad_color::{Color, ParseHexError};
 use hyperchad_transformer_models::{
-    AlignItems, Cursor, ImageFit, ImageLoading, JustifyContent, LayoutDirection, LayoutOverflow,
-    LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine, TextDecorationStyle,
-    Visibility,
+    AlignItems, Cursor, FontWeight, ImageFit, ImageLoading, JustifyContent, LayoutDirection,
+    LayoutOverflow, LinkTarget, Position, Route, SwapTarget, TextAlign, TextDecorationLine,
+    TextDecorationStyle, Visibility,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -345,6 +345,36 @@ fn parse_text_align(value: &str) -> Result<TextAlign, ParseAttrError> {
         "center" => TextAlign::Center,
         "end" => TextAlign::End,
         "justify" => TextAlign::Justify,
+        value => {
+            return Err(ParseAttrError::InvalidValue(value.to_string()));
+        }
+    })
+}
+
+fn parse_font_weight(value: &str) -> Result<FontWeight, ParseAttrError> {
+    Ok(match value {
+        // Named variants
+        "normal" => FontWeight::Normal,
+        "bold" => FontWeight::Bold,
+        "lighter" => FontWeight::Lighter,
+        "bolder" => FontWeight::Bolder,
+        "thin" => FontWeight::Thin,
+        "extra-light" | "extralight" => FontWeight::ExtraLight,
+        "light" => FontWeight::Light,
+        "medium" => FontWeight::Medium,
+        "semi-bold" | "semibold" => FontWeight::SemiBold,
+        "extra-bold" | "extrabold" => FontWeight::ExtraBold,
+        "black" => FontWeight::Black,
+        // Numeric variants - preserve user intent by using Weight* variants
+        "100" => FontWeight::Weight100,
+        "200" => FontWeight::Weight200,
+        "300" => FontWeight::Weight300,
+        "400" => FontWeight::Weight400,
+        "500" => FontWeight::Weight500,
+        "600" => FontWeight::Weight600,
+        "700" => FontWeight::Weight700,
+        "800" => FontWeight::Weight800,
+        "900" => FontWeight::Weight900,
         value => {
             return Err(ParseAttrError::InvalidValue(value.to_string()));
         }
@@ -1327,6 +1357,13 @@ fn parse_element(
             },
             iter_once!(OverrideItem::FontFamily),
         )?,
+        font_weight: pmrv(
+            tag,
+            once("sx-font-weight"),
+            &mut overrides,
+            parse_font_weight,
+            iter_once!(OverrideItem::FontWeight),
+        )?,
         children: parse_top_children(node.children(), parser),
         width: pmrv(
             tag,
@@ -1653,6 +1690,7 @@ mod test {
     use quickcheck_macros::quickcheck;
 
     use crate::Container;
+    use hyperchad_transformer_models::FontWeight;
 
     fn clean_up_container(container: &mut Container) {
         container.id = 0;
@@ -1748,5 +1786,23 @@ mod test {
         }
 
         true
+    }
+
+    #[test]
+    fn test_font_weight_parsing() {
+        let html = r#"<div sx-font-weight="bold">Bold text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.font_weight, Some(FontWeight::Bold));
+
+        let html = r#"<div sx-font-weight="400">Normal text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.font_weight, Some(FontWeight::Weight400));
+
+        let html = r#"<div sx-font-weight="lighter">Lighter text</div>"#;
+        let container: Container = html.try_into().unwrap();
+        let child = &container.children[0];
+        assert_eq!(child.font_weight, Some(FontWeight::Lighter));
     }
 }

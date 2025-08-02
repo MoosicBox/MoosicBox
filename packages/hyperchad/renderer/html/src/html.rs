@@ -670,6 +670,10 @@ pub fn element_style_to_html(
         write_css_attr!(b"font-family", font_family.join(",").as_bytes());
     }
 
+    if let Some(font_weight) = &container.font_weight {
+        write_css_attr!(b"font-weight", font_weight.to_string().as_bytes());
+    }
+
     if let Some(cursor) = &container.cursor {
         write_css_attr!(
             b"cursor",

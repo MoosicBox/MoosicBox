@@ -1084,7 +1084,7 @@ impl Generator {
             } else {
                 let name_str = name.to_string();
                 let error_msg = format!(
-                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, and any other fx-* event)"
+                    "Unknown attribute '{name_str}'. Supported attributes include: class, width, height, padding, padding-x, padding-y, padding-left, padding-right, padding-top, padding-bottom, margin, margin-x, margin-y, margin-left, margin-right, margin-top, margin-bottom, border, border-x, border-y, border-top, border-right, border-bottom, border-left, background, color, align-items, justify-content, text-align, text-decoration, direction, position, cursor, visibility, overflow-x, overflow-y, font-family, font-size, font-weight, opacity, border-radius, gap, hidden, debug, flex, flex-grow, flex-shrink, flex-basis, HTMX attributes (hx-get, hx-post, hx-put, hx-delete, hx-patch, hx-trigger, hx-swap), and action attributes (fx-click, fx-click-outside, fx-resize, fx-immediate, fx-hover, fx-change, fx-mousedown, and any other fx-* event)"
                 );
                 return Err(error_msg);
             }
@@ -1536,6 +1536,9 @@ impl Generator {
                 "font-family" => Some(Self::string_vec_attr_opt("font_family", value)),
                 "class" => Some(Self::string_vec_attr("classes", value)),
 
+                // Font weight property (special enum handling)
+                "font-weight" => Some(Self::font_weight_attr("font_weight", value)),
+
                 _ => None,
             },
             AttributeType::Optional { toggler, .. } => {
@@ -1601,7 +1604,7 @@ impl Generator {
                     }
 
                     "background" | "color" | "hidden" | "debug" | "border-top" | "border-right"
-                    | "border-bottom" | "border-left" | "font-family" | "class" => {
+                    | "border-bottom" | "border-left" | "font-family" | "font-weight" | "class" => {
                         let field_ident = format_ident!("{}", name_str.replace('-', "_"));
                         Some(quote! {
                             #field_ident: if let Some(val) = (#cond) {
@@ -1649,6 +1652,12 @@ impl Generator {
         let field_ident = format_ident!("{}", field);
         let value_tokens = Self::markup_to_enum_tokens(enum_name, value);
         quote! { #field_ident: #value_tokens }
+    }
+
+    fn font_weight_attr(field: &str, value: Markup<NoElement>) -> TokenStream {
+        let field_ident = format_ident!("{}", field);
+        let value_tokens = Self::markup_to_font_weight_tokens(value);
+        quote! { #field_ident: Some(#value_tokens) }
     }
 
     fn color_attr(field: &str, value: Markup<NoElement>) -> TokenStream {
@@ -2418,6 +2427,96 @@ impl Generator {
         }
     }
 
+    fn markup_to_font_weight_tokens(value: Markup<NoElement>) -> TokenStream {
+        match value {
+            Markup::Lit(lit) => {
+                match &lit.lit {
+                    syn::Lit::Str(lit_str) => {
+                        let value_str = lit_str.value();
+                        let variant_ident = Self::font_weight_str_to_variant(&value_str);
+                        quote! { hyperchad_transformer_models::FontWeight::#variant_ident }
+                    }
+                    syn::Lit::Int(lit_int) => {
+                        // Handle numeric literals like 700, 400, etc.
+                        let value_str = lit_int.base10_digits();
+                        let variant_ident = Self::font_weight_str_to_variant(value_str);
+                        quote! { hyperchad_transformer_models::FontWeight::#variant_ident }
+                    }
+                    _ => {
+                        // For other literal types, use the literal directly as an expression
+                        let lit = &lit.lit;
+                        quote! { (#lit).into() }
+                    }
+                }
+            }
+            Markup::Splice { expr, .. } => {
+                // Check if this is a simple identifier that should be converted to a FontWeight variant
+                if let syn::Expr::Path(expr_path) = &*expr {
+                    if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
+                        let identifier_name = expr_path.path.segments[0].ident.to_string();
+
+                        // Only accept kebab-case identifiers (lowercase, may contain hyphens)
+                        // Reject PascalCase identifiers to enforce kebab-case convention
+                        if identifier_name
+                            .chars()
+                            .next()
+                            .is_some_and(char::is_uppercase)
+                        {
+                            // This is PascalCase - don't convert, let it fall through to normal expression handling
+                        } else {
+                            // Convert to FontWeight variant
+                            let variant_ident = Self::font_weight_str_to_variant(&identifier_name);
+                            return quote! { hyperchad_transformer_models::FontWeight::#variant_ident };
+                        }
+                    }
+                }
+
+                // Check if this is a string literal that should be converted to a FontWeight variant
+                if let syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(lit_str),
+                    ..
+                }) = &*expr
+                {
+                    let identifier_name = lit_str.value();
+
+                    // Only accept kebab-case identifiers (lowercase, may contain hyphens)
+                    // Reject PascalCase identifiers to enforce kebab-case convention
+                    if identifier_name
+                        .chars()
+                        .next()
+                        .is_some_and(char::is_uppercase)
+                    {
+                        // This is PascalCase - don't convert, let it fall through to normal expression handling
+                    } else {
+                        // Convert to FontWeight variant
+                        let variant_ident = Self::font_weight_str_to_variant(&identifier_name);
+                        return quote! { hyperchad_transformer_models::FontWeight::#variant_ident };
+                    }
+                }
+
+                // For other expressions, try to convert them
+                quote! { hyperchad_transformer_models::FontWeight::from(#expr) }
+            }
+            Markup::BraceSplice { items, .. } => {
+                // For brace-wrapped items, treat the entire content as a single expression
+                if items.len() == 1 {
+                    Self::markup_to_font_weight_tokens(items[0].clone())
+                } else {
+                    let expr = Self::handle_brace_splice_expression(&items);
+                    quote! {
+                        {
+                            let result = { #expr };
+                            <hyperchad_transformer_models::FontWeight as std::convert::From<_>>::from(result)
+                        }
+                    }
+                }
+            }
+            _ => {
+                quote! { hyperchad_transformer_models::FontWeight::default() }
+            }
+        }
+    }
+
     #[allow(clippy::too_many_lines)]
     fn markup_to_color_tokens(value: Markup<NoElement>) -> TokenStream {
         match value {
@@ -2624,6 +2723,40 @@ impl Generator {
                 val.to_bool()
             }
         }
+    }
+
+    /// Convert font-weight string values to `FontWeight` enum variants
+    fn font_weight_str_to_variant(value: &str) -> proc_macro2::Ident {
+        let variant_name = match value {
+            // Numeric values map to Weight* variants
+            "100" => "Weight100",
+            "200" => "Weight200",
+            "300" => "Weight300",
+            "400" => "Weight400",
+            "500" => "Weight500",
+            "600" => "Weight600",
+            "700" => "Weight700",
+            "800" => "Weight800",
+            "900" => "Weight900",
+
+            // Named variants - convert kebab-case to PascalCase
+            "thin" => "Thin",
+            "extra-light" => "ExtraLight",
+            "light" => "Light",
+            "normal" => "Normal",
+            "medium" => "Medium",
+            "semi-bold" => "SemiBold",
+            "bold" => "Bold",
+            "extra-bold" => "ExtraBold",
+            "black" => "Black",
+            "lighter" => "Lighter",
+            "bolder" => "Bolder",
+
+            // Fallback to kebab-to-pascal conversion for any other values
+            _ => return format_ident!("{}", kebab_to_pascal_case(value)),
+        };
+
+        format_ident!("{}", variant_name)
     }
 
     /// Helper function to handle `BraceSplice` by reconstructing the expression as a cohesive unit

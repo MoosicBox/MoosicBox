@@ -224,6 +224,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
                     | OverrideItem::JustifyContent(..)
                     | OverrideItem::TextDecoration(..)
                     | OverrideItem::FontFamily(..)
+                    | OverrideItem::FontWeight(..)
                     | OverrideItem::Flex(..)
                     | OverrideItem::Cursor(..)
                     | OverrideItem::Position(..)
@@ -326,6 +327,7 @@ const fn override_item_to_css_name(item: &OverrideItem) -> &'static [u8] {
         OverrideItem::TextAlign(..) => b"text-align",
         OverrideItem::TextDecoration(..) => b"text-decoration",
         OverrideItem::FontFamily(..) => b"font-family",
+        OverrideItem::FontWeight(..) => b"font-weight",
         OverrideItem::Width(..) => b"width",
         OverrideItem::MinWidth(..) => b"min-width",
         OverrideItem::MaxWidth(..) => b"max-width",
