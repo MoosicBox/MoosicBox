@@ -553,10 +553,7 @@ pub trait SimBootstrap: Send + Sync + 'static {
 pub trait Sim {
     fn bounce(&mut self, host: impl Into<String>);
 
-    fn host<
-        F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = HostResult> + Send + 'static,
-    >(
+    fn host<F: Fn() -> Fut + 'static, Fut: Future<Output = HostResult> + 'static>(
         &mut self,
         name: impl Into<String>,
         action: F,
@@ -565,7 +562,7 @@ pub trait Sim {
     fn client(
         &mut self,
         name: impl Into<String>,
-        action: impl Future<Output = ClientResult> + Send + 'static,
+        action: impl Future<Output = ClientResult> + 'static,
     );
 }
 
@@ -705,10 +702,7 @@ impl Sim for ManagedSim {
         log::debug!("bouncing host={host}");
     }
 
-    fn host<
-        F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = HostResult> + Send + 'static,
-    >(
+    fn host<F: Fn() -> Fut + 'static, Fut: Future<Output = HostResult> + 'static>(
         &mut self,
         name: impl Into<String>,
         action: F,
@@ -721,7 +715,7 @@ impl Sim for ManagedSim {
     fn client(
         &mut self,
         name: impl Into<String>,
-        action: impl Future<Output = ClientResult> + Send + 'static,
+        action: impl Future<Output = ClientResult> + 'static,
     ) {
         let name = name.into();
         log::debug!("starting client with name={name}");

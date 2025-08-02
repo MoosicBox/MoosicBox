@@ -1,4 +1,4 @@
-use std::{pin::Pin, sync::Arc};
+use std::pin::Pin;
 
 use scoped_tls::scoped_thread_local;
 use simvar_utils::run_until_simulation_cancelled;
@@ -37,21 +37,18 @@ pub type HostResult = Result<(), Box<dyn std::error::Error + Send + 'static>>;
 pub struct Host {
     pub(crate) name: String,
     #[allow(clippy::type_complexity)]
-    pub(crate) action: Box<dyn Fn() -> Pin<Box<dyn Future<Output = HostResult> + Send + 'static>>>,
+    pub(crate) action: Box<dyn Fn() -> Pin<Box<dyn Future<Output = HostResult> + 'static>>>,
     pub(crate) handle: Option<JoinHandle<Option<HostResult>>>,
     pub(crate) runtime: runtime::Runtime,
 }
 
 impl Host {
-    pub(crate) fn new<
-        F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = HostResult> + Send + 'static,
-    >(
+    pub(crate) fn new<F: Fn() -> Fut + 'static, Fut: Future<Output = HostResult> + 'static>(
         name: impl Into<String>,
         action: F,
     ) -> Self {
         let runtime = runtime::Runtime::new();
-        let action = Arc::new(action);
+        let action = std::rc::Rc::new(action);
         let name = name.into();
         Self {
             name: name.clone(),
@@ -79,7 +76,7 @@ impl Host {
 
         self.handle = Some(
             self.runtime
-                .spawn(run_until_simulation_cancelled((self.action)())),
+                .spawn_local(run_until_simulation_cancelled((self.action)())),
         );
     }
 

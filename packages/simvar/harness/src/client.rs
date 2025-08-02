@@ -34,7 +34,7 @@ pub type ClientResult = Result<(), Box<dyn std::error::Error + Send>>;
 pub struct Client {
     pub(crate) name: String,
     #[allow(clippy::type_complexity)]
-    pub(crate) action: Option<Pin<Box<dyn Future<Output = ClientResult> + Send>>>,
+    pub(crate) action: Option<Pin<Box<dyn Future<Output = ClientResult>>>>,
     pub(crate) handle: Option<JoinHandle<Option<ClientResult>>>,
     pub(crate) runtime: runtime::Runtime,
 }
@@ -42,7 +42,7 @@ pub struct Client {
 impl Client {
     pub(crate) fn new(
         name: impl Into<String>,
-        action: impl Future<Output = ClientResult> + Send + 'static,
+        action: impl Future<Output = ClientResult> + 'static,
     ) -> Self {
         let runtime = runtime::Runtime::new();
         let name = name.into();
@@ -63,7 +63,10 @@ impl Client {
             panic!("Client already started");
         };
 
-        self.handle = Some(self.runtime.spawn(run_until_simulation_cancelled(action)));
+        self.handle = Some(
+            self.runtime
+                .spawn_local(run_until_simulation_cancelled(action)),
+        );
     }
 
     const fn has_started(&self) -> bool {
