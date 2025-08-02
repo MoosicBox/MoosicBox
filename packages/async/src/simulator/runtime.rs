@@ -15,6 +15,82 @@ pub use crate::Builder;
 
 use crate::{Error, GenericRuntime, task};
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+type LocalFutureMap = RefCell<HashMap<u64, Pin<Box<dyn Future<Output = ()> + 'static>>>>;
+
+thread_local! {
+    static LOCAL_FUTURES: LocalFutureMap = RefCell::new(HashMap::new());
+}
+
+// A Send future that references a non-Send future stored in thread-local storage
+struct LocalFutureProxy {
+    id: u64,
+    completed: bool,
+}
+
+impl LocalFutureProxy {
+    fn new<T: 'static>(
+        future: impl Future<Output = T> + 'static,
+        sender: futures::channel::oneshot::Sender<T>,
+    ) -> Self {
+        let id = TASK_ID.fetch_add(1, Ordering::SeqCst);
+
+        let wrapped_future = async move {
+            let result = future.await;
+            let _ = sender.send(result);
+        };
+
+        LOCAL_FUTURES.with(|futures| {
+            futures.borrow_mut().insert(id, Box::pin(wrapped_future));
+        });
+
+        Self {
+            id,
+            completed: false,
+        }
+    }
+}
+
+impl Future for LocalFutureProxy {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.completed {
+            return Poll::Ready(());
+        }
+
+        LOCAL_FUTURES.with(|futures| {
+            let mut futures = futures.borrow_mut();
+            if let Some(future) = futures.get_mut(&self.id) {
+                match future.as_mut().poll(cx) {
+                    Poll::Ready(()) => {
+                        futures.remove(&self.id);
+                        self.completed = true;
+                        Poll::Ready(())
+                    }
+                    Poll::Pending => Poll::Pending,
+                }
+            } else {
+                // Future was already completed and removed
+                self.completed = true;
+                Poll::Ready(())
+            }
+        })
+    }
+}
+
+impl Drop for LocalFutureProxy {
+    fn drop(&mut self) {
+        if !self.completed {
+            LOCAL_FUTURES.with(|futures| {
+                futures.borrow_mut().remove(&self.id);
+            });
+        }
+    }
+}
+
 type Queue = Arc<Mutex<Vec<Arc<Task>>>>;
 
 static RUNTIME_ID: LazyLock<AtomicU64> = LazyLock::new(|| AtomicU64::new(1));
@@ -46,6 +122,13 @@ impl Handle {
         R: Send + 'static,
     {
         self.runtime.spawn_blocking(func)
+    }
+
+    pub fn spawn_local<T: 'static>(
+        &self,
+        future: impl Future<Output = T> + 'static,
+    ) -> JoinHandle<T> {
+        self.runtime.spawn_local(future)
     }
 
     /// # Panics
@@ -216,6 +299,14 @@ impl Runtime {
         RUNTIME.set(self, || self.spawner.spawn_blocking(self.clone(), func))
     }
 
+    pub fn spawn_local<T: 'static>(
+        &self,
+        future: impl Future<Output = T> + 'static,
+    ) -> JoinHandle<T> {
+        self.start();
+        RUNTIME.set(self, || self.spawner.spawn_local(self.clone(), future))
+    }
+
     fn active(&self) -> bool {
         self.active.load(Ordering::SeqCst)
     }
@@ -325,6 +416,26 @@ impl Spawner {
         }
     }
 
+    fn spawn_local<T: 'static>(
+        &self,
+        runtime: Runtime,
+        future: impl Future<Output = T> + 'static,
+    ) -> JoinHandle<T> {
+        log::trace!("spawn_local");
+        let (tx, rx) = futures::channel::oneshot::channel();
+
+        // Create a Send proxy that references the non-Send future in thread-local storage
+        let wrapped = LocalFutureProxy::new(future, tx);
+
+        self.inner_spawn(&Task::new(runtime, false, wrapped));
+
+        JoinHandle {
+            rx,
+            result: None,
+            finished: false,
+        }
+    }
+
     fn inner_spawn(&self, task: &Arc<Task>) {
         log::trace!("inner_spawn");
         self.add_task(task);
@@ -354,6 +465,10 @@ impl Spawner {
 
 pub fn spawn<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static) -> JoinHandle<T> {
     RUNTIME.with(|runtime| runtime.spawn(future))
+}
+
+pub fn spawn_local<T: 'static>(future: impl Future<Output = T> + 'static) -> JoinHandle<T> {
+    RUNTIME.with(|runtime| runtime.spawn_local(future))
 }
 
 pub fn spawn_blocking<F, R>(func: F) -> JoinHandle<R>
@@ -503,6 +618,30 @@ mod test {
 
         runtime.block_on(async move {
             task::spawn(async move { assert_eq!(std::thread::current().id(), thread_id) });
+        });
+
+        runtime.wait().unwrap();
+    }
+
+    #[test]
+    fn rt_spawn_local_works_with_non_send() {
+        let runtime = build_runtime(&Builder::new()).unwrap();
+
+        runtime.block_on(async move {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+
+            let data = Rc::new(RefCell::new(42));
+            let data_clone = data.clone();
+
+            let handle = task::spawn_local(async move {
+                *data_clone.borrow_mut() += 1;
+                *data_clone.borrow()
+            });
+
+            let result = handle.await.unwrap();
+            assert_eq!(result, 43);
+            assert_eq!(*data.borrow(), 43);
         });
 
         runtime.wait().unwrap();
