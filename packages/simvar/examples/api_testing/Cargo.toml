@@ -1,0 +1,39 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "API endpoint testing simulation using simvar and moosicbox_web_server"
+edition     = { workspace = true }
+keywords    = ["api-testing", "rest", "simulation", "simvar"]
+license     = { workspace = true }
+name        = "simvar_api_testing_example"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_web_server = { workspace = true, features = [
+    "actix",
+    "cors",
+    "serde",
+] }
+simvar = { workspace = true, features = [
+    "http",
+    "random",
+    "tcp",
+    "time",
+    "web-server",
+] }
+switchy_async = { workspace = true, features = ["simulator", "tokio"] }
+switchy_http = { workspace = true, features = ["simulator"] }
+switchy_http_models = { workspace = true }
+switchy_time = { workspace = true, features = ["simulator"] }
+
+log        = { workspace = true }
+serde      = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+uuid       = { workspace = true, features = ["v4"] }
+
+[features]
+default = []
+
+fail-on-warnings = []

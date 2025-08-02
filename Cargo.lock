@@ -12638,6 +12638,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "simvar_api_testing_example"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.27",
+ "moosicbox_web_server",
+ "serde",
+ "serde_json",
+ "simvar",
+ "switchy_async",
+ "switchy_http",
+ "switchy_http_models",
+ "switchy_time",
+ "uuid",
+]
+
+[[package]]
+name = "simvar_basic_web_server_example"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.27",
+ "moosicbox_web_server",
+ "serde",
+ "serde_json",
+ "simvar",
+ "switchy_async",
+ "switchy_http",
+ "switchy_http_models",
+ "switchy_time",
+]
+
+[[package]]
 name = "simvar_harness"
 version = "0.1.4"
 dependencies = [
