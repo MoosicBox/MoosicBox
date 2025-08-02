@@ -299,7 +299,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
                 .to_vec()
                 .into();
 
-                let content_type = "text/html".to_string();
+                let content_type = "text/html; charset=utf-8".to_string();
 
                 (content, content_type)
             }

@@ -133,7 +133,7 @@ impl<
                     match content {
                         Content::Html(x) => {
                             gz.write_all(x.as_bytes())?;
-                            response = response.header(CONTENT_TYPE, "text/html");
+                            response = response.header(CONTENT_TYPE, "text/html; charset=utf-8");
                         }
                         Content::Raw { data, content_type } => {
                             gz.write_all(&data)?;

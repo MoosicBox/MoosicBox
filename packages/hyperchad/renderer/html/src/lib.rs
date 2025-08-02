@@ -279,6 +279,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
             (DOCTYPE)
             html style="height:100%" lang="en" {
                 head {
+                    meta charset="utf-8";
                     @if let Some(title) = title {
                         title { (title) }
                     }

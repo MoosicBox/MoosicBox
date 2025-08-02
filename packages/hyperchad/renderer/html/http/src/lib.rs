@@ -266,7 +266,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
 
         Ok(Response::builder()
             .status(200)
-            .header("Content-Type", "text/html")
+            .header("Content-Type", "text/html; charset=utf-8")
             .body(html.into_bytes())?)
     }
 }
