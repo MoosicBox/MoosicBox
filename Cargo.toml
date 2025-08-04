@@ -504,7 +504,7 @@ tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.27.0", features = [
     "rustls-tls-webpki-roots",
 ] }
-tokio-util = "0.7.15"
+tokio-util = "0.7.16"
 toml = "0.9.4"
 tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.31.0" }
