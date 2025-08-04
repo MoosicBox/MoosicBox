@@ -7,95 +7,133 @@ on:
 
 env:
     CARGO_TERM_COLOR: always
-    AWS_REGION: us-east-1
 
 jobs:
-    build-matrix:
-        name: Build matrix
+    build-cargo-upgrade:
+        name: Build cargo-upgrade
         runs-on: ubuntu-latest
+        steps:
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: actions/checkout@v4
+            - name: Setup cargo-upgrade
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-edit
+                  command: cargo install -f cargo-edit --git https://github.com/BSteffaniak/cargo-edit --branch add-skip-git-dependencies
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-upgrade
+                  artifact-name: cargo-upgrade-ubuntu-binary
+                  cache-key-prefix: cargo-upgrade
+                  make-executable: true
+                  verify-command: --help
+            - uses: actions/upload-artifact@master
+              with:
+                  name: cargo-upgrade-ubuntu
+                  path: ~/.cargo/bin/cargo-upgrade
+
+    build-clippier:
+        name: Build clippier
+        runs-on: ubuntu-latest
+        steps:
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: actions/checkout@v4
+            - name: Setup clippier
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/MoosicBox/MoosicBox
+                  command: cargo install --git https://github.com/MoosicBox/MoosicBox clippier --features git-diff
+                  shell: bash
+                  output-path: ~/.cargo/bin/clippier
+                  artifact-name: clippier-ubuntu-binary
+                  cache-key-prefix: clippier
+                  make-executable: true
+                  verify-command: --version
+            - uses: actions/upload-artifact@master
+              with:
+                  name: clippier-ubuntu
+                  path: ~/.cargo/bin/clippier
+
+    build-cargo-machete:
+        name: Build cargo-machete
+        runs-on: ubuntu-latest
+        steps:
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: actions/checkout@v4
+            - name: Setup cargo-machete
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-machete
+                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-machete
+                  artifact-name: cargo-machete-ubuntu-binary
+                  cache-key-prefix: cargo-machete
+                  make-executable: true
+                  verify-command: --version
+            - uses: actions/upload-artifact@master
+              with:
+                  name: cargo-machete-ubuntu
+                  path: ~/.cargo/bin/cargo-machete
+
+    upgrade-compatible:
+        name: Upgrade compatible dependencies
+        runs-on: ubuntu-latest
+        needs: [build-cargo-upgrade]
         outputs:
-            matrix: ${{ steps.build-matrix-step.outputs.matrix }}
+            upgraded: ${{ steps.upgrade.outputs.upgraded }}
+            branch-name: ${{ steps.branch.outputs.name }}
+            incompatible-branch: ${{ steps.branch.outputs.incompatible }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
               with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
                   fetch-depth: 0
 
-            - uses: dtolnay/rust-toolchain@stable
-
-            - name: Build matrix JSON
-              id: build-matrix-step
+            - name: Setup branch name with retry handling
+              id: branch
               run: |
-                  MATRIX=$(
-                      cargo run -p clippier \
-                          features \
-                          packages/server \
-                          --os ubuntu \
-                          -o json \
-                          --features default \
-                          | jq -rc \
-                              '[
-                                  .[]
-                                  | {
-                                      "name": (.name | sub("^moosicbox_"; "")),
-                                      "path": (.path),
-                                      "features": (.features),
-                                      "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
-                                      "os": (.os + "-latest"),
-                                      "dependencies": (.dependencies),
-                                      "toolchains": (.toolchains),
-                                      "ciSteps": (.ciSteps),
-                                      "ciToolchains": (.ciToolchains),
-                                      "env": (if .env != null then .env | gsub("\n";" ") else null end),
-                                      "nightly": (.nightly)
-                                  }
-                                  | del(.. | nulls)
-                              ]'
-                  )
-                  echo "Using matrix (raw):"
-                  echo $MATRIX
-                  echo "Using matrix:"
-                  echo $MATRIX | jq
-                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
-                  echo $MATRIX >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
+                  BRANCH_DATE=$(date +%Y%m%d%H%M%S)
+                  BASE_BRANCH="auto-upgrade-${BRANCH_DATE}-${{ github.run_id }}"
 
-    upgrade:
-        runs-on: ${{ matrix.package.os }}
+                  # Build retry suffix if not first attempt
+                  RETRY_SUFFIX=""
+                  if [ "${{ github.run_attempt }}" -gt 1 ]; then
+                    RETRY_SUFFIX="-${{ github.run_attempt }}"
+                  fi
 
-        needs: build-matrix
+                  BRANCH_NAME="${BASE_BRANCH}${RETRY_SUFFIX}"
+                  INCOMPATIBLE_BRANCH="${BASE_BRANCH}-incompatible${RETRY_SUFFIX}"
 
-        strategy:
-            fail-fast: false
+                  echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+                  echo "incompatible=$INCOMPATIBLE_BRANCH" >> $GITHUB_OUTPUT
 
-            matrix:
-                package: ${{ fromJson(needs.build-matrix.outputs.matrix) }}
-
-        outputs:
-            upgraded: ${{ steps.upgrade.outputs.upgraded == 'true' }}
-
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-
-            - name: Update history
-              run: git pull
+                  echo "Using branch: $BRANCH_NAME"
+                  echo "Incompatible branch: $INCOMPATIBLE_BRANCH"
 
             - uses: dtolnay/rust-toolchain@stable
               with:
-                  toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
                   components: rustfmt, clippy
 
-            - name: Install cargo-edit
-              shell: bash
-              run: |
-                  cargo install \
-                      -f cargo-edit \
-                      --git https://github.com/BSteffaniak/cargo-edit \
-                      --branch add-skip-git-dependencies
+            - name: Setup cargo-upgrade
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-edit
+                  command: cargo install -f cargo-edit --git https://github.com/BSteffaniak/cargo-edit --branch add-skip-git-dependencies
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-upgrade
+                  artifact-name: cargo-upgrade-ubuntu-binary
+                  cache-key-prefix: cargo-upgrade
+                  make-executable: true
+                  verify-command: --help
 
-            - name: Upgrade
+            - name: Create upgrade branch
+              run: |
+                  git config user.name "MoosicBoxBot"
+                  git config user.email "MoosicBoxBot@gmail.com"
+                  git checkout -b ${{ steps.branch.outputs.name }}
+
+            - name: Upgrade compatible dependencies
               id: upgrade
               shell: bash
               run: |
@@ -103,32 +141,145 @@ jobs:
                   cargo update
                   if [ -n "$(git status --porcelain)" ]; then
                       echo "Found upgrades"
+                      git add .
+                      git commit --message "Upgrade compatible Cargo dependencies"
+                      git push origin ${{ steps.branch.outputs.name }}
                       echo "upgraded=true" >> "$GITHUB_OUTPUT"
                   else
                       echo "No upgrades"
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
                   fi
 
-            - name: Install winget
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' && matrix.package.os == 'windows-latest' }}
-              uses: BSteffaniak/install-winget@v1
+    validate-compatible:
+        name: Validate compatible upgrades
+        runs-on: ubuntu-latest
+        needs: [upgrade-compatible]
+        if: ${{ needs.upgrade-compatible.outputs.upgraded == 'true' }}
+        outputs:
+            matrix: ${{ steps.build-matrix.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Checkout upgrade branch
+              run: |
+                  git fetch origin ${{ needs.upgrade-compatible.outputs.branch-name }}
+                  git checkout ${{ needs.upgrade-compatible.outputs.branch-name }}
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Setup clippier
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/MoosicBox/MoosicBox
+                  command: cargo install --git https://github.com/MoosicBox/MoosicBox clippier --features git-diff
+                  shell: bash
+                  output-path: ~/.cargo/bin/clippier
+                  artifact-name: clippier-ubuntu-binary
+                  cache-key-prefix: clippier
+                  make-executable: true
+                  verify-command: --version
+
+            - name: Build matrix for changed files
+              id: build-matrix
+              run: |
+                  # Get changed files compared to master
+                  CHANGED_FILES=$(git diff --name-only origin/master | tr '\n' ',' | sed 's/,$//')
+                  echo "Changed files: $CHANGED_FILES"
+
+                  if [ -n "$CHANGED_FILES" ]; then
+                      MATRIX=$(
+                          ~/.cargo/bin/clippier \
+                              features \
+                              . \
+                              --changed-files "$CHANGED_FILES" \
+                              --git-base "origin/master" \
+                              --git-head "HEAD" \
+                              --chunked 15 \
+                              --max-parallel 256 \
+                              -o json \
+                              --spread \
+                              --skip-features fail-on-warnings \
+                              | jq -rc \
+                                  '[
+                                      .[]
+                                      | {
+                                          "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
+                                          "path": (.path),
+                                          "features": (.features),
+                                          "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
+                                          "os": (.os + "-latest"),
+                                          "dependencies": (.dependencies),
+                                          "toolchains": (.toolchains),
+                                          "ciSteps": (.ciSteps),
+                                          "ciToolchains": (.ciToolchains),
+                                          "env": (if .env != null then .env | gsub("\n";" ") else null end),
+                                          "nightly": (.nightly)
+                                      }
+                                      | del(.. | nulls)
+                                  ]'
+                      )
+                  else
+                      MATRIX="[]"
+                  fi
+
+                  echo "Matrix:"
+                  echo $MATRIX | jq
+                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
+                  echo $MATRIX >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+    test-compatible:
+        name: Test compatible upgrades
+        runs-on: ${{ matrix.package.os }}
+        needs: [upgrade-compatible, validate-compatible]
+        if: ${{ needs.upgrade-compatible.outputs.upgraded == 'true' && needs.validate-compatible.outputs.matrix != '[]' }}
+        strategy:
+            fail-fast: false
+            matrix:
+                package: ${{ fromJson(needs.validate-compatible.outputs.matrix) }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Checkout upgrade branch
+              run: |
+                  git fetch origin ${{ needs.upgrade-compatible.outputs.branch-name }}
+                  git checkout ${{ needs.upgrade-compatible.outputs.branch-name }}
+
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
+                  components: rustfmt, clippy
+
+            - name: Setup cmake
+              uses: jwlawson/actions-setup-cmake@v2
+              with:
+                  cmake-version: '3.x'
+
+            - name: Setup CI
+              if: ${{ matrix.package.ciSteps }}
+              run: ${{ matrix.package.ciSteps }}
 
             - name: Install dependencies
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' && matrix.package.dependencies }}
+              if: ${{ matrix.package.dependencies }}
               run: ${{ matrix.package.dependencies }}
 
             - name: Clippy ${{ matrix.package.name }}
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          # Trim whitespace
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy ${{ runner.debug && '-vv ' }}--all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
                               ${{ runner.debug && '-vv' }} \
+                              --all-targets \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
@@ -140,13 +291,11 @@ jobs:
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Run ${{ matrix.package.name }} tests
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
                           command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
-                          # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
                           if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
@@ -162,82 +311,250 @@ jobs:
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Format ${{ matrix.package.name }}
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} ${{ runner.debug && '-vv' }} fmt --all -- --check)
 
-            - name: Install cargo-machete
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
-              shell: bash
-              run: |
-                  cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+            - name: Setup cargo-machete
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-machete
+                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-machete
+                  artifact-name: cargo-machete-ubuntu-binary
+                  cache-key-prefix: cargo-machete
+                  make-executable: true
+                  verify-command: --version
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' }}
               shell: bash
               run: |
-                  ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}
+                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
 
-            - name: Commit
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' && success() }}
-              shell: bash
+    commit-compatible:
+        name: Commit compatible upgrades
+        runs-on: ubuntu-latest
+        needs: [upgrade-compatible, validate-compatible, test-compatible]
+        if: ${{ always() && needs.upgrade-compatible.outputs.upgraded == 'true' }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  fetch-depth: 0
+
+            - name: Checkout upgrade branch
+              run: |
+                  git fetch origin ${{ needs.upgrade-compatible.outputs.branch-name }}
+                  git checkout ${{ needs.upgrade-compatible.outputs.branch-name }}
+
+            - name: Merge to master if tests passed
+              if: ${{ needs.test-compatible.result == 'success' || needs.validate-compatible.outputs.matrix == '[]' }}
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
-                  git add .
-                  git commit --message "Upgrade Cargo Dependencies"
-                  echo "Pushing upgrades"
+                  git fetch origin master
+                  git rebase origin/master
+                  git checkout master
+                  git merge --ff-only ${{ needs.upgrade-compatible.outputs.branch-name }}
                   git push origin master
+                  echo "✅ Compatible upgrades merged to master"
 
-            - name: Commit
-              if: ${{ steps.upgrade.outputs.upgraded == 'true' && failure() }}
-              shell: bash
+            - name: Leave branch if tests failed
+              if: ${{ needs.test-compatible.result == 'failure' }}
               run: |
-                  branch="$(date +"auto-upgrade-%Y%m%d%H%M%S")"
+                  echo "❌ Tests failed - leaving branch ${{ needs.upgrade-compatible.outputs.branch-name }} for manual review"
+
+    upgrade-incompatible:
+        name: Upgrade incompatible dependencies
+        runs-on: ubuntu-latest
+        needs: [upgrade-compatible, commit-compatible]
+        if: ${{ always() && (needs.commit-compatible.result == 'success' || (needs.upgrade-compatible.outputs.upgraded == 'true' && needs.validate-compatible.outputs.matrix == '[]')) }}
+        outputs:
+            upgraded: ${{ steps.upgrade.outputs.upgraded }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  fetch-depth: 0
+
+            - name: Update to latest master
+              run: |
+                  git fetch origin master
+                  git checkout master
+                  git pull origin master
+
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Setup cargo-upgrade
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-edit
+                  command: cargo install -f cargo-edit --git https://github.com/BSteffaniak/cargo-edit --branch add-skip-git-dependencies
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-upgrade
+                  artifact-name: cargo-upgrade-ubuntu-binary
+                  cache-key-prefix: cargo-upgrade
+                  make-executable: true
+                  verify-command: --help
+
+            - name: Create incompatible upgrade branch
+              run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
-                  git checkout -b "$branch"
-                  git add .
-                  git commit --message "Upgrade Cargo Dependencies"
-                  echo "Pushing upgrades"
-                  git push origin "$branch"
+                  git checkout -b ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
 
-            - name: Upgrade incompatible
-              id: upgrade_incompatible
-              if: ${{ success() }}
+            - name: Upgrade incompatible dependencies
+              id: upgrade
               shell: bash
               run: |
                   cargo upgrade --skip-git-dependencies --incompatible
                   cargo update
                   if [ -n "$(git status --porcelain)" ]; then
-                      echo "Found upgrades"
+                      echo "Found incompatible upgrades"
+                      git add .
+                      git commit --message "Upgrade incompatible Cargo dependencies"
+                      git push origin ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
                       echo "upgraded=true" >> "$GITHUB_OUTPUT"
                   else
-                      echo "No upgrades"
+                      echo "No incompatible upgrades"
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
                   fi
 
-            - name: Install winget
-              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' && matrix.package.os == 'windows-latest' }}
-              uses: BSteffaniak/install-winget@v1
+    validate-incompatible:
+        name: Validate incompatible upgrades
+        runs-on: ubuntu-latest
+        needs: [upgrade-compatible, upgrade-incompatible]
+        if: ${{ needs.upgrade-incompatible.outputs.upgraded == 'true' }}
+        outputs:
+            matrix: ${{ steps.build-matrix.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Checkout incompatible upgrade branch
+              run: |
+                  git fetch origin ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+                  git checkout ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Setup clippier
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/MoosicBox/MoosicBox
+                  command: cargo install --git https://github.com/MoosicBox/MoosicBox clippier --features git-diff
+                  shell: bash
+                  output-path: ~/.cargo/bin/clippier
+                  artifact-name: clippier-ubuntu-binary
+                  cache-key-prefix: clippier
+                  make-executable: true
+                  verify-command: --version
+
+            - name: Build matrix for changed files
+              id: build-matrix
+              run: |
+                  # Get changed files compared to master
+                  CHANGED_FILES=$(git diff --name-only origin/master | tr '\n' ',' | sed 's/,$//')
+                  echo "Changed files: $CHANGED_FILES"
+
+                  if [ -n "$CHANGED_FILES" ]; then
+                      MATRIX=$(
+                          ~/.cargo/bin/clippier \
+                              features \
+                              . \
+                              --changed-files "$CHANGED_FILES" \
+                              --git-base "origin/master" \
+                              --git-head "HEAD" \
+                              --chunked 15 \
+                              --max-parallel 256 \
+                              -o json \
+                              --spread \
+                              --skip-features fail-on-warnings \
+                              | jq -rc \
+                                  '[
+                                      .[]
+                                      | {
+                                          "name": (.name | sub("^(moosicbox|switchy|hyperchad)_"; "")),
+                                          "path": (.path),
+                                          "features": (.features),
+                                          "requiredFeatures": (if .requiredFeatures != null then .requiredFeatures | join(",") else null end),
+                                          "os": (.os + "-latest"),
+                                          "dependencies": (.dependencies),
+                                          "toolchains": (.toolchains),
+                                          "ciSteps": (.ciSteps),
+                                          "ciToolchains": (.ciToolchains),
+                                          "env": (if .env != null then .env | gsub("\n";" ") else null end),
+                                          "nightly": (.nightly)
+                                      }
+                                      | del(.. | nulls)
+                                  ]'
+                      )
+                  else
+                      MATRIX="[]"
+                  fi
+
+                  echo "Matrix:"
+                  echo $MATRIX | jq
+                  echo 'matrix<<EOF' >> $GITHUB_OUTPUT
+                  echo $MATRIX >> $GITHUB_OUTPUT
+                  echo 'EOF' >> $GITHUB_OUTPUT
+
+    test-incompatible:
+        name: Test incompatible upgrades
+        runs-on: ${{ matrix.package.os }}
+        needs: [upgrade-compatible, upgrade-incompatible, validate-incompatible]
+        if: ${{ needs.upgrade-incompatible.outputs.upgraded == 'true' && needs.validate-incompatible.outputs.matrix != '[]' }}
+        strategy:
+            fail-fast: false
+            matrix:
+                package: ${{ fromJson(needs.validate-incompatible.outputs.matrix) }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Checkout incompatible upgrade branch
+              run: |
+                  git fetch origin ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+                  git checkout ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
+                  components: rustfmt, clippy
+
+            - name: Setup cmake
+              uses: jwlawson/actions-setup-cmake@v2
+              with:
+                  cmake-version: '3.x'
+
+            - name: Setup CI
+              if: ${{ matrix.package.ciSteps }}
+              run: ${{ matrix.package.ciSteps }}
 
             - name: Install dependencies
-              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' && matrix.package.dependencies }}
+              if: ${{ matrix.package.dependencies }}
               run: ${{ matrix.package.dependencies }}
 
             - name: Clippy ${{ matrix.package.name }}
-              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo clippy --all-targets --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy --all-targets --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo clippy \
+                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} clippy \
                               --all-targets \
                               --no-default-features \
-                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
@@ -246,16 +563,15 @@ jobs:
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Run ${{ matrix.package.name }} tests
-              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo test --no-default-features --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo test \
+                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
                               --no-default-features \
-                              --features="fail-on-warnings,$feature" ${{ matrix.package.cargo }}; then
+                              --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
                               echo "SUCCESS \`$command\`";
                           else
                               >&2 echo "FAILED \`$command\`";
@@ -264,43 +580,63 @@ jobs:
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
             - name: Format ${{ matrix.package.name }}
-              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
               shell: bash
               run: |
-                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo fmt)
+                  (cd ${{ matrix.package.path }}; ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} fmt)
 
-            - name: Install cargo-machete
-              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && steps.upgrade.outputs.upgraded == 'false' }}
-              shell: bash
-              run: |
-                  cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+            - name: Setup cargo-machete
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  repo: https://github.com/BSteffaniak/cargo-machete
+                  command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
+                  shell: bash
+                  output-path: ~/.cargo/bin/cargo-machete
+                  artifact-name: cargo-machete-ubuntu-binary
+                  cache-key-prefix: cargo-machete
+                  make-executable: true
+                  verify-command: --version
 
             - name: Validate ${{ matrix.package.name }} dependencies (machete)
-              if: ${{ success() && steps.upgrade_incompatible.outputs.upgraded == 'true' }}
               shell: bash
               run: |
-                  ${{ matrix.package.env }} cargo machete --with-metadata ${{ matrix.package.path }}
+                  ${{ matrix.package.env }} ~/.cargo/bin/cargo-machete --with-metadata ${{ matrix.package.path }}
 
-            - name: Commit
-              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && success() }}
-              shell: bash
+    commit-incompatible:
+        name: Commit incompatible upgrades
+        runs-on: ubuntu-latest
+        needs:
+            [
+                upgrade-compatible,
+                upgrade-incompatible,
+                validate-incompatible,
+                test-incompatible,
+            ]
+        if: ${{ always() && needs.upgrade-incompatible.outputs.upgraded == 'true' }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
+                  fetch-depth: 0
+
+            - name: Checkout incompatible upgrade branch
+              run: |
+                  git fetch origin ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+                  git checkout ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+
+            - name: Merge to master if tests passed
+              if: ${{ needs.test-incompatible.result == 'success' || needs.validate-incompatible.outputs.matrix == '[]' }}
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
-                  git add .
-                  git commit --message "Upgrade Incompatible Cargo Dependencies"
-                  echo "Pushing upgrades"
+                  git fetch origin master
+                  git rebase origin/master
+                  git checkout master
+                  git merge --ff-only ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
                   git push origin master
+                  echo "✅ Incompatible upgrades merged to master"
 
-            - name: Commit
-              if: ${{ steps.upgrade_incompatible.outputs.upgraded == 'true' && failure() }}
-              shell: bash
+            - name: Leave branch if tests failed
+              if: ${{ needs.test-incompatible.result == 'failure' }}
               run: |
-                  branch="$(date +"auto-upgrade-incompatible-%Y%m%d%H%M%S")"
-                  git config user.name "MoosicBoxBot"
-                  git config user.email "MoosicBoxBot@gmail.com"
-                  git checkout -b "$branch"
-                  git add .
-                  git commit --message "Upgrade Incompatible Cargo Dependencies"
-                  echo "Pushing upgrades"
-                  git push origin "$branch"
+                  echo "❌ Tests failed - leaving branch ${{ needs.upgrade-compatible.outputs.incompatible-branch }} for manual review"
