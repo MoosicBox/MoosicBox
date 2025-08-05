@@ -22,7 +22,7 @@ mod actix;
 #[cfg(feature = "openapi")]
 pub mod openapi;
 
-#[cfg(feature = "simulator")]
+#[cfg(any(feature = "simulator", not(feature = "actix")))]
 pub mod simulator;
 
 #[derive(Debug)]
@@ -161,7 +161,7 @@ impl HttpRequest {
 #[derive(Debug, Clone)]
 pub enum Stub {
     Empty,
-    #[cfg(feature = "simulator")]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     Simulator(simulator::SimulationStub),
 }
 
@@ -502,7 +502,7 @@ macro_rules! impl_web_server {
     };
 }
 
-#[cfg(feature = "simulator")]
+#[cfg(any(feature = "simulator", not(feature = "actix")))]
 impl_web_server!(simulator);
 
 #[cfg(all(not(feature = "simulator"), feature = "actix"))]

@@ -26,6 +26,8 @@ pub use hyperchad_renderer_html_cdn as renderer_html_cdn;
 pub use hyperchad_renderer_html_http as renderer_html_http;
 #[cfg(feature = "renderer-html-lambda")]
 pub use hyperchad_renderer_html_lambda as renderer_html_lambda;
+#[cfg(feature = "renderer-html-web-server")]
+pub use hyperchad_renderer_html_web_server as renderer_html_web_server;
 #[cfg(feature = "renderer-vanilla-js")]
 pub use hyperchad_renderer_vanilla_js as renderer_vanilla_js;
 #[cfg(feature = "router")]

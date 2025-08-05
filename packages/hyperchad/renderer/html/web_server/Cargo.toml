@@ -1,0 +1,41 @@
+[package]
+authors     = { workspace = true }
+categories  = ["gui"]
+description = "HyperChad HTML Web Server renderer package"
+edition     = { workspace = true }
+keywords    = ["gui", "html", "render", "renderer", "web"]
+license     = { workspace = true }
+name        = "hyperchad_renderer_html_web_server"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.4"
+
+[package.metadata.workspaces]
+group = "hyperchad"
+
+[dependencies]
+hyperchad_renderer   = { workspace = true, features = ["canvas"] }
+moosicbox_assert     = { workspace = true }
+moosicbox_env_utils  = { workspace = true }
+moosicbox_logging    = { workspace = true }
+moosicbox_web_server = { workspace = true, features = ["cors"] }
+
+async-trait = { workspace = true }
+bytes       = { workspace = true }
+flume       = { workspace = true }
+log         = { workspace = true }
+
+[features]
+default = ["assets", "debug"]
+
+fail-on-warnings = []
+
+debug = []
+
+# Enable actix backend in moosicbox_web_server
+actix = ["moosicbox_web_server/actix"]
+
+# Enable simulator feature in moosicbox_web_server
+simulator = ["moosicbox_web_server/simulator"]
+
+assets = ["hyperchad_renderer/assets"]

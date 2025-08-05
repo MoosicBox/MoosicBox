@@ -14,15 +14,17 @@ version     = "0.1.4"
 group = "hyperchad"
 
 [dependencies]
-hyperchad_renderer             = { workspace = true, features = ["canvas", "html"] }
-hyperchad_renderer_html_actix  = { workspace = true, optional = true }
-hyperchad_renderer_html_lambda = { workspace = true, optional = true }
-hyperchad_router               = { workspace = true }
-hyperchad_transformer          = { workspace = true, features = ["html"] }
-moosicbox_assert               = { workspace = true }
-moosicbox_env_utils            = { workspace = true }
-moosicbox_logging              = { workspace = true, features = ["macros"] }
-switchy                        = { workspace = true, features = ["http-models"] }
+hyperchad_renderer                 = { workspace = true, features = ["canvas", "html"] }
+hyperchad_renderer_html_actix      = { workspace = true, optional = true }
+hyperchad_renderer_html_lambda     = { workspace = true, optional = true }
+hyperchad_renderer_html_web_server = { workspace = true, optional = true }
+hyperchad_router                   = { workspace = true }
+hyperchad_transformer              = { workspace = true, features = ["html"] }
+moosicbox_assert                   = { workspace = true }
+moosicbox_env_utils                = { workspace = true }
+moosicbox_logging                  = { workspace = true, features = ["macros"] }
+switchy                            = { workspace = true, features = ["http-models"] }
+switchy_http_models                = { workspace = true }
 
 async-trait = { workspace = true }
 bytes       = { workspace = true }
@@ -42,8 +44,15 @@ fail-on-warnings = []
 
 debug = []
 
-actix  = ["dep:hyperchad_renderer_html_actix", "extend"]
-lambda = ["dep:hyperchad_renderer_html_lambda"]
+actix      = ["dep:hyperchad_renderer_html_actix", "extend"]
+lambda     = ["dep:hyperchad_renderer_html_lambda"]
+web-server = ["dep:hyperchad_renderer_html_web_server", "extend"]
+
+web-server-actix = ["hyperchad_renderer_html_web_server?/actix", "web-server"]
+web-server-simulator = [
+    "hyperchad_renderer_html_web_server?/simulator",
+    "web-server",
+]
 
 json = [
     "dep:serde_json",
@@ -56,6 +65,7 @@ assets = [
     "hyperchad_renderer/assets",
     "hyperchad_renderer_html_actix?/assets",
     "hyperchad_renderer_html_lambda?/assets",
+    "hyperchad_renderer_html_web_server?/assets",
 ]
 
 actions = ["hyperchad_renderer_html_actix?/actions"]

@@ -1,0 +1,43 @@
+[package]
+categories  = ["template-engine", "web-programming"]
+description = "Basic web server example demonstrating HyperChad HTML renderer with web server integration"
+edition     = "2021"
+keywords    = ["example", "html", "hyperchad", "web-server"]
+license     = "MIT"
+name        = "hyperchad_web_server_example"
+repository  = "https://github.com/MoosicBox/MoosicBox"
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_web_server"
+path = "src/main.rs"
+
+[dependencies]
+hyperchad = { workspace = true, features = [
+    "renderer",
+    "renderer-assets",
+    "renderer-html",
+    "renderer-html-sse",
+    "renderer-html-web-server-actix",
+    "router",
+    "template",
+] }
+
+switchy = { workspace = true, features = [
+    "async-net",
+    "async-time",
+    "async-tokio",
+] }
+switchy_time = { workspace = true }
+
+# Logging and utilities
+env_logger = { workspace = true }
+log        = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = ["actix"]
+
+fail-on-warnings = []
+
+actix = []

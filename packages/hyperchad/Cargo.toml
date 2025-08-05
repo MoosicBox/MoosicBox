@@ -14,26 +14,27 @@ version     = "0.1.0"
 group = "hyperchad"
 
 [dependencies]
-hyperchad_actions              = { workspace = true, optional = true }
-hyperchad_app                  = { workspace = true, optional = true }
-hyperchad_color                = { workspace = true, optional = true }
-hyperchad_js_bundler           = { workspace = true, optional = true }
-hyperchad_renderer             = { workspace = true, optional = true }
-hyperchad_renderer_egui        = { workspace = true, optional = true }
-hyperchad_renderer_fltk        = { workspace = true, optional = true }
-hyperchad_renderer_html        = { workspace = true, optional = true }
-hyperchad_renderer_html_actix  = { workspace = true, optional = true }
-hyperchad_renderer_html_cdn    = { workspace = true, optional = true }
-hyperchad_renderer_html_http   = { workspace = true, optional = true }
-hyperchad_renderer_html_lambda = { workspace = true, optional = true }
-hyperchad_renderer_vanilla_js  = { workspace = true, optional = true }
-hyperchad_router               = { workspace = true, optional = true }
-hyperchad_simulator            = { workspace = true, optional = true }
-hyperchad_state                = { workspace = true, optional = true }
-hyperchad_template             = { workspace = true, optional = true }
-hyperchad_test_utils           = { workspace = true, optional = true }
-hyperchad_transformer          = { workspace = true, optional = true }
-hyperchad_transformer_models   = { workspace = true, optional = true }
+hyperchad_actions                  = { workspace = true, optional = true }
+hyperchad_app                      = { workspace = true, optional = true }
+hyperchad_color                    = { workspace = true, optional = true }
+hyperchad_js_bundler               = { workspace = true, optional = true }
+hyperchad_renderer                 = { workspace = true, optional = true }
+hyperchad_renderer_egui            = { workspace = true, optional = true }
+hyperchad_renderer_fltk            = { workspace = true, optional = true }
+hyperchad_renderer_html            = { workspace = true, optional = true }
+hyperchad_renderer_html_actix      = { workspace = true, optional = true }
+hyperchad_renderer_html_cdn        = { workspace = true, optional = true }
+hyperchad_renderer_html_http       = { workspace = true, optional = true }
+hyperchad_renderer_html_lambda     = { workspace = true, optional = true }
+hyperchad_renderer_html_web_server = { workspace = true, optional = true }
+hyperchad_renderer_vanilla_js      = { workspace = true, optional = true }
+hyperchad_router                   = { workspace = true, optional = true }
+hyperchad_simulator                = { workspace = true, optional = true }
+hyperchad_state                    = { workspace = true, optional = true }
+hyperchad_template                 = { workspace = true, optional = true }
+hyperchad_test_utils               = { workspace = true, optional = true }
+hyperchad_transformer              = { workspace = true, optional = true }
+hyperchad_transformer_models       = { workspace = true, optional = true }
 
 [features]
 default = ["all"]
@@ -53,6 +54,7 @@ all = [
     "renderer-html-cdn",
     "renderer-html-http",
     "renderer-html-lambda",
+    "renderer-html-web-server",
     "renderer-vanilla-js",
     "router",
     "state",
@@ -178,6 +180,19 @@ renderer-html-lambda = [
     "dep:hyperchad_renderer_html_lambda",
     "hyperchad_app?/lambda",
     "hyperchad_renderer_html?/lambda",
+]
+
+renderer-html-web-server = [
+    "dep:hyperchad_renderer_html_web_server",
+    "hyperchad_app?/web-server",
+    "hyperchad_renderer_html?/web-server",
+]
+
+renderer-html-web-server-actix = [
+    "hyperchad_app?/web-server-actix",
+    "hyperchad_renderer_html?/web-server-actix",
+    "hyperchad_renderer_html_web_server?/actix",
+    "renderer-html-web-server",
 ]
 
 renderer-vanilla-js = [

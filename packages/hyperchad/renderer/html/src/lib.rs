@@ -26,6 +26,9 @@ pub use actix::router_to_actix;
 #[cfg(feature = "lambda")]
 pub use lambda::router_to_lambda;
 
+#[cfg(feature = "web-server")]
+pub use web_server::router_to_web_server;
+
 pub mod html;
 pub mod stub;
 
@@ -34,6 +37,9 @@ pub mod actix;
 
 #[cfg(feature = "lambda")]
 pub mod lambda;
+
+#[cfg(feature = "web-server")]
+pub mod web_server;
 
 #[cfg(feature = "extend")]
 pub mod extend;

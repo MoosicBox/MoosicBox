@@ -5275,6 +5275,7 @@ dependencies = [
  "hyperchad_renderer_html_cdn",
  "hyperchad_renderer_html_http",
  "hyperchad_renderer_html_lambda",
+ "hyperchad_renderer_html_web_server",
  "hyperchad_renderer_vanilla_js",
  "hyperchad_router",
  "hyperchad_simulator",
@@ -5431,6 +5432,7 @@ dependencies = [
  "hyperchad_renderer",
  "hyperchad_renderer_html_actix",
  "hyperchad_renderer_html_lambda",
+ "hyperchad_renderer_html_web_server",
  "hyperchad_router",
  "hyperchad_transformer",
  "log 0.4.27",
@@ -5441,6 +5443,7 @@ dependencies = [
  "qstring",
  "serde_json",
  "switchy",
+ "switchy_http_models",
  "thiserror 2.0.12",
  "uaparser",
 ]
@@ -5511,6 +5514,21 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_env_utils",
  "serde_json",
+]
+
+[[package]]
+name = "hyperchad_renderer_html_web_server"
+version = "0.1.4"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "flume",
+ "hyperchad_renderer",
+ "log 0.4.27",
+ "moosicbox_assert",
+ "moosicbox_env_utils",
+ "moosicbox_logging",
+ "moosicbox_web_server",
 ]
 
 [[package]]
@@ -5690,6 +5708,18 @@ dependencies = [
  "moosicbox_assert",
  "quickcheck",
  "serde",
+]
+
+[[package]]
+name = "hyperchad_web_server_example"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.8",
+ "hyperchad",
+ "log 0.4.27",
+ "serde_json",
+ "switchy",
+ "switchy_time",
 ]
 
 [[package]]
