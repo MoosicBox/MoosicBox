@@ -136,7 +136,7 @@ impl Handle {
     /// * If no runtime is currently running
     #[must_use]
     pub fn current() -> Self {
-        Runtime::current().map(|x| x.handle().clone()).unwrap()
+        Runtime::current().map(|x| x.handle()).unwrap()
     }
 }
 
@@ -235,8 +235,8 @@ impl Runtime {
     ///
     /// * If `handle` is empty
     #[must_use]
-    pub const fn handle(&self) -> &Handle {
-        self.handle.as_ref().unwrap()
+    pub fn handle(&self) -> Handle {
+        self.handle.clone().unwrap()
     }
 
     fn start(&self) {

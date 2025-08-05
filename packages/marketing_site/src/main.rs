@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = moosicbox_marketing_site::init()
         .with_viewport(VIEWPORT.clone())
         .with_router(ROUTER.clone())
-        .with_runtime_handle(runtime.handle().clone());
+        .with_runtime_handle(runtime.handle());
 
     let mut builder = app.with_size(
         option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0),

@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_title("MoosicBox".to_string())
         .with_description("A music app for cows".to_string())
         .with_router(router)
-        .with_runtime_handle(runtime.handle().clone())
+        .with_runtime_handle(runtime.handle())
         .with_background(Color::from_hex("#181a1b"))
         .with_action_handler(move |x, value| {
             Ok::<_, SendError<(Action, Option<Value>)>>(match Action::try_from(x) {
@@ -115,13 +115,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         log::debug!("Starting app server");
 
-        let context = moosicbox_app_native_bundled::Context::new(runtime.handle());
+        let context = moosicbox_app_native_bundled::Context::new(&runtime.handle());
         let server = moosicbox_app_native_bundled::service::Service::new(context);
 
         let app_server_handle = server.handle();
         let (tx, rx) = switchy::unsync::sync::oneshot::channel();
 
-        let join_app_server = server.start_on(runtime.handle());
+        let join_app_server = server.start_on(&runtime.handle());
 
         app_server_handle
             .send_command(moosicbox_app_native_bundled::Command::WaitForStartup { sender: tx })

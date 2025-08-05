@@ -502,7 +502,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
             let runtime = switchy::unsync::runtime::Builder::new()
                 .max_blocking_threads(u16::try_from(threads).unwrap())
                 .build()?;
-            let handle = runtime.handle().clone();
+            let handle = runtime.handle();
             self.runtime_handle = Some(handle.clone());
             self.runtime = Some(runtime);
             handle
