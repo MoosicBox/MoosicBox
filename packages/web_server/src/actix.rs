@@ -209,6 +209,7 @@ where
     B: MessageBody + 'static,
 {
     fn start(&self) -> Pin<Box<dyn Future<Output = ()>>> {
+        log::debug!("Starting actix server on '{}'", self.addr);
         let server = HttpServer::new(self.factory.clone());
         let server = server.bind(&self.addr).unwrap();
         let server = server.run();
@@ -217,10 +218,12 @@ where
             if let Err(e) = server.await {
                 log::error!("Error running actix server: {e:?}");
             }
+            log::debug!("Actix server stopped");
         })
     }
 
     fn stop(&self) -> Pin<Box<dyn Future<Output = ()>>> {
+        log::debug!("Stopping actix server");
         let handle = self.handle.write().unwrap().take();
         if let Some(handle) = handle {
             return Box::pin(handle.stop(true));
