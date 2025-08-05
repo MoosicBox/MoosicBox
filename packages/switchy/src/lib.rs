@@ -3,9 +3,60 @@
 #![allow(clippy::multiple_crate_versions)]
 
 #[cfg(feature = "async")]
-pub use switchy_async as unsync;
+pub mod unsync {
+    // Re-export everything from switchy_async
+    pub use switchy_async::*;
+
+    // Override the select! macro to use the correct path for switchy::unsync
+    #[cfg(feature = "async-macros")]
+    #[macro_export]
+    macro_rules! select {
+        ($($tokens:tt)*) => {
+            ::switchy::unsync_macros::select_internal! {
+                @path = ::switchy::unsync;
+                $($tokens)*
+            }
+        };
+    }
+
+    #[cfg(feature = "async-macros")]
+    pub use select;
+}
 #[cfg(feature = "async-macros")]
-pub use switchy_async_macros as unsync_macros;
+pub mod unsync_macros {
+    // Re-export everything from switchy_async_macros
+    pub use switchy_async_macros::*;
+
+    // For tokio runtime - re-export tokio::select! as select_internal
+    #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
+    #[macro_export]
+    macro_rules! select_internal {
+        // Handle the @path parameter and ignore it for tokio
+        (@path = $path:path; $($tokens:tt)*) => {
+            ::switchy::unsync::tokio::select! { $($tokens)* }
+        };
+        // Fallback for direct calls without @path
+        ($($tokens:tt)*) => {
+            ::switchy::unsync::tokio::select! { $($tokens)* }
+        };
+    }
+
+    #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
+    pub use select_internal;
+
+    // For simulator runtime - re-export the procedural macro
+    #[cfg(feature = "simulator")]
+    pub use switchy_async_macros::select_internal;
+
+    // Default fallback - use simulator when no specific runtime is chosen
+    // but async-macros is enabled (which brings in the dependency)
+    #[cfg(all(
+        feature = "async-macros",
+        not(feature = "async-tokio"),
+        not(feature = "simulator")
+    ))]
+    pub use switchy_async_macros::select_internal;
+}
 #[cfg(feature = "database")]
 pub use switchy_database as database;
 #[cfg(feature = "database-connection")]

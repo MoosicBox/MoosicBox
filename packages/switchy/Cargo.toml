@@ -39,7 +39,6 @@ all = [
     "async-io",
     "async-net",
     "async-rt-multi-thread",
-    "async-simulator",
     "async-sync",
     "async-tokio",
     "async-util",
@@ -95,18 +94,18 @@ simulator = [
     "switchy_upnp?/simulator",
 ]
 
-async                 = ["dep:switchy_async"]
-async-fs              = ["async", "switchy_async?/fs"]
-async-io              = ["async", "switchy_async?/io"]
-async-net             = ["async", "switchy_async?/net"]
+async = ["dep:switchy_async"]
+async-fs = ["async", "switchy_async?/fs"]
+async-io = ["async", "switchy_async?/io"]
+async-net = ["async", "switchy_async?/net"]
 async-rt-multi-thread = ["async", "switchy_async?/rt-multi-thread"]
-async-simulator       = ["async", "switchy_async?/simulator"]
-async-sync            = ["async", "switchy_async?/sync"]
-async-time            = ["async", "switchy_async?/time"]
-async-tokio           = ["async", "switchy_async?/tokio"]
-async-util            = ["async", "switchy_async?/util"]
 
-async-macros = ["async", "dep:switchy_async_macros", "switchy_async?/macros"]
+async-sync = ["async", "switchy_async?/sync"]
+async-time = ["async", "switchy_async?/time"]
+async-tokio = ["async", "switchy_async?/tokio"]
+async-util = ["async", "switchy_async?/util"]
+
+async-macros = ["async", "dep:switchy_async_macros", "switchy_async?/macros", "switchy_async_macros?/simulator"]
 
 database                 = ["dep:switchy_database"]
 database-api             = ["database", "switchy_database?/api"]

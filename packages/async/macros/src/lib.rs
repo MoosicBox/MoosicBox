@@ -13,12 +13,13 @@ use syn::{Expr, ImplItem, Item, ItemMod, parse_macro_input};
 #[cfg(feature = "simulator")]
 mod simulator;
 
-/// A select! macro that provides 100% `tokio::select`! compatibility
-/// while automatically fusing futures/streams for the simulator runtime
+/// Internal select! macro that accepts a crate path parameter
+/// This provides 100% `tokio::select`! compatibility while automatically
+/// fusing futures/streams for the simulator runtime
 #[cfg(feature = "simulator")]
 #[proc_macro]
-pub fn select(input: TokenStream) -> TokenStream {
-    simulator::select(input)
+pub fn select_internal(input: TokenStream) -> TokenStream {
+    simulator::select_internal(input)
 }
 
 struct YieldInjector;

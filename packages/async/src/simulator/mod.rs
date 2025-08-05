@@ -12,7 +12,18 @@ pub mod time;
 pub mod util;
 
 #[cfg(feature = "macros")]
-pub use switchy_async_macros::select;
+#[macro_export]
+macro_rules! select {
+    ($($tokens:tt)*) => {
+        $crate::select_internal! {
+            @path = $crate;
+            $($tokens)*
+        }
+    };
+}
+
+#[cfg(feature = "macros")]
+pub use select;
 
 #[cfg(feature = "macros")]
 #[cfg(test)]
@@ -123,6 +134,44 @@ mod test {
                 };
 
                 assert_eq!(result, Some(Ok(42)));
+            });
+
+            runtime.wait().unwrap();
+        });
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test]
+    fn can_select_with_while_let_pattern() {
+        use futures::{StreamExt, stream};
+
+        switchy_time::simulator::with_real_time(|| {
+            let runtime = build_runtime(&Builder::new()).unwrap();
+
+            runtime.block_on(async move {
+                // Test the while let pattern used in stream_utils
+                let mut stream = Box::new(stream::iter(vec!["data1", "data2"]));
+                let timeout1 = super::time::sleep(Duration::from_millis(100));
+                let timeout2 = super::time::sleep(Duration::from_millis(200));
+
+                let mut results = Vec::new();
+                while let Some(item) = crate::select! {
+                    resp = stream.next() => resp,
+                    () = timeout1 => {
+                        log::debug!("Timeout 1");
+                        None
+                    }
+                    () = timeout2 => {
+                        log::debug!("Timeout 2");
+                        None
+                    }
+                } {
+                    results.push(item);
+                }
+
+                assert_eq!(results.len(), 2);
+                assert_eq!(results[0], "data1");
+                assert_eq!(results[1], "data2");
             });
 
             runtime.wait().unwrap();

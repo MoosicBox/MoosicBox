@@ -11,10 +11,13 @@ use syn::{
 // select! macro implementation for simulator mode
 // ============================================================================
 
-/// A select! macro that provides 100% `tokio::select`! compatibility
-/// while automatically fusing futures/streams for the simulator runtime
-pub fn select(input: TokenStream) -> TokenStream {
-    let select_input = parse_macro_input!(input as SelectInput);
+/// Internal select! macro that accepts a crate path parameter
+/// This provides 100% `tokio::select`! compatibility while automatically
+/// fusing futures/streams for the simulator runtime
+pub fn select_internal(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as SelectWithPathInput);
+    let crate_path = input.crate_path;
+    let select_input = input.select_input;
 
     // Transform each branch to auto-fuse futures/streams
     let transformed_branches: Vec<_> = select_input
@@ -28,8 +31,8 @@ pub fn select(input: TokenStream) -> TokenStream {
                 guard,
             } = branch;
 
-            // Wrap the future with .fuse() - this handles both futures and streams
-            let fused_future = quote! { ::futures::FutureExt::fuse(#future) };
+            // Wrap the future with .fuse() using the provided crate path
+            let fused_future = quote! { #crate_path::futures::FutureExt::fuse(#future) };
 
             // Reconstruct the branch with the fused future
             guard.map_or_else(
@@ -42,19 +45,25 @@ pub fn select(input: TokenStream) -> TokenStream {
     // Handle biased selection if present
     let output = if select_input.biased {
         quote! {
-            ::futures::select_biased! {
+            #crate_path::futures::select_biased! {
                 #(#transformed_branches,)*
             }
         }
     } else {
         quote! {
-            ::futures::select! {
+            #crate_path::futures::select! {
                 #(#transformed_branches,)*
             }
         }
     };
 
     output.into()
+}
+
+/// Represents the parsed input to a select! macro with crate path
+struct SelectWithPathInput {
+    crate_path: syn::Path,
+    select_input: SelectInput,
 }
 
 /// Represents the parsed input to a select! macro
@@ -69,6 +78,23 @@ struct SelectBranch {
     future: Expr,
     handler: TokenStream2,
     guard: Option<Expr>,
+}
+
+impl Parse for SelectWithPathInput {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
+        // Parse: (@path ::some::path) (normal_select_syntax)
+        let _: Token![@] = input.parse()?;
+        let _path_ident: syn::Ident = input.parse()?; // Should be "path"
+        let _: Token![=] = input.parse()?;
+        let crate_path: syn::Path = input.parse()?;
+        let _: Token![;] = input.parse()?;
+        let select_input: SelectInput = input.parse()?;
+
+        Ok(Self {
+            crate_path,
+            select_input,
+        })
+    }
 }
 
 impl Parse for SelectInput {

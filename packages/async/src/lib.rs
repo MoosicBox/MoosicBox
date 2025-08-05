@@ -12,6 +12,20 @@ pub use futures;
 #[cfg(feature = "macros")]
 pub use switchy_async_macros::{inject_yields, inject_yields_mod};
 
+#[cfg(all(feature = "macros", feature = "simulator"))]
+#[doc(hidden)]
+pub use switchy_async_macros::select_internal;
+
+/// For tokio runtime - re-export tokio::select! as select_internal
+#[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
+#[macro_export]
+#[doc(hidden)]
+macro_rules! select_internal {
+    ($($tokens:tt)*) => {
+        ::tokio::select! { $($tokens)* }
+    };
+}
+
 #[cfg(feature = "tokio")]
 pub mod tokio;
 
@@ -93,7 +107,7 @@ macro_rules! impl_async {
         #[cfg(feature = "util")]
         pub use $module::util;
 
-        #[cfg(feature = "macros")]
+        #[cfg(all(feature = "macros", not(feature = "simulator")))]
         pub use $module::select;
 
         impl $module::runtime::Runtime {
