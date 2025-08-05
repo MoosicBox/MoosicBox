@@ -10,6 +10,17 @@ use quote::quote;
 use syn::visit_mut::{VisitMut, visit_expr_mut};
 use syn::{Expr, ImplItem, Item, ItemMod, parse_macro_input};
 
+#[cfg(feature = "simulator")]
+mod simulator;
+
+/// A select! macro that provides 100% `tokio::select`! compatibility
+/// while automatically fusing futures/streams for the simulator runtime
+#[cfg(feature = "simulator")]
+#[proc_macro]
+pub fn select(input: TokenStream) -> TokenStream {
+    simulator::select(input)
+}
+
 struct YieldInjector;
 
 impl VisitMut for YieldInjector {
