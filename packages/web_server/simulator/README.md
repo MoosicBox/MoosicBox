@@ -13,22 +13,18 @@ Simulation backend for moosicbox_web_server that provides in-memory HTTP request
 ## Usage
 
 ```rust
-use web_server_simulator::SimulationWebServer;
-use moosicbox_web_server::{WebServerBuilder, Scope, route};
+use moosicbox_web_server::{WebServerBuilder, Scope, HttpResponse};
 
-// Create simulation server
-let server = SimulationWebServer::new()
+// Create server with dynamic routes
+let server = WebServerBuilder::new()
     .with_scope(Scope::new("/api")
-        .with_route(route!(GET, health, "/health", health_handler)));
+        .get("/health", |_req| {
+            Box::pin(async move {
+                Ok(HttpResponse::ok().with_body("OK"))
+            })
+        }))
+    .build();
 
-// Start simulation
-server.start().await?;
-
-// Send simulated requests
-let response = server.handle_request(
-    HttpMethod::Get,
-    "/api/health",
-    None,
-    BTreeMap::new()
-).await?;
+// Start server
+server.start().await;
 ```

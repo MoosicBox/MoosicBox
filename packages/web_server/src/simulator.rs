@@ -85,21 +85,36 @@ impl SimulationStub {
     }
 }
 
-struct SimulatorWebServer {}
+struct SimulatorWebServer {
+    scopes: Vec<crate::Scope>,
+}
 
 impl WebServer for SimulatorWebServer {
     fn start(&self) -> Pin<Box<dyn Future<Output = ()>>> {
-        Box::pin(async {})
+        let scopes = self.scopes.clone();
+        Box::pin(async move {
+            log::info!("Simulator web server started with {} scopes", scopes.len());
+            for scope in &scopes {
+                log::debug!("Scope '{}' has {} routes", scope.path, scope.routes.len());
+                for route in &scope.routes {
+                    log::debug!("  {:?} {}{}", route.method, scope.path, route.path);
+                }
+            }
+        })
     }
 
     fn stop(&self) -> Pin<Box<dyn Future<Output = ()>>> {
-        Box::pin(async {})
+        Box::pin(async {
+            log::info!("Simulator web server stopped");
+        })
     }
 }
 
 impl WebServerBuilder {
     #[must_use]
     pub fn build_simulator(self) -> Box<dyn WebServer> {
-        Box::new(SimulatorWebServer {})
+        Box::new(SimulatorWebServer {
+            scopes: self.scopes,
+        })
     }
 }

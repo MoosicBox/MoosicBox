@@ -339,31 +339,109 @@ impl HttpResponse {
 
 #[derive(Debug, Clone)]
 pub struct Scope {
-    pub path: &'static str,
+    pub path: String,
     pub routes: Vec<Route>,
     pub scopes: Vec<Scope>,
 }
 
 impl Scope {
     #[must_use]
-    pub const fn new(path: &'static str) -> Self {
+    pub fn new(path: impl Into<String>) -> Self {
         Self {
-            path,
+            path: path.into(),
             routes: vec![],
             scopes: vec![],
         }
     }
 
     #[must_use]
-    pub fn with_route(mut self, route: impl Into<Route>) -> Self {
-        self.routes.push(route.into());
+    pub fn with_route(mut self, route: Route) -> Self {
+        self.routes.push(route);
         self
     }
 
     #[must_use]
-    pub fn with_routes<T: Into<Route>>(mut self, route: impl IntoIterator<Item = T>) -> Self {
-        self.routes.extend(route.into_iter().map(Into::into));
+    pub fn with_routes(mut self, routes: impl IntoIterator<Item = Route>) -> Self {
+        self.routes.extend(routes);
         self
+    }
+
+    #[must_use]
+    pub fn route<F>(mut self, method: Method, path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.routes.push(Route::new(method, path, handler));
+        self
+    }
+
+    #[must_use]
+    pub fn get<F>(self, path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.route(Method::Get, path, handler)
+    }
+
+    #[must_use]
+    pub fn post<F>(self, path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.route(Method::Post, path, handler)
+    }
+
+    #[must_use]
+    pub fn put<F>(self, path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.route(Method::Put, path, handler)
+    }
+
+    #[must_use]
+    pub fn delete<F>(self, path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.route(Method::Delete, path, handler)
+    }
+
+    #[must_use]
+    pub fn patch<F>(self, path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.route(Method::Patch, path, handler)
+    }
+
+    #[must_use]
+    pub fn head<F>(self, path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.route(Method::Head, path, handler)
     }
 
     #[must_use]
@@ -373,8 +451,8 @@ impl Scope {
     }
 
     #[must_use]
-    pub fn with_scopes<T: Into<Self>>(mut self, scope: impl IntoIterator<Item = T>) -> Self {
-        self.scopes.extend(scope.into_iter().map(Into::into));
+    pub fn with_scopes<T: Into<Self>>(mut self, scopes: impl IntoIterator<Item = T>) -> Self {
+        self.scopes.extend(scopes.into_iter().map(Into::into));
         self
     }
 }
@@ -448,30 +526,101 @@ pub trait FromRequest {
     fn from_request(req: HttpRequestRef) -> Self::Future;
 }
 
-#[macro_export]
-macro_rules! route {
-    ($method:ident, $name:ident, $path:expr, $func:expr $(,)?) => {
-        $crate::paste::paste! {
-            pub const [< $method:upper _ $name:upper >]: $crate::Route = $crate::Route {
-                path: $path,
-                method: $crate::Method::[< $method:camel >],
-                handler: &$func,
-            };
-        }
-    };
-}
+pub type RouteHandler = Box<
+    dyn Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+        + Send
+        + Sync
+        + 'static,
+>;
 
 #[derive(Clone)]
 pub struct Route {
-    pub path: &'static str,
+    pub path: String,
     pub method: Method,
-    #[allow(clippy::type_complexity)]
-    pub handler: &'static (
-                 dyn Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>>>>
-                     + Send
-                     + Sync
-                     + 'static
-             ),
+    pub handler: std::sync::Arc<RouteHandler>,
+}
+
+impl Route {
+    #[must_use]
+    pub fn new<F>(method: Method, path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self {
+            path: path.into(),
+            method,
+            handler: std::sync::Arc::new(Box::new(handler)),
+        }
+    }
+    
+    #[must_use]
+    pub fn get<F>(path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self::new(Method::Get, path, handler)
+    }
+    
+    #[must_use]
+    pub fn post<F>(path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self::new(Method::Post, path, handler)
+    }
+    
+    #[must_use]
+    pub fn put<F>(path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self::new(Method::Put, path, handler)
+    }
+    
+    #[must_use]
+    pub fn delete<F>(path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self::new(Method::Delete, path, handler)
+    }
+    
+    #[must_use]
+    pub fn patch<F>(path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self::new(Method::Patch, path, handler)
+    }
+    
+    #[must_use]
+    pub fn head<F>(path: impl Into<String>, handler: F) -> Self
+    where
+        F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self::new(Method::Head, path, handler)
+    }
 }
 
 impl std::fmt::Debug for Route {

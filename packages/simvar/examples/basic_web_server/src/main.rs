@@ -121,9 +121,44 @@ async fn start_web_server(port: u16) -> HostResult {
         .with_cors(cors)
         .with_scope(
             Scope::new("/api/v1")
-                .with_route(GET_HEALTH)
-                .with_route(GET_STATUS)
-                .with_route(POST_ECHO),
+                .get("/health", |_req| {
+                    Box::pin(async move { Ok(HttpResponse::ok().with_body(r#"{"status":"healthy"}"#)) })
+                })
+                .get("/status", |_req| {
+                    Box::pin(async move {
+                        let uptime = switchy_time::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+
+                        let status = StatusResponse {
+                            status: "running".to_string(),
+                            uptime_seconds: uptime,
+                            requests_served: 42, // In a real app, you'd track this
+                        };
+
+                        let body = serde_json::to_string(&status).unwrap();
+                        Ok(HttpResponse::ok().with_body(body))
+                    })
+                })
+                .post("/echo", |_req| {
+                    Box::pin(async move {
+                        // In a real implementation, you'd parse the request body
+                        let server_time = switchy_time::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+
+                        let response = EchoResponse {
+                            echo: "Message received".to_string(),
+                            received_at: server_time,
+                            server_time,
+                        };
+
+                        let body = serde_json::to_string(&response).unwrap();
+                        Ok(HttpResponse::ok().with_body(body))
+                    })
+                }),
         )
         .build();
 
@@ -246,44 +281,4 @@ struct StatusResponse {
     requests_served: u64,
 }
 
-// Route definitions using moosicbox_web_server macros
-moosicbox_web_server::route!(GET, health, "/health", |_req| {
-    Box::pin(async move { Ok(HttpResponse::ok().with_body(r#"{"status":"healthy"}"#)) })
-});
 
-moosicbox_web_server::route!(GET, status, "/status", |_req| {
-    Box::pin(async move {
-        let uptime = switchy_time::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let status = StatusResponse {
-            status: "running".to_string(),
-            uptime_seconds: uptime,
-            requests_served: 42, // In a real app, you'd track this
-        };
-
-        let body = serde_json::to_string(&status).unwrap();
-        Ok(HttpResponse::ok().with_body(body))
-    })
-});
-
-moosicbox_web_server::route!(POST, echo, "/echo", |_req| {
-    Box::pin(async move {
-        // In a real implementation, you'd parse the request body
-        let server_time = switchy_time::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        let response = EchoResponse {
-            echo: "Message received".to_string(),
-            received_at: server_time,
-            server_time,
-        };
-
-        let body = serde_json::to_string(&response).unwrap();
-        Ok(HttpResponse::ok().with_body(body))
-    })
-});

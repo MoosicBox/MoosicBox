@@ -106,7 +106,14 @@ impl<
                 .with_addr(addr)
                 .with_port(port)
                 .with_cors(cors)
-                .with_scope(Scope::new("").with_route(GET_EXAMPLE))
+                .with_scope(Scope::new("").get("/example", |req| {
+                    let path = req.path().to_string();
+                    let query = req.query_string().to_string();
+                    Box::pin(async move {
+                        Ok(HttpResponse::ok()
+                            .with_body(format!("hello, world! path={path} query={query}")))
+                    })
+                }))
                 .build();
 
             log::debug!("Starting web server");
@@ -117,13 +124,3 @@ impl<
         Ok(())
     }
 }
-
-moosicbox_web_server::route!(GET, example, "/example", |req| {
-    Box::pin(async move {
-        Ok(HttpResponse::ok().with_body(format!(
-            "hello, world! path={} query={}",
-            req.path(),
-            req.query_string()
-        )))
-    })
-});

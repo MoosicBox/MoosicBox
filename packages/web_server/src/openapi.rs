@@ -18,24 +18,32 @@ fn get_openapi() -> OpenApi {
 }
 
 #[cfg(feature = "openapi-redoc")]
-crate::route!(GET, redoc, "/redoc", |_req| {
+fn redoc_handler(
+    _req: crate::HttpRequest,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<crate::HttpResponse, crate::Error>> + Send>,
+> {
     use crate::HttpResponse;
 
     static REDOC: LazyLock<utoipa_redoc::Redoc<OpenApi>> =
         LazyLock::new(|| utoipa_redoc::Redoc::new(get_openapi()));
 
     Box::pin(async move { Ok(HttpResponse::ok().with_body(REDOC.to_html())) })
-});
+}
 
 #[cfg(feature = "openapi-scalar")]
-crate::route!(GET, scalar, "/scalar", |_req| {
+fn scalar_handler(
+    _req: crate::HttpRequest,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<crate::HttpResponse, crate::Error>> + Send>,
+> {
     use crate::HttpResponse;
 
     static SCALAR: LazyLock<utoipa_scalar::Scalar<OpenApi>> =
         LazyLock::new(|| utoipa_scalar::Scalar::new(get_openapi()));
 
     Box::pin(async move { Ok(HttpResponse::ok().with_body(SCALAR.to_html())) })
-});
+}
 
 #[cfg(any(feature = "openapi-rapidoc", feature = "openapi-swagger-ui"))]
 mod openapi_spec {
@@ -43,14 +51,18 @@ mod openapi_spec {
 
     use const_format::concatcp;
 
-    use crate::{Error, HttpResponse, route};
+    use crate::{Error, HttpResponse};
 
     use super::get_openapi;
 
-    const SPEC_URL: &str = "/swagger-ui/api-docs/openapi.json";
+    pub const SPEC_URL: &str = "/swagger-ui/api-docs/openapi.json";
     const FULL_SPEC_URL: &str = concatcp!("/openapi", SPEC_URL);
 
-    route!(GET, swagger_openapi_spec, SPEC_URL, |_req| {
+    pub fn swagger_openapi_spec_handler(
+        _req: crate::HttpRequest,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<crate::HttpResponse, crate::Error>> + Send>,
+    > {
         Box::pin(async move {
             Ok(HttpResponse::ok().with_body(
                 get_openapi()
@@ -58,22 +70,30 @@ mod openapi_spec {
                     .map_err(Error::internal_server_error)?,
             ))
         })
-    });
+    }
 
     #[cfg(feature = "openapi-swagger-ui")]
-    route!(GET, swagger_ui_redirect, "/swagger-ui", |_req| {
+    pub fn swagger_ui_redirect_handler(
+        _req: crate::HttpRequest,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<crate::HttpResponse, crate::Error>> + Send>,
+    > {
         Box::pin(async move {
             Ok(HttpResponse::temporary_redirect().with_location("/openapi/swagger-ui/"))
         })
-    });
+    }
 
     #[cfg(feature = "openapi-swagger-ui")]
-    route!(GET, swagger_ui, "/swagger-ui/{_:.*}", |req| {
+    pub fn swagger_ui_handler(
+        req: &crate::HttpRequest,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<crate::HttpResponse, crate::Error>> + Send>,
+    > {
         static CONFIG: LazyLock<std::sync::Arc<utoipa_swagger_ui::Config>> =
             LazyLock::new(|| std::sync::Arc::new(utoipa_swagger_ui::Config::from(FULL_SPEC_URL)));
 
+        let path = req.path().to_string();
         Box::pin(async move {
-            let path = req.path();
             let path = &path[(path.find("/swagger-ui/").unwrap() + "/swagger-ui/".len())..];
             log::debug!("serving swagger-ui path='{path}'");
             match utoipa_swagger_ui::serve(path, CONFIG.clone()) {
@@ -87,32 +107,50 @@ mod openapi_spec {
                 Err(e) => Err(Error::internal_server_error(e)),
             }
         })
-    });
+    }
 
     #[cfg(feature = "openapi-rapidoc")]
-    route!(GET, rapidoc, "/rapidoc", |_req| {
+    pub fn rapidoc_handler(
+        _req: crate::HttpRequest,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<crate::HttpResponse, crate::Error>> + Send>,
+    > {
         static RAPIDOC: LazyLock<utoipa_rapidoc::RapiDoc> =
             LazyLock::new(|| utoipa_rapidoc::RapiDoc::new(FULL_SPEC_URL));
 
         Box::pin(async move { Ok(HttpResponse::ok().with_body(RAPIDOC.to_html())) })
-    });
+    }
 }
 
-#[allow(clippy::let_and_return, clippy::missing_const_for_fn)]
+#[allow(clippy::let_and_return)]
 #[must_use]
-pub fn bind_services(scope: Scope) -> Scope {
+pub fn bind_services(mut scope: Scope) -> Scope {
     #[cfg(feature = "openapi-redoc")]
-    let scope = scope.with_route(GET_REDOC);
+    {
+        scope = scope.get("/redoc", redoc_handler);
+    }
     #[cfg(feature = "openapi-scalar")]
-    let scope = scope.with_route(GET_SCALAR);
+    {
+        scope = scope.get("/scalar", scalar_handler);
+    }
     #[cfg(any(feature = "openapi-rapidoc", feature = "openapi-swagger-ui"))]
-    let scope = scope.with_route(openapi_spec::GET_SWAGGER_OPENAPI_SPEC);
+    {
+        scope = scope.get(
+            openapi_spec::SPEC_URL,
+            openapi_spec::swagger_openapi_spec_handler,
+        );
+    }
     #[cfg(feature = "openapi-swagger-ui")]
-    let scope = scope.with_route(openapi_spec::GET_SWAGGER_UI);
-    #[cfg(feature = "openapi-swagger-ui")]
-    let scope = scope.with_route(openapi_spec::GET_SWAGGER_UI_REDIRECT);
+    {
+        scope = scope.get("/swagger-ui/{_:.*}", |req| {
+            openapi_spec::swagger_ui_handler(&req)
+        });
+        scope = scope.get("/swagger-ui", openapi_spec::swagger_ui_redirect_handler);
+    }
     #[cfg(feature = "openapi-rapidoc")]
-    let scope = scope.with_route(openapi_spec::GET_RAPIDOC);
+    {
+        scope = scope.get("/rapidoc", openapi_spec::rapidoc_handler);
+    }
     scope
 }
 

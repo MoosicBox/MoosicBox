@@ -19,7 +19,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/openapi",
         )))
         // The order matters here. Make sure to add the root scope last
-        .with_scope(Scope::new("").with_route(GET_EXAMPLE))
+        .with_scope(Scope::new("").get("/example", |req| {
+            let path = req.path().to_string();
+            let query = req.query_string().to_string();
+            Box::pin(async move {
+                Ok(HttpResponse::ok()
+                    .with_body(format!("hello, world! path={path} query={query}",)))
+            })
+        }))
         .build();
 
     server.start().await;
@@ -106,13 +113,3 @@ path!(
         )
         .build()
 );
-
-moosicbox_web_server::route!(GET, example, "/example", |req| {
-    Box::pin(async move {
-        Ok(HttpResponse::ok().with_body(format!(
-            "hello, world! path={} query={}",
-            req.path(),
-            req.query_string()
-        )))
-    })
-});

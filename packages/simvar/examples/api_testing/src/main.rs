@@ -267,11 +267,61 @@ async fn start_api_server(port: u16) -> HostResult {
         .with_cors(cors)
         .with_scope(
             Scope::new("/api/v1/users")
-                .with_route(POST_CREATE_USER)
-                .with_route(GET_LIST_USERS)
-                .with_route(GET_USER_BY_ID)
-                .with_route(PUT_UPDATE_USER)
-                .with_route(DELETE_USER),
+                .post("", |_req| {
+                    Box::pin(async move {
+                        // In a real implementation, you'd parse the request body properly
+                        let user = User {
+                            id: Uuid::new_v4().to_string(),
+                            name: "Test User".to_string(),
+                            email: "test@example.com".to_string(),
+                            created_at: switchy_time::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs(),
+                        };
+
+                        DATA_STORE
+                            .users
+                            .lock()
+                            .unwrap()
+                            .insert(user.id.clone(), user.clone());
+
+                        let body = serde_json::to_string(&user).unwrap();
+                        Ok(HttpResponse::from_status_code(StatusCode::Created).with_body(body))
+                    })
+                })
+                .get("", |_req| {
+                    Box::pin(async move {
+                        let users: Vec<User> = DATA_STORE.users.lock().unwrap().values().cloned().collect();
+                        let body = serde_json::to_string(&users).unwrap();
+                        Ok(HttpResponse::ok().with_body(body))
+                    })
+                })
+                .get("/{id}", |_req| {
+                    Box::pin(async move {
+                        // In a real implementation, you'd extract the ID from the path
+                        let users = DATA_STORE.users.lock().unwrap();
+                        Ok(users.values().next().map_or_else(
+                            || HttpResponse::not_found().with_body(r#"{"error":"User not found"}"#),
+                            |user| {
+                                let body = serde_json::to_string(user).unwrap();
+                                HttpResponse::ok().with_body(body)
+                            },
+                        ))
+                    })
+                })
+                .put("/{id}", |_req| {
+                    Box::pin(async move {
+                        // In a real implementation, you'd extract the ID and parse the body
+                        Ok(HttpResponse::ok().with_body(r#"{"message":"User updated"}"#))
+                    })
+                })
+                .delete("/{id}", |_req| {
+                    Box::pin(async move {
+                        // In a real implementation, you'd extract the ID and delete the user
+                        Ok(HttpResponse::ok().with_body(r#"{"message":"User deleted"}"#))
+                    })
+                }),
         )
         .build();
 
@@ -554,66 +604,4 @@ async fn run_edge_case_tests(
 // Global data store for the API (in a real app, this would be a database)
 static DATA_STORE: std::sync::LazyLock<ApiDataStore> = std::sync::LazyLock::new(ApiDataStore::new);
 
-// Route definitions for the REST API
-moosicbox_web_server::route!(POST, create_user, "", |_req| {
-    Box::pin(async move {
-        // In a real implementation, you'd parse the request body properly
-        let user = User {
-            id: Uuid::new_v4().to_string(),
-            name: "Test User".to_string(),
-            email: "test@example.com".to_string(),
-            created_at: switchy_time::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        };
 
-        DATA_STORE
-            .users
-            .lock()
-            .unwrap()
-            .insert(user.id.clone(), user.clone());
-
-        let body = serde_json::to_string(&user).unwrap();
-        Ok(HttpResponse::from_status_code(StatusCode::Created).with_body(body))
-    })
-});
-
-moosicbox_web_server::route!(GET, list_users, "", |_req| {
-    Box::pin(async move {
-        let users: Vec<User> = DATA_STORE.users.lock().unwrap().values().cloned().collect();
-        let body = serde_json::to_string(&users).unwrap();
-        Ok(HttpResponse::ok().with_body(body))
-    })
-});
-
-moosicbox_web_server::route!(GET, user_by_id, "/{id}", |_req| {
-    Box::pin(async move {
-        // In a real implementation, you'd extract the ID from the path
-        let users = DATA_STORE.users.lock().unwrap();
-        Ok(users.values().next().map_or_else(
-            || HttpResponse::not_found().with_body(r#"{"error":"User not found"}"#),
-            |user| {
-                let body = serde_json::to_string(user).unwrap();
-                HttpResponse::ok().with_body(body)
-            },
-        ))
-    })
-});
-
-moosicbox_web_server::route!(PUT, update_user, "/{id}", |_req| {
-    Box::pin(async move {
-        // Simplified implementation
-        Ok(HttpResponse::ok().with_body(r#"{"message":"User updated"}"#))
-    })
-});
-
-moosicbox_web_server::route!(DELETE, delete_user, "/{id}", |_req| {
-    Box::pin(async move {
-        // Simplified implementation
-        Ok(HttpResponse::ok().with_body(r#"{"message":"User deleted"}"#))
-    })
-});
-
-// Create the DELETE_USER constant that's referenced in the scope
-const DELETE_USER: moosicbox_web_server::Route = DELETE_DELETE_USER;
