@@ -16412,6 +16412,7 @@ dependencies = [
 name = "web_server_nested_get"
 version = "0.1.0"
 dependencies = [
+ "env_logger 0.11.8",
  "moosicbox_web_server",
  "tokio",
 ]
@@ -16430,6 +16431,7 @@ dependencies = [
 name = "web_server_simple_get"
 version = "0.1.0"
 dependencies = [
+ "env_logger 0.11.8",
  "moosicbox_web_server",
  "switchy",
 ]

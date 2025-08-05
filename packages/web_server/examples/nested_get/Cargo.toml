@@ -11,7 +11,8 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_web_server = { workspace = true, features = ["actix", "cors"] }
 
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+env_logger = { workspace = true }
+tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = []

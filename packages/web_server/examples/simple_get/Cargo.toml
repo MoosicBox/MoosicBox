@@ -11,6 +11,7 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_web_server = { workspace = true, features = ["actix", "cors"] }
 
+env_logger = { workspace = true }
 switchy = { workspace = true, features = [
     "async-net",
     "async-rt-multi-thread",

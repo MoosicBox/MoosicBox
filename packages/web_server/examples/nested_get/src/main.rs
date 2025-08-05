@@ -2,6 +2,8 @@ use moosicbox_web_server::{HttpResponse, Scope};
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     let cors = moosicbox_web_server::cors::Cors::default()
         .allow_any_origin()
         .allow_any_method()
