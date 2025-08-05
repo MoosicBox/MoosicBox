@@ -16431,7 +16431,7 @@ name = "web_server_simple_get"
 version = "0.1.0"
 dependencies = [
  "moosicbox_web_server",
- "tokio",
+ "switchy",
 ]
 
 [[package]]

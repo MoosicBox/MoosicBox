@@ -11,7 +11,12 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_web_server = { workspace = true, features = ["actix", "cors"] }
 
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+switchy = { workspace = true, features = [
+    "async-net",
+    "async-rt-multi-thread",
+    "async-time",
+    "async-tokio",
+] }
 
 [features]
 default = []
