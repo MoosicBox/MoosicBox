@@ -555,7 +555,7 @@ impl Route {
             handler: std::sync::Arc::new(Box::new(handler)),
         }
     }
-    
+
     #[must_use]
     pub fn get<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -566,7 +566,7 @@ impl Route {
     {
         Self::new(Method::Get, path, handler)
     }
-    
+
     #[must_use]
     pub fn post<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -577,7 +577,7 @@ impl Route {
     {
         Self::new(Method::Post, path, handler)
     }
-    
+
     #[must_use]
     pub fn put<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -588,7 +588,7 @@ impl Route {
     {
         Self::new(Method::Put, path, handler)
     }
-    
+
     #[must_use]
     pub fn delete<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -599,7 +599,7 @@ impl Route {
     {
         Self::new(Method::Delete, path, handler)
     }
-    
+
     #[must_use]
     pub fn patch<F>(path: impl Into<String>, handler: F) -> Self
     where
@@ -610,7 +610,7 @@ impl Route {
     {
         Self::new(Method::Patch, path, handler)
     }
-    
+
     #[must_use]
     pub fn head<F>(path: impl Into<String>, handler: F) -> Self
     where

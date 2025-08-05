@@ -14,11 +14,11 @@ use actix_web::{
     error::{self},
 };
 
+use crate::Method;
 use moosicbox_web_server_core::WebServer;
 #[cfg(feature = "cors")]
 use moosicbox_web_server_cors::AllOrSome;
 use switchy_http_models::{StatusCode, TryFromU16StatusCodeError};
-use crate::Method;
 
 #[allow(clippy::fallible_impl_from)]
 impl From<HttpRequest> for actix_web::HttpRequest {
@@ -147,8 +147,6 @@ impl TryFrom<Error> for crate::Error {
     }
 }
 
-
-
 struct ActixWebServer<F, I, S, B>
 where
     F: Fn() -> I + Send + Clone + 'static,
@@ -204,6 +202,7 @@ use crate::{HttpRequest, HttpRequestRef, WebServerBuilder};
 
 impl WebServerBuilder {
     #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn build_actix(self) -> Box<dyn WebServer> {
         #[cfg(feature = "cors")]
         let cors_builder = self.cors.clone();
@@ -269,15 +268,17 @@ impl WebServerBuilder {
                     let path = route.path.clone();
                     let handler = route.handler.clone();
                     let method = route.method;
-                    
+
                     let actix_handler = move |req: actix_web::HttpRequest| {
                         let handler = handler.clone();
                         async move {
                             let result = handler(req.into()).await;
                             result.map(|resp| {
-                                let mut actix_resp = actix_web::HttpResponseBuilder::new(resp.status_code.into());
+                                let mut actix_resp =
+                                    actix_web::HttpResponseBuilder::new(resp.status_code.into());
                                 if let Some(location) = resp.location {
-                                    actix_resp.insert_header((actix_http::header::LOCATION, location));
+                                    actix_resp
+                                        .insert_header((actix_http::header::LOCATION, location));
                                 }
                                 match resp.body {
                                     Some(crate::HttpResponseBody::Bytes(bytes)) => {
@@ -288,20 +289,34 @@ impl WebServerBuilder {
                             })
                         }
                     };
-                    
+
                     let resource = Resource::new(&path);
                     let resource = match method {
                         Method::Get => resource.route(actix_web::web::get().to(actix_handler)),
                         Method::Post => resource.route(actix_web::web::post().to(actix_handler)),
                         Method::Put => resource.route(actix_web::web::put().to(actix_handler)),
-                        Method::Delete => resource.route(actix_web::web::delete().to(actix_handler)),
+                        Method::Delete => {
+                            resource.route(actix_web::web::delete().to(actix_handler))
+                        }
                         Method::Patch => resource.route(actix_web::web::patch().to(actix_handler)),
                         Method::Head => resource.route(actix_web::web::head().to(actix_handler)),
-                        Method::Options => resource.route(actix_web::web::route().method(actix_web::http::Method::OPTIONS).to(actix_handler)),
-                        Method::Trace => resource.route(actix_web::web::route().method(actix_web::http::Method::TRACE).to(actix_handler)),
-                        Method::Connect => resource.route(actix_web::web::route().method(actix_web::http::Method::CONNECT).to(actix_handler)),
+                        Method::Options => resource.route(
+                            actix_web::web::route()
+                                .method(actix_web::http::Method::OPTIONS)
+                                .to(actix_handler),
+                        ),
+                        Method::Trace => resource.route(
+                            actix_web::web::route()
+                                .method(actix_web::http::Method::TRACE)
+                                .to(actix_handler),
+                        ),
+                        Method::Connect => resource.route(
+                            actix_web::web::route()
+                                .method(actix_web::http::Method::CONNECT)
+                                .to(actix_handler),
+                        ),
                     };
-                    
+
                     actix_scope = actix_scope.service(resource);
                 }
                 app = app.service(actix_scope);

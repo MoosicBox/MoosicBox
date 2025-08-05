@@ -292,7 +292,8 @@ async fn start_api_server(port: u16) -> HostResult {
                 })
                 .get("", |_req| {
                     Box::pin(async move {
-                        let users: Vec<User> = DATA_STORE.users.lock().unwrap().values().cloned().collect();
+                        let users: Vec<User> =
+                            DATA_STORE.users.lock().unwrap().values().cloned().collect();
                         let body = serde_json::to_string(&users).unwrap();
                         Ok(HttpResponse::ok().with_body(body))
                     })
@@ -603,5 +604,3 @@ async fn run_edge_case_tests(
 
 // Global data store for the API (in a real app, this would be a database)
 static DATA_STORE: std::sync::LazyLock<ApiDataStore> = std::sync::LazyLock::new(ApiDataStore::new);
-
-

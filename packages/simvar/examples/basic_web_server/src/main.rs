@@ -122,7 +122,9 @@ async fn start_web_server(port: u16) -> HostResult {
         .with_scope(
             Scope::new("/api/v1")
                 .get("/health", |_req| {
-                    Box::pin(async move { Ok(HttpResponse::ok().with_body(r#"{"status":"healthy"}"#)) })
+                    Box::pin(
+                        async move { Ok(HttpResponse::ok().with_body(r#"{"status":"healthy"}"#)) },
+                    )
                 })
                 .get("/status", |_req| {
                     Box::pin(async move {
@@ -280,5 +282,3 @@ struct StatusResponse {
     uptime_seconds: u64,
     requests_served: u64,
 }
-
-
