@@ -12,8 +12,8 @@ pub mod unsync {
     #[macro_export]
     macro_rules! select {
         ($($tokens:tt)*) => {
-            ::switchy::unsync_macros::select_internal! {
-                @path = ::switchy::unsync;
+            switchy::unsync_macros::select_internal! {
+                @path = switchy::unsync;
                 $($tokens)*
             }
         };
@@ -33,11 +33,11 @@ pub mod unsync_macros {
     macro_rules! select_internal {
         // Handle the @path parameter and ignore it for tokio
         (@path = $path:path; $($tokens:tt)*) => {
-            ::switchy::unsync::tokio::select! { $($tokens)* }
+            switchy::unsync::tokio::select! { $($tokens)* }
         };
         // Fallback for direct calls without @path
         ($($tokens:tt)*) => {
-            ::switchy::unsync::tokio::select! { $($tokens)* }
+            switchy::unsync::tokio::select! { $($tokens)* }
         };
     }
 

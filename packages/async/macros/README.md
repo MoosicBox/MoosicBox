@@ -65,12 +65,12 @@ async fn my_async_function() {
 // async fn my_async_function() {
 //     let result1 = {
 //         let __yield_res = some_async_operation().await;
-//         ::switchy::unsync::task::yield_now().await;
+//         switchy::unsync::task::yield_now().await;
 //         __yield_res
 //     };
 //     let result2 = {
 //         let __yield_res = another_async_operation().await;
-//         ::switchy::unsync::task::yield_now().await;
+//         switchy::unsync::task::yield_now().await;
 //         __yield_res
 //     };
 //     result1 + result2
@@ -157,7 +157,7 @@ let result = async_call().await;
 ```rust
 let result = {
     let __yield_res = async_call().await;
-    ::switchy::unsync::task::yield_now().await;
+    switchy::unsync::task::yield_now().await;
     __yield_res
 };
 ```
