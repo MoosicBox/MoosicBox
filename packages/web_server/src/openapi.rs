@@ -122,9 +122,9 @@ mod openapi_spec {
     }
 }
 
-#[allow(clippy::let_and_return)]
+#[allow(clippy::let_and_return, clippy::missing_const_for_fn)]
 #[must_use]
-pub fn bind_services(mut scope: Scope) -> Scope {
+pub fn bind_services(#[allow(unused_mut)] mut scope: Scope) -> Scope {
     #[cfg(feature = "openapi-redoc")]
     {
         scope = scope.get("/redoc", redoc_handler);
