@@ -24,7 +24,6 @@ actix-web     = { workspace = true, optional = true }
 
 bytes             = { workspace = true }
 const_format      = { workspace = true, optional = true }
-futures-util      = { workspace = true, optional = true }
 log               = { workspace = true }
 paste             = { workspace = true }
 serde             = { workspace = true }
@@ -46,7 +45,6 @@ actix = [
     "dep:actix-http",
     "dep:actix-service",
     "dep:actix-web",
-    "dep:futures-util",
     "switchy_http_models/actix",
 ]
 

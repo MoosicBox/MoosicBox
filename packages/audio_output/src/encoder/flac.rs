@@ -8,6 +8,7 @@ use moosicbox_audio_decoder::{
 };
 use moosicbox_audio_encoder::flac::{Encoder, encoder_flac};
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
+use switchy_async::task::JoinHandle;
 use symphonia::core::{
     audio::{AudioBuffer, Channels, Signal, SignalSpec},
     formats::{Packet, Track},
@@ -262,7 +263,7 @@ pub fn encode_flac_stream(path: &str) -> ByteStream {
 pub fn encode_flac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: &str,
     writer: T,
-) -> tokio::task::JoinHandle<()> {
+) -> JoinHandle<()> {
     let path = path.to_string();
     moosicbox_task::spawn_blocking("audio_decoder: encode_flac", move || {
         encode_flac(&path, writer);

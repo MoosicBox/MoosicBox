@@ -5,10 +5,10 @@ use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{MusicApi, models::AlbumsRequest};
 use moosicbox_music_models::{Album, AudioFormat, Track};
 use moosicbox_paging::PagingRequest;
+use switchy_async::util::CancellationToken;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::{select, sync::RwLock};
-use tokio_util::sync::CancellationToken;
 
 use crate::{
     Scanner,

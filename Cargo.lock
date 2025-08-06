@@ -5416,6 +5416,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_logging",
  "moosicbox_task",
+ "switchy_async",
  "switchy_http",
  "thiserror 2.0.12",
  "tokio",
@@ -5580,8 +5581,8 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "switchy",
+ "switchy_async",
  "thiserror 2.0.12",
- "tokio",
 ]
 
 [[package]]
@@ -7381,9 +7382,9 @@ dependencies = [
  "moosicbox_task",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "tauri",
  "thiserror 2.0.12",
- "tokio",
 ]
 
 [[package]]
@@ -7442,11 +7443,11 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "switchy_async",
  "switchy_http",
  "switchy_upnp",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -7464,10 +7465,10 @@ dependencies = [
  "moosicbox_task",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_database",
  "tauri",
  "thiserror 2.0.12",
- "tokio",
 ]
 
 [[package]]
@@ -7483,10 +7484,10 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_task",
+ "switchy_async",
  "thiserror 2.0.12",
  "tokio",
  "tokio-tungstenite",
- "tokio-util",
 ]
 
 [[package]]
@@ -7517,10 +7518,10 @@ dependencies = [
  "log 0.4.27",
  "moosicbox_task",
  "pretty_assertions",
+ "switchy_async",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -7535,12 +7536,12 @@ dependencies = [
  "moosicbox_task",
  "profiling",
  "rangemap",
+ "switchy_async",
  "switchy_http",
  "switchy_time",
  "symphonia",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -7582,6 +7583,7 @@ dependencies = [
  "opus",
  "rb",
  "serde",
+ "switchy_async",
  "switchy_time",
  "symphonia",
  "thiserror 2.0.12",
@@ -7717,12 +7719,12 @@ dependencies = [
  "serde_json",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_database",
  "switchy_fs",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
  "utoipa",
 ]
 
@@ -7765,6 +7767,7 @@ dependencies = [
  "serde",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_database",
  "switchy_fs",
  "switchy_http",
@@ -7790,6 +7793,7 @@ dependencies = [
  "profiling",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_fs",
  "thiserror 2.0.12",
  "tokio",
@@ -8153,6 +8157,7 @@ dependencies = [
  "profiling",
  "regex",
  "serde",
+ "switchy_async",
  "switchy_database",
  "switchy_http",
  "switchy_random",
@@ -8269,6 +8274,7 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy",
+ "switchy_async",
  "switchy_database",
  "switchy_database_connection",
  "switchy_http",
@@ -8276,7 +8282,6 @@ dependencies = [
  "test-log",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
  "utoipa",
 ]
 
@@ -8324,6 +8329,7 @@ dependencies = [
  "serde",
  "serial_test",
  "static_init",
+ "switchy_async",
  "switchy_fs",
  "tantivy",
  "test-log",
@@ -8385,6 +8391,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_database",
  "switchy_database_connection",
  "switchy_fs",
@@ -8423,9 +8430,9 @@ dependencies = [
  "serde_json",
  "simvar",
  "strum 0.27.2",
+ "switchy_async",
  "switchy_telemetry",
  "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -8476,10 +8483,10 @@ dependencies = [
  "log 0.4.27",
  "moosicbox_task",
  "pin-project",
+ "switchy_async",
  "switchy_http",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -8489,6 +8496,7 @@ dependencies = [
  "futures",
  "log 0.4.27",
  "profiling",
+ "switchy_async",
  "tokio",
 ]
 
@@ -8536,11 +8544,11 @@ dependencies = [
  "serde_json",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_http",
  "switchy_time",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -8572,6 +8580,7 @@ dependencies = [
  "serde",
  "serde-aux",
  "serde_json",
+ "switchy_async",
  "switchy_database",
  "switchy_http",
  "switchy_random",
@@ -8579,7 +8588,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tokio-tungstenite",
- "tokio-util",
 ]
 
 [[package]]
@@ -8610,6 +8618,7 @@ dependencies = [
  "sha2",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_database",
  "switchy_database_connection",
  "switchy_http",
@@ -8617,7 +8626,6 @@ dependencies = [
  "switchy_telemetry",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
  "tracing",
  "uuid",
 ]
@@ -8633,7 +8641,6 @@ dependencies = [
  "actix-web",
  "bytes",
  "const_format",
- "futures-util",
  "log 0.4.27",
  "moosicbox_assert",
  "moosicbox_web_server_core",
@@ -13876,6 +13883,7 @@ dependencies = [
  "rusqlite",
  "sqlx",
  "sqlx-postgres",
+ "switchy_async",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
@@ -13956,6 +13964,7 @@ dependencies = [
  "moosicbox_async_service",
  "moosicbox_task",
  "strum_macros 0.27.2",
+ "switchy_async",
  "thiserror 2.0.12",
 ]
 
@@ -14039,12 +14048,12 @@ dependencies = [
  "serde",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "switchy_async",
  "switchy_http",
  "switchy_random",
  "symphonia",
  "thiserror 2.0.12",
  "tokio",
- "tokio-util",
  "utoipa",
  "xml",
 ]

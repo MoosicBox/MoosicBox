@@ -8,9 +8,8 @@ use moosicbox_player::{DEFAULT_PLAYBACK_RETRY_OPTIONS, PlayerError};
 use moosicbox_session::models::{ApiSession, ApiUpdateSession};
 use moosicbox_ws::models::{EmptyPayload, InboundPayload, OutboundPayload};
 use serde::Serialize;
+use switchy_async::{task::JoinError, util::CancellationToken};
 use thiserror::Error;
-use tokio::task::JoinError;
-use tokio_util::sync::CancellationToken;
 
 use crate::{AppState, AppStateError};
 
@@ -94,7 +93,7 @@ impl AppState {
             .read()
             .await
             .clone()
-            .ok_or_else(|| InitWsError::MissingProfile)?;
+            .ok_or(InitWsError::MissingProfile)?;
 
         let client_id = self.client_id.read().await.clone();
         let signature_token = self.signature_token.read().await.clone();

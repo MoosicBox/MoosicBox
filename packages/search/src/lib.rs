@@ -7,6 +7,7 @@ use std::sync::{LazyLock, RwLock};
 
 use itertools::Itertools;
 use moosicbox_music_api_models::search::api::{ApiGlobalSearchResult, ApiSearchResultsResponse};
+use switchy_async::task::JoinError;
 use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, DisjunctionMaxQuery, QueryParser, TermQuery};
@@ -21,7 +22,6 @@ use tantivy::{
 use tantivy::{Index, IndexReader, ReloadPolicy};
 use thiserror::Error;
 use tokio::sync::Semaphore;
-use tokio::task::JoinError;
 
 #[cfg(feature = "api")]
 pub mod api;

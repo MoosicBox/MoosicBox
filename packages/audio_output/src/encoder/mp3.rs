@@ -8,6 +8,7 @@ use moosicbox_audio_decoder::{
 };
 use moosicbox_audio_encoder::mp3::encoder_mp3;
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
+use switchy_async::task::JoinHandle;
 use symphonia::core::{
     audio::{AudioBuffer, Channels, Signal, SignalSpec},
     formats::{Packet, Track},
@@ -260,7 +261,7 @@ pub fn encode_mp3_stream(path: &str) -> ByteStream {
 pub fn encode_mp3_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: &str,
     writer: T,
-) -> tokio::task::JoinHandle<()> {
+) -> JoinHandle<()> {
     let path = path.to_string();
     moosicbox_task::spawn_blocking("audio_output: encode_mp3", move || {
         encode_mp3(&path, writer);

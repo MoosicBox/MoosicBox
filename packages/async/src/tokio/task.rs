@@ -1,1 +1,1 @@
-pub use tokio::task::{JoinError, JoinHandle, spawn, spawn_blocking, yield_now};
+pub use tokio::task::{JoinError, JoinHandle, spawn, spawn_blocking, spawn_local, yield_now};

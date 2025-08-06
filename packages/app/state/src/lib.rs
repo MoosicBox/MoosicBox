@@ -25,13 +25,10 @@ use moosicbox_session::models::{
 };
 use moosicbox_ws::models::{InboundPayload, OutboundPayload};
 use serde::{Deserialize, Serialize};
+use switchy_async::util::CancellationToken;
 use switchy_http::RequestBuilder;
 use thiserror::Error;
-use tokio::{
-    sync::{RwLock, RwLockReadGuard},
-    task::JoinHandle,
-};
-use tokio_util::sync::CancellationToken;
+use tokio::sync::{RwLock, RwLockReadGuard};
 
 mod persistence;
 pub mod ws;
@@ -223,7 +220,8 @@ pub struct AppState {
     pub ws_token: Arc<RwLock<Option<CancellationToken>>>,
     pub ws_handle: Arc<RwLock<Option<WsHandle>>>,
     #[allow(clippy::type_complexity)]
-    pub ws_join_handle: Arc<RwLock<Option<JoinHandle<Result<(), AppStateError>>>>>,
+    pub ws_join_handle:
+        Arc<RwLock<Option<switchy_async::task::JoinHandle<Result<(), AppStateError>>>>>,
     pub audio_zone_active_api_players: Arc<RwLock<HashMap<u64, Vec<ApiPlayersMap>>>>,
     pub active_players: Arc<RwLock<Vec<PlaybackTargetSessionPlayer>>>,
     pub playback_quality: Arc<RwLock<Option<PlaybackQuality>>>,
@@ -317,7 +315,7 @@ impl std::fmt::Debug for AppState {
             .field("client_id", &self.client_id)
             .field("api_token", &self.api_token)
             .field("ws_token", &self.ws_token)
-            .field("ws_join_handle", &self.ws_join_handle)
+            .field("ws_join_handle", &"<JoinHandle>")
             .field(
                 "audio_zone_active_api_players",
                 &self.audio_zone_active_api_players,

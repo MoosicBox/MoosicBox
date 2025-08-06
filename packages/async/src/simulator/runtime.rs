@@ -330,6 +330,8 @@ pub struct JoinHandle<T> {
     #[allow(clippy::option_option)]
     result: Option<Result<T, task::JoinError>>,
     finished: bool,
+    #[allow(unused)]
+    aborted: bool,
 }
 
 impl<T: Send + Unpin> JoinHandle<T> {
@@ -350,6 +352,13 @@ impl<T: Send + Unpin> JoinHandle<T> {
             }
             Poll::Pending => false,
         }
+    }
+
+    pub fn abort(&self) {
+        // FIXME: We should implement this in the simulator
+        // Note: In the simulator, we can't actually abort running tasks
+        // This is a no-op to maintain API compatibility with tokio
+        log::debug!("JoinHandle::abort() called (no-op in simulator)");
     }
 }
 
@@ -392,6 +401,7 @@ impl Spawner {
             rx,
             result: None,
             finished: false,
+            aborted: false,
         }
     }
 
@@ -413,6 +423,7 @@ impl Spawner {
             rx,
             result: None,
             finished: false,
+            aborted: false,
         }
     }
 
@@ -433,6 +444,7 @@ impl Spawner {
             rx,
             result: None,
             finished: false,
+            aborted: false,
         }
     }
 

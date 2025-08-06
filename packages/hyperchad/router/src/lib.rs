@@ -15,8 +15,8 @@ use hyperchad_renderer::Content;
 pub use hyperchad_transformer::{Container, Element};
 use qstring::QString;
 use switchy::http::models::Method;
+use switchy_async::task::JoinHandle;
 use thiserror::Error;
-use tokio::task::JoinHandle;
 
 pub static DEFAULT_CLIENT_INFO: std::sync::LazyLock<std::sync::Arc<ClientInfo>> =
     std::sync::LazyLock::new(|| {
@@ -880,7 +880,7 @@ impl Router {
 
         log::debug!("navigate_spawn: navigation={navigation:?}");
 
-        self.navigate_spawn_on(&tokio::runtime::Handle::current(), navigation)
+        self.navigate_spawn_on(&switchy_async::runtime::Handle::current(), navigation)
     }
 
     /// # Errors
@@ -889,7 +889,7 @@ impl Router {
     #[must_use]
     pub fn navigate_spawn_on(
         &self,
-        handle: &tokio::runtime::Handle,
+        handle: &switchy_async::runtime::Handle,
         navigation: impl Into<RouteRequest>,
     ) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
         let navigation = navigation.into();

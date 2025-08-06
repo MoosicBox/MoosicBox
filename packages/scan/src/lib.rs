@@ -12,9 +12,9 @@ use moosicbox_config::get_cache_dir_path;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_music_api::{MusicApi, MusicApis, SourceToMusicApi as _};
 use moosicbox_music_models::TrackApiSource;
+use switchy_async::util::CancellationToken;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
-use tokio_util::sync::CancellationToken;
 
 #[cfg(feature = "api")]
 pub mod api;

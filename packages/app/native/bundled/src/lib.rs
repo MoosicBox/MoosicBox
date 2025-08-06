@@ -1,21 +1,16 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 
-use moosicbox_async_service::{Arc, JoinHandle, tokio::sync::RwLock};
+use moosicbox_async_service::{Arc, JoinHandle, sync::RwLock};
 use moosicbox_config::AppType;
 use strum_macros::AsRefStr;
+use switchy_async::sync::oneshot;
 use tauri::RunEvent;
 
 #[derive(Debug, AsRefStr)]
 pub enum Command {
-    RunEvent {
-        event: Arc<RunEvent>,
-    },
-    WaitForStartup {
-        sender: tokio::sync::oneshot::Sender<()>,
-    },
-    WaitForShutdown {
-        sender: tokio::sync::oneshot::Sender<()>,
-    },
+    RunEvent { event: Arc<RunEvent> },
+    WaitForStartup { sender: oneshot::Sender<()> },
+    WaitForShutdown { sender: oneshot::Sender<()> },
 }
 
 impl std::fmt::Display for Command {
@@ -83,12 +78,12 @@ impl service::Processor for service::Service {
 
 pub struct Context {
     server_handle: Option<JoinHandle<std::io::Result<()>>>,
-    receiver: Option<tokio::sync::oneshot::Receiver<()>>,
+    receiver: Option<switchy_async::sync::oneshot::Receiver<()>>,
 }
 
 impl Context {
-    pub fn new(handle: &tokio::runtime::Handle) -> Self {
-        let (sender, receiver) = tokio::sync::oneshot::channel();
+    pub fn new(handle: &moosicbox_async_service::runtime::Handle) -> Self {
+        let (sender, receiver) = switchy_async::sync::oneshot::channel();
 
         let addr = "0.0.0.0";
         let port = 8016;

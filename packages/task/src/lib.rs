@@ -3,52 +3,52 @@
 #![allow(clippy::multiple_crate_versions)]
 
 #[cfg(tokio_unstable)]
-pub fn spawn<Fut>(name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+pub fn spawn<Fut>(name: &str, future: Fut) -> switchy_async::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    spawn_on(name, &tokio::runtime::Handle::current(), future)
+    spawn_on(name, &switchy_async::runtime::Handle::current(), future)
 }
 
 #[cfg(not(tokio_unstable))]
-pub fn spawn<Fut>(name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+pub fn spawn<Fut>(name: &str, future: Fut) -> switchy_async::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
 {
-    spawn_on(name, &tokio::runtime::Handle::current(), future)
+    spawn_on(name, &switchy_async::runtime::Handle::current(), future)
 }
 
 #[cfg(tokio_unstable)]
 pub fn spawn_blocking<Function, Output>(
     name: &str,
     function: Function,
-) -> tokio::task::JoinHandle<Output>
+) -> switchy_async::task::JoinHandle<Output>
 where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
 {
-    spawn_blocking_on(name, &tokio::runtime::Handle::current(), function)
+    spawn_blocking_on(name, &switchy_async::runtime::Handle::current(), function)
 }
 
 #[cfg(not(tokio_unstable))]
 pub fn spawn_blocking<Function, Output>(
     name: &str,
     function: Function,
-) -> tokio::task::JoinHandle<Output>
+) -> switchy_async::task::JoinHandle<Output>
 where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
 {
-    spawn_blocking_on(name, &tokio::runtime::Handle::current(), function)
+    spawn_blocking_on(name, &switchy_async::runtime::Handle::current(), function)
 }
 
 /// # Panics
 ///
 /// * If fails to `spawn_local` the `tokio` task
 #[cfg(tokio_unstable)]
-pub fn spawn_local<Fut>(name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+pub fn spawn_local<Fut>(name: &str, future: Fut) -> switchy_async::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
@@ -67,20 +67,14 @@ where
                 response
             }
         };
-        tokio::task::Builder::new()
-            .name(name)
-            .spawn_local(future)
-            .unwrap()
+        switchy_async::task::spawn_local(future)
     } else {
-        tokio::task::Builder::new()
-            .name(name)
-            .spawn_local(future)
-            .unwrap()
+        switchy_async::task::spawn_local(future)
     }
 }
 
 #[cfg(not(tokio_unstable))]
-pub fn spawn_local<Fut>(name: &str, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+pub fn spawn_local<Fut>(name: &str, future: Fut) -> switchy_async::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + 'static,
     Fut::Output: 'static,
@@ -97,9 +91,9 @@ where
 
             response
         };
-        tokio::task::spawn_local(future)
+        switchy_async::task::spawn_local(future)
     } else {
-        tokio::task::spawn_local(future)
+        switchy_async::task::spawn_local(future)
     }
 }
 
@@ -109,9 +103,9 @@ where
 #[cfg(tokio_unstable)]
 pub fn spawn_on<Fut>(
     name: &str,
-    handle: &tokio::runtime::Handle,
+    handle: &switchy_async::runtime::Handle,
     future: Fut,
-) -> tokio::task::JoinHandle<Fut::Output>
+) -> switchy_async::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
@@ -127,24 +121,18 @@ where
                 response
             }
         };
-        tokio::task::Builder::new()
-            .name(name)
-            .spawn_on(future, handle)
-            .unwrap()
+        handle.spawn(future)
     } else {
-        tokio::task::Builder::new()
-            .name(name)
-            .spawn_on(future, handle)
-            .unwrap()
+        handle.spawn(future)
     }
 }
 
 #[cfg(not(tokio_unstable))]
 pub fn spawn_on<Fut>(
     name: &str,
-    handle: &tokio::runtime::Handle,
+    handle: &switchy_async::runtime::Handle,
     future: Fut,
-) -> tokio::task::JoinHandle<Fut::Output>
+) -> switchy_async::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
@@ -172,9 +160,9 @@ where
 #[cfg(tokio_unstable)]
 pub fn spawn_on_opt<Fut>(
     name: &str,
-    handle: Option<&tokio::runtime::Handle>,
+    handle: Option<&switchy_async::runtime::Handle>,
     future: Fut,
-) -> tokio::task::JoinHandle<Fut::Output>
+) -> switchy_async::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
@@ -189,9 +177,9 @@ where
 #[cfg(not(tokio_unstable))]
 pub fn spawn_on_opt<Fut>(
     name: &str,
-    handle: Option<&tokio::runtime::Handle>,
+    handle: Option<&switchy_async::runtime::Handle>,
     future: Fut,
-) -> tokio::task::JoinHandle<Fut::Output>
+) -> switchy_async::task::JoinHandle<Fut::Output>
 where
     Fut: futures::Future + Send + 'static,
     Fut::Output: Send + 'static,
@@ -209,9 +197,9 @@ where
 #[cfg(tokio_unstable)]
 pub fn spawn_blocking_on<Function, Output>(
     name: &str,
-    handle: &tokio::runtime::Handle,
+    handle: &switchy_async::runtime::Handle,
     function: Function,
-) -> tokio::task::JoinHandle<Output>
+) -> switchy_async::task::JoinHandle<Output>
 where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
@@ -230,24 +218,18 @@ where
                 response
             }
         };
-        tokio::task::Builder::new()
-            .name(name)
-            .spawn_blocking_on(function, handle)
-            .unwrap()
+        handle.spawn_blocking(function)
     } else {
-        tokio::task::Builder::new()
-            .name(name)
-            .spawn_blocking_on(function, handle)
-            .unwrap()
+        handle.spawn_blocking(function)
     }
 }
 
 #[cfg(not(tokio_unstable))]
 pub fn spawn_blocking_on<Function, Output>(
     name: &str,
-    handle: &tokio::runtime::Handle,
+    handle: &switchy_async::runtime::Handle,
     function: Function,
-) -> tokio::task::JoinHandle<Output>
+) -> switchy_async::task::JoinHandle<Output>
 where
     Function: FnOnce() -> Output + Send + 'static,
     Output: Send + 'static,
@@ -341,7 +323,7 @@ where
 pub fn block_on<Fut>(name: &str, future: Fut) -> Fut::Output
 where
     Fut: futures::Future + 'static,
-    Fut::Output: 'static,
+    Fut::Output: 'static + Send,
 {
     block_on_runtime(name, &tokio::runtime::Handle::current(), future)
 }
@@ -350,20 +332,20 @@ where
 pub fn block_on<Fut>(name: &str, future: Fut) -> Fut::Output
 where
     Fut: futures::Future + 'static,
-    Fut::Output: 'static,
+    Fut::Output: 'static + Send,
 {
-    block_on_runtime(name, &tokio::runtime::Handle::current(), future)
+    block_on_runtime(name, &switchy_async::runtime::Handle::current(), future)
 }
 
 #[cfg(tokio_unstable)]
 pub fn block_on_runtime<Fut>(
     name: &str,
-    handle: &tokio::runtime::Handle,
+    handle: &switchy_async::runtime::Handle,
     future: Fut,
 ) -> Fut::Output
 where
     Fut: futures::Future + 'static,
-    Fut::Output: 'static,
+    Fut::Output: 'static + Send,
 {
     if log::log_enabled!(log::Level::Trace) {
         log::trace!("block_on start: {name}");
@@ -386,12 +368,12 @@ where
 #[cfg(not(tokio_unstable))]
 pub fn block_on_runtime<Fut>(
     name: &str,
-    handle: &tokio::runtime::Handle,
+    handle: &switchy_async::runtime::Handle,
     future: Fut,
 ) -> Fut::Output
 where
     Fut: futures::Future + 'static,
-    Fut::Output: 'static,
+    Fut::Output: 'static + Send,
 {
     if log::log_enabled!(log::Level::Trace) {
         log::trace!("block_on start: {name}");

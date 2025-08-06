@@ -68,13 +68,12 @@ static HTTP_APP: OnceLock<hyperchad::renderer_html_http::HttpApp<native_app::Ren
     OnceLock::new();
 
 #[cfg(feature = "bundled")]
-static THREADS: LazyLock<usize> =
-    LazyLock::new(|| moosicbox_env_utils::default_env_usize("MAX_THREADS", 64).unwrap_or(64));
+static THREADS: LazyLock<u16> =
+    LazyLock::new(|| moosicbox_env_utils::default_env_u16("MAX_THREADS", 64).unwrap_or(64));
 
 #[cfg(feature = "bundled")]
-static RT: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
+static RT: LazyLock<switchy::unsync::runtime::Runtime> = LazyLock::new(|| {
+    switchy::unsync::runtime::Builder::new()
         .max_blocking_threads(*THREADS)
         .build()
         .unwrap()
@@ -752,7 +751,9 @@ pub fn run() {
     static JOIN_APP_SERVER: LazyLock<
         std::sync::Mutex<
             Option<
-                tokio::task::JoinHandle<Result<(), moosicbox_app_tauri_bundled::service::Error>>,
+                switchy::unsync::task::JoinHandle<
+                    Result<(), moosicbox_app_tauri_bundled::service::Error>,
+                >,
             >,
         >,
     > = LazyLock::new(|| std::sync::Mutex::new(None));
@@ -760,14 +761,18 @@ pub fn run() {
     #[allow(clippy::type_complexity)]
     static JOIN_MDNS_SERVICE: LazyLock<
         std::sync::Mutex<
-            Option<tokio::task::JoinHandle<Result<(), switchy::mdns::scanner::service::Error>>>,
+            Option<
+                switchy::unsync::task::JoinHandle<
+                    Result<(), switchy::mdns::scanner::service::Error>,
+                >,
+            >,
         >,
     > = LazyLock::new(|| std::sync::Mutex::new(None));
 
     #[allow(clippy::type_complexity)]
     static JOIN_UPNP_SERVICE: LazyLock<
         std::sync::Mutex<
-            Option<tokio::task::JoinHandle<Result<(), switchy::upnp::listener::Error>>>,
+            Option<switchy::unsync::task::JoinHandle<Result<(), switchy::upnp::listener::Error>>>,
         >,
     > = LazyLock::new(|| std::sync::Mutex::new(None));
 
@@ -872,8 +877,7 @@ pub fn run() {
         .setup(move |app| {
             APP.get_or_init(|| app.handle().clone());
 
-            let tauri::async_runtime::RuntimeHandle::Tokio(tokio_handle) =
-                tauri::async_runtime::handle();
+            let runtime_handle = switchy::unsync::runtime::Handle::current();
 
             moosicbox_config::set_root_dir(get_data_dir().unwrap());
 
@@ -885,7 +889,7 @@ pub fn run() {
                 .with_on_before_set_state_listener(update_log_layer);
 
             #[cfg(feature = "moosicbox-app-native")]
-            let state = tokio_handle.block_on(async move { moosicbox_app_native::init_app_state(state).await }).unwrap();
+            let state = runtime_handle.block_on(async move { moosicbox_app_native::init_app_state(state).await }).unwrap();
             #[cfg(not(feature = "moosicbox-app-native"))]
             {
                 ApiSource::register_library();
@@ -964,7 +968,7 @@ pub fn run() {
                         }
                     });
 
-                tokio_handle.spawn(async move {
+                runtime_handle.spawn(async move {
                     while let Ok((action, value)) = action_rx.recv_async().await {
                         log::debug!("Received action: action={action} value={value:?}");
                         match Action::try_from(action) {
@@ -981,7 +985,7 @@ pub fn run() {
 
                 HTTP_APP.set(app).unwrap();
 
-                tokio_handle.spawn(async move {
+                runtime_handle.spawn(async move {
                     let api_url = STATE
                         .get_current_connection()
                         .await
@@ -1015,13 +1019,13 @@ pub fn run() {
 
                 log::debug!("Starting app server");
 
-                let context = moosicbox_app_tauri_bundled::Context::new(RT.handle());
+                let context = moosicbox_app_tauri_bundled::Context::new(&RT.handle());
                 let server = moosicbox_app_tauri_bundled::service::Service::new(context);
 
                 let app_server_handle = server.handle();
-                let (tx, rx) = tokio::sync::oneshot::channel();
+                let (tx, rx) = switchy::unsync::sync::oneshot::channel();
 
-                let join_app_server = server.start_on(RT.handle());
+                let join_app_server = server.start_on(&RT.handle());
 
                 app_server_handle
                     .send_command(moosicbox_app_tauri_bundled::Command::WaitForStartup {
@@ -1045,7 +1049,7 @@ pub fn run() {
                 switchy::upnp::listener::Service::new(switchy::upnp::listener::UpnpContext::new());
 
             let upnp_service_handle = upnp_service.handle();
-            *JOIN_UPNP_SERVICE.lock().unwrap() = Some(upnp_service.start_on(&tokio_handle));
+            *JOIN_UPNP_SERVICE.lock().unwrap() = Some(upnp_service.start_on(&runtime_handle));
 
             UPNP_LISTENER_HANDLE
                 .set(upnp_service_handle)

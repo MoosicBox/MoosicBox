@@ -31,6 +31,7 @@ moosicbox_stream_utils = { workspace = true }
 moosicbox_task = { workspace = true }
 moosicbox_tunnel = { workspace = true }
 moosicbox_ws = { workspace = true, features = ["ws"] }
+switchy_async = { workspace = true, features = ["tokio"] }
 switchy_database = { workspace = true }
 switchy_http = { workspace = true, features = ["json", "reqwest"] }
 switchy_random = { workspace = true, features = ["rand"] }
@@ -51,7 +52,6 @@ symphonia         = { workspace = true }
 thiserror         = { workspace = true }
 tokio             = { workspace = true, features = ["tracing"] }
 tokio-tungstenite = { workspace = true }
-tokio-util        = { workspace = true }
 
 [features]
 default = ["all-encoders", "base64"]

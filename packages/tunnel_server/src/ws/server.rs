@@ -16,13 +16,13 @@ use moosicbox_tunnel_server::CANCELLATION_TOKEN;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
+use switchy_async::util::CancellationToken;
 use thiserror::Error;
 use tokio::sync::{
     RwLock,
     mpsc::{self, UnboundedSender, error::SendError},
     oneshot,
 };
-use tokio_util::sync::CancellationToken;
 
 use crate::db::{DatabaseError, delete_connection, select_connection, upsert_connection};
 use crate::ws::{ConnId, Msg};

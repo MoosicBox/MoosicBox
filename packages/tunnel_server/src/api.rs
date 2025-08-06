@@ -19,11 +19,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::str::FromStr as _;
+use switchy_async::util::CancellationToken;
 use switchy_http::models::Method;
 use thiserror::Error;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::sync::oneshot;
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::WS_SERVER_HANDLE;

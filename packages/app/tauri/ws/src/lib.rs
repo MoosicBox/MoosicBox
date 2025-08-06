@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures_channel::mpsc::UnboundedSender;
 use futures_util::{StreamExt as _, future, pin_mut};
+use switchy_async::util::CancellationToken;
 use thiserror::Error;
 use tokio::select;
 use tokio::sync::mpsc::Sender;
@@ -20,7 +21,6 @@ use tokio_tungstenite::{
     connect_async,
     tungstenite::{Error, Message},
 };
-use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Error)]
 pub enum SendBytesError {

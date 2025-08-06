@@ -7,11 +7,11 @@ use async_trait::async_trait;
 use chrono::{NaiveDateTime, Utc};
 use futures::StreamExt;
 use postgres_protocol::types::{bool_from_sql, float8_from_sql, int8_from_sql, text_from_sql};
+use switchy_async::task::JoinHandle;
 use thiserror::Error;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     pin,
-    task::JoinHandle,
 };
 use tokio_postgres::{Client, Row, RowStream, types::IsNull};
 

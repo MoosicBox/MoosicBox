@@ -17,6 +17,7 @@ group = "switchy"
 moosicbox_assert   = { workspace = true }
 moosicbox_profiles = { workspace = true, features = ["api"] }
 moosicbox_task     = { workspace = true, optional = true }
+switchy_async      = { workspace = true, features = ["tokio"] }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }

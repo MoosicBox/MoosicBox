@@ -37,7 +37,7 @@ pub enum ResizeImageError {
     #[error(transparent)]
     Image(#[from] image::error::ImageError),
     #[error(transparent)]
-    Join(#[from] tokio::task::JoinError),
+    Join(#[from] switchy_async::task::JoinError),
 }
 
 /// # Errors

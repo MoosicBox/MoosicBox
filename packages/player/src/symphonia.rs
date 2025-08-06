@@ -1,6 +1,7 @@
 use std::{fs::File, path::Path};
 
 use moosicbox_audio_decoder::{AudioDecodeHandler, DecodeError, decode};
+use switchy_async::task::JoinError;
 use symphonia::core::{
     codecs::DecoderOptions,
     formats::FormatOptions,
@@ -9,7 +10,6 @@ use symphonia::core::{
     probe::Hint,
 };
 use thiserror::Error;
-use tokio::task::JoinError;
 
 impl From<std::io::Error> for PlaybackError {
     fn from(err: std::io::Error) -> Self {

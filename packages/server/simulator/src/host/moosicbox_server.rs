@@ -17,8 +17,7 @@ use simvar::{
     },
     utils::run_until_simulation_cancelled,
 };
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
+use switchy_async::util::CancellationToken;
 
 pub const HOST: &str = "moosicbox_server";
 pub const PORT: u16 = 1234;
@@ -183,7 +182,7 @@ async fn connect_std_tcp_addr(addr: &str) -> Result<std::net::TcpStream, std::io
 fn start_tcp_listen(
     addr: &str,
     token: CancellationToken,
-) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
+) -> switchy_async::task::JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
     let addr = addr.to_string();
     moosicbox_task::spawn("simulation TCP listener", async move {
         log::debug!("simulation TCP listener: starting TcpListener...");

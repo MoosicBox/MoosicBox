@@ -23,9 +23,9 @@ use std::{
     net::TcpListener,
     sync::{Arc, LazyLock},
 };
+use switchy_async::util::CancellationToken;
 use switchy_database::{Database, config::ConfigDatabase, profiles::PROFILES};
 use tokio::try_join;
-use tokio_util::sync::CancellationToken;
 
 static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);
 #[cfg(feature = "upnp")]
@@ -201,7 +201,8 @@ pub async fn run<T>(
 
             (handle, join_handle)
         })
-        .await?;
+        .await
+        .map_err(std::io::Error::other)?;
 
     #[cfg(feature = "upnp")]
     let (upnp_service_handle, join_upnp_service) = if upnp_players {

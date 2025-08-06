@@ -4,12 +4,9 @@ use std::{collections::HashMap, fmt::Display, pin::Pin, sync::Arc, time::Duratio
 
 use futures::Future;
 use strum_macros::AsRefStr;
+use switchy_async::{task::JoinError, util::CancellationToken};
 use thiserror::Error;
-use tokio::{
-    sync::RwLock,
-    task::{JoinError, JoinHandle},
-};
-use tokio_util::sync::CancellationToken;
+use tokio::sync::RwLock;
 
 use crate::{MediaInfo, PositionInfo, TransportInfo};
 
@@ -68,7 +65,7 @@ impl Display for UpnpCommand {
 
 pub struct UpnpContext {
     #[allow(clippy::type_complexity)]
-    status_join_handles: HashMap<usize, JoinHandle<Result<(), ListenerError>>>,
+    status_join_handles: HashMap<usize, switchy_async::task::JoinHandle<Result<(), ListenerError>>>,
     status_tokens: HashMap<usize, CancellationToken>,
     token: Option<CancellationToken>,
     subscription_id: usize,

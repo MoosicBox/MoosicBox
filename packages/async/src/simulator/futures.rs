@@ -188,4 +188,38 @@ impl Interval {
     pub fn tick(&mut self) -> Instant {
         Instant::new(system_time_to_instant(switchy_time::now() + self.interval).unwrap())
     }
+
+    pub fn reset(&mut self) {
+        self.now = switchy_time::now();
+        self.polled = false;
+        self.completed = false;
+    }
+
+    /// # Panics
+    ///
+    /// * If time goes backwards
+    pub fn poll_tick(&mut self, cx: &mut Context) -> Poll<std::time::Instant> {
+        if self.completed {
+            // Reset for next tick
+            self.now = switchy_time::now();
+            self.polled = false;
+            self.completed = false;
+        }
+
+        if self.polled {
+            let duration = switchy_time::now().duration_since(self.now).unwrap();
+            if duration >= self.interval {
+                self.completed = true;
+                let instant = system_time_to_instant(switchy_time::now()).unwrap();
+                return Poll::Ready(instant);
+            }
+        }
+
+        if !self.polled {
+            self.polled = true;
+        }
+
+        cx.waker().wake_by_ref();
+        Poll::Pending
+    }
 }

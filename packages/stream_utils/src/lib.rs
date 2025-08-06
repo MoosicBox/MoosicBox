@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use switchy_async::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 #[cfg(feature = "remote-bytestream")]
 pub mod remote_bytestream;

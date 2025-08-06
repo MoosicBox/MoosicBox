@@ -25,6 +25,7 @@ use moosicbox_stream_utils::{
 };
 use moosicbox_task;
 use serde::{Deserialize, Serialize};
+use switchy_async::util::CancellationToken;
 use symphonia::core::{
     audio::{AudioBuffer, Signal},
     conv::IntoSample,
@@ -35,7 +36,6 @@ use symphonia::core::{
 };
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use tokio_util::sync::CancellationToken;
 
 use crate::files::{
     filename_from_path_str, track_bytes_media_source::TrackBytesMediaSource,

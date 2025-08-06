@@ -4,6 +4,6 @@
 
 use std::sync::LazyLock;
 
-use tokio_util::sync::CancellationToken;
+use switchy_async::util::CancellationToken;
 
 pub static CANCELLATION_TOKEN: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new);

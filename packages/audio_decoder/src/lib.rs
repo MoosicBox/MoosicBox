@@ -7,6 +7,8 @@
 use std::fs::File;
 use std::path::Path;
 
+use switchy_async::task::JoinError;
+use switchy_async::util::CancellationToken;
 use symphonia::core::audio::{AudioBuffer, SignalSpec};
 use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions, FinalizeResult};
 use symphonia::core::errors::Error;
@@ -16,8 +18,6 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::{Duration, Time};
 use thiserror::Error;
-use tokio::task::JoinError;
-use tokio_util::sync::CancellationToken;
 
 pub mod media_sources;
 pub mod unsync;

@@ -9,8 +9,8 @@ use thiserror::Error;
 pub struct StalledReadMonitor<T, R: futures::Stream<Item = T>> {
     #[pin]
     inner: R,
-    sleeper: Option<tokio::time::Interval>,
-    throttler: Option<tokio::time::Interval>,
+    sleeper: Option<switchy_async::time::Interval>,
+    throttler: Option<switchy_async::time::Interval>,
 }
 
 impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
@@ -24,7 +24,7 @@ impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
 
     #[must_use]
     pub fn with_timeout(self, timeout_duration: Duration) -> Self {
-        let mut sleeper = tokio::time::interval(timeout_duration);
+        let mut sleeper = switchy_async::time::interval(timeout_duration);
         sleeper.reset();
 
         Self {
@@ -36,7 +36,7 @@ impl<T, R: futures::Stream<Item = T>> StalledReadMonitor<T, R> {
 
     #[must_use]
     pub fn with_throttle(self, throttle_duration: Duration) -> Self {
-        let mut throttler = tokio::time::interval(throttle_duration);
+        let mut throttler = switchy_async::time::interval(throttle_duration);
         throttler.reset();
 
         Self {

@@ -6,9 +6,9 @@ use moosicbox_tunnel_sender::{
     TunnelMessage,
     sender::{TunnelSender, TunnelSenderHandle},
 };
+use switchy_async::task::JoinHandle;
 use switchy_database::config::ConfigDatabase;
 use thiserror::Error;
-use tokio::task::JoinHandle;
 use url::Url;
 
 use crate::{CANCELLATION_TOKEN, WS_SERVER_HANDLE};

@@ -11,15 +11,13 @@ use std::{
 use futures::Future;
 use moosicbox_json_utils::database::DatabaseFetchError;
 use moosicbox_scan::local::ScanItem;
+use switchy_async::task::{JoinError, JoinHandle};
+use switchy_async::util::CancellationToken;
 use switchy_database::{
     DatabaseError, DatabaseValue, Row, profiles::LibraryDatabase, query::FilterableQuery,
 };
 use thiserror::Error;
-use tokio::{
-    sync::{Mutex, RwLock},
-    task::{JoinError, JoinHandle},
-};
-use tokio_util::sync::CancellationToken;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     DownloadAlbumError, DownloadTrackError, Downloader,

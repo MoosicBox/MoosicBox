@@ -15,6 +15,7 @@ ignored = ["strum"]
 
 [dependencies]
 moosicbox_assert = { workspace = true }
+switchy_async    = { workspace = true, features = ["tokio"] }
 switchy_http     = { workspace = true, features = ["serde"] }
 switchy_time     = { workspace = true, features = ["std"] }
 
@@ -30,7 +31,6 @@ strum        = { workspace = true }
 strum_macros = { workspace = true }
 thiserror    = { workspace = true }
 tokio        = { workspace = true, features = ["rt", "tracing"] }
-tokio-util   = { workspace = true }
 
 [features]
 default = ["base64"]

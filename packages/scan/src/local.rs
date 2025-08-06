@@ -13,14 +13,14 @@ use std::{
     pin::Pin,
     sync::{Arc, LazyLock},
 };
+use switchy_async::task::JoinError;
+use switchy_async::util::CancellationToken;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
 use tokio::{
     fs::{self, DirEntry},
     sync::RwLock,
-    task::JoinError,
 };
-use tokio_util::sync::CancellationToken;
 
 use crate::{
     CACHE_DIR, Scanner,

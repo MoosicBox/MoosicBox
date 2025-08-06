@@ -168,6 +168,16 @@ pub fn default_env_usize(name: &str, default: usize) -> Result<usize, DefaultEnv
     }
 }
 
+/// # Errors
+///
+/// * If encounters an invalid digit in the `&str`
+pub fn default_env_u16(name: &str, default: u16) -> Result<u16, DefaultEnvUsizeError> {
+    match std::env::var(name) {
+        Ok(value) => Ok(value.parse::<u16>()?),
+        Err(_) => Ok(default),
+    }
+}
+
 #[macro_export]
 macro_rules! default_env_usize {
     ($name:expr, $default:expr $(,)?) => {

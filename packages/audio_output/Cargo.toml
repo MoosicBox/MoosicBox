@@ -18,6 +18,7 @@ moosicbox_env_utils     = { workspace = true }
 moosicbox_resampler     = { workspace = true }
 moosicbox_stream_utils  = { workspace = true }
 moosicbox_task          = { workspace = true }
+switchy_async           = { workspace = true, features = ["tokio"] }
 switchy_time            = { workspace = true, features = ["std"] }
 
 # API Dependencies

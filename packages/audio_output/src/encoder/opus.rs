@@ -11,6 +11,7 @@ use moosicbox_audio_encoder::opus::{
 };
 use moosicbox_stream_utils::{ByteStream, ByteWriter};
 use ogg::{PacketWriteEndInfo, PacketWriter};
+use switchy_async::task::JoinHandle;
 use symphonia::core::{
     audio::{AudioBuffer, Channels, Signal, SignalSpec},
     formats::{Packet, Track},
@@ -380,7 +381,7 @@ pub fn encode_opus_stream(path: &str) -> ByteStream {
 pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     path: &str,
     writer: T,
-) -> tokio::task::JoinHandle<()> {
+) -> JoinHandle<()> {
     let path = path.to_string();
     moosicbox_task::spawn_blocking("audio_decoder: encode_opus", move || {
         encode_opus(&path, writer);

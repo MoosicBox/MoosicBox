@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use mdns_sd::{ServiceDaemon, ServiceEvent};
-use moosicbox_async_service::{Arc, CancellationToken, JoinError, JoinHandle, tokio::sync::RwLock};
+use moosicbox_async_service::{Arc, CancellationToken, JoinError, JoinHandle, sync::RwLock};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
@@ -72,7 +72,7 @@ impl service::Processor for service::Service {
                 log::debug!("mdns scanner: Browsing for {service_type} services...");
 
                 while let Ok(Some(event)) = {
-                    moosicbox_async_service::tokio::select! {
+                    switchy_async::select! {
                         event = receiver.recv_async() => event.map(Some),
                         () = token.cancelled() => Ok(None)
                     }

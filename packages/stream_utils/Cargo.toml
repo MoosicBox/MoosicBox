@@ -12,6 +12,7 @@ version     = "0.1.4"
 
 [dependencies]
 moosicbox_task = { workspace = true, optional = true }
+switchy_async = { workspace = true, features = ["tokio", "util", "macros"] }
 switchy_http = { workspace = true, optional = true, features = [
     "reqwest",
     "stream",
@@ -24,8 +25,9 @@ futures     = { workspace = true }
 log         = { workspace = true }
 pin-project = { workspace = true }
 thiserror   = { workspace = true, optional = true }
-tokio       = { workspace = true, features = ["sync"] }
-tokio-util  = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
 
 [features]
 default = ["remote-bytestream", "stalled-monitor"]
@@ -36,9 +38,6 @@ remote-bytestream = [
     "dep:flume",
     "dep:moosicbox_task",
     "dep:switchy_http",
-    "dep:tokio-util",
-    "tokio/macros",
-    "tokio/sync",
-    "tokio/time",
+    "switchy_async/util",
 ]
-stalled-monitor = ["dep:thiserror", "tokio/sync", "tokio/time"]
+stalled-monitor = ["dep:thiserror", "switchy_async/sync", "switchy_async/time"]

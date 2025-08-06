@@ -21,7 +21,8 @@ required-features = ["build-binary"]
 [dependencies]
 moosicbox_task = { workspace = true }
 
-bytes = { workspace = true }
+bytes         = { workspace = true }
+switchy_async = { workspace = true, features = ["tokio"] }
 clap = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 log = { workspace = true }

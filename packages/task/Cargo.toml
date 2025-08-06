@@ -14,10 +14,11 @@ version     = "0.1.4"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tokio_unstable)'] }
 
 [dependencies]
-futures   = { workspace = true }
-log       = { workspace = true }
-profiling = { workspace = true, optional = true }
-tokio     = { workspace = true, features = ["rt", "tracing"] }
+futures      = { workspace = true }
+log          = { workspace = true }
+profiling    = { workspace = true, optional = true }
+switchy_async = { workspace = true, features = ["tokio"] }
+tokio        = { workspace = true, features = ["rt"] }
 
 [features]
 default = []

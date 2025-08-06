@@ -31,6 +31,7 @@ simvar = { workspace = true, features = [
     "tui",
     "upnp",
 ] }
+switchy_async = { workspace = true, features = ["tokio"] }
 switchy_telemetry = { workspace = true }
 
 actix-web  = { workspace = true }
@@ -39,7 +40,6 @@ net2       = { workspace = true }
 serde_json = { workspace = true }
 strum      = { workspace = true, features = ["derive"] }
 tokio      = { workspace = true }
-tokio-util = { workspace = true }
 
 [features]
 default = ["player", "sqlite", "telemetry", "upnp"]

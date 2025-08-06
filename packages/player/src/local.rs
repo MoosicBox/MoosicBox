@@ -14,8 +14,8 @@ use moosicbox_audio_output::{AudioHandle, AudioOutput, AudioOutputFactory};
 use moosicbox_music_api::models::TrackAudioQuality;
 use moosicbox_music_models::TrackApiSource;
 use moosicbox_session::models::UpdateSession;
+use switchy_async::util::CancellationToken;
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
-use tokio_util::sync::CancellationToken;
 
 use crate::{
     ApiPlaybackStatus, Playback, PlaybackHandler, PlaybackType, Player, PlayerError, PlayerSource,
@@ -43,7 +43,7 @@ pub struct LocalPlayer {
     pub audio_handle: Arc<RwLock<Option<AudioHandle>>>, // Handle for immediate audio control
     session_command_forwarder:
         Arc<RwLock<Option<flume::Sender<moosicbox_audio_output::CommandMessage>>>>,
-    session_coordinator_handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
+    session_coordinator_handle: Arc<RwLock<Option<switchy_async::task::JoinHandle<()>>>>,
 }
 
 impl std::fmt::Debug for LocalPlayer {
@@ -395,7 +395,7 @@ impl LocalPlayer {
     fn start_instance_session_coordinator(
         &self,
         session_command_receiver: flume::Receiver<moosicbox_audio_output::CommandMessage>,
-    ) -> tokio::task::JoinHandle<()> {
+    ) -> switchy_async::task::JoinHandle<()> {
         let session_command_forwarder = self.session_command_forwarder.clone();
         moosicbox_task::spawn("instance_session_coordinator", async move {
             log::debug!("Instance session command coordinator started");

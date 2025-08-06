@@ -9,10 +9,10 @@ use futures_util::{Future, Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum_macros::EnumString;
+use switchy_async::util::CancellationToken;
 use switchy_http::models::Method;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedReceiver;
-use tokio_util::sync::CancellationToken;
 
 #[cfg(feature = "base64")]
 static BASE64_TUNNEL_RESPONSE_PREFIX: &str = "TUNNEL_RESPONSE:";

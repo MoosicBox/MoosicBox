@@ -1,6 +1,8 @@
-use std::time::Duration;
+use crate::simulator::futures::Sleep;
 
-use crate::simulator::futures::{Interval, Sleep};
+// Re-export types for compatibility
+pub use crate::simulator::futures::Interval;
+pub use std::time::Duration;
 
 #[must_use]
 pub fn sleep(duration: Duration) -> Sleep {
@@ -8,6 +10,6 @@ pub fn sleep(duration: Duration) -> Sleep {
 }
 
 #[must_use]
-pub fn interval(duration: Duration) -> Interval {
-    Interval::new(duration)
+pub fn interval(duration: Duration) -> crate::simulator::futures::Interval {
+    crate::simulator::futures::Interval::new(duration)
 }

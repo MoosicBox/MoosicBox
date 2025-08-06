@@ -1,8 +1,7 @@
 use std::sync::{Arc, LazyLock};
 
 use serde::Serialize;
-use tauri::async_runtime::RuntimeHandle;
-use tokio::{sync::RwLock, task::JoinHandle};
+use tokio::sync::RwLock;
 
 use crate::TauriPlayerError;
 
@@ -37,7 +36,7 @@ pub async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerErro
 
 pub fn spawn_mdns_scanner() -> (
     switchy::mdns::scanner::service::Handle,
-    JoinHandle<Result<(), switchy::mdns::scanner::service::Error>>,
+    switchy::unsync::task::JoinHandle<Result<(), switchy::mdns::scanner::service::Error>>,
 ) {
     let (tx, rx) = kanal::unbounded_async();
 
@@ -45,7 +44,7 @@ pub fn spawn_mdns_scanner() -> (
     let service = switchy::mdns::scanner::service::Service::new(context);
 
     let handle = service.handle();
-    let RuntimeHandle::Tokio(runtime_handle) = tauri::async_runtime::handle();
+    let runtime_handle = switchy::unsync::runtime::Handle::current();
 
     moosicbox_task::spawn_on("mdns_scanner", &runtime_handle, async move {
         while let Ok(server) = rx.recv().await {

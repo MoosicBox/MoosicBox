@@ -16,19 +16,19 @@ moosicbox_stream_utils = { workspace = true, features = [
     "stalled-monitor",
 ] }
 moosicbox_task = { workspace = true }
+switchy_async = { workspace = true, features = ["tokio"] }
 switchy_http = { workspace = true, features = ["reqwest"] }
 switchy_time = { workspace = true, features = ["std"] }
 
-bytes      = { workspace = true }
-flume      = { workspace = true }
-futures    = { workspace = true }
-log        = { workspace = true }
-profiling  = { workspace = true, optional = true }
-rangemap   = { workspace = true }
-symphonia  = { workspace = true }
-thiserror  = { workspace = true }
-tokio      = { workspace = true, features = ["rt-multi-thread", "tracing"] }
-tokio-util = { workspace = true }
+bytes     = { workspace = true }
+flume     = { workspace = true }
+futures   = { workspace = true }
+log       = { workspace = true }
+profiling = { workspace = true, optional = true }
+rangemap  = { workspace = true }
+symphonia = { workspace = true }
+thiserror = { workspace = true }
+tokio     = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 
 [features]
 default = []

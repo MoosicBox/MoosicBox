@@ -1,4 +1,5 @@
-use moosicbox_async_service::{tokio::sync::RwLock, Arc};
+use moosicbox_async_service::Arc;
+use switchy_async::sync::RwLock;
 use strum_macros::AsRefStr;
 
 #[derive(Debug, AsRefStr)]

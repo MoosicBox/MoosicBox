@@ -14,11 +14,16 @@ version     = "0.1.4"
 group = "hyperchad"
 
 [dependencies]
-hyperchad_renderer    = { workspace = true }
+hyperchad_renderer = { workspace = true }
 hyperchad_transformer = { workspace = true, features = ["html"] }
-moosicbox_assert      = { workspace = true }
-moosicbox_task        = { workspace = true }
-switchy               = { workspace = true, features = ["http-models"] }
+moosicbox_assert = { workspace = true }
+moosicbox_task = { workspace = true }
+switchy = { workspace = true, features = ["http-models"] }
+switchy_async = { workspace = true, features = [
+    "rt-multi-thread",
+    "sync",
+    "tokio",
+] }
 
 bytes     = { workspace = true }
 flume     = { workspace = true }
@@ -27,7 +32,6 @@ log       = { workspace = true }
 os_info   = { workspace = true }
 qstring   = { workspace = true }
 thiserror = { workspace = true }
-tokio     = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 base64           = { workspace = true, optional = true }
 hyper_old        = { package = "hyper", version = "=0.10", optional = true, default-features = false }

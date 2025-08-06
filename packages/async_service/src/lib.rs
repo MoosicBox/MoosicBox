@@ -9,10 +9,10 @@ pub use flume::{Receiver, RecvError, SendError, Sender, unbounded};
 pub use futures::Future;
 pub use log;
 pub use moosicbox_task;
+pub use switchy_async::task::{JoinError, JoinHandle};
+pub use switchy_async::util::CancellationToken;
+pub use switchy_async::{runtime, select, sync};
 pub use thiserror::Error;
-pub use tokio;
-pub use tokio::task::{JoinError, JoinHandle};
-pub use tokio_util::sync::CancellationToken;
 
 #[macro_export]
 macro_rules! async_service_body {
@@ -22,7 +22,7 @@ macro_rules! async_service_body {
             type Error;
 
             async fn process_command(
-                ctx: $crate::Arc<$crate::tokio::sync::RwLock<$context>>,
+                ctx: $crate::Arc<$crate::sync::RwLock<$context>>,
                 command: $command,
             ) -> Result<(), Self::Error>;
 
@@ -33,7 +33,7 @@ macro_rules! async_service_body {
 
             #[allow(unused_variables)]
             async fn on_shutdown(
-                ctx: $crate::Arc<$crate::tokio::sync::RwLock<$context>>,
+                ctx: $crate::Arc<$crate::sync::RwLock<$context>>,
             ) -> Result<(), Self::Error> {
                 Ok(())
             }
@@ -41,7 +41,7 @@ macro_rules! async_service_body {
 
         pub struct Service {
             pub name: $crate::Arc<String>,
-            pub ctx: $crate::Arc<$crate::tokio::sync::RwLock<$context>>,
+            pub ctx: $crate::Arc<$crate::sync::RwLock<$context>>,
             pub token: $crate::CancellationToken,
             sender: $crate::Sender<Command>,
             receiver: $crate::Receiver<Command>,
@@ -51,7 +51,7 @@ macro_rules! async_service_body {
             pub fn new(ctx: $context) -> Self {
                 let (tx, rx) = $crate::unbounded();
                 Self {
-                    ctx: $crate::Arc::new($crate::tokio::sync::RwLock::new(ctx)),
+                    ctx: $crate::Arc::new($crate::sync::RwLock::new(ctx)),
                     sender: tx,
                     receiver: rx,
                     token: $crate::CancellationToken::new(),
@@ -65,10 +65,10 @@ macro_rules! async_service_body {
             }
 
             pub fn start(self) -> $crate::JoinHandle<Result<(), Error>> {
-                self.start_on(&$crate::tokio::runtime::Handle::current())
+                self.start_on(&$crate::runtime::Handle::current())
             }
 
-            pub fn start_on(mut self, handle: &$crate::tokio::runtime::Handle) -> $crate::JoinHandle<Result<(), Error>> {
+            pub fn start_on(mut self, handle: &$crate::runtime::Handle) -> $crate::JoinHandle<Result<(), Error>> {
                 $crate::moosicbox_task::spawn_on(
                     &format!("async_service: {}", self.name),
                     handle,
@@ -76,7 +76,7 @@ macro_rules! async_service_body {
                         self.on_start().await?;
                         let ctx = self.ctx;
 
-                        while let Ok(Ok(command)) = $crate::tokio::select!(
+                        while let Ok(Ok(command)) = $crate::select!(
                             () = self.token.cancelled() => {
                                 log::debug!("Service was cancelled");
                                 Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cancelled"))
@@ -143,7 +143,7 @@ macro_rules! async_service_body {
             #[allow(unused)]
             async fn send_command_and_wait_async(&self, command: $command) -> Result<(), Self::Error>;
             #[allow(unused)]
-            async fn send_command_and_wait_async_on(&self, command: $command, handle: &$crate::tokio::runtime::Handle) -> Result<(), Self::Error>;
+            async fn send_command_and_wait_async_on(&self, command: $command, handle: &$crate::runtime::Handle) -> Result<(), Self::Error>;
             #[allow(unused)]
             fn shutdown(&self) -> Result<(), Self::Error>;
         }
@@ -188,10 +188,10 @@ macro_rules! async_service_body {
             }
 
             async fn send_command_and_wait_async(&self, command: $command) -> Result<(), Self::Error> {
-                self.send_command_and_wait_async_on(command, &$crate::tokio::runtime::Handle::current()).await
+                self.send_command_and_wait_async_on(command, &$crate::runtime::Handle::current()).await
             }
 
-            async fn send_command_and_wait_async_on(&self, command: $command, handle: &$crate::tokio::runtime::Handle) -> Result<(), Self::Error> {
+            async fn send_command_and_wait_async_on(&self, command: $command, handle: &$crate::runtime::Handle) -> Result<(), Self::Error> {
                 let (tx, rx) = $crate::unbounded();
                 let sender = self.sender.clone();
                 $crate::moosicbox_task::spawn_on(
@@ -316,7 +316,7 @@ mod test {
 
     use async_trait::async_trait;
     use pretty_assertions::assert_eq;
-    use tokio::sync::RwLock;
+    use switchy_async::sync::RwLock;
 
     pub enum ExampleCommand {
         TestCommand { value: String },

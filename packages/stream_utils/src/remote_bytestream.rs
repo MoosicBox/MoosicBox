@@ -4,9 +4,9 @@ use std::io::{Read, Seek};
 use bytes::Bytes;
 use flume::{Receiver, Sender, bounded, unbounded};
 use futures::StreamExt;
+use switchy_async::task::JoinHandle;
+use switchy_async::util::CancellationToken;
 use switchy_http::Client;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
 // Trait for HTTP fetching to enable dependency injection in tests
 #[async_trait::async_trait]
@@ -174,7 +174,7 @@ impl<F: HttpFetcher> RemoteByteStreamFetcher<F> {
                     }
                 };
 
-                while let Some(item) = tokio::select! {
+                while let Some(item) = switchy_async::select! {
                     resp = stream.next() => resp,
                     () = abort.cancelled() => {
                         log::debug!("Aborted");
@@ -529,7 +529,7 @@ impl<F: HttpFetcher> Seek for RemoteByteStream<F> {
 mod tests {
     use super::*;
     use std::io::{Read, Seek, SeekFrom};
-    use tokio_util::sync::CancellationToken;
+    use switchy_async::util::CancellationToken;
 
     #[test]
     fn test_remote_bytestream_construction() {
@@ -934,7 +934,7 @@ mod tests {
         );
 
         // Give time for fetch to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
 
         // Read only part of the data (first 10 bytes)
         let mut buf = [0u8; 10];
@@ -976,7 +976,7 @@ mod tests {
         );
 
         // Give time for fetch to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
 
         // Read all the data
         let mut buf = [0u8; 10];
@@ -1016,7 +1016,7 @@ mod tests {
         );
 
         // Give time for fetch to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
 
         // First read - should get all available data at once (both chunks)
         let mut buf1 = [0u8; 25];
@@ -1054,7 +1054,7 @@ mod tests {
         );
 
         // Give time for fetch to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
 
         // Read only part of available data
         let mut buf1 = [0u8; 10];
@@ -1090,7 +1090,7 @@ mod tests {
         );
 
         // Give time for fetch to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
 
         // Read some data but not all
         let mut buf1 = [0u8; 5];
@@ -1132,7 +1132,7 @@ mod tests {
         );
 
         // Give time for fetch to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
 
         // Read only part of the data
         let mut buf1 = [0u8; 4];

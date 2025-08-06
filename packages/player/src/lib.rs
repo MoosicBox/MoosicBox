@@ -31,12 +31,10 @@ use moosicbox_stream_utils::{
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use switchy_async::util::CancellationToken;
 use switchy_database::profiles::LibraryDatabase;
 use thiserror::Error;
-use tokio_util::{
-    codec::{BytesCodec, FramedRead},
-    sync::CancellationToken,
-};
+use tokio_util::codec::{BytesCodec, FramedRead};
 
 use crate::{
     signal_chain::{SignalChain, SignalChainError},
@@ -77,7 +75,7 @@ pub enum PlayerError {
     #[error(transparent)]
     DatabaseFetch(#[from] DatabaseFetchError),
     #[error(transparent)]
-    Join(#[from] tokio::task::JoinError),
+    Join(#[from] switchy_async::task::JoinError),
     #[error(transparent)]
     Acquire(#[from] tokio::sync::AcquireError),
     #[error(transparent)]

@@ -39,6 +39,7 @@ use moosicbox_tunnel::{TunnelEncoding, TunnelWsResponse};
 use moosicbox_ws::{PlayerAction, WebsocketContext, WebsocketSendError, WebsocketSender};
 use regex::Regex;
 use serde_json::Value;
+use switchy_async::util::CancellationToken;
 use switchy_database::{config::ConfigDatabase, profiles::PROFILES};
 use switchy_http::models::Method;
 use symphonia::core::{
@@ -55,7 +56,6 @@ use tokio_tungstenite::{
     connect_async,
     tungstenite::{Error, Message, Utf8Bytes},
 };
-use tokio_util::sync::CancellationToken;
 
 use super::{
     GetTrackInfoQuery, GetTrackQuery, SendBytesError, SendMessageError, TunnelMessage,

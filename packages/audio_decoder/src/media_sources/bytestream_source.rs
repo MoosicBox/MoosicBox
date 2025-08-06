@@ -4,9 +4,9 @@ use std::io::{Read, Seek};
 use bytes::Bytes;
 use flume::{Receiver, Sender, bounded};
 use futures::{Stream, StreamExt};
+use switchy_async::task::JoinHandle;
+use switchy_async::util::CancellationToken;
 use symphonia::core::io::MediaSource;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
 type ByteStreamType =
     Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send + std::marker::Unpin>;

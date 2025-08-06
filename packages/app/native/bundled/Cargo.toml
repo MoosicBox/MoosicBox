@@ -21,12 +21,12 @@ moosicbox_config        = { workspace = true }
 moosicbox_server        = { workspace = true, features = ["app-apis", "sqlite-sqlx"] }
 moosicbox_task          = { workspace = true }
 
-log          = { workspace = true }
-strum        = { workspace = true }
-strum_macros = { workspace = true }
-tauri        = { workspace = true }
-thiserror    = { workspace = true }
-tokio        = { workspace = true }
+log           = { workspace = true }
+strum         = { workspace = true }
+strum_macros  = { workspace = true }
+switchy_async = { workspace = true, features = ["sync", "tokio"] }
+tauri         = { workspace = true }
+thiserror     = { workspace = true }
 
 [features]
 default = ["all-decoders", "all-sources"]
