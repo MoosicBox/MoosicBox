@@ -23,7 +23,7 @@ use moosicbox_stream_utils::{
     ByteWriter, new_byte_writer_id, remote_bytestream::RemoteByteStream,
     stalled_monitor::StalledReadMonitor,
 };
-use moosicbox_task;
+
 use serde::{Deserialize, Serialize};
 use switchy_async::util::CancellationToken;
 use symphonia::core::{
@@ -314,75 +314,78 @@ pub fn get_silence_bytes(
     let duration: u64 = u64::from(spec.rate) * duration;
 
     #[allow(unreachable_code)]
-    moosicbox_task::spawn_blocking("get_silence_bytes: encode", move || {
-        #[allow(unused)]
-        let mut encoder: Box<dyn AudioWrite> = match format {
-            #[cfg(feature = "format-aac")]
-            AudioFormat::Aac => {
-                #[cfg(feature = "encoder-aac")]
-                {
-                    Box::new(
-                        moosicbox_audio_output::encoder::aac::AacEncoder::with_writer(writer)
-                            .open(spec, duration),
-                    )
+    switchy_async::runtime::Handle::current().spawn_blocking_with_name(
+        "get_silence_bytes: encode",
+        move || {
+            #[allow(unused)]
+            let mut encoder: Box<dyn AudioWrite> = match format {
+                #[cfg(feature = "format-aac")]
+                AudioFormat::Aac => {
+                    #[cfg(feature = "encoder-aac")]
+                    {
+                        Box::new(
+                            moosicbox_audio_output::encoder::aac::AacEncoder::with_writer(writer)
+                                .open(spec, duration),
+                        )
+                    }
+                    #[cfg(not(feature = "encoder-aac"))]
+                    panic!("No encoder-aac feature");
                 }
-                #[cfg(not(feature = "encoder-aac"))]
-                panic!("No encoder-aac feature");
-            }
-            #[cfg(feature = "format-flac")]
-            AudioFormat::Flac => {
-                #[cfg(feature = "encoder-flac")]
-                {
-                    Box::new(
-                        moosicbox_audio_output::encoder::flac::FlacEncoder::with_writer(writer)
-                            .open(spec, duration),
-                    )
+                #[cfg(feature = "format-flac")]
+                AudioFormat::Flac => {
+                    #[cfg(feature = "encoder-flac")]
+                    {
+                        Box::new(
+                            moosicbox_audio_output::encoder::flac::FlacEncoder::with_writer(writer)
+                                .open(spec, duration),
+                        )
+                    }
+                    #[cfg(not(feature = "encoder-flac"))]
+                    panic!("No encoder-aac feature");
                 }
-                #[cfg(not(feature = "encoder-flac"))]
-                panic!("No encoder-aac feature");
-            }
-            #[cfg(feature = "format-mp3")]
-            AudioFormat::Mp3 => {
-                #[cfg(feature = "encoder-mp3")]
-                {
-                    Box::new(
-                        moosicbox_audio_output::encoder::mp3::Mp3Encoder::with_writer(writer)
-                            .open(spec, duration),
-                    )
+                #[cfg(feature = "format-mp3")]
+                AudioFormat::Mp3 => {
+                    #[cfg(feature = "encoder-mp3")]
+                    {
+                        Box::new(
+                            moosicbox_audio_output::encoder::mp3::Mp3Encoder::with_writer(writer)
+                                .open(spec, duration),
+                        )
+                    }
+                    #[cfg(not(feature = "encoder-mp3"))]
+                    panic!("No encoder-mp3 feature");
                 }
-                #[cfg(not(feature = "encoder-mp3"))]
-                panic!("No encoder-mp3 feature");
-            }
-            #[cfg(feature = "format-opus")]
-            AudioFormat::Opus => {
-                #[cfg(feature = "encoder-opus")]
-                {
-                    Box::new(
-                        moosicbox_audio_output::encoder::opus::OpusEncoder::with_writer(writer)
-                            .open(spec, duration),
-                    )
+                #[cfg(feature = "format-opus")]
+                AudioFormat::Opus => {
+                    #[cfg(feature = "encoder-opus")]
+                    {
+                        Box::new(
+                            moosicbox_audio_output::encoder::opus::OpusEncoder::with_writer(writer)
+                                .open(spec, duration),
+                        )
+                    }
+                    #[cfg(not(feature = "encoder-opus"))]
+                    panic!("No encoder-opus feature");
                 }
-                #[cfg(not(feature = "encoder-opus"))]
-                panic!("No encoder-opus feature");
-            }
-            AudioFormat::Source => return Err::<(), _>(GetSilenceBytesError::InvalidSource),
-        };
+                AudioFormat::Source => return Err::<(), _>(GetSilenceBytesError::InvalidSource),
+            };
 
-        #[cfg(any(
-            feature = "format-aac",
-            feature = "format-flac",
-            feature = "format-mp3",
-            feature = "format-opus"
-        ))]
-        {
-            let mut buffer = AudioBuffer::<f32>::new(duration, spec);
-            buffer.render_silence(None);
-            encoder.write(buffer)?;
-            encoder.flush()?;
+            #[cfg(any(
+                feature = "format-aac",
+                feature = "format-flac",
+                feature = "format-mp3",
+                feature = "format-opus"
+            ))]
+            {
+                let mut buffer = AudioBuffer::<f32>::new(duration, spec);
+                buffer.render_silence(None);
+                encoder.write(buffer)?;
+                encoder.flush()?;
 
-            Ok(())
-        }
-    });
+                Ok(())
+            }
+        },
+    );
 
     Ok(TrackBytes {
         id: writer_id,
@@ -643,73 +646,78 @@ async fn request_audio_bytes_from_file(
     let (sender, receiver) = flume::unbounded();
     let file_path = path.clone();
 
-    moosicbox_task::spawn("files: Manual file reader", async move {
-        let mut file = match tokio::fs::File::open(&file_path).await {
-            Ok(file) => file,
-            Err(e) => {
-                log::error!("Failed to open file for manual reading: {e}");
-                return;
-            }
-        };
-
-        if let Some(start) = start {
-            if let Err(e) = file.seek(std::io::SeekFrom::Start(start)).await {
-                log::error!("Failed to seek to start position: {e}");
-                return;
-            }
-        }
-
-        let mut bytes_read = 0u64;
-        let mut buffer = vec![0u8; 8192]; // 8KB chunks
-
-        log::debug!("Manual file reader starting for {file_path}, target size: {size}");
-
-        loop {
-            match file.read(&mut buffer).await {
-                Ok(0) => {
-                    log::debug!("Manual file reader: EOF reached after reading {bytes_read} bytes");
-                    break;
-                }
-                Ok(n) => {
-                    bytes_read += n as u64;
-
-                    // Check if we should stop due to size limit
-                    if bytes_read > size {
-                        let excess = bytes_read - size;
-                        let send_bytes = n - usize::try_from(excess).unwrap();
-                        if send_bytes > 0
-                            && sender
-                                .send_async(Ok(Bytes::copy_from_slice(&buffer[..send_bytes])))
-                                .await
-                                .is_err()
-                        {
-                            log::debug!("Manual file reader: receiver dropped (final chunk)");
-                        }
-                        log::debug!("Manual file reader: reached size limit {size} bytes");
-                        break;
-                    }
-
-                    log::trace!("Manual file reader: read {n} bytes (total: {bytes_read})");
-
-                    if sender
-                        .send_async(Ok(Bytes::copy_from_slice(&buffer[..n])))
-                        .await
-                        .is_err()
-                    {
-                        log::debug!("Manual file reader: receiver dropped");
-                        break;
-                    }
-                }
+    switchy_async::runtime::Handle::current().spawn_with_name(
+        "files: Manual file reader",
+        async move {
+            let mut file = match tokio::fs::File::open(&file_path).await {
+                Ok(file) => file,
                 Err(e) => {
-                    log::error!("Manual file reader: read error after {bytes_read} bytes: {e}");
-                    let _ = sender.send_async(Err(e)).await;
-                    break;
+                    log::error!("Failed to open file for manual reading: {e}");
+                    return;
+                }
+            };
+
+            if let Some(start) = start {
+                if let Err(e) = file.seek(std::io::SeekFrom::Start(start)).await {
+                    log::error!("Failed to seek to start position: {e}");
+                    return;
                 }
             }
-        }
 
-        log::debug!("Manual file reader finished: read {bytes_read} bytes total");
-    });
+            let mut bytes_read = 0u64;
+            let mut buffer = vec![0u8; 8192]; // 8KB chunks
+
+            log::debug!("Manual file reader starting for {file_path}, target size: {size}");
+
+            loop {
+                match file.read(&mut buffer).await {
+                    Ok(0) => {
+                        log::debug!(
+                            "Manual file reader: EOF reached after reading {bytes_read} bytes"
+                        );
+                        break;
+                    }
+                    Ok(n) => {
+                        bytes_read += n as u64;
+
+                        // Check if we should stop due to size limit
+                        if bytes_read > size {
+                            let excess = bytes_read - size;
+                            let send_bytes = n - usize::try_from(excess).unwrap();
+                            if send_bytes > 0
+                                && sender
+                                    .send_async(Ok(Bytes::copy_from_slice(&buffer[..send_bytes])))
+                                    .await
+                                    .is_err()
+                            {
+                                log::debug!("Manual file reader: receiver dropped (final chunk)");
+                            }
+                            log::debug!("Manual file reader: reached size limit {size} bytes");
+                            break;
+                        }
+
+                        log::trace!("Manual file reader: read {n} bytes (total: {bytes_read})");
+
+                        if sender
+                            .send_async(Ok(Bytes::copy_from_slice(&buffer[..n])))
+                            .await
+                            .is_err()
+                        {
+                            log::debug!("Manual file reader: receiver dropped");
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Manual file reader: read error after {bytes_read} bytes: {e}");
+                        let _ = sender.send_async(Err(e)).await;
+                        break;
+                    }
+                }
+            }
+
+            log::debug!("Manual file reader finished: read {bytes_read} bytes total");
+        },
+    );
 
     let stream = futures::stream::unfold(receiver, |receiver| async move {
         receiver.recv_async().await.ok().map(|x| (x, receiver))

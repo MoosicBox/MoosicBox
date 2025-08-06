@@ -568,45 +568,50 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             ctx.request_repaint();
                         }
                     } else {
-                        moosicbox_task::spawn("renderer: load_image", async move {
-                            static CLIENT: LazyLock<switchy_http::Client> =
-                                LazyLock::new(switchy_http::Client::new);
+                        switchy_async::runtime::Handle::current().spawn_with_name(
+                            "renderer: load_image",
+                            async move {
+                                static CLIENT: LazyLock<switchy_http::Client> =
+                                    LazyLock::new(switchy_http::Client::new);
 
-                            log::trace!("loading image {source}");
-                            match CLIENT.get(&source).send().await {
-                                Ok(response) => {
-                                    if !response.status().is_success() {
-                                        log::error!(
-                                            "Failed to load image: {}",
-                                            response.text().await.unwrap_or_else(|e| {
-                                                format!("(failed to get response text: {e:?})")
-                                            })
-                                        );
-                                        return;
-                                    }
+                                log::trace!("loading image {source}");
+                                match CLIENT.get(&source).send().await {
+                                    Ok(response) => {
+                                        if !response.status().is_success() {
+                                            log::error!(
+                                                "Failed to load image: {}",
+                                                response.text().await.unwrap_or_else(|e| {
+                                                    format!("(failed to get response text: {e:?})")
+                                                })
+                                            );
+                                            return;
+                                        }
 
-                                    match response.bytes().await {
-                                        Ok(bytes) => {
-                                            let bytes = bytes.to_vec().into();
+                                        match response.bytes().await {
+                                            Ok(bytes) => {
+                                                let bytes = bytes.to_vec().into();
 
-                                            let mut binding = images.write().unwrap();
-                                            binding.insert(source, AppImage::Bytes(bytes));
-                                            drop(binding);
+                                                let mut binding = images.write().unwrap();
+                                                binding.insert(source, AppImage::Bytes(bytes));
+                                                drop(binding);
 
-                                            if let Some(ctx) = &*ctx.read().unwrap() {
-                                                ctx.request_repaint();
+                                                if let Some(ctx) = &*ctx.read().unwrap() {
+                                                    ctx.request_repaint();
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::error!(
+                                                    "Failed to fetch image ({source}): {e:?}"
+                                                );
                                             }
                                         }
-                                        Err(e) => {
-                                            log::error!("Failed to fetch image ({source}): {e:?}");
-                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to fetch image ({source}): {e:?}");
                                     }
                                 }
-                                Err(e) => {
-                                    log::error!("Failed to fetch image ({source}): {e:?}");
-                                }
-                            }
-                        });
+                            },
+                        );
                     }
                 }
             }
@@ -647,7 +652,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> hyperchad_renderer::Renderer f
 
         // Start listening for events
         log::debug!("EguiRenderer: spawning listen thread");
-        moosicbox_task::spawn("renderer_egui::init: listen", {
+        switchy_async::runtime::Handle::current().spawn_with_name("renderer_egui::init: listen", {
             let app = self.app.clone();
             async move {
                 log::debug!("EguiRenderer: listening");

@@ -14,8 +14,8 @@ version     = "0.1.4"
 moosicbox_assert    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging   = { workspace = true, features = ["macros"] }
-moosicbox_task      = { workspace = true }
-switchy_async       = { workspace = true, features = ["tokio"] }
+
+switchy_async = { workspace = true, features = ["tokio", "util"] }
 
 async-trait       = { workspace = true }
 bytes             = { workspace = true }

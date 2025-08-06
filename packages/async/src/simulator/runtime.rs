@@ -116,6 +116,26 @@ impl Handle {
         self.runtime.spawn(future)
     }
 
+    /// Spawn a named future onto the runtime
+    pub fn spawn_with_name<T: Send + 'static>(
+        &self,
+        name: &str,
+        future: impl Future<Output = T> + Send + 'static,
+    ) -> JoinHandle<T> {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("spawn start: {name}");
+            let name = name.to_owned();
+            let future = async move {
+                let response = future.await;
+                log::trace!("spawn finished: {name}");
+                response
+            };
+            self.runtime.spawn(future)
+        } else {
+            self.runtime.spawn(future)
+        }
+    }
+
     pub fn spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -124,11 +144,51 @@ impl Handle {
         self.runtime.spawn_blocking(func)
     }
 
+    /// Spawn a named blocking task onto the runtime
+    pub fn spawn_blocking_with_name<F, R>(&self, name: &str, func: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("spawn_blocking start: {name}");
+            let name = name.to_owned();
+            let func = move || {
+                let response = func();
+                log::trace!("spawn_blocking finished: {name}");
+                response
+            };
+            self.runtime.spawn_blocking(func)
+        } else {
+            self.runtime.spawn_blocking(func)
+        }
+    }
+
     pub fn spawn_local<T: 'static>(
         &self,
         future: impl Future<Output = T> + 'static,
     ) -> JoinHandle<T> {
         self.runtime.spawn_local(future)
+    }
+
+    /// Spawn a named local future onto the runtime
+    pub fn spawn_local_with_name<T: 'static>(
+        &self,
+        name: &str,
+        future: impl Future<Output = T> + 'static,
+    ) -> JoinHandle<T> {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("spawn_local start: {name}");
+            let name = name.to_owned();
+            let future = async move {
+                let response = future.await;
+                log::trace!("spawn_local finished: {name}");
+                response
+            };
+            self.runtime.spawn_local(future)
+        } else {
+            self.runtime.spawn_local(future)
+        }
     }
 
     /// # Panics
@@ -290,6 +350,15 @@ impl Runtime {
         RUNTIME.set(self, || self.spawner.spawn(self.clone(), future))
     }
 
+    /// Spawn a named future onto the runtime
+    pub fn spawn_with_name<T: Send + 'static>(
+        &self,
+        name: &str,
+        future: impl Future<Output = T> + Send + 'static,
+    ) -> JoinHandle<T> {
+        self.handle().spawn_with_name(name, future)
+    }
+
     pub fn spawn_blocking<F, R>(&self, func: F) -> JoinHandle<R>
     where
         F: FnOnce() -> R + Send + 'static,
@@ -297,6 +366,15 @@ impl Runtime {
     {
         self.start();
         RUNTIME.set(self, || self.spawner.spawn_blocking(self.clone(), func))
+    }
+
+    /// Spawn a named blocking task onto the runtime
+    pub fn spawn_blocking_with_name<F, R>(&self, name: &str, func: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        self.handle().spawn_blocking_with_name(name, func)
     }
 
     pub fn spawn_local<T: 'static>(

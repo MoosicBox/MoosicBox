@@ -394,7 +394,7 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> ToRenderRunner for EguiRendere
 
         let renderer = self.clone();
 
-        moosicbox_task::spawn("render buffer", async move {
+        switchy_async::runtime::Handle::current().spawn_with_name("render buffer", async move {
             while let Ok(Some(view)) = view_rx.recv_async().await {
                 match view {
                     RenderView::View(x) => {
@@ -460,14 +460,17 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
         self.app.background = background.map(Into::into);
 
         log::debug!("start: spawning listen thread");
-        moosicbox_task::spawn("renderer_egui::start: listen", {
-            let app = self.app.clone();
-            async move {
-                log::debug!("start: listening");
-                app.listen().await;
-                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
-            }
-        });
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "renderer_egui::start: listen",
+            {
+                let app = self.app.clone();
+                async move {
+                    log::debug!("start: listening");
+                    app.listen().await;
+                    Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+                }
+            },
+        );
 
         Ok(())
     }
@@ -484,11 +487,12 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
 
         let app = self.app.clone();
 
-        moosicbox_task::spawn_blocking("handle_event", move || {
-            app.handle_event(&event_name, event_value.as_deref());
-        })
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?;
+        switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("handle_event", move || {
+                app.handle_event(&event_name, event_value.as_deref());
+            })
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?;
 
         Ok(())
     }
@@ -516,46 +520,47 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
         let width = self.width;
         let height = self.height;
 
-        moosicbox_task::spawn_blocking("egui render", move || {
-            moosicbox_logging::debug_or_trace!(
-                ("render: start"),
-                ("render: start {:?}", view.immediate)
-            );
-            let mut element = view.immediate;
+        switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("egui render", move || {
+                moosicbox_logging::debug_or_trace!(
+                    ("render: start"),
+                    ("render: start {:?}", view.immediate)
+                );
+                let mut element = view.immediate;
 
-            element.calculated_width = app.width.read().unwrap().or(width);
-            element.calculated_height = app.height.read().unwrap().or(height);
-            log::debug!(
-                "render: calculated_width={:?} calculated_height={:?}",
-                element.calculated_width,
-                element.calculated_height
-            );
-            app.calculator.read().unwrap().calc(&mut element);
-            moosicbox_assert::assert!(element.calculated_font_size.is_some());
+                element.calculated_width = app.width.read().unwrap().or(width);
+                element.calculated_height = app.height.read().unwrap().or(height);
+                log::debug!(
+                    "render: calculated_width={:?} calculated_height={:?}",
+                    element.calculated_width,
+                    element.calculated_height
+                );
+                app.calculator.read().unwrap().calc(&mut element);
+                moosicbox_assert::assert!(element.calculated_font_size.is_some());
 
-            let mut watch_positions = app.watch_positions.write().unwrap();
-            watch_positions.clear();
-            add_watch_pos(&element, &element, &mut watch_positions);
-            drop(watch_positions);
+                let mut watch_positions = app.watch_positions.write().unwrap();
+                watch_positions.clear();
+                add_watch_pos(&element, &element, &mut watch_positions);
+                drop(watch_positions);
 
-            *app.container.write().unwrap() = Some(element);
-            app.images.write().unwrap().clear();
-            app.viewport_listeners.write().unwrap().clear();
-            app.route_requests.write().unwrap().clear();
-            app.checkboxes.write().unwrap().clear();
-            app.positions.write().unwrap().clear();
-            app.immediate_elements_handled.write().unwrap().clear();
-            // Removed: action_handler field was removed
+                *app.container.write().unwrap() = Some(element);
+                app.images.write().unwrap().clear();
+                app.viewport_listeners.write().unwrap().clear();
+                app.route_requests.write().unwrap().clear();
+                app.checkboxes.write().unwrap().clear();
+                app.positions.write().unwrap().clear();
+                app.immediate_elements_handled.write().unwrap().clear();
+                // Removed: action_handler field was removed
 
-            log::debug!("render: finished");
-            if let Some(ctx) = &*app.ctx.read().unwrap() {
-                ctx.request_repaint();
-            }
+                log::debug!("render: finished");
+                if let Some(ctx) = &*app.ctx.read().unwrap() {
+                    ctx.request_repaint();
+                }
 
-            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
-        })
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
+                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+            })
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
 
         Ok(())
     }
@@ -578,51 +583,55 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
 
         let app = self.app.clone();
 
-        moosicbox_task::spawn_blocking("egui render_partial", move || {
-            moosicbox_logging::debug_or_trace!(
-                ("render_partial: start"),
-                ("render_partial: start {:?}", view)
-            );
+        switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("egui render_partial", move || {
+                moosicbox_logging::debug_or_trace!(
+                    ("render_partial: start"),
+                    ("render_partial: start {:?}", view)
+                );
 
-            let mut binding = app.container.write().unwrap();
-            let Some(page) = binding.as_mut() else {
-                return Ok(());
-            };
-            let calculator = app.calculator.read().unwrap();
+                let mut binding = app.container.write().unwrap();
+                let Some(page) = binding.as_mut() else {
+                    return Ok(());
+                };
+                let calculator = app.calculator.read().unwrap();
 
-            if page
-                .replace_str_id_with_elements_calc(
-                    &*calculator,
-                    view.container.children,
-                    &view.target,
-                )
-                .is_some()
-            {
-                drop(calculator);
-                let mut watch_positions = app.watch_positions.write().unwrap();
-                watch_positions.clear();
-                add_watch_pos(page, page, &mut watch_positions);
-                drop(watch_positions);
+                if page
+                    .replace_str_id_with_elements_calc(
+                        &*calculator,
+                        view.container.children,
+                        &view.target,
+                    )
+                    .is_some()
+                {
+                    drop(calculator);
+                    let mut watch_positions = app.watch_positions.write().unwrap();
+                    watch_positions.clear();
+                    add_watch_pos(page, page, &mut watch_positions);
+                    drop(watch_positions);
 
-                // TODO: Handle style transfer with shared action handler
-                // For now, clear the action handler to reset state
-                // Removed: action_handler field was removed
+                    // TODO: Handle style transfer with shared action handler
+                    // For now, clear the action handler to reset state
+                    // Removed: action_handler field was removed
 
-                drop(binding);
-                if let Some(ctx) = &*app.ctx.read().unwrap() {
-                    ctx.request_repaint();
+                    drop(binding);
+                    if let Some(ctx) = &*app.ctx.read().unwrap() {
+                        ctx.request_repaint();
+                    }
+                } else {
+                    drop(calculator);
+                    log::warn!("Unable to find element with id {}", view.target);
                 }
-            } else {
-                drop(calculator);
-                log::warn!("Unable to find element with id {}", view.target);
-            }
 
-            moosicbox_logging::debug_or_trace!(("render_partial: end"), ("render_partial: end"));
+                moosicbox_logging::debug_or_trace!(
+                    ("render_partial: end"),
+                    ("render_partial: end")
+                );
 
-            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
-        })
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
+                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+            })
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
 
         Ok(())
     }
@@ -640,31 +649,32 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> Renderer for EguiRenderer<C> {
     ) -> Result<(), Box<dyn std::error::Error + Send + 'static>> {
         let app = self.app.clone();
 
-        moosicbox_task::spawn_blocking("egui render_canvas", move || {
-            log::trace!("render_canvas: start");
+        switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("egui render_canvas", move || {
+                log::trace!("render_canvas: start");
 
-            let mut binding = app.canvas_actions.write().unwrap();
+                let mut binding = app.canvas_actions.write().unwrap();
 
-            let actions = binding
-                .entry(update.target)
-                .or_insert_with(|| Vec::with_capacity(update.canvas_actions.len()));
+                let actions = binding
+                    .entry(update.target)
+                    .or_insert_with(|| Vec::with_capacity(update.canvas_actions.len()));
 
-            actions.append(&mut update.canvas_actions);
+                actions.append(&mut update.canvas_actions);
 
-            compact_canvas_actions(actions);
+                compact_canvas_actions(actions);
 
-            drop(binding);
+                drop(binding);
 
-            if let Some(ctx) = &*app.ctx.read().unwrap() {
-                ctx.request_repaint();
-            }
+                if let Some(ctx) = &*app.ctx.read().unwrap() {
+                    ctx.request_repaint();
+                }
 
-            log::trace!("render_canvas: end");
+                log::trace!("render_canvas: end");
 
-            Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
-        })
-        .await
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
+                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+            })
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)??;
 
         Ok(())
     }
@@ -1066,45 +1076,50 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                             ctx.request_repaint();
                         }
                     } else {
-                        moosicbox_task::spawn("renderer: load_image", async move {
-                            static CLIENT: LazyLock<switchy_http::Client> =
-                                LazyLock::new(switchy_http::Client::new);
+                        switchy_async::runtime::Handle::current().spawn_with_name(
+                            "renderer: load_image",
+                            async move {
+                                static CLIENT: LazyLock<switchy_http::Client> =
+                                    LazyLock::new(switchy_http::Client::new);
 
-                            log::trace!("loading image {source}");
-                            match CLIENT.get(&source).send().await {
-                                Ok(response) => {
-                                    if !response.status().is_success() {
-                                        log::error!(
-                                            "Failed to load image: {}",
-                                            response.text().await.unwrap_or_else(|e| {
-                                                format!("(failed to get response text: {e:?})")
-                                            })
-                                        );
-                                        return;
-                                    }
+                                log::trace!("loading image {source}");
+                                match CLIENT.get(&source).send().await {
+                                    Ok(response) => {
+                                        if !response.status().is_success() {
+                                            log::error!(
+                                                "Failed to load image: {}",
+                                                response.text().await.unwrap_or_else(|e| {
+                                                    format!("(failed to get response text: {e:?})")
+                                                })
+                                            );
+                                            return;
+                                        }
 
-                                    match response.bytes().await {
-                                        Ok(bytes) => {
-                                            let bytes = bytes.to_vec().into();
+                                        match response.bytes().await {
+                                            Ok(bytes) => {
+                                                let bytes = bytes.to_vec().into();
 
-                                            let mut binding = images.write().unwrap();
-                                            binding.insert(source, AppImage::Bytes(bytes));
-                                            drop(binding);
+                                                let mut binding = images.write().unwrap();
+                                                binding.insert(source, AppImage::Bytes(bytes));
+                                                drop(binding);
 
-                                            if let Some(ctx) = &*ctx.read().unwrap() {
-                                                ctx.request_repaint();
+                                                if let Some(ctx) = &*ctx.read().unwrap() {
+                                                    ctx.request_repaint();
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::error!(
+                                                    "Failed to fetch image ({source}): {e:?}"
+                                                );
                                             }
                                         }
-                                        Err(e) => {
-                                            log::error!("Failed to fetch image ({source}): {e:?}");
-                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to fetch image ({source}): {e:?}");
                                     }
                                 }
-                                Err(e) => {
-                                    log::error!("Failed to fetch image ({source}): {e:?}");
-                                }
-                            }
-                        });
+                            },
+                        );
                     }
                 }
                 AppEvent::ProcessRoute {
@@ -1121,79 +1136,84 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     let calculator = self.calculator.clone();
                     let ctx = self.ctx.clone();
                     let client = self.client_info.clone();
-                    moosicbox_task::spawn("renderer: ProcessRoute", async move {
-                        match route {
-                            Route::Get {
-                                route,
-                                trigger,
-                                swap,
-                            }
-                            | Route::Post {
-                                route,
-                                trigger,
-                                swap,
-                            }
-                            | Route::Put {
-                                route,
-                                trigger,
-                                swap,
-                            }
-                            | Route::Delete {
-                                route,
-                                trigger,
-                                swap,
-                            }
-                            | Route::Patch {
-                                route,
-                                trigger,
-                                swap,
-                            } => {
-                                if trigger.as_deref() == Some("load") {
-                                    let info = RequestInfo { client };
-                                    match router.navigate((&route, info)).await {
-                                        Ok(content) => {
-                                            let Some(content) = content else { return };
-                                            let Some(ctx) = ctx.read().unwrap().clone() else {
-                                                moosicbox_assert::die_or_panic!(
-                                                    "Context was not set"
-                                                )
-                                            };
-                                            #[allow(clippy::match_wildcard_for_single_variants)]
-                                            match content {
-                                                Content::View(view) => {
-                                                    Self::swap_elements(
-                                                        &swap,
-                                                        &ctx,
-                                                        &container,
-                                                        &calculator.read().unwrap(),
-                                                        container_id,
-                                                        view.immediate,
-                                                    );
-                                                    if let Some(future) = view.future {
-                                                        let view = future.await;
+                    switchy_async::runtime::Handle::current().spawn_with_name(
+                        "renderer: ProcessRoute",
+                        async move {
+                            match route {
+                                Route::Get {
+                                    route,
+                                    trigger,
+                                    swap,
+                                }
+                                | Route::Post {
+                                    route,
+                                    trigger,
+                                    swap,
+                                }
+                                | Route::Put {
+                                    route,
+                                    trigger,
+                                    swap,
+                                }
+                                | Route::Delete {
+                                    route,
+                                    trigger,
+                                    swap,
+                                }
+                                | Route::Patch {
+                                    route,
+                                    trigger,
+                                    swap,
+                                } => {
+                                    if trigger.as_deref() == Some("load") {
+                                        let info = RequestInfo { client };
+                                        match router.navigate((&route, info)).await {
+                                            Ok(content) => {
+                                                let Some(content) = content else { return };
+                                                let Some(ctx) = ctx.read().unwrap().clone() else {
+                                                    moosicbox_assert::die_or_panic!(
+                                                        "Context was not set"
+                                                    )
+                                                };
+                                                #[allow(clippy::match_wildcard_for_single_variants)]
+                                                match content {
+                                                    Content::View(view) => {
                                                         Self::swap_elements(
                                                             &swap,
                                                             &ctx,
                                                             &container,
                                                             &calculator.read().unwrap(),
                                                             container_id,
-                                                            view,
+                                                            view.immediate,
                                                         );
+                                                        if let Some(future) = view.future {
+                                                            let view = future.await;
+                                                            Self::swap_elements(
+                                                                &swap,
+                                                                &ctx,
+                                                                &container,
+                                                                &calculator.read().unwrap(),
+                                                                container_id,
+                                                                view,
+                                                            );
+                                                        }
+                                                    }
+                                                    _ => {
+                                                        unimplemented!();
                                                     }
                                                 }
-                                                _ => {
-                                                    unimplemented!();
-                                                }
                                             }
-                                        }
-                                        Err(e) => {
-                                            log::error!("Failed to process route ({route}): {e:?}");
+                                            Err(e) => {
+                                                log::error!(
+                                                    "Failed to process route ({route}): {e:?}"
+                                                );
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    });
+                        },
+                    );
                 }
             }
         }

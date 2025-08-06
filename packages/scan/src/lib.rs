@@ -252,9 +252,10 @@ impl Scanner {
             let scanner = self.clone();
             let path = path.to_owned();
 
-            moosicbox_task::spawn(&format!("scan_local: scan '{path}'"), async move {
-                local::scan(&path, &db, CANCELLATION_TOKEN.clone(), scanner).await
-            })
+            switchy_async::runtime::Handle::current()
+                .spawn_with_name(&format!("scan_local: scan '{path}'"), async move {
+                    local::scan(&path, &db, CANCELLATION_TOKEN.clone(), scanner).await
+                })
         });
 
         for resp in futures::future::join_all(handles).await {

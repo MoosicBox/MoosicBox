@@ -20,7 +20,7 @@ ignored = ["strum"]
 moosicbox_assert       = { workspace = true }
 moosicbox_audio_output = { workspace = true, optional = true }
 moosicbox_logging      = { workspace = true, optional = true, features = ["macros"] }
-moosicbox_task         = { workspace = true }
+
 switchy_async          = { workspace = true, features = ["tokio"] }
 switchy_http           = { workspace = true, optional = true, features = ["reqwest"] }
 

@@ -424,7 +424,7 @@ impl WsServer {
             cmd = cmd_rx.recv_async() => { Ok(cmd) }
         ) {
             log::trace!("Received WsServer command {cmd}");
-            moosicbox_task::spawn(
+            switchy_async::runtime::Handle::current().spawn_with_name(
                 "server: WsServer process_command",
                 Self::process_command(ctx.clone(), cmd),
             );
@@ -509,7 +509,7 @@ impl WsServerHandle {
 
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
-        moosicbox_task::spawn("ws server connect", {
+        switchy_async::runtime::Handle::current().spawn_with_name("ws server connect", {
             let cmd_tx = self.cmd_tx.clone();
             async move {
                 if let Err(e) = cmd_tx
@@ -534,7 +534,7 @@ impl WsServerHandle {
         log::trace!("Sending Send command");
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
-        moosicbox_task::spawn("ws server send", {
+        switchy_async::runtime::Handle::current().spawn_with_name("ws server send", {
             let cmd_tx = self.cmd_tx.clone();
             let msg = msg.into();
             async move {
@@ -553,7 +553,7 @@ impl WsServerHandle {
         log::trace!("Sending Broadcast command");
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
-        moosicbox_task::spawn("ws server broadcast", {
+        switchy_async::runtime::Handle::current().spawn_with_name("ws server broadcast", {
             let cmd_tx = self.cmd_tx.clone();
             let msg = msg.into();
             async move {
@@ -572,7 +572,7 @@ impl WsServerHandle {
         log::trace!("Sending BroadcastExcept command");
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
-        moosicbox_task::spawn("ws server broadcast_except", {
+        switchy_async::runtime::Handle::current().spawn_with_name("ws server broadcast_except", {
             let cmd_tx = self.cmd_tx.clone();
             let msg = msg.into();
             async move {
@@ -595,7 +595,7 @@ impl WsServerHandle {
         log::trace!("Sending Message command");
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
 
-        moosicbox_task::spawn("ws server send_message", {
+        switchy_async::runtime::Handle::current().spawn_with_name("ws server send_message", {
             let cmd_tx = self.cmd_tx.clone();
             let msg = msg.into();
             async move {

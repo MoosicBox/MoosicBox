@@ -1185,13 +1185,16 @@ impl FltkRenderer {
                     }
 
                     let cancel = Arc::new(AtomicBool::new(false));
-                    let handle = moosicbox_task::spawn("check_viewports", {
-                        let renderer = renderer.clone();
-                        let cancel = cancel.clone();
-                        async move {
-                            renderer.check_viewports(&cancel);
-                        }
-                    });
+                    let handle = switchy_async::runtime::Handle::current().spawn_with_name(
+                        "check_viewports",
+                        {
+                            let renderer = renderer.clone();
+                            let cancel = cancel.clone();
+                            async move {
+                                renderer.check_viewports(&cancel);
+                            }
+                        },
+                    );
 
                     renderer
                         .viewport_listener_join_handle
@@ -1214,9 +1217,10 @@ impl FltkRenderer {
                     height,
                     frame,
                 } => {
-                    moosicbox_task::spawn("renderer: load_image", async move {
-                        Self::load_image(source, width, height, frame).await
-                    });
+                    switchy_async::runtime::Handle::current()
+                        .spawn_with_name("renderer: load_image", async move {
+                            Self::load_image(source, width, height, frame).await
+                        });
                 }
                 AppEvent::UnloadImage { mut frame } => {
                     Self::set_frame_image(&mut frame, None);
@@ -1382,14 +1386,17 @@ impl Renderer for FltkRenderer {
         log::debug!("start: started");
 
         log::debug!("start: spawning listen thread");
-        moosicbox_task::spawn("renderer_fltk::start: listen", {
-            let renderer = self.clone();
-            async move {
-                log::debug!("start: listening");
-                renderer.listen().await;
-                Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
-            }
-        });
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "renderer_fltk::start: listen",
+            {
+                let renderer = self.clone();
+                async move {
+                    log::debug!("start: listening");
+                    renderer.listen().await;
+                    Ok::<_, Box<dyn std::error::Error + Send + 'static>>(())
+                }
+            },
+        );
 
         Ok(())
     }
@@ -1424,7 +1431,8 @@ impl Renderer for FltkRenderer {
 
         let renderer = self.clone();
 
-        moosicbox_task::spawn_blocking("fltk render", move || renderer.perform_render())
+        switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("fltk render", move || renderer.perform_render())
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + 'static>)?;

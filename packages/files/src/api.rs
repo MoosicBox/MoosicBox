@@ -1015,16 +1015,17 @@ pub(crate) async fn resize_image_path(
             use moosicbox_image::libvips::{get_error, resize_local_file};
 
             image_type = "jpeg";
-            moosicbox_task::spawn_blocking("files: resize_image_path", {
-                let path = path.to_owned();
-                move || {
-                    resize_local_file(width, height, &path).map_err(|e| {
-                        log::error!("{}", get_error());
-                        ResizeImageError::File(path, e.to_string())
-                    })
-                }
-            })
-            .await??
+            switchy_async::runtime::Handle::current()
+                .spawn_blocking_with_name("files: resize_image_path", {
+                    let path = path.to_owned();
+                    move || {
+                        resize_local_file(width, height, &path).map_err(|e| {
+                            log::error!("{}", get_error());
+                            ResizeImageError::File(path, e.to_string())
+                        })
+                    }
+                })
+                .await??
         }
         #[cfg(not(feature = "libvips"))]
         {

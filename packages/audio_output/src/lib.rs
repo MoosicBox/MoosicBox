@@ -470,50 +470,56 @@ impl AudioOutputScanner {
         #[cfg(feature = "cpal")]
         {
             self.outputs.extend(
-                moosicbox_task::spawn(
-                    "server: scan cpal outputs",
-                    moosicbox_task::spawn_blocking("server: scan cpal outputs (blocking)", || {
-                        let start = switchy_time::now();
-                        let outputs = crate::cpal::scan_available_outputs().collect::<Vec<_>>();
+                switchy_async::runtime::Handle::current()
+                    .spawn_with_name(
+                        "server: scan cpal outputs",
+                        switchy_async::runtime::Handle::current().spawn_blocking_with_name(
+                            "server: scan cpal outputs (blocking)",
+                            || {
+                                let start = switchy_time::now();
+                                let outputs =
+                                    crate::cpal::scan_available_outputs().collect::<Vec<_>>();
 
-                        for output in &outputs {
-                            log::debug!("cpal output: {}", output.name);
-                        }
+                                for output in &outputs {
+                                    log::debug!("cpal output: {}", output.name);
+                                }
 
-                        let end = switchy_time::now();
-                        log::debug!(
-                            "took {}ms to scan outputs",
-                            end.duration_since(start).unwrap().as_millis()
-                        );
-                        outputs
-                    }),
-                )
-                .await??,
+                                let end = switchy_time::now();
+                                log::debug!(
+                                    "took {}ms to scan outputs",
+                                    end.duration_since(start).unwrap().as_millis()
+                                );
+                                outputs
+                            },
+                        ),
+                    )
+                    .await??,
             );
 
             if self.default_output.is_none() {
-                self.default_output = moosicbox_task::spawn(
-                    "server: scan cpal default output",
-                    moosicbox_task::spawn_blocking(
-                        "server: scan cpal default output (blocking)",
-                        || {
-                            let start = switchy_time::now();
-                            let output = crate::cpal::scan_default_output();
+                self.default_output = switchy_async::runtime::Handle::current()
+                    .spawn_with_name(
+                        "server: scan cpal default output",
+                        switchy_async::runtime::Handle::current().spawn_blocking_with_name(
+                            "server: scan cpal default output (blocking)",
+                            || {
+                                let start = switchy_time::now();
+                                let output = crate::cpal::scan_default_output();
 
-                            if let Some(output) = &output {
-                                log::debug!("cpal output: {}", output.name);
-                            }
+                                if let Some(output) = &output {
+                                    log::debug!("cpal output: {}", output.name);
+                                }
 
-                            let end = switchy_time::now();
-                            log::debug!(
-                                "took {}ms to scan default output",
-                                end.duration_since(start).unwrap().as_millis()
-                            );
-                            output
-                        },
-                    ),
-                )
-                .await??;
+                                let end = switchy_time::now();
+                                log::debug!(
+                                    "took {}ms to scan default output",
+                                    end.duration_since(start).unwrap().as_millis()
+                                );
+                                output
+                            },
+                        ),
+                    )
+                    .await??;
 
                 if let Some(output) = &self.default_output {
                     if !self.outputs.iter().any(|x| x.id == output.id) {

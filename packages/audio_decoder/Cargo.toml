@@ -15,7 +15,7 @@ moosicbox_stream_utils = { workspace = true, features = [
     "remote-bytestream",
     "stalled-monitor",
 ] }
-moosicbox_task = { workspace = true }
+
 switchy_async = { workspace = true, features = ["tokio"] }
 switchy_http = { workspace = true, features = ["reqwest"] }
 switchy_time = { workspace = true, features = ["std"] }

@@ -73,7 +73,7 @@ pub async fn setup_tunnel(
 
             Ok((
                 Some(host),
-                Some(moosicbox_task::spawn("server: tunnel", async move {
+                Some(switchy_async::runtime::Handle::current().spawn_with_name("server: tunnel", async move {
                     let mut rx = tunnel.start();
 
                     while let Some(m) = rx.recv().await {
@@ -81,7 +81,7 @@ pub async fn setup_tunnel(
                             TunnelMessage::Text(m) => {
                                 log::debug!("Received text TunnelMessage {}", &m);
                                 let tunnel = tunnel.clone();
-                                moosicbox_task::spawn("server: tunnel message", async move {
+                                switchy_async::runtime::Handle::current().spawn_with_name("server: tunnel message", async move {
                                     match serde_json::from_str(&m).unwrap() {
                                         TunnelRequest::Http(request) => {
                                             if let Err(err) = tunnel

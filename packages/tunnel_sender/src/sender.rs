@@ -296,7 +296,7 @@ impl TunnelSender {
         let abort_request_tokens = self.abort_request_tokens.clone();
         let cancellation_token = self.cancellation_token.clone();
 
-        moosicbox_task::spawn("tunnel_sender", async move {
+        switchy_async::runtime::Handle::current().spawn_with_name("tunnel_sender", async move {
             let mut just_retried = false;
             log::debug!("Fetching signature token...");
             let token = loop {
@@ -458,7 +458,7 @@ impl TunnelSender {
                                 }
                             };
 
-                            moosicbox_task::spawn("tunnel_sender: Process WS message", {
+                            switchy_async::runtime::Handle::current().spawn_with_name("tunnel_sender: Process WS message", {
                                 let tx = tx.clone();
                                 let close_token = close_token.clone();
 
@@ -471,7 +471,7 @@ impl TunnelSender {
                             });
                         });
 
-                        let pinger = moosicbox_task::spawn("tunnel_sender: pinger", {
+                        let pinger = switchy_async::runtime::Handle::current().spawn_with_name("tunnel_sender: pinger", {
                             let txf = txf.clone();
                             let close_token = close_token.clone();
                             let cancellation_token = cancellation_token.clone();

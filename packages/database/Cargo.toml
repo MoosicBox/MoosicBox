@@ -16,7 +16,7 @@ group = "switchy"
 [dependencies]
 moosicbox_assert   = { workspace = true }
 moosicbox_profiles = { workspace = true, features = ["api"] }
-moosicbox_task     = { workspace = true, optional = true }
+
 switchy_async      = { workspace = true, features = ["tokio"] }
 
 # DB Dependencies
@@ -70,7 +70,6 @@ mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = ["dep:futures", "dep:sqlx", "sqlx", "sqlx/mysql"]
 postgres = [
     "dep:futures",
-    "dep:moosicbox_task",
     "dep:regex",
     "dep:tokio-util",
     "postgres-raw",

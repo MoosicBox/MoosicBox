@@ -330,7 +330,6 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 - **[moosicbox_logging](packages/logging)** - Logging utilities with feature-gated modules
 - **[switchy_telemetry](packages/telemetry)** - OpenTelemetry integration for distributed tracing
 - **[moosicbox_async_service](packages/async_service)** - Service framework for async applications
-- **[moosicbox_task](packages/task)** - Task spawning utilities and abstractions
 - **[switchy_time](packages/time)** - Time abstraction utilities
 - **[switchy_random](packages/random)** - Random number generation utilities
 

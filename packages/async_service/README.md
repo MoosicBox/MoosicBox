@@ -170,6 +170,5 @@ The library re-exports commonly used async utilities:
 - `async_trait`: Async trait support
 - `flume`: Fast async channels
 - `futures`: Additional async utilities
-- `moosicbox_task`: Task spawning utilities
 
 This framework provides a foundation for building robust async services in the MoosicBox ecosystem.

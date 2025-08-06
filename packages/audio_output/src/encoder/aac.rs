@@ -262,9 +262,12 @@ pub fn encode_aac_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     writer: T,
 ) -> JoinHandle<()> {
     let path = path.to_string();
-    moosicbox_task::spawn_blocking("audio_decoder: encode_aac", move || {
-        encode_aac(&path, writer);
-    })
+    switchy_async::runtime::Handle::current().spawn_blocking_with_name(
+        "audio_decoder: encode_aac",
+        move || {
+            encode_aac(&path, writer);
+        },
+    )
 }
 
 pub fn encode_aac<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str, writer: T) {

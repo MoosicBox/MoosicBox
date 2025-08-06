@@ -383,9 +383,12 @@ pub fn encode_opus_spawn<T: std::io::Write + Send + Sync + Clone + 'static>(
     writer: T,
 ) -> JoinHandle<()> {
     let path = path.to_string();
-    moosicbox_task::spawn_blocking("audio_decoder: encode_opus", move || {
-        encode_opus(&path, writer);
-    })
+    switchy_async::runtime::Handle::current().spawn_blocking_with_name(
+        "audio_decoder: encode_opus",
+        move || {
+            encode_opus(&path, writer);
+        },
+    )
 }
 
 pub fn encode_opus<T: std::io::Write + Send + Sync + Clone + 'static>(path: &str, writer: T) {

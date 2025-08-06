@@ -897,7 +897,7 @@ impl Router {
         log::debug!("navigate_spawn_on: navigation={navigation:?}");
 
         let router = self.clone();
-        moosicbox_task::spawn_on("NativeApp navigate_spawn", handle, async move {
+        handle.spawn_with_name("NativeApp navigate_spawn", async move {
             router
                 .navigate_send(navigation)
                 .await

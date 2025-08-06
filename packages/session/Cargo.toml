@@ -17,6 +17,7 @@ moosicbox_json_utils     = { workspace = true }
 moosicbox_library        = { workspace = true }
 moosicbox_music_models   = { workspace = true, features = ["api"] }
 moosicbox_session_models = { workspace = true }
+switchy_async            = { workspace = true, features = ["tokio"] }
 switchy_database         = { workspace = true }
 
 # API Dependencies
@@ -25,7 +26,7 @@ moosicbox_paging = { workspace = true, optional = true }
 utoipa           = { workspace = true, optional = true }
 
 # Events Dependencies
-moosicbox_task = { workspace = true, optional = true }
+
 tokio          = { workspace = true, optional = true }
 
 log        = { workspace = true }
@@ -53,7 +54,7 @@ openapi = [
     "moosicbox_session_models/openapi",
 ]
 
-events = ["dep:moosicbox_task", "dep:tokio"]
+events = ["dep:tokio"]
 
 all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]

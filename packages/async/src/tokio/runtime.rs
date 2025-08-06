@@ -45,12 +45,80 @@ impl Handle {
         self.inner.spawn(future)
     }
 
+    /// Spawn a named future onto the runtime
+    pub fn spawn_with_name<T: Send + 'static>(
+        &self,
+        name: &str,
+        future: impl std::future::Future<Output = T> + Send + 'static,
+    ) -> JoinHandle<T> {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("spawn start: {name}");
+            let name = name.to_owned();
+            let future = async move {
+                let response = future.await;
+                log::trace!("spawn finished: {name}");
+                response
+            };
+            self.inner.spawn(future)
+        } else {
+            self.inner.spawn(future)
+        }
+    }
+
     /// Spawn a blocking task onto the runtime
     pub fn spawn_blocking<T: Send + 'static>(
         &self,
         f: impl FnOnce() -> T + Send + 'static,
     ) -> JoinHandle<T> {
         self.inner.spawn_blocking(f)
+    }
+
+    /// Spawn a named blocking task onto the runtime
+    pub fn spawn_blocking_with_name<T: Send + 'static>(
+        &self,
+        name: &str,
+        f: impl FnOnce() -> T + Send + 'static,
+    ) -> JoinHandle<T> {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("spawn_blocking start: {name}");
+            let name = name.to_owned();
+            let f = move || {
+                let response = f();
+                log::trace!("spawn_blocking finished: {name}");
+                response
+            };
+            self.inner.spawn_blocking(f)
+        } else {
+            self.inner.spawn_blocking(f)
+        }
+    }
+
+    /// Spawn a local future onto the runtime
+    pub fn spawn_local<T: 'static>(
+        &self,
+        future: impl std::future::Future<Output = T> + 'static,
+    ) -> JoinHandle<T> {
+        tokio::task::spawn_local(future)
+    }
+
+    /// Spawn a named local future onto the runtime
+    pub fn spawn_local_with_name<T: 'static>(
+        &self,
+        name: &str,
+        future: impl std::future::Future<Output = T> + 'static,
+    ) -> JoinHandle<T> {
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!("spawn_local start: {name}");
+            let name = name.to_owned();
+            let future = async move {
+                let response = future.await;
+                log::trace!("spawn_local finished: {name}");
+                response
+            };
+            tokio::task::spawn_local(future)
+        } else {
+            tokio::task::spawn_local(future)
+        }
     }
 
     /// Get the current runtime handle if available
@@ -102,6 +170,32 @@ impl Runtime {
         future: impl std::future::Future<Output = T> + Send + 'static,
     ) -> JoinHandle<T> {
         self.inner.spawn(future)
+    }
+
+    /// Spawn a named future onto the runtime
+    pub fn spawn_with_name<T: Send + 'static>(
+        &self,
+        name: &str,
+        future: impl std::future::Future<Output = T> + Send + 'static,
+    ) -> JoinHandle<T> {
+        self.handle().spawn_with_name(name, future)
+    }
+
+    /// Spawn a blocking task onto the runtime
+    pub fn spawn_blocking<T: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> T + Send + 'static,
+    ) -> JoinHandle<T> {
+        self.inner.spawn_blocking(f)
+    }
+
+    /// Spawn a named blocking task onto the runtime
+    pub fn spawn_blocking_with_name<T: Send + 'static>(
+        &self,
+        name: &str,
+        f: impl FnOnce() -> T + Send + 'static,
+    ) -> JoinHandle<T> {
+        self.handle().spawn_blocking_with_name(name, f)
     }
 
     #[must_use]

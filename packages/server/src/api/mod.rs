@@ -32,7 +32,7 @@ pub async fn websocket(
     let (response, session, msg_stream) = actix_ws::handle(&req, stream)?;
 
     // spawn websocket handler (and don't await it) so that the response is returned immediately
-    moosicbox_task::spawn_local(
+    switchy_async::runtime::Handle::current().spawn_local_with_name(
         "server: WsClient",
         handler::handle_ws(
             WS_SERVER_HANDLE

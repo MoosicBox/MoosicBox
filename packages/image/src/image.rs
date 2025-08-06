@@ -52,10 +52,9 @@ pub async fn try_resize_local_file_async(
     quality: u8,
 ) -> Result<Option<Bytes>, ResizeImageError> {
     let path = path.to_owned();
-    Ok(
-        moosicbox_task::spawn_blocking("image: Resize local file", move || {
+    Ok(switchy_async::runtime::Handle::current()
+        .spawn_blocking_with_name("image: Resize local file", move || {
             try_resize_local_file(width, height, &path, encoding, quality)
         })
-        .await??,
-    )
+        .await??)
 }

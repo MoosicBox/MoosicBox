@@ -755,18 +755,24 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
             let volume_shared = self.volume_shared.clone();
             let stream_handle = self.stream_handle.clone();
 
-            moosicbox_task::spawn("cpal_command_processor", async move {
-                while let Ok(command_msg) = command_receiver.recv_async().await {
-                    let response =
-                        Self::process_command(&command_msg.command, &volume_shared, &stream_handle)
-                            .await;
+            switchy_async::runtime::Handle::current().spawn_with_name(
+                "cpal_command_processor",
+                async move {
+                    while let Ok(command_msg) = command_receiver.recv_async().await {
+                        let response = Self::process_command(
+                            &command_msg.command,
+                            &volume_shared,
+                            &stream_handle,
+                        )
+                        .await;
 
-                    // Send response if requested
-                    if let Some(response_sender) = command_msg.response_sender {
-                        let _ = response_sender.send_async(response.clone()).await;
+                        // Send response if requested
+                        if let Some(response_sender) = command_msg.response_sender {
+                            let _ = response_sender.send_async(response.clone()).await;
+                        }
                     }
-                }
-            });
+                },
+            );
         }
     }
 

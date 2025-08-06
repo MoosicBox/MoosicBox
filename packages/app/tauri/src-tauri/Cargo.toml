@@ -27,16 +27,19 @@ tauri-build = { workspace = true, features = [] }
 [dependencies]
 moosicbox_app_state = { workspace = true, features = ["upnp"] }
 
-moosicbox_assert       = { workspace = true }
-moosicbox_config       = { workspace = true }
-moosicbox_env_utils    = { workspace = true }
-moosicbox_logging      = { workspace = true, features = ["free_log"] }
+moosicbox_assert = { workspace = true }
+moosicbox_config = { workspace = true }
+moosicbox_env_utils = { workspace = true }
+moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_music_models = { workspace = true }
-moosicbox_player       = { workspace = true, features = ["local"] }
-moosicbox_session      = { workspace = true }
-moosicbox_task         = { workspace = true }
-moosicbox_ws           = { workspace = true }
-switchy                = { workspace = true, features = ["mdns-scanner", "upnp-player"] }
+moosicbox_player = { workspace = true, features = ["local"] }
+moosicbox_session = { workspace = true }
+moosicbox_ws = { workspace = true }
+switchy = { workspace = true, features = [
+    "async-tokio",
+    "mdns-scanner",
+    "upnp-player",
+] }
 
 # Bundled Dependencies
 moosicbox_app_tauri_bundled = { workspace = true, optional = true }

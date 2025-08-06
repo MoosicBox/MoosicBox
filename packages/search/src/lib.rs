@@ -293,30 +293,31 @@ pub async fn populate_global_search_index(
     delete: bool,
 ) -> Result<(), PopulateIndexError> {
     let permit = SEMAPHORE.acquire().await;
-    moosicbox_task::spawn_blocking("populate_global_search_index", {
-        let data = data
-            .iter()
-            .map(|x| {
-                x.iter()
-                    .map(|x| (x.0.to_string(), x.1.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        move || {
-            populate_global_search_index_sync(
-                &data
-                    .iter()
-                    .map(|x| {
-                        x.iter()
-                            .map(|x| (x.0.as_str(), x.1.clone()))
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>(),
-                delete,
-            )
-        }
-    })
-    .await??;
+    switchy_async::runtime::Handle::current()
+        .spawn_blocking_with_name("populate_global_search_index", {
+            let data = data
+                .iter()
+                .map(|x| {
+                    x.iter()
+                        .map(|x| (x.0.to_string(), x.1.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            move || {
+                populate_global_search_index_sync(
+                    &data
+                        .iter()
+                        .map(|x| {
+                            x.iter()
+                                .map(|x| (x.0.as_str(), x.1.clone()))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>(),
+                    delete,
+                )
+            }
+        })
+        .await??;
     drop(permit);
     Ok(())
 }
@@ -565,33 +566,34 @@ pub async fn reindex_global_search_index(
     data: &[Vec<(&str, DataValue)>],
 ) -> Result<(), ReindexError> {
     let permit = SEMAPHORE.acquire().await;
-    moosicbox_task::spawn_blocking("reindex_global_search_index", {
-        let data = data
-            .iter()
-            .map(|x| {
-                x.iter()
-                    .map(|x| (x.0.to_string(), x.1.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        move || {
-            let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
-            recreate_global_search_index_sync(path)?;
-            populate_global_search_index_sync(
-                &data
-                    .iter()
-                    .map(|x| {
-                        x.iter()
-                            .map(|x| (x.0.as_str(), x.1.clone()))
-                            .collect::<Vec<_>>()
-                    })
-                    .collect::<Vec<_>>(),
-                false,
-            )?;
-            Ok::<_, ReindexError>(())
-        }
-    })
-    .await??;
+    switchy_async::runtime::Handle::current()
+        .spawn_blocking_with_name("reindex_global_search_index", {
+            let data = data
+                .iter()
+                .map(|x| {
+                    x.iter()
+                        .map(|x| (x.0.to_string(), x.1.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            move || {
+                let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+                recreate_global_search_index_sync(path)?;
+                populate_global_search_index_sync(
+                    &data
+                        .iter()
+                        .map(|x| {
+                            x.iter()
+                                .map(|x| (x.0.as_str(), x.1.clone()))
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>(),
+                    false,
+                )?;
+                Ok::<_, ReindexError>(())
+            }
+        })
+        .await??;
     drop(permit);
 
     Ok(())

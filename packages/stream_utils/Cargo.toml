@@ -11,8 +11,14 @@ repository  = { workspace = true }
 version     = "0.1.4"
 
 [dependencies]
-moosicbox_task = { workspace = true, optional = true }
-switchy_async = { workspace = true, features = ["tokio", "util", "macros"] }
+
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+    "util",
+] }
 switchy_http = { workspace = true, optional = true, features = [
     "reqwest",
     "stream",
@@ -34,10 +40,5 @@ default = ["remote-bytestream", "stalled-monitor"]
 
 fail-on-warnings = []
 
-remote-bytestream = [
-    "dep:flume",
-    "dep:moosicbox_task",
-    "dep:switchy_http",
-    "switchy_async/util",
-]
-stalled-monitor = ["dep:thiserror", "switchy_async/sync", "switchy_async/time"]
+remote-bytestream = ["dep:flume", "dep:switchy_http", "switchy_async/util"]
+stalled-monitor   = ["dep:thiserror", "switchy_async/sync", "switchy_async/time"]

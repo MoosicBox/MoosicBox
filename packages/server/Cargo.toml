@@ -44,7 +44,7 @@ moosicbox_music_models = { workspace = true }
 moosicbox_profiles = { workspace = true, features = ["api", "events"] }
 moosicbox_schema = { workspace = true, optional = true }
 moosicbox_session = { workspace = true, features = ["events"] }
-moosicbox_task = { workspace = true }
+
 moosicbox_ws = { workspace = true, features = ["ws"] }
 switchy_async = { workspace = true, features = ["tokio"] }
 switchy_database = { workspace = true, features = ["api"] }
@@ -402,7 +402,6 @@ profiling = [
     "dep:profiling",
     "moosicbox_files/profiling",
     "moosicbox_player?/profiling",
-    "moosicbox_task/profiling",
 ]
 profiling-puffin = [
     "dep:puffin",

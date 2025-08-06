@@ -8,7 +8,7 @@ pub use async_trait::async_trait;
 pub use flume::{Receiver, RecvError, SendError, Sender, unbounded};
 pub use futures::Future;
 pub use log;
-pub use moosicbox_task;
+
 pub use switchy_async::task::{JoinError, JoinHandle};
 pub use switchy_async::util::CancellationToken;
 pub use switchy_async::{runtime, select, sync};
@@ -69,9 +69,9 @@ macro_rules! async_service_body {
             }
 
             pub fn start_on(mut self, handle: &$crate::runtime::Handle) -> $crate::JoinHandle<Result<(), Error>> {
-                $crate::moosicbox_task::spawn_on(
-                    &format!("async_service: {}", self.name),
-                    handle,
+                let service_name = self.name.clone();
+                handle.spawn_with_name(
+                    &format!("async_service: {}", service_name),
                     async move {
                         self.on_start().await?;
                         let ctx = self.ctx;
@@ -93,8 +93,8 @@ macro_rules! async_service_body {
                                 }
                             } else {
                                 let ctx = ctx.clone();
-                                $crate::moosicbox_task::spawn(
-                                    &format!("async_service: {} - process_command", self.name),
+                                $crate::runtime::Handle::current().spawn_with_name(
+                                    &format!("async_service: {} - process_command", service_name),
                                     async move {
                                         log::trace!("Received Service command");
                                         if let Err(e) = Self::process_command(ctx, command.cmd).await {
@@ -194,9 +194,8 @@ macro_rules! async_service_body {
             async fn send_command_and_wait_async_on(&self, command: $command, handle: &$crate::runtime::Handle) -> Result<(), Self::Error> {
                 let (tx, rx) = $crate::unbounded();
                 let sender = self.sender.clone();
-                $crate::moosicbox_task::spawn_on(
+                handle.spawn_with_name(
                     &format!("async_service: {} - send_command_and_wait_async", self.name),
-                    handle,
                     async move {
                         sender.send_async(Command {
                             cmd: command,

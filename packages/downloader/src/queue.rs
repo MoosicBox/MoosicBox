@@ -213,27 +213,30 @@ impl DownloadQueue {
         let join_handle = self.join_handle.clone();
         let this = self.clone();
 
-        moosicbox_task::spawn("downloader: queue - process", async move {
-            let mut handle = join_handle.lock().await;
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "downloader: queue - process",
+            async move {
+                let mut handle = join_handle.lock().await;
 
-            if let Some(handle) = handle.as_mut() {
-                if !handle.is_finished() {
-                    handle.await??;
+                if let Some(handle) = handle.as_mut() {
+                    if !handle.is_finished() {
+                        handle.await??;
+                    }
                 }
-            }
 
-            handle.replace(moosicbox_task::spawn(
-                "downloader: queue - process_inner",
-                async move {
-                    this.process_inner().await?;
-                    Ok(())
-                },
-            ));
+                handle.replace(switchy_async::runtime::Handle::current().spawn_with_name(
+                    "downloader: queue - process_inner",
+                    async move {
+                        this.process_inner().await?;
+                        Ok(())
+                    },
+                ));
 
-            drop(handle);
+                drop(handle);
 
-            Ok::<_, ProcessDownloadQueueError>(())
-        })
+                Ok::<_, ProcessDownloadQueueError>(())
+            },
+        )
     }
 
     #[allow(unused)]
@@ -356,7 +359,7 @@ impl DownloadQueue {
                             if let Some(size) = bytes {
                                 task_size.replace(size);
                                 let database = database.clone();
-                                moosicbox_task::spawn(
+                                switchy_async::runtime::Handle::current().spawn_with_name(
                                     "downloader: queue - on_progress - size",
                                     async move {
                                         if let Err(err) = database
@@ -534,16 +537,19 @@ impl Drop for DownloadQueue {
     fn drop(&mut self) {
         let handle = self.join_handle.clone();
 
-        moosicbox_task::spawn("downloader: queue - drop", async move {
-            let mut handle = handle.lock().await;
-            if let Some(handle) = handle.as_mut() {
-                if !handle.is_finished() {
-                    if let Err(err) = handle.await {
-                        log::error!("Failed to drop DownloadQueue: {err:?}");
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "downloader: queue - drop",
+            async move {
+                let mut handle = handle.lock().await;
+                if let Some(handle) = handle.as_mut() {
+                    if !handle.is_finished() {
+                        if let Err(err) = handle.await {
+                            log::error!("Failed to drop DownloadQueue: {err:?}");
+                        }
                     }
                 }
-            }
-        });
+            },
+        );
     }
 }
 

@@ -19,7 +19,7 @@ path              = "src/main.rs"
 required-features = ["build-binary"]
 
 [dependencies]
-moosicbox_task = { workspace = true }
+
 
 bytes         = { workspace = true }
 switchy_async = { workspace = true, features = ["tokio"] }

@@ -65,8 +65,9 @@ moosicbox_paging = { workspace = true }
 moosicbox_player = { workspace = true }
 moosicbox_scan_models = { workspace = true, features = ["api"] }
 moosicbox_session_models = { workspace = true }
-moosicbox_task = { workspace = true }
+
 moosicbox_ws = { workspace = true }
+switchy_async = { workspace = true, features = ["tokio"] }
 switchy = { workspace = true, features = [
     "async-macros",
     "async-net",

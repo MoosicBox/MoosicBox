@@ -71,11 +71,14 @@ pub async fn create_audio_zone(
 
     #[cfg(feature = "events")]
     {
-        moosicbox_task::spawn("create_audio_zone updated_events", async move {
-            if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
-                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
-            }
-        });
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "create_audio_zone updated_events",
+            async move {
+                if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
+                    moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+                }
+            },
+        );
     }
 
     Ok(resp)
@@ -93,11 +96,14 @@ pub async fn update_audio_zone(
 
     #[cfg(feature = "events")]
     {
-        moosicbox_task::spawn("create_audio_zone updated_events", async move {
-            if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
-                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
-            }
-        });
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "create_audio_zone updated_events",
+            async move {
+                if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
+                    moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+                }
+            },
+        );
     }
 
     Ok(resp)
@@ -120,11 +126,14 @@ pub async fn delete_audio_zone(
 
     #[cfg(feature = "events")]
     {
-        moosicbox_task::spawn("create_audio_zone updated_events", async move {
-            if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
-                moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
-            }
-        });
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "create_audio_zone updated_events",
+            async move {
+                if let Err(e) = crate::events::trigger_audio_zones_updated_event().await {
+                    moosicbox_assert::die_or_error!("Failed to trigger event: {e:?}");
+                }
+            },
+        );
     }
 
     Ok(resp)

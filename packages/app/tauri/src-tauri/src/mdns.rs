@@ -46,7 +46,7 @@ pub fn spawn_mdns_scanner() -> (
     let handle = service.handle();
     let runtime_handle = switchy::unsync::runtime::Handle::current();
 
-    moosicbox_task::spawn_on("mdns_scanner", &runtime_handle, async move {
+    runtime_handle.spawn_with_name("mdns_scanner", async move {
         while let Ok(server) = rx.recv().await {
             let mut servers = MOOSICBOX_SERVERS.write().await;
 

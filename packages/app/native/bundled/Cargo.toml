@@ -19,7 +19,7 @@ moosicbox_assert        = { workspace = true }
 moosicbox_async_service = { workspace = true }
 moosicbox_config        = { workspace = true }
 moosicbox_server        = { workspace = true, features = ["app-apis", "sqlite-sqlx"] }
-moosicbox_task          = { workspace = true }
+
 
 log           = { workspace = true }
 strum         = { workspace = true }

@@ -154,7 +154,7 @@ pub async fn start_scan_endpoint(
         })
         .transpose()?;
 
-    moosicbox_task::spawn("scan", async move {
+    switchy_async::runtime::Handle::current().spawn_with_name("scan", async move {
         run_scan(origins, &db, music_apis).await.map_err(|e| {
             moosicbox_assert::die_or_error!("Scan error: {e:?}");
             e

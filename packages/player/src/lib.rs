@@ -673,83 +673,86 @@ impl PlaybackHandler {
 
         let mut player = self.clone();
 
-        moosicbox_task::spawn("player: Play playback", async move {
-            let mut seek = seek;
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "player: Play playback",
+            async move {
+                let mut seek = seek;
 
-            let mut playback = player
-                .playback
-                .read()
-                .unwrap()
-                .clone()
-                .ok_or(PlayerError::NoPlayersPlaying)?;
+                let mut playback = player
+                    .playback
+                    .read()
+                    .unwrap()
+                    .clone()
+                    .ok_or(PlayerError::NoPlayersPlaying)?;
 
-            #[allow(clippy::redundant_pub_crate)]
-            while playback.playing && (playback.position as usize) < playback.tracks.len() {
-                let track_or_id = &playback.tracks[playback.position as usize];
-                log::debug!("play_playback: track={track_or_id:?} seek={seek:?}");
+                #[allow(clippy::redundant_pub_crate)]
+                while playback.playing && (playback.position as usize) < playback.tracks.len() {
+                    let track_or_id = &playback.tracks[playback.position as usize];
+                    log::debug!("play_playback: track={track_or_id:?} seek={seek:?}");
 
-                let seek = if seek.is_some() { seek.take() } else { None };
+                    let seek = if seek.is_some() { seek.take() } else { None };
 
-                log::debug!("player cancelled={}", playback.abort.is_cancelled());
-                tokio::select! {
-                    () = playback.abort.cancelled() => {
-                        log::debug!("play_playback: Playback cancelled");
-                        return Err(PlayerError::Cancelled);
-                    }
-                    resp = player.play(seek, retry_options) => {
-                        if let Err(err) = resp {
-                            log::error!("Playback error occurred: {err:?}");
+                    log::debug!("player cancelled={}", playback.abort.is_cancelled());
+                    tokio::select! {
+                        () = playback.abort.cancelled() => {
+                            log::debug!("play_playback: Playback cancelled");
+                            return Err(PlayerError::Cancelled);
+                        }
+                        resp = player.play(seek, retry_options) => {
+                            if let Err(err) = resp {
+                                log::error!("Playback error occurred: {err:?}");
 
-                            {
-                                let old = playback.clone();
-                                    playback.playing = false;
-                                    player.playback.write().unwrap().replace(playback.clone());
-                                trigger_playback_event(&playback, &old);
+                                {
+                                    let old = playback.clone();
+                                        playback.playing = false;
+                                        player.playback.write().unwrap().replace(playback.clone());
+                                    trigger_playback_event(&playback, &old);
+                                }
+
+
+                                return Err(err);
                             }
-
-
-                            return Err(err);
                         }
                     }
+
+                    log::debug!(
+                        "play_playback: playback finished track={track_or_id:?} cancelled={}",
+                        playback.abort.is_cancelled()
+                    );
+
+                    if playback.abort.is_cancelled() {
+                        break;
+                    }
+
+                    if ((playback.position + 1) as usize) >= playback.tracks.len() {
+                        log::debug!("Playback position at end of tracks. Breaking");
+                        break;
+                    }
+
+                    let old = playback.clone();
+                    playback.position += 1;
+                    playback.progress = 0.0;
+                    player.playback.write().unwrap().replace(playback.clone());
+                    trigger_playback_event(&playback, &old);
                 }
 
                 log::debug!(
-                    "play_playback: playback finished track={track_or_id:?} cancelled={}",
-                    playback.abort.is_cancelled()
+                    "Finished playback on all tracks. playing={} position={} len={}",
+                    playback.playing,
+                    playback.position,
+                    playback.tracks.len()
                 );
 
-                if playback.abort.is_cancelled() {
-                    break;
+                {
+                    let old = playback.clone();
+                    playback.playing = false;
+                    player.playback.write().unwrap().replace(playback.clone());
+                    trigger_playback_event(&playback, &old);
                 }
 
-                if ((playback.position + 1) as usize) >= playback.tracks.len() {
-                    log::debug!("Playback position at end of tracks. Breaking");
-                    break;
-                }
-
-                let old = playback.clone();
-                playback.position += 1;
-                playback.progress = 0.0;
-                player.playback.write().unwrap().replace(playback.clone());
-                trigger_playback_event(&playback, &old);
-            }
-
-            log::debug!(
-                "Finished playback on all tracks. playing={} position={} len={}",
-                playback.playing,
-                playback.position,
-                playback.tracks.len()
-            );
-
-            {
-                let old = playback.clone();
-                playback.playing = false;
-                player.playback.write().unwrap().replace(playback.clone());
-                trigger_playback_event(&playback, &old);
-            }
-
-            Ok::<_, PlayerError>(0)
-        });
+                Ok::<_, PlayerError>(0)
+            },
+        );
 
         Ok(())
     }

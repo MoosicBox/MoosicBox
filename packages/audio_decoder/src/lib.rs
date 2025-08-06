@@ -228,18 +228,19 @@ pub async fn decode_file_path_str_async(
     seek: Option<f64>,
 ) -> Result<i32, DecodeError> {
     let path_str = path_str.to_owned();
-    moosicbox_task::spawn_blocking("audio_decoder: Play file path", move || {
-        let mut handler = get_audio_output_handler()?;
-        decode_file_path_str(
-            &path_str,
-            &mut handler,
-            enable_gapless,
-            verify,
-            track_num,
-            seek,
-        )
-    })
-    .await?
+    switchy_async::runtime::Handle::current()
+        .spawn_blocking_with_name("audio_decoder: Play file path", move || {
+            let mut handler = get_audio_output_handler()?;
+            decode_file_path_str(
+                &path_str,
+                &mut handler,
+                enable_gapless,
+                verify,
+                track_num,
+                seek,
+            )
+        })
+        .await?
 }
 
 /// # Errors
@@ -298,19 +299,20 @@ pub async fn decode_media_source_async(
     seek: Option<f64>,
 ) -> Result<i32, DecodeError> {
     let hint = hint.clone();
-    moosicbox_task::spawn_blocking("audio_decoder: Play media source", move || {
-        let mut handler = get_audio_output_handler()?;
-        decode_media_source(
-            media_source_stream,
-            &hint,
-            &mut handler,
-            enable_gapless,
-            verify,
-            track_num,
-            seek,
-        )
-    })
-    .await?
+    switchy_async::runtime::Handle::current()
+        .spawn_blocking_with_name("audio_decoder: Play media source", move || {
+            let mut handler = get_audio_output_handler()?;
+            decode_media_source(
+                media_source_stream,
+                &hint,
+                &mut handler,
+                enable_gapless,
+                verify,
+                track_num,
+                seek,
+            )
+        })
+        .await?
 }
 
 #[cfg_attr(feature = "profiling", profiling::function)]

@@ -160,7 +160,7 @@ impl<F: HttpFetcher> RemoteByteStreamFetcher<F> {
         let size_info = end.map_or_else(|| "unknown size".to_string(), |s| format!("{s} bytes"));
         log::debug!("Starting fetch for byte stream with range {bytes_range} ({size_info})");
 
-        self.abort_handle = Some(moosicbox_task::spawn(
+        self.abort_handle = Some(switchy_async::runtime::Handle::current().spawn_with_name(
             "stream_utils: RemoteByteStream Fetcher",
             async move {
                 let mut stream = match http_fetcher.fetch_range(&url, start, end).await {

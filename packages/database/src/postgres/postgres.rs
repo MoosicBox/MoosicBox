@@ -256,7 +256,8 @@ impl PostgresDatabase {
         client: Client,
         connection: tokio_postgres::Connection<tokio_postgres::Socket, T>,
     ) -> Self {
-        let handle = moosicbox_task::spawn("Postgres database connection", connection);
+        let handle = switchy_async::runtime::Handle::current()
+            .spawn_with_name("Postgres database connection", connection);
 
         Self { client, handle }
     }

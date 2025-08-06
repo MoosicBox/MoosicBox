@@ -249,7 +249,7 @@ impl service::Processor for service::Service {
                 let ctx = ctx.read().await;
                 if let Some(track_bytes_source) = ctx.pool.get(&key) {
                     let track_bytes_source = track_bytes_source.clone();
-                    moosicbox_task::spawn(
+                    switchy_async::runtime::Handle::current().spawn_with_name(
                         &format!("files: track_pool process_command {cmd_str}"),
                         async move {
                             track_bytes_source

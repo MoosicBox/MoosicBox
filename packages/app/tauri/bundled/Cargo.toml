@@ -21,7 +21,7 @@ moosicbox_downloader    = { workspace = true }
 moosicbox_profiles      = { workspace = true, features = ["events"] }
 moosicbox_scan          = { workspace = true }
 moosicbox_server        = { workspace = true, features = ["app-apis", "sqlite-sqlx"] }
-moosicbox_task          = { workspace = true }
+
 switchy_async           = { workspace = true, features = ["sync", "tokio"] }
 switchy_database        = { workspace = true }
 

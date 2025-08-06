@@ -1717,7 +1717,7 @@ impl AppState {
         log::debug!("update_connection_state: has_connection_id={has_connection_id}");
 
         if has_connection_id {
-            moosicbox_task::spawn("set_state: scan_outputs", {
+            switchy_async::runtime::Handle::current().spawn_with_name("set_state: scan_outputs", {
                 let state = self.clone();
                 async move {
                     log::debug!("Attempting to scan_outputs...");
@@ -1726,71 +1726,86 @@ impl AppState {
             });
 
             #[cfg(feature = "upnp")]
-            let inited_upnp_players = moosicbox_task::spawn("set_state: init_upnp_players", {
-                let state = self.clone();
-                async move {
-                    log::debug!("Attempting to init_upnp_players...");
-                    state.init_upnp_players().await
-                }
-            });
+            let inited_upnp_players = switchy_async::runtime::Handle::current().spawn_with_name(
+                "set_state: init_upnp_players",
+                {
+                    let state = self.clone();
+                    async move {
+                        log::debug!("Attempting to init_upnp_players...");
+                        state.init_upnp_players().await
+                    }
+                },
+            );
 
-            let reinited_players = moosicbox_task::spawn("set_state: reinit_players", {
-                let state = self.clone();
-                async move {
-                    #[cfg(feature = "upnp")]
-                    inited_upnp_players
-                        .await
-                        .map_err(|e| AppStateError::unknown(e.to_string()))??;
-                    log::debug!("Attempting to reinit_players...");
-                    state.reinit_players().await
-                }
-            });
+            let reinited_players = switchy_async::runtime::Handle::current().spawn_with_name(
+                "set_state: reinit_players",
+                {
+                    let state = self.clone();
+                    async move {
+                        #[cfg(feature = "upnp")]
+                        inited_upnp_players
+                            .await
+                            .map_err(|e| AppStateError::unknown(e.to_string()))??;
+                        log::debug!("Attempting to reinit_players...");
+                        state.reinit_players().await
+                    }
+                },
+            );
 
-            moosicbox_task::spawn("set_state: fetch_audio_zones", {
-                let state = self.clone();
-                async move {
-                    reinited_players
-                        .await
-                        .map_err(|e| AppStateError::unknown(e.to_string()))??;
-                    log::debug!("Attempting to fetch_audio_zones...");
-                    state.fetch_audio_zones().await
-                }
-            });
+            switchy_async::runtime::Handle::current().spawn_with_name(
+                "set_state: fetch_audio_zones",
+                {
+                    let state = self.clone();
+                    async move {
+                        reinited_players
+                            .await
+                            .map_err(|e| AppStateError::unknown(e.to_string()))??;
+                        log::debug!("Attempting to fetch_audio_zones...");
+                        state.fetch_audio_zones().await
+                    }
+                },
+            );
         }
 
         self.close_ws_connection().await?;
 
-        let ws = moosicbox_task::spawn("set_state: init_ws_connection", {
-            let state = self.clone();
-            async move {
-                loop {
-                    log::debug!("Attempting to init_ws_connection...");
-                    match state.start_ws_connection().await {
-                        Ok(()) => {
-                            log::debug!("ws connection closed");
-                            break;
-                        }
-                        Err(e) => {
-                            if matches!(e, AppStateError::ConnectWs(ConnectWsError::Unauthorized)) {
-                                if state.signature_token.read().await.is_none() {
-                                    state.fetch_signature_token().await?;
-                                    continue;
+        let ws = switchy_async::runtime::Handle::current().spawn_with_name(
+            "set_state: init_ws_connection",
+            {
+                let state = self.clone();
+                async move {
+                    loop {
+                        log::debug!("Attempting to init_ws_connection...");
+                        match state.start_ws_connection().await {
+                            Ok(()) => {
+                                log::debug!("ws connection closed");
+                                break;
+                            }
+                            Err(e) => {
+                                if matches!(
+                                    e,
+                                    AppStateError::ConnectWs(ConnectWsError::Unauthorized)
+                                ) {
+                                    if state.signature_token.read().await.is_none() {
+                                        state.fetch_signature_token().await?;
+                                        continue;
+                                    }
+
+                                    log::error!("ws connection Unauthorized: {e:?}");
+                                    return Err(e);
                                 }
 
-                                log::error!("ws connection Unauthorized: {e:?}");
+                                log::error!("ws connection error: {e:?}");
+
                                 return Err(e);
                             }
-
-                            log::error!("ws connection error: {e:?}");
-
-                            return Err(e);
                         }
                     }
-                }
 
-                Ok::<_, AppStateError>(())
-            }
-        });
+                    Ok::<_, AppStateError>(())
+                }
+            },
+        );
 
         self.ws_join_handle.write().await.replace(ws);
 

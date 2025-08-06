@@ -171,7 +171,7 @@ impl Read for StreamableFileAsync {
                 .as_millis();
             self.receivers.push((id, rx));
 
-            moosicbox_task::spawn(
+            switchy_async::runtime::Handle::current().spawn_with_name(
                 "audio_decoder: StreamableFileAsync read_chunk",
                 async move {
                     Self::read_chunk(tx, url, chunk_write_pos, file_size).await;

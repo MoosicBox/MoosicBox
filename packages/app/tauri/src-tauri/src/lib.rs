@@ -334,11 +334,14 @@ async fn propagate_ws_message(message: InboundPayload) -> Result<(), TauriPlayer
         ("propagate_ws_message: received ws message from frontend: {message:?}")
     );
 
-    moosicbox_task::spawn("propagate_ws_message", async move {
-        STATE.queue_ws_message(message, true).await?;
+    switchy::unsync::runtime::Handle::current().spawn_with_name(
+        "propagate_ws_message",
+        async move {
+            STATE.queue_ws_message(message, true).await?;
 
-        Ok::<_, AppStateError>(())
-    });
+            Ok::<_, AppStateError>(())
+        },
+    );
 
     Ok(())
 }
@@ -420,7 +423,7 @@ async fn propagate_playback_event(update: UpdateSession, to_plugin: bool) -> Res
 pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
     log::debug!("on_playback_event: received update, spawning task to handle update={update:?}");
 
-    moosicbox_task::spawn(
+    switchy::unsync::runtime::Handle::current().spawn_with_name(
         "moosicbox_app: on_playback_event",
         propagate_playback_event(update.to_owned(), true),
     );

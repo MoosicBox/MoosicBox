@@ -64,44 +64,48 @@ impl service::Processor for service::Service {
         let token = ctx.token.clone();
 
         ctx.handle
-            .replace(moosicbox_task::spawn("switchy_mdns scanner", async move {
-                let mdns = ServiceDaemon::new()?;
-                let service_type = "_moosicboxserver._tcp.local.";
-                let receiver = mdns.browse(service_type)?;
+            .replace(switchy_async::runtime::Handle::current().spawn_with_name(
+                "switchy_mdns scanner",
+                async move {
+                    let mdns = ServiceDaemon::new()?;
+                    let service_type = "_moosicboxserver._tcp.local.";
+                    let receiver = mdns.browse(service_type)?;
 
-                log::debug!("mdns scanner: Browsing for {service_type} services...");
+                    log::debug!("mdns scanner: Browsing for {service_type} services...");
 
-                while let Ok(Some(event)) = {
-                    switchy_async::select! {
-                        event = receiver.recv_async() => event.map(Some),
-                        () = token.cancelled() => Ok(None)
-                    }
-                } {
-                    if let ServiceEvent::ServiceResolved(info) = event {
-                        log::debug!(
-                            "mdns scanner: Found server instance: {}",
-                            info.get_fullname()
-                        );
+                    while let Ok(Some(event)) = {
+                        switchy_async::select! {
+                            event = receiver.recv_async() => event.map(Some),
+                            () = token.cancelled() => Ok(None)
+                        }
+                    } {
+                        if let ServiceEvent::ServiceResolved(info) = event {
+                            log::debug!(
+                                "mdns scanner: Found server instance: {}",
+                                info.get_fullname()
+                            );
 
-                        for addr in info.get_addresses().iter().filter(|x| x.is_ipv4()).copied() {
-                            let socket_addr = SocketAddr::new(addr, info.get_port());
-                            log::debug!("mdns scanner: Server address: {addr}");
-                            let dns = info.get_fullname().to_string();
+                            for addr in info.get_addresses().iter().filter(|x| x.is_ipv4()).copied()
+                            {
+                                let socket_addr = SocketAddr::new(addr, info.get_port());
+                                log::debug!("mdns scanner: Server address: {addr}");
+                                let dns = info.get_fullname().to_string();
 
-                            let server = MoosicBox {
-                                id: dns.split_once('.').expect("Invalid dns").0.to_string(),
-                                name: info.get_hostname().to_string(),
-                                host: socket_addr,
-                                dns,
-                            };
+                                let server = MoosicBox {
+                                    id: dns.split_once('.').expect("Invalid dns").0.to_string(),
+                                    name: info.get_hostname().to_string(),
+                                    host: socket_addr,
+                                    dns,
+                                };
 
-                            moosicbox_assert::die_or_propagate!(tx.send(server).await);
+                                moosicbox_assert::die_or_propagate!(tx.send(server).await);
+                            }
                         }
                     }
-                }
 
-                Ok::<_, Error>(())
-            }));
+                    Ok::<_, Error>(())
+                },
+            ));
 
         drop(ctx);
 

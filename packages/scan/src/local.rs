@@ -93,23 +93,26 @@ pub async fn scan_items(
         move |item| {
             let output = output.clone();
             let scanner = scanner.clone();
-            moosicbox_task::spawn("scan: scan item", async move {
-                match item {
-                    ScanItem::Track { path, metadata, .. } => {
-                        scan_track(path, output, metadata, scanner).await
+            switchy_async::runtime::Handle::current().spawn_with_name(
+                "scan: scan item",
+                async move {
+                    match item {
+                        ScanItem::Track { path, metadata, .. } => {
+                            scan_track(path, output, metadata, scanner).await
+                        }
+                        ScanItem::AlbumCover {
+                            path,
+                            metadata,
+                            album,
+                        } => scan_album_cover(album, path, output, metadata, scanner).await,
+                        ScanItem::ArtistCover {
+                            path,
+                            metadata,
+                            artist,
+                        } => scan_artist_cover(artist, path, output, metadata, scanner).await,
                     }
-                    ScanItem::AlbumCover {
-                        path,
-                        metadata,
-                        album,
-                    } => scan_album_cover(album, path, output, metadata, scanner).await,
-                    ScanItem::ArtistCover {
-                        path,
-                        metadata,
-                        artist,
-                    } => scan_artist_cover(artist, path, output, metadata, scanner).await,
-                }
-            })
+                },
+            )
         }
     });
 
@@ -178,161 +181,162 @@ fn scan_track(
             sample_rate,
             bit_depth,
             channels,
-        ) = moosicbox_task::spawn_blocking("scan: scan_track", move || {
-            log::debug!("scan_track: path={}", path.display());
-            let extension = path
-                .extension()
-                .and_then(std::ffi::OsStr::to_str)
-                .unwrap_or("")
-                .to_uppercase();
+        ) = switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("scan: scan_track", move || {
+                log::debug!("scan_track: path={}", path.display());
+                let extension = path
+                    .extension()
+                    .and_then(std::ffi::OsStr::to_str)
+                    .unwrap_or("")
+                    .to_uppercase();
 
-            let tag = match extension.as_str() {
-                "FLAC" | "MP4" | "M4A" | "MP3" | "WAV" => {
-                    Some(Tag::new().read_from_path(path.to_str().unwrap()))
-                }
-                _ => None,
-            };
-            let moosicbox_lofty_tag = moosicbox_lofty::Probe::open(&path)
-                .expect("ERROR: Bad path provided!")
-                .options(ParseOptions::new().read_picture(false))
-                .read()
-                .map_err(|e| {
-                    moosicbox_assert::die_or_error!(
-                        "Failed to read lofty tags: path={path:?} ({e:?})"
-                    );
-                    e
-                })?;
+                let tag = match extension.as_str() {
+                    "FLAC" | "MP4" | "M4A" | "MP3" | "WAV" => {
+                        Some(Tag::new().read_from_path(path.to_str().unwrap()))
+                    }
+                    _ => None,
+                };
+                let moosicbox_lofty_tag = moosicbox_lofty::Probe::open(&path)
+                    .expect("ERROR: Bad path provided!")
+                    .options(ParseOptions::new().read_picture(false))
+                    .read()
+                    .map_err(|e| {
+                        moosicbox_assert::die_or_error!(
+                            "Failed to read lofty tags: path={path:?} ({e:?})"
+                        );
+                        e
+                    })?;
 
-            let duration = if std::path::Path::new(path.clone().to_str().unwrap())
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"))
-            {
-                mp3_duration::from_path(path.as_path())
+                let duration = if std::path::Path::new(path.clone().to_str().unwrap())
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"))
+                {
+                    mp3_duration::from_path(path.as_path())
+                        .unwrap()
+                        .as_secs_f64()
+                } else {
+                    match tag {
+                        Some(Ok(ref tag)) => tag.duration().unwrap(),
+                        Some(Err(err)) => return Err(ScanError::Tag(err)),
+                        None => 10.0,
+                    }
+                };
+
+                let tag = tag.and_then(Result::ok);
+
+                let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
+                let artist_dir_name = path_artist
+                    .file_name()
                     .unwrap()
-                    .as_secs_f64()
-            } else {
-                match tag {
-                    Some(Ok(ref tag)) => tag.duration().unwrap(),
-                    Some(Err(err)) => return Err(ScanError::Tag(err)),
-                    None => 10.0,
-                }
-            };
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+                let path_album = path.clone().parent().unwrap().to_owned();
+                let album_dir_name = path_album
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
 
-            let tag = tag.and_then(Result::ok);
+                let track_filestem = path.file_stem().unwrap().to_str().unwrap().to_string();
 
-            let path_artist = path.clone().parent().unwrap().parent().unwrap().to_owned();
-            let artist_dir_name = path_artist
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
-            let path_album = path.clone().parent().unwrap().to_owned();
-            let album_dir_name = path_album
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string();
+                let format = match extension.as_str() {
+                    #[cfg(feature = "aac")]
+                    "M4A" => AudioFormat::Aac,
+                    #[cfg(feature = "flac")]
+                    "FLAC" => AudioFormat::Flac,
+                    #[cfg(feature = "mp3")]
+                    "MP3" => AudioFormat::Mp3,
+                    #[cfg(feature = "opus")]
+                    "OPUS" => AudioFormat::Opus,
+                    _ => AudioFormat::Source,
+                };
+                let bytes = metadata.len();
+                let title = tag
+                    .as_ref()
+                    .and_then(|tag| tag.title().map(ToString::to_string))
+                    .or_else(|| extract_track_name(&track_filestem))
+                    .unwrap_or_else(|| "(untitled)".to_string());
+                let number = i32::from(
+                    tag.as_ref()
+                        .and_then(|tag| tag.track_number())
+                        .or_else(|| extract_track_number(&track_filestem))
+                        .unwrap_or(1),
+                );
+                let album = tag
+                    .as_ref()
+                    .and_then(|tag| tag.album_title())
+                    .unwrap_or(&album_dir_name)
+                    .to_string();
+                let artist_name = tag
+                    .as_ref()
+                    .and_then(|tag| tag.artist().or_else(|| tag.album_artist()))
+                    .unwrap_or(&artist_dir_name)
+                    .to_string();
+                let album_artist = tag
+                    .as_ref()
+                    .and_then(|tag| tag.album_artist())
+                    .unwrap_or(artist_name.as_str())
+                    .to_string();
+                let date_released = tag
+                    .as_ref()
+                    .and_then(|tag| tag.date())
+                    .map(|date| date.to_string());
 
-            let track_filestem = path.file_stem().unwrap().to_str().unwrap().to_string();
+                let audio_bitrate = moosicbox_lofty_tag.properties().audio_bitrate();
+                let overall_bitrate = moosicbox_lofty_tag.properties().overall_bitrate();
+                let sample_rate = moosicbox_lofty_tag.properties().sample_rate();
+                let bit_depth = moosicbox_lofty_tag.properties().bit_depth();
+                let channels = moosicbox_lofty_tag.properties().channels();
 
-            let format = match extension.as_str() {
-                #[cfg(feature = "aac")]
-                "M4A" => AudioFormat::Aac,
-                #[cfg(feature = "flac")]
-                "FLAC" => AudioFormat::Flac,
-                #[cfg(feature = "mp3")]
-                "MP3" => AudioFormat::Mp3,
-                #[cfg(feature = "opus")]
-                "OPUS" => AudioFormat::Opus,
-                _ => AudioFormat::Source,
-            };
-            let bytes = metadata.len();
-            let title = tag
-                .as_ref()
-                .and_then(|tag| tag.title().map(ToString::to_string))
-                .or_else(|| extract_track_name(&track_filestem))
-                .unwrap_or_else(|| "(untitled)".to_string());
-            let number = i32::from(
-                tag.as_ref()
-                    .and_then(|tag| tag.track_number())
-                    .or_else(|| extract_track_number(&track_filestem))
-                    .unwrap_or(1),
-            );
-            let album = tag
-                .as_ref()
-                .and_then(|tag| tag.album_title())
-                .unwrap_or(&album_dir_name)
-                .to_string();
-            let artist_name = tag
-                .as_ref()
-                .and_then(|tag| tag.artist().or_else(|| tag.album_artist()))
-                .unwrap_or(&artist_dir_name)
-                .to_string();
-            let album_artist = tag
-                .as_ref()
-                .and_then(|tag| tag.album_artist())
-                .unwrap_or(artist_name.as_str())
-                .to_string();
-            let date_released = tag
-                .as_ref()
-                .and_then(|tag| tag.date())
-                .map(|date| date.to_string());
+                log::debug!("====== {} ======", path.clone().to_str().unwrap());
+                log::debug!("title: {title}");
+                log::debug!("format: {format:?}");
+                log::debug!("number: {number}");
+                log::debug!("duration: {duration}");
+                log::debug!("bytes: {bytes}");
+                log::debug!("audio_bitrate: {audio_bitrate:?}");
+                log::debug!("overall_bitrate: {overall_bitrate:?}");
+                log::debug!("sample_rate: {sample_rate:?}");
+                log::debug!("bit_depth: {bit_depth:?}");
+                log::debug!("channels: {channels:?}");
+                log::debug!("album title: {album}");
+                log::debug!("artist directory name: {artist_dir_name}");
+                log::debug!("album directory name: {album_dir_name}");
+                log::debug!("artist: {artist_name}");
+                log::debug!("album_artist: {album_artist}");
+                log::debug!("date_released: {date_released:?}");
+                log::debug!(
+                    "contains cover: {:?}",
+                    tag.as_ref().is_some_and(|tag| tag.album_cover().is_some())
+                );
 
-            let audio_bitrate = moosicbox_lofty_tag.properties().audio_bitrate();
-            let overall_bitrate = moosicbox_lofty_tag.properties().overall_bitrate();
-            let sample_rate = moosicbox_lofty_tag.properties().sample_rate();
-            let bit_depth = moosicbox_lofty_tag.properties().bit_depth();
-            let channels = moosicbox_lofty_tag.properties().channels();
+                let album_artist = match MULTI_ARTIST_PATTERN.find(album_artist.as_str()) {
+                    Some(comma) => album_artist[..=comma.start()].to_string(),
+                    None => album_artist,
+                };
 
-            log::debug!("====== {} ======", path.clone().to_str().unwrap());
-            log::debug!("title: {title}");
-            log::debug!("format: {format:?}");
-            log::debug!("number: {number}");
-            log::debug!("duration: {duration}");
-            log::debug!("bytes: {bytes}");
-            log::debug!("audio_bitrate: {audio_bitrate:?}");
-            log::debug!("overall_bitrate: {overall_bitrate:?}");
-            log::debug!("sample_rate: {sample_rate:?}");
-            log::debug!("bit_depth: {bit_depth:?}");
-            log::debug!("channels: {channels:?}");
-            log::debug!("album title: {album}");
-            log::debug!("artist directory name: {artist_dir_name}");
-            log::debug!("album directory name: {album_dir_name}");
-            log::debug!("artist: {artist_name}");
-            log::debug!("album_artist: {album_artist}");
-            log::debug!("date_released: {date_released:?}");
-            log::debug!(
-                "contains cover: {:?}",
-                tag.as_ref().is_some_and(|tag| tag.album_cover().is_some())
-            );
-
-            let album_artist = match MULTI_ARTIST_PATTERN.find(album_artist.as_str()) {
-                Some(comma) => album_artist[..=comma.start()].to_string(),
-                None => album_artist,
-            };
-
-            Ok::<_, ScanError>((
-                path.clone(),
-                tag,
-                path_album,
-                format,
-                bytes,
-                title,
-                number,
-                duration,
-                album,
-                album_artist,
-                date_released,
-                audio_bitrate,
-                overall_bitrate,
-                sample_rate,
-                bit_depth,
-                channels,
-            ))
-        })
-        .await??;
+                Ok::<_, ScanError>((
+                    path.clone(),
+                    tag,
+                    path_album,
+                    format,
+                    bytes,
+                    title,
+                    number,
+                    duration,
+                    album,
+                    album_artist,
+                    date_released,
+                    audio_bitrate,
+                    overall_bitrate,
+                    sample_rate,
+                    bit_depth,
+                    channels,
+                ))
+            })
+            .await??;
 
         let mut output = output.write().await;
 

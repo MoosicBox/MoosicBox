@@ -357,7 +357,7 @@ fn request(
     let path = path.to_string();
     let abort_token = abort_token.clone();
 
-    moosicbox_task::spawn("tunnel_server_request", async move {
+    switchy_async::runtime::Handle::current().spawn_with_name("tunnel_server_request", async move {
         debug!("Sending server request {request_id}");
         let ws_server = WS_SERVER_HANDLE.read().await.as_ref().unwrap().clone();
         ws_server

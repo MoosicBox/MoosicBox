@@ -17,7 +17,7 @@ group = "hyperchad"
 hyperchad_renderer = { workspace = true }
 hyperchad_transformer = { workspace = true, features = ["html"] }
 moosicbox_assert = { workspace = true }
-moosicbox_task = { workspace = true }
+
 switchy = { workspace = true, features = ["http-models"] }
 switchy_async = { workspace = true, features = [
     "rt-multi-thread",

@@ -187,10 +187,11 @@ pub async fn run<T>(
         ws_server.add_sender(Box::new(tunnel_handle.clone()));
     }
 
-    let ws_server_handle = moosicbox_task::spawn("server: WsServer", ws_server.run());
+    let ws_server_handle = switchy_async::runtime::Handle::current()
+        .spawn_with_name("server: WsServer", ws_server.run());
 
-    let (track_pool_handle, track_pool_join_handle) =
-        moosicbox_task::spawn("server: init TrackPool", async move {
+    let (track_pool_handle, track_pool_join_handle) = switchy_async::runtime::Handle::current()
+        .spawn_with_name("server: init TrackPool", async move {
             use moosicbox_files::files::track_pool::{Context, HANDLE, service::Service};
 
             let service = Service::new(Context::new());
@@ -214,7 +215,7 @@ pub async fn run<T>(
         *UPNP_LISTENER_HANDLE.write().unwrap() = Some(upnp_service_handle.clone());
 
         #[cfg(feature = "upnp")]
-        moosicbox_task::spawn(
+        switchy_async::runtime::Handle::current().spawn_with_name(
             "server: register upnp players",
             players::upnp::init(
                 handle.clone(),
@@ -245,14 +246,17 @@ pub async fn run<T>(
         #[cfg(feature = "tunnel")]
         let tunnel_handle = tunnel_handle.clone();
 
-        moosicbox_task::spawn("server: scan outputs", async move {
-            players::local::init(
-                &config_database,
-                #[cfg(feature = "tunnel")]
-                tunnel_handle,
-            )
-            .await
-        });
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "server: scan outputs",
+            async move {
+                players::local::init(
+                    &config_database,
+                    #[cfg(feature = "tunnel")]
+                    tunnel_handle,
+                )
+                .await
+            },
+        );
 
         (Some(playback_event_handle), Some(playback_join_handle))
     } else {
@@ -511,7 +515,7 @@ pub async fn run<T>(
             http_server = http_server.workers(workers);
         }
 
-        moosicbox_task::spawn("server: ctrl-c", async move {
+        switchy_async::runtime::Handle::current().spawn_with_name("server: ctrl-c", async move {
             #[cfg(feature = "simulator")]
             {
                 Ok::<_, std::io::Error>(())

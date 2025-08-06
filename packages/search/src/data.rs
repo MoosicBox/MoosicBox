@@ -189,11 +189,12 @@ pub enum ReindexFromDbError {
 /// * If the tokio task failed to join
 pub async fn recreate_global_search_index() -> Result<(), RecreateIndexError> {
     let permit = SEMAPHORE.acquire().await;
-    moosicbox_task::spawn_blocking("recreate_global_search_index", || {
-        let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
-        crate::recreate_global_search_index_sync(path)
-    })
-    .await??;
+    switchy_async::runtime::Handle::current()
+        .spawn_blocking_with_name("recreate_global_search_index", || {
+            let path: &Path = GLOBAL_SEARCH_INDEX_PATH.as_ref();
+            crate::recreate_global_search_index_sync(path)
+        })
+        .await??;
     drop(permit);
     Ok(())
 }

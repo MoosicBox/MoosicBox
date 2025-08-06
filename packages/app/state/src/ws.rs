@@ -111,7 +111,7 @@ impl AppState {
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
 
-        moosicbox_task::spawn("ws message loop", async move {
+        switchy_async::runtime::Handle::current().spawn_with_name("ws message loop", async move {
             while let Some(m) = tokio::select! {
                 resp = rx.recv() => {
                     resp
@@ -170,26 +170,31 @@ impl AppState {
                     let handle = handle.clone();
                     let state = self.clone();
                     move || {
-                        moosicbox_task::spawn("moosicbox_app_state: ws GetConnectionId", {
-                            let handle = handle.clone();
-                            let state = state.clone();
-                            async move {
-                                log::debug!("Sending GetConnectionId");
-                                if let Err(e) = state
-                                    .send_ws_message(
-                                        &handle,
-                                        InboundPayload::GetConnectionId(EmptyPayload {}),
-                                        true,
-                                    )
-                                    .await
-                                {
-                                    log::error!("Failed to send GetConnectionId WS message: {e:?}");
+                        switchy_async::runtime::Handle::current().spawn_with_name(
+                            "moosicbox_app_state: ws GetConnectionId",
+                            {
+                                let handle = handle.clone();
+                                let state = state.clone();
+                                async move {
+                                    log::debug!("Sending GetConnectionId");
+                                    if let Err(e) = state
+                                        .send_ws_message(
+                                            &handle,
+                                            InboundPayload::GetConnectionId(EmptyPayload {}),
+                                            true,
+                                        )
+                                        .await
+                                    {
+                                        log::error!(
+                                            "Failed to send GetConnectionId WS message: {e:?}"
+                                        );
+                                    }
+                                    if let Err(e) = state.flush_ws_message_buffer().await {
+                                        log::error!("Failed to flush WS message buffer: {e:?}");
+                                    }
                                 }
-                                if let Err(e) = state.flush_ws_message_buffer().await {
-                                    log::error!("Failed to flush WS message buffer: {e:?}");
-                                }
-                            }
-                        });
+                            },
+                        );
                     }
                 },
                 tx,
@@ -266,41 +271,44 @@ impl AppState {
         if handle_update {
             let message = message.clone();
             let state = self.clone();
-            moosicbox_task::spawn("send_ws_message: handle_update", async move {
-                match &message {
-                    InboundPayload::UpdateSession(payload) => {
-                        state
-                            .handle_playback_update(&payload.payload.clone().into(), true)
-                            .await?;
+            switchy_async::runtime::Handle::current().spawn_with_name(
+                "send_ws_message: handle_update",
+                async move {
+                    match &message {
+                        InboundPayload::UpdateSession(payload) => {
+                            state
+                                .handle_playback_update(&payload.payload.clone().into(), true)
+                                .await?;
+                        }
+                        InboundPayload::SetSeek(payload) => {
+                            #[allow(clippy::cast_precision_loss)]
+                            state
+                                .handle_playback_update(
+                                    &ApiUpdateSession {
+                                        session_id: payload.payload.session_id,
+                                        profile: payload.payload.profile.clone(),
+                                        playback_target: payload.payload.playback_target.clone(),
+                                        play: None,
+                                        stop: None,
+                                        name: None,
+                                        active: None,
+                                        playing: None,
+                                        position: None,
+                                        seek: Some(payload.payload.seek as f64),
+                                        volume: None,
+                                        playlist: None,
+                                        quality: None,
+                                    },
+                                    true,
+                                )
+                                .await?;
+                        }
+                        _ => {}
                     }
-                    InboundPayload::SetSeek(payload) => {
-                        #[allow(clippy::cast_precision_loss)]
-                        state
-                            .handle_playback_update(
-                                &ApiUpdateSession {
-                                    session_id: payload.payload.session_id,
-                                    profile: payload.payload.profile.clone(),
-                                    playback_target: payload.payload.playback_target.clone(),
-                                    play: None,
-                                    stop: None,
-                                    name: None,
-                                    active: None,
-                                    playing: None,
-                                    position: None,
-                                    seek: Some(payload.payload.seek as f64),
-                                    volume: None,
-                                    playlist: None,
-                                    quality: None,
-                                },
-                                true,
-                            )
-                            .await?;
-                    }
-                    _ => {}
-                }
 
-                Ok::<_, AppStateError>(())
-            });
+                    Ok::<_, AppStateError>(())
+                },
+            );
         }
 
         handle
@@ -327,7 +335,7 @@ impl AppState {
 
         let state = self.clone();
 
-        moosicbox_task::spawn("handle_ws_message", {
+        switchy_async::runtime::Handle::current().spawn_with_name("handle_ws_message", {
             let message = message.clone();
             async move {
                 match &message {

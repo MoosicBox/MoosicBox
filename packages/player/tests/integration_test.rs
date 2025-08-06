@@ -587,18 +587,23 @@ mod local {
         // 3. New AudioOutput is created immediately for the seek position
         // 4. Both AudioOutputs are active during the drain period
 
-        let task1 = moosicbox_task::spawn("test: player1 trigger_play", {
-            let player1 = player1.clone();
-            async move {
-                println!("🔊 Player1: Starting trigger_play (this simulates the OLD AudioOutput)");
-                player1.trigger_play(Some(30.0)).await
-            }
-        });
+        let task1 = switchy_async::runtime::Handle::current().spawn_with_name(
+            "test: player1 trigger_play",
+            {
+                let player1 = player1.clone();
+                async move {
+                    println!(
+                        "🔊 Player1: Starting trigger_play (this simulates the OLD AudioOutput)"
+                    );
+                    player1.trigger_play(Some(30.0)).await
+                }
+            },
+        );
 
         // Very brief delay to let first AudioOutput start, then start second
         sleep(Duration::from_millis(10)).await;
 
-        let task2 = moosicbox_task::spawn("test: player2 trigger_play", {
+        let task2 = switchy_async::runtime::Handle::current().spawn_with_name("test: player2 trigger_play", {
             let player2 = player2.clone();
             async move {
                 println!(

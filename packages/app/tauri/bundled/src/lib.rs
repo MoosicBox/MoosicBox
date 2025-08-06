@@ -100,11 +100,10 @@ impl Context {
         let addr = "0.0.0.0";
         let port = 8016;
 
-        let server_handle = moosicbox_task::spawn_on(
+        let server_handle = handle.spawn_with_name(
             "moosicbox_app_tauri_bundled server",
-            handle,
             moosicbox_server::run_basic(AppType::App, addr, port, None, move |_| {
-                moosicbox_task::spawn(
+                switchy_async::runtime::Handle::current().spawn_with_name(
                     "moosicbox_app_tauri_bundled: create_download_location",
                     async move {
                         let downloads_path_str = downloads_path.to_str().unwrap();

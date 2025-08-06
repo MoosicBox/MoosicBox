@@ -138,49 +138,50 @@ impl Player for LocalPlayer {
         // Cleanup old session coordinator before creating new one
         self.cleanup_session_coordinator().await;
 
-        moosicbox_task::spawn_blocking("player: Play media source", {
-            let playback = self.playback.clone();
-            let shared_volume = self.shared_volume.clone();
-            let output = self.output.clone().unwrap();
-            let audio_handle_storage = self.audio_handle.clone();
-            let session_coordinator_handle_storage = self.session_coordinator_handle.clone();
-            let player_self = self.clone();
-            move || {
-                // CREATE AUDIO HANDLE AND SESSION COORDINATOR
-                let (session_command_sender, session_command_receiver) = flume::unbounded();
-                let handle = moosicbox_audio_output::AudioHandle::new(session_command_sender);
+        switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("player: Play media source", {
+                let playback = self.playback.clone();
+                let shared_volume = self.shared_volume.clone();
+                let output = self.output.clone().unwrap();
+                let audio_handle_storage = self.audio_handle.clone();
+                let session_coordinator_handle_storage = self.session_coordinator_handle.clone();
+                let player_self = self.clone();
+                move || {
+                    // CREATE AUDIO HANDLE AND SESSION COORDINATOR
+                    let (session_command_sender, session_command_receiver) = flume::unbounded();
+                    let handle = moosicbox_audio_output::AudioHandle::new(session_command_sender);
 
-                // STORE HANDLE IMMEDIATELY - available for pause() right now
-                *audio_handle_storage.write().unwrap() = Some(handle);
-                log::debug!("trigger_play: created and stored audio handle immediately");
+                    // STORE HANDLE IMMEDIATELY - available for pause() right now
+                    *audio_handle_storage.write().unwrap() = Some(handle);
+                    log::debug!("trigger_play: created and stored audio handle immediately");
 
-                // START INSTANCE SESSION COMMAND COORDINATOR (no CPAL streams involved)
-                let coordinator_handle =
-                    player_self.start_instance_session_coordinator(session_command_receiver);
-                *session_coordinator_handle_storage.write().unwrap() = Some(coordinator_handle);
-                log::debug!("trigger_play: started instance session command coordinator");
+                    // START INSTANCE SESSION COMMAND COORDINATOR (no CPAL streams involved)
+                    let coordinator_handle =
+                        player_self.start_instance_session_coordinator(session_command_receiver);
+                    *session_coordinator_handle_storage.write().unwrap() = Some(coordinator_handle);
+                    log::debug!("trigger_play: started instance session command coordinator");
 
-                let mut handler = get_audio_decode_handler_with_command_receiver(
-                    &playback,
-                    shared_volume,
-                    output,
-                    seek,
-                    player_self.clone(),
-                )?;
+                    let mut handler = get_audio_decode_handler_with_command_receiver(
+                        &playback,
+                        shared_volume,
+                        output,
+                        seek,
+                        player_self.clone(),
+                    )?;
 
-                play_media_source(
-                    mss,
-                    &playable_track.hint,
-                    &mut handler,
-                    true,
-                    true,
-                    None,
-                    seek,
-                )
-                .map_err(PlayerError::PlaybackError)
-            }
-        })
-        .await??;
+                    play_media_source(
+                        mss,
+                        &playable_track.hint,
+                        &mut handler,
+                        true,
+                        true,
+                        None,
+                        seek,
+                    )
+                    .map_err(PlayerError::PlaybackError)
+                }
+            })
+            .await??;
 
         log::info!("Finished playback for track_id={}", track_id);
 
@@ -339,10 +340,11 @@ impl LocalPlayer {
         source: PlayerSource,
         playback_type: Option<PlaybackType>,
     ) -> Result<Self, PlayerError> {
-        let id = moosicbox_task::spawn_blocking("player: local player rng", || {
-            switchy_random::rng().next_u64()
-        })
-        .await?;
+        let id = switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("player: local player rng", || {
+                switchy_random::rng().next_u64()
+            })
+            .await?;
 
         let shared_volume = Arc::new(AtomicF64::new(1.0));
         log::info!("LocalPlayer {id}: initialized shared volume to 1.0 (full volume)");
@@ -397,7 +399,7 @@ impl LocalPlayer {
         session_command_receiver: flume::Receiver<moosicbox_audio_output::CommandMessage>,
     ) -> switchy_async::task::JoinHandle<()> {
         let session_command_forwarder = self.session_command_forwarder.clone();
-        moosicbox_task::spawn("instance_session_coordinator", async move {
+        switchy_async::runtime::Handle::current().spawn_with_name("instance_session_coordinator", async move {
             log::debug!("Instance session command coordinator started");
 
             while let Ok(command_msg) = session_command_receiver.recv_async().await {
@@ -444,61 +446,64 @@ impl LocalPlayer {
         log::debug!("Registered thread-local processor with session coordinator");
 
         // Start the thread-local processor (stays on current thread)
-        moosicbox_task::spawn("thread_local_audio_processor", async move {
-            log::debug!("Thread-local audio processor started");
+        switchy_async::runtime::Handle::current().spawn_with_name(
+            "thread_local_audio_processor",
+            async move {
+                log::debug!("Thread-local audio processor started");
 
-            while let Ok(command_msg) = thread_local_receiver.recv_async().await {
-                log::trace!(
-                    "Processing thread-local audio command: {:?}",
-                    command_msg.command
-                );
+                while let Ok(command_msg) = thread_local_receiver.recv_async().await {
+                    log::trace!(
+                        "Processing thread-local audio command: {:?}",
+                        command_msg.command
+                    );
 
-                let response = match command_msg.command {
-                    moosicbox_audio_output::AudioCommand::Pause => {
-                        match audio_output_handle.pause().await {
-                            Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                            Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
-                                "Failed to pause: {e}"
-                            )),
+                    let response = match command_msg.command {
+                        moosicbox_audio_output::AudioCommand::Pause => {
+                            match audio_output_handle.pause().await {
+                                Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                                Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                                    "Failed to pause: {e}"
+                                )),
+                            }
                         }
-                    }
-                    moosicbox_audio_output::AudioCommand::Resume => {
-                        match audio_output_handle.resume().await {
-                            Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                            Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
-                                "Failed to resume: {e}"
-                            )),
+                        moosicbox_audio_output::AudioCommand::Resume => {
+                            match audio_output_handle.resume().await {
+                                Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                                Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                                    "Failed to resume: {e}"
+                                )),
+                            }
                         }
-                    }
-                    moosicbox_audio_output::AudioCommand::SetVolume(volume) => {
-                        match audio_output_handle.set_volume(volume).await {
-                            Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                            Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
-                                "Failed to set volume: {e}"
-                            )),
+                        moosicbox_audio_output::AudioCommand::SetVolume(volume) => {
+                            match audio_output_handle.set_volume(volume).await {
+                                Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                                Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                                    "Failed to set volume: {e}"
+                                )),
+                            }
                         }
-                    }
-                    moosicbox_audio_output::AudioCommand::Reset => {
-                        match audio_output_handle.reset().await {
-                            Ok(()) => moosicbox_audio_output::AudioResponse::Success,
-                            Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
-                                "Failed to reset: {e}"
-                            )),
+                        moosicbox_audio_output::AudioCommand::Reset => {
+                            match audio_output_handle.reset().await {
+                                Ok(()) => moosicbox_audio_output::AudioResponse::Success,
+                                Err(e) => moosicbox_audio_output::AudioResponse::Error(format!(
+                                    "Failed to reset: {e}"
+                                )),
+                            }
                         }
-                    }
-                    _ => moosicbox_audio_output::AudioResponse::Error(
-                        "Command not supported".to_string(),
-                    ),
-                };
+                        _ => moosicbox_audio_output::AudioResponse::Error(
+                            "Command not supported".to_string(),
+                        ),
+                    };
 
-                // Send response if requested
-                if let Some(response_sender) = command_msg.response_sender {
-                    let _ = response_sender.send_async(response).await;
+                    // Send response if requested
+                    if let Some(response_sender) = command_msg.response_sender {
+                        let _ = response_sender.send_async(response).await;
+                    }
                 }
-            }
 
-            log::debug!("Thread-local audio processor stopped");
-        });
+                log::debug!("Thread-local audio processor stopped");
+            },
+        );
     }
 }
 
@@ -604,7 +609,7 @@ fn get_audio_decode_handler_with_command_receiver(
 
                 // Spawn a task to handle progress updates from the audio thread
                 let playback_for_handler = playback_for_callback.clone();
-                moosicbox_task::spawn("player: Progress handler", async move {
+                switchy_async::runtime::Handle::current().spawn_with_name("player: Progress handler", async move {
                     let mut last_reported_second: Option<u64> = None;
 
                     while let Ok(progress_update) = progress_rx.recv_async().await {

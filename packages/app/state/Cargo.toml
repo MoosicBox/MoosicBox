@@ -26,7 +26,7 @@ moosicbox_paging         = { workspace = true }
 moosicbox_player         = { workspace = true, features = ["local"] }
 moosicbox_remote_library = { workspace = true }
 moosicbox_session        = { workspace = true }
-moosicbox_task           = { workspace = true }
+
 moosicbox_ws             = { workspace = true }
 switchy_async            = { workspace = true, features = ["tokio"] }
 switchy_http             = { workspace = true, features = ["json", "reqwest"] }

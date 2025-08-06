@@ -16,7 +16,8 @@ moosicbox_config = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true }
 moosicbox_server = { workspace = true, features = ["simulator"] }
-moosicbox_task = { workspace = true }
+switchy_async = { workspace = true, features = ["tokio"] }
+
 openport = { workspace = true }
 simvar = { workspace = true, features = [
     "async",
@@ -31,7 +32,6 @@ simvar = { workspace = true, features = [
     "tui",
     "upnp",
 ] }
-switchy_async = { workspace = true, features = ["tokio"] }
 switchy_telemetry = { workspace = true }
 
 actix-web  = { workspace = true }

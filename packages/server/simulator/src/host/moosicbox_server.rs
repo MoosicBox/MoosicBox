@@ -150,12 +150,13 @@ async fn bind_std_tcp_addr(addr: &str) -> Result<std::net::TcpListener, std::io:
 async fn connect_std_tcp_addr(addr: &str) -> Result<std::net::TcpStream, std::io::Error> {
     let mut count = 0;
     Ok(loop {
-        match moosicbox_task::spawn_blocking("connect_std_tcp_addr", {
-            let addr = addr.to_string();
-            move || std::net::TcpStream::connect(addr)
-        })
-        .await
-        .unwrap()
+        match switchy_async::runtime::Handle::current()
+            .spawn_blocking_with_name("connect_std_tcp_addr", {
+                let addr = addr.to_string();
+                move || std::net::TcpStream::connect(addr)
+            })
+            .await
+            .unwrap()
         {
             Ok(x) => break x,
             Err(e) => {
@@ -184,40 +185,43 @@ fn start_tcp_listen(
     token: CancellationToken,
 ) -> switchy_async::task::JoinHandle<Result<(), Box<dyn std::error::Error + Send>>> {
     let addr = addr.to_string();
-    moosicbox_task::spawn("simulation TCP listener", async move {
-        log::debug!("simulation TCP listener: starting TcpListener...");
+    switchy_async::runtime::Handle::current().spawn_with_name(
+        "simulation TCP listener",
+        async move {
+            log::debug!("simulation TCP listener: starting TcpListener...");
 
-        let listener = TcpListener::bind(format!("0.0.0.0:{PORT}"))
-            .await
-            .inspect_err(|e| {
-                log::error!("simulation TCP listener: failed to bind TcpListener: {e:?}");
-            })
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+            let listener = TcpListener::bind(format!("0.0.0.0:{PORT}"))
+                .await
+                .inspect_err(|e| {
+                    log::error!("simulation TCP listener: failed to bind TcpListener: {e:?}");
+                })
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
-        log::debug!("simulation TCP listener: bound TcpListener");
+            log::debug!("simulation TCP listener: bound TcpListener");
 
-        loop {
-            tokio::select! {
-                resp = listener.accept() => {
-                    match resp {
-                        Ok((stream, _addr)) => {
-                            handle_moosicbox_connection(stream, &addr).await?;
-                        }
-                        Err(e) => {
-                            log::error!("Failed to accept TCP connection: {e:?}");
-                            return Err(Box::new(e) as Box<dyn std::error::Error + Send>);
+            loop {
+                tokio::select! {
+                    resp = listener.accept() => {
+                        match resp {
+                            Ok((stream, _addr)) => {
+                                handle_moosicbox_connection(stream, &addr).await?;
+                            }
+                            Err(e) => {
+                                log::error!("Failed to accept TCP connection: {e:?}");
+                                return Err(Box::new(e) as Box<dyn std::error::Error + Send>);
+                            }
                         }
                     }
-                }
-                () = token.cancelled() => {
-                    log::debug!("finished tcp_listen");
-                    break;
+                    () = token.cancelled() => {
+                        log::debug!("finished tcp_listen");
+                        break;
+                    }
                 }
             }
-        }
 
-        Ok(())
-    })
+            Ok(())
+        },
+    )
 }
 
 async fn handle_moosicbox_connection(
@@ -266,30 +270,31 @@ async fn handle_moosicbox_connection(
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
     log::trace!("handle_moosicbox_connection: flushed actual stream");
 
-    let response_bytes = moosicbox_task::spawn_blocking("read actual stream", move || {
-        let mut response_bytes = vec![];
+    let response_bytes = switchy_async::runtime::Handle::current()
+        .spawn_blocking_with_name("read actual stream", move || {
+            let mut response_bytes = vec![];
 
-        loop {
-            log::trace!("handle_moosicbox_connection: reading from actual stream");
-            let mut buf = [0_u8; 1024];
-            let count = actual_stream
-                .read(&mut buf)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
+            loop {
+                log::trace!("handle_moosicbox_connection: reading from actual stream");
+                let mut buf = [0_u8; 1024];
+                let count = actual_stream
+                    .read(&mut buf)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send>)?;
 
-            log::trace!("handle_moosicbox_connection: read {count} actual bytes");
+                log::trace!("handle_moosicbox_connection: read {count} actual bytes");
 
-            if count == 0 {
-                log::trace!("handle_moosicbox_connection: actual read closed");
-                break;
+                if count == 0 {
+                    log::trace!("handle_moosicbox_connection: actual read closed");
+                    break;
+                }
+
+                response_bytes.extend_from_slice(&buf[0..count]);
             }
 
-            response_bytes.extend_from_slice(&buf[0..count]);
-        }
-
-        Ok::<_, Box<dyn std::error::Error + Send>>(response_bytes)
-    })
-    .await
-    .unwrap()?;
+            Ok::<_, Box<dyn std::error::Error + Send>>(response_bytes)
+        })
+        .await
+        .unwrap()?;
 
     write
         .write_all(&response_bytes)

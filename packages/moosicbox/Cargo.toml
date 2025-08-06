@@ -49,7 +49,7 @@ moosicbox_search            = { workspace = true }
 moosicbox_session           = { workspace = true }
 moosicbox_session_models    = { workspace = true }
 moosicbox_stream_utils      = { workspace = true }
-moosicbox_task              = { workspace = true }
+
 moosicbox_tidal             = { workspace = true, optional = true }
 moosicbox_tunnel            = { workspace = true }
 moosicbox_tunnel_sender     = { workspace = true }

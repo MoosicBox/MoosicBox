@@ -28,7 +28,7 @@ moosicbox_music_api = { workspace = true }
 moosicbox_music_models = { workspace = true }
 moosicbox_player = { workspace = true }
 moosicbox_stream_utils = { workspace = true }
-moosicbox_task = { workspace = true }
+
 moosicbox_tunnel = { workspace = true }
 moosicbox_ws = { workspace = true, features = ["ws"] }
 switchy_async = { workspace = true, features = ["tokio"] }

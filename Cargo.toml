@@ -111,7 +111,6 @@ members = [
     "packages/simvar/utils",
     "packages/stream_utils",
     "packages/switchy",
-    "packages/task",
     "packages/tcp",
     "packages/telemetry",
     "packages/tidal",
@@ -237,7 +236,6 @@ moosicbox_server             = { version = "0.1.1", default-features = false, pa
 moosicbox_session            = { version = "0.1.1", default-features = false, path = "packages/session" }
 moosicbox_session_models     = { version = "0.1.1", default-features = false, path = "packages/session/models" }
 moosicbox_stream_utils       = { version = "0.1.1", default-features = false, path = "packages/stream_utils" }
-moosicbox_task               = { version = "0.1.1", default-features = false, path = "packages/task" }
 moosicbox_tidal              = { version = "0.1.1", default-features = false, path = "packages/tidal" }
 moosicbox_tunnel             = { version = "0.1.1", default-features = false, path = "packages/tunnel" }
 moosicbox_tunnel_sender      = { version = "0.1.1", default-features = false, path = "packages/tunnel_sender" }

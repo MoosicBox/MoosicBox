@@ -23,7 +23,7 @@ hyperchad_transformer = { workspace = true, features = ["html", "layout"] }
 moosicbox_app_native_image = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_logging = { workspace = true }
-moosicbox_task = { workspace = true }
+
 switchy_async = { workspace = true, features = ["tokio"] }
 switchy_http = { workspace = true, features = ["reqwest"] }
 

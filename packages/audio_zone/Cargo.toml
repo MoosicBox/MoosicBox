@@ -14,6 +14,7 @@ version     = "0.1.4"
 moosicbox_assert            = { workspace = true }
 moosicbox_audio_zone_models = { workspace = true }
 moosicbox_json_utils        = { workspace = true, features = ["database"] }
+switchy_async               = { workspace = true, features = ["tokio"] }
 switchy_database            = { workspace = true }
 
 # API Dependencies
@@ -22,7 +23,7 @@ moosicbox_paging = { workspace = true, optional = true }
 utoipa           = { workspace = true, optional = true }
 
 # Events Dependencies
-moosicbox_task = { workspace = true, optional = true }
+
 
 log   = { workspace = true }
 serde = { workspace = true }
@@ -45,4 +46,4 @@ openapi = [
     "moosicbox_paging/openapi",
 ]
 
-events = ["dep:moosicbox_task"]
+events = []

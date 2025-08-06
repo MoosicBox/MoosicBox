@@ -86,7 +86,7 @@ pub async fn handle_playback_update(update: ApiUpdateSession) {
         ("handle_playback_update: update={update:?}")
     );
 
-    moosicbox_task::spawn(
+    switchy_async::runtime::Handle::current().spawn_with_name(
         "moosicbox_app: handle_playback_update: render partials",
         async move {
             if let Some(session) = STATE.get_current_session().await {
@@ -106,7 +106,7 @@ pub async fn handle_playback_update(update: ApiUpdateSession) {
 pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
     log::debug!("on_playback_event: received update, spawning task to handle update={update:?}");
 
-    moosicbox_task::spawn(
+    switchy_async::runtime::Handle::current().spawn_with_name(
         "moosicbox_app: handle_playback_event",
         handle_playback_update(update.to_owned().into()),
     );

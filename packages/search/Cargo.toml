@@ -15,7 +15,7 @@ moosicbox_config           = { workspace = true }
 moosicbox_json_utils       = { workspace = true, features = ["tantivy"] }
 moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models     = { workspace = true, features = ["tantivy"] }
-moosicbox_task             = { workspace = true }
+
 switchy_async              = { workspace = true, features = ["tokio"] }
 switchy_fs                 = { workspace = true, features = ["std"] }
 

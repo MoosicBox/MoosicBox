@@ -88,9 +88,8 @@ impl Context {
         let addr = "0.0.0.0";
         let port = 8016;
 
-        let server_handle = moosicbox_task::spawn_on(
+        let server_handle = handle.spawn_with_name(
             "moosicbox_app_tauri_bundled server",
-            handle,
             moosicbox_server::run_basic(AppType::App, addr, port, None, move |_| {
                 log::info!("App server listening on {addr}:{port}");
                 if let Err(e) = sender.send(()) {

@@ -266,20 +266,23 @@ impl WsClient {
                             }
                         };
 
-                        moosicbox_task::spawn("ws: Process WS message", {
-                            let tx = tx.clone();
-                            let close_token = close_token.clone();
+                        switchy_async::runtime::Handle::current().spawn_with_name(
+                            "ws: Process WS message",
+                            {
+                                let tx = tx.clone();
+                                let close_token = close_token.clone();
 
-                            async move {
-                                if let Err(e) = handler(tx.clone(), m).await {
-                                    log::error!("Handler Send Loop error: {e:?}");
-                                    close_token.cancel();
+                                async move {
+                                    if let Err(e) = handler(tx.clone(), m).await {
+                                        log::error!("Handler Send Loop error: {e:?}");
+                                        close_token.cancel();
+                                    }
                                 }
-                            }
-                        });
+                            },
+                        );
                     });
 
-                    let pinger = moosicbox_task::spawn("ws: pinger", {
+                    let pinger = switchy_async::runtime::Handle::current().spawn_with_name("ws: pinger", {
                         let txf = txf.clone();
                         let close_token = close_token.clone();
                         let cancellation_token = cancellation_token.clone();
