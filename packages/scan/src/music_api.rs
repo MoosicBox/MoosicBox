@@ -190,15 +190,16 @@ pub async fn scan_albums(
                 }
             }
 
-            if read_album.cover.is_none() && !read_album.searched_cover {
-                if let Some(url) = album.artwork.clone() {
-                    scan_album
-                        .write()
-                        .await
-                        // FIXME: Pass headers
-                        .search_cover(url, None, api.source())
-                        .await?;
-                }
+            if read_album.cover.is_none()
+                && !read_album.searched_cover
+                && let Some(url) = album.artwork.clone()
+            {
+                scan_album
+                    .write()
+                    .await
+                    // FIXME: Pass headers
+                    .search_cover(url, None, api.source())
+                    .await?;
             }
         }
 

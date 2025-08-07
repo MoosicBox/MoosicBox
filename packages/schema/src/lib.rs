@@ -212,11 +212,11 @@ impl Migrations {
         let migrations = self.as_btree(true);
 
         for (name, migration) in migrations {
-            if let Some(migration_name) = migration_name {
-                if migration_name == name {
-                    log::info!("run_until: stopping on migration_name={name}");
-                    break;
-                }
+            if let Some(migration_name) = migration_name
+                && migration_name == name
+            {
+                log::info!("run_until: stopping on migration_name={name}");
+                break;
             }
 
             let results = db

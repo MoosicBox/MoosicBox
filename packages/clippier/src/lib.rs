@@ -368,24 +368,24 @@ pub fn get_binary_name(
     // Try to read the target package's Cargo.toml to get the correct binary name
     let cargo_path = workspace_root.join(target_package_path).join("Cargo.toml");
 
-    if let Ok(source) = std::fs::read_to_string(&cargo_path) {
-        if let Ok(value) = toml::from_str::<Value>(&source) {
-            // Check for explicit binary definitions
-            if let Some(bins) = value.get("bin").and_then(|b| b.as_array()) {
-                // Use the first binary definition if it has a name
-                if let Some(bin) = bins.first() {
-                    if let Some(bin_name) = bin.get("name").and_then(|n| n.as_str()) {
-                        return bin_name.to_string();
-                    }
-                }
+    if let Ok(source) = std::fs::read_to_string(&cargo_path)
+        && let Ok(value) = toml::from_str::<Value>(&source)
+    {
+        // Check for explicit binary definitions
+        if let Some(bins) = value.get("bin").and_then(|b| b.as_array()) {
+            // Use the first binary definition if it has a name
+            if let Some(bin) = bins.first()
+                && let Some(bin_name) = bin.get("name").and_then(|n| n.as_str())
+            {
+                return bin_name.to_string();
             }
+        }
 
-            // Check for a single binary definition (not array)
-            if let Some(bin) = value.get("bin").and_then(|b| b.as_table()) {
-                if let Some(bin_name) = bin.get("name").and_then(|n| n.as_str()) {
-                    return bin_name.to_string();
-                }
-            }
+        // Check for a single binary definition (not array)
+        if let Some(bin) = value.get("bin").and_then(|b| b.as_table())
+            && let Some(bin_name) = bin.get("name").and_then(|n| n.as_str())
+        {
+            return bin_name.to_string();
         }
     }
 
@@ -926,10 +926,10 @@ pub fn find_workspace_dependencies(
         visited.insert(current_package.clone());
 
         // Add current package to result if it's not the target package
-        if current_package != target_package {
-            if let Some(package_path) = package_paths.get(&current_package) {
-                resolved_dependencies.insert((current_package.clone(), package_path.clone()));
-            }
+        if current_package != target_package
+            && let Some(package_path) = package_paths.get(&current_package)
+        {
+            resolved_dependencies.insert((current_package.clone(), package_path.clone()));
         }
 
         // Get dependencies for current package
@@ -1041,34 +1041,28 @@ fn is_dependency_activated(
     };
 
     // Check if dependency is in regular dependencies and not optional
-    if let Some(dependencies) = cargo_value.get("dependencies").and_then(|d| d.as_table()) {
-        if let Some(dep_value) = dependencies.get(dep_name) {
-            if is_workspace_dependency(dep_value) {
-                // Check if it's optional
-                if let Value::Table(table) = dep_value {
-                    if table.get("optional") == Some(&Value::Boolean(true)) {
-                        // Optional dependency - check if activated by features
-                        return is_optional_dependency_activated(
-                            cargo_value,
-                            dep_name,
-                            enabled_features,
-                        );
-                    }
-                }
-                // Non-optional workspace dependency is always activated
-                return true;
-            }
+    if let Some(dependencies) = cargo_value.get("dependencies").and_then(|d| d.as_table())
+        && let Some(dep_value) = dependencies.get(dep_name)
+        && is_workspace_dependency(dep_value)
+    {
+        // Check if it's optional
+        if let Value::Table(table) = dep_value
+            && table.get("optional") == Some(&Value::Boolean(true))
+        {
+            // Optional dependency - check if activated by features
+            return is_optional_dependency_activated(cargo_value, dep_name, enabled_features);
         }
+        // Non-optional workspace dependency is always activated
+        return true;
     }
 
     // Check dev and build dependencies
     for section_name in ["dev-dependencies", "build-dependencies"] {
-        if let Some(section) = cargo_value.get(section_name).and_then(|d| d.as_table()) {
-            if let Some(dep_value) = section.get(dep_name) {
-                if is_workspace_dependency(dep_value) {
-                    return true; // Dev and build deps are typically always enabled
-                }
-            }
+        if let Some(section) = cargo_value.get(section_name).and_then(|d| d.as_table())
+            && let Some(dep_value) = section.get(dep_name)
+            && is_workspace_dependency(dep_value)
+        {
+            return true; // Dev and build deps are typically always enabled
         }
     }
 
@@ -1382,11 +1376,11 @@ pub fn generate_dockerfile_content_from_git(
         build_cmd.push_str(" --no-default-features");
     }
 
-    if let Some(features) = enabled_features {
-        if !features.is_empty() {
-            use std::fmt::Write as _;
-            write!(build_cmd, " --features=\"{}\"", features.join(","))?;
-        }
+    if let Some(features) = enabled_features
+        && !features.is_empty()
+    {
+        use std::fmt::Write as _;
+        write!(build_cmd, " --features=\"{}\"", features.join(","))?;
     }
 
     writeln!(content, "{build_cmd}\n")?;
@@ -1661,10 +1655,10 @@ pub fn generate_dockerfile_content(
         feature_flags.push("--no-default-features".to_string());
     }
 
-    if let Some(features) = enabled_features {
-        if !features.is_empty() {
-            feature_flags.push(format!("--features={}", features.join(",")));
-        }
+    if let Some(features) = enabled_features
+        && !features.is_empty()
+    {
+        feature_flags.push(format!("--features={}", features.join(",")));
     }
 
     let features_flag = feature_flags.join(" ");
@@ -2186,14 +2180,13 @@ pub fn collect_environment_variables(
 
     // Extract environment variables
     for package in packages {
-        if let Some(os) = package.get("os").and_then(|v| v.as_str()) {
-            if os == target_os {
-                if let Some(env_str) = package.get("env").and_then(|v| v.as_str()) {
-                    for line in env_str.lines() {
-                        if let Some((key, value)) = line.split_once('=') {
-                            env_vars.push((key.to_string(), value.to_string()));
-                        }
-                    }
+        if let Some(os) = package.get("os").and_then(|v| v.as_str())
+            && os == target_os
+            && let Some(env_str) = package.get("env").and_then(|v| v.as_str())
+        {
+            for line in env_str.lines() {
+                if let Some((key, value)) = line.split_once('=') {
+                    env_vars.push((key.to_string(), value.to_string()));
                 }
             }
         }
@@ -2254,14 +2247,13 @@ pub fn collect_system_dependencies(
 
         // Extract system dependencies
         for package in packages {
-            if let Some(os) = package.get("os").and_then(|v| v.as_str()) {
-                if os == target_os {
-                    if let Some(deps) = package.get("dependencies").and_then(|v| v.as_str()) {
-                        for dep in deps.lines() {
-                            if !dep.trim().is_empty() {
-                                all_deps.insert(dep.trim().to_string());
-                            }
-                        }
+            if let Some(os) = package.get("os").and_then(|v| v.as_str())
+                && os == target_os
+                && let Some(deps) = package.get("dependencies").and_then(|v| v.as_str())
+            {
+                for dep in deps.lines() {
+                    if !dep.trim().is_empty() {
+                        all_deps.insert(dep.trim().to_string());
                     }
                 }
             }
@@ -2631,26 +2623,21 @@ pub fn handle_features_command(
                 log::debug!("Added package affected by external dependencies: {external_pkg}");
 
                 // If reasoning is enabled, add reasoning entry for external dependency affected package
-                if include_reasoning {
-                    if let Some(ref mut reasoning_data) = updated_reasoning {
-                        // Get specific external dependencies that affected this package
-                        let specific_deps =
-                            external_dependency_mapping.get(&external_pkg).map_or_else(
-                                || vec!["Affected by external dependency changes".to_string()],
-                                |deps| {
-                                    deps.iter()
-                                        .map(|dep| {
-                                            format!("Affected by external dependency: {dep}")
-                                        })
-                                        .collect()
-                                },
-                            );
+                if include_reasoning && let Some(ref mut reasoning_data) = updated_reasoning {
+                    // Get specific external dependencies that affected this package
+                    let specific_deps = external_dependency_mapping.get(&external_pkg).map_or_else(
+                        || vec!["Affected by external dependency changes".to_string()],
+                        |deps| {
+                            deps.iter()
+                                .map(|dep| format!("Affected by external dependency: {dep}"))
+                                .collect()
+                        },
+                    );
 
-                        reasoning_data.push(AffectedPackageInfo {
-                            name: external_pkg,
-                            reasoning: Some(specific_deps),
-                        });
-                    }
+                    reasoning_data.push(AffectedPackageInfo {
+                        name: external_pkg,
+                        reasoning: Some(specific_deps),
+                    });
                 }
             }
         }
@@ -2711,19 +2698,14 @@ pub fn handle_features_command(
                 )?;
 
                 // Add reasoning to packages if include_reasoning is true
-                if let Some(ref reasoning_data) = affected_with_reasoning {
-                    if let Some(pkg_reasoning) = reasoning_data
+                if let Some(ref reasoning_data) = affected_with_reasoning
+                    && let Some(pkg_reasoning) = reasoning_data
                         .iter()
                         .find(|pkg| pkg.name == affected_package)
-                    {
-                        if let Some(reasoning) = &pkg_reasoning.reasoning {
-                            for package in &mut packages {
-                                package.insert(
-                                    "reasoning".to_string(),
-                                    serde_json::to_value(reasoning)?,
-                                );
-                            }
-                        }
+                    && let Some(reasoning) = &pkg_reasoning.reasoning
+                {
+                    for package in &mut packages {
+                        package.insert("reasoning".to_string(), serde_json::to_value(reasoning)?);
                     }
                 }
 

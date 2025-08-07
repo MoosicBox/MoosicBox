@@ -15,14 +15,13 @@ pub fn get_config_db_path(app_type: AppType) -> Option<std::path::PathBuf> {
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[must_use]
 pub fn make_config_db_path(app_type: AppType) -> Option<std::path::PathBuf> {
-    if let Some(path) = get_config_db_path(app_type) {
-        if path.is_file()
+    if let Some(path) = get_config_db_path(app_type)
+        && (path.is_file()
             || path
                 .parent()
-                .is_some_and(|x| x.is_dir() || std::fs::create_dir_all(x).is_ok())
-        {
-            return Some(path);
-        }
+                .is_some_and(|x| x.is_dir() || std::fs::create_dir_all(x).is_ok()))
+    {
+        return Some(path);
     }
 
     None
@@ -46,14 +45,13 @@ pub fn make_profile_library_db_path(
     app_type: AppType,
     profile: &str,
 ) -> Option<std::path::PathBuf> {
-    if let Some(path) = get_profile_library_db_path(app_type, profile) {
-        if path.is_file()
+    if let Some(path) = get_profile_library_db_path(app_type, profile)
+        && (path.is_file()
             || path
                 .parent()
-                .is_some_and(|x| x.is_dir() || std::fs::create_dir_all(x).is_ok())
-        {
-            return Some(path);
-        }
+                .is_some_and(|x| x.is_dir() || std::fs::create_dir_all(x).is_ok()))
+    {
+        return Some(path);
     }
 
     None

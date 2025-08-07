@@ -13,6 +13,7 @@ pub trait UpnpScanner: Send + Sync {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<Device, rupnp::Error>> + Send>>, rupnp::Error>;
 }
 
+#[allow(dead_code)]
 pub struct RupnpScanner;
 
 #[async_trait]

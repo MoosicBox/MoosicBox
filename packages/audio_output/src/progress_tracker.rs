@@ -102,10 +102,10 @@ impl ProgressTracker {
                     .store(current_position, Ordering::SeqCst);
 
                 // Call progress callback if it exists
-                if let Ok(callback_guard) = self.callback.try_read() {
-                    if let Some(callback) = callback_guard.as_ref() {
-                        callback(current_position);
-                    }
+                if let Ok(callback_guard) = self.callback.try_read()
+                    && let Some(callback) = callback_guard.as_ref()
+                {
+                    callback(current_position);
                 }
             }
         }
@@ -212,10 +212,10 @@ impl ProgressTracker {
                 last_reported_position.store(current_position, Ordering::SeqCst);
 
                 // Call progress callback if it exists
-                if let Ok(callback_guard) = callback.try_read() {
-                    if let Some(cb) = callback_guard.as_ref() {
-                        cb(current_position);
-                    }
+                if let Ok(callback_guard) = callback.try_read()
+                    && let Some(cb) = callback_guard.as_ref()
+                {
+                    cb(current_position);
                 }
             }
         }

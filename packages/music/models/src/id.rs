@@ -549,22 +549,22 @@ pub fn parse_id_ranges(
 
             ids.append(&mut start);
 
-            if let Id::Number(end_id) = end_id {
-                if let Id::Number(mut start_id) = start_id {
+            if let Id::Number(end_id) = end_id
+                && let Id::Number(mut start_id) = start_id
+            {
+                start_id += 1;
+
+                if end_id - start_id > 100_000 {
+                    return Err(ParseIdsError::RangeTooLarge(format!(
+                        "{}-{}",
+                        start_id - 1,
+                        end_id,
+                    )));
+                }
+
+                while start_id < end_id {
+                    ids.push(Id::Number(start_id));
                     start_id += 1;
-
-                    if end_id - start_id > 100_000 {
-                        return Err(ParseIdsError::RangeTooLarge(format!(
-                            "{}-{}",
-                            start_id - 1,
-                            end_id,
-                        )));
-                    }
-
-                    while start_id < end_id {
-                        ids.push(Id::Number(start_id));
-                        start_id += 1;
-                    }
                 }
             }
 

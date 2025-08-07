@@ -84,10 +84,10 @@ pub fn get_cache_dir_path() -> Option<PathBuf> {
 
 #[must_use]
 pub fn make_config_dir_path() -> Option<PathBuf> {
-    if let Some(path) = get_config_dir_path() {
-        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
-            return Some(path);
-        }
+    if let Some(path) = get_config_dir_path()
+        && (path.is_dir() || std::fs::create_dir_all(&path).is_ok())
+    {
+        return Some(path);
     }
 
     None
@@ -95,10 +95,10 @@ pub fn make_config_dir_path() -> Option<PathBuf> {
 
 #[must_use]
 pub fn make_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf> {
-    if let Some(path) = get_profile_dir_path(app_type, profile) {
-        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
-            return Some(path);
-        }
+    if let Some(path) = get_profile_dir_path(app_type, profile)
+        && (path.is_dir() || std::fs::create_dir_all(&path).is_ok())
+    {
+        return Some(path);
     }
 
     None
@@ -106,10 +106,10 @@ pub fn make_profile_dir_path(app_type: AppType, profile: &str) -> Option<PathBuf
 
 #[must_use]
 pub fn make_cache_dir_path() -> Option<PathBuf> {
-    if let Some(path) = get_cache_dir_path() {
-        if path.is_dir() || std::fs::create_dir_all(&path).is_ok() {
-            return Some(path);
-        }
+    if let Some(path) = get_cache_dir_path()
+        && (path.is_dir() || std::fs::create_dir_all(&path).is_ok())
+    {
+        return Some(path);
     }
 
     None

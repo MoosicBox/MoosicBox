@@ -218,10 +218,10 @@ impl DownloadQueue {
             async move {
                 let mut handle = join_handle.lock().await;
 
-                if let Some(handle) = handle.as_mut() {
-                    if !handle.is_finished() {
-                        handle.await??;
-                    }
+                if let Some(handle) = handle.as_mut()
+                    && !handle.is_finished()
+                {
+                    handle.await??;
                 }
 
                 handle.replace(switchy_async::runtime::Handle::current().spawn_with_name(
@@ -541,12 +541,11 @@ impl Drop for DownloadQueue {
             "downloader: queue - drop",
             async move {
                 let mut handle = handle.lock().await;
-                if let Some(handle) = handle.as_mut() {
-                    if !handle.is_finished() {
-                        if let Err(err) = handle.await {
-                            log::error!("Failed to drop DownloadQueue: {err:?}");
-                        }
-                    }
+                if let Some(handle) = handle.as_mut()
+                    && !handle.is_finished()
+                    && let Err(err) = handle.await
+                {
+                    log::error!("Failed to drop DownloadQueue: {err:?}");
                 }
             },
         );

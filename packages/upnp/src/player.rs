@@ -100,11 +100,11 @@ impl Player for UpnpPlayer {
             return Err(PlayerError::NoPlayersPlaying);
         };
 
-        if let Some(seek) = seek {
-            if seek > 0.0 {
-                log::debug!("trigger_play: Seeking track to seek={seek}");
-                self.trigger_seek(seek).await?;
-            }
+        if let Some(seek) = seek
+            && seek > 0.0
+        {
+            log::debug!("trigger_play: Seeking track to seek={seek}");
+            self.trigger_seek(seek).await?;
         }
 
         crate::play(&self.service, self.device.url(), self.instance_id, 1.0)
@@ -551,8 +551,7 @@ impl UpnpPlayer {
                             if let Some(playback) = binding.as_mut() {
                                 if !sent_playback_start_event
                                     .load(std::sync::atomic::Ordering::SeqCst)
-                                {
-                                    if let Some(playback_target) = playback.playback_target.clone() {
+                                    && let Some(playback_target) = playback.playback_target.clone() {
                                         sent_playback_start_event
                                             .store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -573,7 +572,6 @@ impl UpnpPlayer {
                                         };
                                         send_playback_event(&update, playback);
                                     }
-                                }
 
                                 let old = playback.clone();
                                 playback.progress = f64::from(position);

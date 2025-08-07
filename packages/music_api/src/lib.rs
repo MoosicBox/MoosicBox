@@ -881,7 +881,7 @@ impl<T: MusicApi> MusicApi for CachedMusicApi<T> {
 #[cfg(test)]
 #[allow(clippy::module_name_repetitions)]
 mod test {
-    use std::sync::LazyLock;
+    use std::{slice, sync::LazyLock};
 
     use async_trait::async_trait;
     use moosicbox_music_api_models::{
@@ -1034,7 +1034,7 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_artists(&[artist.clone()]).await;
+        api.cache_artists(slice::from_ref(&artist)).await;
 
         let one = api.artist(&artist.id).await.unwrap();
 
@@ -1051,7 +1051,7 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_artists(&[artist.clone()]).await;
+        api.cache_artists(slice::from_ref(&artist)).await;
 
         let one = api.artist(&2.into()).await.unwrap();
 
@@ -1073,8 +1073,8 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_artists(&[artist1.clone()]).await;
-        api.cache_artists(&[artist2.clone()]).await;
+        api.cache_artists(slice::from_ref(&artist1)).await;
+        api.cache_artists(slice::from_ref(&artist2)).await;
 
         let one = api.artist(&artist1.id).await.unwrap();
         let two = api.artist(&artist2.id).await.unwrap();
@@ -1102,7 +1102,7 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_albums(&[album.clone()]).await;
+        api.cache_albums(slice::from_ref(&album)).await;
 
         let one = api.album(&album.id).await.unwrap();
 
@@ -1119,7 +1119,7 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_albums(&[album.clone()]).await;
+        api.cache_albums(slice::from_ref(&album)).await;
 
         let one = api.album(&2.into()).await.unwrap();
 
@@ -1141,8 +1141,8 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_albums(&[album1.clone()]).await;
-        api.cache_albums(&[album2.clone()]).await;
+        api.cache_albums(slice::from_ref(&album1)).await;
+        api.cache_albums(slice::from_ref(&album2)).await;
 
         let one = api.album(&album1.id).await.unwrap();
         let two = api.album(&album2.id).await.unwrap();
@@ -1170,7 +1170,7 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_tracks(&[track.clone()]).await;
+        api.cache_tracks(slice::from_ref(&track)).await;
 
         let one = api.track(&track.id).await.unwrap();
 
@@ -1187,7 +1187,7 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_tracks(&[track.clone()]).await;
+        api.cache_tracks(slice::from_ref(&track)).await;
 
         let one = api.track(&2.into()).await.unwrap();
 
@@ -1209,8 +1209,8 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_tracks(&[track1.clone()]).await;
-        api.cache_tracks(&[track2.clone()]).await;
+        api.cache_tracks(slice::from_ref(&track1)).await;
+        api.cache_tracks(slice::from_ref(&track2)).await;
 
         let one = api.track(&track1.id).await.unwrap();
         let two = api.track(&track2.id).await.unwrap();
@@ -1236,8 +1236,8 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_artists(&[artist.clone()]).await;
-        api.cache_albums(&[album.clone()]).await;
+        api.cache_artists(slice::from_ref(&artist)).await;
+        api.cache_albums(slice::from_ref(&album)).await;
 
         api.remove_artist(&artist.id).await.unwrap();
 
@@ -1272,9 +1272,9 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_artists(&[artist.clone()]).await;
-        api.cache_albums(&[album.clone()]).await;
-        api.cache_tracks(&[track.clone()]).await;
+        api.cache_artists(slice::from_ref(&artist)).await;
+        api.cache_albums(slice::from_ref(&album)).await;
+        api.cache_tracks(slice::from_ref(&track)).await;
 
         api.remove_artist(&artist.id).await.unwrap();
 
@@ -1305,8 +1305,8 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_artists(&[artist.clone()]).await;
-        api.cache_albums(&[album.clone()]).await;
+        api.cache_artists(slice::from_ref(&artist)).await;
+        api.cache_albums(slice::from_ref(&album)).await;
 
         api.remove_artist(&artist.id).await.unwrap();
 
@@ -1341,9 +1341,9 @@ mod test {
             ..Default::default()
         };
 
-        api.cache_artists(&[artist.clone()]).await;
-        api.cache_albums(&[album.clone()]).await;
-        api.cache_tracks(&[track.clone()]).await;
+        api.cache_artists(slice::from_ref(&artist)).await;
+        api.cache_albums(slice::from_ref(&album)).await;
+        api.cache_tracks(slice::from_ref(&track)).await;
 
         api.remove_artist(&artist.id).await.unwrap();
 

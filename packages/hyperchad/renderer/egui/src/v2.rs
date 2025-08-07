@@ -277,10 +277,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     let font_size = container.calculated_font_size.unwrap_or(14.0);
                     let response = ui.link(egui::RichText::new(text).size(font_size));
 
-                    if response.clicked() {
-                        if let Some(href) = href {
-                            let _ = self.sender.send(href.clone());
-                        }
+                    if response.clicked()
+                        && let Some(href) = href
+                    {
+                        let _ = self.sender.send(href.clone());
                     }
 
                     return Some(response);
@@ -487,10 +487,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
     fn get_container_text(container: &Container) -> Option<String> {
         // Look for text in children or raw elements
-        if let Some(child) = container.children.first() {
-            if let Element::Raw { value } = &child.element {
-                return Some(value.clone());
-            }
+        if let Some(child) = container.children.first()
+            && let Element::Raw { value } = &child.element
+        {
+            return Some(value.clone());
         }
         None
     }

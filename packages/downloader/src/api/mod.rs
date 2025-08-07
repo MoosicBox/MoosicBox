@@ -1,3 +1,5 @@
+#![allow(clippy::needless_for_each)]
+
 use std::{path::PathBuf, str::FromStr as _, sync::LazyLock};
 
 use crate::{

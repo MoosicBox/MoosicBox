@@ -49,10 +49,10 @@ impl Generator {
         match markup {
             Markup::Block(block) => {
                 if block.markups.markups.iter().any(|markup| {
-                    if let Markup::ControlFlow(flow) = markup {
-                        if let ControlFlowKind::Let(_) = flow.kind {
-                            return true;
-                        }
+                    if let Markup::ControlFlow(flow) = markup
+                        && let ControlFlowKind::Let(_) = flow.kind
+                    {
+                        return true;
                     }
                     false
                 }) {
@@ -473,10 +473,9 @@ impl Generator {
             if let AttributeType::Normal {
                 value: attr_value, ..
             } = attr_type
+                && name_str == "type"
             {
-                if name_str == "type" {
-                    button_type = Some(Self::markup_to_string_tokens(attr_value));
-                }
+                button_type = Some(Self::markup_to_string_tokens(attr_value));
             }
         }
 
@@ -776,18 +775,18 @@ impl Generator {
         // Find fx- attributes
         for (name, attr_type) in named_attrs {
             let name_str = name.to_string();
-            if let Some(trigger_name) = name_str.strip_prefix("fx-") {
-                if let AttributeType::Normal { value, .. } = attr_type {
-                    let trigger_ident = Self::action_trigger_name_to_ident(trigger_name);
-                    let action_effect = Self::markup_to_action_effect_tokens(value.clone());
+            if let Some(trigger_name) = name_str.strip_prefix("fx-")
+                && let AttributeType::Normal { value, .. } = attr_type
+            {
+                let trigger_ident = Self::action_trigger_name_to_ident(trigger_name);
+                let action_effect = Self::markup_to_action_effect_tokens(value.clone());
 
-                    actions.push(quote! {
-                        hyperchad_actions::Action {
-                            trigger: #trigger_ident,
-                            effect: (#action_effect).into(),
-                        }
-                    });
-                }
+                actions.push(quote! {
+                    hyperchad_actions::Action {
+                        trigger: #trigger_ident,
+                        effect: (#action_effect).into(),
+                    }
+                });
             }
         }
 
@@ -1864,131 +1863,128 @@ impl Generator {
     #[allow(clippy::too_many_lines)]
     fn handle_potential_if_expression_for_number(expr: &syn::Expr) -> TokenStream {
         // Check if this is a calc() function call
-        if let syn::Expr::Call(call_expr) = expr {
-            if let syn::Expr::Path(path_expr) = &*call_expr.func {
-                if path_expr.path.segments.len() == 1 {
-                    let function_name = path_expr.path.segments[0].ident.to_string();
+        if let syn::Expr::Call(call_expr) = expr
+            && let syn::Expr::Path(path_expr) = &*call_expr.func
+            && path_expr.path.segments.len() == 1
+        {
+            let function_name = path_expr.path.segments[0].ident.to_string();
 
-                    match function_name.as_str() {
-                        "calc" => {
-                            // Handle calc() expressions
-                            if call_expr.args.len() == 1 {
-                                let calc_expr = &call_expr.args[0];
-                                return Self::handle_calc_expression(calc_expr);
-                            }
-                        }
-                        "min" => {
-                            // Handle min() expressions outside of calc()
-                            if call_expr.args.len() >= 2 {
-                                // For multiple arguments, chain binary min operations
-                                // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
-                                let mut result = Self::build_calculation_ast(
-                                    &call_expr.args[call_expr.args.len() - 1],
-                                );
-                                for i in (0..call_expr.args.len() - 1).rev() {
-                                    let left = Self::build_calculation_ast(&call_expr.args[i]);
-                                    result = quote! {
-                                        hyperchad_transformer::Calculation::Min(
-                                            Box::new(#left),
-                                            Box::new(#result)
-                                        )
-                                    };
-                                }
-                                return quote! {
-                                    hyperchad_transformer::Number::Calc(#result)
-                                };
-                            }
-                        }
-                        "max" => {
-                            // Handle max() expressions outside of calc()
-                            if call_expr.args.len() >= 2 {
-                                // For multiple arguments, chain binary max operations
-                                // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
-                                let mut result = Self::build_calculation_ast(
-                                    &call_expr.args[call_expr.args.len() - 1],
-                                );
-                                for i in (0..call_expr.args.len() - 1).rev() {
-                                    let left = Self::build_calculation_ast(&call_expr.args[i]);
-                                    result = quote! {
-                                        hyperchad_transformer::Calculation::Max(
-                                            Box::new(#left),
-                                            Box::new(#result)
-                                        )
-                                    };
-                                }
-                                return quote! {
-                                    hyperchad_transformer::Number::Calc(#result)
-                                };
-                            }
-                        }
-                        "clamp" => {
-                            // Handle clamp() expressions outside of calc()
-                            if call_expr.args.len() == 3 {
-                                // clamp(min, preferred, max) = max(min, min(preferred, max))
-                                let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
-                                let preferred_arg = Self::build_calculation_ast(&call_expr.args[1]);
-                                let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
-                                return quote! {
-                                    hyperchad_transformer::Number::Calc(
-                                        hyperchad_transformer::Calculation::Max(
-                                            Box::new(#min_arg),
-                                            Box::new(hyperchad_transformer::Calculation::Min(
-                                                Box::new(#preferred_arg),
-                                                Box::new(#max_arg)
-                                            ))
-                                        )
-                                    )
-                                };
-                            }
-                        }
-                        "percent" => {
-                            // Helper function: percent(value) -> Number::*Percent
-                            if call_expr.args.len() == 1 {
-                                let value_expr = &call_expr.args[0];
-                                return quote! {
-                                    hyperchad_template::calc::to_percent_number(#value_expr)
-                                };
-                            }
-                        }
-                        "vh" => {
-                            // Helper function: vh(value) -> Number::*Vh
-                            if call_expr.args.len() == 1 {
-                                let value_expr = &call_expr.args[0];
-                                return quote! {
-                                    hyperchad_template::calc::to_vh_number(#value_expr)
-                                };
-                            }
-                        }
-                        "vw" => {
-                            // Helper function: vw(value) -> Number::*Vw
-                            if call_expr.args.len() == 1 {
-                                let value_expr = &call_expr.args[0];
-                                return quote! {
-                                    hyperchad_template::calc::to_vw_number(#value_expr)
-                                };
-                            }
-                        }
-                        "dvh" => {
-                            // Helper function: dvh(value) -> Number::*Dvh
-                            if call_expr.args.len() == 1 {
-                                let value_expr = &call_expr.args[0];
-                                return quote! {
-                                    hyperchad_template::calc::to_dvh_number(#value_expr)
-                                };
-                            }
-                        }
-                        "dvw" => {
-                            // Helper function: dvw(value) -> Number::*Dvw
-                            if call_expr.args.len() == 1 {
-                                let value_expr = &call_expr.args[0];
-                                return quote! {
-                                    hyperchad_template::calc::to_dvw_number(#value_expr)
-                                };
-                            }
-                        }
-                        _ => {}
+            match function_name.as_str() {
+                "calc" => {
+                    // Handle calc() expressions
+                    if call_expr.args.len() == 1 {
+                        let calc_expr = &call_expr.args[0];
+                        return Self::handle_calc_expression(calc_expr);
                     }
                 }
+                "min" => {
+                    // Handle min() expressions outside of calc()
+                    if call_expr.args.len() >= 2 {
+                        // For multiple arguments, chain binary min operations
+                        // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
+                        let mut result =
+                            Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                        for i in (0..call_expr.args.len() - 1).rev() {
+                            let left = Self::build_calculation_ast(&call_expr.args[i]);
+                            result = quote! {
+                                hyperchad_transformer::Calculation::Min(
+                                    Box::new(#left),
+                                    Box::new(#result)
+                                )
+                            };
+                        }
+                        return quote! {
+                            hyperchad_transformer::Number::Calc(#result)
+                        };
+                    }
+                }
+                "max" => {
+                    // Handle max() expressions outside of calc()
+                    if call_expr.args.len() >= 2 {
+                        // For multiple arguments, chain binary max operations
+                        // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
+                        let mut result =
+                            Self::build_calculation_ast(&call_expr.args[call_expr.args.len() - 1]);
+                        for i in (0..call_expr.args.len() - 1).rev() {
+                            let left = Self::build_calculation_ast(&call_expr.args[i]);
+                            result = quote! {
+                                hyperchad_transformer::Calculation::Max(
+                                    Box::new(#left),
+                                    Box::new(#result)
+                                )
+                            };
+                        }
+                        return quote! {
+                            hyperchad_transformer::Number::Calc(#result)
+                        };
+                    }
+                }
+                "clamp" => {
+                    // Handle clamp() expressions outside of calc()
+                    if call_expr.args.len() == 3 {
+                        // clamp(min, preferred, max) = max(min, min(preferred, max))
+                        let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
+                        let preferred_arg = Self::build_calculation_ast(&call_expr.args[1]);
+                        let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
+                        return quote! {
+                            hyperchad_transformer::Number::Calc(
+                                hyperchad_transformer::Calculation::Max(
+                                    Box::new(#min_arg),
+                                    Box::new(hyperchad_transformer::Calculation::Min(
+                                        Box::new(#preferred_arg),
+                                        Box::new(#max_arg)
+                                    ))
+                                )
+                            )
+                        };
+                    }
+                }
+                "percent" => {
+                    // Helper function: percent(value) -> Number::*Percent
+                    if call_expr.args.len() == 1 {
+                        let value_expr = &call_expr.args[0];
+                        return quote! {
+                            hyperchad_template::calc::to_percent_number(#value_expr)
+                        };
+                    }
+                }
+                "vh" => {
+                    // Helper function: vh(value) -> Number::*Vh
+                    if call_expr.args.len() == 1 {
+                        let value_expr = &call_expr.args[0];
+                        return quote! {
+                            hyperchad_template::calc::to_vh_number(#value_expr)
+                        };
+                    }
+                }
+                "vw" => {
+                    // Helper function: vw(value) -> Number::*Vw
+                    if call_expr.args.len() == 1 {
+                        let value_expr = &call_expr.args[0];
+                        return quote! {
+                            hyperchad_template::calc::to_vw_number(#value_expr)
+                        };
+                    }
+                }
+                "dvh" => {
+                    // Helper function: dvh(value) -> Number::*Dvh
+                    if call_expr.args.len() == 1 {
+                        let value_expr = &call_expr.args[0];
+                        return quote! {
+                            hyperchad_template::calc::to_dvh_number(#value_expr)
+                        };
+                    }
+                }
+                "dvw" => {
+                    // Helper function: dvw(value) -> Number::*Dvw
+                    if call_expr.args.len() == 1 {
+                        let value_expr = &call_expr.args[0];
+                        return quote! {
+                            hyperchad_template::calc::to_dvw_number(#value_expr)
+                        };
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -2100,151 +2096,150 @@ impl Generator {
 
             // Handle function calls (percent(), vh(), vw(), min(), max(), clamp(), etc.)
             syn::Expr::Call(call_expr) => {
-                if let syn::Expr::Path(path_expr) = &*call_expr.func {
-                    if path_expr.path.segments.len() == 1 {
-                        let function_name = path_expr.path.segments[0].ident.to_string();
+                if let syn::Expr::Path(path_expr) = &*call_expr.func
+                    && path_expr.path.segments.len() == 1
+                {
+                    let function_name = path_expr.path.segments[0].ident.to_string();
 
-                        match function_name.as_str() {
-                            // CSS Math functions that return Calculation variants
-                            "min" => {
-                                if call_expr.args.len() >= 2 {
-                                    // For multiple arguments, chain binary min operations
-                                    // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
-                                    let mut result = Self::build_calculation_ast(
-                                        &call_expr.args[call_expr.args.len() - 1],
-                                    );
-                                    for i in (0..call_expr.args.len() - 1).rev() {
-                                        let left = Self::build_calculation_ast(&call_expr.args[i]);
-                                        result = quote! {
-                                            hyperchad_transformer::Calculation::Min(
-                                                Box::new(#left),
-                                                Box::new(#result)
-                                            )
-                                        };
-                                    }
-                                    return result;
-                                }
-
-                                return quote! {
-                                    hyperchad_transformer::Calculation::Number(
-                                        Box::new(hyperchad_transformer::Number::Integer(0))
-                                    )
-                                };
-                            }
-                            "max" => {
-                                if call_expr.args.len() >= 2 {
-                                    // For multiple arguments, chain binary max operations
-                                    // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
-                                    let mut result = Self::build_calculation_ast(
-                                        &call_expr.args[call_expr.args.len() - 1],
-                                    );
-                                    for i in (0..call_expr.args.len() - 1).rev() {
-                                        let left = Self::build_calculation_ast(&call_expr.args[i]);
-                                        result = quote! {
-                                            hyperchad_transformer::Calculation::Max(
-                                                Box::new(#left),
-                                                Box::new(#result)
-                                            )
-                                        };
-                                    }
-                                    return result;
-                                }
-
-                                return quote! {
-                                    hyperchad_transformer::Calculation::Number(
-                                        Box::new(hyperchad_transformer::Number::Integer(0))
-                                    )
-                                };
-                            }
-                            "clamp" => {
-                                if call_expr.args.len() == 3 {
-                                    // clamp(min, preferred, max) = max(min, min(preferred, max))
-                                    let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
-                                    let preferred_arg =
-                                        Self::build_calculation_ast(&call_expr.args[1]);
-                                    let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
-
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Max(
-                                            Box::new(#min_arg),
-                                            Box::new(hyperchad_transformer::Calculation::Min(
-                                                Box::new(#preferred_arg),
-                                                Box::new(#max_arg)
-                                            ))
+                    match function_name.as_str() {
+                        // CSS Math functions that return Calculation variants
+                        "min" => {
+                            if call_expr.args.len() >= 2 {
+                                // For multiple arguments, chain binary min operations
+                                // min(a, b, c, d) becomes min(a, min(b, min(c, d)))
+                                let mut result = Self::build_calculation_ast(
+                                    &call_expr.args[call_expr.args.len() - 1],
+                                );
+                                for i in (0..call_expr.args.len() - 1).rev() {
+                                    let left = Self::build_calculation_ast(&call_expr.args[i]);
+                                    result = quote! {
+                                        hyperchad_transformer::Calculation::Min(
+                                            Box::new(#left),
+                                            Box::new(#result)
                                         )
                                     };
                                 }
+                                return result;
+                            }
+
+                            return quote! {
+                                hyperchad_transformer::Calculation::Number(
+                                    Box::new(hyperchad_transformer::Number::Integer(0))
+                                )
+                            };
+                        }
+                        "max" => {
+                            if call_expr.args.len() >= 2 {
+                                // For multiple arguments, chain binary max operations
+                                // max(a, b, c, d) becomes max(a, max(b, max(c, d)))
+                                let mut result = Self::build_calculation_ast(
+                                    &call_expr.args[call_expr.args.len() - 1],
+                                );
+                                for i in (0..call_expr.args.len() - 1).rev() {
+                                    let left = Self::build_calculation_ast(&call_expr.args[i]);
+                                    result = quote! {
+                                        hyperchad_transformer::Calculation::Max(
+                                            Box::new(#left),
+                                            Box::new(#result)
+                                        )
+                                    };
+                                }
+                                return result;
+                            }
+
+                            return quote! {
+                                hyperchad_transformer::Calculation::Number(
+                                    Box::new(hyperchad_transformer::Number::Integer(0))
+                                )
+                            };
+                        }
+                        "clamp" => {
+                            if call_expr.args.len() == 3 {
+                                // clamp(min, preferred, max) = max(min, min(preferred, max))
+                                let min_arg = Self::build_calculation_ast(&call_expr.args[0]);
+                                let preferred_arg = Self::build_calculation_ast(&call_expr.args[1]);
+                                let max_arg = Self::build_calculation_ast(&call_expr.args[2]);
 
                                 return quote! {
-                                    hyperchad_transformer::Calculation::Number(
-                                        Box::new(hyperchad_transformer::Number::Integer(0))
+                                    hyperchad_transformer::Calculation::Max(
+                                        Box::new(#min_arg),
+                                        Box::new(hyperchad_transformer::Calculation::Min(
+                                            Box::new(#preferred_arg),
+                                            Box::new(#max_arg)
+                                        ))
                                     )
                                 };
                             }
-                            "percent" => {
-                                // Helper function: percent(value) -> Number::*Percent
-                                if call_expr.args.len() == 1 {
-                                    let value_expr = &call_expr.args[0];
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Number(Box::new(
-                                            hyperchad_template::calc::to_percent_number(#value_expr)
-                                        ))
-                                    };
-                                }
-                            }
-                            "vh" => {
-                                // Helper function: vh(value) -> Number::*Vh
-                                if call_expr.args.len() == 1 {
-                                    let value_expr = &call_expr.args[0];
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Number(Box::new(
-                                            hyperchad_template::calc::to_vh_number(#value_expr)
-                                        ))
-                                    };
-                                }
-                            }
-                            "vw" => {
-                                // Helper function: vw(value) -> Number::*Vw
-                                if call_expr.args.len() == 1 {
-                                    let value_expr = &call_expr.args[0];
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Number(Box::new(
-                                            hyperchad_template::calc::to_vw_number(#value_expr)
-                                        ))
-                                    };
-                                }
-                            }
-                            "dvh" => {
-                                // Helper function: dvh(value) -> Number::*Dvh
-                                if call_expr.args.len() == 1 {
-                                    let value_expr = &call_expr.args[0];
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Number(Box::new(
-                                            hyperchad_template::calc::to_dvh_number(#value_expr)
-                                        ))
-                                    };
-                                }
-                            }
-                            "dvw" => {
-                                // Helper function: dvw(value) -> Number::*Dvw
-                                if call_expr.args.len() == 1 {
-                                    let value_expr = &call_expr.args[0];
-                                    return quote! {
-                                        hyperchad_transformer::Calculation::Number(Box::new(
-                                            hyperchad_template::calc::to_dvw_number(#value_expr)
-                                        ))
-                                    };
-                                }
-                            }
-                            _ => {
-                                // Fallback: treat as regular expression
+
+                            return quote! {
+                                hyperchad_transformer::Calculation::Number(
+                                    Box::new(hyperchad_transformer::Number::Integer(0))
+                                )
+                            };
+                        }
+                        "percent" => {
+                            // Helper function: percent(value) -> Number::*Percent
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
                                 return quote! {
-                                    hyperchad_transformer::Calculation::Number(Box::new({
-                                        let val = #call_expr;
-                                        hyperchad_template::calc::to_number(val)
-                                    }))
+                                    hyperchad_transformer::Calculation::Number(Box::new(
+                                        hyperchad_template::calc::to_percent_number(#value_expr)
+                                    ))
                                 };
                             }
+                        }
+                        "vh" => {
+                            // Helper function: vh(value) -> Number::*Vh
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_transformer::Calculation::Number(Box::new(
+                                        hyperchad_template::calc::to_vh_number(#value_expr)
+                                    ))
+                                };
+                            }
+                        }
+                        "vw" => {
+                            // Helper function: vw(value) -> Number::*Vw
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_transformer::Calculation::Number(Box::new(
+                                        hyperchad_template::calc::to_vw_number(#value_expr)
+                                    ))
+                                };
+                            }
+                        }
+                        "dvh" => {
+                            // Helper function: dvh(value) -> Number::*Dvh
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_transformer::Calculation::Number(Box::new(
+                                        hyperchad_template::calc::to_dvh_number(#value_expr)
+                                    ))
+                                };
+                            }
+                        }
+                        "dvw" => {
+                            // Helper function: dvw(value) -> Number::*Dvw
+                            if call_expr.args.len() == 1 {
+                                let value_expr = &call_expr.args[0];
+                                return quote! {
+                                    hyperchad_transformer::Calculation::Number(Box::new(
+                                        hyperchad_template::calc::to_dvw_number(#value_expr)
+                                    ))
+                                };
+                            }
+                        }
+                        _ => {
+                            // Fallback: treat as regular expression
+                            return quote! {
+                                hyperchad_transformer::Calculation::Number(Box::new({
+                                    let val = #call_expr;
+                                    hyperchad_template::calc::to_number(val)
+                                }))
+                            };
                         }
                     }
                 }
@@ -2341,27 +2336,28 @@ impl Generator {
             }
             Markup::Splice { expr, .. } => {
                 // Check if this is a simple identifier that should be converted to an enum variant
-                if let syn::Expr::Path(expr_path) = &*expr {
-                    if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
-                        let identifier_name = expr_path.path.segments[0].ident.to_string();
+                if let syn::Expr::Path(expr_path) = &*expr
+                    && expr_path.path.segments.len() == 1
+                    && expr_path.qself.is_none()
+                {
+                    let identifier_name = expr_path.path.segments[0].ident.to_string();
 
-                        // Only accept kebab-case identifiers (lowercase, may contain hyphens)
-                        // Reject PascalCase identifiers to enforce kebab-case convention
-                        if identifier_name
-                            .chars()
-                            .next()
-                            .is_some_and(char::is_uppercase)
-                        {
-                            // This is PascalCase - don't convert, let it fall through to normal expression handling
-                            // This will cause a compile error, enforcing kebab-case usage
-                        } else {
-                            // Convert kebab-case to PascalCase
-                            let variant_name = kebab_to_pascal_case(&identifier_name);
-                            let enum_ident = format_ident!("{}", enum_name);
-                            let variant_ident = format_ident!("{}", variant_name);
+                    // Only accept kebab-case identifiers (lowercase, may contain hyphens)
+                    // Reject PascalCase identifiers to enforce kebab-case convention
+                    if identifier_name
+                        .chars()
+                        .next()
+                        .is_some_and(char::is_uppercase)
+                    {
+                        // This is PascalCase - don't convert, let it fall through to normal expression handling
+                        // This will cause a compile error, enforcing kebab-case usage
+                    } else {
+                        // Convert kebab-case to PascalCase
+                        let variant_name = kebab_to_pascal_case(&identifier_name);
+                        let enum_ident = format_ident!("{}", enum_name);
+                        let variant_ident = format_ident!("{}", variant_name);
 
-                            return quote! { hyperchad_transformer_models::#enum_ident::#variant_ident };
-                        }
+                        return quote! { hyperchad_transformer_models::#enum_ident::#variant_ident };
                     }
                 }
 
@@ -2451,23 +2447,24 @@ impl Generator {
             }
             Markup::Splice { expr, .. } => {
                 // Check if this is a simple identifier that should be converted to a FontWeight variant
-                if let syn::Expr::Path(expr_path) = &*expr {
-                    if expr_path.path.segments.len() == 1 && expr_path.qself.is_none() {
-                        let identifier_name = expr_path.path.segments[0].ident.to_string();
+                if let syn::Expr::Path(expr_path) = &*expr
+                    && expr_path.path.segments.len() == 1
+                    && expr_path.qself.is_none()
+                {
+                    let identifier_name = expr_path.path.segments[0].ident.to_string();
 
-                        // Only accept kebab-case identifiers (lowercase, may contain hyphens)
-                        // Reject PascalCase identifiers to enforce kebab-case convention
-                        if identifier_name
-                            .chars()
-                            .next()
-                            .is_some_and(char::is_uppercase)
-                        {
-                            // This is PascalCase - don't convert, let it fall through to normal expression handling
-                        } else {
-                            // Convert to FontWeight variant
-                            let variant_ident = Self::font_weight_str_to_variant(&identifier_name);
-                            return quote! { hyperchad_transformer_models::FontWeight::#variant_ident };
-                        }
+                    // Only accept kebab-case identifiers (lowercase, may contain hyphens)
+                    // Reject PascalCase identifiers to enforce kebab-case convention
+                    if identifier_name
+                        .chars()
+                        .next()
+                        .is_some_and(char::is_uppercase)
+                    {
+                        // This is PascalCase - don't convert, let it fall through to normal expression handling
+                    } else {
+                        // Convert to FontWeight variant
+                        let variant_ident = Self::font_weight_str_to_variant(&identifier_name);
+                        return quote! { hyperchad_transformer_models::FontWeight::#variant_ident };
                     }
                 }
 
@@ -3351,55 +3348,51 @@ impl Generator {
                 // Check if this is fx followed by block content
                 if !items.is_empty() {
                     // Check if the first item is an fx identifier
-                    if let Some(Markup::Splice { expr, .. }) = items.first() {
-                        if let syn::Expr::Path(path_expr) = expr.as_ref() {
-                            if let Some(ident) = path_expr.path.get_ident() {
-                                if ident == "fx" {
-                                    // This is fx followed by block content
-                                    if items.len() == 1 {
-                                        // Single fx identifier without content - return empty DSL
-                                        return Some(quote! {});
-                                    } else if items.len() == 2 {
-                                        // fx followed by one block expression
-                                        if let Markup::Splice { expr, .. } = &items[1] {
-                                            // Extract the block expression content
-                                            if let syn::Expr::Block(block_expr) = expr.as_ref() {
-                                                // Extract the statements from the block
-                                                let stmts = &block_expr.block.stmts;
-                                                return Some(quote! { #(#stmts)* });
-                                            }
-
-                                            // Not a block expression, return the expression directly
-                                            return Some(quote! { #expr });
-                                        }
-                                    } else {
-                                        // Multiple items - combine them
-                                        let content_items = &items[1..];
-                                        let content_tokens = content_items
-                                            .iter()
-                                            .map(|item| match item {
-                                                Markup::Splice { expr, .. } => {
-                                                    if let syn::Expr::Block(block_expr) =
-                                                        expr.as_ref()
-                                                    {
-                                                        let stmts = &block_expr.block.stmts;
-                                                        quote! { #(#stmts)* }
-                                                    } else {
-                                                        quote! { #expr }
-                                                    }
-                                                }
-                                                Markup::Lit(lit) => {
-                                                    let lit_token = &lit.lit;
-                                                    quote! { #lit_token }
-                                                }
-                                                _ => quote! {},
-                                            })
-                                            .collect::<Vec<_>>();
-
-                                        return Some(quote! { #(#content_tokens)* });
-                                    }
+                    if let Some(Markup::Splice { expr, .. }) = items.first()
+                        && let syn::Expr::Path(path_expr) = expr.as_ref()
+                        && let Some(ident) = path_expr.path.get_ident()
+                        && ident == "fx"
+                    {
+                        // This is fx followed by block content
+                        if items.len() == 1 {
+                            // Single fx identifier without content - return empty DSL
+                            return Some(quote! {});
+                        } else if items.len() == 2 {
+                            // fx followed by one block expression
+                            if let Markup::Splice { expr, .. } = &items[1] {
+                                // Extract the block expression content
+                                if let syn::Expr::Block(block_expr) = expr.as_ref() {
+                                    // Extract the statements from the block
+                                    let stmts = &block_expr.block.stmts;
+                                    return Some(quote! { #(#stmts)* });
                                 }
+
+                                // Not a block expression, return the expression directly
+                                return Some(quote! { #expr });
                             }
+                        } else {
+                            // Multiple items - combine them
+                            let content_items = &items[1..];
+                            let content_tokens = content_items
+                                .iter()
+                                .map(|item| match item {
+                                    Markup::Splice { expr, .. } => {
+                                        if let syn::Expr::Block(block_expr) = expr.as_ref() {
+                                            let stmts = &block_expr.block.stmts;
+                                            quote! { #(#stmts)* }
+                                        } else {
+                                            quote! { #expr }
+                                        }
+                                    }
+                                    Markup::Lit(lit) => {
+                                        let lit_token = &lit.lit;
+                                        quote! { #lit_token }
+                                    }
+                                    _ => quote! {},
+                                })
+                                .collect::<Vec<_>>();
+
+                            return Some(quote! { #(#content_tokens)* });
                         }
                     }
                 }

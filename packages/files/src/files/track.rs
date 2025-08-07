@@ -657,11 +657,11 @@ async fn request_audio_bytes_from_file(
                 }
             };
 
-            if let Some(start) = start {
-                if let Err(e) = file.seek(std::io::SeekFrom::Start(start)).await {
-                    log::error!("Failed to seek to start position: {e}");
-                    return;
-                }
+            if let Some(start) = start
+                && let Err(e) = file.seek(std::io::SeekFrom::Start(start)).await
+            {
+                log::error!("Failed to seek to start position: {e}");
+                return;
             }
 
             let mut bytes_read = 0u64;

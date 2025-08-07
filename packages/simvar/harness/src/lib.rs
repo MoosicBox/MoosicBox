@@ -174,18 +174,16 @@ pub fn run_simulation<B: SimBootstrap>(
     }
 
     #[cfg(feature = "tui")]
-    if USE_TUI {
-        if let Ok(results) = &resp {
-            eprintln!(
-                "{}",
-                results
-                    .iter()
-                    .filter(|x| !x.is_success())
-                    .map(SimResult::to_string)
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            );
-        }
+    if USE_TUI && let Ok(results) = &resp {
+        eprintln!(
+            "{}",
+            results
+                .iter()
+                .filter(|x| !x.is_success())
+                .map(SimResult::to_string)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
     }
 
     resp

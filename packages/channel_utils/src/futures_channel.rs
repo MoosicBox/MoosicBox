@@ -56,27 +56,26 @@ impl<T: Send> MoosicBoxSender<T, TrySendError<T>> for PrioritizedSender<T> {
         if !self
             .ready_to_send
             .swap(false, std::sync::atomic::Ordering::SeqCst)
+            && let Some(priority) = &self.priority
         {
-            if let Some(priority) = &self.priority {
-                let priority = priority(&msg);
+            let priority = priority(&msg);
 
-                let mut buffer = self.buffer.write().unwrap();
+            let mut buffer = self.buffer.write().unwrap();
 
-                let index = buffer
-                    .iter()
-                    .enumerate()
-                    .find_map(|(i, (p, _item))| if priority > *p { Some(i) } else { None });
+            let index = buffer
+                .iter()
+                .enumerate()
+                .find_map(|(i, (p, _item))| if priority > *p { Some(i) } else { None });
 
-                if let Some(index) = index {
-                    buffer.insert(index, (priority, msg));
-                } else {
-                    buffer.push((priority, msg));
-                }
-
-                drop(buffer);
-
-                return Ok(());
+            if let Some(index) = index {
+                buffer.insert(index, (priority, msg));
+            } else {
+                buffer.push((priority, msg));
             }
+
+            drop(buffer);
+
+            return Ok(());
         }
 
         self.unbounded_send(msg)?;
@@ -141,10 +140,10 @@ impl<T: Send> Stream for PrioritizedReceiver<T> {
         let stream = pin!(inner);
         let poll = stream.poll_next(cx);
 
-        if let std::task::Poll::Ready(Some(_)) = &poll {
-            if let Err(e) = this.sender.flush() {
-                moosicbox_assert::die_or_error!("Failed to flush sender: {e:?}");
-            }
+        if let std::task::Poll::Ready(Some(_)) = &poll
+            && let Err(e) = this.sender.flush()
+        {
+            moosicbox_assert::die_or_error!("Failed to flush sender: {e:?}");
         }
 
         poll

@@ -1563,7 +1563,7 @@ impl Expression for SqliteDatabaseValue {
         self.0.is_null()
     }
 
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::DatabaseValue(self)
     }
 }

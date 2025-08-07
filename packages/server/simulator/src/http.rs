@@ -109,18 +109,17 @@ pub fn parse_http_response(raw_response: &str) -> Result<HttpResponse, &'static 
         } else {
             None
         }
-    }) {
-        if let Ok(content_length) = content_length_str.parse::<usize>() {
-            // Ensure we don't read beyond the specified content length
-            // This is a simplification; actual HTTP might have complex encoding
-            if body.len() >= content_length {
-                let truncated_body = &body[..content_length];
-                return Ok(HttpResponse {
-                    status_code,
-                    headers,
-                    body: truncated_body.to_string(),
-                });
-            }
+    }) && let Ok(content_length) = content_length_str.parse::<usize>()
+    {
+        // Ensure we don't read beyond the specified content length
+        // This is a simplification; actual HTTP might have complex encoding
+        if body.len() >= content_length {
+            let truncated_body = &body[..content_length];
+            return Ok(HttpResponse {
+                status_code,
+                headers,
+                body: truncated_body.to_string(),
+            });
         }
     }
 

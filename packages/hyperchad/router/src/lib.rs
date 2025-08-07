@@ -154,10 +154,10 @@ impl RouteRequest {
                                 .parameters
                                 .iter()
                                 .find_map(|param| {
-                                    if let DispositionParam::Ext(key, val) = param {
-                                        if key.eq_ignore_ascii_case("name") {
-                                            return Some(val.clone());
-                                        }
+                                    if let DispositionParam::Ext(key, val) = param
+                                        && key.eq_ignore_ascii_case("name")
+                                    {
+                                        return Some(val.clone());
                                     }
                                     None
                                 })
@@ -176,10 +176,10 @@ impl RouteRequest {
                                 .parameters
                                 .iter()
                                 .find_map(|param| {
-                                    if let DispositionParam::Ext(key, val) = param {
-                                        if key.eq_ignore_ascii_case("name") {
-                                            return Some(val.clone());
-                                        }
+                                    if let DispositionParam::Ext(key, val) = param
+                                        && key.eq_ignore_ascii_case("name")
+                                    {
+                                        return Some(val.clone());
                                     }
                                     None
                                 })

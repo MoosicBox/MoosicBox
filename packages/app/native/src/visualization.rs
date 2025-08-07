@@ -331,56 +331,56 @@ async fn tick_visualization() {
 pub async fn check_visualization_update() {
     let session = STATE.get_current_session_ref().await;
     if let Some(session) = session {
-        if let Some(position) = session.position {
-            if let Some(track) = session.playlist.tracks.get(position as usize) {
-                let track_id = track.track_id.clone();
-                let duration = track.duration;
-                let api_source = track.api_source.clone();
-                let seek = session.seek.unwrap_or_default();
-                let playing = session.playing;
-                drop(session);
-                CURRENT_TRACK.write().unwrap().replace(CurrentTrack {
-                    id: track_id,
-                    api_source,
-                    seek,
-                    duration,
-                    time: switchy::time::now(),
-                });
+        if let Some(position) = session.position
+            && let Some(track) = session.playlist.tracks.get(position as usize)
+        {
+            let track_id = track.track_id.clone();
+            let duration = track.duration;
+            let api_source = track.api_source.clone();
+            let seek = session.seek.unwrap_or_default();
+            let playing = session.playing;
+            drop(session);
+            CURRENT_TRACK.write().unwrap().replace(CurrentTrack {
+                id: track_id,
+                api_source,
+                seek,
+                duration,
+                time: switchy::time::now(),
+            });
 
-                if let Some(interval_period) = { *INTERVAL_PERIOD.read().unwrap() } {
-                    let mut interval = INTERVAL.write().unwrap();
-                    let mut cancel_interval = CANCEL_INTERVAL.write().unwrap();
-                    if playing && !interval.is_some() {
-                        cancel_interval.cancel();
-                        let token = CancellationToken::new();
-                        *cancel_interval = token.clone();
-                        drop(cancel_interval);
-                        interval.replace(switchy::unsync::task::spawn(async move {
-                            let mut interval = switchy::unsync::time::interval(interval_period);
+            if let Some(interval_period) = { *INTERVAL_PERIOD.read().unwrap() } {
+                let mut interval = INTERVAL.write().unwrap();
+                let mut cancel_interval = CANCEL_INTERVAL.write().unwrap();
+                if playing && !interval.is_some() {
+                    cancel_interval.cancel();
+                    let token = CancellationToken::new();
+                    *cancel_interval = token.clone();
+                    drop(cancel_interval);
+                    interval.replace(switchy::unsync::task::spawn(async move {
+                        let mut interval = switchy::unsync::time::interval(interval_period);
 
-                            while !token.is_cancelled() {
-                                switchy::unsync::select! {
-                                    _ = interval.tick() => {}
-                                    () = token.cancelled().fuse() => {
-                                        break;
-                                    }
-                                };
-                                tick_visualization().await;
-                            }
-                        }));
-                    } else {
-                        if !playing && interval.is_some() {
-                            interval.take();
-                            cancel_interval.cancel();
+                        while !token.is_cancelled() {
+                            switchy::unsync::select! {
+                                _ = interval.tick() => {}
+                                () = token.cancelled().fuse() => {
+                                    break;
+                                }
+                            };
+                            tick_visualization().await;
                         }
-                        drop(cancel_interval);
+                    }));
+                } else {
+                    if !playing && interval.is_some() {
+                        interval.take();
+                        cancel_interval.cancel();
                     }
-
-                    drop(interval);
+                    drop(cancel_interval);
                 }
 
-                tick_visualization().await;
+                drop(interval);
             }
+
+            tick_visualization().await;
         }
     } else {
         drop(session);

@@ -509,7 +509,7 @@ impl AppState {
         self.get_current_session_ref().await.map(|x| x.clone())
     }
 
-    pub async fn get_current_session_ref(&self) -> Option<RwLockReadGuard<ApiSession>> {
+    pub async fn get_current_session_ref(&self) -> Option<RwLockReadGuard<'_, ApiSession>> {
         let session_id = (*self.current_session_id.read().await)?;
         let binding = self.current_sessions.read().await;
         if !binding.iter().any(|x| x.session_id == session_id) {
@@ -1470,35 +1470,35 @@ impl AppState {
                 .map(|x| x.session_id)
         };
 
-        if let Some(session_id) = session_id {
-            if session_id != update.session_id {
-                let session = {
-                    self.current_sessions
-                        .read()
-                        .await
-                        .iter()
-                        .find(|s| s.session_id == session_id)
-                        .cloned()
-                };
+        if let Some(session_id) = session_id
+            && session_id != update.session_id
+        {
+            let session = {
+                self.current_sessions
+                    .read()
+                    .await
+                    .iter()
+                    .find(|s| s.session_id == session_id)
+                    .cloned()
+            };
 
-                if let Some(session) = session {
-                    update.session_id = session_id;
+            if let Some(session) = session {
+                update.session_id = session_id;
 
-                    if update.position.is_none() {
-                        update.position = session.position;
-                    }
-                    if update.seek.is_none() {
-                        update.seek = session.seek;
-                    }
-                    if update.volume.is_none() {
-                        update.volume = session.volume;
-                    }
-                    if update.playlist.is_none() {
-                        update.playlist = Some(ApiUpdateSessionPlaylist {
-                            session_playlist_id: session.playlist.session_playlist_id,
-                            tracks: session.playlist.tracks,
-                        });
-                    }
+                if update.position.is_none() {
+                    update.position = session.position;
+                }
+                if update.seek.is_none() {
+                    update.seek = session.seek;
+                }
+                if update.volume.is_none() {
+                    update.volume = session.volume;
+                }
+                if update.playlist.is_none() {
+                    update.playlist = Some(ApiUpdateSessionPlaylist {
+                        session_playlist_id: session.playlist.session_playlist_id,
+                        tracks: session.playlist.tracks,
+                    });
                 }
             }
         }

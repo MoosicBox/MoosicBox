@@ -188,10 +188,10 @@ fn map_element_target<R>(
                 // FIXME
                 return None;
             };
-            if let Some(container) = container.find_element_by_id(self_id) {
-                if let Some(element) = container.find_element_by_class(class) {
-                    return Some(func(element));
-                }
+            if let Some(container) = container.find_element_by_id(self_id)
+                && let Some(element) = container.find_element_by_class(class)
+            {
+                return Some(func(element));
             }
 
             log::warn!("Could not find element with class '{class}'");
@@ -2456,56 +2456,54 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
 
         self.handle_custom_event_side_effects(container);
 
-        if let Some(ui) = ui {
-            if let Element::Image {
+        if let Some(ui) = ui
+            && let Element::Image {
                 source: Some(source),
                 ..
             } = &container.element
-            {
-                #[cfg(feature = "profiling")]
-                profiling::scope!("image side effects");
-                let pos = ui.cursor().left_top();
-                let listener = render_context
-                    .viewport_listeners
-                    .entry(container.id)
-                    .or_insert_with(|| {
-                        ViewportListener::new(
-                            viewport.cloned(),
-                            0.0,
-                            0.0,
-                            container.calculated_width.unwrap(),
-                            container.calculated_height.unwrap(),
-                        )
-                    });
-                listener.viewport = viewport.cloned();
-                listener.pos.x = pos.x + viewport.map_or(0.0, |x| x.viewport.x);
-                listener.pos.y = pos.y + viewport.map_or(0.0, |x| x.viewport.y);
+        {
+            #[cfg(feature = "profiling")]
+            profiling::scope!("image side effects");
+            let pos = ui.cursor().left_top();
+            let listener = render_context
+                .viewport_listeners
+                .entry(container.id)
+                .or_insert_with(|| {
+                    ViewportListener::new(
+                        viewport.cloned(),
+                        0.0,
+                        0.0,
+                        container.calculated_width.unwrap(),
+                        container.calculated_height.unwrap(),
+                    )
+                });
+            listener.viewport = viewport.cloned();
+            listener.pos.x = pos.x + viewport.map_or(0.0, |x| x.viewport.x);
+            listener.pos.y = pos.y + viewport.map_or(0.0, |x| x.viewport.y);
 
-                let (_, (dist, prev_dist)) = listener.check();
+            let (_, (dist, prev_dist)) = listener.check();
 
-                if prev_dist.is_none_or(|x| x >= 2000.0) && dist < 2000.0 {
-                    let contains_image =
-                        { matches!(render_context.images.get(source), Some(AppImage::Bytes(_))) };
-                    if !contains_image {
-                        let loading_image = {
-                            matches!(render_context.images.get(source), Some(AppImage::Loading))
-                        };
+            if prev_dist.is_none_or(|x| x >= 2000.0) && dist < 2000.0 {
+                let contains_image =
+                    { matches!(render_context.images.get(source), Some(AppImage::Bytes(_))) };
+                if !contains_image {
+                    let loading_image =
+                        { matches!(render_context.images.get(source), Some(AppImage::Loading)) };
 
-                        if !loading_image {
-                            log::debug!(
-                                "render_element: triggering LoadImage for source={source} ({}, {})",
-                                listener.pos.x,
-                                listener.pos.y
-                            );
-                            render_context
-                                .images
-                                .insert(source.clone(), AppImage::Loading);
+                    if !loading_image {
+                        log::debug!(
+                            "render_element: triggering LoadImage for source={source} ({}, {})",
+                            listener.pos.x,
+                            listener.pos.y
+                        );
+                        render_context
+                            .images
+                            .insert(source.clone(), AppImage::Loading);
 
-                            if let Err(e) = self.event.send(AppEvent::LoadImage {
-                                source: source.to_string(),
-                            }) {
-                                log::error!("Failed to send LoadImage event: {e:?}");
-                            }
+                        if let Err(e) = self.event.send(AppEvent::LoadImage {
+                            source: source.to_string(),
+                        }) {
+                            log::error!("Failed to send LoadImage event: {e:?}");
                         }
                     }
                 }
@@ -2831,12 +2829,10 @@ impl<C: EguiCalc + Clone + Send + Sync + 'static> EguiApp<C> {
                     self.trigger_side_effect(move |_render_context| {
                         if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect)
                             && pointer.primary_released()
+                            && let Some(href) = href.clone()
+                            && let Err(e) = sender.send(href)
                         {
-                            if let Some(href) = href.clone() {
-                                if let Err(e) = sender.send(href) {
-                                    log::error!("Failed to send href event: {e:?}");
-                                }
-                            }
+                            log::error!("Failed to send href event: {e:?}");
                         }
 
                         if Self::rect_contains_mouse(&pointer, response.rect, viewport_rect) {

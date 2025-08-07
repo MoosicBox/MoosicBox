@@ -542,51 +542,49 @@ pub async fn update_session(
     );
     moosicbox_session::update_session(db, payload).await?;
 
-    if let Some(actions) = context.map(|x| &x.player_actions) {
-        if payload.playback_updated() {
-            if let Some(session) = moosicbox_session::get_session(db, payload.session_id).await? {
-                let funcs = if let Some(PlaybackTarget::AudioZone { audio_zone_id }) =
-                    session.playback_target
-                {
-                    let players =
-                        moosicbox_audio_zone::db::get_players(config_db, audio_zone_id).await?;
+    if let Some(actions) = context.map(|x| &x.player_actions)
+        && payload.playback_updated()
+        && let Some(session) = moosicbox_session::get_session(db, payload.session_id).await?
+    {
+        let funcs = if let Some(PlaybackTarget::AudioZone { audio_zone_id }) =
+            session.playback_target
+        {
+            let players = moosicbox_audio_zone::db::get_players(config_db, audio_zone_id).await?;
 
-                    players
-                        .iter()
-                        .filter_map(|p| {
-                            actions.iter().find_map(|(player_id, action)| {
-                                if *player_id == p.id {
-                                    Some(action)
-                                } else {
-                                    None
-                                }
-                            })
-                        })
-                        .collect::<Vec<_>>()
-                } else {
-                    vec![]
-                };
+            players
+                .iter()
+                .filter_map(|p| {
+                    actions.iter().find_map(|(player_id, action)| {
+                        if *player_id == p.id {
+                            Some(action)
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
 
-                if log::log_enabled!(log::Level::Trace) {
-                    log::trace!(
-                        "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?} playback_target={:?} action_player_ids={:?}",
-                        session.id,
-                        funcs.len(),
-                        session.playback_target,
-                        actions.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
-                    );
-                } else {
-                    log::debug!(
-                        "Running player actions on existing id={} count_of_funcs={}",
-                        session.id,
-                        funcs.len(),
-                    );
-                }
+        if log::log_enabled!(log::Level::Trace) {
+            log::trace!(
+                "Running player actions on existing session id={} count_of_funcs={} payload={payload:?} session={session:?} playback_target={:?} action_player_ids={:?}",
+                session.id,
+                funcs.len(),
+                session.playback_target,
+                actions.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+            );
+        } else {
+            log::debug!(
+                "Running player actions on existing id={} count_of_funcs={}",
+                session.id,
+                funcs.len(),
+            );
+        }
 
-                for func in funcs {
-                    func(payload).await;
-                }
-            }
+        for func in funcs {
+            func(payload).await;
         }
     }
 

@@ -1432,7 +1432,7 @@ impl Expression for RusqliteDatabaseValue {
         )
     }
 
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::DatabaseValue(self)
     }
 }

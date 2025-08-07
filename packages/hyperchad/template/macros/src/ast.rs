@@ -122,57 +122,56 @@ impl<E: MaybeElement> Markup<E> {
             }
 
             // Try to parse as a single expression first
-            if let Ok(expr) = content.parse::<Expr>() {
-                if content.is_empty() {
-                    // Successfully parsed as a single expression
-                    // Check if it's a function call pattern like "literal"(expression)
-                    if let syn::Expr::Call(call) = &expr {
-                        if let syn::Expr::Lit(syn::ExprLit {
-                            lit: syn::Lit::Str(_),
-                            ..
-                        }) = call.func.as_ref()
-                        {
-                            // This is a "literal"(args...) pattern - break it down for concatenation
-                            let content;
-                            let brace_token = braced!(content in input);
-                            let expr = content.parse::<Expr>()?;
-
-                            if let syn::Expr::Call(call) = expr {
-                                let mut items = vec![];
-
-                                // Add the function (string literal) as a literal item
-                                if let syn::Expr::Lit(lit_expr) = call.func.as_ref() {
-                                    items.push(Markup::Lit(ContainerLit {
-                                        lit: lit_expr.lit.clone(),
-                                    }));
-                                }
-
-                                // Add each argument as an expression item
-                                for arg in call.args {
-                                    items.push(Markup::Splice {
-                                        paren_token: Box::new(Paren::default()),
-                                        expr: Box::new(arg),
-                                    });
-                                }
-
-                                return Ok(Self::BraceSplice { brace_token, items });
-                            }
-                        }
-                    }
-
-                    // Regular single expression - wrap as BraceSplice with one item
+            if let Ok(expr) = content.parse::<Expr>()
+                && content.is_empty()
+            {
+                // Successfully parsed as a single expression
+                // Check if it's a function call pattern like "literal"(expression)
+                if let syn::Expr::Call(call) = &expr
+                    && let syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(_),
+                        ..
+                    }) = call.func.as_ref()
+                {
+                    // This is a "literal"(args...) pattern - break it down for concatenation
                     let content;
                     let brace_token = braced!(content in input);
                     let expr = content.parse::<Expr>()?;
 
-                    return Ok(Self::BraceSplice {
-                        brace_token,
-                        items: vec![Markup::Splice {
-                            paren_token: Box::new(Paren::default()),
-                            expr: Box::new(expr),
-                        }],
-                    });
+                    if let syn::Expr::Call(call) = expr {
+                        let mut items = vec![];
+
+                        // Add the function (string literal) as a literal item
+                        if let syn::Expr::Lit(lit_expr) = call.func.as_ref() {
+                            items.push(Markup::Lit(ContainerLit {
+                                lit: lit_expr.lit.clone(),
+                            }));
+                        }
+
+                        // Add each argument as an expression item
+                        for arg in call.args {
+                            items.push(Markup::Splice {
+                                paren_token: Box::new(Paren::default()),
+                                expr: Box::new(arg),
+                            });
+                        }
+
+                        return Ok(Self::BraceSplice { brace_token, items });
+                    }
                 }
+
+                // Regular single expression - wrap as BraceSplice with one item
+                let content;
+                let brace_token = braced!(content in input);
+                let expr = content.parse::<Expr>()?;
+
+                return Ok(Self::BraceSplice {
+                    brace_token,
+                    items: vec![Markup::Splice {
+                        paren_token: Box::new(Paren::default()),
+                        expr: Box::new(expr),
+                    }],
+                });
             }
 
             // If single expression parsing failed, try to parse as a sequence of literals and expressions
@@ -355,10 +354,10 @@ impl<E: MaybeElement> Markup<E> {
                 ));
             }
 
-            return Err(Error::new(
+            Err(Error::new(
                 input.span(),
                 "Expected hex digits after '#' for hex color",
-            ));
+            ))
         } else if lookahead.peek(Ident::peek_any) {
             // Handle bare identifiers (including kebab-case) as splice expressions for attribute values
             // This enables syntax like: visibility=hidden, align-items=center, justify-content=space-between
@@ -453,20 +452,20 @@ impl<E: MaybeElement> Markup<E> {
 
             // Check for identifier followed by % first (approach 2): variable%
             let fork2 = input.fork();
-            if let Ok(_ident) = fork2.call(Ident::parse_any) {
-                if fork2.peek(syn::Token![%]) {
-                    // This is a variable followed by %, like: value%
-                    let var_ident: Ident = input.call(Ident::parse_any)?;
-                    let _percent: syn::Token![%] = input.parse()?;
+            if let Ok(_ident) = fork2.call(Ident::parse_any)
+                && fork2.peek(syn::Token![%])
+            {
+                // This is a variable followed by %, like: value%
+                let var_ident: Ident = input.call(Ident::parse_any)?;
+                let _percent: syn::Token![%] = input.parse()?;
 
-                    // Create a splice expression that converts the variable to percentage
-                    let expr: Expr =
-                        parse_quote!(hyperchad_template::calc::to_percent_number(#var_ident));
-                    return Ok(Self::Splice {
-                        paren_token: Box::new(Paren::default()),
-                        expr: Box::new(expr),
-                    });
-                }
+                // Create a splice expression that converts the variable to percentage
+                let expr: Expr =
+                    parse_quote!(hyperchad_template::calc::to_percent_number(#var_ident));
+                return Ok(Self::Splice {
+                    paren_token: Box::new(Paren::default()),
+                    expr: Box::new(expr),
+                });
             }
 
             // Try to parse as AttributeName first (supports kebab-case like space-evenly)
@@ -514,14 +513,14 @@ impl<E: MaybeElement> DiagnosticParse for Markup<E> {
     ) -> syn::Result<Self> {
         let markup = Self::diagnostic_parse_in_block(input, diagnostics)?;
 
-        if let Self::ControlFlow(flow) = &markup {
-            if let ControlFlowKind::Let(_) = flow.kind {
-                diagnostics.push(
-                    markup
-                        .span()
-                        .error("`@let` bindings are only allowed inside blocks"),
-                );
-            }
+        if let Self::ControlFlow(flow) = &markup
+            && let ControlFlowKind::Let(_) = flow.kind
+        {
+            diagnostics.push(
+                markup
+                    .span()
+                    .error("`@let` bindings are only allowed inside blocks"),
+            );
         }
 
         Ok(markup)
@@ -923,37 +922,38 @@ impl DiagnosticParse for AttributeType {
                 // Check for special fx { ... } syntax without parentheses
                 if input.peek(Ident::peek_any) {
                     let fork = input.fork();
-                    if let Ok(ident) = fork.call(Ident::parse_any) {
-                        if ident == "fx" && fork.peek(Brace) {
-                            // This is the fx { ... } syntax - parse it specially
-                            let fx_ident: Ident = input.call(Ident::parse_any)?;
-                            let content;
-                            let brace_token = braced!(content in input);
+                    if let Ok(ident) = fork.call(Ident::parse_any)
+                        && ident == "fx"
+                        && fork.peek(Brace)
+                    {
+                        // This is the fx { ... } syntax - parse it specially
+                        let fx_ident: Ident = input.call(Ident::parse_any)?;
+                        let content;
+                        let brace_token = braced!(content in input);
 
-                            // Create a BraceSplice with fx as first item and brace content as second
-                            let mut items = vec![Markup::Splice {
+                        // Create a BraceSplice with fx as first item and brace content as second
+                        let mut items = vec![Markup::Splice {
+                            paren_token: Box::new(Paren::default()),
+                            expr: Box::new(syn::Expr::Path(syn::ExprPath {
+                                attrs: vec![],
+                                qself: None,
+                                path: syn::Path::from(fx_ident),
+                            })),
+                        }];
+
+                        if !content.is_empty() {
+                            // Parse the content as a block
+                            let tokens: proc_macro2::TokenStream = content.parse()?;
+                            items.push(Markup::Splice {
                                 paren_token: Box::new(Paren::default()),
-                                expr: Box::new(syn::Expr::Path(syn::ExprPath {
-                                    attrs: vec![],
-                                    qself: None,
-                                    path: syn::Path::from(fx_ident),
-                                })),
-                            }];
-
-                            if !content.is_empty() {
-                                // Parse the content as a block
-                                let tokens: proc_macro2::TokenStream = content.parse()?;
-                                items.push(Markup::Splice {
-                                    paren_token: Box::new(Paren::default()),
-                                    expr: Box::new(syn::parse2(quote::quote! { { #tokens } })?),
-                                });
-                            }
-
-                            return Ok(Self::Normal {
-                                eq_token,
-                                value: Markup::BraceSplice { brace_token, items },
+                                expr: Box::new(syn::parse2(quote::quote! { { #tokens } })?),
                             });
                         }
+
+                        return Ok(Self::Normal {
+                            eq_token,
+                            value: Markup::BraceSplice { brace_token, items },
+                        });
                     }
                 }
 
@@ -1222,70 +1222,70 @@ pub enum NumericType {
 impl NumericLit {
     fn try_parse(input: &str) -> Option<Self> {
         // Check for percentage values
-        if let Some(num_str) = input.strip_suffix('%') {
-            if num_str.parse::<f32>().is_ok() {
-                return Some(Self {
-                    value: input.to_string(),
-                    number_type: if num_str.contains('.') {
-                        NumericType::RealPercent
-                    } else {
-                        NumericType::IntegerPercent
-                    },
-                });
-            }
+        if let Some(num_str) = input.strip_suffix('%')
+            && num_str.parse::<f32>().is_ok()
+        {
+            return Some(Self {
+                value: input.to_string(),
+                number_type: if num_str.contains('.') {
+                    NumericType::RealPercent
+                } else {
+                    NumericType::IntegerPercent
+                },
+            });
         }
 
         // Check for viewport units (vw, vh, dvw, dvh)
-        if let Some(num_str) = input.strip_suffix("vw") {
-            if num_str.parse::<f32>().is_ok() {
-                return Some(Self {
-                    value: input.to_string(),
-                    number_type: if num_str.contains('.') {
-                        NumericType::RealVw
-                    } else {
-                        NumericType::IntegerVw
-                    },
-                });
-            }
+        if let Some(num_str) = input.strip_suffix("vw")
+            && num_str.parse::<f32>().is_ok()
+        {
+            return Some(Self {
+                value: input.to_string(),
+                number_type: if num_str.contains('.') {
+                    NumericType::RealVw
+                } else {
+                    NumericType::IntegerVw
+                },
+            });
         }
 
-        if let Some(num_str) = input.strip_suffix("vh") {
-            if num_str.parse::<f32>().is_ok() {
-                return Some(Self {
-                    value: input.to_string(),
-                    number_type: if num_str.contains('.') {
-                        NumericType::RealVh
-                    } else {
-                        NumericType::IntegerVh
-                    },
-                });
-            }
+        if let Some(num_str) = input.strip_suffix("vh")
+            && num_str.parse::<f32>().is_ok()
+        {
+            return Some(Self {
+                value: input.to_string(),
+                number_type: if num_str.contains('.') {
+                    NumericType::RealVh
+                } else {
+                    NumericType::IntegerVh
+                },
+            });
         }
 
-        if let Some(num_str) = input.strip_suffix("dvw") {
-            if num_str.parse::<f32>().is_ok() {
-                return Some(Self {
-                    value: input.to_string(),
-                    number_type: if num_str.contains('.') {
-                        NumericType::RealDvw
-                    } else {
-                        NumericType::IntegerDvw
-                    },
-                });
-            }
+        if let Some(num_str) = input.strip_suffix("dvw")
+            && num_str.parse::<f32>().is_ok()
+        {
+            return Some(Self {
+                value: input.to_string(),
+                number_type: if num_str.contains('.') {
+                    NumericType::RealDvw
+                } else {
+                    NumericType::IntegerDvw
+                },
+            });
         }
 
-        if let Some(num_str) = input.strip_suffix("dvh") {
-            if num_str.parse::<f32>().is_ok() {
-                return Some(Self {
-                    value: input.to_string(),
-                    number_type: if num_str.contains('.') {
-                        NumericType::RealDvh
-                    } else {
-                        NumericType::IntegerDvh
-                    },
-                });
-            }
+        if let Some(num_str) = input.strip_suffix("dvh")
+            && num_str.parse::<f32>().is_ok()
+        {
+            return Some(Self {
+                value: input.to_string(),
+                number_type: if num_str.contains('.') {
+                    NumericType::RealDvh
+                } else {
+                    NumericType::IntegerDvh
+                },
+            });
         }
 
         // Check for plain numbers (integer or float)
@@ -1314,17 +1314,16 @@ impl NumericLit {
         ];
 
         for unit in &units {
-            if let Some(number_part) = input.strip_prefix(unit) {
-                if !number_part.is_empty()
-                    && number_part.chars().all(|c| c.is_ascii_digit() || c == '.')
-                {
-                    // Construct the unit+number string
-                    let full_unit_string = format!("{number_part}{unit}");
+            if let Some(number_part) = input.strip_prefix(unit)
+                && !number_part.is_empty()
+                && number_part.chars().all(|c| c.is_ascii_digit() || c == '.')
+            {
+                // Construct the unit+number string
+                let full_unit_string = format!("{number_part}{unit}");
 
-                    // Try to parse using the existing logic
-                    if let Some(numeric_lit) = Self::try_parse(&full_unit_string) {
-                        return Some(numeric_lit);
-                    }
+                // Try to parse using the existing logic
+                if let Some(numeric_lit) = Self::try_parse(&full_unit_string) {
+                    return Some(numeric_lit);
                 }
             }
         }

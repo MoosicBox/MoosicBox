@@ -432,31 +432,31 @@ pub fn on_playback_event(update: &UpdateSession, _current: &Playback) {
 async fn propagate_state_to_plugin(update: ApiUpdateSession) {
     let current_session_id = { *STATE.current_session_id.read().await };
 
-    if current_session_id.is_some_and(|id| update.session_id == id) {
-        if let Some((url, query)) = get_url_and_query().await {
-            use app_tauri_plugin_player::PlayerExt;
+    if current_session_id.is_some_and(|id| update.session_id == id)
+        && let Some((url, query)) = get_url_and_query().await
+    {
+        use app_tauri_plugin_player::PlayerExt;
 
-            let player = APP.get().unwrap().player();
+        let player = APP.get().unwrap().player();
 
-            log::debug!("propagate_state_to_plugin: update={update:?}");
-            if let Err(e) = player.update_state(app_tauri_plugin_player::UpdateState {
-                playing: update.playing,
-                position: update.position,
-                seek: update.seek,
-                volume: update.volume,
-                playlist: update
-                    .playlist
-                    .as_ref()
-                    .map(|x| app_tauri_plugin_player::Playlist {
-                        tracks: x
-                            .tracks
-                            .iter()
-                            .map(|x| convert_track(x.clone(), &url, &query))
-                            .collect::<Vec<_>>(),
-                    }),
-            }) {
-                log::error!("Failed to update_state: {e:?}");
-            }
+        log::debug!("propagate_state_to_plugin: update={update:?}");
+        if let Err(e) = player.update_state(app_tauri_plugin_player::UpdateState {
+            playing: update.playing,
+            position: update.position,
+            seek: update.seek,
+            volume: update.volume,
+            playlist: update
+                .playlist
+                .as_ref()
+                .map(|x| app_tauri_plugin_player::Playlist {
+                    tracks: x
+                        .tracks
+                        .iter()
+                        .map(|x| convert_track(x.clone(), &url, &query))
+                        .collect::<Vec<_>>(),
+                }),
+        }) {
+            log::error!("Failed to update_state: {e:?}");
         }
     }
 }

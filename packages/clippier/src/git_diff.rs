@@ -38,23 +38,22 @@ pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
         let line = line.trim();
 
         if line.starts_with("name = \"") {
-            if let Some(name_start) = line.find('"') {
-                if let Some(name_end) = line.rfind('"') {
-                    if name_end > name_start {
-                        current_package = Some(line[name_start + 1..name_end].to_string());
-                        has_version_change = false;
-                        is_new_package = *op == '+'; // New package if the name line is added
-                    }
-                }
+            if let Some(name_start) = line.find('"')
+                && let Some(name_end) = line.rfind('"')
+                && name_end > name_start
+            {
+                current_package = Some(line[name_start + 1..name_end].to_string());
+                has_version_change = false;
+                is_new_package = *op == '+'; // New package if the name line is added
             }
         } else if line.starts_with("version = \"") && (*op == '-' || *op == '+') {
             has_version_change = true;
         } else if line.starts_with("[[package]]") {
             // Include package if it has version changes OR if it's a newly added package
-            if let Some(package) = &current_package {
-                if has_version_change || is_new_package {
-                    changed_packages.insert(package.clone());
-                }
+            if let Some(package) = &current_package
+                && (has_version_change || is_new_package)
+            {
+                changed_packages.insert(package.clone());
             }
             current_package = None;
             has_version_change = false;
@@ -62,10 +61,10 @@ pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
         } else if line.is_empty() {
             // For empty lines, we process the current package and reset, but only if we haven't seen a new [[package]] marker
             // This handles the case where a package section ends with an empty line rather than a new [[package]]
-            if let Some(package) = &current_package {
-                if has_version_change || is_new_package {
-                    changed_packages.insert(package.clone());
-                }
+            if let Some(package) = &current_package
+                && (has_version_change || is_new_package)
+            {
+                changed_packages.insert(package.clone());
             }
             current_package = None;
             has_version_change = false;
@@ -76,10 +75,10 @@ pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
     }
 
     // Handle the last package in the diff
-    if let Some(package) = current_package {
-        if has_version_change || is_new_package {
-            changed_packages.insert(package);
-        }
+    if let Some(package) = current_package
+        && (has_version_change || is_new_package)
+    {
+        changed_packages.insert(package);
     }
 
     let mut result: Vec<String> = changed_packages.into_iter().collect();
@@ -175,10 +174,10 @@ pub fn get_changed_files_from_git(
                 if let Some(path_str) = new_file.to_str() {
                     changed_files.push(path_str.to_string());
                 }
-            } else if let Some(old_file) = delta.old_file().path() {
-                if let Some(path_str) = old_file.to_str() {
-                    changed_files.push(path_str.to_string());
-                }
+            } else if let Some(old_file) = delta.old_file().path()
+                && let Some(path_str) = old_file.to_str()
+            {
+                changed_files.push(path_str.to_string());
             }
             true
         },
@@ -281,18 +280,15 @@ pub fn extract_changed_dependencies_from_git(
             let full_path = workspace_root.join(member_path);
             let cargo_path = full_path.join("Cargo.toml");
 
-            if cargo_path.exists() {
-                if let Ok(source) = std::fs::read_to_string(&cargo_path) {
-                    if let Ok(value) = toml::from_str::<toml::Value>(&source) {
-                        if let Some(package_name) = value
-                            .get("package")
-                            .and_then(|x| x.get("name"))
-                            .and_then(|x| x.as_str())
-                        {
-                            workspace_package_names.insert(package_name.to_string());
-                        }
-                    }
-                }
+            if cargo_path.exists()
+                && let Ok(source) = std::fs::read_to_string(&cargo_path)
+                && let Ok(value) = toml::from_str::<toml::Value>(&source)
+                && let Some(package_name) = value
+                    .get("package")
+                    .and_then(|x| x.get("name"))
+                    .and_then(|x| x.as_str())
+            {
+                workspace_package_names.insert(package_name.to_string());
             }
         }
     }

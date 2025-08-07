@@ -1,5 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
+use std::slice;
+
 use hyperchad::{
     template::{self as hyperchad_template, Containers, container},
     transformer::models::{ImageLoading, LayoutOverflow, Visibility},
@@ -876,7 +878,7 @@ pub fn albums_page_content(
                                                     albums_page_url(&if checked {
                                                         filtered_sources.iter().filter(|x| *x != source).cloned().collect::<Vec<_>>()
                                                     } else {
-                                                        [filtered_sources, &[source.clone()]].concat()
+                                                        [filtered_sources, slice::from_ref(source)].concat()
                                                     }, sort)
                                                 )
                                             }

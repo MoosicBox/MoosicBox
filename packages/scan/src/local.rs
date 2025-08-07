@@ -449,30 +449,30 @@ fn scan_album_cover(
     _scanner: Scanner,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        if let Some(album) = album {
-            if let Some(path_str) = path.to_str() {
-                let artist = output
-                    .write()
-                    .await
-                    .add_artist(&album.artist, &None, ApiSource::library())
-                    .await;
+        if let Some(album) = album
+            && let Some(path_str) = path.to_str()
+        {
+            let artist = output
+                .write()
+                .await
+                .add_artist(&album.artist, &None, ApiSource::library())
+                .await;
 
-                let output_album = artist
-                    .write()
-                    .await
-                    .add_album(
-                        &album.title,
-                        &album.date_released.map(|x| x.and_utc().to_rfc3339()),
-                        path.parent().and_then(|x| x.to_str()),
-                        &None,
-                        ApiSource::library(),
-                    )
-                    .await;
+            let output_album = artist
+                .write()
+                .await
+                .add_album(
+                    &album.title,
+                    &album.date_released.map(|x| x.and_utc().to_rfc3339()),
+                    path.parent().and_then(|x| x.to_str()),
+                    &None,
+                    ApiSource::library(),
+                )
+                .await;
 
-                output_album.write().await.cover = Some(path_str.to_string());
+            output_album.write().await.cover = Some(path_str.to_string());
 
-                return Ok(());
-            }
+            return Ok(());
         }
 
         unimplemented!("scan album cover without Album info");
@@ -492,18 +492,18 @@ fn scan_artist_cover(
     _scanner: Scanner,
 ) -> Pin<Box<dyn Future<Output = Result<(), ScanError>> + Send>> {
     Box::pin(async move {
-        if let Some(artist) = artist {
-            if let Some(path_str) = path.to_str() {
-                let output_artist = output
-                    .write()
-                    .await
-                    .add_artist(&artist.title, &None, ApiSource::library())
-                    .await;
+        if let Some(artist) = artist
+            && let Some(path_str) = path.to_str()
+        {
+            let output_artist = output
+                .write()
+                .await
+                .add_artist(&artist.title, &None, ApiSource::library())
+                .await;
 
-                output_artist.write().await.cover = Some(path_str.to_string());
+            output_artist.write().await.cover = Some(path_str.to_string());
 
-                return Ok(());
-            }
+            return Ok(());
         }
 
         unimplemented!("scan artist cover without Artist info");

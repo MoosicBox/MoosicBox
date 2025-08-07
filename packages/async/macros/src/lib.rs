@@ -46,10 +46,10 @@ fn inject_item(item: &mut Item, injector: &mut YieldInjector) {
         }
         Item::Impl(item_impl) => {
             for impl_member in &mut item_impl.items {
-                if let ImplItem::Fn(func) = impl_member {
-                    if func.sig.asyncness.is_some() {
-                        injector.visit_block_mut(&mut func.block);
-                    }
+                if let ImplItem::Fn(func) = impl_member
+                    && func.sig.asyncness.is_some()
+                {
+                    injector.visit_block_mut(&mut func.block);
                 }
             }
         }

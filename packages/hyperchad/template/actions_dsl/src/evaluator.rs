@@ -992,14 +992,13 @@ fn generate_function_call_code(
             // Generate field assignments from tuple arguments
             let mut field_assignments = Vec::new();
             for arg in args {
-                if let Expression::Tuple(tuple_args) = arg {
-                    if tuple_args.len() == 2 {
-                        if let Expression::Literal(Literal::String(field_name)) = &tuple_args[0] {
-                            let field_ident = format_ident!("{}", field_name);
-                            let field_value = generate_expression_code(context, &tuple_args[1])?;
-                            field_assignments.push(quote! { #field_ident: #field_value });
-                        }
-                    }
+                if let Expression::Tuple(tuple_args) = arg
+                    && tuple_args.len() == 2
+                    && let Expression::Literal(Literal::String(field_name)) = &tuple_args[0]
+                {
+                    let field_ident = format_ident!("{}", field_name);
+                    let field_value = generate_expression_code(context, &tuple_args[1])?;
+                    field_assignments.push(quote! { #field_ident: #field_value });
                 }
             }
 
@@ -1366,18 +1365,16 @@ fn generate_function_call_code(
 
                         let mut field_assignments = Vec::new();
                         for arg in call_args {
-                            if let Expression::Tuple(tuple_args) = arg {
-                                if let (
+                            if let Expression::Tuple(tuple_args) = arg
+                                && let (
                                     Expression::Literal(Literal::String(field_name)),
                                     field_value,
                                 ) = (&tuple_args[0], &tuple_args[1])
-                                {
-                                    let field_ident = format_ident!("{}", field_name);
-                                    let field_value_code =
-                                        generate_expression_code(context, field_value)?;
-                                    field_assignments
-                                        .push(quote! { #field_ident: #field_value_code });
-                                }
+                            {
+                                let field_ident = format_ident!("{}", field_name);
+                                let field_value_code =
+                                    generate_expression_code(context, field_value)?;
+                                field_assignments.push(quote! { #field_ident: #field_value_code });
                             }
                         }
 
@@ -1822,15 +1819,13 @@ fn generate_function_call_code(
 
                     let mut field_assignments = Vec::new();
                     for arg in args {
-                        if let Expression::Tuple(tuple_args) = arg {
-                            if let (Expression::Literal(Literal::String(field_name)), field_value) =
+                        if let Expression::Tuple(tuple_args) = arg
+                            && let (Expression::Literal(Literal::String(field_name)), field_value) =
                                 (&tuple_args[0], &tuple_args[1])
-                            {
-                                let field_ident = format_ident!("{}", field_name);
-                                let field_value_code =
-                                    generate_expression_code(context, field_value)?;
-                                field_assignments.push(quote! { #field_ident: #field_value_code });
-                            }
+                        {
+                            let field_ident = format_ident!("{}", field_name);
+                            let field_value_code = generate_expression_code(context, field_value)?;
+                            field_assignments.push(quote! { #field_ident: #field_value_code });
                         }
                     }
 

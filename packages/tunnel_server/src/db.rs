@@ -164,22 +164,22 @@ where
         match exec().await {
             Ok(value) => return Ok(value),
             Err(err) => {
-                if let DatabaseError::Db(db_err) = &err {
-                    if db_err.is_connection_error() {
-                        if retries >= MAX_RETRY {
-                            return Err(err);
-                        }
-                        log::info!(
-                            "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
-                            retries + 1
-                        );
-                        if let Err(init_err) = init().await {
-                            log::error!("Failed to reinitialize: {init_err:?}");
-                            return Err(init_err);
-                        }
-                        retries += 1;
-                        continue;
+                if let DatabaseError::Db(db_err) = &err
+                    && db_err.is_connection_error()
+                {
+                    if retries >= MAX_RETRY {
+                        return Err(err);
                     }
+                    log::info!(
+                        "Database IO error. Attempting reconnect... {}/{MAX_RETRY}",
+                        retries + 1
+                    );
+                    if let Err(init_err) = init().await {
+                        log::error!("Failed to reinitialize: {init_err:?}");
+                        return Err(init_err);
+                    }
+                    retries += 1;
+                    continue;
                 }
                 return Err(err);
             }

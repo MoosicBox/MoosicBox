@@ -219,15 +219,15 @@ impl FltkRenderer {
         };
         log::debug!("trigger_load_image: image={image:?}");
 
-        if let Some(image) = image {
-            if let Some(sender) = &self.event_sender {
-                sender.send(AppEvent::LoadImage {
-                    source: image.source,
-                    width: image.width,
-                    height: image.height,
-                    frame: frame.to_owned(),
-                })?;
-            }
+        if let Some(image) = image
+            && let Some(sender) = &self.event_sender
+        {
+            sender.send(AppEvent::LoadImage {
+                source: image.source,
+                width: image.width,
+                height: image.height,
+                frame: frame.to_owned(),
+            })?;
         }
 
         Ok(())
@@ -983,59 +983,53 @@ impl FltkRenderer {
                                 .parent()
                                 .and_then(|x| x.parent())
                                 .map(|x| x.join("app-website").join("public").join(source))
+                                && let Ok(path) = path.canonicalize()
+                                && path.is_file()
                             {
-                                if let Ok(path) = path.canonicalize() {
-                                    if path.is_file() {
-                                        let image = SharedImage::load(path)?;
+                                let image = SharedImage::load(path)?;
 
-                                        // FIXME: Need to handle aspect ratio if either width or
-                                        // height is missing
-                                        if width.is_some() || height.is_some() {
-                                            #[allow(
-                                                clippy::cast_possible_truncation,
-                                                clippy::cast_precision_loss
-                                            )]
-                                            let width = container
-                                                .width
-                                                .as_ref()
-                                                .unwrap()
-                                                .calc(
-                                                    context.width,
-                                                    self.width
-                                                        .load(std::sync::atomic::Ordering::SeqCst)
-                                                        as f32,
-                                                    self.height
-                                                        .load(std::sync::atomic::Ordering::SeqCst)
-                                                        as f32,
-                                                )
-                                                .round()
-                                                as i32;
-                                            #[allow(
-                                                clippy::cast_possible_truncation,
-                                                clippy::cast_precision_loss
-                                            )]
-                                            let height = container
-                                                .height
-                                                .as_ref()
-                                                .unwrap()
-                                                .calc(
-                                                    context.height,
-                                                    self.width
-                                                        .load(std::sync::atomic::Ordering::SeqCst)
-                                                        as f32,
-                                                    self.height
-                                                        .load(std::sync::atomic::Ordering::SeqCst)
-                                                        as f32,
-                                                )
-                                                .round()
-                                                as i32;
+                                // FIXME: Need to handle aspect ratio if either width or
+                                // height is missing
+                                if width.is_some() || height.is_some() {
+                                    #[allow(
+                                        clippy::cast_possible_truncation,
+                                        clippy::cast_precision_loss
+                                    )]
+                                    let width = container
+                                        .width
+                                        .as_ref()
+                                        .unwrap()
+                                        .calc(
+                                            context.width,
+                                            self.width.load(std::sync::atomic::Ordering::SeqCst)
+                                                as f32,
+                                            self.height.load(std::sync::atomic::Ordering::SeqCst)
+                                                as f32,
+                                        )
+                                        .round()
+                                        as i32;
+                                    #[allow(
+                                        clippy::cast_possible_truncation,
+                                        clippy::cast_precision_loss
+                                    )]
+                                    let height = container
+                                        .height
+                                        .as_ref()
+                                        .unwrap()
+                                        .calc(
+                                            context.height,
+                                            self.width.load(std::sync::atomic::Ordering::SeqCst)
+                                                as f32,
+                                            self.height.load(std::sync::atomic::Ordering::SeqCst)
+                                                as f32,
+                                        )
+                                        .round()
+                                        as i32;
 
-                                            frame.set_size(width, height);
-                                        }
-
-                                        frame.set_image_scaled(Some(image));
-                                    }
+                                    frame.set_size(width, height);
                                 }
+
+                                frame.set_image_scaled(Some(image));
                             }
                         }
                     }
@@ -1089,62 +1083,63 @@ impl FltkRenderer {
         }
 
         #[cfg(feature = "debug")]
-        if let Some(flex_element) = &mut flex_element {
-            if *DEBUG.read().unwrap() && (depth == 1 || index > 0) {
-                let mut element_info = vec![];
+        if let Some(flex_element) = &mut flex_element
+            && *DEBUG.read().unwrap()
+            && (depth == 1 || index > 0)
+        {
+            let mut element_info = vec![];
 
-                let mut child = Some(container);
+            let mut child = Some(container);
 
-                while let Some(container) = child.take() {
-                    let element_name = container.element.tag_display_str();
-                    let text = element_name.to_string();
-                    let first = element_info.is_empty();
+            while let Some(container) = child.take() {
+                let element_name = container.element.tag_display_str();
+                let text = element_name.to_string();
+                let first = element_info.is_empty();
 
-                    element_info.push(text);
+                element_info.push(text);
 
+                let text = format!(
+                    "    ({}, {}, {}, {})",
+                    container.calculated_x.unwrap_or(0.0),
+                    container.calculated_y.unwrap_or(0.0),
+                    container.calculated_width.unwrap_or(0.0),
+                    container.calculated_height.unwrap_or(0.0),
+                );
+
+                element_info.push(text);
+
+                if first {
                     let text = format!(
                         "    ({}, {}, {}, {})",
-                        container.calculated_x.unwrap_or(0.0),
-                        container.calculated_y.unwrap_or(0.0),
-                        container.calculated_width.unwrap_or(0.0),
-                        container.calculated_height.unwrap_or(0.0),
+                        flex_element.x(),
+                        flex_element.y(),
+                        flex_element.w(),
+                        flex_element.h(),
                     );
 
                     element_info.push(text);
-
-                    if first {
-                        let text = format!(
-                            "    ({}, {}, {}, {})",
-                            flex_element.x(),
-                            flex_element.y(),
-                            flex_element.w(),
-                            flex_element.h(),
-                        );
-
-                        element_info.push(text);
-                    }
-
-                    child = container.children.first();
                 }
 
-                flex_element.draw({
-                    move |w| {
-                        use fltk::draw;
-
-                        draw::set_draw_color(enums::Color::Red);
-                        draw::draw_rect(w.x(), w.y(), w.w(), w.h());
-                        draw::set_font(fltk::draw::font(), 8);
-
-                        let mut y_offset = 0;
-
-                        for text in &element_info {
-                            let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
-                            y_offset += t_h;
-                            draw::draw_text(text, w.x(), w.y() + y_offset);
-                        }
-                    }
-                });
+                child = container.children.first();
             }
+
+            flex_element.draw({
+                move |w| {
+                    use fltk::draw;
+
+                    draw::set_draw_color(enums::Color::Red);
+                    draw::draw_rect(w.x(), w.y(), w.w(), w.h());
+                    draw::set_font(fltk::draw::font(), 8);
+
+                    let mut y_offset = 0;
+
+                    for text in &element_info {
+                        let (_t_x, _t_y, _t_w, t_h) = draw::text_extents(text);
+                        y_offset += t_h;
+                        draw::draw_text(text, w.x(), w.y() + y_offset);
+                    }
+                }
+            });
         }
 
         Ok(flex_element.map(|x| x.as_base_widget()).or(other_element))

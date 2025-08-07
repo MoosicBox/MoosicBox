@@ -521,13 +521,13 @@ impl AudioOutputScanner {
                     )
                     .await??;
 
-                if let Some(output) = &self.default_output {
-                    if !self.outputs.iter().any(|x| x.id == output.id) {
-                        if self.outputs.is_empty() {
-                            self.outputs.push(output.clone());
-                        } else {
-                            self.outputs.insert(0, output.clone());
-                        }
+                if let Some(output) = &self.default_output
+                    && !self.outputs.iter().any(|x| x.id == output.id)
+                {
+                    if self.outputs.is_empty() {
+                        self.outputs.push(output.clone());
+                    } else {
+                        self.outputs.insert(0, output.clone());
                     }
                 }
             }

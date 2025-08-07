@@ -1,3 +1,5 @@
+#![allow(clippy::needless_for_each)]
+
 use actix_web::{
     Scope,
     dev::{ServiceFactory, ServiceRequest},

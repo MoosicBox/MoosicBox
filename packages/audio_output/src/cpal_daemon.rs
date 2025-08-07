@@ -174,10 +174,10 @@ impl CpalStreamDaemon {
     pub fn quit(&mut self, reason: StreamDaemonError) {
         // Send quit signal for immediate shutdown
         log::debug!("CpalStreamDaemon: quit called, sending quit signal");
-        if let Some(quit_sender) = self.shutdown_sender.take() {
-            if let Err(e) = quit_sender.send(()) {
-                log::debug!("CpalStreamDaemon: failed to send quit signal: {e}");
-            }
+        if let Some(quit_sender) = self.shutdown_sender.take()
+            && let Err(e) = quit_sender.send(())
+        {
+            log::debug!("CpalStreamDaemon: failed to send quit signal: {e}");
         }
         self.daemon.quit(reason);
     }

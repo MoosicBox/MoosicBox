@@ -147,15 +147,14 @@ fn handle_server_playback_update(
                         .unwrap()
                         .replace(player.clone());
 
-                    if let Ok(Some(session)) = get_session(&db, update.session_id).await {
-                        if let Err(e) = player
+                    if let Ok(Some(session)) = get_session(&db, update.session_id).await
+                        && let Err(e) = player
                             .init_from_session(update.profile.clone(), session, &update)
                             .await
-                        {
-                            moosicbox_assert::die_or_error!(
-                                "Failed to create new player from session: {e:?}"
-                            );
-                        }
+                    {
+                        moosicbox_assert::die_or_error!(
+                            "Failed to create new player from session: {e:?}"
+                        );
                     }
 
                     players.insert(update.session_id, (local_player, player.clone()));

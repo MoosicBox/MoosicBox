@@ -15,7 +15,7 @@ pub struct Sort {
 }
 
 impl Expression for Sort {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Sort(self)
     }
 }
@@ -28,7 +28,7 @@ pub struct Join<'a> {
 }
 
 impl Expression for Join<'_> {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Join(self)
     }
 }
@@ -55,7 +55,7 @@ pub enum ExpressionType<'a> {
 }
 
 pub trait Expression: Send + Sync + Debug {
-    fn expression_type(&self) -> ExpressionType;
+    fn expression_type(&self) -> ExpressionType<'_>;
 
     fn params(&self) -> Option<Vec<&DatabaseValue>> {
         self.values().map(|x| {
@@ -111,7 +111,7 @@ impl From<Literal> for Box<dyn Expression> {
 }
 
 impl Expression for Literal {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Literal(self)
     }
 }
@@ -149,7 +149,7 @@ impl From<Identifier> for Box<dyn Expression> {
 }
 
 impl Expression for Identifier {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Identifier(self)
     }
 }
@@ -162,7 +162,7 @@ pub fn identifier(value: &str) -> Identifier {
 }
 
 impl Expression for DatabaseValue {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::DatabaseValue(self)
     }
 
@@ -198,7 +198,7 @@ pub struct And {
 
 impl BooleanExpression for And {}
 impl Expression for And {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::And(self)
     }
 
@@ -225,7 +225,7 @@ pub struct Or {
 
 impl BooleanExpression for Or {}
 impl Expression for Or {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Or(self)
     }
 
@@ -253,7 +253,7 @@ pub struct NotEq {
 
 impl BooleanExpression for NotEq {}
 impl Expression for NotEq {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::NotEq(self)
     }
 
@@ -270,7 +270,7 @@ pub struct Eq {
 
 impl BooleanExpression for Eq {}
 impl Expression for Eq {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Eq(self)
     }
 
@@ -287,7 +287,7 @@ pub struct Gt {
 
 impl BooleanExpression for Gt {}
 impl Expression for Gt {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Gt(self)
     }
 
@@ -304,7 +304,7 @@ pub struct Gte {
 
 impl BooleanExpression for Gte {}
 impl Expression for Gte {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Gte(self)
     }
 
@@ -321,7 +321,7 @@ pub struct Lt {
 
 impl BooleanExpression for Lt {}
 impl Expression for Lt {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Lt(self)
     }
 
@@ -338,7 +338,7 @@ pub struct Lte {
 
 impl BooleanExpression for Lte {}
 impl Expression for Lte {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Lte(self)
     }
 
@@ -355,7 +355,7 @@ pub struct In<'a> {
 
 impl BooleanExpression for In<'_> {}
 impl Expression for In<'_> {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::In(self)
     }
 
@@ -382,7 +382,7 @@ pub struct NotIn<'a> {
 
 impl BooleanExpression for NotIn<'_> {}
 impl Expression for NotIn<'_> {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::NotIn(self)
     }
 
@@ -512,7 +512,7 @@ pub struct Coalesce {
 
 impl List for Coalesce {}
 impl Expression for Coalesce {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::Coalesce(self)
     }
 
@@ -543,7 +543,7 @@ pub struct InList {
 
 impl List for InList {}
 impl Expression for InList {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::InList(self)
     }
 
@@ -736,7 +736,7 @@ pub struct SelectQuery<'a> {
 
 impl List for SelectQuery<'_> {}
 impl Expression for SelectQuery<'_> {
-    fn expression_type(&self) -> ExpressionType {
+    fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::SelectQuery(self)
     }
 

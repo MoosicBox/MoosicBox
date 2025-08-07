@@ -537,8 +537,8 @@ fn get_audio_decode_handler_with_command_receiver(
                 // Just send the initial playback start event, don't track progress here
                 if !sent_playback_start_event.load(std::sync::atomic::Ordering::SeqCst) {
                     let binding = playback.read().unwrap();
-                    if let Some(playback) = binding.as_ref() {
-                        if let Some(playback_target) = playback.playback_target.clone() {
+                    if let Some(playback) = binding.as_ref()
+                        && let Some(playback_target) = playback.playback_target.clone() {
                             sent_playback_start_event
                                 .store(true, std::sync::atomic::Ordering::SeqCst);
 
@@ -561,7 +561,6 @@ fn get_audio_decode_handler_with_command_receiver(
                             };
                             send_playback_event(&update, playback);
                         }
-                    }
                 }
                 Ok(())
             }

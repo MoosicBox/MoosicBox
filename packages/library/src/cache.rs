@@ -68,10 +68,10 @@ where
     Err: Error,
     Fut: Future<Output = Result<CacheItemType, Err>> + Send,
 {
-    if let Some(entry) = CACHE_MAP.read().unwrap().get(request.key) {
-        if entry.expiration > current_time_nanos() {
-            return Ok(entry.data.clone());
-        }
+    if let Some(entry) = CACHE_MAP.read().unwrap().get(request.key)
+        && entry.expiration > current_time_nanos()
+    {
+        return Ok(entry.data.clone());
     }
 
     let value = match compute().await {

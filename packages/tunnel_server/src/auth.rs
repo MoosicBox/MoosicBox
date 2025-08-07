@@ -36,16 +36,16 @@ impl FromRequest for GeneralHeaderAuthorized {
 }
 
 fn is_authorized(req: &HttpRequest) -> bool {
-    if let Some(auth) = req.headers().get(http::header::AUTHORIZATION) {
-        if let Ok(auth) = auth.to_str() {
-            let token = if auth.to_lowercase().starts_with("bearer") {
-                auth[6..].trim_start()
-            } else {
-                auth
-            };
+    if let Some(auth) = req.headers().get(http::header::AUTHORIZATION)
+        && let Ok(auth) = auth.to_str()
+    {
+        let token = if auth.to_lowercase().starts_with("bearer") {
+            auth[6..].trim_start()
+        } else {
+            auth
+        };
 
-            return token == TUNNEL_ACCESS_TOKEN;
-        }
+        return token == TUNNEL_ACCESS_TOKEN;
     }
 
     false

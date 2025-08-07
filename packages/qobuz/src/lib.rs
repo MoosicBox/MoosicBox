@@ -1703,12 +1703,12 @@ fn search_bundle_version(login_source: &str) -> Option<String> {
         .unwrap()
     });
 
-    if let Some(caps) = BUNDLE_ID_REGEX.captures(login_source) {
-        if let Some(version) = caps.get(1) {
-            let version = version.as_str();
-            log::debug!("Found version={version}");
-            return Some(version.to_string());
-        }
+    if let Some(caps) = BUNDLE_ID_REGEX.captures(login_source)
+        && let Some(version) = caps.get(1)
+    {
+        let version = version.as_str();
+        log::debug!("Found version={version}");
+        return Some(version.to_string());
     }
 
     None
@@ -2002,10 +2002,10 @@ impl MusicApi for QobuzMusicApi {
             {
                 Ok(artist) => Some(artist.into()),
                 Err(e) => {
-                    if let Error::HttpRequestFailed(status, _) = &e {
-                        if *status == 404 {
-                            return Ok(None);
-                        }
+                    if let Error::HttpRequestFailed(status, _) = &e
+                        && *status == 404
+                    {
+                        return Ok(None);
                     }
 
                     return Err(e.into());

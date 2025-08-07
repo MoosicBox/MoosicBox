@@ -327,7 +327,7 @@ impl TcpStream {
         log::debug!("Connecting to server at server_addr={server_addr}");
 
         let client_port = next_port();
-        let client_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), client_port);
+        let client_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), client_port);
         let (peer_addr, _host_name) = parse_addr(server_addr, false).map_err(|e| match e {
             Error::IO(e) => e,
             Error::AddrParse(..) | Error::ParseInt(..) | Error::Send => io::Error::new(
@@ -536,7 +536,7 @@ mod test {
     #[test_log::test]
     #[serial]
     async fn tcp_listener_can_bind() {
-        let addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+        let addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
 
         let listener = TcpListener::bind(addr.to_string()).await;
         assert!(
@@ -550,7 +550,7 @@ mod test {
     #[test_log::test]
     #[serial]
     async fn tcp_listener_after_bind_exists_in_tcp_listener() {
-        let addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+        let addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
 
         let _listener = TcpListener::bind(addr.to_string()).await.unwrap();
         TCP_LISTENERS.with_borrow_mut(|x| {
@@ -565,7 +565,7 @@ mod test {
     #[test_log::test]
     #[serial]
     async fn tcp_listener_addr_matches_bind_addr() {
-        let addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+        let addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
 
         let listener = TcpListener::bind(addr.to_string()).await.unwrap();
         assert_eq!(listener.addr, addr, "TcpListener address mismatch");
@@ -575,7 +575,7 @@ mod test {
     #[test_log::test]
     #[serial]
     async fn tcp_listener_rx_is_empty_initially() {
-        let addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+        let addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
 
         let listener = TcpListener::bind(addr.to_string()).await.unwrap();
         assert!(
@@ -588,7 +588,7 @@ mod test {
     #[test_log::test]
     #[serial]
     async fn tcp_listener_shutdown_removes_from_tcp_listeners() {
-        let addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+        let addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
 
         let listener = TcpListener::bind(addr.to_string()).await.unwrap();
         listener.shutdown();
@@ -606,13 +606,13 @@ mod test {
         let runtime = runtime::Runtime::new();
 
         runtime.block_on(async move {
-            let server_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
             let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
 
             task::spawn(async move {
                 let (mut stream, addr) = listener.accept().await.unwrap();
 
-                assert_eq!(addr.ip(), Ipv4Addr::new(127, 0, 0, 1));
+                assert_eq!(addr.ip(), Ipv4Addr::LOCALHOST);
 
                 let mut buf = vec![];
 
@@ -640,13 +640,13 @@ mod test {
         let runtime = runtime::Runtime::new();
 
         runtime.block_on(async move {
-            let server_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
             let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
 
             task::spawn(async move {
                 let (mut stream, addr) = listener.accept().await.unwrap();
 
-                assert_eq!(addr.ip(), Ipv4Addr::new(127, 0, 0, 1));
+                assert_eq!(addr.ip(), Ipv4Addr::LOCALHOST);
 
                 let mut buf = vec![];
 
@@ -680,13 +680,13 @@ mod test {
         let runtime = runtime::Runtime::new();
 
         runtime.block_on(async move {
-            let server_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
             let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
 
             task::spawn(async move {
                 let (mut stream, addr) = listener.accept().await.unwrap();
 
-                assert_eq!(addr.ip(), Ipv4Addr::new(127, 0, 0, 1));
+                assert_eq!(addr.ip(), Ipv4Addr::LOCALHOST);
 
                 let mut buf = vec![];
 
@@ -706,7 +706,7 @@ mod test {
                 // Second connection
                 let (mut stream, addr) = listener.accept().await.unwrap();
 
-                assert_eq!(addr.ip(), Ipv4Addr::new(127, 0, 0, 1));
+                assert_eq!(addr.ip(), Ipv4Addr::LOCALHOST);
 
                 let mut buf = vec![];
 
@@ -749,7 +749,7 @@ mod test {
         let runtime = runtime::Runtime::new();
 
         runtime.block_on(async move {
-            let server_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
             let listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
 
             task::spawn(TOKEN.run_until_cancelled(async move {
@@ -779,7 +779,7 @@ mod test {
         let runtime = runtime::Runtime::new();
 
         runtime.block_on(async move {
-            let server_addr = SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080);
+            let server_addr = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
             let _listener = TcpListener::bind(server_addr.to_string()).await.unwrap();
 
             #[allow(clippy::collection_is_never_read)]

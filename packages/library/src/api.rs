@@ -1,3 +1,4 @@
+#![allow(clippy::needless_for_each)]
 #![allow(clippy::module_name_repetitions)]
 
 use actix_web::{

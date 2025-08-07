@@ -1,3 +1,5 @@
+#![allow(clippy::needless_for_each)]
+
 use std::str::FromStr;
 
 use actix_web::{

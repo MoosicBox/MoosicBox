@@ -184,58 +184,50 @@ fn test_debug_raw_diff_lines() {
     let base_commit = "c721488ba3aa21df6d7c8f9874c3189ae3d6191d";
     let head_commit = "3c5d315c42b0b579c27d41cce9c2c6280a6e0e34";
 
-    if let Ok(repo) = Repository::open(workspace_root) {
-        if let (Ok(base_oid), Ok(head_oid)) = (
+    if let Ok(repo) = Repository::open(workspace_root)
+        && let (Ok(base_oid), Ok(head_oid)) = (
             repo.revparse_single(base_commit).map(|o| o.id()),
             repo.revparse_single(head_commit).map(|o| o.id()),
-        ) {
-            if let (Ok(base_commit), Ok(head_commit)) =
-                (repo.find_commit(base_oid), repo.find_commit(head_oid))
-            {
-                if let (Ok(base_tree), Ok(head_tree)) = (base_commit.tree(), head_commit.tree()) {
-                    if let Ok(diff) =
-                        repo.diff_tree_to_tree(Some(&base_tree), Some(&head_tree), None)
-                    {
-                        let mut cargo_lock_changes = Vec::new();
+        )
+        && let (Ok(base_commit), Ok(head_commit)) =
+            (repo.find_commit(base_oid), repo.find_commit(head_oid))
+        && let (Ok(base_tree), Ok(head_tree)) = (base_commit.tree(), head_commit.tree())
+        && let Ok(diff) = repo.diff_tree_to_tree(Some(&base_tree), Some(&head_tree), None)
+    {
+        let mut cargo_lock_changes = Vec::new();
 
-                        // Extract the changes
-                        let _ = diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
-                            let content = std::str::from_utf8(line.content()).unwrap_or("");
-                            cargo_lock_changes.push((line.origin(), content.to_string()));
-                            true
-                        });
+        // Extract the changes
+        let _ = diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
+            let content = std::str::from_utf8(line.content()).unwrap_or("");
+            cargo_lock_changes.push((line.origin(), content.to_string()));
+            true
+        });
 
-                        // Look for lines that contain 'serde' to understand why it's being detected as changed
-                        println!("Lines containing 'serde':");
-                        for (i, (op, line)) in cargo_lock_changes.iter().enumerate() {
-                            if line.to_lowercase().contains("serde") {
-                                println!("  {}: {} '{}'", i, op, line.trim());
-                            }
-                        }
-
-                        // Look for patterns around package declarations
-                        println!("\nPattern analysis around package declarations:");
-                        for (i, (_op, line)) in cargo_lock_changes.iter().enumerate() {
-                            if line.trim().starts_with("name = \"") {
-                                // Show context around name declarations
-                                let start = i.saturating_sub(2);
-                                let end = std::cmp::min(i + 5, cargo_lock_changes.len());
-                                println!("Context around line {i} (name declaration):");
-                                for (j, (op, line)) in
-                                    cargo_lock_changes[start..end].iter().enumerate()
-                                {
-                                    let marker = if j == i { ">>>" } else { "   " };
-                                    println!("  {} {}: {} '{}'", marker, j, op, line.trim());
-                                }
-                                println!();
-                            }
-                        }
-
-                        return;
-                    }
-                }
+        // Look for lines that contain 'serde' to understand why it's being detected as changed
+        println!("Lines containing 'serde':");
+        for (i, (op, line)) in cargo_lock_changes.iter().enumerate() {
+            if line.to_lowercase().contains("serde") {
+                println!("  {}: {} '{}'", i, op, line.trim());
             }
         }
+
+        // Look for patterns around package declarations
+        println!("\nPattern analysis around package declarations:");
+        for (i, (_op, line)) in cargo_lock_changes.iter().enumerate() {
+            if line.trim().starts_with("name = \"") {
+                // Show context around name declarations
+                let start = i.saturating_sub(2);
+                let end = std::cmp::min(i + 5, cargo_lock_changes.len());
+                println!("Context around line {i} (name declaration):");
+                for (j, (op, line)) in cargo_lock_changes[start..end].iter().enumerate() {
+                    let marker = if j == i { ">>>" } else { "   " };
+                    println!("  {} {}: {} '{}'", marker, j, op, line.trim());
+                }
+                println!();
+            }
+        }
+
+        return;
     }
 
     panic!("Could not access git repository or commits");

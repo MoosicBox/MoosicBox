@@ -124,6 +124,7 @@ impl SimBootstrap for ApiTestingBootstrap {
         if simvar::switchy::time::simulator::current_step() % 2000 == 0 {
             let results = self.test_results.lock().unwrap();
             log::info!("Test progress: {}", results.summary());
+            drop(results);
         }
     }
 
@@ -133,6 +134,7 @@ impl SimBootstrap for ApiTestingBootstrap {
             "API testing completed. Results: {}",
             results.detailed_report()
         );
+        drop(results);
     }
 }
 

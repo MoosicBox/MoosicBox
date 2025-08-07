@@ -545,11 +545,10 @@ where
             throttle: Some(throttle),
             ..
         }) = effect
+            && self.timing_manager.should_throttle(self_id, *throttle)
         {
-            if self.timing_manager.should_throttle(self_id, *throttle) {
-                context.request_repaint();
-                return true;
-            }
+            context.request_repaint();
+            return true;
         }
 
         match action {
@@ -1038,7 +1037,7 @@ pub mod example_integration {
         /// Create an action handler for the current container
         pub fn create_action_handler(
             &self,
-        ) -> Option<utils::DefaultActionHandler<utils::ContainerElementFinder<C>>> {
+        ) -> Option<utils::DefaultActionHandler<utils::ContainerElementFinder<'_, C>>> {
             let container = self.container.as_ref()?;
             let finder =
                 utils::ContainerElementFinder::new(container, &self.positions, &self.dimensions);
