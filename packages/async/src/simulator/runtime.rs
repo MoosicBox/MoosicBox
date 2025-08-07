@@ -102,10 +102,7 @@ pub struct Handle {
 }
 
 impl Handle {
-    pub fn block_on<F: Future + 'static>(&self, f: F) -> F::Output
-    where
-        F::Output: Send,
-    {
+    pub fn block_on<F: Future>(&self, f: F) -> F::Output {
         self.runtime.block_on(f)
     }
 
@@ -569,7 +566,7 @@ where
     RUNTIME.with(|runtime| runtime.spawn_blocking(func))
 }
 
-pub fn block_on<F: Future + 'static>(future: F) -> F::Output {
+pub fn block_on<F: Future>(future: F) -> F::Output {
     RUNTIME.with(|runtime| runtime.block_on(future))
 }
 

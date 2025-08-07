@@ -111,7 +111,7 @@ macro_rules! impl_async {
         pub use $module::select;
 
         impl $module::runtime::Runtime {
-            pub fn block_on<F: Future + 'static>(&self, f: F) -> F::Output {
+            pub fn block_on<F: Future>(&self, f: F) -> F::Output {
                 <Self as GenericRuntime>::block_on(self, f)
             }
 
