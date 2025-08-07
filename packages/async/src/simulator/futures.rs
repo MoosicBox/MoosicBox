@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     future::Future,
     pin::Pin,
     task::{Context, Poll},
@@ -221,5 +222,72 @@ impl Interval {
 
         cx.waker().wake_by_ref();
         Poll::Pending
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Elapsed;
+
+impl fmt::Display for Elapsed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "deadline has elapsed")
+    }
+}
+
+impl std::error::Error for Elapsed {}
+
+pin_project! {
+    #[derive(Debug)]
+    pub struct Timeout<F> {
+        #[pin]
+        future: F,
+        #[pin]
+        sleep: Sleep,
+    }
+}
+
+impl<F> Timeout<F> {
+    #[must_use]
+    pub fn new(duration: Duration, future: F) -> Self {
+        Self {
+            future,
+            sleep: Sleep::new(duration),
+        }
+    }
+
+    pub fn into_inner(self) -> F {
+        self.future
+    }
+}
+
+impl<F> Future for Timeout<F>
+where
+    F: Future,
+{
+    type Output = Result<F::Output, Elapsed>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        let this = self.project();
+
+        // First check if the inner future is ready
+        if let Poll::Ready(output) = this.future.poll(cx) {
+            return Poll::Ready(Ok(output));
+        }
+
+        // Then check if the timeout has elapsed
+        if this.sleep.poll(cx) == Poll::Ready(()) {
+            return Poll::Ready(Err(Elapsed));
+        }
+
+        Poll::Pending
+    }
+}
+
+impl<F> FusedFuture for Timeout<F>
+where
+    F: FusedFuture,
+{
+    fn is_terminated(&self) -> bool {
+        self.future.is_terminated() || self.sleep.is_terminated()
     }
 }
