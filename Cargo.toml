@@ -321,9 +321,9 @@ async-recursion = "1.1.1"
 async-trait = "0.1.88"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
-aws-config = "1.8.3"
-aws-sdk-apigatewaymanagement = "1.78.0"
-aws-sdk-ssm = "1.87.0"
+aws-config = "1.8.4"
+aws-sdk-apigatewaymanagement = "1.79.0"
+aws-sdk-ssm = "1.88.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.0"
@@ -334,7 +334,7 @@ chrono = { version = "0.4.41", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.42", features = ["derive"] }
+clap = { version = "4.5.43", features = ["derive"] }
 color-backtrace = { version = "0.7.0", default-features = false, features = [
     "use-btparse-crate",
 ] }
