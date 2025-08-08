@@ -323,7 +323,7 @@ impl Runtime {
         Some(queue.remove(index))
     }
 
-    fn process_next_task(&self) -> bool {
+    pub(crate) fn process_next_task(&self) -> bool {
         let Some(task) = self.next_task() else {
             return false;
         };

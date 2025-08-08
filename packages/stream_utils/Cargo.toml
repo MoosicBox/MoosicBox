@@ -11,7 +11,7 @@ repository  = { workspace = true }
 version     = "0.1.4"
 
 [dependencies]
-
+moosicbox_assert = { workspace = true }
 switchy_async = { workspace = true, features = [
     "macros",
     "sync",
@@ -26,19 +26,20 @@ switchy_http = { workspace = true, optional = true, features = [
 
 async-trait = { workspace = true }
 bytes       = { workspace = true }
-flume       = { workspace = true, optional = true }
 futures     = { workspace = true }
 log         = { workspace = true }
 pin-project = { workspace = true }
 thiserror   = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt", "time"] }
+switchy  = { workspace = true, features = ["async-macros"] }
+test-log = { workspace = true }
+tokio    = { workspace = true, features = ["macros", "rt", "time"] }
 
 [features]
 default = ["remote-bytestream", "stalled-monitor"]
 
 fail-on-warnings = []
 
-remote-bytestream = ["dep:flume", "dep:switchy_http", "switchy_async/util"]
+remote-bytestream = ["dep:switchy_http", "switchy_async/util"]
 stalled-monitor   = ["dep:thiserror", "switchy_async/sync", "switchy_async/time"]

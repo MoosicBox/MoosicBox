@@ -30,6 +30,9 @@ futures = { workspace = true, optional = true }
 tokio      = { workspace = true, optional = true, features = ["rt"] }
 tokio-util = { workspace = true, optional = true }
 
+# Channels
+flume = { workspace = true, optional = true }
+
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 switchy_time      = { workspace = true, features = ["simulator"] }
@@ -68,6 +71,6 @@ io              = ["tokio?/io-util"]
 macros          = ["dep:switchy_async_macros", "tokio", "tokio?/macros"]
 net             = ["tokio?/net"]
 rt-multi-thread = ["tokio?/rt-multi-thread"]
-sync            = ["tokio?/sync"]
+sync            = ["dep:flume", "tokio?/sync"]
 time            = ["tokio?/time"]
 util            = ["dep:tokio-util"]

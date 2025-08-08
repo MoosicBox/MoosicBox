@@ -336,8 +336,8 @@ impl TcpStream {
             ),
         })?;
 
-        let (tx1, rx1) = tokio::sync::mpsc::channel(16);
-        let (tx2, rx2) = tokio::sync::mpsc::channel(16);
+        let (tx1, rx1) = switchy_async::sync::mpsc::bounded(16);
+        let (tx2, rx2) = switchy_async::sync::mpsc::bounded(16);
 
         let stream_for_client = Self {
             local_addr: client_addr,
@@ -500,7 +500,7 @@ impl AsyncWrite for TcpStreamWriteHalf {
                 log::trace!("Sender full, cannot send {len} bytes");
                 Poll::Pending
             }
-            Err(TrySendError::Closed(..)) => {
+            Err(TrySendError::Disconnected(..)) => {
                 log::trace!("Sender closed, cannot send {len} bytes");
                 Poll::Ready(Err(io::Error::new(
                     io::ErrorKind::BrokenPipe,

@@ -8459,12 +8459,14 @@ version = "0.1.4"
 dependencies = [
  "async-trait",
  "bytes",
- "flume",
  "futures",
  "log 0.4.27",
+ "moosicbox_assert",
  "pin-project",
+ "switchy",
  "switchy_async",
  "switchy_http",
+ "test-log",
  "thiserror 2.0.12",
  "tokio",
 ]
@@ -13797,6 +13799,7 @@ dependencies = [
 name = "switchy_async"
 version = "0.1.4"
 dependencies = [
+ "flume",
  "futures",
  "log 0.4.27",
  "pin-project-lite",

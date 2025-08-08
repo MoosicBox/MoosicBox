@@ -2,8 +2,8 @@ use std::cmp::min;
 use std::io::{Read, Seek};
 
 use bytes::Bytes;
-use flume::{Receiver, Sender, bounded, unbounded};
 use futures::StreamExt;
+use switchy_async::sync::mpmc;
 use switchy_async::task::JoinHandle;
 use switchy_async::util::CancellationToken;
 use switchy_http::Client;
@@ -99,10 +99,10 @@ struct RemoteByteStreamFetcher<F: HttpFetcher> {
     start: u64,
     end: Option<u64>,
     buffer: Vec<u8>,
-    ready_receiver: Receiver<()>,
-    ready: Sender<()>,
-    receiver: Receiver<Bytes>,
-    sender: Sender<Bytes>,
+    ready_receiver: Option<mpmc::Receiver<()>>,
+    ready: mpmc::Sender<()>,
+    receiver: mpmc::Receiver<Bytes>,
+    sender: mpmc::Sender<Bytes>,
     abort_handle: Option<JoinHandle<()>>,
     abort: CancellationToken,
     stream_abort: CancellationToken,
@@ -118,15 +118,16 @@ impl<F: HttpFetcher> RemoteByteStreamFetcher<F> {
         stream_abort: CancellationToken,
         http_fetcher: F,
     ) -> Self {
-        let (tx, rx) = unbounded();
-        let (tx_ready, rx_ready) = bounded(1);
+        let (tx, rx) = mpmc::unbounded();
+        // FIXME: Should be a one-shot channel
+        let (tx_ready, rx_ready) = mpmc::unbounded();
 
         let mut fetcher = Self {
             url,
             start,
             end,
             buffer: vec![],
-            ready_receiver: rx_ready,
+            ready_receiver: Some(rx_ready),
             ready: tx_ready,
             receiver: rx,
             sender: tx,
@@ -146,7 +147,9 @@ impl<F: HttpFetcher> RemoteByteStreamFetcher<F> {
     fn start_fetch(&mut self) {
         let url = self.url.clone();
         let sender = self.sender.clone();
-        let ready_receiver = self.ready_receiver.clone();
+        let Some(ready_receiver) = self.ready_receiver.take() else {
+            moosicbox_assert::die_or_panic!("ready_receiver is None");
+        };
         let abort = self.abort.clone();
         let stream_abort = self.stream_abort.clone();
         let start = self.start;
@@ -315,8 +318,8 @@ impl<F: HttpFetcher> Read for RemoteByteStream<F> {
         let mut http_stream_ended = false;
 
         while written < write_max {
-            let receiver = self.fetcher.receiver.clone();
             let fetcher = &mut self.fetcher;
+            let receiver = &mut fetcher.receiver;
             let buffer_len = fetcher.buffer.len();
             let fetcher_start = usize::try_from(fetcher.start).unwrap();
 
