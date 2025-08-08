@@ -179,6 +179,116 @@ mod test {
     }
 
     #[cfg(feature = "time")]
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn timeout_completes_before_deadline() {
+        // Fast future should complete before timeout
+        let result = super::time::timeout(
+            Duration::from_millis(100),
+            super::time::sleep(Duration::from_millis(10)),
+        )
+        .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn timeout_expires_before_completion() {
+        // Slow future should timeout
+        let result = super::time::timeout(
+            Duration::from_millis(10),
+            super::time::sleep(Duration::from_millis(100)),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), super::time::Elapsed);
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn timeout_works_with_select() {
+        // Test timeout in select! branches
+        crate::select! {
+            result = super::time::timeout(
+                Duration::from_millis(50),
+                super::time::sleep(Duration::from_millis(10))
+            ) => {
+                assert!(result.is_ok());
+            },
+            () = super::time::sleep(Duration::from_millis(100)) => {
+                panic!("Should have selected timeout branch");
+            }
+        }
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn timeout_can_be_cancelled() {
+        use std::future::pending;
+
+        // Test that dropping timeout future works correctly
+        let timeout_future = super::time::timeout(Duration::from_millis(100), pending::<()>());
+
+        // Create and immediately drop the timeout
+        #[allow(clippy::drop_non_drop)]
+        drop(timeout_future);
+
+        // Should not panic or cause issues
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn timeout_into_inner_works() {
+        use std::future::ready;
+
+        // Test that into_inner returns the original future
+        let original_future = ready(42);
+        let timeout_future = super::time::timeout(Duration::from_millis(100), original_future);
+
+        let inner_future = timeout_future.into_inner();
+        let result = inner_future.await;
+        assert_eq!(result, 42);
+    }
+
+    #[cfg(feature = "time")]
+    #[test_log::test(crate::internal_test(real_time))]
+    async fn test_new_macro_syntax_works() {
+        use std::time::Duration;
+
+        // Test that the new macro syntax works with real time
+        let start = std::time::Instant::now();
+        super::time::sleep(Duration::from_millis(10)).await;
+        let elapsed = start.elapsed();
+
+        // Should have actually slept for ~10ms
+        assert!(elapsed >= Duration::from_millis(8)); // Allow some tolerance
+        assert!(elapsed < Duration::from_millis(50)); // But not too much
+    }
+
+    #[cfg(feature = "time")]
+    #[crate::internal_test]
+    async fn test_simulated_time_behavior() {
+        use std::time::Duration;
+
+        // Test that without real_time, time doesn't advance automatically
+        let start_time = switchy_time::now();
+
+        // This would hang forever if we actually waited, but since we're in
+        // simulated time mode, we can test the behavior differently
+        let timeout_future =
+            super::time::timeout(Duration::from_millis(10), std::future::pending::<()>());
+
+        // The timeout should be created but time won't advance
+        #[allow(clippy::drop_non_drop)]
+        drop(timeout_future);
+
+        let end_time = switchy_time::now();
+        // Time should not have advanced since we're in simulation mode
+        assert_eq!(start_time, end_time);
+    }
+
+    #[cfg(feature = "time")]
     #[test_log::test]
     fn can_select_2_futures() {
         switchy_time::simulator::with_real_time(|| {
