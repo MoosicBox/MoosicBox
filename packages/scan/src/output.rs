@@ -914,7 +914,7 @@ mod test {
     macro_rules! test_update_api_sources {
         ($db:ident, $init:expr $(,)?) => {
             paste::paste! {
-                #[test_log::test(tokio::test)]
+                #[test_log::test(switchy_async::test)]
                 async fn [< test_update_api_sources_ $db>]() {
                     let tidal = ApiSource::register("Tidal", "Tidal");
                     let qobuz = ApiSource::register("Qobuz", "Qobuz");
@@ -1176,7 +1176,7 @@ mod test {
         switchy::database_connection::init_sqlite_rusqlite(None).unwrap()
     });
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn can_scan_single_artist_with_single_album_with_single_track() {
         static API_SOURCE: LazyLock<ApiSource> =
             LazyLock::new(|| ApiSource::register("MockApi", "MockApi"));
@@ -1317,7 +1317,7 @@ mod test {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn should_merge_artists_with_same_id_and_name_in_different_api_sources() {
         let api_source1 = ApiSource::register("MockApi1", "MockApi1");
         let api_source2 = ApiSource::register("MockApi2", "MockApi2");
@@ -1515,7 +1515,7 @@ mod test {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn should_merge_artists_with_different_id_and_same_name_in_different_api_sources() {
         let api_source1 = ApiSource::register("MockApi1", "MockApi1");
         let api_source2 = ApiSource::register("MockApi2", "MockApi2");
@@ -1720,7 +1720,7 @@ mod test {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn should_merge_artists_with_no_id_and_same_name_in_different_api_sources() {
         let api_source1 = ApiSource::register("MockApi1", "MockApi1");
         let api_source2 = ApiSource::register("MockApi2", "MockApi2");
@@ -1906,7 +1906,7 @@ mod test {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn should_merge_multiple_artists_with_same_name_in_different_api_sources() {
         let api_source1 = ApiSource::register("MockApi1", "MockApi1");
         let api_source2 = ApiSource::register("MockApi2", "MockApi2");

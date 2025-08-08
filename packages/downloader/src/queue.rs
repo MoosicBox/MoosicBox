@@ -706,7 +706,7 @@ mod tests {
             .with_downloader(Box::new(TestDownloader {}))
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_can_process_single_track_download_task() {
         let mut queue = new_queue();
         let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -757,7 +757,7 @@ mod tests {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_can_process_multiple_track_download_tasks() {
         let mut queue = new_queue();
         let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -832,7 +832,7 @@ mod tests {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_can_process_duplicate_track_download_tasks() {
         let mut queue = new_queue();
         let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -904,7 +904,7 @@ mod tests {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_can_process_another_track_download_task_after_processing_has_already_started() {
         let mut queue = new_queue();
         let file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -961,7 +961,7 @@ mod tests {
             })
             .await;
 
-        tokio::time::sleep(std::time::Duration::from_millis(0)).await;
+        switchy_async::time::sleep(std::time::Duration::from_millis(0)).await;
 
         queue.shutdown().await.unwrap();
 

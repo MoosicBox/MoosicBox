@@ -22,8 +22,8 @@ mod local {
     use moosicbox_player::{
         PlaybackType, Player, PlayerSource, local::LocalPlayer, set_service_port,
     };
+    use switchy_async::time::sleep;
     use symphonia::core::audio::Signal;
-    use tokio::time::sleep;
 
     /// Helper function to create a test track
     fn create_test_track() -> Track {
@@ -75,7 +75,7 @@ mod local {
     }
 
     /// Test for progress callbacks continuing after pause (regression test)
-    #[tokio::test]
+    #[test_log::test(switchy_async::test(real_time))]
     async fn test_pause_stops_progress_callbacks_regression() {
         println!("📋 PAUSE STOPS PROGRESS CALLBACKS REGRESSION TEST");
         println!("📋 Testing that progress callbacks stop immediately when pause is called");
@@ -97,10 +97,10 @@ mod local {
         let pause_state = shared_paused.clone();
         let pause_done = pause_completed.clone();
 
-        tokio::spawn(async move {
+        switchy_async::task::spawn(async move {
             // Simulate progress callbacks every 110ms (realistic interval)
             for i in 1..=20 {
-                tokio::time::sleep(Duration::from_millis(110)).await;
+                switchy_async::time::sleep(Duration::from_millis(110)).await;
 
                 // Check if pause has been triggered (the fix check)
                 if pause_state.load(Ordering::SeqCst) {
@@ -126,7 +126,7 @@ mod local {
         println!("⏸️  Calling pause...");
 
         // Simulate pause operation
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        switchy_async::time::sleep(Duration::from_millis(50)).await;
 
         // THE FIX: Set shared pause state immediately (implemented in LocalPlayer::trigger_stop)
         shared_paused.store(true, Ordering::SeqCst);
@@ -135,7 +135,7 @@ mod local {
         pause_completed.store(true, Ordering::SeqCst);
 
         println!("⏱️  Waiting 800ms to check for continued progress callbacks...");
-        tokio::time::sleep(Duration::from_millis(800)).await;
+        switchy_async::time::sleep(Duration::from_millis(800)).await;
 
         let callbacks_after_pause = progress_callbacks_after_pause.load(Ordering::SeqCst);
 
@@ -154,8 +154,11 @@ mod local {
 
     /// Test to reproduce the seek overlapping audio bug by bypassing the synchronization fix
     /// This test should FAIL initially (proving the bug exists) then PASS after applying the fix
-    #[tokio::test]
+    #[test_log::test(switchy_async::test(real_time))]
     async fn test_seek_overlapping_audio_bug_reproduction() {
+        // Initialize SERVICE_PORT for testing
+        set_service_port(8001);
+
         println!("🧪 SEEK OVERLAPPING AUDIO BUG REPRODUCTION TEST");
         println!(
             "🧪 This test attempts to reproduce the race condition by creating rapid concurrent seeks"
@@ -231,7 +234,7 @@ mod local {
         let player_clone1 = player.clone();
         let player_clone2 = player.clone();
 
-        let seek_task1 = tokio::spawn(async move {
+        let seek_task1 = switchy_async::task::spawn(async move {
             for i in 0..5 {
                 println!(
                     "  📍 Seek task 1, iteration {}: seeking to {}s",
@@ -242,11 +245,11 @@ mod local {
                     println!("  ⚠️  Seek task 1 failed: {e}");
                 }
                 // Very short delay to increase race condition probability
-                tokio::time::sleep(Duration::from_millis(5)).await;
+                switchy_async::time::sleep(Duration::from_millis(5)).await;
             }
         });
 
-        let seek_task2 = tokio::spawn(async move {
+        let seek_task2 = switchy_async::task::spawn(async move {
             for i in 0..5 {
                 println!(
                     "  📍 Seek task 2, iteration {}: seeking to {}s",
@@ -257,12 +260,12 @@ mod local {
                     println!("  ⚠️  Seek task 2 failed: {e}");
                 }
                 // Very short delay to increase race condition probability
-                tokio::time::sleep(Duration::from_millis(7)).await;
+                switchy_async::time::sleep(Duration::from_millis(7)).await;
             }
         });
 
         // Wait for tasks with timeout
-        let result = tokio::time::timeout(Duration::from_secs(10), async {
+        let result = switchy_async::time::timeout(Duration::from_secs(10), async {
             tokio::try_join!(seek_task1, seek_task2)
         })
         .await;
@@ -313,7 +316,7 @@ mod local {
     }
 
     /// Test that verifies normal single playback works correctly without triggering overlapping detection
-    #[tokio::test]
+    #[test_log::test(switchy_async::test(real_time))]
     async fn test_normal_single_playback_no_overlap() {
         // Initialize SERVICE_PORT for testing
         set_service_port(8001);
@@ -376,7 +379,7 @@ mod local {
         }));
 
         // Start normal playback (no seeks)
-        let result = tokio::time::timeout(Duration::from_secs(3), async {
+        let result = switchy_async::time::timeout(Duration::from_secs(3), async {
             player.trigger_play(None).await
         })
         .await;
@@ -417,8 +420,11 @@ mod local {
         );
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test(real_time))]
     async fn test_seek_audio_output_drain_overlap_regression() {
+        // Initialize SERVICE_PORT for testing
+        set_service_port(8001);
+
         // This test reproduces the specific seek overlapping audio bug where:
         // 1. Old AudioOutput enters drain mode (3+ seconds of buffered audio)
         // 2. New AudioOutput is created immediately for seek position

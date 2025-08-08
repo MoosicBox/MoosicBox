@@ -350,7 +350,7 @@ mod test {
         }
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn can_create_an_example_service() {
         use example::Commander;
 

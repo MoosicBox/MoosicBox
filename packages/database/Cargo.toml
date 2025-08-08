@@ -17,7 +17,7 @@ group = "switchy"
 moosicbox_assert   = { workspace = true }
 moosicbox_profiles = { workspace = true, features = ["api"] }
 
-switchy_async      = { workspace = true, features = ["tokio"] }
+switchy_async = { workspace = true, features = ["tokio"] }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }
@@ -46,6 +46,7 @@ tokio-util  = { workspace = true, optional = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+switchy_async     = { workspace = true, features = ["macros"] }
 test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt"] }
 
@@ -68,12 +69,7 @@ api = ["dep:actix-web", "dep:futures"]
 
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = ["dep:futures", "dep:sqlx", "sqlx", "sqlx/mysql"]
-postgres = [
-    "dep:futures",
-    "dep:regex",
-    "dep:tokio-util",
-    "postgres-raw",
-]
+postgres = ["dep:futures", "dep:regex", "dep:tokio-util", "postgres-raw"]
 postgres-raw = ["dep:postgres-protocol", "dep:tokio-postgres", "postgres"]
 postgres-sqlx = [
     "dep:sqlx",

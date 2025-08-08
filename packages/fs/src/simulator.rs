@@ -234,7 +234,7 @@ pub mod sync {
 
         use super::OpenOptions;
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn can_read_empty_file() {
             const FILENAME: &str = "sync::test1";
 
@@ -253,7 +253,7 @@ pub mod sync {
             assert_eq!(read_count, 0);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn can_read_small_bytes_file() {
             const FILENAME: &str = "sync::test2";
 
@@ -437,7 +437,7 @@ pub mod unsync {
 
         use super::OpenOptions;
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn can_read_empty_file() {
             const FILENAME: &str = "unsync::test1";
 
@@ -460,7 +460,7 @@ pub mod unsync {
             assert_eq!(read_count, 0);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn can_read_small_bytes_file() {
             const FILENAME: &str = "unsync::test2";
 

@@ -12,3 +12,6 @@ pub mod util;
 
 #[cfg(feature = "macros")]
 pub use tokio::select;
+
+#[cfg(feature = "macros")]
+pub use tokio::test;

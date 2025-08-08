@@ -26,6 +26,7 @@ tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+switchy_async     = { workspace = true, features = ["macros"] }
 tokio             = { workspace = true, features = ["macros", "rt"] }
 
 [features]

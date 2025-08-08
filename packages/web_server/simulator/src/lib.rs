@@ -458,13 +458,13 @@ mod tests {
         handlers,
     };
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_simulation_server_creation() {
         let server = SimulationWebServer::new();
         assert!(!server.is_running().await);
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_server_start_stop() {
         let server = SimulationWebServer::new();
 
@@ -477,7 +477,7 @@ mod tests {
         assert!(!server.is_running().await);
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_mock_response() {
         let server = SimulationWebServer::new();
         server.start().await.unwrap();
@@ -498,7 +498,7 @@ mod tests {
         assert_eq!(response.body.unwrap(), Bytes::from("Hello, World!"));
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_route_handler() {
         let server = SimulationWebServer::new();
         server.start().await.unwrap();
@@ -515,7 +515,7 @@ mod tests {
         assert_eq!(response.body.unwrap(), Bytes::from("Hello from handler!"));
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_request_logging() {
         let server = SimulationWebServer::new();
         server.start().await.unwrap();

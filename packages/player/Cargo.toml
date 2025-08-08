@@ -23,10 +23,10 @@ moosicbox_resampler     = { workspace = true }
 moosicbox_session       = { workspace = true }
 moosicbox_stream_utils  = { workspace = true }
 
-switchy_async           = { workspace = true, features = ["tokio"] }
-switchy_database        = { workspace = true }
-switchy_http            = { workspace = true, features = ["json", "reqwest"] }
-switchy_random          = { workspace = true, features = ["rand"] }
+switchy_async    = { workspace = true, features = ["tokio"] }
+switchy_database = { workspace = true }
+switchy_http     = { workspace = true, features = ["json", "reqwest"] }
+switchy_random   = { workspace = true, features = ["rand"] }
 
 #API Dependencies
 utoipa = { workspace = true, optional = true }
@@ -49,7 +49,9 @@ tokio-util       = { workspace = true }
 url              = { workspace = true }
 
 [dev-dependencies]
-env_logger = { workspace = true }
+env_logger    = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "time"] }
+test-log      = { workspace = true }
 
 [features]
 default = [
@@ -74,10 +76,10 @@ api     = ["dep:actix-web", "dep:moosicbox_profiles", "moosicbox_music_api/api"]
 openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]
 
 # Player audio outputs
-asio                = ["moosicbox_audio_output/asio"]
-cpal                = ["moosicbox_audio_output/cpal"]
-jack                = ["moosicbox_audio_output/jack"]
-oboe-shared-stdcxx  = ["moosicbox_audio_output/oboe-shared-stdcxx"]
+asio               = ["moosicbox_audio_output/asio"]
+cpal               = ["moosicbox_audio_output/cpal"]
+jack               = ["moosicbox_audio_output/jack"]
+oboe-shared-stdcxx = ["moosicbox_audio_output/oboe-shared-stdcxx"]
 
 all-encoders    = ["all-os-encoders", "encoder-mp3"]
 all-os-encoders = ["encoder-aac", "encoder-flac", "encoder-opus"]

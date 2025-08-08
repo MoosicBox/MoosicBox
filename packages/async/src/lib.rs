@@ -16,6 +16,20 @@ pub use switchy_async_macros::{inject_yields, inject_yields_mod};
 #[doc(hidden)]
 pub use switchy_async_macros::select_internal;
 
+#[cfg(all(feature = "macros", feature = "simulator"))]
+#[doc(hidden)]
+pub use switchy_async_macros::test_internal;
+
+#[cfg(all(feature = "macros", feature = "simulator"))]
+#[doc(hidden)]
+pub use switchy_async_macros::internal_test;
+
+#[cfg(all(feature = "macros", feature = "simulator"))]
+pub use switchy_async_macros::test;
+
+#[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
+pub use switchy_async_macros::tokio_test_wrapper as test;
+
 /// For tokio runtime - re-export tokio::select! as select_internal
 #[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
 #[macro_export]
@@ -25,6 +39,10 @@ macro_rules! select_internal {
         ::tokio::select! { $($tokens)* }
     };
 }
+
+/// For tokio runtime - re-export `tokio::test` as `test_internal`
+#[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
+pub use crate::tokio::test as test_internal;
 
 #[cfg(feature = "tokio")]
 pub mod tokio;
@@ -139,3 +157,5 @@ impl_async!(simulator);
 
 #[cfg(all(not(feature = "simulator"), feature = "tokio"))]
 impl_async!(tokio);
+
+// Note: test macro is defined above via macro_rules!

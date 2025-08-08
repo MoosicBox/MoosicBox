@@ -481,7 +481,7 @@ mod tests {
 
     macro_rules! generate_tests {
         () => {
-            #[tokio::test]
+            #[switchy_async::test]
             #[test_log::test]
             async fn test_insert() {
                 let db = setup_db().await;
@@ -510,7 +510,7 @@ mod tests {
                 );
             }
 
-            #[tokio::test]
+            #[switchy_async::test]
             #[test_log::test]
             async fn test_update() {
                 let db = setup_db().await;
@@ -547,7 +547,7 @@ mod tests {
                 );
             }
 
-            #[tokio::test]
+            #[switchy_async::test]
             #[test_log::test]
             async fn test_delete() {
                 let db = setup_db().await;
@@ -586,7 +586,7 @@ mod tests {
                 assert_eq!(rows.len(), 0);
             }
 
-            #[tokio::test]
+            #[switchy_async::test]
             #[test_log::test]
             async fn test_delete_with_limit() {
                 let db = setup_db().await;

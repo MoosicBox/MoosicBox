@@ -1015,7 +1015,7 @@ mod test {
         }
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn doesnt_cache_nothing_for_artists() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1024,7 +1024,7 @@ mod test {
         assert_eq!(one, None);
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn can_cache_single_artist_by_id() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1041,7 +1041,7 @@ mod test {
         assert_eq!(one, Some(artist));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn doesnt_return_artist_from_cache_if_doesnt_exist() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1058,7 +1058,7 @@ mod test {
         assert_eq!(one, None);
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn can_cache_two_artists_by_id_and_recall_each() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1083,7 +1083,7 @@ mod test {
         assert_eq!(two, Some(artist2));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn doesnt_cache_nothing_for_albums() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1092,7 +1092,7 @@ mod test {
         assert_eq!(one, None);
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn can_cache_single_album_by_id() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1109,7 +1109,7 @@ mod test {
         assert_eq!(one, Some(album));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn doesnt_return_album_from_cache_if_doesnt_exist() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1126,7 +1126,7 @@ mod test {
         assert_eq!(one, None);
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn can_cache_two_albums_by_id_and_recall_each() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1151,7 +1151,7 @@ mod test {
         assert_eq!(two, Some(album2));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn doesnt_cache_nothing_for_tracks() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1160,7 +1160,7 @@ mod test {
         assert_eq!(one, None);
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn can_cache_single_track_by_id() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1177,7 +1177,7 @@ mod test {
         assert_eq!(one, Some(track));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn doesnt_return_track_from_cache_if_doesnt_exist() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1194,7 +1194,7 @@ mod test {
         assert_eq!(one, None);
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn can_cache_two_tracks_by_id_and_recall_each() {
         let api = CachedMusicApi::new(TestMusicApi {});
 
@@ -1219,7 +1219,7 @@ mod test {
         assert_eq!(two, Some(track2));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn doesnt_cascade_delete_albums_from_artists_if_cascade_delete_disabled() {
         let api = CachedMusicApi::new(TestMusicApi {}).with_cascade_delete(false);
 
@@ -1248,7 +1248,7 @@ mod test {
         assert_eq!(cache_album, Some(album));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn doesnt_cascade_delete_albums_and_tracks_from_artists_if_cascade_delete_disabled() {
         let api = CachedMusicApi::new(TestMusicApi {}).with_cascade_delete(false);
 
@@ -1288,7 +1288,7 @@ mod test {
         assert_eq!(cache_track, Some(track));
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn cascade_deletes_albums_from_artists_if_cascade_delete_enabled() {
         let api = CachedMusicApi::new(TestMusicApi {}).with_cascade_delete(true);
 
@@ -1317,7 +1317,7 @@ mod test {
         assert_eq!(album, None);
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn cascade_deletes_albums_and_tracks_from_artists_if_cascade_delete_enabled() {
         let api = CachedMusicApi::new(TestMusicApi {}).with_cascade_delete(true);
 

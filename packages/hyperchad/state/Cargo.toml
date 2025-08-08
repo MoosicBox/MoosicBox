@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.4"
 
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
 [package.metadata.workspaces]
 group = "hyperchad"
 
@@ -21,7 +24,6 @@ log         = { workspace = true }
 serde       = { workspace = true, features = ["derive"] }
 serde_json  = { workspace = true }
 thiserror   = { workspace = true }
-tokio       = { workspace = true, features = ["fs", "sync"] }
 
 switchy = { workspace = true, optional = true, features = [
     "database-connection-sqlite-sqlx",
@@ -30,7 +32,8 @@ switchy = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt"] }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+tokio         = { workspace = true, features = ["macros"] }
 
 [features]
 default = ["persistence-ios", "persistence-sqlite"]

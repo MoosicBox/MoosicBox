@@ -6,12 +6,58 @@ use std::path::PathBuf;
 use std::str::FromStr as _;
 
 use proc_macro::TokenStream;
+
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::visit_mut::{VisitMut, visit_expr_mut};
 use syn::{Expr, ImplItem, Item, ItemMod, parse_macro_input};
 
 #[cfg(feature = "simulator")]
 mod simulator;
+
+/// Represents the parsed input to a test macro with crate path
+#[cfg(feature = "simulator")]
+struct TestWithPathInput {
+    crate_path: syn::Path,
+    use_real_time: bool,
+    function: syn::ItemFn,
+}
+
+#[cfg(feature = "simulator")]
+impl syn::parse::Parse for TestWithPathInput {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        use syn::Token;
+
+        // Parse: (@path ::some::path [; real_time]) function_definition
+        let _: Token![@] = input.parse()?;
+        let _path_ident: syn::Ident = input.parse()?; // Should be "path"
+        let _: Token![=] = input.parse()?;
+        let crate_path: syn::Path = input.parse()?;
+        let _: Token![;] = input.parse()?;
+
+        // Check for optional real_time parameter
+        let use_real_time = if input.peek(syn::Ident) {
+            let ident: syn::Ident = input.fork().parse()?;
+            if ident == "real_time" {
+                let _: syn::Ident = input.parse()?;
+                let _: Token![;] = input.parse()?;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        let function: syn::ItemFn = input.parse()?;
+
+        Ok(Self {
+            crate_path,
+            use_real_time,
+            function,
+        })
+    }
+}
 
 /// Internal select! macro that accepts a crate path parameter
 /// This provides 100% `tokio::select`! compatibility while automatically
@@ -79,6 +125,160 @@ pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {
         inject_item(&mut ast, &mut injector);
         TokenStream::from(quote!(#ast))
     }
+}
+
+/// Internal test attribute macro that accepts a crate path parameter
+/// This provides test runtime setup for the simulator runtime
+#[cfg(feature = "simulator")]
+#[proc_macro]
+pub fn test_internal(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as TestWithPathInput);
+    let crate_path = input.crate_path;
+    let use_real_time = input.use_real_time;
+    let input_fn = input.function;
+
+    let fn_name = &input_fn.sig.ident;
+    let fn_block = &input_fn.block;
+    let fn_vis = &input_fn.vis;
+    let fn_attrs = &input_fn.attrs;
+    let fn_inputs = &input_fn.sig.inputs;
+    let fn_output = &input_fn.sig.output;
+
+    // Extract any existing attributes except #[test]
+    let filtered_attrs: Vec<_> = fn_attrs
+        .iter()
+        .filter(|attr| !attr.path().is_ident("test"))
+        .collect();
+
+    let result = if use_real_time {
+        quote! {
+            #(#filtered_attrs)*
+            #[::core::prelude::v1::test]
+            #fn_vis fn #fn_name(#fn_inputs) #fn_output {
+                #crate_path::time::simulator::with_real_time(|| {
+                    let rt = #crate_path::Builder::new().build().unwrap();
+                    rt.block_on(async move #fn_block)
+                    // Don't call rt.wait() as it can hang in tests
+                })
+            }
+        }
+    } else {
+        quote! {
+            #(#filtered_attrs)*
+            #[::core::prelude::v1::test]
+            #fn_vis fn #fn_name(#fn_inputs) #fn_output {
+                let rt = #crate_path::Builder::new().build().unwrap();
+                rt.block_on(async move #fn_block)
+                // Don't call rt.wait() as it can hang in tests
+            }
+        }
+    };
+
+    result.into()
+}
+
+/// Internal test attribute macro for `switchy_async` - uses crate path for internal usage
+#[cfg(feature = "simulator")]
+#[proc_macro_attribute]
+pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
+    // Convert attribute macro call to function-like macro call
+    let args_str = if args.is_empty() {
+        String::new()
+    } else {
+        args.to_string()
+    };
+
+    let item_tokens: TokenStream2 = item.into();
+    let input_tokens = if args_str.trim() == "real_time" {
+        quote! {
+            @path = crate;
+            real_time;
+            #item_tokens
+        }
+    } else {
+        quote! {
+            @path = crate;
+            #item_tokens
+        }
+    };
+
+    test_internal(input_tokens.into())
+}
+
+/// External test attribute macro for `switchy_async` - uses `switchy_async` path for external usage
+#[cfg(feature = "simulator")]
+#[proc_macro_attribute]
+pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
+    // Convert attribute macro call to function-like macro call
+    let args_str = if args.is_empty() {
+        String::new()
+    } else {
+        args.to_string()
+    };
+
+    let item_tokens: TokenStream2 = item.into();
+    let input_tokens = if args_str.trim() == "real_time" {
+        quote! {
+            @path = switchy_async;
+            real_time;
+            #item_tokens
+        }
+    } else {
+        quote! {
+            @path = switchy_async;
+            #item_tokens
+        }
+    };
+
+    test_internal(input_tokens.into())
+}
+
+/// Test attribute macro for `switchy::unsync` - accepts optional `real_time` parameter
+#[cfg(feature = "simulator")]
+#[proc_macro_attribute]
+pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
+    // Convert attribute macro call to function-like macro call
+    let args_str = if args.is_empty() {
+        String::new()
+    } else {
+        args.to_string()
+    };
+
+    let item_tokens: TokenStream2 = item.into();
+    let input_tokens = if args_str.trim() == "real_time" {
+        quote! {
+            @path = switchy::unsync;
+            real_time;
+            #item_tokens
+        }
+    } else {
+        quote! {
+            @path = switchy::unsync;
+            #item_tokens
+        }
+    };
+
+    test_internal(input_tokens.into())
+}
+
+/// Tokio-compatible test attribute macro - accepts `real_time` parameter but treats it as no-op
+#[proc_macro_attribute]
+pub fn tokio_test_wrapper(args: TokenStream, item: TokenStream) -> TokenStream {
+    // Parse and ignore the real_time parameter - tokio doesn't support it
+    let _args_str = if args.is_empty() {
+        String::new()
+    } else {
+        args.to_string() // Parse but ignore
+    };
+
+    // Always generate a standard tokio::test regardless of parameters
+    let item_tokens: TokenStream2 = item.into();
+    let result = quote! {
+        #[::tokio::test]
+        #item_tokens
+    };
+
+    result.into()
 }
 
 /// # Panics

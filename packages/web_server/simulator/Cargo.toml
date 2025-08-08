@@ -1,6 +1,6 @@
 [package]
 authors     = { workspace = true }
-categories  = ["development-tools", "simulation", "network-programming"]
+categories  = ["development-tools", "network-programming", "simulation"]
 description = "MoosicBox Web Server Simulator package"
 edition     = { workspace = true }
 keywords    = ["http", "simulation", "testing", "web"]
@@ -13,19 +13,21 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_assert          = { workspace = true }
 moosicbox_web_server_core = { workspace = true }
-switchy                   = { workspace = true, features = ["async-tokio", "async-sync"] }
+switchy                   = { workspace = true, features = ["async-sync", "async-tokio"] }
 switchy_http_models       = { workspace = true }
 
-bytes       = { workspace = true }
-log         = { workspace = true }
-serde       = { workspace = true }
-serde_json  = { workspace = true }
-thiserror   = { workspace = true }
+bytes      = { workspace = true }
+log        = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt"] }
+switchy_async = { workspace = true, features = ["macros"] }
+tokio         = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["fail-on-warnings"]
 
 fail-on-warnings = []
+

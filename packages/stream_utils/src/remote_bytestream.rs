@@ -553,7 +553,7 @@ mod tests {
         assert!(stream.seekable);
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_seek_functionality() {
         // Test seeking functionality
         let abort_token = CancellationToken::new();
@@ -602,7 +602,7 @@ mod tests {
         // But we can verify the seek position was set correctly
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_seek_error_handling() {
         // Test seek error handling for invalid positions
         let abort_token = CancellationToken::new();
@@ -647,7 +647,7 @@ mod tests {
         assert_eq!(result, 0, "Finished stream should return 0 bytes");
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_range_request_construction() {
         // Test that range requests are constructed correctly
         let abort_token = CancellationToken::new();
@@ -699,7 +699,7 @@ mod tests {
         assert!(stream.abort.is_cancelled());
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_fetcher_abort_and_recreation() {
         // Test that fetchers are properly aborted and recreated on seek
         let abort_token = CancellationToken::new();
@@ -825,7 +825,7 @@ mod tests {
         assert_eq!(stream.fetcher.buffer.len(), 500);
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_seek_outside_downloaded_data_creates_new_fetcher() {
         // Test that seeking outside downloaded data creates a new fetcher
         let abort_token = CancellationToken::new();
@@ -923,7 +923,7 @@ mod tests {
     }
 
     /// Test that stream is NOT marked as finished when HTTP stream ends but buffer has data
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_regression_stream_not_finished_with_buffer_data() {
         let abort_token = CancellationToken::new();
         let fetcher = TestHttpFetcher::new(vec![Bytes::from("hello world test data")]);
@@ -936,8 +936,7 @@ mod tests {
             fetcher,
         );
 
-        // Give time for fetch to start
-        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
+        // TestHttpFetcher returns data immediately, no need to wait
 
         // Read only part of the data (first 10 bytes)
         let mut buf = [0u8; 10];
@@ -965,7 +964,7 @@ mod tests {
     }
 
     /// Test that stream IS marked as finished when HTTP stream ends and buffer is empty
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_regression_stream_finished_with_empty_buffer() {
         let abort_token = CancellationToken::new();
         let fetcher = TestHttpFetcher::new(vec![Bytes::from("hello test")]);
@@ -978,8 +977,7 @@ mod tests {
             fetcher,
         );
 
-        // Give time for fetch to start
-        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
+        // TestHttpFetcher returns data immediately, no need to wait
 
         // Read all the data
         let mut buf = [0u8; 10];
@@ -1004,7 +1002,7 @@ mod tests {
     }
 
     /// Test that multiple reads work correctly when HTTP stream ends during one of them
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_regression_multiple_reads_with_http_end() {
         let abort_token = CancellationToken::new();
         let fetcher =
@@ -1018,8 +1016,7 @@ mod tests {
             fetcher,
         );
 
-        // Give time for fetch to start
-        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
+        // TestHttpFetcher returns data immediately, no need to wait
 
         // First read - should get all available data at once (both chunks)
         let mut buf1 = [0u8; 25];
@@ -1039,7 +1036,7 @@ mod tests {
     }
 
     /// Test that read returns all available data even when HTTP stream ends during the call
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_regression_read_all_data_on_http_end() {
         let abort_token = CancellationToken::new();
         let fetcher = TestHttpFetcher::new(vec![
@@ -1056,8 +1053,7 @@ mod tests {
             fetcher,
         );
 
-        // Give time for fetch to start
-        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
+        // TestHttpFetcher returns data immediately, no need to wait
 
         // Read only part of available data
         let mut buf1 = [0u8; 10];
@@ -1079,7 +1075,7 @@ mod tests {
     }
 
     /// Test the exact bug scenario: stream finishing logic race condition
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_regression_stream_finishing_race_condition() {
         let abort_token = CancellationToken::new();
         let fetcher = TestHttpFetcher::new(vec![Bytes::from("test data"), Bytes::from("end")]);
@@ -1092,8 +1088,7 @@ mod tests {
             fetcher,
         );
 
-        // Give time for fetch to start
-        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
+        // TestHttpFetcher returns data immediately, no need to wait
 
         // Read some data but not all
         let mut buf1 = [0u8; 5];
@@ -1121,7 +1116,7 @@ mod tests {
     }
 
     /// Test that finished stream with remaining buffer data continues to return data
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_regression_finished_stream_with_buffer_data() {
         let abort_token = CancellationToken::new();
         let fetcher = TestHttpFetcher::new(vec![Bytes::from("testdata12")]);
@@ -1134,8 +1129,7 @@ mod tests {
             fetcher,
         );
 
-        // Give time for fetch to start
-        switchy_async::time::sleep(switchy_async::time::Duration::from_millis(10)).await;
+        // TestHttpFetcher returns data immediately, no need to wait
 
         // Read only part of the data
         let mut buf1 = [0u8; 4];

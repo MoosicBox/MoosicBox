@@ -149,8 +149,8 @@ mod tests {
         value: i32,
     }
 
-    #[tokio::test]
-    async fn test_sqlite_persistence() -> Result<(), Error> {
+    #[switchy_async::test]
+    async fn test_sqlite_persistence() -> Result<(), crate::Error> {
         let persistence = SqlitePersistence::new_in_memory().await?;
         let store = StateStore::new(persistence);
 
@@ -184,6 +184,6 @@ mod tests {
             Ok(None)
         ));
 
-        Ok(())
+        Ok::<(), crate::Error>(())
     }
 }

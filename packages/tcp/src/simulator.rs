@@ -532,7 +532,7 @@ mod test {
 
     use super::*;
 
-    #[tokio::test]
+    #[switchy_async::test]
     #[test_log::test]
     #[serial]
     async fn tcp_listener_can_bind() {
@@ -546,7 +546,7 @@ mod test {
         );
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     #[test_log::test]
     #[serial]
     async fn tcp_listener_after_bind_exists_in_tcp_listener() {
@@ -561,7 +561,7 @@ mod test {
         });
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     #[test_log::test]
     #[serial]
     async fn tcp_listener_addr_matches_bind_addr() {
@@ -571,7 +571,7 @@ mod test {
         assert_eq!(listener.addr, addr, "TcpListener address mismatch");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     #[test_log::test]
     #[serial]
     async fn tcp_listener_rx_is_empty_initially() {
@@ -584,7 +584,7 @@ mod test {
         );
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     #[test_log::test]
     #[serial]
     async fn tcp_listener_shutdown_removes_from_tcp_listeners() {

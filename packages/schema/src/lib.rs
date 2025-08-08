@@ -305,7 +305,7 @@ mod sqlite_tests {
 
     use super::*;
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn sqlx_config_migrations() {
         let db = switchy_database_connection::init_sqlite_sqlx(None)
             .await
@@ -314,7 +314,7 @@ mod sqlite_tests {
         sqlite::SQLITE_CONFIG_MIGRATIONS.run(&*db).await.unwrap();
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn sqlx_library_migrations() {
         let db = switchy_database_connection::init_sqlite_sqlx(None)
             .await
@@ -323,21 +323,21 @@ mod sqlite_tests {
         sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn rusqlite_config_migrations() {
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
         sqlite::SQLITE_CONFIG_MIGRATIONS.run(&*db).await.unwrap();
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn rusqlite_library_migrations() {
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
         sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_api_sources_table_migration() {
         const API_SOURCES_COLUMN: &str = "
             (
@@ -573,7 +573,7 @@ mod sqlite_tests {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_api_sources_column_migration() {
         let tidal = ApiSource::register("Tidal", "Tidal");
         let qobuz = ApiSource::register("Qobuz", "Qobuz");

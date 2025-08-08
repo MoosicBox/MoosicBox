@@ -21,6 +21,10 @@ pub mod unsync {
 
     #[cfg(feature = "async-macros")]
     pub use select;
+
+    // Re-export test attribute macro
+    #[cfg(all(test, feature = "async-macros"))]
+    pub use crate::unsync_macros::unsync_test as test;
 }
 #[cfg(feature = "async-macros")]
 pub mod unsync_macros {
@@ -56,6 +60,23 @@ pub mod unsync_macros {
         not(feature = "simulator")
     ))]
     pub use switchy_async_macros::select_internal;
+
+    // For tokio runtime - re-export tokio::test as test_internal
+    #[cfg(all(test, feature = "async-tokio", not(feature = "simulator")))]
+    pub use tokio::test as test_internal;
+
+    // For simulator runtime - re-export the procedural macro
+    #[cfg(feature = "simulator")]
+    pub use switchy_async_macros::test_internal;
+
+    // Default fallback - use simulator when no specific runtime is chosen
+    // but async-macros is enabled (which brings in the dependency)
+    #[cfg(all(
+        feature = "async-macros",
+        not(feature = "async-tokio"),
+        not(feature = "simulator")
+    ))]
+    pub use switchy_async_macros::test_internal;
 }
 #[cfg(feature = "database")]
 pub use switchy_database as database;
