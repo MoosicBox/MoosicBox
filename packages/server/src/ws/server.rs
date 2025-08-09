@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     io,
     sync::{
         Arc,
@@ -129,16 +129,16 @@ struct Connection {
 #[derive(Debug)]
 pub struct WsServer {
     /// Map of connection IDs to their message receivers.
-    connections: HashMap<ConnId, Connection>,
+    connections: BTreeMap<ConnId, Connection>,
 
     config_db: ConfigDatabase,
 
     /// Map of room name to participant IDs in that room.
-    rooms: HashMap<RoomId, HashSet<ConnId>>,
+    rooms: BTreeMap<RoomId, BTreeSet<ConnId>>,
 
     /// Map of profiles to participant IDs using that profile.
     #[allow(unused)]
-    profiles: HashMap<String, HashSet<ConnId>>,
+    profiles: BTreeMap<String, BTreeSet<ConnId>>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
@@ -156,15 +156,15 @@ pub struct WsServer {
 impl WsServer {
     pub fn new(config_db: ConfigDatabase) -> (Self, WsServerHandle) {
         // create empty server
-        let mut rooms = HashMap::with_capacity(4);
+        let mut rooms = BTreeMap::new();
 
         // create default room
-        rooms.insert("main".to_owned(), HashSet::new());
+        rooms.insert("main".to_owned(), BTreeSet::new());
 
-        let mut profiles = HashMap::with_capacity(4);
+        let mut profiles = BTreeMap::new();
 
         for profile in PROFILES.names() {
-            profiles.insert(profile, HashSet::new());
+            profiles.insert(profile, BTreeSet::new());
         }
 
         let (cmd_tx, cmd_rx) = flume::unbounded();
@@ -176,7 +176,7 @@ impl WsServer {
 
         (
             Self {
-                connections: HashMap::new(),
+                connections: BTreeMap::new(),
                 config_db,
                 rooms,
                 profiles,

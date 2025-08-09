@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     future::Future,
     pin::Pin,
     sync::{Arc, LazyLock},
@@ -222,13 +222,13 @@ pub struct AppState {
     #[allow(clippy::type_complexity)]
     pub ws_join_handle:
         Arc<RwLock<Option<switchy_async::task::JoinHandle<Result<(), AppStateError>>>>>,
-    pub audio_zone_active_api_players: Arc<RwLock<HashMap<u64, Vec<ApiPlayersMap>>>>,
+    pub audio_zone_active_api_players: Arc<RwLock<BTreeMap<u64, Vec<ApiPlayersMap>>>>,
     pub active_players: Arc<RwLock<Vec<PlaybackTargetSessionPlayer>>>,
     pub playback_quality: Arc<RwLock<Option<PlaybackQuality>>>,
     pub ws_message_buffer: Arc<RwLock<Vec<InboundPayload>>>,
     pub current_playback_target: Arc<RwLock<Option<PlaybackTarget>>>,
     pub current_connections: Arc<RwLock<Vec<ApiConnection>>>,
-    pub pending_player_sessions: Arc<RwLock<HashMap<u64, u64>>>,
+    pub pending_player_sessions: Arc<RwLock<BTreeMap<u64, u64>>>,
     pub current_sessions: Arc<RwLock<Vec<ApiSession>>>,
     pub default_download_location: Arc<std::sync::RwLock<Option<String>>>,
     #[allow(clippy::type_complexity)]
@@ -574,7 +574,7 @@ impl AppState {
             return Err(AppStateError::unknown("Missing profile"));
         };
 
-        let mut headers = HashMap::new();
+        let mut headers = BTreeMap::new();
         headers.insert("moosicbox-profile".to_string(), profile);
 
         if self.api_token.read().await.is_some() {
@@ -587,7 +587,7 @@ impl AppState {
         let query = if self.client_id.read().await.is_some()
             && self.signature_token.read().await.is_some()
         {
-            let mut query = HashMap::new();
+            let mut query = BTreeMap::new();
             query.insert(
                 "clientId".to_string(),
                 self.client_id.read().await.as_ref().unwrap().to_string(),
@@ -1162,7 +1162,7 @@ impl AppState {
     pub async fn api_proxy_get(
         &self,
         url: String,
-        headers: Option<HashMap<String, String>>,
+        headers: Option<BTreeMap<String, String>>,
     ) -> Result<serde_json::Value, AppStateError> {
         self.api_proxy("get", url, None, headers).await
     }
@@ -1179,7 +1179,7 @@ impl AppState {
         &self,
         url: String,
         body: Option<serde_json::Value>,
-        headers: Option<HashMap<String, String>>,
+        headers: Option<BTreeMap<String, String>>,
     ) -> Result<serde_json::Value, AppStateError> {
         self.api_proxy("post", url, body, headers).await
     }
@@ -1197,7 +1197,7 @@ impl AppState {
         method: &str,
         url: String,
         body: Option<serde_json::Value>,
-        headers: Option<HashMap<String, String>>,
+        headers: Option<BTreeMap<String, String>>,
     ) -> Result<serde_json::Value, AppStateError> {
         let mut headers = headers.unwrap_or_default();
 

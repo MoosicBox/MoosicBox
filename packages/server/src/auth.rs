@@ -6,7 +6,7 @@ use actix_web::{
 use futures_util::future::LocalBoxFuture;
 use qstring::QString;
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     future::{Ready, ready},
 };
 
@@ -105,7 +105,7 @@ fn is_header_authorized(req: &ServiceRequest, expected: &str) -> bool {
 #[cfg_attr(feature = "profiling", profiling::function)]
 fn is_query_authorized(req: &ServiceRequest, expected: &str) -> bool {
     let query: Vec<_> = QString::from(req.query_string()).into();
-    let query: HashMap<_, _> = query.into_iter().collect();
+    let query: BTreeMap<_, _> = query.into_iter().collect();
     let authorization = query
         .iter()
         .find(|(key, _)| key.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str()))

@@ -1,6 +1,6 @@
 use core::fmt;
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     future::Future,
     num::ParseIntError,
     pin::Pin,
@@ -83,8 +83,8 @@ impl core::fmt::Debug for dyn WebsocketSender {
     }
 }
 
-static CONNECTION_DATA: LazyLock<Arc<RwLock<HashMap<String, Connection>>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(HashMap::new())));
+static CONNECTION_DATA: LazyLock<Arc<RwLock<BTreeMap<String, Connection>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(BTreeMap::new())));
 
 #[derive(Debug, Error)]
 pub enum WebsocketConnectError {

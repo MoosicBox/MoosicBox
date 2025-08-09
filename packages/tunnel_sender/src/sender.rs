@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fs::File,
     io::Cursor,
     sync::{Arc, LazyLock, RwLock},
@@ -184,7 +184,7 @@ pub struct TunnelSender {
     access_token: String,
     sender: Arc<RwLock<Option<PrioritizedSender<TunnelResponseMessage>>>>,
     cancellation_token: CancellationToken,
-    abort_request_tokens: Arc<RwLock<HashMap<u64, CancellationToken>>>,
+    abort_request_tokens: Arc<RwLock<BTreeMap<u64, CancellationToken>>>,
     player_actions: Arc<RwLock<Vec<(u64, PlayerAction)>>>,
     config_db: ConfigDatabase,
 }
@@ -227,7 +227,7 @@ impl TunnelSender {
                 access_token,
                 sender,
                 cancellation_token,
-                abort_request_tokens: Arc::new(RwLock::new(HashMap::new())),
+                abort_request_tokens: Arc::new(RwLock::new(BTreeMap::new())),
                 player_actions,
                 config_db,
             },
@@ -272,7 +272,7 @@ impl TunnelSender {
 
     fn is_request_aborted(
         request_id: u64,
-        tokens: &Arc<RwLock<HashMap<u64, CancellationToken>>>,
+        tokens: &Arc<RwLock<BTreeMap<u64, CancellationToken>>>,
     ) -> bool {
         if let Some(token) = tokens.read().unwrap().get(&request_id) {
             return token.is_cancelled();
@@ -616,7 +616,7 @@ impl TunnelSender {
         &self,
         request_id: u64,
         status: u16,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         reader: impl std::io::Read,
         encoding: TunnelEncoding,
     ) -> Result<(), TunnelRequestError> {
@@ -634,7 +634,7 @@ impl TunnelSender {
         &self,
         request_id: u64,
         status: u16,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         ranges: Option<Vec<Range>>,
         stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin + Send,
         encoding: TunnelEncoding,
@@ -657,7 +657,7 @@ impl TunnelSender {
         packet_id: u32,
         last: bool,
         status: u16,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         buf: &mut [u8],
     ) -> usize {
         let mut offset = 0_usize;
@@ -708,7 +708,7 @@ impl TunnelSender {
         &self,
         request_id: u64,
         status: u16,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         ranges: Option<Vec<Range>>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin + Send,
     ) -> Result<(), TunnelRequestError> {
@@ -852,7 +852,7 @@ impl TunnelSender {
         &self,
         request_id: u64,
         status: u16,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         mut reader: impl std::io::Read,
     ) {
         let mut bytes_read = 0_usize;
@@ -902,7 +902,7 @@ impl TunnelSender {
         request_id: u64,
         packet_id: u32,
         status: u16,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         buf: &mut String,
         overflow_buf: &mut String,
     ) -> String {
@@ -930,7 +930,7 @@ impl TunnelSender {
         &self,
         request_id: u64,
         status: u16,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         mut reader: impl std::io::Read,
     ) -> Result<(), TunnelRequestError> {
         use std::cmp::min;
@@ -1010,7 +1010,7 @@ impl TunnelSender {
         &self,
         request_id: u64,
         status: u16,
-        headers: &HashMap<String, String>,
+        headers: &BTreeMap<String, String>,
         ranges: Option<Vec<Range>>,
         mut stream: impl Stream<Item = Result<Bytes, E>> + std::marker::Unpin + Send,
     ) -> Result<(), TunnelRequestError> {
@@ -1264,7 +1264,7 @@ impl TunnelSender {
                         })
                         .transpose()?;
 
-                    let mut response_headers = HashMap::new();
+                    let mut response_headers = BTreeMap::new();
                     response_headers.insert("accept-ranges".to_string(), "bytes".to_string());
 
                     match get_track_id_source(
@@ -1509,7 +1509,7 @@ impl TunnelSender {
                     let query = serde_json::from_value::<GetTrackInfoQuery>(query)
                         .map_err(|e| TunnelRequestError::InvalidQuery(e.to_string()))?;
 
-                    let mut headers = HashMap::new();
+                    let mut headers = BTreeMap::new();
                     headers.insert("content-type".to_string(), "application/json".to_string());
 
                     let music_apis = music_apis.ok_or(TunnelRequestError::MissingProfile)?;
@@ -1597,7 +1597,7 @@ impl TunnelSender {
                             .await
                             .map_err(|e| TunnelRequestError::Request(e.to_string()))?;
 
-                            let mut headers = HashMap::new();
+                            let mut headers = BTreeMap::new();
                             let resized = {
                                 use moosicbox_image::{
                                     Encoding, image::try_resize_local_file_async,

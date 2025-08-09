@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     env,
     fmt::{Debug, Write},
     path::PathBuf,
@@ -355,7 +355,7 @@ async fn api_proxy_get(
         .api_proxy_get(
             url,
             headers.map(|headers| {
-                let mut map = HashMap::new();
+                let mut map = BTreeMap::new();
                 for (name, value) in headers.as_object().unwrap() {
                     map.insert(name.to_string(), value.as_str().unwrap().to_string());
                 }
@@ -376,7 +376,7 @@ async fn api_proxy_post(
             url,
             body,
             headers.map(|headers| {
-                let mut map = HashMap::new();
+                let mut map = BTreeMap::new();
                 for (name, value) in headers.as_object().unwrap() {
                     map.insert(name.to_string(), value.as_str().unwrap().to_string());
                 }
@@ -1204,7 +1204,7 @@ pub fn run() {
 #[cfg(feature = "moosicbox-app-native")]
 mod native_app {
     use std::{
-        collections::HashMap,
+        collections::BTreeMap,
         sync::{Arc, LazyLock, Mutex},
     };
 
@@ -1217,7 +1217,7 @@ mod native_app {
     };
     use tauri::Emitter as _;
 
-    static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+    static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 
     #[derive(Debug, Clone)]
     pub struct Renderer {
@@ -1267,7 +1267,7 @@ mod native_app {
 
         fn partial_html(
             &self,
-            headers: &std::collections::HashMap<String, String>,
+            headers: &std::collections::BTreeMap<String, String>,
             container: &Container,
             content: String,
             viewport: Option<&str>,
@@ -1281,7 +1281,7 @@ mod native_app {
 
         fn root_html(
             &self,
-            headers: &std::collections::HashMap<String, String>,
+            headers: &std::collections::BTreeMap<String, String>,
             container: &Container,
             content: String,
             viewport: Option<&str>,

@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fs::File,
     path::Path,
     sync::{Arc, LazyLock, RwLock},
@@ -225,7 +225,7 @@ pub async fn get_track_url(
     format: PlaybackQuality,
     quality: TrackAudioQuality,
     use_local_network_ip: bool,
-) -> Result<(String, Option<HashMap<String, String>>), PlayerError> {
+) -> Result<(String, Option<BTreeMap<String, String>>), PlayerError> {
     let (host, query, headers) = match player_source {
         PlayerSource::Remote {
             host,
@@ -361,8 +361,8 @@ pub enum PlayerSource {
     Local,
     Remote {
         host: String,
-        query: Option<HashMap<String, String>>,
-        headers: Option<HashMap<String, String>>,
+        query: Option<BTreeMap<String, String>>,
+        headers: Option<BTreeMap<String, String>>,
     },
 }
 

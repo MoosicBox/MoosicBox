@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     sync::{Arc, RwLock},
 };
 
@@ -11,14 +11,14 @@ use crate::{Error, persistence::StatePersistence};
 /// In-memory state store that can be optionally backed by persistent storage
 pub struct StateStore<P: StatePersistence> {
     persistence: Arc<P>,
-    cache: Arc<RwLock<HashMap<String, Value>>>,
+    cache: Arc<RwLock<BTreeMap<String, Value>>>,
 }
 
 impl<P: StatePersistence> StateStore<P> {
     pub fn new(persistence: P) -> Self {
         Self {
             persistence: Arc::new(persistence),
-            cache: Arc::new(RwLock::new(HashMap::new())),
+            cache: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 
