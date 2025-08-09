@@ -4,6 +4,8 @@
 
 This document provides a comprehensive audit of non-deterministic patterns in the MoosicBox codebase. Each section identifies specific instances where determinism is not guaranteed and provides recommendations for remediation using the switchy pattern or other deterministic alternatives.
 
+**CRITICAL FINDING:** The codebase has 50+ packages directly using actix-web instead of the deterministic moosicbox_web_server abstraction. This represents the single largest source of non-determinism and will require significant refactoring effort.
+
 ## Status Legend
 
 - 🔴 **Critical** - Affects core functionality or security
@@ -13,7 +15,78 @@ This document provides a comprehensive audit of non-deterministic patterns in th
 - ⏳ **In Progress** - Currently being worked on
 - ❌ **Blocked** - Waiting on dependencies or design decisions
 
-## 1. UUID Generation
+## 1. Web Server Framework (Actix-Web)
+
+**Status:** 🔴 CRITICAL | ❌ Major refactoring required
+
+### Scope of Problem
+
+- **50+ packages** directly using `actix_web` instead of `moosicbox_web_server`
+- **275+ references** to `actix_web::` throughout codebase
+- **173+ uses** of actix extractors (`web::Json`, `web::Query`, `web::Path`, `web::Data`)
+- **17 instances** of `HttpServer::new` or `App::new`
+
+### Major Affected Packages
+
+| Package                   | Usage                    | Complexity |
+| ------------------------- | ------------------------ | ---------- |
+| `packages/admin_htmx/`    | Full API implementation  | 🔴 High    |
+| `packages/auth/`          | Authentication endpoints | 🔴 High    |
+| `packages/config/`        | Configuration API        | 🔴 High    |
+| `packages/downloader/`    | Download API             | 🟡 Medium  |
+| `packages/files/`         | File serving API         | 🔴 High    |
+| `packages/library/`       | Library API              | 🔴 High    |
+| `packages/menu/`          | Menu API                 | 🟡 Medium  |
+| `packages/music_api/`     | Music API endpoints      | 🔴 High    |
+| `packages/player/`        | Player control API       | 🔴 High    |
+| `packages/scan/`          | Scan API                 | 🟡 Medium  |
+| `packages/search/`        | Search API               | 🟡 Medium  |
+| `packages/server/`        | Main server              | 🔴 High    |
+| `packages/tunnel_server/` | Tunnel server            | 🔴 High    |
+| `packages/upnp/`          | UPnP API                 | 🟡 Medium  |
+| `packages/audio_zone/`    | Audio zone API           | 🟡 Medium  |
+| `packages/profiles/`      | Profiles API             | 🟡 Medium  |
+
+### Required moosicbox_web_server Enhancements
+
+The current `moosicbox_web_server` needs significant enhancements to achieve feature parity with actix-web:
+
+#### Missing Core Features
+
+- [ ] **Extractors**: Json, Query, Path, Data, Header, Form
+- [ ] **Middleware**: Logger, CORS, Compression, Authentication
+- [ ] **WebSocket Support**: Full WS/WSS implementation
+- [ ] **Streaming**: Server-sent events, chunked responses
+- [ ] **Static Files**: File serving with range requests
+- [ ] **Error Handling**: Custom error responses and handlers
+- [ ] **State Management**: App data and request-scoped state
+- [ ] **Guards**: Request guards and filters
+- [ ] **Testing Utilities**: Test client and helpers
+
+#### Ergonomic Improvements Needed
+
+- [ ] **Macro-based routing**: Similar to actix's `#[get("/path")]`
+- [ ] **Type-safe extractors**: Automatic deserialization
+- [ ] **Builder pattern**: Fluent API for server configuration
+- [ ] **Async trait handlers**: Support for async fn handlers
+- [ ] **Automatic OpenAPI generation**: From route definitions
+
+### Migration Strategy
+
+1. **Phase 1**: Enhance moosicbox_web_server with missing features
+2. **Phase 2**: Create migration guide and compatibility layer
+3. **Phase 3**: Migrate one package at a time, starting with leaf packages
+4. **Phase 4**: Migrate core server packages
+5. **Phase 5**: Remove actix-web dependency
+
+### Estimated Effort
+
+- **Enhancement of moosicbox_web_server**: 4-6 weeks
+- **Migration of all packages**: 6-8 weeks
+- **Testing and validation**: 2-3 weeks
+- **Total**: 12-17 weeks (3-4 months)
+
+## 2. UUID Generation
 
 **Status:** 🔴 Critical | ❌ Blocked (no switchy_uuid implementation)
 
@@ -267,6 +340,19 @@ Leverage existing `switchy_tcp` and `switchy_http` more extensively
 
 ## Priority Roadmap
 
+### Phase 0: Web Server Migration (🔴🔴🔴 HIGHEST PRIORITY)
+
+1. [ ] Enhance moosicbox_web_server with missing core features
+    - [ ] Implement extractors (Json, Query, Path, Data, Header)
+    - [ ] Add middleware support (Logger, CORS, Compression)
+    - [ ] Implement WebSocket support
+    - [ ] Add streaming and SSE support
+    - [ ] Implement static file serving with range requests
+2. [ ] Create migration tooling and compatibility layer
+3. [ ] Migrate leaf packages (lowest dependencies first)
+4. [ ] Migrate core server packages
+5. [ ] Remove actix-web from workspace
+
 ### Phase 1: Critical Security & Core (🔴)
 
 1. [ ] Create `switchy_uuid` for deterministic UUID generation
@@ -312,16 +398,27 @@ Leverage existing `switchy_tcp` and `switchy_http` more extensively
 
 The MoosicBox codebase has made significant progress toward determinism with the switchy pattern. Key achievements include:
 
-- ✅ Most time operations migrated
+- ✅ Most time operations migrated (including new `instant_now()` support)
 - ✅ Random operations using switchy_random
 - ✅ Some collections migrated to BTree variants
 
-Major remaining work:
+**CRITICAL DISCOVERY:** The single largest source of non-determinism is the direct use of actix-web throughout 50+ packages. This must be addressed before other determinism efforts can be fully effective.
 
+Major remaining work (in priority order):
+
+- 🔴🔴🔴 **Web Server Migration** - Replace actix-web with moosicbox_web_server (12-17 weeks)
 - 🔴 UUID generation needs abstraction
 - 🔴 Network operations need comprehensive mocking
 - 🔴 Async race conditions need resolution
 - 🟡 File system operations need deterministic ordering
 - 🟡 Environment variables need abstraction
 
-Estimated effort: 2-3 weeks for Phase 1, 3-4 weeks for Phase 2, 2-3 weeks for Phase 3.
+**Revised Total Estimated Effort:**
+
+- Phase 0 (Web Server): 12-17 weeks
+- Phase 1 (Critical): 2-3 weeks
+- Phase 2 (Testing): 3-4 weeks
+- Phase 3 (Complete): 2-3 weeks
+- **Total: 19-27 weeks (5-7 months)**
+
+The web server migration represents approximately 60-70% of the total determinism effort and blocks many other improvements. This should be the immediate focus.
