@@ -379,7 +379,10 @@ impl UpnpPlayer {
         )
         .await?;
 
-        let size = if switchy_env::var_parse_or("UPNP_SEND_SIZE", false) {
+        let size = if matches!(
+            switchy_env::var("UPNP_SEND_SIZE").as_deref(),
+            Ok("1" | "true")
+        ) {
             let mut client = switchy_http::Client::new().head(&local_transport_uri);
 
             if let Some(headers) = headers {

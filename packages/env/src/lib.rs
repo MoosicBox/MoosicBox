@@ -101,21 +101,13 @@ pub trait EnvProvider: Send + Sync {
 
 #[allow(unused)]
 macro_rules! impl_env {
-    ($module:ident, $type:ty $(,)?) => {
+    ($module:ident $(,)?) => {
         pub use $module::{var, var_exists, var_or, var_parse, var_parse_opt, var_parse_or, vars};
-
-        pub type Provider = $type;
-
-        impl Default for Provider {
-            fn default() -> Self {
-                Self::new()
-            }
-        }
     };
 }
 
 #[cfg(feature = "simulator")]
-impl_env!(simulator, simulator::SimulatorEnv);
+impl_env!(simulator);
 
 #[cfg(all(not(feature = "simulator"), feature = "std"))]
-impl_env!(standard, standard::StandardEnv);
+impl_env!(standard);

@@ -52,10 +52,10 @@ static CLIENT: LazyLock<switchy_http::Client> = LazyLock::new(switchy_http::Clie
 
 #[cfg(feature = "debug")]
 static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
-    RwLock::new(
-        std::env::var("DEBUG_RENDERER")
-            .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
-    )
+    RwLock::new(matches!(
+        switchy_env::var("DEBUG_RENDERER").as_deref(),
+        Ok("1" | "true")
+    ))
 });
 
 const DELTA: f32 = 14.0f32 / 16.0;

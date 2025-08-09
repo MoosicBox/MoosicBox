@@ -5395,6 +5395,7 @@ dependencies = [
  "puffin",
  "puffin_http",
  "switchy_async",
+ "switchy_env",
  "switchy_http",
  "tracing-subscriber",
  "tracy-client",
@@ -5418,6 +5419,7 @@ dependencies = [
  "moosicbox_assert",
  "moosicbox_logging",
  "switchy_async",
+ "switchy_env",
  "switchy_http",
  "thiserror 2.0.12",
  "tokio",
@@ -7293,6 +7295,7 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy",
+ "switchy_env",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -7365,6 +7368,7 @@ dependencies = [
  "strum 0.27.2",
  "switchy",
  "switchy_async",
+ "switchy_env",
  "thiserror 2.0.12",
 ]
 
@@ -7945,6 +7949,7 @@ dependencies = [
  "serde",
  "serde_json",
  "switchy_async",
+ "switchy_env",
  "switchy_http",
 ]
 
@@ -8388,6 +8393,7 @@ dependencies = [
  "switchy_async",
  "switchy_database",
  "switchy_database_connection",
+ "switchy_env",
  "switchy_fs",
  "switchy_mdns",
  "switchy_random",
@@ -8603,6 +8609,7 @@ dependencies = [
  "switchy_async",
  "switchy_database",
  "switchy_database_connection",
+ "switchy_env",
  "switchy_http",
  "switchy_random",
  "switchy_telemetry",

@@ -34,10 +34,10 @@ pub enum RenderView {
 
 #[cfg(feature = "debug")]
 static DEBUG: LazyLock<RwLock<bool>> = LazyLock::new(|| {
-    RwLock::new(
-        std::env::var("DEBUG_RENDERER")
-            .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str())),
-    )
+    RwLock::new(matches!(
+        switchy_env::var("DEBUG_RENDERER").as_deref(),
+        Ok("1" | "true")
+    ))
 });
 
 #[derive(Clone)]

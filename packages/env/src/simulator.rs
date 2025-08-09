@@ -123,6 +123,12 @@ impl SimulatorEnv {
     }
 }
 
+impl Default for SimulatorEnv {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EnvProvider for SimulatorEnv {
     fn var(&self, name: &str) -> Result<String> {
         let vars = self.vars.read().unwrap();

@@ -25,6 +25,7 @@ moosicbox_assert = { workspace = true }
 moosicbox_logging = { workspace = true }
 
 switchy_async = { workspace = true, features = ["tokio"] }
+switchy_env = { workspace = true, features = ["std"] }
 switchy_http = { workspace = true, features = ["reqwest"] }
 
 async-trait = { workspace = true }

@@ -46,7 +46,10 @@ fn main() -> Result<(), std::io::Error> {
     .block_on(async move {
         let mut layers = vec![];
 
-        if std::env::var("TOKIO_CONSOLE").as_deref() == Ok("1") {
+        if matches!(
+            switchy_env::var("TOKIO_CONSOLE").as_deref(),
+            Ok("1" | "true")
+        ) {
             layers.push(Box::new(console_subscriber::spawn()) as DynLayer);
         }
 

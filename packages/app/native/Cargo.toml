@@ -68,6 +68,7 @@ moosicbox_session_models = { workspace = true }
 
 moosicbox_ws = { workspace = true }
 switchy_async = { workspace = true, features = ["tokio"] }
+switchy_env = { workspace = true, features = ["std"] }
 switchy = { workspace = true, features = [
     "async-macros",
     "async-net",

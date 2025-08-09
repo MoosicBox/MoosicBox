@@ -35,6 +35,7 @@ moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 moosicbox_marketing_site_ui = { workspace = true }
+switchy_env = { workspace = true, features = ["std"] }
 switchy_async = { workspace = true, features = [
     "net",
     "rt-multi-thread",
