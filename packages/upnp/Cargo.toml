@@ -22,6 +22,7 @@ moosicbox_audio_output = { workspace = true, optional = true }
 moosicbox_logging      = { workspace = true, optional = true, features = ["macros"] }
 
 switchy_async          = { workspace = true, features = ["tokio"] }
+switchy_env            = { workspace = true, features = ["std"] }
 switchy_http           = { workspace = true, optional = true, features = ["reqwest"] }
 
 # API Dependencies

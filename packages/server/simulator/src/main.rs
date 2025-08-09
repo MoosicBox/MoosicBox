@@ -7,14 +7,8 @@ use std::{process::ExitCode, sync::LazyLock};
 use moosicbox_server_simulator::{client, handle_actions, host};
 use simvar::{Sim, SimBootstrap, run_simulation};
 
-static PORT: LazyLock<Option<u16>> = LazyLock::new(|| {
-    std::env::var("PORT")
-        .ok()
-        .map(|x| x.parse::<u16>().expect("Invalid PORT env var"))
-        .map(TryInto::try_into)
-        .transpose()
-        .unwrap()
-});
+static PORT: LazyLock<Option<u16>> =
+    LazyLock::new(|| switchy_env::var_parse_opt("PORT").expect("Invalid PORT env var"));
 
 pub struct Simulator;
 

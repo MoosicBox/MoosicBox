@@ -40,11 +40,10 @@ pub fn init_tracer(#[allow(unused)] name: &'static str) -> Result<DynLayer, Expo
             .with_batch_exporter(
                 opentelemetry_otlp::SpanExporter::builder()
                     .with_tonic()
-                    .with_endpoint(
-                        std::env::var("OTEL_ENDPOINT")
-                            .as_deref()
-                            .unwrap_or("http://127.0.0.1:4317"),
-                    )
+                    .with_endpoint(switchy_env::var_or(
+                        "OTEL_ENDPOINT",
+                        "http://127.0.0.1:4317",
+                    ))
                     .build()?,
             )
             .with_resource(get_resource_attr(name))

@@ -8425,6 +8425,7 @@ dependencies = [
  "simvar",
  "strum 0.27.2",
  "switchy_async",
+ "switchy_env",
  "switchy_telemetry",
  "tokio",
 ]
@@ -13999,6 +14000,7 @@ dependencies = [
  "opentelemetry 0.30.0",
  "opentelemetry-otlp",
  "opentelemetry_sdk 0.30.0",
+ "switchy_env",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -14039,6 +14041,7 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy_async",
+ "switchy_env",
  "switchy_http",
  "switchy_random",
  "symphonia",

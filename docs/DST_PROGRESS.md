@@ -244,7 +244,7 @@ These should migrate to use `switchy_time`.
 
 ## 7. Environment Variables
 
-**Status:** ✅ Fixed (Core Infrastructure) | ✅ High Priority Complete | ⏳ Medium/Low Priority Remaining
+**Status:** ✅ Fixed (Core Infrastructure) | ✅ High Priority Complete | ✅ Medium Priority Complete | ⏳ Low Priority Remaining
 
 ### Solution Implemented
 
@@ -253,6 +253,7 @@ Created `switchy_env` package with:
 - **Production**: Uses real environment variables via `std::env`
 - **Simulation**: Uses configurable environment with deterministic defaults
 - **Type Safety**: Parse environment variables to specific types with `var_parse<T>()`
+- **Optional Parsing**: New `var_parse_opt<T>() -> Result<Option<T>, EnvError>` for better error handling
 - **Testing**: Set/remove variables for testing scenarios
 
 ### 🚫 **DO NOT MIGRATE** - Must Use Real Environment Variables (30+ locations)
@@ -325,14 +326,14 @@ These packages control simulation behavior and build processes - they MUST use r
    - Line 30: SSL_KEY_PATH ✅ MIGRATED (using var_or)
 
 ✅ packages/load_balancer/src/server.rs:44,81 - CLUSTERS, SSL path checks ✅ MIGRATED
-✅ packages/server/simulator/src/main.rs:11 - PORT
-✅ packages/upnp/src/player.rs:382 - UPNP_SEND_SIZE
+✅ packages/server/simulator/src/main.rs:11 - PORT ✅ MIGRATED (using var_parse_opt)
+✅ packages/upnp/src/player.rs:382 - UPNP_SEND_SIZE ✅ MIGRATED (using var_parse_or<bool>)
 ```
 
-#### **4. Telemetry & Monitoring** (🟡 Medium Priority)
+#### **4. Telemetry & Monitoring** (🟡 Medium Priority) ✅ COMPLETED
 
 ```
-✅ packages/telemetry/src/lib.rs:44 - OTEL_ENDPOINT
+✅ packages/telemetry/src/lib.rs:44 - OTEL_ENDPOINT ✅ MIGRATED (using var_or)
 ```
 
 #### **5. Debug & Development Flags** (🟢 Low Priority)
@@ -372,15 +373,21 @@ These packages control simulation behavior and build processes - they MUST use r
   - Load balancer configuration (PORT, SSL_PORT, SSL paths, CLUSTERS)
   - Schema migration flag (MOOSICBOX_SKIP_MIGRATION_EXECUTION)
 
-**Ready for Medium/Low Priority Migration:**
+**✅ COMPLETED Medium Priority Application Migration:**
 
-- 🟡 **Important (8 locations)**: Telemetry, UPnP settings
+- ✅ **Important (9 locations)**: Telemetry, UPnP settings, server simulator - ALL MIGRATED
+  - Telemetry endpoint configuration (OTEL_ENDPOINT)
+  - UPnP send size flag (UPNP_SEND_SIZE)
+  - Server simulator port (PORT with proper error handling)
+
+**Ready for Low Priority Migration:**
+
 - 🟢 **Nice-to-have (30+ locations)**: Debug flags, development tools
 
 ### Usage Pattern
 
 ```rust
-use switchy_env::{var, var_or, var_parse, var_parse_or};
+use switchy_env::{var, var_or, var_parse, var_parse_or, var_parse_opt};
 
 // Database configuration with deterministic defaults
 let database_url = var_or("DATABASE_URL", "sqlite::memory:");
@@ -389,6 +396,13 @@ let db_host = var_or("DB_HOST", "localhost");
 // Service configuration with type safety
 let port: u16 = var_parse_or("PORT", 8080);
 let ssl_port: u16 = var_parse_or("SSL_PORT", 8443);
+
+// Optional configuration with proper error handling
+let optional_port: Option<u16> = var_parse_opt("OPTIONAL_PORT")
+    .expect("Invalid OPTIONAL_PORT env var")?;
+
+// Boolean flags with type safety
+let debug_enabled: bool = var_parse_or("DEBUG_ENABLED", false);
 
 // Authentication tokens (no defaults for security)
 let tunnel_token = var("TUNNEL_ACCESS_TOKEN")?;
@@ -622,6 +636,7 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 - [x] Add type-safe access patterns
 - [x] Fixed Default trait conflict in standard implementation
 - [x] Added proper feature flags (std, simulator)
+- [x] Enhanced API with `var_parse_opt<T>() -> Result<Option<T>, EnvError>` for better error handling
 
 **✅ Correctly preserved simulation infrastructure (DO NOT MIGRATE):**
 
@@ -641,22 +656,22 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 - [x] `packages/load_balancer/src/server.rs:44,81` - CLUSTERS, SSL configuration ✅ COMPLETED
 - [x] `packages/schema/src/lib.rs:236` - MOOSICBOX_SKIP_MIGRATION_EXECUTION ✅ COMPLETED
 
-**🟡 Medium Priority Application Migration (9 locations):**
+**🟡 Medium Priority Application Migration (9 locations):** ✅ COMPLETED
 
-- [ ] `packages/server/simulator/src/main.rs:11` - PORT
-- [ ] `packages/upnp/src/player.rs:382` - UPNP_SEND_SIZE
-- [ ] `packages/telemetry/src/lib.rs:44` - OTEL_ENDPOINT
+- [x] `packages/server/simulator/src/main.rs:11` - PORT ✅ MIGRATED (using var_parse_opt with proper error handling)
+- [x] `packages/upnp/src/player.rs:382` - UPNP_SEND_SIZE ✅ MIGRATED (using var_parse_or<bool>)
+- [x] `packages/telemetry/src/lib.rs:44` - OTEL_ENDPOINT ✅ MIGRATED (using var_or)
 
-**🟢 Low Priority Debug Flags (21+ locations):**
+**🟢 Low Priority Debug Flags (21+ locations):** ⏳ READY FOR MIGRATION
 
-- [ ] `packages/app/tauri/src-tauri/src/lib.rs:677` - TOKIO_CONSOLE
-- [ ] `packages/app/native/src/main.rs:29` - TOKIO_CONSOLE
-- [ ] `packages/marketing_site/src/main.rs:24` - TOKIO_CONSOLE
-- [ ] `packages/tunnel_server/src/main.rs:49` - TOKIO_CONSOLE
-- [ ] `packages/server/src/main.rs:38` - TOKIO_CONSOLE
-- [ ] `packages/hyperchad/renderer/egui/src/v1.rs:38` - DEBUG_RENDERER
-- [ ] `packages/hyperchad/renderer/fltk/src/lib.rs:56` - DEBUG_RENDERER
-- [ ] `packages/hyperchad/transformer/src/lib.rs:2826,3424,3430` - Debug attributes
+- [ ] `packages/app/tauri/src-tauri/src/lib.rs:677` - TOKIO_CONSOLE (debug flag)
+- [ ] `packages/app/native/src/main.rs:29` - TOKIO_CONSOLE (debug flag)
+- [ ] `packages/marketing_site/src/main.rs:24` - TOKIO_CONSOLE (debug flag)
+- [ ] `packages/tunnel_server/src/main.rs:49` - TOKIO_CONSOLE (debug flag)
+- [ ] `packages/server/src/main.rs:38` - TOKIO_CONSOLE (debug flag)
+- [ ] `packages/hyperchad/renderer/egui/src/v1.rs:38` - DEBUG_RENDERER (debug flag)
+- [ ] `packages/hyperchad/renderer/fltk/src/lib.rs:56` - DEBUG_RENDERER (debug flag)
+- [ ] `packages/hyperchad/transformer/src/lib.rs:2826,3424,3430` - Debug attributes (debug flags)
 
 **📦 Technical Debt (15+ locations):**
 

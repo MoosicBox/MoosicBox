@@ -66,6 +66,25 @@ where
     PROVIDER.var_parse_or(name, default)
 }
 
+/// Get an optional environment variable parsed as a specific type
+///
+/// # Returns
+///
+/// * `Ok(Some(value))` if the variable exists and parses successfully
+/// * `Ok(None)` if the variable doesn't exist
+/// * `Err(EnvError::ParseError)` if the variable exists but can't be parsed
+///
+/// # Errors
+///
+/// * If the environment variable exists but cannot be parsed to the target type
+pub fn var_parse_opt<T>(name: &str) -> Result<Option<T>>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    PROVIDER.var_parse_opt(name)
+}
+
 /// Check if an environment variable exists
 pub fn var_exists(name: &str) -> bool {
     PROVIDER.var_exists(name)

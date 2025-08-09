@@ -64,6 +64,32 @@ pub trait EnvProvider: Send + Sync {
         self.var_parse(name).unwrap_or(default)
     }
 
+    /// Get an optional environment variable parsed as a specific type
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Some(value))` if the variable exists and parses successfully
+    /// * `Ok(None)` if the variable doesn't exist
+    /// * `Err(EnvError::ParseError)` if the variable exists but can't be parsed
+    ///
+    /// # Errors
+    ///
+    /// * If the environment variable fails to parse
+    fn var_parse_opt<T>(&self, name: &str) -> Result<Option<T>>
+    where
+        T: std::str::FromStr,
+        T::Err: std::fmt::Display,
+    {
+        match self.var(name) {
+            Ok(value) => value
+                .parse::<T>()
+                .map(Some)
+                .map_err(|e| EnvError::ParseError(name.to_string(), e.to_string())),
+            Err(EnvError::NotFound(_)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Check if an environment variable exists
     fn var_exists(&self, name: &str) -> bool {
         self.var(name).is_ok()
@@ -76,7 +102,7 @@ pub trait EnvProvider: Send + Sync {
 #[allow(unused)]
 macro_rules! impl_env {
     ($module:ident, $type:ty $(,)?) => {
-        pub use $module::{var, var_exists, var_or, var_parse, var_parse_or, vars};
+        pub use $module::{var, var_exists, var_or, var_parse, var_parse_opt, var_parse_or, vars};
 
         pub type Provider = $type;
 

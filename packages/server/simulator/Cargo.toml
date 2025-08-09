@@ -17,6 +17,7 @@ moosicbox_env_utils = { workspace = true }
 moosicbox_logging = { workspace = true }
 moosicbox_server = { workspace = true, features = ["simulator"] }
 switchy_async = { workspace = true, features = ["tokio"] }
+switchy_env = { workspace = true, features = ["std"] }
 
 openport = { workspace = true }
 simvar = { workspace = true, features = [

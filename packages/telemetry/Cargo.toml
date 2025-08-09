@@ -17,6 +17,7 @@ group = "switchy"
 moosicbox_assert    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
 moosicbox_logging   = { workspace = true, features = ["free_log"] }
+switchy_env         = { workspace = true, features = ["std"] }
 
 actix-web               = { workspace = true, optional = true }
 actix-web-opentelemetry = { workspace = true, optional = true }
