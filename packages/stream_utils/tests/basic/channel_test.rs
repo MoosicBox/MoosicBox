@@ -4,7 +4,7 @@ use switchy_async::sync::mpsc::unbounded;
 async fn channel_test() {
     println!("Testing channel");
 
-    let (sender, receiver) = unbounded();
+    let (sender, mut receiver) = unbounded();
 
     // Send data in background task
     let sender_clone = sender.clone();
@@ -15,7 +15,7 @@ async fn channel_test() {
     });
 
     println!("Receiving data");
-    let value = receiver.recv().unwrap();
+    let value = receiver.recv_async().await.unwrap();
     println!("Received: {value}");
 
     assert_eq!(value, 42);

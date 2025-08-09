@@ -19,7 +19,7 @@ use bytes::{Bytes, BytesMut};
 use scoped_tls::scoped_thread_local;
 use switchy_async::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
-    sync::mpsc::{Receiver, Sender, error::TrySendError},
+    sync::mpsc::{Receiver, Sender, TrySendError},
     time,
     util::CancellationToken,
 };
@@ -336,8 +336,12 @@ impl TcpStream {
             ),
         })?;
 
-        let (tx1, rx1) = switchy_async::sync::mpsc::bounded(16);
-        let (tx2, rx2) = switchy_async::sync::mpsc::bounded(16);
+        // FIXME: use mpmc::bounded when it's implemented
+        // let (tx1, rx1) = switchy_async::sync::mpsc::bounded(16);
+        // let (tx2, rx2) = switchy_async::sync::mpsc::bounded(16);
+
+        let (tx1, rx1) = switchy_async::sync::mpsc::unbounded();
+        let (tx2, rx2) = switchy_async::sync::mpsc::unbounded();
 
         let stream_for_client = Self {
             local_addr: client_addr,

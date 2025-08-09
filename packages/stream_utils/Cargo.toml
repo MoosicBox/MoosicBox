@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.4"
 
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
 [dependencies]
 moosicbox_assert = { workspace = true }
 switchy_async = { workspace = true, features = [
@@ -32,7 +35,6 @@ pin-project = { workspace = true }
 thiserror   = { workspace = true, optional = true }
 
 [dev-dependencies]
-switchy  = { workspace = true, features = ["async-macros"] }
 test-log = { workspace = true }
 tokio    = { workspace = true, features = ["macros", "rt", "time"] }
 
@@ -43,3 +45,12 @@ fail-on-warnings = []
 
 remote-bytestream = ["dep:switchy_http", "switchy_async/util"]
 stalled-monitor   = ["dep:thiserror", "switchy_async/sync", "switchy_async/time"]
+
+[[test]]
+name = "basic_tests"
+path = "tests/basic/mod.rs"
+
+[[test]]
+name              = "remote_bytestream_tests"
+path              = "tests/remote_bytestream/mod.rs"
+required-features = ["remote-bytestream"]

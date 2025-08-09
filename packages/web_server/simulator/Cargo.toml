@@ -10,6 +10,9 @@ readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"
 
+[package.metadata.cargo-machete]
+ignored = ["tokio"]
+
 [dependencies]
 moosicbox_assert          = { workspace = true }
 moosicbox_web_server_core = { workspace = true }
@@ -24,10 +27,9 @@ thiserror  = { workspace = true }
 
 [dev-dependencies]
 switchy_async = { workspace = true, features = ["macros"] }
-tokio         = { workspace = true, features = ["macros", "rt"] }
+tokio         = { workspace = true, features = ["macros"] }
 
 [features]
 default = ["fail-on-warnings"]
 
 fail-on-warnings = []
-

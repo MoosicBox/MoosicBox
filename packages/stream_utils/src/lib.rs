@@ -8,7 +8,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use switchy_async::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use switchy_async::sync::mpsc::{Receiver, Sender, unbounded};
 
 #[cfg(feature = "remote-bytestream")]
 pub mod remote_bytestream;
@@ -25,7 +25,7 @@ pub fn new_byte_writer_id() -> usize {
 pub struct ByteWriter {
     pub id: usize,
     written: Arc<RwLock<u64>>,
-    senders: Arc<RwLock<Vec<UnboundedSender<Bytes>>>>,
+    senders: Arc<RwLock<Vec<Sender<Bytes>>>>,
 }
 
 impl ByteWriter {
@@ -117,7 +117,7 @@ impl std::io::Write for ByteWriter {
 
 pub struct ByteStream {
     id: usize,
-    receiver: UnboundedReceiver<Bytes>,
+    receiver: Receiver<Bytes>,
 }
 
 #[cfg(feature = "stalled-monitor")]
@@ -165,7 +165,7 @@ impl futures::Stream for ByteStream {
 #[allow(clippy::fallible_impl_from)]
 impl From<&ByteWriter> for ByteStream {
     fn from(value: &ByteWriter) -> Self {
-        let (sender, receiver) = unbounded_channel();
+        let (sender, receiver) = unbounded();
         value.senders.write().unwrap().push(sender);
         Self {
             id: value.id,
@@ -177,7 +177,7 @@ impl From<&ByteWriter> for ByteStream {
 #[derive(Clone)]
 pub struct TypedWriter<T> {
     id: usize,
-    senders: Arc<RwLock<Vec<UnboundedSender<T>>>>,
+    senders: Arc<RwLock<Vec<Sender<T>>>>,
 }
 
 impl<T> TypedWriter<T> {
@@ -229,7 +229,7 @@ impl<T> Default for TypedWriter<T> {
 }
 
 pub struct TypedStream<T> {
-    receiver: UnboundedReceiver<T>,
+    receiver: Receiver<T>,
 }
 
 #[cfg(feature = "stalled-monitor")]
@@ -269,7 +269,7 @@ impl<T> futures::Stream for TypedStream<T> {
 #[allow(clippy::fallible_impl_from)]
 impl<T> From<&TypedWriter<T>> for TypedStream<T> {
     fn from(value: &TypedWriter<T>) -> Self {
-        let (sender, receiver) = unbounded_channel();
+        let (sender, receiver) = unbounded();
         value.senders.write().unwrap().push(sender);
         Self { receiver }
     }

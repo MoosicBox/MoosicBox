@@ -8467,7 +8467,6 @@ dependencies = [
  "log 0.4.27",
  "moosicbox_assert",
  "pin-project",
- "switchy",
  "switchy_async",
  "switchy_http",
  "test-log",
