@@ -410,24 +410,38 @@ Application code has race conditions. `switchy_async` provides deterministic run
 
 #### 1.1 Replace ALL remaining HashMap/HashSet with BTreeMap/BTreeSet
 
-**Files to modify (89 occurrences found):**
+**Files to modify (89 occurrences across 30 files):**
 
 - `packages/scan/src/output.rs:583,620,664` - HashSet<u64> for IDs
 - `packages/server/src/ws/server.rs:132,137,141` - Connection maps
+- `packages/server/src/auth.rs:108` - Query parameter collection
+- `packages/server/src/players/upnp.rs:23` - Player state map
 - `packages/ws/src/ws.rs:86` - CONNECTION_DATA static
 - `packages/player/src/api.rs:125` - PlaybackHandler map
 - `packages/player/src/lib.rs:228,364,365` - Query/headers maps
 - `packages/hyperchad/state/src/store.rs:14` - Cache storage
 - `packages/hyperchad/renderer/egui/src/v1.rs:229-777` - UI state maps (15+ occurrences)
 - `packages/hyperchad/renderer/egui/src/v2.rs:178-180,507` - UI element maps
+- `packages/hyperchad/renderer/fltk/src/lib.rs:284` - Image cache
+- `packages/hyperchad/renderer/src/lib.rs:298,308` - Headers parameters
+- `packages/hyperchad/renderer/vanilla_js/src/lib.rs:798,815` - Headers
+- `packages/hyperchad/renderer/html/src/lib.rs:49,257,268` - Responsive triggers
+- `packages/hyperchad/renderer/html/src/actix.rs:267` - Static headers
+- `packages/hyperchad/renderer/html/src/html.rs:1046` - Headers
+- `packages/hyperchad/renderer/html/src/lambda.rs:253` - Lambda headers
+- `packages/hyperchad/renderer/html/src/web_server.rs:233` - Web server headers
+- `packages/hyperchad/renderer/html/http/src/lib.rs:95` - HTTP headers
+- `packages/hyperchad/actions/src/dsl.rs:448` - DSL variables
 - `packages/tunnel_server/src/ws/server.rs:332,343-352,530` - WebSocket state
 - `packages/tunnel_sender/src/sender.rs:187,275,619-1013` - Request tracking
+- `packages/tunnel/src/lib.rs:46` - Tunnel headers
 - `packages/files/src/files/track_pool.rs:85-86` - Semaphore/pool maps
 - `packages/upnp/src/listener.rs:68-69` - Status tracking
 - `packages/load_balancer/src/server.rs:27,43,66` - Cluster configuration
 - `packages/load_balancer/src/load_balancer.rs:35,39` - Router maps
-- `packages/app/` - Multiple UI state maps (10+ files)
-- `packages/hyperchad/renderer/html/` - Response triggers and headers (5+ files)
+- `packages/app/tauri/src-tauri/src/lib.rs:1220,1270,1284` - Headers and state
+- `packages/app/native/src/visualization.rs:227` - Visualization cache
+- `packages/app/state/src/lib.rs:225,231,1165,1182,1200` - Audio zone and player state
 
 #### 1.2 Create `switchy_uuid` package
 
@@ -455,11 +469,12 @@ Application code has race conditions. `switchy_async` provides deterministic run
 
 #### 1.4 Create `switchy_process` package
 
-**Files needing migration (16 occurrences):**
+**Files needing migration (17 occurrences):**
 
 - `packages/bloaty/src/main.rs:113` - Process exit
 - `packages/server/src/lib.rs:769` - puffin_viewer launch
 - `packages/hyperchad/renderer/egui/src/v1.rs:3780` - puffin_viewer
+- `packages/hyperchad/js_bundler/src/node.rs` - Node.js command execution
 - `packages/assert/src/lib.rs:25,44,183,200,221,267,325,358` - Assertion exits
 - Build scripts: `tunnel_server`, `server`, `marketing_site`, `app/native`, `hyperchad/renderer/vanilla_js`
 
@@ -469,6 +484,12 @@ Application code has race conditions. `switchy_async` provides deterministic run
 
 - `packages/files/src/lib.rs:161,192` - Performance timing
 - `packages/audio_output/src/cpal.rs:596` - Audio timing
+- `packages/async/examples/simulated/src/main.rs:19` - SystemTime::now()
+- `packages/async/src/simulator/sync/mpmc/flume.rs:135` - Instant::now()
+- `packages/async/src/simulator/futures.rs:108-109` - SystemTime and Instant
+- `packages/async/src/simulator/mod.rs:260` - Instant::now()
+
+Note: Files in `packages/time/src/` are part of the switchy_time implementation itself
 
 #### 1.6 Add chrono DateTime support to `switchy_time`
 
@@ -745,13 +766,29 @@ This phase executes the migration strategy detailed in Section 1.
 - Session management in `packages/session/`
 - Use `select_biased!` for deterministic future selection
 
+**Specific files with select!/join!/spawn patterns:**
+
+- `packages/server/src/ws/server.rs` - WebSocket server with select!
+- `packages/player/src/lib.rs` - Player with tokio::spawn
+- `packages/app/tauri/ws/src/lib.rs` - Tauri WebSocket
+- `packages/app/state/src/ws.rs` - App WebSocket state
+- `packages/upnp/src/player.rs` - UPnP player async operations
+
 #### 5.2 Address floating-point determinism
 
-**Packages with float operations:**
+**Specific files with float operations:**
 
-- `packages/resampler/` - Audio resampling
-- `packages/audio_output/` - Volume/gain calculations
-- Consider using fixed-point or controlled rounding
+- `packages/player/src/signal_chain.rs` - Signal processing chains
+- `packages/player/src/volume_mixer.rs` - Volume mixing calculations
+- `packages/player/src/symphonia.rs` - Audio decoding with floats
+- `packages/player/src/symphonia_unsync.rs` - Unsync audio decoding
+- `packages/player/src/local.rs` - Local player volume
+- `packages/audio_output/src/lib.rs` - Output gain processing
+- `packages/audio_output/src/cpal.rs` - CPAL audio output
+- `packages/audio_zone/src/` - Zone volume management
+- `packages/resampler/` - Audio resampling algorithms
+
+Consider using fixed-point arithmetic or controlled rounding for determinism
 
 #### 5.3 Update comprehensive documentation
 
