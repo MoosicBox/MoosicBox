@@ -3,28 +3,27 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use moosicbox_config::AppType;
-use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_logging::free_log_client::DynLayer;
+use switchy_env::{var_or, var_parse_opt, var_parse_or};
 
 #[cfg_attr(feature = "profiling", profiling::function)]
 #[allow(clippy::too_many_lines)]
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
-    let addr = default_env("BIND_ADDR", "0.0.0.0");
+    let addr = var_or("BIND_ADDR", "0.0.0.0");
     let service_port = if args.len() > 1 {
         args[1].parse::<u16>().expect("Invalid port argument")
     } else {
-        default_env_usize("PORT", 8000)
-            .unwrap_or(8000)
+        var_parse_or("PORT", 8000usize)
             .try_into()
             .expect("Invalid PORT environment variable")
     };
-    let actix_workers = option_env_usize("ACTIX_WORKERS")
+    let actix_workers = var_parse_opt::<usize>("ACTIX_WORKERS")
         .map_err(|e| std::io::Error::other(format!("Invalid ACTIX_WORKERS: {e:?}")))?;
 
     actix_web::rt::System::with_tokio_rt(|| {
-        let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+        let threads = var_parse_or("MAX_THREADS", 64usize);
         log::debug!("Running with {threads} max blocking threads");
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()

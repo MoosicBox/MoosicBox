@@ -5,11 +5,11 @@
 use std::sync::{Arc, LazyLock};
 
 use hyperchad::renderer_html::lambda::lambda_http::tracing;
-use moosicbox_env_utils::default_env_usize;
 use switchy_async::runtime::Runtime;
+use switchy_env::var_parse_or;
 
 static RUNTIME: LazyLock<Arc<Runtime>> = LazyLock::new(|| {
-    let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+    let threads = var_parse_or("MAX_THREADS", 64usize);
     log::debug!("Running with {threads} max blocking threads");
     let runtime = switchy_async::runtime::Builder::new()
         .max_blocking_threads(u16::try_from(threads).unwrap())

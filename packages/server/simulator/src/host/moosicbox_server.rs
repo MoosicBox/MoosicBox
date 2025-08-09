@@ -6,7 +6,6 @@ use std::{
 
 use actix_web::dev::ServerHandle;
 use moosicbox_config::AppType;
-use moosicbox_env_utils::default_env;
 use net2::TcpBuilder;
 use simvar::{
     Sim,
@@ -18,6 +17,7 @@ use simvar::{
     utils::run_until_simulation_cancelled,
 };
 use switchy_async::util::CancellationToken;
+use switchy_env::var_or;
 
 pub const HOST: &str = "moosicbox_server";
 pub const PORT: u16 = 1234;
@@ -33,7 +33,7 @@ pub fn start(sim: &mut impl Sim, service_port: Option<u16>) {
     let service_port = service_port.unwrap_or_else(|| {
         openport::pick_unused_port(3000..=u16::MAX).expect("No open ports within acceptable range")
     });
-    let host = default_env("BIND_ADDR", "0.0.0.0");
+    let host = var_or("BIND_ADDR", "0.0.0.0");
     let actix_workers = Some(rng().gen_range(1..=64_usize));
     #[cfg(feature = "telemetry")]
     let metrics_handler = std::sync::Arc::new(switchy_telemetry::get_http_metrics_handler());

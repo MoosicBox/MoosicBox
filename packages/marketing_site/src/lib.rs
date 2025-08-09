@@ -9,8 +9,8 @@ use hyperchad::{
     color::Color,
     router::Router,
 };
-use moosicbox_env_utils::option_env_f32;
 use serde_json::json;
+use switchy_env::var_parse_opt;
 
 mod download;
 
@@ -91,8 +91,12 @@ pub fn init() -> AppBuilder {
         .with_title("MoosicBox".to_string())
         .with_description("MoosicBox: A music app for cows".to_string())
         .with_size(
-            option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0),
-            option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0),
+            var_parse_opt::<f32>("WINDOW_WIDTH")
+                .unwrap_or(None)
+                .unwrap_or(1000.0),
+            var_parse_opt::<f32>("WINDOW_HEIGHT")
+                .unwrap_or(None)
+                .unwrap_or(600.0),
         );
 
     #[cfg(feature = "assets")]

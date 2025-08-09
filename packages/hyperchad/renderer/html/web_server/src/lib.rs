@@ -8,7 +8,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use flume::Receiver;
 use hyperchad_renderer::{Content, Handle, RenderRunner, RendererEvent, ToRenderRunner};
-use moosicbox_env_utils::{default_env, default_env_u16};
+use moosicbox_env_utils::default_env_u16;
+use switchy_env::var_or;
 
 pub use moosicbox_web_server;
 
@@ -93,7 +94,7 @@ impl<
 
         let _html_app = self.app.clone();
         self.handle.block_on(async move {
-            let addr = default_env("BIND_ADDR", "0.0.0.0");
+            let addr = var_or("BIND_ADDR", "0.0.0.0");
             let port = default_env_u16!("PORT", 8343);
 
             let cors = moosicbox_web_server::cors::Cors::default()

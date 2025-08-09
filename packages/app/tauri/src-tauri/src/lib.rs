@@ -68,8 +68,7 @@ static HTTP_APP: OnceLock<hyperchad::renderer_html_http::HttpApp<native_app::Ren
     OnceLock::new();
 
 #[cfg(feature = "bundled")]
-static THREADS: LazyLock<u16> =
-    LazyLock::new(|| moosicbox_env_utils::default_env_u16("MAX_THREADS", 64).unwrap_or(64));
+static THREADS: LazyLock<u16> = LazyLock::new(|| switchy_env::var_parse_or("MAX_THREADS", 64u16));
 
 #[cfg(feature = "bundled")]
 static RT: LazyLock<switchy::unsync::runtime::Runtime> = LazyLock::new(|| {

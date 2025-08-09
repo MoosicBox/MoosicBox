@@ -349,17 +349,21 @@ These packages control simulation behavior and build processes - they MUST use r
 ✅ packages/hyperchad/renderer/fltk/src/lib.rs:56 - DEBUG_RENDERER ✅ MIGRATED (supports "1" and "true")
 ```
 
-#### **6. Environment Utilities Package Status**
+#### **6. Environment Utilities Package Status** ✅ COMPLETED
 
 ```
-📦 packages/env_utils/src/lib.rs:142-452 - Runtime environment utilities (15 instances)
-   Status: LEGACY PACKAGE - Candidate for deprecation
-   Contains: Compile-time macros (preserve) + Runtime functions (could use switchy_env)
+✅ packages/env_utils/src/lib.rs - Runtime environment utilities REMOVED
+   Status: COMPILE-TIME ONLY PACKAGE - Runtime functions successfully removed
+   Contains: Compile-time macros only (preserved) - 15+ macros using env!() and option_env!()
 ```
 
-**Important Note**: The `moosicbox_env_utils` package provides valuable compile-time macros using `env!()` and `option_env!()` that are useful for build-time constants and const evaluation. These compile-time features should be preserved.
+**✅ Runtime Functions Removal Complete**: All 15 runtime functions that used `std::env::var()` have been successfully removed from `moosicbox_env_utils` and replaced with `switchy_env` calls across 13+ packages.
 
-**Potential Enhancement**: The runtime functions in `env_utils` (`env_usize()`, `default_env_usize()`, etc.) could potentially be enhanced to use `switchy_env` internally while maintaining their current API, or the package could be deprecated in favor of direct `switchy_env` usage.
+**Functions Removed**: `env_usize()`, `default_env_usize()`, `default_env_u16()`, `option_env_usize()`, `option_env_u64()`, `option_env_u32()`, `option_env_u16()`, `option_env_f32()`, `option_env_isize()`, `option_env_i64()`, `option_env_i32()`, `option_env_i16()`, `option_env_i8()`, `default_env()`, and 4 error types.
+
+**Macros Preserved**: All compile-time macros using `env!()` and `option_env!()` remain for build-time constants: `env_usize!`, `default_env!`, `default_env_usize!`, `option_env_usize!`, etc.
+
+**Packages Migrated**: marketing_site, tunnel_server, server, hyperchad/app, app/native, app/tauri, hyperchad/renderer/html/web_server, logging, and 5+ others.
 
 ### Migration Status Summary
 
@@ -391,7 +395,7 @@ These packages control simulation behavior and build processes - they MUST use r
     - TOKIO_CONSOLE debug flags (5 packages) - supports both "1" and "true"
     - DEBUG_RENDERER flags (2 packages) - supports both "1" and "true"
 
-#### **7. Additional Debug & Development Variables** (🟢 Low Priority) ✅ COMPLETED (December 2024)
+#### **7. Additional Debug & Development Variables** (🟢 Low Priority) ✅ COMPLETED
 
 ```
 ✅ packages/hyperchad/transformer/src/lib.rs:
@@ -402,13 +406,51 @@ These packages control simulation behavior and build processes - they MUST use r
 ✅ packages/hyperchad/js_bundler/src/node.rs:36 - PNPM_HOME ✅ MIGRATED (build tool detection)
 ```
 
-**🎉 MIGRATION 100% COMPLETE:**
+#### **8. Runtime Functions Removal** (🟢 Cleanup) ✅ COMPLETED
+
+```
+✅ moosicbox_env_utils runtime functions removal:
+   - 15 runtime functions removed: env_usize(), default_env_usize(), default_env_u16(),
+     option_env_usize(), option_env_u64(), option_env_u32(), option_env_u16(),
+     option_env_f32(), option_env_isize(), option_env_i64(), option_env_i32(),
+     option_env_i16(), option_env_i8(), default_env()
+   - 4 error types removed: EnvUsizeError, DefaultEnvUsizeError, OptionEnvUsizeError, OptionEnvF32Error
+   - 15+ compile-time macros preserved: env_usize!, default_env!, option_env_*!, etc.
+
+✅ 13+ packages migrated to switchy_env:
+   - packages/marketing_site/ (3 files) - default_env_usize(), option_env_f32(), option_env_i32()
+   - packages/tunnel_server/ (1 file) - default_env(), default_env_usize(), option_env_usize()
+   - packages/server/ (2 files) - default_env(), default_env_usize(), option_env_usize()
+   - packages/hyperchad/app/ (1 file) - default_env_usize()
+   - packages/app/native/ (1 file) - default_env_usize(), option_env_f32(), option_env_i32()
+   - packages/app/tauri/src-tauri/ (1 file) - default_env_u16()
+   - packages/hyperchad/renderer/html/web_server/ (1 file) - default_env()
+   - packages/logging/ (1 file) - unused import cleanup
+   - 5+ additional packages with switchy_env dependencies added
+```
+
+**Migration Pattern Used:**
+
+```rust
+// Before: Runtime function calls
+let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+let port = default_env("PORT", "8080");
+
+// After: switchy_env calls
+let threads = var_parse_or("MAX_THREADS", 64usize);
+let port = var_or("PORT", "8080");
+```
+
+**🎉 MIGRATION 100% COMPLETE + RUNTIME FUNCTIONS REMOVED:**
 
 - **Total migrated**: 38+ environment variables across 17+ packages
 - **All priority levels**: High, Medium, and Low priority migrations completed
-- **Additional variables**: 4 debug/development variables migrated in December 2024
+- **Additional variables**: 4 debug/development variables migrated
+- **Runtime functions removed**: 15 functions + 4 error types from moosicbox_env_utils
+- **Packages migrated from runtime functions**: 13+ packages migrated to switchy_env
 - **Backward compatibility**: Maintained for all existing usage patterns
 - **Enhanced API**: New `var_parse_opt` function for better error handling
+- **Compile-time macros**: All 15+ macros preserved for build-time constants
 
 ### Usage Pattern
 
@@ -711,16 +753,16 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 - [x] `packages/hyperchad/renderer/egui/src/v1.rs:38` - DEBUG_RENDERER ✅ MIGRATED (supports "1" and "true")
 - [x] `packages/hyperchad/renderer/fltk/src/lib.rs:56` - DEBUG_RENDERER ✅ MIGRATED (supports "1" and "true")
 
-**🟢 Additional Debug Variables (4 locations):** ✅ COMPLETED (December 2024)
+**🟢 Additional Debug Variables (4 locations):** ✅ COMPLETED
 
 - [x] `packages/hyperchad/transformer/src/lib.rs:2826` - SKIP_DEFAULT_DEBUG_ATTRS ✅ MIGRATED (supports "1" and "true")
 - [x] `packages/hyperchad/transformer/src/lib.rs:3424` - DEBUG_ATTRS ✅ MIGRATED (supports "1" and "true")
 - [x] `packages/hyperchad/transformer/src/lib.rs:3430` - DEBUG_RAW_ATTRS ✅ MIGRATED (supports "1" and "true")
 - [x] `packages/hyperchad/js_bundler/src/node.rs:36` - PNPM_HOME ✅ MIGRATED (build tool detection)
 
-**📦 Technical Debt (15+ locations):**
+**📦 Technical Debt Cleanup:** ✅ COMPLETED
 
-- [ ] `packages/env_utils/src/lib.rs:142-452` - Deprecate entire package in favor of switchy_env
+- [x] `packages/env_utils/src/lib.rs:142-452` - Runtime functions removed, compile-time macros preserved ✅ COMPLETED
 
 #### 1.4 Create `switchy_process` package
 
@@ -1134,11 +1176,12 @@ These must execute in sequence:
 
 The MoosicBox codebase has made significant progress toward determinism with the switchy pattern. Key achievements include:
 
-- ✅ **Environment variables**: 100% complete - 38+ variables migrated across 17+ packages
+- ✅ **Environment variables**: 100% complete - 38+ variables migrated across 17+ packages + runtime functions removed
 - ✅ **Time operations**: Most migrated (including new `instant_now()` support)
 - ✅ **Random operations**: Complete using switchy_random
 - ✅ **UUID generation**: Complete using switchy_uuid
 - ✅ **Collections**: 83% complete - BTree variants replacing HashMap/HashSet
+- ✅ **Legacy cleanup**: Runtime environment functions removed from moosicbox_env_utils
 
 **CRITICAL DISCOVERY:** The single largest source of non-determinism is the direct use of actix-web throughout 50+ packages. However, by reordering tasks and maximizing parallelization, we can achieve significant determinism improvements while preparing for the web server migration.
 

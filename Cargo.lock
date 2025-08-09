@@ -5322,6 +5322,7 @@ dependencies = [
  "moosicbox_env_utils",
  "serde_json",
  "switchy",
+ "switchy_env",
  "thiserror 2.0.12",
 ]
 
@@ -5534,6 +5535,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "moosicbox_web_server",
+ "switchy_env",
 ]
 
 [[package]]
@@ -7734,7 +7736,6 @@ dependencies = [
  "log 0.4.27",
  "pretty_assertions",
  "test-log",
- "thiserror 2.0.12",
 ]
 
 [[package]]

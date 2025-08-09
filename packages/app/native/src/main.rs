@@ -15,7 +15,7 @@ use moosicbox_app_native::{
     PROFILE, RENDERER, STATE, STATE_LOCK, actions::handle_action, init_app_state,
 };
 use moosicbox_app_native_ui::Action;
-use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
+use switchy_env::{var_parse_opt, var_parse_or};
 
 #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(all(feature = "html", feature = "_canvas"))]
     moosicbox_app_native::visualization::disable_interval();
 
-    let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+    let threads = var_parse_or("MAX_THREADS", 64usize);
     log::debug!("Running with {threads} max blocking threads");
 
     let runtime = switchy::unsync::runtime::Builder::new()
@@ -60,8 +60,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (action_tx, action_rx) = flume::unbounded();
 
-    let width = option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0);
-    let height = option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0);
+    let width = var_parse_opt::<f32>("WINDOW_WIDTH")
+        .unwrap_or(None)
+        .unwrap_or(1000.0);
+    let height = var_parse_opt::<f32>("WINDOW_HEIGHT")
+        .unwrap_or(None)
+        .unwrap_or(600.0);
 
     let mut app = AppBuilder::new()
         .with_title("MoosicBox".to_string())
@@ -140,8 +144,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if let (Some(x), Some(y)) = (
-        option_env_i32("WINDOW_X").unwrap(),
-        option_env_i32("WINDOW_Y").unwrap(),
+        var_parse_opt::<i32>("WINDOW_X").unwrap_or(None),
+        var_parse_opt::<i32>("WINDOW_Y").unwrap_or(None),
     ) {
         app = app.with_position(x, y);
     }

@@ -2,8 +2,6 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use thiserror::Error;
-
 #[derive(Clone, Copy, Debug)]
 pub enum ParseIntError {
     InvalidDigit,
@@ -126,22 +124,6 @@ pub const fn parse_isize(b: &str) -> Result<isize, ParseIntError> {
     Ok(result as isize * sign)
 }
 
-#[derive(Error, Debug)]
-pub enum EnvUsizeError {
-    #[error(transparent)]
-    Var(#[from] std::env::VarError),
-    #[error(transparent)]
-    ParseInt(#[from] std::num::ParseIntError),
-}
-
-/// # Errors
-///
-/// * If the environment variable is missing
-/// * If encounters an invalid digit in the `&str`
-pub fn env_usize(name: &str) -> Result<usize, EnvUsizeError> {
-    Ok(std::env::var(name)?.parse::<usize>()?)
-}
-
 #[macro_export]
 macro_rules! env_usize {
     ($name:expr $(,)?) => {
@@ -150,32 +132,6 @@ macro_rules! env_usize {
             Err(_e) => panic!("Environment variable not set"),
         }
     };
-}
-
-#[derive(Error, Debug)]
-pub enum DefaultEnvUsizeError {
-    #[error(transparent)]
-    ParseInt(#[from] std::num::ParseIntError),
-}
-
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn default_env_usize(name: &str, default: usize) -> Result<usize, DefaultEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(value.parse::<usize>()?),
-        Err(_) => Ok(default),
-    }
-}
-
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn default_env_u16(name: &str, default: u16) -> Result<u16, DefaultEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(value.parse::<u16>()?),
-        Err(_) => Ok(default),
-    }
 }
 
 #[macro_export]
@@ -218,22 +174,6 @@ macro_rules! default_env_u16 {
     };
 }
 
-#[derive(Error, Debug)]
-pub enum OptionEnvUsizeError {
-    #[error(transparent)]
-    ParseInt(#[from] std::num::ParseIntError),
-}
-
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_usize(name: &str) -> Result<Option<usize>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<usize>()?)),
-        Err(_) => Ok(None),
-    }
-}
-
 #[macro_export]
 macro_rules! option_env_usize {
     ($name:expr $(,)?) => {
@@ -245,16 +185,6 @@ macro_rules! option_env_usize {
             None => None,
         }
     };
-}
-
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_u64(name: &str) -> Result<Option<u64>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<u64>()?)),
-        Err(_) => Ok(None),
-    }
 }
 
 #[macro_export]
@@ -270,16 +200,6 @@ macro_rules! option_env_u64 {
     };
 }
 
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_u32(name: &str) -> Result<Option<u32>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<u32>()?)),
-        Err(_) => Ok(None),
-    }
-}
-
 #[macro_export]
 macro_rules! option_env_u32 {
     ($name:expr $(,)?) => {
@@ -291,32 +211,6 @@ macro_rules! option_env_u32 {
             None => None,
         }
     };
-}
-
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_u16(name: &str) -> Result<Option<u16>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<u16>()?)),
-        Err(_) => Ok(None),
-    }
-}
-
-#[derive(Error, Debug)]
-pub enum OptionEnvF32Error {
-    #[error(transparent)]
-    ParseFloat(#[from] std::num::ParseFloatError),
-}
-
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_f32(name: &str) -> Result<Option<f32>, OptionEnvF32Error> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<f32>()?)),
-        Err(_) => Ok(None),
-    }
 }
 
 #[macro_export]
@@ -332,16 +226,6 @@ macro_rules! option_env_u16 {
     };
 }
 
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_isize(name: &str) -> Result<Option<isize>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<isize>()?)),
-        Err(_) => Ok(None),
-    }
-}
-
 #[macro_export]
 macro_rules! option_env_isize {
     ($name:expr $(,)?) => {
@@ -353,16 +237,6 @@ macro_rules! option_env_isize {
             None => None,
         }
     };
-}
-
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_i64(name: &str) -> Result<Option<i64>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<i64>()?)),
-        Err(_) => Ok(None),
-    }
 }
 
 #[macro_export]
@@ -378,16 +252,6 @@ macro_rules! option_env_i64 {
     };
 }
 
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_i32(name: &str) -> Result<Option<i32>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<i32>()?)),
-        Err(_) => Ok(None),
-    }
-}
-
 #[macro_export]
 macro_rules! option_env_i32 {
     ($name:expr $(,)?) => {
@@ -399,16 +263,6 @@ macro_rules! option_env_i32 {
             None => None,
         }
     };
-}
-
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_i16(name: &str) -> Result<Option<i16>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<i16>()?)),
-        Err(_) => Ok(None),
-    }
 }
 
 #[macro_export]
@@ -424,16 +278,6 @@ macro_rules! option_env_i16 {
     };
 }
 
-/// # Errors
-///
-/// * If encounters an invalid digit in the `&str`
-pub fn option_env_i8(name: &str) -> Result<Option<i8>, OptionEnvUsizeError> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value.parse::<i8>()?)),
-        Err(_) => Ok(None),
-    }
-}
-
 #[macro_export]
 macro_rules! option_env_i8 {
     ($name:expr $(,)?) => {
@@ -445,11 +289,6 @@ macro_rules! option_env_i8 {
             None => None,
         }
     };
-}
-
-#[must_use]
-pub fn default_env(name: &str, default: &str) -> String {
-    std::env::var(name).unwrap_or_else(|_| default.to_string())
 }
 
 #[macro_export]

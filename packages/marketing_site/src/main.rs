@@ -9,8 +9,8 @@
 
 use std::sync::Arc;
 
-use moosicbox_env_utils::{default_env_usize, option_env_f32, option_env_i32};
 use moosicbox_marketing_site::{ROUTER, VIEWPORT};
+use switchy_env::{var_parse_opt, var_parse_or};
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         moosicbox_logging::init(filename, Some(layers)).expect("Failed to initialize FreeLog");
     }
 
-    let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+    let threads = var_parse_or("MAX_THREADS", 64usize);
     log::debug!("Running with {threads} max blocking threads");
     let runtime = switchy_async::runtime::Builder::new()
         .max_blocking_threads(u16::try_from(threads).unwrap())
@@ -51,13 +51,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_runtime_handle(runtime.handle());
 
     let mut builder = app.with_size(
-        option_env_f32("WINDOW_WIDTH").unwrap().unwrap_or(1000.0),
-        option_env_f32("WINDOW_HEIGHT").unwrap().unwrap_or(600.0),
+        var_parse_opt::<f32>("WINDOW_WIDTH")
+            .unwrap_or(None)
+            .unwrap_or(1000.0),
+        var_parse_opt::<f32>("WINDOW_HEIGHT")
+            .unwrap_or(None)
+            .unwrap_or(600.0),
     );
 
     if let (Some(x), Some(y)) = (
-        option_env_i32("WINDOW_X").unwrap(),
-        option_env_i32("WINDOW_Y").unwrap(),
+        var_parse_opt::<i32>("WINDOW_X").unwrap_or(None),
+        var_parse_opt::<i32>("WINDOW_Y").unwrap_or(None),
     ) {
         builder.position(x, y);
     }

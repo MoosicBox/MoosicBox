@@ -10,10 +10,10 @@ mod ws;
 use actix_cors::Cors;
 use actix_web::{App, http, middleware};
 use api::health_endpoint;
-use moosicbox_env_utils::{default_env, default_env_usize, option_env_usize};
 use moosicbox_logging::free_log_client::DynLayer;
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
 use std::{env, sync::LazyLock};
+use switchy_env::{var_or, var_parse_opt, var_parse_or};
 use tokio::try_join;
 
 static WS_SERVER_HANDLE: LazyLock<tokio::sync::RwLock<Option<ws::server::service::Handle>>> =
@@ -27,15 +27,14 @@ fn main() -> Result<(), std::io::Error> {
         if args.len() > 1 {
             args[1].parse::<u16>().expect("Invalid port argument")
         } else {
-            default_env_usize("PORT", 8000)
-                .unwrap_or(8000)
+            var_parse_or("PORT", 8000usize)
                 .try_into()
                 .expect("Invalid PORT environment variable")
         }
     };
 
     actix_web::rt::System::with_tokio_rt(|| {
-        let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+        let threads = var_parse_or("MAX_THREADS", 64usize);
         log::debug!("Running with {threads} max blocking threads");
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -142,13 +141,13 @@ fn main() -> Result<(), std::io::Error> {
 
         let mut http_server = actix_web::HttpServer::new(app);
 
-        if let Ok(Some(workers)) = option_env_usize("ACTIX_WORKERS") {
+        if let Some(workers) = var_parse_opt::<usize>("ACTIX_WORKERS").unwrap_or(None) {
             log::debug!("Running with {workers} Actix workers");
             http_server = http_server.workers(workers);
         }
 
         let http_server = http_server
-            .bind((default_env("BIND_ADDR", "0.0.0.0"), service_port))?
+            .bind((var_or("BIND_ADDR", "0.0.0.0"), service_port))?
             .run();
 
         if let Err(err) = try_join!(

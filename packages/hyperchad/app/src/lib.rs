@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use clap::{Parser, Subcommand, arg, command};
 use hyperchad_renderer::{Color, RenderRunner, Renderer, ToRenderRunner};
 use hyperchad_router::{Navigation, RoutePath, Router};
-use moosicbox_env_utils::default_env_usize;
 use switchy::unsync::{futures::channel::oneshot, runtime::Handle};
+use switchy_env::var_parse_or;
 
 pub mod renderer;
 
@@ -497,7 +497,7 @@ impl<R: Renderer + ToRenderRunner + Generator + Cleaner + Clone + 'static> App<R
         Ok(if let Some(handle) = self.runtime_handle.clone() {
             handle
         } else {
-            let threads = default_env_usize("MAX_THREADS", 64).unwrap_or(64);
+            let threads = var_parse_or("MAX_THREADS", 64usize);
             log::debug!("Running with {threads} max blocking threads");
             let runtime = switchy::unsync::runtime::Builder::new()
                 .max_blocking_threads(u16::try_from(threads).unwrap())
