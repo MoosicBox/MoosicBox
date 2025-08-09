@@ -408,12 +408,71 @@ Application code has race conditions. `switchy_async` provides deterministic run
 
 **Parallel execution possible:**
 
-- [ ] Replace ALL remaining HashMap/HashSet with BTreeMap/BTreeSet
-- [ ] Create `switchy_uuid` package
-- [ ] Create `switchy_env` package
-- [ ] Create `switchy_process` package
-- [ ] Fix remaining direct time/instant usage
-- [ ] Add chrono DateTime support to `switchy_time`
+#### 1.1 Replace ALL remaining HashMap/HashSet with BTreeMap/BTreeSet
+
+**Files to modify (89 occurrences found):**
+
+- `packages/scan/src/output.rs:583,620,664` - HashSet<u64> for IDs
+- `packages/server/src/ws/server.rs:132,137,141` - Connection maps
+- `packages/ws/src/ws.rs:86` - CONNECTION_DATA static
+- `packages/player/src/api.rs:125` - PlaybackHandler map
+- `packages/player/src/lib.rs:228,364,365` - Query/headers maps
+- `packages/hyperchad/state/src/store.rs:14` - Cache storage
+- `packages/hyperchad/renderer/egui/src/v1.rs:229-777` - UI state maps (15+ occurrences)
+- `packages/hyperchad/renderer/egui/src/v2.rs:178-180,507` - UI element maps
+- `packages/tunnel_server/src/ws/server.rs:332,343-352,530` - WebSocket state
+- `packages/tunnel_sender/src/sender.rs:187,275,619-1013` - Request tracking
+- `packages/files/src/files/track_pool.rs:85-86` - Semaphore/pool maps
+- `packages/upnp/src/listener.rs:68-69` - Status tracking
+- `packages/load_balancer/src/server.rs:27,43,66` - Cluster configuration
+- `packages/load_balancer/src/load_balancer.rs:35,39` - Router maps
+- `packages/app/` - Multiple UI state maps (10+ files)
+- `packages/hyperchad/renderer/html/` - Response triggers and headers (5+ files)
+
+#### 1.2 Create `switchy_uuid` package
+
+**Files needing migration (6 direct usages):**
+
+- `packages/tunnel_server/src/api.rs:27,110,129` - Token generation
+- `packages/auth/src/lib.rs:16,75,88` - Magic token generation
+- `packages/simvar/examples/api_testing/src/main.rs:20,276,398` - Test IDs
+
+#### 1.3 Create `switchy_env` package
+
+**Files needing migration (58 occurrences):**
+
+- `packages/database_connection/src/creds.rs:38-78` - Database credentials
+- `packages/env_utils/src/lib.rs:142-452` - All env utilities
+- `packages/auth/src/lib.rs:120` - TUNNEL_ACCESS_TOKEN
+- `packages/app/native/ui/src/api/tidal.rs:16,65-66` - Tidal credentials
+- `packages/simvar/harness/src/lib.rs:52,115` - Simulator config
+- `packages/simvar/harness/src/config.rs:55,377` - Simulator settings
+- `packages/time/src/simulator.rs:26,63` - Time offsets
+- `packages/random/src/simulator.rs:13,48` - Random seeds
+- `packages/load_balancer/src/server.rs:44,81` - SSL configuration
+- `packages/load_balancer/src/load_balancer.rs:12,19,26,30` - Port/SSL paths
+- Build scripts and main.rs files (10+ occurrences)
+
+#### 1.4 Create `switchy_process` package
+
+**Files needing migration (16 occurrences):**
+
+- `packages/bloaty/src/main.rs:113` - Process exit
+- `packages/server/src/lib.rs:769` - puffin_viewer launch
+- `packages/hyperchad/renderer/egui/src/v1.rs:3780` - puffin_viewer
+- `packages/assert/src/lib.rs:25,44,183,200,221,267,325,358` - Assertion exits
+- Build scripts: `tunnel_server`, `server`, `marketing_site`, `app/native`, `hyperchad/renderer/vanilla_js`
+
+#### 1.5 Fix remaining direct time/instant usage
+
+**Files to modify:**
+
+- `packages/files/src/lib.rs:161,192` - Performance timing
+- `packages/audio_output/src/cpal.rs:596` - Audio timing
+
+#### 1.6 Add chrono DateTime support to `switchy_time`
+
+- Extend `packages/time/src/lib.rs` with DateTime abstractions
 
 These tasks have no interdependencies and can execute simultaneously.
 
@@ -423,10 +482,34 @@ These tasks have no interdependencies and can execute simultaneously.
 
 **Parallel execution possible:**
 
-- [ ] Sort all `fs::read_dir` operations
-- [ ] Document global lock hierarchy
-- [ ] Add deadlock detection in debug builds
-- [ ] Create deterministic file iteration helpers
+#### 2.1 Sort all `fs::read_dir` operations
+
+**Files to modify (9 occurrences):**
+
+- `packages/scan/src/output.rs:50` - Cover file scanning
+- `packages/scan/src/local.rs:566` - Directory scanning
+- `packages/files/src/lib.rs:450` - Cover directory reading
+- `packages/hyperchad/app/src/renderer.rs:452` - Resource copying
+- `packages/hyperchad/renderer/vanilla_js/build.rs:118` - Build script
+- `packages/clippier/tests/command_tests.rs:173,192` - Test utilities
+- `packages/clippier/test_utilities/src/lib.rs:192` - Test helpers
+- `packages/clippier/src/test_utils.rs:223` - Test utilities
+
+**Implementation:** Add `.sort()` after collecting entries, migrate to `switchy_fs`
+
+#### 2.2 Document global lock hierarchy
+
+- Create `LOCK_HIERARCHY.md` documenting all Arc<RwLock> usage
+- Focus on: WebSocket connections, player state, cache maps
+
+#### 2.3 Add deadlock detection in debug builds
+
+- Add to all RwLock acquisitions in debug mode
+- Priority packages: `ws`, `server`, `tunnel_server`, `player`
+
+#### 2.4 Create deterministic file iteration helpers
+
+- Add to `switchy_fs` package: `read_dir_sorted()`, `walk_dir_sorted()`
 
 These are mechanical changes that don't conflict with each other.
 
@@ -436,13 +519,52 @@ These are mechanical changes that don't conflict with each other.
 
 **Execution order:**
 
-1. [ ] Design trait abstractions for web concepts (Request, Response, Extractors, Middleware)
-2. **Then (parallel):**
-    - [ ] Implement traits for actix-web
-    - [ ] Implement traits for moosicbox_web_server
-    - [ ] Enhance moosicbox_web_server with missing features (see Section 1 for detailed list)
-3. [ ] Build compatibility layer and migration tooling
-4. [ ] Apply abstractions to leaf packages as proof of concept
+#### 3.1 Design trait abstractions for web concepts
+
+**Create in `packages/web_server/src/traits/`:**
+
+- `request.rs` - Request trait abstracting HttpRequest
+- `response.rs` - Response trait abstracting HttpResponse
+- `extractors.rs` - Data extraction traits (Path, Query, Json, etc.)
+- `middleware.rs` - Middleware trait abstraction
+- `service.rs` - Service factory traits
+
+#### 3.2 Implement traits (parallel after 3.1)
+
+**actix-web implementations:**
+
+- Create `packages/web_server/src/actix/` module
+- Implement all traits for actix types
+
+**moosicbox_web_server implementations:**
+
+- Enhance existing `packages/web_server/src/`
+- Add missing features from Section 1 checklist
+
+**Missing features to add (from Section 1):**
+
+- WebSocket support (critical for 5 packages)
+- Server-sent events
+- Multipart form handling
+- Custom error responses
+- Request guards/extractors
+- Middleware system
+- Static file serving
+- CORS configuration
+
+#### 3.3 Build compatibility layer
+
+- Migration helpers in `packages/web_server/src/migration/`
+- Automated code transformation tools
+- Dual-mode operation support
+
+#### 3.4 Apply to leaf packages (proof of concept)
+
+**Start with simplest packages:**
+
+- `packages/config/src/api/` (simple REST)
+- `packages/scan/src/api.rs` (basic endpoints)
+- `packages/menu/src/api.rs` (no WebSockets)
 
 The trait design must complete before implementations begin. See Section 1 "Web Server Framework" for detailed feature requirements.
 
@@ -454,20 +576,64 @@ This phase executes the migration strategy detailed in Section 1.
 
 **Parallel migration groups** (no interdependencies):
 
-- [ ] **Auth/Config group**: `auth`, `config` packages
-- [ ] **Media group**: `music_api`, `library`, `scan`, `search`
-- [ ] **UI group**: `admin_htmx`, `menu`
-- [ ] **Network group**: `upnp`, `downloader`
-- [ ] **Audio group**: `audio_zone`, `audio_output`
+#### 4.1 Auth/Config group
+
+- `packages/auth/src/lib.rs` - FromRequest implementations
+- `packages/config/src/api/mod.rs` - Service bindings
+
+#### 4.2 Media group
+
+- `packages/music_api/src/api.rs` - API endpoints
+- `packages/library/src/api/` - Multiple API modules
+- `packages/scan/src/api.rs` - Scan endpoints
+- `packages/search/src/api.rs` - Search endpoints
+
+#### 4.3 UI group
+
+- `packages/admin_htmx/src/api/mod.rs` - HTMX endpoints
+- `packages/menu/src/api.rs` - Menu API
+
+#### 4.4 Network group
+
+- `packages/upnp/src/api.rs` - UPnP discovery
+- `packages/downloader/src/api/mod.rs` - Download management
+
+#### 4.5 Audio group
+
+- `packages/audio_zone/src/api.rs` - Zone management
+- `packages/audio_output/src/api.rs` - Output control
 
 **Sequential requirements:**
 
-- [ ] Core `server` package (must migrate last - everything depends on it)
-- [ ] `tunnel_server` package (after server, includes WebSocket migration)
-- [ ] WebSocket implementations (critical for real-time features)
-- [ ] Remove actix-web dependency from workspace
+#### 4.6 Core server package
 
-See Section 1 for the full list of 50+ packages requiring migration.
+- `packages/server/src/lib.rs` - Main server (50+ service bindings)
+- `packages/server/src/api/` - All API modules
+- Must migrate last - everything depends on it
+
+#### 4.7 Tunnel server (after 4.6)
+
+- `packages/tunnel_server/src/main.rs` - Server setup
+- `packages/tunnel_server/src/ws/` - WebSocket handling
+- `packages/tunnel_server/src/api.rs` - API endpoints
+- `packages/tunnel_server/src/auth.rs` - Auth middleware
+
+#### 4.8 WebSocket implementations
+
+**Critical packages using WebSockets:**
+
+- `packages/ws/src/ws.rs` - Core WebSocket
+- `packages/server/src/ws/server.rs` - Server WebSocket
+- `packages/player/src/api.rs` - Player WebSocket
+- `packages/session/src/api/` - Session WebSocket
+- `packages/hyperchad/renderer/html/actix/` - UI WebSocket
+
+#### 4.9 Final cleanup
+
+- Remove actix-web from Cargo.toml dependencies
+- Update all imports and use statements
+
+**Total files to migrate:** 50+ files across 30+ packages
 
 ### Phase 5: Final Determinism
 
@@ -475,10 +641,34 @@ See Section 1 for the full list of 50+ packages requiring migration.
 
 **Parallel execution possible:**
 
-- [ ] Fix remaining async race conditions
-- [ ] Address floating-point determinism where needed
-- [ ] Update comprehensive documentation
-- [ ] Final testing sweep
+#### 5.1 Fix remaining async race conditions
+
+**Focus areas:**
+
+- WebSocket message ordering in `packages/ws/`, `packages/server/src/ws/`
+- Player state updates in `packages/player/src/lib.rs`
+- Session management in `packages/session/`
+- Use `select_biased!` for deterministic future selection
+
+#### 5.2 Address floating-point determinism
+
+**Packages with float operations:**
+
+- `packages/resampler/` - Audio resampling
+- `packages/audio_output/` - Volume/gain calculations
+- Consider using fixed-point or controlled rounding
+
+#### 5.3 Update comprehensive documentation
+
+- Update README.md with determinism guarantees
+- Document all switchy packages and their usage
+- Add examples for deterministic testing
+
+#### 5.4 Final testing sweep
+
+- Run full test suite with `SIMULATOR_*` variables
+- Verify identical outputs across multiple runs
+- Performance regression testing
 
 ## Task Dependencies and Parallelization
 
