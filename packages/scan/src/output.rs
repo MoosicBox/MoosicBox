@@ -47,9 +47,14 @@ async fn search_for_cover(
 
     log::debug!("Searching for existing cover in {}...", path.display());
 
-    if let Some(cover_file) = std::fs::read_dir(path)
+    let mut entries: Vec<_> = std::fs::read_dir(path)
         .unwrap()
         .filter_map(Result::ok)
+        .collect();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+
+    if let Some(cover_file) = entries
+        .into_iter()
         .find(|p| p.file_name().to_str().unwrap() == name)
         .map(|dir| dir.path())
     {

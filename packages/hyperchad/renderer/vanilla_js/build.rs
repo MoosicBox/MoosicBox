@@ -115,7 +115,13 @@ fn main() {
             .unwrap();
     }
 
-    for entry in std::fs::read_dir(src_dir).unwrap().filter_map(Result::ok) {
+    let mut entries: Vec<_> = std::fs::read_dir(src_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .collect();
+    entries.sort_by_key(|x| x.file_name());
+
+    for entry in entries {
         println!("cargo:rerun-if-changed={}", entry.path().display());
     }
 

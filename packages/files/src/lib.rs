@@ -447,7 +447,15 @@ pub async fn search_for_cover(
 ) -> Result<Option<PathBuf>, std::io::Error> {
     log::trace!("Searching for cover {}", path.display());
     if let Ok(mut cover_dir) = tokio::fs::read_dir(path.clone()).await {
+        let mut entries = vec![];
         while let Ok(Some(p)) = cover_dir.next_entry().await {
+            entries.push(p);
+        }
+
+        // Sort entries for deterministic processing
+        entries.sort_by_key(tokio::fs::DirEntry::file_name);
+
+        for p in entries {
             if p.file_name().to_str().is_some_and(|name| {
                 name.to_lowercase()
                     .starts_with(format!("{filename}.").as_str())

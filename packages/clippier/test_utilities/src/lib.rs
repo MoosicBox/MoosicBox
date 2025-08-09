@@ -189,8 +189,10 @@ pub mod test_resources {
     fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
         std::fs::create_dir_all(dst)?;
 
-        for entry in std::fs::read_dir(src)? {
-            let entry = entry?;
+        let mut entries: Vec<_> = std::fs::read_dir(src)?.collect::<Result<Vec<_>, _>>()?;
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+
+        for entry in entries {
             let src_path = entry.path();
             let dst_path = dst.join(entry.file_name());
 

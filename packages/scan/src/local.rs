@@ -574,6 +574,9 @@ async fn scan_dir(
         entries.push(entry);
     }
 
+    // Sort entries for deterministic processing
+    entries.sort_by_key(tokio::fs::DirEntry::file_name);
+
     let mut handles = vec![];
 
     for entry in entries {

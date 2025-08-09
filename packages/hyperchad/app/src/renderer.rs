@@ -449,8 +449,13 @@ pub mod html {
 
                 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
                     std::fs::create_dir_all(dst)?;
-                    let mut read_dir = std::fs::read_dir(src)?;
-                    while let Some(Ok(entry)) = read_dir.next() {
+                    let mut entries: Vec<_> =
+                        std::fs::read_dir(src)?.filter_map(Result::ok).collect();
+
+                    // Sort entries for deterministic processing
+                    entries.sort_by_key(std::fs::DirEntry::file_name);
+
+                    for entry in entries {
                         let ty = entry.file_type()?;
                         if ty.is_dir() {
                             copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;

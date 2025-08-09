@@ -801,20 +801,20 @@ These tasks have no interdependencies and can execute simultaneously.
 
 **Parallel execution possible:**
 
-#### 2.1 Sort all `fs::read_dir` operations
+#### 2.1 Sort all `fs::read_dir` operations ✅ COMPLETED
 
-**Files to modify (9 occurrences):**
+**Files modified (9 occurrences):**
 
-- [ ] `packages/scan/src/output.rs:50` - Cover file scanning
-- [ ] `packages/scan/src/local.rs:566` - Directory scanning
-- [ ] `packages/files/src/lib.rs:450` - Cover directory reading
-- [ ] `packages/hyperchad/app/src/renderer.rs:452` - Resource copying
-- [ ] `packages/hyperchad/renderer/vanilla_js/build.rs:118` - Build script
-- [ ] `packages/clippier/tests/command_tests.rs:173,192` - Test utilities
-- [ ] `packages/clippier/test_utilities/src/lib.rs:192` - Test helpers
-- [ ] `packages/clippier/src/test_utils.rs:223` - Test utilities
+- [x] `packages/scan/src/output.rs:50` - Cover file scanning
+- [x] `packages/scan/src/local.rs:566` - Directory scanning
+- [x] `packages/files/src/lib.rs:450` - Cover directory reading
+- [x] `packages/hyperchad/app/src/renderer.rs:452` - Resource copying
+- [x] `packages/hyperchad/renderer/vanilla_js/build.rs:118` - Build script
+- [x] `packages/clippier/tests/command_tests.rs:173,192` - Test utilities (already sorted)
+- [x] `packages/clippier/test_utilities/src/lib.rs:192` - Test helpers
+- [x] `packages/clippier/src/test_utils.rs:223` - Test utilities
 
-**Implementation:** Add `.sort()` after collecting entries, migrate to `switchy_fs`
+**Implementation:** Added sorting after collecting entries for deterministic directory iteration
 
 #### 2.2 Document global lock hierarchy
 
