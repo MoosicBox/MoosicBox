@@ -656,7 +656,7 @@ jobs:
                       PACKAGE_PLURAL=$([[ "$PACKAGES_LENGTH" -eq 1 ]] && echo "package" || echo "packages")
                       echo "📊 **Build Matrix**: $MATRIX_LENGTH $JOB_PLURAL for $PACKAGES_LENGTH $PACKAGE_PLURAL will be built/tested" >> $GITHUB_STEP_SUMMARY
                       echo "" >> $GITHUB_STEP_SUMMARY
-                      echo "**Affected packages:**" >> $GITHUB_STEP_SUMMARY
+                      echo "<details><summary>Affected packages</summary>" >> $GITHUB_STEP_SUMMARY
 
                       # Combine matrix and reasoning data to show reasoning under each package
                       REASONING_DATA='${{ needs.determine-affected-packages.outputs.reasoning }}'
@@ -698,14 +698,14 @@ jobs:
                               # Generate the markdown output with job details
                               map(
                                   if (.reasoning | length) > 0 then
-                                      "- <details>\n  <summary>" + .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")</summary>\n  \n" +
+                                      "<details>\n  <summary>" + .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")</summary>\n  \n" +
                                       "  **Why this package is affected:**\n" +
                                       (.reasoning | map("  - " + .) | join("\n")) +
                                       "\n  \n  **Jobs to run:**\n" +
                                       (.jobs | map("  - **" + .os + "** " + (if .nightly then "(nightly)" else "(stable)" end) + "\n    - Features: `" + (.features | join("`, `")) + "`" + (if .requiredFeatures then "\n    - Required Features: `" + .requiredFeatures + "`" else "" end)) | join("\n")) +
                                       "\n  </details>"
                                   else
-                                      "- " + .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")"
+                                      .name + " (" + (.job_count | tostring) + " job" + (if .job_count > 1 then "s" else "" end) + ")"
                                   end
                               ) |
                               join("\n")
@@ -723,7 +723,7 @@ jobs:
                   fi
 
                   # Docker build summary (using outputs from determine-affected-packages job)
-                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "</details>" >> $GITHUB_STEP_SUMMARY
                   echo "## 🐳 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
                   echo "" >> $GITHUB_STEP_SUMMARY
 
