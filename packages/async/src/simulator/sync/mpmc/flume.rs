@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 use std::task::Waker;
 use std::time::Duration;
 
+use switchy_time::instant_now;
+
 // Re-export flume error types for compatibility
 pub use flume::{RecvError, RecvTimeoutError, SendError, TryRecvError, TrySendError};
 
@@ -132,7 +134,7 @@ impl<T> Receiver<T> {
     /// * Returns `RecvTimeoutError::Timeout` if timeout expires
     /// * Returns `RecvTimeoutError::Disconnected` if all senders have been dropped
     pub fn recv_timeout(&self, timeout: Duration) -> Result<T, RecvTimeoutError> {
-        let start = std::time::Instant::now();
+        let start = instant_now();
         let mut iteration = 0;
 
         loop {

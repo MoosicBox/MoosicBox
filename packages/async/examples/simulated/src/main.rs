@@ -1,7 +1,8 @@
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use switchy_async::{Error, runtime::Runtime, task, time};
 use switchy_random::{rng, simulator::initial_seed};
+use switchy_time::now;
 
 fn main() -> Result<(), Error> {
     pretty_env_logger::init();
@@ -16,8 +17,8 @@ fn main() -> Result<(), Error> {
         // Create a random number generator so we can generate random numbers
         // A small function to generate the time in seconds when we call it.
         let time = || {
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
+            now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_secs()
         };

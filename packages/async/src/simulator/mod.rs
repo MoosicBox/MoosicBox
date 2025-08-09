@@ -255,9 +255,10 @@ mod test {
     #[test_log::test(crate::internal_test(real_time))]
     async fn test_new_macro_syntax_works() {
         use std::time::Duration;
+        use switchy_time::instant_now;
 
         // Test that the new macro syntax works with real time
-        let start = std::time::Instant::now();
+        let start = instant_now();
         super::time::sleep(Duration::from_millis(10)).await;
         let elapsed = start.elapsed();
 

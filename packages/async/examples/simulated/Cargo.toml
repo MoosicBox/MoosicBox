@@ -11,6 +11,7 @@ version     = "0.1.0"
 [dependencies]
 switchy_async  = { workspace = true, features = ["time", "tokio"] }
 switchy_random = { workspace = true, features = ["simulator"] }
+switchy_time   = { workspace = true, features = ["simulator"] }
 
 pretty_env_logger = { workspace = true }
 

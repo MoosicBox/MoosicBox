@@ -6,6 +6,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use switchy_time::{instant_now, now};
+
 use futures::future::FusedFuture;
 use pin_project_lite::pin_project;
 
@@ -105,8 +107,8 @@ impl Instant {
 fn system_time_to_instant(
     target: SystemTime,
 ) -> Result<std::time::Instant, std::time::SystemTimeError> {
-    let now_sys = SystemTime::now();
-    let now_inst = std::time::Instant::now();
+    let now_sys = now();
+    let now_inst = instant_now();
 
     if target >= now_sys {
         // target is in the future (or now)

@@ -593,7 +593,7 @@ impl<T: AudioOutputSample> AudioWrite for CpalAudioOutputImpl<T> {
                 *empty_flag = false;
             }
 
-            let start_time = std::time::Instant::now();
+            let start_time = switchy_time::instant_now();
 
             // Wait for the CPAL callback to signal ring buffer empty
             if let Ok(mut empty_flag) = self.completion_mutex.lock() {

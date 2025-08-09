@@ -767,18 +767,18 @@ All HashMap/HashSet instances have been migrated to BTreeMap/BTreeSet or removed
 
 - [x] `packages/env_utils/src/lib.rs:142-452` - Runtime functions removed, compile-time macros preserved ✅ COMPLETED
 
-#### 1.4 Fix remaining direct time/instant usage
+#### 1.4 Fix remaining direct time/instant usage ✅ COMPLETED
 
-**Files to modify:**
+**Files modified:**
 
-- [ ] `packages/files/src/lib.rs:161,192` - Performance timing
-- [ ] `packages/audio_output/src/cpal.rs:596` - Audio timing
-- [ ] `packages/async/examples/simulated/src/main.rs:19` - SystemTime::now()
-- [ ] `packages/async/src/simulator/sync/mpmc/flume.rs:135` - Instant::now()
-- [ ] `packages/async/src/simulator/futures.rs:108-109` - SystemTime and Instant
-- [ ] `packages/async/src/simulator/mod.rs:260` - Instant::now()
+- [x] `packages/files/src/lib.rs:161,192` - Performance timing
+- [x] `packages/audio_output/src/cpal.rs:596` - Audio timing
+- [x] `packages/async/examples/simulated/src/main.rs:19` - SystemTime::now()
+- [x] `packages/async/src/simulator/sync/mpmc/flume.rs:135` - Instant::now()
+- [x] `packages/async/src/simulator/futures.rs:108-109` - SystemTime and Instant
+- [x] `packages/async/src/simulator/mod.rs:260` - Instant::now()
 
-Note: Files in `packages/time/src/` are part of the switchy_time implementation itself
+All direct `std::time` usage has been migrated to use `switchy_time` functions.
 
 #### 1.5 Add chrono DateTime support to `switchy_time`
 

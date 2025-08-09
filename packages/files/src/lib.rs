@@ -7,7 +7,6 @@ use std::{
     path::{Path, PathBuf},
     pin::Pin,
     sync::{Arc, LazyLock, atomic::AtomicUsize},
-    time::Instant,
 };
 
 use atomic_float::AtomicF64;
@@ -158,7 +157,7 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
     on_speed: OnSpeed,
     on_progress: Option<OnProgress>,
 ) -> Result<(), SaveBytesStreamToFileError> {
-    let last_instant = Arc::new(tokio::sync::Mutex::new(Instant::now()));
+    let last_instant = Arc::new(tokio::sync::Mutex::new(switchy_time::instant_now()));
     let bytes_since_last_interval = Arc::new(AtomicUsize::new(0));
     let speed = Arc::new(AtomicF64::new(0.0));
 
@@ -189,7 +188,7 @@ pub async fn save_bytes_stream_to_file_with_speed_listener<
                     let bytes = bytes_since_last_interval
                         .fetch_add(read, std::sync::atomic::Ordering::SeqCst)
                         + read;
-                    let now = Instant::now();
+                    let now = switchy_time::instant_now();
                     let millis = now.duration_since(*last_instant).as_millis();
 
                     if millis >= 1000 {
