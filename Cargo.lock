@@ -14006,7 +14006,6 @@ version = "0.1.4"
 dependencies = [
  "log 0.4.27",
  "scoped-tls",
- "switchy_env",
  "switchy_random",
 ]
 

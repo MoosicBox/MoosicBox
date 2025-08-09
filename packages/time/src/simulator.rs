@@ -5,7 +5,6 @@ use std::{
 };
 
 use scoped_tls::scoped_thread_local;
-use switchy_env::var_parse_or;
 
 pub struct RealTime;
 
@@ -22,8 +21,11 @@ thread_local! {
 }
 
 fn gen_epoch_offset() -> u64 {
-    let default_value = switchy_random::rng().gen_range(1..100_000_000_000_000u64);
-    var_parse_or("SIMULATOR_EPOCH_OFFSET", default_value)
+    let value = switchy_random::rng().gen_range(1..100_000_000_000_000u64);
+
+    std::env::var("SIMULATOR_EPOCH_OFFSET")
+        .ok()
+        .map_or(value, |x| x.parse::<u64>().unwrap())
 }
 
 /// # Panics
@@ -58,7 +60,9 @@ fn gen_step_multiplier() -> u64 {
         let value = switchy_random::rng().gen_range_disti(1..1_000_000_000, 20);
         if value == 0 { 1 } else { value }
     };
-    var_parse_or("SIMULATOR_STEP_MULTIPLIER", value)
+    std::env::var("SIMULATOR_STEP_MULTIPLIER")
+        .ok()
+        .map_or(value, |x| x.parse::<u64>().unwrap())
 }
 
 /// # Panics
