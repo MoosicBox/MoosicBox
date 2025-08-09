@@ -394,7 +394,7 @@ pub mod html {
                                 container: view, ..
                             }) => {
                                 let html = container_element_to_html_response(
-                                    &std::collections::HashMap::new(),
+                                    &std::collections::BTreeMap::new(),
                                     &view,
                                     Some(&*VIEWPORT),
                                     Some(*BACKGROUND_COLOR),

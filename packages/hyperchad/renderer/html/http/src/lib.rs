@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::BTreeMap, sync::LazyLock};
 
 use http::Response;
 use hyperchad_color::Color;
@@ -92,7 +92,7 @@ impl<R: HtmlTagRenderer + Sync> HttpApp<R> {
     /// * Shouldn't
     #[allow(clippy::too_many_lines)]
     pub async fn process(&self, req: &RouteRequest) -> Result<Response<Vec<u8>>, Error> {
-        static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+        static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 
         log::debug!("process: req={req:?}");
 

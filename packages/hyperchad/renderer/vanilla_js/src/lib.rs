@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::HashMap, io::Write, sync::LazyLock};
+use std::{collections::BTreeMap, io::Write, sync::LazyLock};
 
 use async_trait::async_trait;
 use const_format::concatcp;
@@ -795,7 +795,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
 
     fn partial_html(
         &self,
-        _headers: &HashMap<String, String>,
+        _headers: &BTreeMap<String, String>,
         container: &Container,
         content: String,
         _viewport: Option<&str>,
@@ -812,7 +812,7 @@ impl HtmlTagRenderer for VanillaJsTagRenderer {
 
     fn root_html(
         &self,
-        _headers: &HashMap<String, String>,
+        _headers: &BTreeMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,

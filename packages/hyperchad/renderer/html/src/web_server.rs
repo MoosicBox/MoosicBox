@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     sync::{Arc, LazyLock},
 };
 
@@ -230,7 +230,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync> WebServerResponseProcessor<Prepar
         content: Content,
         req: PreparedRequest,
     ) -> Result<(Bytes, String), hyperchad_renderer_html_web_server::WebServerError> {
-        static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+        static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 
         Ok(match content {
             hyperchad_renderer::Content::View(View {

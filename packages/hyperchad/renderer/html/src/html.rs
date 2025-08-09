@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::{collections::HashMap, io::Write};
+use std::{collections::BTreeMap, io::Write};
 
 use hyperchad_renderer::{Color, HtmlTagRenderer};
 use hyperchad_router::Container;
@@ -1043,7 +1043,7 @@ pub fn container_element_to_html(
 /// * If there were any IO errors writing the `Container` as an HTML response
 #[allow(clippy::similar_names, clippy::implicit_hasher)]
 pub fn container_element_to_html_response(
-    headers: &HashMap<String, String>,
+    headers: &BTreeMap<String, String>,
     container: &Container,
     viewport: Option<&str>,
     background: Option<Color>,

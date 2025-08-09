@@ -216,7 +216,7 @@ async fn update_visualization(
     visualization_height: f32,
     track: CurrentTrack,
 ) {
-    use std::{collections::HashMap, sync::Arc};
+    use std::{collections::BTreeMap, sync::Arc};
 
     use switchy::unsync::sync::RwLock;
 
@@ -224,8 +224,8 @@ async fn update_visualization(
     static BAR_WIDTH: f32 = 1.0;
     static GAP: f32 = 2.0;
 
-    static CACHE: LazyLock<RwLock<HashMap<String, Arc<[u8]>>>> =
-        LazyLock::new(|| RwLock::new(HashMap::new()));
+    static CACHE: LazyLock<RwLock<BTreeMap<String, Arc<[u8]>>>> =
+        LazyLock::new(|| RwLock::new(BTreeMap::new()));
 
     let track_id = track.id;
     let api_source = track.api_source;

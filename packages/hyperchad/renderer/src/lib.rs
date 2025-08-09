@@ -295,7 +295,7 @@ pub trait HtmlTagRenderer {
 
     fn partial_html(
         &self,
-        headers: &std::collections::HashMap<String, String>,
+        headers: &std::collections::BTreeMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,
@@ -305,7 +305,7 @@ pub trait HtmlTagRenderer {
     #[allow(clippy::too_many_arguments)]
     fn root_html(
         &self,
-        headers: &std::collections::HashMap<String, String>,
+        headers: &std::collections::BTreeMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,

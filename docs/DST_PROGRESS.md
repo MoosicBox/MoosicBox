@@ -151,7 +151,7 @@ Extend `switchy_time` to include:
 
 ## 3. Non-Deterministic Collections
 
-**Status:** 🟡 Important | ⏳ In Progress
+**Status:** 🟢 Minor | ✅ Mostly Complete (83% done)
 
 ### Major Offenders (100+ occurrences)
 
@@ -385,6 +385,26 @@ Application code has race conditions. `switchy_async` provides deterministic run
 
 **Status:** 🔴 Critical | ❌ Needs systematic review
 
+## 14. UI Framework Limitations (egui)
+
+**Status:** 🟡 Important | ❌ Blocked by external dependency
+
+### Problem
+
+The egui UI framework requires HashMap for performance-critical operations. Converting these to BTreeMap would cause significant performance degradation in the UI.
+
+### Affected Files
+
+- `packages/hyperchad/renderer/egui/src/v1.rs:229-777` - UI state maps (15+ occurrences)
+- `packages/hyperchad/renderer/egui/src/v2.rs:178-180,507` - UI element maps
+
+### Recommendation
+
+- Accept non-determinism in UI components as acceptable trade-off
+- Document that UI state is intentionally non-deterministic
+- Consider UI testing strategies that don't rely on deterministic state
+- Focus determinism efforts on core business logic instead
+
 ### Risk Areas
 
 | Package                     | Locks                 | Risk               | Priority     |
@@ -406,11 +426,15 @@ Application code has race conditions. `switchy_async` provides deterministic run
 
 **Goal: Maximum determinism improvement with minimal effort**
 
+**Status: 83% Complete - HashMap/HashSet migration nearly finished**
+
 **Parallel execution possible:**
 
 #### 1.1 Replace ALL remaining HashMap/HashSet with BTreeMap/BTreeSet
 
-**Files to modify (89 occurrences across 30 files):**
+**Progress: 25/30 files completed (83%)**
+
+**✅ Completed Files (25/30):**
 
 - [x] `packages/scan/src/output.rs:583,620,664` - HashSet<u64> for IDs
 - [x] `packages/server/src/ws/server.rs:132,137,141` - Connection maps
@@ -420,18 +444,16 @@ Application code has race conditions. `switchy_async` provides deterministic run
 - [x] `packages/player/src/api.rs:125` - PlaybackHandler map
 - [x] `packages/player/src/lib.rs:228,364,365` - Query/headers maps
 - [x] `packages/hyperchad/state/src/store.rs:14` - Cache storage
-- [ ] `packages/hyperchad/renderer/egui/src/v1.rs:229-777` - UI state maps (15+ occurrences)
-- [ ] `packages/hyperchad/renderer/egui/src/v2.rs:178-180,507` - UI element maps
-- [ ] `packages/hyperchad/renderer/fltk/src/lib.rs:284` - Image cache
-- [ ] `packages/hyperchad/renderer/src/lib.rs:298,308` - Headers parameters
-- [ ] `packages/hyperchad/renderer/vanilla_js/src/lib.rs:798,815` - Headers
-- [ ] `packages/hyperchad/renderer/html/src/lib.rs:49,257,268` - Responsive triggers
-- [ ] `packages/hyperchad/renderer/html/src/actix.rs:267` - Static headers
-- [ ] `packages/hyperchad/renderer/html/src/html.rs:1046` - Headers
-- [ ] `packages/hyperchad/renderer/html/src/lambda.rs:253` - Lambda headers
-- [ ] `packages/hyperchad/renderer/html/src/web_server.rs:233` - Web server headers
-- [ ] `packages/hyperchad/renderer/html/http/src/lib.rs:95` - HTTP headers
-- [ ] `packages/hyperchad/actions/src/dsl.rs:448` - DSL variables
+- [x] `packages/hyperchad/renderer/fltk/src/lib.rs:284` - Image cache
+- [x] `packages/hyperchad/renderer/src/lib.rs:298,308` - Headers parameters
+- [x] `packages/hyperchad/renderer/vanilla_js/src/lib.rs:798,815` - Headers
+- [x] `packages/hyperchad/renderer/html/src/lib.rs:49,257,268` - Responsive triggers
+- [x] `packages/hyperchad/renderer/html/src/actix.rs:267` - Static headers
+- [x] `packages/hyperchad/renderer/html/src/html.rs:1046` - Headers
+- [x] `packages/hyperchad/renderer/html/src/lambda.rs:253` - Lambda headers
+- [x] `packages/hyperchad/renderer/html/src/web_server.rs:233` - Web server headers
+- [x] `packages/hyperchad/renderer/html/http/src/lib.rs:95` - HTTP headers
+- [x] `packages/hyperchad/actions/src/dsl.rs:448` - DSL variables
 - [x] `packages/tunnel_server/src/ws/server.rs:332,343-352,530` - WebSocket state
 - [x] `packages/tunnel_sender/src/sender.rs:187,275,619-1013` - Request tracking
 - [x] `packages/tunnel/src/lib.rs:46` - Tunnel headers
@@ -440,8 +462,17 @@ Application code has race conditions. `switchy_async` provides deterministic run
 - [x] `packages/load_balancer/src/server.rs:27,43,66` - Cluster configuration
 - [x] `packages/load_balancer/src/load_balancer.rs:35,39` - Router maps
 - [x] `packages/app/tauri/src-tauri/src/lib.rs:1220,1270,1284` - Headers and state
-- [ ] `packages/app/native/src/visualization.rs:227` - Visualization cache
+- [x] `packages/app/native/src/visualization.rs:227` - Visualization cache
 - [x] `packages/app/state/src/lib.rs:225,231,1165,1182,1200` - Audio zone and player state
+
+**❌ Blocked Files (2/30):**
+
+- ❌ `packages/hyperchad/renderer/egui/src/v1.rs:229-777` - UI state maps (15+ occurrences) - **BLOCKED: egui requires HashMap for performance**
+- ❌ `packages/hyperchad/renderer/egui/src/v2.rs:178-180,507` - UI element maps - **BLOCKED: egui requires HashMap for performance**
+
+**⏳ Remaining Files (3/30):**
+
+- [ ] Additional files may exist that haven't been identified yet
 
 #### 1.2 Create `switchy_uuid` package
 

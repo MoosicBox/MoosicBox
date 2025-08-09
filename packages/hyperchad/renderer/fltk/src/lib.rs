@@ -4,7 +4,7 @@
 
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::Write,
     ops::Deref,
     str::FromStr as _,
@@ -281,10 +281,10 @@ impl FltkRenderer {
         mut frame: Frame,
     ) -> Result<(), LoadImageError> {
         type ImageCache = LazyLock<
-            Arc<tokio::sync::RwLock<HashMap<String, (Arc<Bytes>, u32, u32, enums::ColorDepth)>>>,
+            Arc<tokio::sync::RwLock<BTreeMap<String, (Arc<Bytes>, u32, u32, enums::ColorDepth)>>>,
         >;
         static IMAGE_CACHE: ImageCache =
-            LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(HashMap::new())));
+            LazyLock::new(|| Arc::new(tokio::sync::RwLock::new(BTreeMap::new())));
 
         let uri = match &source {
             ImageSource::Bytes { source, .. } | ImageSource::Url(source) => source,

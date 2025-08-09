@@ -445,7 +445,7 @@ pub enum BuiltinFunction {
 #[derive(Clone, Debug, Default)]
 pub struct EvalContext {
     /// Variables in scope
-    pub variables: std::collections::HashMap<String, DslValue>,
+    pub variables: std::collections::BTreeMap<String, DslValue>,
 }
 
 /// DSL values that can be stored in variables or used in expressions

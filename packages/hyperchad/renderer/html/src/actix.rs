@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     str::FromStr as _,
     sync::{Arc, LazyLock},
 };
@@ -264,7 +264,7 @@ impl<T: HtmlTagRenderer + Clone + Send + Sync>
         content: Content,
         req: PreparedRequest,
     ) -> Result<(Bytes, String), actix_web::Error> {
-        static HEADERS: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
+        static HEADERS: LazyLock<BTreeMap<String, String>> = LazyLock::new(BTreeMap::new);
 
         Ok(match content {
             hyperchad_renderer::Content::View(View {

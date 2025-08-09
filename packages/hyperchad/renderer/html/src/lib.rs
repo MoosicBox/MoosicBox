@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::HashMap, io::Write};
+use std::{collections::BTreeMap, io::Write};
 
 use async_trait::async_trait;
 use flume::Receiver;
@@ -46,7 +46,7 @@ pub mod extend;
 
 #[derive(Debug, Default, Clone)]
 pub struct DefaultHtmlTagRenderer {
-    pub responsive_triggers: HashMap<String, ResponsiveTrigger>,
+    pub responsive_triggers: BTreeMap<String, ResponsiveTrigger>,
 }
 
 impl DefaultHtmlTagRenderer {
@@ -254,7 +254,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
 
     fn partial_html(
         &self,
-        _headers: &HashMap<String, String>,
+        _headers: &BTreeMap<String, String>,
         _container: &Container,
         content: String,
         _viewport: Option<&str>,
@@ -265,7 +265,7 @@ impl HtmlTagRenderer for DefaultHtmlTagRenderer {
 
     fn root_html(
         &self,
-        _headers: &HashMap<String, String>,
+        _headers: &BTreeMap<String, String>,
         container: &Container,
         content: String,
         viewport: Option<&str>,
