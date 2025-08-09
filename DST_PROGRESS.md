@@ -338,41 +338,124 @@ Leverage existing `switchy_tcp` and `switchy_http` more extensively
 - Use lock-free data structures where possible
 - Add deadlock detection in debug builds
 
-## Priority Roadmap
+## Optimized Execution Plan
 
-### Phase 0: Web Server Migration (🔴🔴🔴 HIGHEST PRIORITY)
+### Phase 1: Foundation & Quick Wins (1 week with parallelization)
 
-1. [ ] Enhance moosicbox_web_server with missing core features
-    - [ ] Implement extractors (Json, Query, Path, Data, Header)
-    - [ ] Add middleware support (Logger, CORS, Compression)
-    - [ ] Implement WebSocket support
-    - [ ] Add streaming and SSE support
-    - [ ] Implement static file serving with range requests
-2. [ ] Create migration tooling and compatibility layer
-3. [ ] Migrate leaf packages (lowest dependencies first)
-4. [ ] Migrate core server packages
-5. [ ] Remove actix-web from workspace
+**Goal: Maximum determinism improvement with minimal effort**
 
-### Phase 1: Critical Security & Core (🔴)
+**Parallel execution possible:**
 
-1. [ ] Create `switchy_uuid` for deterministic UUID generation
-2. [ ] Replace remaining HashMap/HashSet in core packages
-3. [ ] Fix async race conditions in critical paths
-4. [ ] Establish lock ordering hierarchy
+- [ ] Replace ALL remaining HashMap/HashSet with BTreeMap/BTreeSet
+- [ ] Create `switchy_uuid` package
+- [ ] Create `switchy_env` package
+- [ ] Create `switchy_process` package
+- [ ] Fix remaining direct time/instant usage
+- [ ] Add chrono DateTime support to `switchy_time`
 
-### Phase 2: Testing & Reliability (🟡)
+These tasks have no interdependencies and can execute simultaneously.
 
-1. [ ] Extend `switchy_time` for chrono support
-2. [ ] Create `switchy_env` for environment variables
-3. [ ] Implement deterministic file system operations
-4. [ ] Add network operation mocking
+### Phase 2: File System & Ordering (3-4 days with parallelization)
 
-### Phase 3: Complete Determinism (🟢)
+**Goal: Fix ordering issues that affect all packages**
 
-1. [ ] Create `switchy_process` for command execution
-2. [ ] Address floating-point determinism where needed
-3. [ ] Complete migration of all time operations
-4. [ ] Document acceptable non-determinism
+**Parallel execution possible:**
+
+- [ ] Sort all `fs::read_dir` operations
+- [ ] Document global lock hierarchy
+- [ ] Add deadlock detection in debug builds
+- [ ] Create deterministic file iteration helpers
+
+These are mechanical changes that don't conflict with each other.
+
+### Phase 3: Web Server Preparation (1-2 weeks)
+
+**Goal: Minimize rework during web server migration**
+
+**Execution order:**
+
+1. [ ] Design trait abstractions for web concepts (Request, Response, Extractors, Middleware)
+2. **Then (parallel):**
+    - [ ] Implement traits for actix-web
+    - [ ] Implement traits for moosicbox_web_server
+    - [ ] Enhance moosicbox_web_server with missing features
+3. [ ] Apply abstractions to leaf packages
+
+The trait design must complete before implementations begin.
+
+### Phase 4: Web Server Migration (6-8 weeks with parallelization)
+
+**Goal: Systematic migration with minimal disruption**
+
+**Parallel migration groups** (no interdependencies):
+
+- [ ] **Auth/Config group**: `auth`, `config` packages
+- [ ] **Media group**: `music_api`, `library`, `scan`, `search`
+- [ ] **UI group**: `admin_htmx`, `menu`
+- [ ] **Network group**: `upnp`, `downloader`
+- [ ] **Audio group**: `audio_zone`, `audio_output`
+
+**Sequential requirements:**
+
+- [ ] Core `server` package (must migrate last)
+- [ ] WebSocket implementations (after server migration)
+- [ ] Remove actix-web dependency
+
+### Phase 5: Final Determinism (3-4 days with parallelization)
+
+**Goal: Address remaining issues**
+
+**Parallel execution possible:**
+
+- [ ] Fix remaining async race conditions
+- [ ] Address floating-point determinism where needed
+- [ ] Update comprehensive documentation
+- [ ] Final testing sweep
+
+## Task Dependencies and Parallelization
+
+### Independent Task Groups
+
+These can execute in any order or simultaneously:
+
+1. **Data Structure Determinism**
+
+    - Collection replacements (HashMap → BTreeMap)
+    - Sorting operations (fs::read_dir)
+    - Lock ordering documentation
+
+2. **Package Creation**
+
+    - switchy_uuid
+    - switchy_env
+    - switchy_process
+
+3. **Time Operations**
+    - Instant replacements
+    - SystemTime replacements
+    - Chrono extensions
+
+### Dependent Task Chains
+
+These must execute in sequence:
+
+1. **Web Abstraction Chain**
+
+    - Design abstractions → Implement traits → Apply to packages → Migrate to new server
+
+2. **UUID Chain**
+
+    - Create switchy_uuid → Migrate auth tokens → Update session management
+
+3. **Environment Chain**
+    - Create switchy_env → Migrate critical vars → Update configuration loading
+
+### Batch Processing Opportunities
+
+- **Pattern replacements**: All HashMap→BTreeMap changes can happen at once
+- **Import updates**: All package imports can update simultaneously
+- **Sorting additions**: All read_dir operations can be fixed together
+- **Mechanical changes**: Most find/replace operations can be parallelized
 
 ## Testing Strategy
 
@@ -402,23 +485,45 @@ The MoosicBox codebase has made significant progress toward determinism with the
 - ✅ Random operations using switchy_random
 - ✅ Some collections migrated to BTree variants
 
-**CRITICAL DISCOVERY:** The single largest source of non-determinism is the direct use of actix-web throughout 50+ packages. This must be addressed before other determinism efforts can be fully effective.
+**CRITICAL DISCOVERY:** The single largest source of non-determinism is the direct use of actix-web throughout 50+ packages. However, by reordering tasks and maximizing parallelization, we can achieve significant determinism improvements while preparing for the web server migration.
 
-Major remaining work (in priority order):
+## Execution Strategy Benefits
 
-- 🔴🔴🔴 **Web Server Migration** - Replace actix-web with moosicbox_web_server (12-17 weeks)
-- 🔴 UUID generation needs abstraction
-- 🔴 Network operations need comprehensive mocking
-- 🔴 Async race conditions need resolution
-- 🟡 File system operations need deterministic ordering
-- 🟡 Environment variables need abstraction
+### Immediate Value
 
-**Revised Total Estimated Effort:**
+- Collections become deterministic immediately (Week 1)
+- UUID determinism fixes security concerns early (Week 1)
+- Testing becomes easier with each phase
 
-- Phase 0 (Web Server): 12-17 weeks
-- Phase 1 (Critical): 2-3 weeks
-- Phase 2 (Testing): 3-4 weeks
-- Phase 3 (Complete): 2-3 weeks
-- **Total: 19-27 weeks (5-7 months)**
+### Minimal Rework
 
-The web server migration represents approximately 60-70% of the total determinism effort and blocks many other improvements. This should be the immediate focus.
+- Abstraction layer means touching files once
+- Mechanical changes done early won't need revisiting
+- Dependencies clearly mapped to avoid conflicts
+
+### Continuous Progress
+
+- Each phase delivers working improvements
+- No "big bang" migration risk
+- Can pause between phases if needed
+
+## Revised Timeline with Optimized Execution
+
+**With effective parallelization:**
+
+- **Phase 1** (Foundation): 1 week
+- **Phase 2** (File System): 3-4 days
+- **Phase 3** (Web Preparation): 1-2 weeks
+- **Phase 4** (Web Migration): 6-8 weeks
+- **Phase 5** (Final): 3-4 days
+
+**Total: 9-12 weeks (2-3 months)**
+
+This optimized approach reduces the timeline by nearly 50% through:
+
+- Aggressive parallelization of mechanical changes
+- Quick wins that provide immediate value
+- Strategic ordering to minimize rework
+- Clear dependency mapping to enable parallel execution
+
+The critical path remains the web server migration, but early determinism improvements will make that migration easier and more testable.
