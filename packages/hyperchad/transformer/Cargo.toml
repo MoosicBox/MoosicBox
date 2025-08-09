@@ -19,6 +19,7 @@ hyperchad_color              = { workspace = true, features = ["serde"] }
 hyperchad_transformer_models = { workspace = true, default-features = false }
 moosicbox_assert             = { workspace = true }
 moosicbox_logging            = { workspace = true, features = ["macros"] }
+switchy_env                  = { workspace = true, features = ["std"] }
 switchy_time                 = { workspace = true, features = ["std"] }
 
 bumpalo     = { workspace = true, features = ["collections"], optional = true }

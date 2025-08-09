@@ -352,13 +352,14 @@ These packages control simulation behavior and build processes - they MUST use r
 #### **6. Environment Utilities Package Status**
 
 ```
-✅ packages/env_utils/src/lib.rs:142-452 - Runtime environment utilities
-   (Runtime functions could potentially use switchy_env internally)
+📦 packages/env_utils/src/lib.rs:142-452 - Runtime environment utilities (15 instances)
+   Status: LEGACY PACKAGE - Candidate for deprecation
+   Contains: Compile-time macros (preserve) + Runtime functions (could use switchy_env)
 ```
 
 **Important Note**: The `moosicbox_env_utils` package provides valuable compile-time macros using `env!()` and `option_env!()` that are useful for build-time constants and const evaluation. These compile-time features should be preserved.
 
-**Potential Enhancement**: The runtime functions in `env_utils` (`env_usize()`, `default_env_usize()`, etc.) could potentially be enhanced to use `switchy_env` internally while maintaining their current API.
+**Potential Enhancement**: The runtime functions in `env_utils` (`env_usize()`, `default_env_usize()`, etc.) could potentially be enhanced to use `switchy_env` internally while maintaining their current API, or the package could be deprecated in favor of direct `switchy_env` usage.
 
 ### Migration Status Summary
 
@@ -390,10 +391,22 @@ These packages control simulation behavior and build processes - they MUST use r
     - TOKIO_CONSOLE debug flags (5 packages) - supports both "1" and "true"
     - DEBUG_RENDERER flags (2 packages) - supports both "1" and "true"
 
+#### **7. Additional Debug & Development Variables** (🟢 Low Priority) ✅ COMPLETED (December 2024)
+
+```
+✅ packages/hyperchad/transformer/src/lib.rs:
+   - Line 2826: SKIP_DEFAULT_DEBUG_ATTRS ✅ MIGRATED (supports "1" and "true")
+   - Line 3424: DEBUG_ATTRS ✅ MIGRATED (supports "1" and "true")
+   - Line 3430: DEBUG_RAW_ATTRS ✅ MIGRATED (supports "1" and "true")
+
+✅ packages/hyperchad/js_bundler/src/node.rs:36 - PNPM_HOME ✅ MIGRATED (build tool detection)
+```
+
 **🎉 MIGRATION 100% COMPLETE:**
 
-- **Total migrated**: 34+ environment variables across 15+ packages
+- **Total migrated**: 38+ environment variables across 17+ packages
 - **All priority levels**: High, Medium, and Low priority migrations completed
+- **Additional variables**: 4 debug/development variables migrated in December 2024
 - **Backward compatibility**: Maintained for all existing usage patterns
 - **Enhanced API**: New `var_parse_opt` function for better error handling
 
@@ -697,6 +710,13 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 - [x] `packages/server/src/main.rs:38` - TOKIO_CONSOLE ✅ MIGRATED (supports "1" and "true")
 - [x] `packages/hyperchad/renderer/egui/src/v1.rs:38` - DEBUG_RENDERER ✅ MIGRATED (supports "1" and "true")
 - [x] `packages/hyperchad/renderer/fltk/src/lib.rs:56` - DEBUG_RENDERER ✅ MIGRATED (supports "1" and "true")
+
+**🟢 Additional Debug Variables (4 locations):** ✅ COMPLETED (December 2024)
+
+- [x] `packages/hyperchad/transformer/src/lib.rs:2826` - SKIP_DEFAULT_DEBUG_ATTRS ✅ MIGRATED (supports "1" and "true")
+- [x] `packages/hyperchad/transformer/src/lib.rs:3424` - DEBUG_ATTRS ✅ MIGRATED (supports "1" and "true")
+- [x] `packages/hyperchad/transformer/src/lib.rs:3430` - DEBUG_RAW_ATTRS ✅ MIGRATED (supports "1" and "true")
+- [x] `packages/hyperchad/js_bundler/src/node.rs:36` - PNPM_HOME ✅ MIGRATED (build tool detection)
 
 **📦 Technical Debt (15+ locations):**
 
@@ -1114,9 +1134,11 @@ These must execute in sequence:
 
 The MoosicBox codebase has made significant progress toward determinism with the switchy pattern. Key achievements include:
 
-- ✅ Most time operations migrated (including new `instant_now()` support)
-- ✅ Random operations using switchy_random
-- ✅ Some collections migrated to BTree variants
+- ✅ **Environment variables**: 100% complete - 38+ variables migrated across 17+ packages
+- ✅ **Time operations**: Most migrated (including new `instant_now()` support)
+- ✅ **Random operations**: Complete using switchy_random
+- ✅ **UUID generation**: Complete using switchy_uuid
+- ✅ **Collections**: 83% complete - BTree variants replacing HashMap/HashSet
 
 **CRITICAL DISCOVERY:** The single largest source of non-determinism is the direct use of actix-web throughout 50+ packages. However, by reordering tasks and maximizing parallelization, we can achieve significant determinism improvements while preparing for the web server migration.
 

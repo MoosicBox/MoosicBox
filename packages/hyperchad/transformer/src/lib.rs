@@ -4,6 +4,8 @@
 
 use std::{any::Any, collections::BTreeMap, io::Write};
 
+use switchy_env::var;
+
 use hyperchad_actions::Action;
 use hyperchad_color::Color;
 use hyperchad_transformer_models::{
@@ -2823,8 +2825,8 @@ impl Container {
 
         #[cfg(feature = "layout")]
         if with_debug_attrs {
-            let skip_default = std::env::var("SKIP_DEFAULT_DEBUG_ATTRS")
-                .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()));
+            let skip_default =
+                matches!(var("SKIP_DEFAULT_DEBUG_ATTRS").as_deref(), Ok("1" | "true"));
 
             attrs.add_opt_skip_default("calc-x", self.calculated_x, skip_default);
             attrs.add_opt_skip_default("calc-y", self.calculated_y, skip_default);
@@ -3421,14 +3423,12 @@ impl std::fmt::Display for Container {
                     if cfg!(test) {
                         true
                     } else {
-                        std::env::var("DEBUG_ATTRS")
-                            .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()))
+                        matches!(var("DEBUG_ATTRS").as_deref(), Ok("1" | "true"))
                     },
                     if cfg!(test) {
                         true
                     } else {
-                        std::env::var("DEBUG_RAW_ATTRS")
-                            .is_ok_and(|x| ["1", "true"].contains(&x.to_lowercase().as_str()))
+                        matches!(var("DEBUG_RAW_ATTRS").as_deref(), Ok("1" | "true"))
                     },
                     #[cfg(feature = "format")]
                     true,

@@ -17,7 +17,8 @@ group = "hyperchad"
 ignored = []
 
 [dependencies]
-log = { workspace = true }
+log         = { workspace = true }
+switchy_env = { workspace = true, features = ["std"] }
 
 anyhow                         = { workspace = true, optional = true }
 swc_bundler                    = { workspace = true, optional = true }

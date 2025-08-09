@@ -1,10 +1,11 @@
 use std::{
-    env,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr as _,
     sync::LazyLock,
 };
+
+use switchy_env::var;
 
 static NPM_COMMANDS: [&str; 3] = ["pnpm", "bun", "npm"];
 
@@ -33,9 +34,9 @@ pub(crate) fn run_command(binaries: impl Iterator<Item = String>, arguments: &[&
         .map(|x| PathBuf::from_str(&x).unwrap())
         .map(|x| {
             if x.file_name().is_some_and(|x| x == "pnpm")
-                && let Ok(var) = env::var("PNPM_HOME")
+                && let Ok(pnpm_home) = var("PNPM_HOME")
             {
-                return PathBuf::from_str(&var).unwrap().join(x);
+                return PathBuf::from_str(&pnpm_home).unwrap().join(x);
             }
 
             x

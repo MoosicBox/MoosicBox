@@ -5356,6 +5356,7 @@ dependencies = [
  "swc_ecma_transforms_base",
  "swc_ecma_transforms_typescript",
  "swc_ecma_visit",
+ "switchy_env",
 ]
 
 [[package]]
@@ -5695,6 +5696,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "switchy_env",
  "switchy_time",
  "syntect",
  "test-log",
