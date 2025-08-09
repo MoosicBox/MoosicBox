@@ -79,12 +79,12 @@ The current `moosicbox_web_server` needs significant enhancements to achieve fea
 4. **Phase 4**: Migrate core server packages
 5. **Phase 5**: Remove actix-web dependency
 
-### Estimated Effort
+### Migration Complexity
 
-- **Enhancement of moosicbox_web_server**: 4-6 weeks
-- **Migration of all packages**: 6-8 weeks
-- **Testing and validation**: 2-3 weeks
-- **Total**: 12-17 weeks (3-4 months)
+- **Enhancement of moosicbox_web_server**: High complexity, many missing features
+- **Package migration**: Mechanical but extensive changes across 50+ packages
+- **Testing and validation**: Critical for ensuring no regressions
+- **Dependencies**: Must complete in order, but package groups can migrate in parallel
 
 ## 2. UUID Generation
 
@@ -340,7 +340,7 @@ Leverage existing `switchy_tcp` and `switchy_http` more extensively
 
 ## Optimized Execution Plan
 
-### Phase 1: Foundation & Quick Wins (1 week with parallelization)
+### Phase 1: Foundation & Quick Wins
 
 **Goal: Maximum determinism improvement with minimal effort**
 
@@ -355,7 +355,7 @@ Leverage existing `switchy_tcp` and `switchy_http` more extensively
 
 These tasks have no interdependencies and can execute simultaneously.
 
-### Phase 2: File System & Ordering (3-4 days with parallelization)
+### Phase 2: File System & Ordering
 
 **Goal: Fix ordering issues that affect all packages**
 
@@ -368,7 +368,7 @@ These tasks have no interdependencies and can execute simultaneously.
 
 These are mechanical changes that don't conflict with each other.
 
-### Phase 3: Web Server Preparation (1-2 weeks)
+### Phase 3: Web Server Preparation
 
 **Goal: Minimize rework during web server migration**
 
@@ -383,7 +383,7 @@ These are mechanical changes that don't conflict with each other.
 
 The trait design must complete before implementations begin.
 
-### Phase 4: Web Server Migration (6-8 weeks with parallelization)
+### Phase 4: Web Server Migration
 
 **Goal: Systematic migration with minimal disruption**
 
@@ -401,7 +401,7 @@ The trait design must complete before implementations begin.
 - [ ] WebSocket implementations (after server migration)
 - [ ] Remove actix-web dependency
 
-### Phase 5: Final Determinism (3-4 days with parallelization)
+### Phase 5: Final Determinism
 
 **Goal: Address remaining issues**
 
@@ -491,8 +491,8 @@ The MoosicBox codebase has made significant progress toward determinism with the
 
 ### Immediate Value
 
-- Collections become deterministic immediately (Week 1)
-- UUID determinism fixes security concerns early (Week 1)
+- Collections become deterministic immediately
+- UUID determinism fixes security concerns early
 - Testing becomes easier with each phase
 
 ### Minimal Rework
@@ -507,23 +507,13 @@ The MoosicBox codebase has made significant progress toward determinism with the
 - No "big bang" migration risk
 - Can pause between phases if needed
 
-## Revised Timeline with Optimized Execution
+## Optimized Approach Benefits
 
-**With effective parallelization:**
+This execution strategy maximizes efficiency through:
 
-- **Phase 1** (Foundation): 1 week
-- **Phase 2** (File System): 3-4 days
-- **Phase 3** (Web Preparation): 1-2 weeks
-- **Phase 4** (Web Migration): 6-8 weeks
-- **Phase 5** (Final): 3-4 days
+- **Aggressive parallelization** of mechanical changes
+- **Quick wins** that provide immediate value
+- **Strategic ordering** to minimize rework
+- **Clear dependency mapping** to enable parallel execution
 
-**Total: 9-12 weeks (2-3 months)**
-
-This optimized approach reduces the timeline by nearly 50% through:
-
-- Aggressive parallelization of mechanical changes
-- Quick wins that provide immediate value
-- Strategic ordering to minimize rework
-- Clear dependency mapping to enable parallel execution
-
-The critical path remains the web server migration, but early determinism improvements will make that migration easier and more testable.
+The critical path remains the web server migration, but early determinism improvements will make that migration easier and more testable. Each phase builds on the previous one, creating a solid foundation for comprehensive determinism.
