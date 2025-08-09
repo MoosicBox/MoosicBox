@@ -764,23 +764,7 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 
 - [x] `packages/env_utils/src/lib.rs:142-452` - Runtime functions removed, compile-time macros preserved ✅ COMPLETED
 
-#### 1.4 Create `switchy_process` package
-
-- [ ] Create new package structure
-- [ ] Implement command execution abstraction
-- [ ] Add deterministic output for testing
-- [ ] Implement process exit handling
-
-**Files needing migration (17 occurrences):**
-
-- [ ] `packages/bloaty/src/main.rs:113` - Process exit
-- [ ] `packages/server/src/lib.rs:769` - puffin_viewer launch
-- [ ] `packages/hyperchad/renderer/egui/src/v1.rs:3780` - puffin_viewer
-- [ ] `packages/hyperchad/js_bundler/src/node.rs` - Node.js command execution
-- [ ] `packages/assert/src/lib.rs:25,44,183,200,221,267,325,358` - Assertion exits
-- [ ] Build scripts: `tunnel_server`, `server`, `marketing_site`, `app/native`, `hyperchad/renderer/vanilla_js`
-
-#### 1.5 Fix remaining direct time/instant usage
+#### 1.4 Fix remaining direct time/instant usage
 
 **Files to modify:**
 
@@ -793,7 +777,7 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 
 Note: Files in `packages/time/src/` are part of the switchy_time implementation itself
 
-#### 1.6 Add chrono DateTime support to `switchy_time`
+#### 1.5 Add chrono DateTime support to `switchy_time`
 
 - [ ] Extend `packages/time/src/lib.rs` with DateTime abstractions
 - [ ] Add `datetime_now()` returning chrono DateTime types
@@ -1107,6 +1091,37 @@ Consider using fixed-point arithmetic or controlled rounding for determinism
 - [ ] Verify identical outputs across multiple runs
 - [ ] Performance regression testing
 
+### Phase 6: Process Abstraction
+
+**Goal: Complete determinism by abstracting process execution**
+
+**Note**: This phase is deferred to the end as it has the lowest impact on core determinism. Most process execution is in development tools, build scripts, or error handling paths.
+
+#### 6.1 Create `switchy_process` package
+
+- [ ] Create new package structure
+- [ ] Implement command execution abstraction
+- [ ] Add deterministic output for testing
+- [ ] Implement process exit handling
+
+#### 6.2 Migrate process execution calls
+
+**Files needing migration (29 occurrences):**
+
+- [ ] `packages/bloaty/src/main.rs:113` - Process exit
+- [ ] `packages/server/src/lib.rs:769` - puffin_viewer launch
+- [ ] `packages/hyperchad/renderer/egui/src/v1.rs:3780` - puffin_viewer
+- [ ] `packages/hyperchad/js_bundler/src/node.rs` - Node.js command execution
+- [ ] `packages/assert/src/lib.rs:25,44,183,200,221,267,325,358` - Assertion exits
+- [ ] Build scripts: `tunnel_server`, `server`, `marketing_site`, `app/native`, `hyperchad/renderer/vanilla_js`
+
+**Migration Priority**: Low - Most usage is in:
+
+- Development tooling (bloaty, puffin_viewer)
+- Build-time operations (git version info)
+- Error handling (deterministic exits)
+- Optional features (profiling)
+
 ## Task Dependencies and Parallelization
 
 ### Independent Task Groups
@@ -1121,9 +1136,8 @@ These can execute in any order or simultaneously:
 
 2. **Package Creation**
 
-    - switchy_uuid
-    - switchy_env
-    - switchy_process
+    - switchy_uuid ✅ COMPLETED
+    - switchy_env ✅ COMPLETED
 
 3. **Time Operations**
     - Instant replacements
@@ -1215,3 +1229,5 @@ This execution strategy maximizes efficiency through:
 - **Clear dependency mapping** to enable parallel execution
 
 The critical path remains the web server migration, but early determinism improvements will make that migration easier and more testable. Each phase builds on the previous one, creating a solid foundation for comprehensive determinism.
+
+**Phase 6 (Process Abstraction)** is intentionally deferred to the end as it has the lowest impact on core application determinism. The 29 instances of process execution are primarily in development tools, build scripts, and error handling - areas that don't significantly affect the deterministic behavior of the main application logic.
