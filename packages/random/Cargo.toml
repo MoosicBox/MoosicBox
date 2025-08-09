@@ -16,6 +16,7 @@ group = "switchy"
 [dependencies]
 log  = { workspace = true }
 rand = { version = "=0.8.5", features = ["small_rng"] }
+switchy_env = { workspace = true, optional = true, features = ["simulator"] }
 
 [features]
 default = ["rand", "simulator"]
@@ -23,4 +24,4 @@ default = ["rand", "simulator"]
 fail-on-warnings = []
 
 rand      = []
-simulator = []
+simulator = ["dep:switchy_env"]
