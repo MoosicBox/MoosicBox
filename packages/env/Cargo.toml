@@ -1,0 +1,26 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools"]
+description = "Switchy Environment Variables package"
+edition     = { workspace = true }
+keywords    = ["config", "environment", "variables"]
+license     = { workspace = true }
+name        = "switchy_env"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+log       = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = ["simulator", "std"]
+
+fail-on-warnings = []
+
+simulator = []
+std       = []

@@ -36,6 +36,7 @@ members = [
     "packages/database_connection",
     "packages/date_utils",
     "packages/downloader",
+    "packages/env",
     "packages/env_utils",
     "packages/files",
     "packages/fs",
@@ -252,6 +253,7 @@ switchy_async               = { version = "0.1.3", default-features = false, pat
 switchy_async_macros        = { version = "0.1.3", default-features = false, path = "packages/async/macros" }
 switchy_database            = { version = "0.1.3", default-features = false, path = "packages/database" }
 switchy_database_connection = { version = "0.1.3", default-features = false, path = "packages/database_connection" }
+switchy_env                 = { version = "0.1.0", default-features = false, path = "packages/env" }
 switchy_fs                  = { version = "0.1.3", default-features = false, path = "packages/fs" }
 switchy_http                = { version = "0.1.3", default-features = false, path = "packages/http" }
 switchy_http_models         = { version = "0.1.3", default-features = false, path = "packages/http/models" }

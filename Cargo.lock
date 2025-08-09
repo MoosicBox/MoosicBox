@@ -13890,6 +13890,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_env"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.27",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "switchy_fs"
 version = "0.1.4"
 dependencies = [
