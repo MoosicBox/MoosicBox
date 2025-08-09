@@ -574,66 +574,161 @@ The trait design must complete before implementations begin. See Section 1 "Web 
 
 This phase executes the migration strategy detailed in Section 1.
 
+**Total scope: 75 files across 35+ packages** (64 with actix types + 11 WebSocket-specific)
+
 **Parallel migration groups** (no interdependencies):
 
-#### 4.1 Auth/Config group
+#### 4.1 Auth/Config/Profiles group
+
+**Files to migrate:**
 
 - `packages/auth/src/lib.rs` - FromRequest implementations
-- `packages/config/src/api/mod.rs` - Service bindings
+- `packages/auth/src/api.rs` - Auth endpoints
+- `packages/config/src/api/mod.rs` - Config service bindings
+- `packages/profiles/src/lib.rs` - Profile management
+- `packages/database/src/profiles.rs` - Database profile extractors
+- `packages/database/src/config.rs` - Database config extractors
+- `packages/library/music_api/src/profiles.rs` - Music API profiles
+- `packages/music_api/src/profiles.rs` - Music profiles
 
-#### 4.2 Media group
+#### 4.2 Media API group
 
-- `packages/music_api/src/api.rs` - API endpoints
-- `packages/library/src/api/` - Multiple API modules
-- `packages/scan/src/api.rs` - Scan endpoints
+**Files to migrate:**
+
+- `packages/music_api/api/src/api.rs` - Core music API
+- `packages/library/src/api.rs` - Library endpoints
+- `packages/scan/src/api.rs` - Scan endpoints (#[actix_web::get] macros)
 - `packages/search/src/api.rs` - Search endpoints
+- `packages/qobuz/src/api.rs` - Qobuz API endpoints
+- `packages/qobuz/src/lib.rs` - Qobuz types (HttpResponse)
+- `packages/tidal/src/api.rs` - Tidal API endpoints
+- `packages/tidal/src/lib.rs` - Tidal types (HttpResponse)
+- `packages/yt/src/api.rs` - YouTube API endpoints
+- `packages/yt/src/lib.rs` - YouTube types (HttpResponse)
 
-#### 4.3 UI group
+#### 4.3 UI/Admin group
 
-- `packages/admin_htmx/src/api/mod.rs` - HTMX endpoints
+**Files to migrate:**
+
+- `packages/admin_htmx/src/api/mod.rs` - Main HTMX endpoints
+- `packages/admin_htmx/src/api/info.rs` - Info endpoints
+- `packages/admin_htmx/src/api/profiles.rs` - Profile UI
+- `packages/admin_htmx/src/api/qobuz.rs` - Qobuz UI
+- `packages/admin_htmx/src/api/scan.rs` - Scan UI
+- `packages/admin_htmx/src/api/tidal.rs` - Tidal UI
 - `packages/menu/src/api.rs` - Menu API
 
-#### 4.4 Network group
+#### 4.4 Network/Files group
 
-- `packages/upnp/src/api.rs` - UPnP discovery
+**Files to migrate:**
+
+- `packages/upnp/src/api.rs` - UPnP discovery endpoints
 - `packages/downloader/src/api/mod.rs` - Download management
+- `packages/files/src/api.rs` - File serving (uses actix_files)
+- `packages/tunnel/src/lib.rs` - Tunnel types (HttpRequest/Response)
 
-#### 4.5 Audio group
+#### 4.5 Audio/Player group
 
-- `packages/audio_zone/src/api.rs` - Zone management
-- `packages/audio_output/src/api.rs` - Output control
+**Files to migrate:**
+
+- `packages/audio_zone/src/api/mod.rs` - Zone management
+- `packages/audio_output/src/api/mod.rs` - Output control
+- `packages/player/src/api.rs` - Player API (WebSocket critical)
+- `packages/session/src/api/mod.rs` - Session API (WebSocket critical)
+
+#### 4.6 Middleware group
+
+**Files to migrate:**
+
+- `packages/middleware/src/api_logger.rs` - API logging middleware
+- `packages/middleware/src/service_info.rs` - Service info middleware
+- `packages/middleware/src/tunnel_info.rs` - Tunnel info middleware
+- `packages/telemetry/src/lib.rs` - Telemetry integration
+- `packages/telemetry/src/simulator.rs` - Simulator telemetry
 
 **Sequential requirements:**
 
-#### 4.6 Core server package
+#### 4.7 Hyperchad/Renderer group (complex WebSocket/SSE)
 
-- `packages/server/src/lib.rs` - Main server (50+ service bindings)
-- `packages/server/src/api/` - All API modules
-- Must migrate last - everything depends on it
+**Files to migrate:**
 
-#### 4.7 Tunnel server (after 4.6)
+- `packages/hyperchad/renderer/html/actix/src/lib.rs` - Core actix renderer
+- `packages/hyperchad/renderer/html/actix/src/actions.rs` - Action handlers
+- `packages/hyperchad/renderer/html/actix/src/sse.rs` - Server-sent events
+- `packages/hyperchad/renderer/html/src/actix.rs` - Actix integration
+- `packages/hyperchad/renderer/html/src/web_server.rs` - Web server abstraction
+- `packages/hyperchad/renderer/html/web_server/src/lib.rs` - Web server impl
+- `packages/hyperchad/test_utils/src/http.rs` - HTTP test utilities
+- `packages/hyperchad/test_utils/src/lib.rs` - Test utilities
 
-- `packages/tunnel_server/src/main.rs` - Server setup
-- `packages/tunnel_server/src/ws/` - WebSocket handling
-- `packages/tunnel_server/src/api.rs` - API endpoints
-- `packages/tunnel_server/src/auth.rs` - Auth middleware
+#### 4.8 Core server package (depends on all above)
 
-#### 4.8 WebSocket implementations
+**Files to migrate:**
 
-**Critical packages using WebSockets:**
+- `packages/server/src/lib.rs` - Main server setup (HttpServer, 50+ service bindings)
+- `packages/server/src/api/mod.rs` - Core API module
+- `packages/server/src/api/openapi.rs` - OpenAPI endpoints
+- `packages/server/src/auth.rs` - Server auth
+- `packages/server/src/ws/server.rs` - WebSocket server (critical)
+- `packages/server/src/ws/handler.rs` - WebSocket handler (actix_ws)
+- `packages/server/src/events/audio_zone_event.rs` - Audio zone events (WebSocket)
+- `packages/server/src/events/session_event.rs` - Session events (WebSocket)
+- `packages/server/src/players/local.rs` - Local player (WebSocket)
+- `packages/server/src/players/upnp.rs` - UPnP player (WebSocket)
+- `packages/server/simulator/src/host/moosicbox_server.rs` - Simulator server
+- `packages/server/simulator/src/http.rs` - Simulator HTTP
 
-- `packages/ws/src/ws.rs` - Core WebSocket
-- `packages/server/src/ws/server.rs` - Server WebSocket
-- `packages/player/src/api.rs` - Player WebSocket
-- `packages/session/src/api/` - Session WebSocket
-- `packages/hyperchad/renderer/html/actix/` - UI WebSocket
+#### 4.9 Tunnel server (after core server)
 
-#### 4.9 Final cleanup
+**Files to migrate:**
 
-- Remove actix-web from Cargo.toml dependencies
+- `packages/tunnel_server/src/main.rs` - Main tunnel server (HttpServer)
+- `packages/tunnel_server/src/api.rs` - Tunnel API endpoints
+- `packages/tunnel_server/src/auth.rs` - Tunnel auth middleware
+- `packages/tunnel_server/src/db.rs` - Database error handling
+- `packages/tunnel_server/src/ws/api.rs` - Tunnel WebSocket API (actix_ws)
+- `packages/tunnel_server/src/ws/handler.rs` - Tunnel WebSocket handler
+- `packages/tunnel_sender/src/sender.rs` - WebSocket client side
+
+#### 4.10 WebSocket core (critical for real-time)
+
+**Files to migrate:**
+
+- `packages/ws/src/ws.rs` - Core WebSocket utilities (WebsocketContext)
+- All WebSocket files from 4.8 and 4.9 above (11 total files)
+
+#### 4.11 Platform integrations
+
+**Files to migrate:**
+
+- `packages/app/tauri/src-tauri/src/lib.rs` - Tauri HTTP types
+- `packages/web_server/src/actix.rs` - Actix compatibility layer
+- `packages/web_server/src/lib.rs` - Web server core
+- `packages/web_server/src/openapi.rs` - OpenAPI support
+
+#### 4.12 Examples and tests
+
+**Files to migrate:**
+
+- `packages/simvar/examples/api_testing/src/main.rs` - API testing example
+- `packages/simvar/examples/basic_web_server/src/main.rs` - Basic server example
+- `packages/web_server/examples/nested_get/src/main.rs` - Nested routes example
+- `packages/web_server/examples/openapi/src/main.rs` - OpenAPI example
+- `packages/web_server/examples/simple_get/src/main.rs` - Simple GET example
+
+#### 4.13 Final cleanup
+
+- Remove actix-web, actix-ws, actix-files, actix-cors from all Cargo.toml files
 - Update all imports and use statements
+- Verify no remaining actix dependencies
 
-**Total files to migrate:** 50+ files across 30+ packages
+**Migration complexity summary:**
+
+- **High complexity (7+ files):** server, tunnel_server, hyperchad
+- **Medium complexity (3-6 files):** admin_htmx, session, player, middleware
+- **Low complexity (1-2 files):** Most API packages
+
+**Critical WebSocket files (11 total):** Must maintain real-time functionality during migration
 
 ### Phase 5: Final Determinism
 
