@@ -111,23 +111,23 @@ The web server migration will be executed as part of Phases 3-4 of the main exec
 
 ## 2. UUID Generation
 
-**Status:** 🔴 Critical | ❌ Blocked (no switchy_uuid implementation)
+**Status:** ✅ Fixed
 
-### Occurrences
+### Solution Implemented
 
-| File                                               | Line     | Usage                     | Priority    |
-| -------------------------------------------------- | -------- | ------------------------- | ----------- |
-| `packages/tunnel_server/src/api.rs`                | 110, 129 | Token generation          | 🔴 Critical |
-| `packages/auth/src/lib.rs`                         | 75, 88   | Magic token & session IDs | 🔴 Critical |
-| `packages/simvar/examples/api_testing/src/main.rs` | 276, 398 | Test data                 | 🟢 Minor    |
+Created `switchy_uuid` package with:
 
-### Recommendation
+- **Production**: Uses cryptographically secure random UUIDs via `uuid` crate
+- **Simulation**: Uses seeded deterministic UUIDs for reproducible testing
+- **Environment Control**: Set `SIMULATOR_UUID_SEED` to control deterministic generation
 
-Create `switchy_uuid` package with:
+### Migrated Files
 
-- Deterministic UUID generation for testing
-- Cryptographically secure UUIDs for production
-- Seeded UUID generation for simulations
+- ✅ `packages/tunnel_server/src/api.rs:110,129` - Token generation
+- ✅ `packages/auth/src/lib.rs:75,88` - Magic token & session IDs
+- ✅ `packages/simvar/examples/api_testing/src/main.rs:276,398` - Test data
+
+All UUID generation now uses `switchy_uuid::{new_v4, new_v4_string}` functions.
 
 ## 2. Chrono Date/Time Usage
 
@@ -244,29 +244,41 @@ These should migrate to use `switchy_time`.
 
 ## 7. Environment Variables
 
-**Status:** 🟡 Important | ❌ No abstraction exists
+**Status:** ✅ Fixed
 
-### Problem
+### Solution Implemented
 
-Direct use of `std::env::var` throughout codebase without abstraction. Need to create `switchy_env` package.
+Created `switchy_env` package with:
 
-### Direct Usage (75 occurrences)
+- **Production**: Uses real environment variables via `std::env`
+- **Simulation**: Uses configurable environment with deterministic defaults
+- **Type Safety**: Parse environment variables to specific types with `var_parse<T>()`
+- **Testing**: Set/remove variables for testing scenarios
 
-| Category  | Variables                                | Usage              | Priority     |
-| --------- | ---------------------------------------- | ------------------ | ------------ |
-| Database  | `DATABASE_URL`, `DB_*`                   | Connection strings | 🔴 Critical  |
-| Security  | `TUNNEL_ACCESS_TOKEN`, `*_CLIENT_SECRET` | Authentication     | 🔴 Critical  |
-| Simulator | `SIMULATOR_*`                            | Test configuration | 🟡 Important |
-| Debug     | `DEBUG_*`, `TOKIO_CONSOLE`               | Debug flags        | 🟢 Minor     |
+### Migrated Core Packages
 
-### Recommendation
+- ✅ `packages/uuid/src/simulator.rs` - SIMULATOR_UUID_SEED
+- ✅ `packages/random/src/simulator.rs` - SIMULATOR_SEED
+- ✅ `packages/time/src/simulator.rs` - SIMULATOR_EPOCH_OFFSET, SIMULATOR_STEP_MULTIPLIER
 
-Create new `switchy_env` package with:
+### Usage Pattern
 
-- Environment variable abstraction
-- Deterministic values for testing
-- Configuration injection
-- Type-safe access patterns
+```rust
+use switchy_env::{var, var_or, var_parse, var_parse_or};
+
+// Get with type safety and defaults
+let seed = var_parse_or("SIMULATOR_SEED", 12345u64);
+let database_url = var_or("DATABASE_URL", "sqlite::memory:");
+```
+
+### Remaining Migration Opportunities (59 occurrences)
+
+Additional packages can be migrated to use `switchy_env` for better determinism:
+
+- Database connection packages
+- Load balancer configuration
+- Authentication tokens
+- Debug flags
 
 ## 8. File System Operations
 
@@ -474,28 +486,34 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 
 - [ ] Additional files may exist that haven't been identified yet
 
-#### 1.2 Create `switchy_uuid` package
+#### 1.2 Create `switchy_uuid` package ✅ COMPLETED
 
-- [ ] Create new package structure
-- [ ] Implement deterministic UUID generation for testing
-- [ ] Implement cryptographically secure UUIDs for production
-- [ ] Add seeded UUID generation for simulations
+- [x] Create new package structure
+- [x] Implement deterministic UUID generation for testing
+- [x] Implement cryptographically secure UUIDs for production
+- [x] Add seeded UUID generation for simulations
 
-**Files needing migration (6 direct usages):**
+**Files migrated (6 direct usages):**
 
-- [ ] `packages/tunnel_server/src/api.rs:27,110,129` - Token generation
-- [ ] `packages/auth/src/lib.rs:16,75,88` - Magic token generation
-- [ ] `packages/simvar/examples/api_testing/src/main.rs:20,276,398` - Test IDs
+- [x] `packages/tunnel_server/src/api.rs:27,110,129` - Token generation
+- [x] `packages/auth/src/lib.rs:16,75,88` - Magic token generation
+- [x] `packages/simvar/examples/api_testing/src/main.rs:20,276,398` - Test IDs
 
-#### 1.3 Create `switchy_env` package
+#### 1.3 Create `switchy_env` package ✅ COMPLETED
 
-- [ ] Create new package structure
-- [ ] Implement environment variable abstraction
-- [ ] Add deterministic values for testing
-- [ ] Implement configuration injection
-- [ ] Add type-safe access patterns
+- [x] Create new package structure
+- [x] Implement environment variable abstraction
+- [x] Add deterministic values for testing
+- [x] Implement configuration injection
+- [x] Add type-safe access patterns
 
-**Files needing migration (58 occurrences):**
+**Core packages migrated (3 critical packages):**
+
+- [x] `packages/uuid/src/simulator.rs` - SIMULATOR_UUID_SEED
+- [x] `packages/random/src/simulator.rs:13,48` - Random seeds
+- [x] `packages/time/src/simulator.rs:26,63` - Time offsets
+
+**Additional migration opportunities (55+ occurrences):**
 
 - [ ] `packages/database_connection/src/creds.rs:38-78` - Database credentials
 - [ ] `packages/env_utils/src/lib.rs:142-452` - All env utilities
@@ -503,8 +521,6 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 - [ ] `packages/app/native/ui/src/api/tidal.rs:16,65-66` - Tidal credentials
 - [ ] `packages/simvar/harness/src/lib.rs:52,115` - Simulator config
 - [ ] `packages/simvar/harness/src/config.rs:55,377` - Simulator settings
-- [ ] `packages/time/src/simulator.rs:26,63` - Time offsets
-- [ ] `packages/random/src/simulator.rs:13,48` - Random seeds
 - [ ] `packages/load_balancer/src/server.rs:44,81` - SSL configuration
 - [ ] `packages/load_balancer/src/load_balancer.rs:12,19,26,30` - Port/SSL paths
 - [ ] Build scripts and main.rs files (10+ occurrences)
