@@ -349,12 +349,16 @@ These packages control simulation behavior and build processes - they MUST use r
 ✅ packages/hyperchad/renderer/fltk/src/lib.rs:56 - DEBUG_RENDERER ✅ MIGRATED (supports "1" and "true")
 ```
 
-#### **6. Technical Debt** (Should be deprecated)
+#### **6. Environment Utilities Package Status**
 
 ```
-✅ packages/env_utils/src/lib.rs:142-452 - All environment utilities
-   (This entire package should be deprecated in favor of switchy_env)
+✅ packages/env_utils/src/lib.rs:142-452 - Runtime environment utilities
+   (Runtime functions could potentially use switchy_env internally)
 ```
+
+**Important Note**: The `moosicbox_env_utils` package provides valuable compile-time macros using `env!()` and `option_env!()` that are useful for build-time constants and const evaluation. These compile-time features should be preserved.
+
+**Potential Enhancement**: The runtime functions in `env_utils` (`env_usize()`, `default_env_usize()`, etc.) could potentially be enhanced to use `switchy_env` internally while maintaining their current API.
 
 ### Migration Status Summary
 
