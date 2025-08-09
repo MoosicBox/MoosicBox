@@ -275,10 +275,22 @@ pub enum InitSqliteRusqliteError {
 /// # Errors
 ///
 /// * If fails to initialize the Sqlite connection via rusqlite
+///
+/// # Panics
+///
+/// * If the `simulator` db connection fails to be initialized
 #[cfg(feature = "sqlite-rusqlite")]
+#[allow(unused, unreachable_code)]
 pub fn init_sqlite_rusqlite(
     db_location: Option<&std::path::Path>,
 ) -> Result<Box<dyn Database>, InitSqliteRusqliteError> {
+    #[cfg(feature = "simulator")]
+    {
+        return Ok(Box::new(
+            switchy_database::simulator::SimulationDatabase::new().unwrap(),
+        ));
+    }
+
     let library = db_location.map_or_else(
         ::rusqlite::Connection::open_in_memory,
         ::rusqlite::Connection::open,
@@ -320,8 +332,12 @@ pub enum InitSqliteSqlxDatabaseError {
 /// # Errors
 ///
 /// * If fails to initialize the Sqlite connection via Sqlx
+///
+/// # Panics
+///
+/// * If the `simulator` db connection fails to be initialized
 #[cfg(feature = "sqlite-sqlx")]
-#[allow(unused)]
+#[allow(unused, unreachable_code)]
 pub async fn init_sqlite_sqlx(
     db_location: Option<&std::path::Path>,
 ) -> Result<Box<dyn Database>, InitSqliteSqlxDatabaseError> {
@@ -329,6 +345,13 @@ pub async fn init_sqlite_sqlx(
 
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use switchy_database::sqlx::sqlite::SqliteSqlxDatabase;
+
+    #[cfg(feature = "simulator")]
+    {
+        return Ok(Box::new(
+            switchy_database::simulator::SimulationDatabase::new().unwrap(),
+        ));
+    }
 
     let connect_options = SqliteConnectOptions::new();
     let mut connect_options = if let Some(db_location) = db_location {
