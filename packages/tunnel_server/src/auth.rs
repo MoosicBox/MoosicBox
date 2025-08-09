@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::{LazyLock, Mutex};
 
@@ -127,7 +127,7 @@ impl FromRequest for QueryAuthorized {
 
 fn is_query_authorized(req: &HttpRequest) -> bool {
     let query: Vec<_> = QString::from(req.query_string()).into();
-    let query: HashMap<_, _> = query.into_iter().collect();
+    let query: BTreeMap<_, _> = query.into_iter().collect();
     let authorization = query
         .iter()
         .find(|(key, _)| key.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str()))
@@ -190,8 +190,8 @@ async fn is_signature_authorized(query_string: &str) -> Result<bool, DatabaseErr
     Ok(false)
 }
 
-static HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static HASH_CACHE: LazyLock<Mutex<BTreeMap<String, String>>> =
+    LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 pub fn hash_token(token: &str) -> String {
     if let Some(existing) = HASH_CACHE

@@ -3,7 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     str::Utf8Error,
     sync::{Arc, LazyLock},
 };
@@ -1730,7 +1730,7 @@ fn capitalize(value: &str) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AppConfig {
     pub(crate) app_id: String,
-    pub(crate) secrets: HashMap<String, String>,
+    pub(crate) secrets: BTreeMap<String, String>,
 }
 
 #[allow(unused)]
@@ -1813,7 +1813,7 @@ pub(crate) fn search_app_config(bundle: &str) -> Result<AppConfig, Error> {
         return Err(Error::NoInfoAndExtras);
     }
 
-    let mut secrets = HashMap::new();
+    let mut secrets = BTreeMap::new();
 
     log::trace!("seed_timezones={:?}", &seed_timezones);
     for (seed, timezone) in seed_timezones {
@@ -2451,7 +2451,7 @@ impl MusicApi for QobuzMusicApi {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     use crate::*;
 
@@ -2476,7 +2476,7 @@ mod tests {
             secrets,
             AppConfig {
                 app_id: "123456789".to_string(),
-                secrets: HashMap::from([
+                secrets: BTreeMap::from([
                     (
                         "london".to_string(),
                         "b0b0b0bd3adb33fcd6a7405f25555555".to_string()

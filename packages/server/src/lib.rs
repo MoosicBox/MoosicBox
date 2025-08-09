@@ -555,12 +555,20 @@ pub async fn run<T>(
 
             #[cfg(feature = "player")]
             {
+                fn drain_btreemap<K: Ord, V>(
+                    map: &mut std::collections::BTreeMap<K, V>,
+                ) -> Vec<(K, V)> {
+                    let mut values = Vec::new();
+
+                    while let Some((key, value)) = map.pop_first() {
+                        values.push((key, value));
+                    }
+
+                    values
+                }
+
                 log::debug!("Shutting down server players...");
-                let players = players::local::SERVER_PLAYERS
-                    .write()
-                    .await
-                    .drain()
-                    .collect::<Vec<_>>();
+                let players = drain_btreemap(&mut *players::local::SERVER_PLAYERS.write().await);
                 for (id, (_, mut player)) in players {
                     log::debug!("Shutting down player id={id}");
                     if let Err(err) = player

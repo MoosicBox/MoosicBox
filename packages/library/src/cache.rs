@@ -3,7 +3,7 @@
 use enum_as_inner::EnumAsInner;
 use futures::Future;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::sync::{Arc, LazyLock, RwLock};
 use std::time::{Duration, UNIX_EPOCH};
@@ -43,8 +43,8 @@ pub struct CacheRequest<'a> {
     pub expiration: Duration,
 }
 
-static CACHE_MAP: LazyLock<RwLock<HashMap<String, CacheItem>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+static CACHE_MAP: LazyLock<RwLock<BTreeMap<String, CacheItem>>> =
+    LazyLock::new(|| RwLock::new(BTreeMap::new()));
 
 /// # Panics
 ///

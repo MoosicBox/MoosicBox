@@ -58,7 +58,7 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
         } else {
             use aws_config::{BehaviorVersion, Region};
             use aws_sdk_ssm::Client;
-            use std::collections::HashMap;
+            use std::collections::BTreeMap;
 
             log::debug!("get_db_creds: Fetching creds from aws ssm");
 
@@ -99,7 +99,7 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
             let params = params
                 .parameters
                 .ok_or(GetDbCredsError::InvalidSsmParameters)?;
-            let params: HashMap<String, String> = params
+            let params: BTreeMap<String, String> = params
                 .iter()
                 .map(|param| {
                     param

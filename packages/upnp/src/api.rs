@@ -1,6 +1,6 @@
 #![allow(clippy::needless_for_each)]
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use actix_web::{
     Result, Scope,
@@ -277,7 +277,7 @@ pub struct GetVolumeQuery {
             (
                 status = 200,
                 description = "The current UPnP volume info",
-                body = HashMap<String, String>,
+                body = BTreeMap<String, String>,
             )
         )
     )
@@ -285,7 +285,7 @@ pub struct GetVolumeQuery {
 #[route("/volume", method = "GET")]
 pub async fn get_volume_endpoint(
     query: web::Query<GetVolumeQuery>,
-) -> Result<Json<HashMap<String, String>>> {
+) -> Result<Json<BTreeMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:RenderingControl")?
     } else if let Some(url) = &query.device_url {
@@ -332,7 +332,7 @@ pub struct SetVolumeQuery {
             (
                 status = 200,
                 description = "The set volume action response",
-                body = HashMap<String, String>,
+                body = BTreeMap<String, String>,
             )
         )
     )
@@ -340,7 +340,7 @@ pub struct SetVolumeQuery {
 #[route("/volume", method = "POST")]
 pub async fn set_volume_endpoint(
     query: web::Query<SetVolumeQuery>,
-) -> Result<Json<HashMap<String, String>>> {
+) -> Result<Json<BTreeMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:RenderingControl")?
     } else if let Some(url) = &query.device_url {
@@ -448,7 +448,7 @@ pub struct PauseQuery {
 #[route("/pause", method = "POST")]
 pub async fn pause_endpoint(
     query: web::Query<PauseQuery>,
-) -> Result<Json<HashMap<String, String>>> {
+) -> Result<Json<BTreeMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {
@@ -493,7 +493,7 @@ pub struct PlayQuery {
     )
 )]
 #[route("/play", method = "POST")]
-pub async fn play_endpoint(query: web::Query<PlayQuery>) -> Result<Json<HashMap<String, String>>> {
+pub async fn play_endpoint(query: web::Query<PlayQuery>) -> Result<Json<BTreeMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {
@@ -546,7 +546,7 @@ pub struct SeekQuery {
     )
 )]
 #[route("/seek", method = "POST")]
-pub async fn seek_endpoint(query: web::Query<SeekQuery>) -> Result<Json<HashMap<String, String>>> {
+pub async fn seek_endpoint(query: web::Query<SeekQuery>) -> Result<Json<BTreeMap<String, String>>> {
     let (device, service) = if let Some(udn) = &query.device_udn {
         get_device_and_service(udn, "urn:upnp-org:serviceId:AVTransport")?
     } else if let Some(url) = &query.device_url {

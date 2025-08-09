@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
 use moosicbox_audio_output::AudioOutputScannerError;
@@ -11,7 +11,7 @@ use crate::WS_SERVER_HANDLE;
 
 pub static SERVER_PLAYERS: LazyLock<
     tokio::sync::RwLock<
-        HashMap<
+        BTreeMap<
             u64,
             (
                 moosicbox_player::local::LocalPlayer,
@@ -19,7 +19,7 @@ pub static SERVER_PLAYERS: LazyLock<
             ),
         >,
     >,
-> = LazyLock::new(|| tokio::sync::RwLock::new(HashMap::new()));
+> = LazyLock::new(|| tokio::sync::RwLock::new(BTreeMap::new()));
 
 #[derive(Debug, Error)]
 pub enum InitError {

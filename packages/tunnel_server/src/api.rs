@@ -17,7 +17,7 @@ use moosicbox_tunnel::{
 use qstring::QString;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::str::FromStr as _;
 use switchy_async::util::CancellationToken;
 use switchy_http::models::Method;
@@ -195,7 +195,7 @@ enum ResponseType {
 
 #[cfg_attr(feature = "telemetry", tracing::instrument)]
 fn get_headers_for_request(req: &HttpRequest) -> Option<Value> {
-    let mut headers = HashMap::<String, String>::new();
+    let mut headers = BTreeMap::<String, String>::new();
 
     for (key, value) in req.headers() {
         match *key {
@@ -227,7 +227,7 @@ async fn proxy_request(
     })?;
     let path = req.path().strip_prefix('/').expect("Failed to get path");
     let query: Vec<_> = QString::from(req.query_string()).into();
-    let query: HashMap<_, _> = query.into_iter().collect();
+    let query: BTreeMap<_, _> = query.into_iter().collect();
     let client_id = query
         .get("clientId")
         .cloned()

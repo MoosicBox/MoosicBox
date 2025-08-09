@@ -16,12 +16,12 @@ pub use crate::Builder;
 use crate::{Error, GenericRuntime, task};
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
-type LocalFutureMap = RefCell<HashMap<u64, Pin<Box<dyn Future<Output = ()> + 'static>>>>;
+type LocalFutureMap = RefCell<BTreeMap<u64, Pin<Box<dyn Future<Output = ()> + 'static>>>>;
 
 thread_local! {
-    static LOCAL_FUTURES: LocalFutureMap = RefCell::new(HashMap::new());
+    static LOCAL_FUTURES: LocalFutureMap = RefCell::new(BTreeMap::new());
 }
 
 // A Send future that references a non-Send future stored in thread-local storage

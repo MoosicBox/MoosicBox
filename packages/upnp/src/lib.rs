@@ -21,7 +21,7 @@ pub use rupnp::{Device, DeviceSpec, Service, http::Uri, ssdp::SearchTarget};
 use scanner::UpnpScanner;
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     sync::{Arc, LazyLock},
     time::Duration,
 };
@@ -30,7 +30,7 @@ use tokio::sync::Mutex;
 
 mod cache {
     use std::{
-        collections::HashMap,
+        collections::BTreeMap,
         sync::{LazyLock, RwLock},
     };
 
@@ -41,14 +41,14 @@ mod cache {
     #[derive(Debug, Clone)]
     struct DeviceMapping {
         device: Device,
-        services: HashMap<String, Service>,
+        services: BTreeMap<String, Service>,
     }
 
-    static DEVICE_URL_MAPPINGS: LazyLock<RwLock<HashMap<String, DeviceMapping>>> =
-        LazyLock::new(|| RwLock::new(HashMap::new()));
+    static DEVICE_URL_MAPPINGS: LazyLock<RwLock<BTreeMap<String, DeviceMapping>>> =
+        LazyLock::new(|| RwLock::new(BTreeMap::new()));
 
-    static DEVICE_MAPPINGS: LazyLock<RwLock<HashMap<String, DeviceMapping>>> =
-        LazyLock::new(|| RwLock::new(HashMap::new()));
+    static DEVICE_MAPPINGS: LazyLock<RwLock<BTreeMap<String, DeviceMapping>>> =
+        LazyLock::new(|| RwLock::new(BTreeMap::new()));
 
     pub fn get_device_from_url(url: &str) -> Result<Device, ScanError> {
         Ok(DEVICE_MAPPINGS
@@ -79,14 +79,14 @@ mod cache {
             device.url().to_string(),
             DeviceMapping {
                 device: device.clone(),
-                services: HashMap::new(),
+                services: BTreeMap::new(),
             },
         );
         DEVICE_MAPPINGS.write().unwrap().insert(
             device.udn().to_owned(),
             DeviceMapping {
                 device,
-                services: HashMap::new(),
+                services: BTreeMap::new(),
             },
         );
     }
@@ -294,7 +294,7 @@ pub async fn set_av_transport_uri(
     original_track_number: Option<u32>,
     duration: Option<u32>,
     size: Option<u64>,
-) -> Result<HashMap<String, String>, ActionError> {
+) -> Result<BTreeMap<String, String>, ActionError> {
     static BRACKET_WHITESPACE: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r">\s+<").expect("Invalid Regex"));
     static BETWEEN_WHITESPACE: LazyLock<regex::Regex> =
@@ -374,7 +374,9 @@ pub async fn set_av_transport_uri(
 
     Ok(service
         .action(device_url, "SetAVTransportURI", &args)
-        .await?)
+        .await?
+        .into_iter()
+        .collect())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -602,7 +604,7 @@ pub async fn seek(
     instance_id: u32,
     unit: &str,
     target: u32,
-) -> Result<HashMap<String, String>, ActionError> {
+) -> Result<BTreeMap<String, String>, ActionError> {
     let target_str = duration_to_string(target);
     log::trace!("seek: seeking to target={target_str} instance_id={instance_id} unit={unit}");
 
@@ -618,7 +620,9 @@ pub async fn seek(
                 "
             ),
         )
-        .await?)
+        .await?
+        .into_iter()
+        .collect())
 }
 
 /// # Errors
@@ -629,14 +633,16 @@ pub async fn get_volume(
     url: &Uri,
     instance_id: u32,
     channel: &str,
-) -> Result<HashMap<String, String>, ActionError> {
+) -> Result<BTreeMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,
             "GetVolume",
             &format!("<InstanceID>{instance_id}</InstanceID><Channel>{channel}</Channel>"),
         )
-        .await?)
+        .await?
+        .into_iter()
+        .collect())
 }
 
 /// # Errors
@@ -648,14 +654,15 @@ pub async fn set_volume(
     instance_id: u32,
     channel: &str,
     volume: u8,
-) -> Result<HashMap<String, String>, ActionError> {
+) -> Result<BTreeMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,
             "SetVolume",
             &format!("<InstanceID>{instance_id}</InstanceID><Channel>{channel}</Channel><DesiredVolume>{volume}</DesiredVolume>"),
         )
-        .await?)
+        .await?.into_iter()
+        .collect())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -730,11 +737,13 @@ pub async fn subscribe_events(
 ) -> Result<
     (
         String,
-        impl Stream<Item = Result<HashMap<String, String>, rupnp::Error>> + use<>,
+        impl Stream<Item = Result<BTreeMap<String, String>, rupnp::Error>> + use<>,
     ),
     ScanError,
 > {
-    Ok(service.subscribe(url, 300).await?)
+    let (url, stream) = service.subscribe(url, 300).await?;
+
+    Ok((url, stream.map(|x| x.map(|x| x.into_iter().collect()))))
 }
 
 /// # Errors
@@ -745,14 +754,16 @@ pub async fn play(
     url: &Uri,
     instance_id: u32,
     speed: f64,
-) -> Result<HashMap<String, String>, ActionError> {
+) -> Result<BTreeMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,
             "Play",
             &format!("<InstanceID>{instance_id}</InstanceID><Speed>{speed}</Speed>"),
         )
-        .await?)
+        .await?
+        .into_iter()
+        .collect())
 }
 
 /// # Errors
@@ -762,14 +773,16 @@ pub async fn pause(
     service: &Service,
     url: &Uri,
     instance_id: u32,
-) -> Result<HashMap<String, String>, ActionError> {
+) -> Result<BTreeMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,
             "Pause",
             &format!("<InstanceID>{instance_id}</InstanceID>"),
         )
-        .await?)
+        .await?
+        .into_iter()
+        .collect())
 }
 
 /// # Errors
@@ -779,14 +792,16 @@ pub async fn stop(
     service: &Service,
     url: &Uri,
     instance_id: u32,
-) -> Result<HashMap<String, String>, ActionError> {
+) -> Result<BTreeMap<String, String>, ActionError> {
     Ok(service
         .action(
             url,
             "Stop",
             &format!("<InstanceID>{instance_id}</InstanceID>"),
         )
-        .await?)
+        .await?
+        .into_iter()
+        .collect())
 }
 
 /// # Errors
