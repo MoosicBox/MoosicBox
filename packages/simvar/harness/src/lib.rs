@@ -381,7 +381,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
             run_info(&props)
         ));
 
-        let start = SystemTime::now();
+        let start = switchy::time::now();
 
         #[cfg(feature = "tui")]
         self.display_state
@@ -452,7 +452,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
 
         self.bootstrap.on_end(&mut managed_sim);
 
-        let end = SystemTime::now();
+        let end = switchy::time::now();
         let real_time_millis = end.duration_since(start).unwrap().as_millis();
         let sim_time_millis = managed_sim.elapsed().as_millis();
         let steps = current_step() - 1;

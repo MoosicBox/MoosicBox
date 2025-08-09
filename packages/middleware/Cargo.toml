@@ -12,6 +12,7 @@ version     = "0.1.4"
 
 [dependencies]
 moosicbox_assert = { workspace = true }
+switchy_time     = { workspace = true, features = ["std"] }
 
 actix-web    = { workspace = true }
 futures      = { workspace = true }

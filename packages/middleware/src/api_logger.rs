@@ -76,10 +76,12 @@ where
             },
             headers = relevant_headers,
         );
-        let start = std::time::Instant::now();
+        let start = switchy_time::instant_now();
         log::trace!("{prefix} STARTED");
         Box::pin(self.service.call(req).then(move |response| async move {
-            let duration = std::time::Instant::now().duration_since(start).as_millis();
+            let duration = switchy_time::instant_now()
+                .duration_since(start)
+                .as_millis();
             match response {
                 Ok(data) => {
                     const RELEVANT_HEADER_NAMES: [header::HeaderName; 3] = [

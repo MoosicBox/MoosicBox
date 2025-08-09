@@ -44,6 +44,7 @@ moosicbox_music_models = { workspace = true }
 moosicbox_profiles = { workspace = true, features = ["api", "events"] }
 moosicbox_schema = { workspace = true, optional = true }
 moosicbox_session = { workspace = true, features = ["events"] }
+switchy_time = { workspace = true, features = ["std"] }
 
 moosicbox_ws = { workspace = true, features = ["ws"] }
 switchy_async = { workspace = true, features = ["tokio"] }

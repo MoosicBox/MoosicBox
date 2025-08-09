@@ -454,7 +454,7 @@ mod local {
             "Test Seek Overlap Output".to_string(),
             spec,
             Box::new(move || {
-                let now = Instant::now();
+                let now = switchy_time::instant_now();
 
                 // Record this AudioOutput creation time
                 {
@@ -805,7 +805,7 @@ mod local {
         fn new(context: String) -> Self {
             println!(
                 "🔧 Creating MockAudioWrite for detection (AudioOutput creation at {:?})",
-                Instant::now()
+                switchy_time::instant_now()
             );
             Self { _context: context }
         }

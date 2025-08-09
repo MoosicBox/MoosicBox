@@ -21,6 +21,7 @@ moosicbox_arb = { workspace = true, optional = true, features = [
     "xml",
 ] }
 moosicbox_assert = { workspace = true }
+switchy_time = { workspace = true, features = ["std"] }
 
 log        = { workspace = true }
 quickcheck = { workspace = true, optional = true }

@@ -251,28 +251,32 @@ impl ActionTimingManager {
     /// Check if action should be throttled
     pub fn should_throttle(&mut self, element_id: usize, throttle_ms: u64) -> bool {
         if let Some((instant, throttle)) = self.throttle.get(&element_id) {
-            let ms = Instant::now().duration_since(*instant).as_millis();
+            let ms = switchy_time::instant_now()
+                .duration_since(*instant)
+                .as_millis();
             if ms < u128::from(*throttle) {
                 return true;
             }
         }
 
         self.throttle
-            .insert(element_id, (Instant::now(), throttle_ms));
+            .insert(element_id, (switchy_time::instant_now(), throttle_ms));
         false
     }
 
     /// Start delay off timer
     pub fn start_delay_off(&mut self, element_id: usize, delay_ms: u64) {
         self.delay_off
-            .insert(element_id, (Instant::now(), delay_ms));
+            .insert(element_id, (switchy_time::instant_now(), delay_ms));
     }
 
     /// Check if delay off has expired
     #[must_use]
     pub fn is_delay_off_expired(&self, element_id: usize) -> bool {
         if let Some((instant, delay)) = self.delay_off.get(&element_id) {
-            let ms = Instant::now().duration_since(*instant).as_millis();
+            let ms = switchy_time::instant_now()
+                .duration_since(*instant)
+                .as_millis();
             ms >= u128::from(*delay)
         } else {
             true

@@ -13,7 +13,7 @@ use std::{
     fs,
     io::Write,
     process::{Command, Stdio},
-    time::{SystemTime, UNIX_EPOCH},
+    time::UNIX_EPOCH,
 };
 
 #[derive(Parser)]
@@ -115,7 +115,10 @@ fn check_tools_availability(tools: &[String]) {
 }
 
 fn setup_report_files(args: &Args) -> Result<AnalysisContext> {
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    let timestamp = switchy_time::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
     let base_filename = args
         .report_file

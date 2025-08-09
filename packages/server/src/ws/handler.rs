@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use actix_ws::Message;
 use futures_util::{
@@ -28,7 +28,7 @@ pub async fn handle_ws(
     log::debug!("connected");
 
     let mut name = None;
-    let mut last_heartbeat = Instant::now();
+    let mut last_heartbeat = switchy_time::instant_now();
     let mut interval = interval(HEARTBEAT_INTERVAL);
 
     let (conn_tx, mut conn_rx) = mpsc::unbounded_channel();
@@ -55,12 +55,12 @@ pub async fn handle_ws(
             // commands & messages received from client
             Either::Left((Either::Left((Some(Ok(msg)), _)), _)) => match msg {
                 Message::Ping(bytes) => {
-                    last_heartbeat = Instant::now();
+                    last_heartbeat = switchy_time::instant_now();
                     session.pong(&bytes).await.unwrap();
                 }
 
                 Message::Pong(_) => {
-                    last_heartbeat = Instant::now();
+                    last_heartbeat = switchy_time::instant_now();
                 }
 
                 Message::Text(text) => {
@@ -107,7 +107,7 @@ pub async fn handle_ws(
             // heartbeat internal tick
             Either::Right((_inst, _)) => {
                 // if no heartbeat ping/pong received recently, close the connection
-                if Instant::now().duration_since(last_heartbeat) > CLIENT_TIMEOUT {
+                if switchy_time::instant_now().duration_since(last_heartbeat) > CLIENT_TIMEOUT {
                     log::info!(
                         "client has not sent heartbeat in over {CLIENT_TIMEOUT:?}; disconnecting"
                     );
