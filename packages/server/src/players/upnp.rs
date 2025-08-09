@@ -1,5 +1,5 @@
 use std::sync::LazyLock;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use moosicbox_session::update_session_audio_output_ids;
 use switchy_database::profiles::PROFILES;
@@ -20,7 +20,7 @@ pub static UPNP_PLAYERS: LazyLock<
 
 static SESSION_UPNP_PLAYERS: LazyLock<
     tokio::sync::RwLock<
-        HashMap<
+        BTreeMap<
             u64,
             (
                 moosicbox_audio_output::AudioOutputFactory,
@@ -28,7 +28,7 @@ static SESSION_UPNP_PLAYERS: LazyLock<
             ),
         >,
     >,
-> = LazyLock::new(|| tokio::sync::RwLock::new(HashMap::new()));
+> = LazyLock::new(|| tokio::sync::RwLock::new(BTreeMap::new()));
 
 #[derive(Debug, Error)]
 pub enum InitError {

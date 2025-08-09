@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     sync::{Arc, LazyLock},
 };
 
@@ -32,11 +32,11 @@ pub static SSL_KEY_PATH: LazyLock<String> = LazyLock::new(|| {
 
 static SNI: LazyLock<String> = LazyLock::new(|| format!("127.0.0.1:{}", *SSL_PORT));
 
-pub struct Router(HashMap<String, Arc<LoadBalancer<RoundRobin>>>);
+pub struct Router(BTreeMap<String, Arc<LoadBalancer<RoundRobin>>>);
 
 impl Router {
     #[must_use]
-    pub const fn new(upstreams: HashMap<String, Arc<LoadBalancer<RoundRobin>>>) -> Self {
+    pub const fn new(upstreams: BTreeMap<String, Arc<LoadBalancer<RoundRobin>>>) -> Self {
         Self(upstreams)
     }
 }

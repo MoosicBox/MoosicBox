@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::Display,
     io::Write,
     pin::Pin,
@@ -82,8 +82,8 @@ impl Display for Command {
 #[derive(Default)]
 pub struct Context {
     handle: Option<service::Handle>,
-    semaphore: HashMap<String, Arc<Semaphore>>,
-    pool: HashMap<String, TrackBytesSource>,
+    semaphore: BTreeMap<String, Arc<Semaphore>>,
+    pool: BTreeMap<String, TrackBytesSource>,
     token: Option<CancellationToken>,
 }
 

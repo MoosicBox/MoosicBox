@@ -1,7 +1,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt,
     sync::{
         Arc, LazyLock,
@@ -329,7 +329,7 @@ impl service::Processor for service::Service {
 #[derive(Debug)]
 pub struct RequestHeaders {
     pub status: u16,
-    pub headers: HashMap<String, String>,
+    pub headers: BTreeMap<String, String>,
 }
 
 /// A multi-room ws server.
@@ -340,16 +340,16 @@ pub struct RequestHeaders {
 #[derive(Debug)]
 pub struct WsServer {
     /// Map of connection IDs to their message receivers.
-    sessions: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
-    clients: HashMap<ConnId, mpsc::UnboundedSender<Msg>>,
-    senders: HashMap<u64, UnboundedSender<TunnelResponse>>,
-    headers_senders: HashMap<u64, oneshot::Sender<RequestHeaders>>,
-    abort_request_tokens: HashMap<u64, CancellationToken>,
+    sessions: BTreeMap<ConnId, mpsc::UnboundedSender<Msg>>,
+    clients: BTreeMap<ConnId, mpsc::UnboundedSender<Msg>>,
+    senders: BTreeMap<u64, UnboundedSender<TunnelResponse>>,
+    headers_senders: BTreeMap<u64, oneshot::Sender<RequestHeaders>>,
+    abort_request_tokens: BTreeMap<u64, CancellationToken>,
 
     /// Tracks total number of historical connections established.
     visitor_count: Arc<AtomicUsize>,
 
-    ws_requests: HashMap<u64, ConnId>,
+    ws_requests: BTreeMap<u64, ConnId>,
 }
 
 #[derive(Debug, Serialize, Deserialize, EnumString)]
@@ -376,13 +376,13 @@ pub enum WebsocketMessageError {
 impl WsServer {
     pub fn new() -> Self {
         Self {
-            sessions: HashMap::new(),
-            clients: HashMap::new(),
-            senders: HashMap::new(),
-            headers_senders: HashMap::new(),
-            abort_request_tokens: HashMap::new(),
+            sessions: BTreeMap::new(),
+            clients: BTreeMap::new(),
+            senders: BTreeMap::new(),
+            headers_senders: BTreeMap::new(),
+            abort_request_tokens: BTreeMap::new(),
             visitor_count: Arc::new(AtomicUsize::new(0)),
-            ws_requests: HashMap::new(),
+            ws_requests: BTreeMap::new(),
         }
     }
 
@@ -527,8 +527,8 @@ pub enum ConnectionIdError {
     Database(#[from] DatabaseError),
 }
 
-static CACHE_CONNECTIONS_MAP: LazyLock<std::sync::RwLock<HashMap<String, ConnId>>> =
-    LazyLock::new(|| std::sync::RwLock::new(HashMap::new()));
+static CACHE_CONNECTIONS_MAP: LazyLock<std::sync::RwLock<BTreeMap<String, ConnId>>> =
+    LazyLock::new(|| std::sync::RwLock::new(BTreeMap::new()));
 
 impl service::Handle {
     /// Register client message sender and obtain connection ID.

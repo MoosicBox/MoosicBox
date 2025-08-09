@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::HashMap, task::Poll, time::SystemTime};
+use std::{collections::BTreeMap, task::Poll, time::SystemTime};
 
 use bytes::Bytes;
 use futures_util::{Future, Stream};
@@ -43,7 +43,7 @@ pub struct TunnelResponse {
     pub last: bool,
     pub bytes: Bytes,
     pub status: Option<u16>,
-    pub headers: Option<HashMap<String, String>>,
+    pub headers: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

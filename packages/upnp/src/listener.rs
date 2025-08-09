@@ -1,6 +1,6 @@
 #![allow(clippy::module_name_repetitions)]
 
-use std::{collections::HashMap, fmt::Display, pin::Pin, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, fmt::Display, pin::Pin, sync::Arc, time::Duration};
 
 use futures::Future;
 use strum_macros::AsRefStr;
@@ -65,8 +65,9 @@ impl Display for UpnpCommand {
 
 pub struct UpnpContext {
     #[allow(clippy::type_complexity)]
-    status_join_handles: HashMap<usize, switchy_async::task::JoinHandle<Result<(), ListenerError>>>,
-    status_tokens: HashMap<usize, CancellationToken>,
+    status_join_handles:
+        BTreeMap<usize, switchy_async::task::JoinHandle<Result<(), ListenerError>>>,
+    status_tokens: BTreeMap<usize, CancellationToken>,
     token: Option<CancellationToken>,
     subscription_id: usize,
 }
@@ -81,8 +82,8 @@ impl UpnpContext {
 impl Default for UpnpContext {
     fn default() -> Self {
         Self {
-            status_join_handles: HashMap::default(),
-            status_tokens: HashMap::default(),
+            status_join_handles: BTreeMap::default(),
+            status_tokens: BTreeMap::default(),
             token: Option::default(),
             subscription_id: 1,
         }
@@ -183,10 +184,11 @@ impl Processor for Service {
 
     async fn on_shutdown(ctx: Arc<RwLock<UpnpContext>>) -> Result<(), Self::Error> {
         let mut ctx = ctx.write().await;
-        for (_, handle) in ctx.status_join_handles.drain() {
+        let handles = std::mem::take(&mut ctx.status_join_handles);
+        drop(ctx);
+        for (_, handle) in handles {
             handle.await??;
         }
-        drop(ctx);
         Ok(())
     }
 

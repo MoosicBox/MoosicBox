@@ -415,7 +415,7 @@ Application code has race conditions. `switchy_async` provides deterministic run
 - [x] `packages/scan/src/output.rs:583,620,664` - HashSet<u64> for IDs
 - [x] `packages/server/src/ws/server.rs:132,137,141` - Connection maps
 - [x] `packages/server/src/auth.rs:108` - Query parameter collection
-- [ ] `packages/server/src/players/upnp.rs:23` - Player state map
+- [x] `packages/server/src/players/upnp.rs:23` - Player state map
 - [x] `packages/ws/src/ws.rs:86` - CONNECTION_DATA static
 - [x] `packages/player/src/api.rs:125` - PlaybackHandler map
 - [x] `packages/player/src/lib.rs:228,364,365` - Query/headers maps
@@ -432,13 +432,13 @@ Application code has race conditions. `switchy_async` provides deterministic run
 - [ ] `packages/hyperchad/renderer/html/src/web_server.rs:233` - Web server headers
 - [ ] `packages/hyperchad/renderer/html/http/src/lib.rs:95` - HTTP headers
 - [ ] `packages/hyperchad/actions/src/dsl.rs:448` - DSL variables
-- [ ] `packages/tunnel_server/src/ws/server.rs:332,343-352,530` - WebSocket state
+- [x] `packages/tunnel_server/src/ws/server.rs:332,343-352,530` - WebSocket state
 - [x] `packages/tunnel_sender/src/sender.rs:187,275,619-1013` - Request tracking
-- [ ] `packages/tunnel/src/lib.rs:46` - Tunnel headers
-- [ ] `packages/files/src/files/track_pool.rs:85-86` - Semaphore/pool maps
-- [ ] `packages/upnp/src/listener.rs:68-69` - Status tracking
-- [ ] `packages/load_balancer/src/server.rs:27,43,66` - Cluster configuration
-- [ ] `packages/load_balancer/src/load_balancer.rs:35,39` - Router maps
+- [x] `packages/tunnel/src/lib.rs:46` - Tunnel headers
+- [x] `packages/files/src/files/track_pool.rs:85-86` - Semaphore/pool maps
+- [x] `packages/upnp/src/listener.rs:68-69` - Status tracking
+- [x] `packages/load_balancer/src/server.rs:27,43,66` - Cluster configuration
+- [x] `packages/load_balancer/src/load_balancer.rs:35,39` - Router maps
 - [x] `packages/app/tauri/src-tauri/src/lib.rs:1220,1270,1284` - Headers and state
 - [ ] `packages/app/native/src/visualization.rs:227` - Visualization cache
 - [x] `packages/app/state/src/lib.rs:225,231,1165,1182,1200` - Audio zone and player state

@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{collections::HashMap, path::Path};
+use std::{collections::BTreeMap, path::Path};
 
 use moosicbox_load_balancer::{PORT, Router, SSL_CRT_PATH, SSL_KEY_PATH, SSL_PORT};
 use pingora::{listeners::tls::TlsSettings, prelude::*};
@@ -24,7 +24,7 @@ pub fn serve() {
             clusters
                 .iter()
                 .map(|x| (x.0.to_owned(), x.1.task()))
-                .collect::<HashMap<_, _>>(),
+                .collect::<BTreeMap<_, _>>(),
         ),
     );
 
@@ -40,7 +40,7 @@ pub fn serve() {
     pingora_server.run_forever();
 }
 
-fn parse_clusters() -> HashMap<String, GenBackgroundService<LoadBalancer<RoundRobin>>> {
+fn parse_clusters() -> BTreeMap<String, GenBackgroundService<LoadBalancer<RoundRobin>>> {
     std::env::var("CLUSTERS")
         .expect("Must pass CLUSTERS environment variable")
         .split(';')
@@ -63,7 +63,7 @@ fn parse_clusters() -> HashMap<String, GenBackgroundService<LoadBalancer<RoundRo
 
             (name, background_service("health check", upstreams))
         })
-        .collect::<HashMap<_, _>>()
+        .collect::<BTreeMap<_, _>>()
 }
 
 fn setup_tls(lb: &mut Service<HttpProxy<Router>>) {
