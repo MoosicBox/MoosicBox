@@ -119,6 +119,7 @@ members = [
     "packages/tunnel_sender",
     "packages/tunnel_server",
     "packages/upnp",
+    "packages/uuid",
     "packages/web_server",
     "packages/web_server/core",
     "packages/web_server/cors",
@@ -260,6 +261,7 @@ switchy_tcp                 = { version = "0.1.3", default-features = false, pat
 switchy_telemetry           = { version = "0.1.3", default-features = false, path = "packages/telemetry" }
 switchy_time                = { version = "0.1.3", default-features = false, path = "packages/time" }
 switchy_upnp                = { version = "0.1.3", default-features = false, path = "packages/upnp" }
+switchy_uuid                = { version = "0.1.0", default-features = false, path = "packages/uuid" }
 
 # Internal HyperChad
 hyperchad                          = { version = "0.1.0", default-features = false, path = "packages/hyperchad" }

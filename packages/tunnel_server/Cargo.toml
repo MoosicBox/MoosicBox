@@ -20,14 +20,14 @@ name = "moosicbox_tunnel_server"
 path = "src/main.rs"
 
 [dependencies]
-moosicbox_assert            = { workspace = true }
-moosicbox_async_service     = { workspace = true }
-moosicbox_env_utils         = { workspace = true }
-moosicbox_json_utils        = { workspace = true, features = ["database"] }
-moosicbox_logging           = { workspace = true, features = ["free_log"] }
-moosicbox_middleware        = { workspace = true }
-moosicbox_profiles          = { workspace = true, features = ["api"] }
-switchy_time                = { workspace = true, features = ["std"] }
+moosicbox_assert        = { workspace = true }
+moosicbox_async_service = { workspace = true }
+moosicbox_env_utils     = { workspace = true }
+moosicbox_json_utils    = { workspace = true, features = ["database"] }
+moosicbox_logging       = { workspace = true, features = ["free_log"] }
+moosicbox_middleware    = { workspace = true }
+moosicbox_profiles      = { workspace = true, features = ["api"] }
+switchy_time            = { workspace = true, features = ["std"] }
 
 moosicbox_tunnel            = { workspace = true }
 switchy_async               = { workspace = true, features = ["tokio"] }
@@ -36,6 +36,7 @@ switchy_database_connection = { workspace = true }
 switchy_http                = { workspace = true, features = ["serde"] }
 switchy_random              = { workspace = true, features = ["rand"] }
 switchy_telemetry           = { workspace = true, features = ["actix"], optional = true }
+switchy_uuid                = { workspace = true, features = ["uuid"] }
 
 actix-cors = { workspace = true }
 actix-web = { workspace = true }
@@ -59,7 +60,6 @@ tokio = { workspace = true, features = [
     "tracing",
 ] }
 tracing = { workspace = true, optional = true }
-uuid = { workspace = true }
 
 [features]
 default = [

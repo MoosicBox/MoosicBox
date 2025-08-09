@@ -27,11 +27,11 @@ switchy_async = { workspace = true, features = ["simulator", "tokio"] }
 switchy_http = { workspace = true, features = ["simulator"] }
 switchy_http_models = { workspace = true }
 switchy_time = { workspace = true, features = ["simulator"] }
+switchy_uuid = { workspace = true, features = ["simulator"] }
 
 log        = { workspace = true }
 serde      = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-uuid       = { workspace = true, features = ["v4"] }
 
 [features]
 default = []

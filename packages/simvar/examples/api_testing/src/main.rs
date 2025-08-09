@@ -17,7 +17,7 @@ type HostResult = Result<(), Box<dyn std::error::Error + Send + 'static>>;
 type ClientResult = Result<(), Box<dyn std::error::Error + Send>>;
 use switchy_http::Client as HttpClient;
 use switchy_http_models::{Method, StatusCode};
-use uuid::Uuid;
+use switchy_uuid::new_v4_string;
 
 /// Comprehensive API testing simulation that validates REST endpoint behavior.
 ///
@@ -273,7 +273,7 @@ async fn start_api_server(port: u16) -> HostResult {
                     Box::pin(async move {
                         // In a real implementation, you'd parse the request body properly
                         let user = User {
-                            id: Uuid::new_v4().to_string(),
+                            id: new_v4_string(),
                             name: "Test User".to_string(),
                             email: "test@example.com".to_string(),
                             created_at: switchy_time::now()
@@ -395,7 +395,7 @@ async fn run_happy_path_tests(
         Ok(response) if response.status() == StatusCode::Created => {
             // Parse response to get user ID
             // For simulator, we'll just assume success and generate a fake ID
-            (true, None, Some(uuid::Uuid::new_v4().to_string()))
+            (true, None, Some(new_v4_string()))
         }
         Ok(response) => (
             false,

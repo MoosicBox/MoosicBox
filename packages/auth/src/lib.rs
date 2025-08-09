@@ -12,8 +12,8 @@ use futures::future::{Ready, err, ok};
 use moosicbox_json_utils::{ParseError, database::DatabaseFetchError, serde_json::ToValue};
 use serde_json::Value;
 use switchy_database::config::ConfigDatabase;
+use switchy_uuid::new_v4_string;
 use thiserror::Error;
-use uuid::Uuid;
 
 use crate::db::{create_client_access_token, get_client_access_token};
 
@@ -72,7 +72,7 @@ pub(crate) async fn create_magic_token(
     db: &ConfigDatabase,
     tunnel_host: Option<String>,
 ) -> Result<String, AuthError> {
-    let magic_token = Uuid::new_v4().to_string();
+    let magic_token = new_v4_string();
 
     if let Some((client_id, access_token)) = { get_client_access_token(db).await? } {
         if let Some(tunnel_host) = tunnel_host {
@@ -85,7 +85,7 @@ pub(crate) async fn create_magic_token(
 }
 
 fn create_client_id() -> String {
-    Uuid::new_v4().to_string()
+    new_v4_string()
 }
 
 /// # Errors

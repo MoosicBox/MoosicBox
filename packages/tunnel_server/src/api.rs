@@ -21,10 +21,10 @@ use std::collections::BTreeMap;
 use std::str::FromStr as _;
 use switchy_async::util::CancellationToken;
 use switchy_http::models::Method;
+use switchy_uuid::new_v4_string;
 use thiserror::Error;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::sync::oneshot;
-use uuid::Uuid;
 
 use crate::WS_SERVER_HANDLE;
 use crate::auth::{
@@ -107,7 +107,7 @@ pub async fn auth_register_client_endpoint(
     query: web::Query<AuthRegisterClientRequest>,
     _: GeneralHeaderAuthorized,
 ) -> Result<Json<Value>> {
-    let token = &Uuid::new_v4().to_string();
+    let token = &new_v4_string();
     let token_hash = &hash_token(token);
 
     insert_client_access_token(&query.client_id, token_hash).await?;
@@ -126,7 +126,7 @@ pub async fn auth_signature_token_endpoint(
     query: web::Query<AuthRequest>,
     _: ClientHeaderAuthorized,
 ) -> Result<Json<Value>> {
-    let token = &Uuid::new_v4().to_string();
+    let token = &new_v4_string();
     let token_hash = &hash_token(token);
 
     insert_signature_token(&query.client_id, token_hash).await?;

@@ -7639,10 +7639,10 @@ dependencies = [
  "serde_json",
  "switchy_database",
  "switchy_http",
+ "switchy_uuid",
  "thiserror 2.0.12",
  "url 2.5.4",
  "utoipa",
- "uuid",
 ]
 
 [[package]]
@@ -8602,10 +8602,10 @@ dependencies = [
  "switchy_random",
  "switchy_telemetry",
  "switchy_time",
+ "switchy_uuid",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -12665,7 +12665,7 @@ dependencies = [
  "switchy_http",
  "switchy_http_models",
  "switchy_time",
- "uuid",
+ "switchy_uuid",
 ]
 
 [[package]]
@@ -14033,6 +14033,16 @@ dependencies = [
  "tokio",
  "utoipa",
  "xml",
+]
+
+[[package]]
+name = "switchy_uuid"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.27",
+ "switchy_env",
+ "switchy_random",
+ "uuid",
 ]
 
 [[package]]
