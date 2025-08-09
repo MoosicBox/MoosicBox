@@ -936,7 +936,7 @@ mod tests {
             fetcher,
         );
 
-        // TestHttpFetcher returns data immediately, no need to wait
+        switchy_async::task::yield_now().await;
 
         // Read only part of the data (first 10 bytes)
         let mut buf = [0u8; 10];
@@ -977,7 +977,7 @@ mod tests {
             fetcher,
         );
 
-        // TestHttpFetcher returns data immediately, no need to wait
+        switchy_async::task::yield_now().await;
 
         // Read all the data
         let mut buf = [0u8; 10];
@@ -1016,7 +1016,7 @@ mod tests {
             fetcher,
         );
 
-        // TestHttpFetcher returns data immediately, no need to wait
+        switchy_async::task::yield_now().await;
 
         // First read - should get all available data at once (both chunks)
         let mut buf1 = [0u8; 25];
@@ -1053,7 +1053,7 @@ mod tests {
             fetcher,
         );
 
-        // TestHttpFetcher returns data immediately, no need to wait
+        switchy_async::task::yield_now().await;
 
         // Read only part of available data
         let mut buf1 = [0u8; 10];
@@ -1088,7 +1088,7 @@ mod tests {
             fetcher,
         );
 
-        // TestHttpFetcher returns data immediately, no need to wait
+        switchy_async::task::yield_now().await;
 
         // Read some data but not all
         let mut buf1 = [0u8; 5];
@@ -1129,7 +1129,7 @@ mod tests {
             fetcher,
         );
 
-        // TestHttpFetcher returns data immediately, no need to wait
+        switchy_async::task::yield_now().await;
 
         // Read only part of the data
         let mut buf1 = [0u8; 4];
