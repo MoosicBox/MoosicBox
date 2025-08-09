@@ -49,27 +49,35 @@ This document provides a comprehensive audit of non-deterministic patterns in th
 
 ### Required moosicbox_web_server Enhancements
 
-The current `moosicbox_web_server` needs significant enhancements to achieve feature parity with actix-web:
+The current `moosicbox_web_server` has some features but needs significant enhancements to achieve feature parity with actix-web:
 
-#### Missing Core Features
+#### Already Implemented ✅
 
-- [ ] **Extractors**: Json, Query, Path, Data, Header, Form
-- [ ] **Middleware**: Logger, CORS, Compression, Authentication
-- [ ] **WebSocket Support**: Full WS/WSS implementation
+- [x] **CORS support** - via `moosicbox_web_server_cors` package
+- [x] **OpenAPI support** - via utoipa integration
+- [x] **Basic routing** - Scope and route handlers
+- [x] **Compression** - feature flag exists (needs testing)
+- [x] **Request/Response abstractions** - HttpRequest, HttpResponse
+
+#### Missing Core Features ❌
+
+- [ ] **Extractors**: Json, Query, Path, Data, Form (heavily used in all API packages)
+- [ ] **Middleware System**: General middleware trait/framework (only CORS exists)
+- [ ] **WebSocket Support**: Full WS/WSS implementation (critical for server/tunnel_server)
 - [ ] **Streaming**: Server-sent events, chunked responses
 - [ ] **Static Files**: File serving with range requests
-- [ ] **Error Handling**: Custom error responses and handlers
-- [ ] **State Management**: App data and request-scoped state
+- [ ] **State Management**: App data injection (web::Data<T> pattern)
 - [ ] **Guards**: Request guards and filters
-- [ ] **Testing Utilities**: Test client and helpers
+- [ ] **Error Handling**: Rich error response system
 
-#### Ergonomic Improvements Needed
+#### Currently Used Actix Features Requiring Migration
 
-- [ ] **Macro-based routing**: Similar to actix's `#[get("/path")]`
-- [ ] **Type-safe extractors**: Automatic deserialization
-- [ ] **Builder pattern**: Fluent API for server configuration
-- [ ] **Async trait handlers**: Support for async fn handlers
-- [ ] **Automatic OpenAPI generation**: From route definitions
+- `web::Query<T>` - Used in 100+ endpoints
+- `web::Json<T>` - Used for JSON request/response
+- `web::Path<T>` - Used for URL path parameters
+- `web::Data<T>` - Used for shared state/database connections
+- Custom middleware (auth, telemetry, logging)
+- WebSocket handlers in server and tunnel_server
 
 ### Migration Strategy
 
