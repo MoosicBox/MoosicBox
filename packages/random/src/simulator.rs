@@ -4,14 +4,16 @@ use std::{
 };
 
 use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
-use switchy_env::{var_exists, var_parse};
 
 use crate::GenericRng;
 
 pub struct SimulatorRng(Arc<Mutex<SmallRng>>);
 
 static INITIAL_SEED: LazyLock<u64> = LazyLock::new(|| {
-    var_parse("SIMULATOR_SEED").unwrap_or_else(|_| SmallRng::from_entropy().next_u64())
+    std::env::var("SIMULATOR_SEED").ok().map_or_else(
+        || SmallRng::from_entropy().next_u64(),
+        |x| x.parse::<u64>().unwrap(),
+    )
 });
 
 static INITIAL_RNG: LazyLock<Mutex<SmallRng>> =
@@ -43,7 +45,7 @@ pub fn gen_seed() -> u64 {
 
 #[must_use]
 pub fn contains_fixed_seed() -> bool {
-    var_exists("SIMULATOR_SEED")
+    std::env::var("SIMULATOR_SEED").is_ok()
 }
 
 /// # Panics

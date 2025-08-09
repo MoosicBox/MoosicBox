@@ -13960,7 +13960,6 @@ version = "0.1.4"
 dependencies = [
  "log 0.4.27",
  "rand 0.8.5",
- "switchy_env",
 ]
 
 [[package]]
