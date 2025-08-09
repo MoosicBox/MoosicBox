@@ -2,9 +2,15 @@
 
 ## Executive Summary
 
-This document provides a comprehensive audit of non-deterministic patterns in the MoosicBox codebase. Each section identifies specific instances where determinism is not guaranteed and provides recommendations for remediation using the switchy pattern or other deterministic alternatives.
+This document audits non-deterministic patterns in the MoosicBox codebase, analyzing their scope and complexity. Each section describes the extent of the issue and what would be required to fix it.
 
-**CRITICAL FINDING:** The codebase has 50+ packages directly using actix-web instead of the deterministic moosicbox_web_server abstraction. This represents the single largest source of non-determinism and will require significant refactoring effort.
+**Scope of Issues (by size):**
+
+- **Largest:** Direct actix-web usage in 50+ packages (requires creating abstractions and migrating all web endpoints)
+- **Medium:** Missing switchy packages (uuid, env, process) and adoption of existing ones (fs, tcp, http)
+- **Smallest:** Mechanical replacements (HashMap→BTreeMap, adding sort to directory operations)
+
+The **Optimized Execution Plan** section provides the recommended order for addressing these issues, which prioritizes quick wins over tackling the largest problems first.
 
 ## Status Legend
 
@@ -79,13 +85,22 @@ The current `moosicbox_web_server` has some features but needs significant enhan
 - Custom middleware (auth, telemetry, logging)
 - WebSocket handlers in server and tunnel_server
 
-### Migration Strategy
+### Web Server Migration Steps
 
-1. **Phase 1**: Enhance moosicbox_web_server with missing features
-2. **Phase 2**: Create migration guide and compatibility layer
-3. **Phase 3**: Migrate one package at a time, starting with leaf packages
-4. **Phase 4**: Migrate core server packages
-5. **Phase 5**: Remove actix-web dependency
+The web server migration will be executed as part of Phases 3-4 of the main execution plan:
+
+**During Phase 3 (Web Server Preparation):**
+
+- Enhance moosicbox_web_server with missing features
+- Create trait abstractions for web concepts
+- Build compatibility layer
+
+**During Phase 4 (Web Server Migration):**
+
+- Migrate leaf packages first (lowest dependencies)
+- Migrate package groups in parallel
+- Migrate core server packages last
+- Remove actix-web dependency
 
 ### Migration Complexity
 
@@ -425,14 +440,17 @@ These are mechanical changes that don't conflict with each other.
 2. **Then (parallel):**
     - [ ] Implement traits for actix-web
     - [ ] Implement traits for moosicbox_web_server
-    - [ ] Enhance moosicbox_web_server with missing features
-3. [ ] Apply abstractions to leaf packages
+    - [ ] Enhance moosicbox_web_server with missing features (see Section 1 for detailed list)
+3. [ ] Build compatibility layer and migration tooling
+4. [ ] Apply abstractions to leaf packages as proof of concept
 
-The trait design must complete before implementations begin.
+The trait design must complete before implementations begin. See Section 1 "Web Server Framework" for detailed feature requirements.
 
 ### Phase 4: Web Server Migration
 
 **Goal: Systematic migration with minimal disruption**
+
+This phase executes the migration strategy detailed in Section 1.
 
 **Parallel migration groups** (no interdependencies):
 
@@ -444,9 +462,12 @@ The trait design must complete before implementations begin.
 
 **Sequential requirements:**
 
-- [ ] Core `server` package (must migrate last)
-- [ ] WebSocket implementations (after server migration)
-- [ ] Remove actix-web dependency
+- [ ] Core `server` package (must migrate last - everything depends on it)
+- [ ] `tunnel_server` package (after server, includes WebSocket migration)
+- [ ] WebSocket implementations (critical for real-time features)
+- [ ] Remove actix-web dependency from workspace
+
+See Section 1 for the full list of 50+ packages requiring migration.
 
 ### Phase 5: Final Determinism
 
