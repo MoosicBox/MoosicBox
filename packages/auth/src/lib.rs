@@ -117,7 +117,7 @@ async fn register_client(host: &str, client_id: &str) -> Result<Option<String>, 
         .post(&url)
         .header(
             switchy_http::Header::Authorization.as_ref(),
-            &std::env::var("TUNNEL_ACCESS_TOKEN").expect("TUNNEL_ACCESS_TOKEN not set"),
+            &switchy_env::var("TUNNEL_ACCESS_TOKEN").expect("TUNNEL_ACCESS_TOKEN not set"),
         )
         .send()
         .await?

@@ -4,16 +4,16 @@ use std::collections::BTreeMap;
 /// Standard environment provider that uses `std::env`
 pub struct StandardEnv;
 
-impl Default for StandardEnv {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl StandardEnv {
     #[must_use]
     pub const fn new() -> Self {
         Self
+    }
+}
+
+impl Default for StandardEnv {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

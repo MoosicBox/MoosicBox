@@ -233,7 +233,11 @@ impl Migrations {
             );
 
             if results.is_empty() {
-                if std::env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION").as_deref() != Ok("1") {
+                if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
+                    .as_deref()
+                    .unwrap_or("0")
+                    != "1"
+                {
                     log::info!("run: running name={name}");
 
                     let migration = String::from_utf8_lossy(migration).to_string();

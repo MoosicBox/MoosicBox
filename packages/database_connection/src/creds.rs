@@ -35,16 +35,16 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
     log::trace!("get_db_creds");
 
     // First try DATABASE_URL
-    if let Ok(database_url) = std::env::var("DATABASE_URL") {
+    if let Ok(database_url) = switchy_env::var("DATABASE_URL") {
         log::debug!("get_db_creds: Using DATABASE_URL");
         return Credentials::from_url(&database_url)
             .map_err(GetDbCredsError::CredentialsParseError);
     }
 
-    let env_db_host = std::env::var("DB_HOST").ok();
-    let env_db_name = std::env::var("DB_NAME").ok();
-    let env_db_user = std::env::var("DB_USER").ok();
-    let env_db_password = std::env::var("DB_PASSWORD").ok();
+    let env_db_host = switchy_env::var("DB_HOST").ok();
+    let env_db_name = switchy_env::var("DB_NAME").ok();
+    let env_db_user = switchy_env::var("DB_USER").ok();
+    let env_db_password = switchy_env::var("DB_PASSWORD").ok();
 
     Ok(
         if env_db_host.is_some() || env_db_name.is_some() || env_db_user.is_some() {
@@ -69,13 +69,13 @@ pub async fn get_db_creds() -> Result<Credentials, GetDbCredsError> {
 
             let client = Client::new(&config);
 
-            let ssm_db_name_param_name = std::env::var("SSM_DB_NAME_PARAM_NAME")
+            let ssm_db_name_param_name = switchy_env::var("SSM_DB_NAME_PARAM_NAME")
                 .unwrap_or_else(|_| "moosicbox_db_name".to_string());
-            let ssm_db_host_param_name = std::env::var("SSM_DB_HOST_PARAM_NAME")
+            let ssm_db_host_param_name = switchy_env::var("SSM_DB_HOST_PARAM_NAME")
                 .unwrap_or_else(|_| "moosicbox_db_hostname".to_string());
-            let ssm_db_user_param_name = std::env::var("SSM_DB_USER_PARAM_NAME")
+            let ssm_db_user_param_name = switchy_env::var("SSM_DB_USER_PARAM_NAME")
                 .unwrap_or_else(|_| "moosicbox_db_user".to_string());
-            let ssm_db_password_param_name = std::env::var("SSM_DB_PASSWORD_PARAM_NAME")
+            let ssm_db_password_param_name = switchy_env::var("SSM_DB_PASSWORD_PARAM_NAME")
                 .unwrap_or_else(|_| "moosicbox_db_password".to_string());
 
             let ssm_db_name_param_name = ssm_db_name_param_name.as_str();

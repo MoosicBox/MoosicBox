@@ -17,6 +17,7 @@ moosicbox_json_utils = { workspace = true, features = [
 ] }
 moosicbox_middleware = { workspace = true, features = ["tunnel"] }
 switchy_database = { workspace = true }
+switchy_env      = { workspace = true, features = ["std"] }
 switchy_http = { workspace = true, features = ["json", "reqwest"] }
 switchy_uuid = { workspace = true, features = ["uuid"] }
 

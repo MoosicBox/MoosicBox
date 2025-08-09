@@ -8,27 +8,15 @@ use pingora_core::{Result, upstreams::peer::HttpPeer};
 use pingora_load_balancing::{LoadBalancer, selection::RoundRobin};
 use pingora_proxy::{ProxyHttp, Session};
 
-pub static PORT: LazyLock<u16> = LazyLock::new(|| {
-    std::env::var("PORT")
-        .unwrap_or_else(|_| "6188".to_string())
-        .parse::<u16>()
-        .expect("Invalid PORT")
-});
+pub static PORT: LazyLock<u16> = LazyLock::new(|| switchy_env::var_parse_or("PORT", 6188));
 
-pub static SSL_PORT: LazyLock<u16> = LazyLock::new(|| {
-    std::env::var("SSL_PORT")
-        .unwrap_or_else(|_| "6189".to_string())
-        .parse::<u16>()
-        .expect("Invalid SSL_PORT")
-});
+pub static SSL_PORT: LazyLock<u16> = LazyLock::new(|| switchy_env::var_parse_or("SSL_PORT", 6189));
 
-pub static SSL_CRT_PATH: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("SSL_CRT_PATH").unwrap_or_else(|_| "/etc/pingora/ssl/tls.crt".to_string())
-});
+pub static SSL_CRT_PATH: LazyLock<String> =
+    LazyLock::new(|| switchy_env::var_or("SSL_CRT_PATH", "/etc/pingora/ssl/tls.crt"));
 
-pub static SSL_KEY_PATH: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("SSL_KEY_PATH").unwrap_or_else(|_| "/etc/pingora/ssl/tls.key".to_string())
-});
+pub static SSL_KEY_PATH: LazyLock<String> =
+    LazyLock::new(|| switchy_env::var_or("SSL_KEY_PATH", "/etc/pingora/ssl/tls.key"));
 
 static SNI: LazyLock<String> = LazyLock::new(|| format!("127.0.0.1:{}", *SSL_PORT));
 

@@ -244,7 +244,7 @@ These should migrate to use `switchy_time`.
 
 ## 7. Environment Variables
 
-**Status:** ✅ Fixed (Core Infrastructure) | ⏳ Partial (Application Logic)
+**Status:** ✅ Fixed (Core Infrastructure) | ✅ High Priority Complete | ⏳ Medium/Low Priority Remaining
 
 ### Solution Implemented
 
@@ -296,35 +296,35 @@ These packages control simulation behavior and build processes - they MUST use r
 
 ### ✅ **SHOULD MIGRATE** - Application Logic Environment Variables (48+ locations)
 
-#### **1. Database Configuration** (🔴 High Priority)
+#### **1. Database Configuration** (🔴 High Priority) ✅ COMPLETED
 
 ```
 ✅ packages/database_connection/src/creds.rs:
-   - Line 38: DATABASE_URL
-   - Lines 44-47: DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
+   - Line 38: DATABASE_URL ✅ MIGRATED
+   - Lines 44-47: DB_HOST, DB_NAME, DB_USER, DB_PASSWORD ✅ MIGRATED
    - Lines 72-78: SSM_DB_NAME_PARAM_NAME, SSM_DB_HOST_PARAM_NAME,
-                  SSM_DB_USER_PARAM_NAME, SSM_DB_PASSWORD_PARAM_NAME
+                  SSM_DB_USER_PARAM_NAME, SSM_DB_PASSWORD_PARAM_NAME ✅ MIGRATED
 
-✅ packages/schema/src/lib.rs:236 - MOOSICBOX_SKIP_MIGRATION_EXECUTION
+✅ packages/schema/src/lib.rs:236 - MOOSICBOX_SKIP_MIGRATION_EXECUTION ✅ MIGRATED
 ```
 
-#### **2. Authentication & Security** (🔴 High Priority)
+#### **2. Authentication & Security** (🔴 High Priority) ✅ COMPLETED
 
 ```
-✅ packages/auth/src/lib.rs:120 - TUNNEL_ACCESS_TOKEN (runtime token)
-✅ packages/app/native/ui/src/api/tidal.rs:16,65-66 - TIDAL_CLIENT_ID, TIDAL_CLIENT_SECRET
+✅ packages/auth/src/lib.rs:120 - TUNNEL_ACCESS_TOKEN (runtime token) ✅ MIGRATED
+✅ packages/app/native/ui/src/api/tidal.rs:16,65-66 - TIDAL_CLIENT_ID, TIDAL_CLIENT_SECRET ✅ MIGRATED
 ```
 
-#### **3. Service Configuration** (🔴 High Priority)
+#### **3. Service Configuration** (🔴 High Priority) ✅ COMPLETED
 
 ```
 ✅ packages/load_balancer/src/load_balancer.rs:
-   - Line 12: PORT
-   - Line 19: SSL_PORT
-   - Line 26: SSL_CRT_PATH
-   - Line 30: SSL_KEY_PATH
+   - Line 12: PORT ✅ MIGRATED (using var_parse_or)
+   - Line 19: SSL_PORT ✅ MIGRATED (using var_parse_or)
+   - Line 26: SSL_CRT_PATH ✅ MIGRATED (using var_or)
+   - Line 30: SSL_KEY_PATH ✅ MIGRATED (using var_or)
 
-✅ packages/load_balancer/src/server.rs:44,81 - CLUSTERS, SSL path checks
+✅ packages/load_balancer/src/server.rs:44,81 - CLUSTERS, SSL path checks ✅ MIGRATED
 ✅ packages/server/simulator/src/main.rs:11 - PORT
 ✅ packages/upnp/src/player.rs:382 - UPNP_SEND_SIZE
 ```
@@ -359,14 +359,22 @@ These packages control simulation behavior and build processes - they MUST use r
 
 **Completed Core Infrastructure:**
 
-- ❌ Correctly preserved simulation control variables (SIMULATOR\_\*)
-- ❌ Correctly preserved compile-time constants (env!() macros)
-- ❌ Correctly preserved build environment (CARGO_MANIFEST_DIR)
+- ✅ Correctly preserved simulation control variables (SIMULATOR\_\*)
+- ✅ Correctly preserved compile-time constants (env!() macros)
+- ✅ Correctly preserved build environment (CARGO_MANIFEST_DIR)
 
-**Ready for Application Migration:**
+**✅ COMPLETED High Priority Application Migration:**
 
-- 🔴 **Critical (10 locations)**: Database credentials, authentication tokens
-- 🟡 **Important (8 locations)**: Service configuration, telemetry
+- ✅ **Critical (18 locations)**: Database credentials, authentication tokens, service configuration - ALL MIGRATED
+  - Database connection credentials (6 variables)
+  - Authentication tokens (TUNNEL_ACCESS_TOKEN)
+  - TIDAL API credentials (CLIENT_ID, CLIENT_SECRET)
+  - Load balancer configuration (PORT, SSL_PORT, SSL paths, CLUSTERS)
+  - Schema migration flag (MOOSICBOX_SKIP_MIGRATION_EXECUTION)
+
+**Ready for Medium/Low Priority Migration:**
+
+- 🟡 **Important (8 locations)**: Telemetry, UPnP settings
 - 🟢 **Nice-to-have (30+ locations)**: Debug flags, development tools
 
 ### Usage Pattern
@@ -612,6 +620,8 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 - [x] Add deterministic values for testing
 - [x] Implement configuration injection
 - [x] Add type-safe access patterns
+- [x] Fixed Default trait conflict in standard implementation
+- [x] Added proper feature flags (std, simulator)
 
 **✅ Correctly preserved simulation infrastructure (DO NOT MIGRATE):**
 
@@ -624,12 +634,12 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 
 **🔴 High Priority Application Migration (18 locations):**
 
-- [ ] `packages/database_connection/src/creds.rs:38-78` - Database credentials (10 env vars)
-- [ ] `packages/auth/src/lib.rs:120` - TUNNEL_ACCESS_TOKEN (runtime token)
-- [ ] `packages/app/native/ui/src/api/tidal.rs:16,65-66` - TIDAL_CLIENT_ID, TIDAL_CLIENT_SECRET
-- [ ] `packages/load_balancer/src/load_balancer.rs:12,19,26,30` - PORT, SSL_PORT, SSL paths
-- [ ] `packages/load_balancer/src/server.rs:44,81` - CLUSTERS, SSL configuration
-- [ ] `packages/schema/src/lib.rs:236` - MOOSICBOX_SKIP_MIGRATION_EXECUTION
+- [x] `packages/database_connection/src/creds.rs:38-78` - Database credentials (10 env vars) ✅ COMPLETED
+- [x] `packages/auth/src/lib.rs:120` - TUNNEL_ACCESS_TOKEN (runtime token) ✅ COMPLETED
+- [x] `packages/app/native/ui/src/api/tidal.rs:16,65-66` - TIDAL_CLIENT_ID, TIDAL_CLIENT_SECRET ✅ COMPLETED
+- [x] `packages/load_balancer/src/load_balancer.rs:12,19,26,30` - PORT, SSL_PORT, SSL paths ✅ COMPLETED
+- [x] `packages/load_balancer/src/server.rs:44,81` - CLUSTERS, SSL configuration ✅ COMPLETED
+- [x] `packages/schema/src/lib.rs:236` - MOOSICBOX_SKIP_MIGRATION_EXECUTION ✅ COMPLETED
 
 **🟡 Medium Priority Application Migration (9 locations):**
 

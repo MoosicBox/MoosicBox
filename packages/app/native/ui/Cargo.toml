@@ -30,6 +30,7 @@ moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models = { workspace = true, features = ["api"] }
 moosicbox_paging = { workspace = true }
 moosicbox_session_models = { workspace = true }
+switchy_env = { workspace = true, features = ["std"] }
 
 bytesize            = { workspace = true }
 log                 = { workspace = true }

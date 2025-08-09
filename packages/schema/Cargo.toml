@@ -16,6 +16,7 @@ ignored = ["tokio"]
 [dependencies]
 moosicbox_assert = { workspace = true }
 switchy_database = { workspace = true, features = ["schema"] }
+switchy_env      = { workspace = true, features = ["std"] }
 
 include_dir = { workspace = true }
 log         = { workspace = true }

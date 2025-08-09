@@ -13,7 +13,7 @@ pub async fn get_tidal_config(db: &LibraryDatabase) -> Option<TidalConfig> {
 }
 
 pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
-    let client_id = match std::env::var("TIDAL_CLIENT_ID") {
+    let client_id = match switchy_env::var("TIDAL_CLIENT_ID") {
         Ok(id) => id,
         Err(e) => {
             error!("Failed to get TIDAL_CLIENT_ID: {}", e);
@@ -62,8 +62,8 @@ pub async fn start_auth(db: &LibraryDatabase) -> Option<String> {
                 interval.tick().await;
                 if let Ok(response) = device_authorization_token(
                     &db,
-                    std::env::var("TIDAL_CLIENT_ID").unwrap(),
-                    std::env::var("TIDAL_CLIENT_SECRET").unwrap(),
+                    switchy_env::var("TIDAL_CLIENT_ID").unwrap(),
+                    switchy_env::var("TIDAL_CLIENT_SECRET").unwrap(),
                     device_code.clone(),
                     Some(true),
                 ).await {
@@ -90,4 +90,4 @@ pub async fn run_scan(db: &LibraryDatabase) -> bool {
             false
         }
     }
-} 
+}

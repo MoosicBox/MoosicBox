@@ -15,6 +15,7 @@ group = "switchy"
 
 [dependencies]
 switchy_database = { workspace = true }
+switchy_env      = { workspace = true, features = ["std"] }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }

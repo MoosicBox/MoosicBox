@@ -41,7 +41,7 @@ pub fn serve() {
 }
 
 fn parse_clusters() -> BTreeMap<String, GenBackgroundService<LoadBalancer<RoundRobin>>> {
-    std::env::var("CLUSTERS")
+    switchy_env::var("CLUSTERS")
         .expect("Must pass CLUSTERS environment variable")
         .split(';')
         .map(str::trim)
@@ -78,7 +78,7 @@ fn setup_tls(lb: &mut Service<HttpProxy<Router>>) {
 
         let ssl_addr = format!("0.0.0.0:{}", *SSL_PORT);
         lb.add_tls_with_settings(&ssl_addr, None, tls_settings);
-    } else if std::env::var("SSL_CRT_PATH").is_ok() || std::env::var("SSL_KEY_PATH").is_ok() {
+    } else if switchy_env::var("SSL_CRT_PATH").is_ok() || switchy_env::var("SSL_KEY_PATH").is_ok() {
         if !crt_valid {
             log::warn!("Invalid SSL_CRT_PATH");
         }
