@@ -4,7 +4,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use futures::StreamExt;
 use postgres_protocol::types::{bool_from_sql, float8_from_sql, int8_from_sql, text_from_sql};
 use switchy_async::task::JoinHandle;
@@ -1598,7 +1598,9 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             DatabaseValue::Real(value) => value.to_sql(ty, out)?,
             DatabaseValue::RealOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::NowAdd(value) => value.to_sql(ty, out)?,
-            DatabaseValue::Now => Utc::now().naive_utc().to_sql(ty, out)?,
+            DatabaseValue::Now => switchy_time::datetime_utc_now()
+                .naive_utc()
+                .to_sql(ty, out)?,
             DatabaseValue::DateTime(value) => value.to_sql(ty, out)?,
         })
     }

@@ -12,6 +12,9 @@ pub mod simulator;
 macro_rules! impl_time {
     ($module:ident $(,)?) => {
         pub use $module::{instant_now, now};
+
+        #[cfg(feature = "chrono")]
+        pub use $module::{datetime_local_now, datetime_utc_now};
     };
 }
 

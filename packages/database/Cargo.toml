@@ -18,6 +18,7 @@ moosicbox_assert   = { workspace = true }
 moosicbox_profiles = { workspace = true, features = ["api"] }
 
 switchy_async = { workspace = true, features = ["tokio"] }
+switchy_time = { workspace = true, features = ["std", "chrono"] }
 
 # DB Dependencies
 rusqlite = { workspace = true, optional = true }

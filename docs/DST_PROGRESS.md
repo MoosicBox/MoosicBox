@@ -780,12 +780,18 @@ All HashMap/HashSet instances have been migrated to BTreeMap/BTreeSet or removed
 
 All direct `std::time` usage has been migrated to use `switchy_time` functions.
 
-#### 1.5 Add chrono DateTime support to `switchy_time`
+#### 1.5 Add chrono DateTime support to `switchy_time` ✅ COMPLETED
 
-- [ ] Extend `packages/time/src/lib.rs` with DateTime abstractions
-- [ ] Add `datetime_now()` returning chrono DateTime types
-- [ ] Implement timezone-aware time functions
-- [ ] Add date formatting utilities
+- [x] Extend `packages/time/src/lib.rs` with DateTime abstractions
+- [x] Add `datetime_local_now()` and `datetime_utc_now()` returning chrono DateTime types
+- [x] Implement timezone-aware time functions for both standard and simulator modes
+- [x] Migrate `packages/yt/src/lib.rs:1814` - chrono::Local::now()
+- [x] Migrate `packages/database/src/postgres/postgres.rs:1601` - Utc::now()
+
+**Added chrono support behind optional "chrono" feature:**
+
+- Standard mode: Direct passthrough to chrono::Local::now() and chrono::Utc::now()
+- Simulator mode: Deterministic DateTime generation based on simulated SystemTime
 
 These tasks have no interdependencies and can execute simultaneously.
 

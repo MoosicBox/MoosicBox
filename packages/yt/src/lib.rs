@@ -1811,7 +1811,7 @@ pub async fn search(
 ) -> Result<YtSearchResults, Error> {
     let url = yt_api_endpoint!(Search, &[], &[("prettyPrint", &false.to_string()),]);
 
-    let date = chrono::Local::now();
+    let date = switchy_time::datetime_local_now();
 
     let value = post_request(
         &url,

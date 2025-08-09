@@ -8712,6 +8712,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_database",
  "switchy_http",
+ "switchy_time",
  "thiserror 2.0.12",
  "tokio",
  "url 2.5.4",
@@ -13879,6 +13880,7 @@ dependencies = [
  "sqlx-postgres",
  "switchy_async",
  "switchy_database_connection",
+ "switchy_time",
  "test-log",
  "thiserror 2.0.12",
  "tokio",
@@ -14021,6 +14023,7 @@ dependencies = [
 name = "switchy_time"
 version = "0.1.4"
 dependencies = [
+ "chrono",
  "log 0.4.27",
  "scoped-tls",
  "switchy_random",

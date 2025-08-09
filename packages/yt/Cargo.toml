@@ -28,6 +28,7 @@ moosicbox_music_models = { workspace = true, features = ["flac"] }
 moosicbox_paging = { workspace = true }
 switchy_database = { workspace = true }
 switchy_http = { workspace = true, features = ["json", "reqwest"] }
+switchy_time = { workspace = true, features = ["std", "chrono"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }

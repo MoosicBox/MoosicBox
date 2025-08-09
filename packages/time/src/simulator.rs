@@ -171,3 +171,27 @@ pub fn instant_now() -> Instant {
 
     *BASE_INSTANT + duration
 }
+
+#[cfg(feature = "chrono")]
+#[must_use]
+pub fn datetime_local_now() -> chrono::DateTime<chrono::Local> {
+    if REAL_TIME.is_set() {
+        return chrono::Local::now();
+    }
+
+    // Convert simulated SystemTime to Local DateTime
+    let system_time = now();
+    chrono::DateTime::from(system_time)
+}
+
+#[cfg(feature = "chrono")]
+#[must_use]
+pub fn datetime_utc_now() -> chrono::DateTime<chrono::Utc> {
+    if REAL_TIME.is_set() {
+        return chrono::Utc::now();
+    }
+
+    // Convert simulated SystemTime to UTC DateTime
+    let system_time = now();
+    chrono::DateTime::from(system_time)
+}
