@@ -15,6 +15,7 @@ group = "switchy"
 
 [dependencies]
 switchy_random = { workspace = true, optional = true, features = ["rand"] }
+switchy_env = { workspace = true, optional = true, features = ["simulator"] }
 
 log        = { workspace = true }
 scoped-tls = { workspace = true, optional = true }
@@ -24,5 +25,5 @@ default = ["simulator", "std"]
 
 fail-on-warnings = []
 
-simulator = ["dep:scoped-tls", "dep:switchy_random"]
+simulator = ["dep:scoped-tls", "dep:switchy_random", "dep:switchy_env"]
 std       = []
