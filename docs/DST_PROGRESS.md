@@ -244,7 +244,7 @@ These should migrate to use `switchy_time`.
 
 ## 7. Environment Variables
 
-**Status:** ✅ Fixed
+**Status:** ✅ Fixed (Core Infrastructure) | ⏳ Partial (Application Logic)
 
 ### Solution Implemented
 
@@ -255,30 +255,136 @@ Created `switchy_env` package with:
 - **Type Safety**: Parse environment variables to specific types with `var_parse<T>()`
 - **Testing**: Set/remove variables for testing scenarios
 
-### Migrated Core Packages
+### 🚫 **DO NOT MIGRATE** - Must Use Real Environment Variables (30+ locations)
 
-- ✅ `packages/uuid/src/simulator.rs` - SIMULATOR_UUID_SEED
-- ✅ `packages/random/src/simulator.rs` - SIMULATOR_SEED
-- ✅ `packages/time/src/simulator.rs` - SIMULATOR_EPOCH_OFFSET, SIMULATOR_STEP_MULTIPLIER
+These packages control simulation behavior and build processes - they MUST use real environment variables:
+
+#### **Switchy Infrastructure Packages** (Control simulation behavior)
+
+```
+❌ packages/random/src/simulator.rs:13,48 - SIMULATOR_SEED
+❌ packages/time/src/simulator.rs:26,63 - SIMULATOR_EPOCH_OFFSET, SIMULATOR_STEP_MULTIPLIER
+❌ packages/simvar/harness/src/lib.rs:52,115 - SIMULATOR_RUNS, SIMULATOR_MAX_PARALLEL
+❌ packages/simvar/harness/src/config.rs:55,377 - SIMULATOR_DURATION, std::env::vars()
+```
+
+#### **Compile-Time Environment Variables** (Build-time constants)
+
+```
+❌ packages/tunnel_server/src/auth.rs:16 - env!("TUNNEL_ACCESS_TOKEN")
+❌ packages/server/src/api/mod.rs:19 - env!("GIT_HASH")
+❌ packages/server/src/lib.rs:315 - env!("STATIC_TOKEN")
+❌ packages/telemetry/src/lib.rs:54 - env!("CARGO_PKG_VERSION")
+❌ All env!() macro usage (8+ locations)
+```
+
+#### **Build Scripts & Macros** (Build environment)
+
+```
+❌ packages/async/macros/src/lib.rs:299 - CARGO_MANIFEST_DIR (macro expansion)
+❌ packages/hyperchad/app/src/renderer.rs:298 - CARGO_MANIFEST_DIR (asset resolution)
+❌ packages/hyperchad/renderer/vanilla_js/build.rs:15 - CARGO_MANIFEST_DIR
+❌ All CARGO_MANIFEST_DIR usage (10+ locations)
+```
+
+#### **Switchy_env Package Itself** (The abstraction layer)
+
+```
+❌ packages/env/src/simulator.rs:16,68 - std::env::vars() (loading real env vars)
+❌ packages/env/src/standard.rs:22,26 - std::env::var(), std::env::vars()
+```
+
+### ✅ **SHOULD MIGRATE** - Application Logic Environment Variables (48+ locations)
+
+#### **1. Database Configuration** (🔴 High Priority)
+
+```
+✅ packages/database_connection/src/creds.rs:
+   - Line 38: DATABASE_URL
+   - Lines 44-47: DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
+   - Lines 72-78: SSM_DB_NAME_PARAM_NAME, SSM_DB_HOST_PARAM_NAME,
+                  SSM_DB_USER_PARAM_NAME, SSM_DB_PASSWORD_PARAM_NAME
+
+✅ packages/schema/src/lib.rs:236 - MOOSICBOX_SKIP_MIGRATION_EXECUTION
+```
+
+#### **2. Authentication & Security** (🔴 High Priority)
+
+```
+✅ packages/auth/src/lib.rs:120 - TUNNEL_ACCESS_TOKEN (runtime token)
+✅ packages/app/native/ui/src/api/tidal.rs:16,65-66 - TIDAL_CLIENT_ID, TIDAL_CLIENT_SECRET
+```
+
+#### **3. Service Configuration** (🔴 High Priority)
+
+```
+✅ packages/load_balancer/src/load_balancer.rs:
+   - Line 12: PORT
+   - Line 19: SSL_PORT
+   - Line 26: SSL_CRT_PATH
+   - Line 30: SSL_KEY_PATH
+
+✅ packages/load_balancer/src/server.rs:44,81 - CLUSTERS, SSL path checks
+✅ packages/server/simulator/src/main.rs:11 - PORT
+✅ packages/upnp/src/player.rs:382 - UPNP_SEND_SIZE
+```
+
+#### **4. Telemetry & Monitoring** (🟡 Medium Priority)
+
+```
+✅ packages/telemetry/src/lib.rs:44 - OTEL_ENDPOINT
+```
+
+#### **5. Debug & Development Flags** (🟢 Low Priority)
+
+```
+✅ packages/app/tauri/src-tauri/src/lib.rs:677 - TOKIO_CONSOLE
+✅ packages/app/native/src/main.rs:29 - TOKIO_CONSOLE
+✅ packages/marketing_site/src/main.rs:24 - TOKIO_CONSOLE
+✅ packages/tunnel_server/src/main.rs:49 - TOKIO_CONSOLE
+✅ packages/server/src/main.rs:38 - TOKIO_CONSOLE
+✅ packages/hyperchad/renderer/egui/src/v1.rs:38 - DEBUG_RENDERER
+✅ packages/hyperchad/renderer/fltk/src/lib.rs:56 - DEBUG_RENDERER
+✅ packages/hyperchad/transformer/src/lib.rs:2826,3424,3430 - Debug attributes
+```
+
+#### **6. Technical Debt** (Should be deprecated)
+
+```
+✅ packages/env_utils/src/lib.rs:142-452 - All environment utilities
+   (This entire package should be deprecated in favor of switchy_env)
+```
+
+### Migration Status Summary
+
+**Completed Core Infrastructure:**
+
+- ❌ Correctly preserved simulation control variables (SIMULATOR\_\*)
+- ❌ Correctly preserved compile-time constants (env!() macros)
+- ❌ Correctly preserved build environment (CARGO_MANIFEST_DIR)
+
+**Ready for Application Migration:**
+
+- 🔴 **Critical (10 locations)**: Database credentials, authentication tokens
+- 🟡 **Important (8 locations)**: Service configuration, telemetry
+- 🟢 **Nice-to-have (30+ locations)**: Debug flags, development tools
 
 ### Usage Pattern
 
 ```rust
 use switchy_env::{var, var_or, var_parse, var_parse_or};
 
-// Get with type safety and defaults
-let seed = var_parse_or("SIMULATOR_SEED", 12345u64);
+// Database configuration with deterministic defaults
 let database_url = var_or("DATABASE_URL", "sqlite::memory:");
+let db_host = var_or("DB_HOST", "localhost");
+
+// Service configuration with type safety
+let port: u16 = var_parse_or("PORT", 8080);
+let ssl_port: u16 = var_parse_or("SSL_PORT", 8443);
+
+// Authentication tokens (no defaults for security)
+let tunnel_token = var("TUNNEL_ACCESS_TOKEN")?;
 ```
-
-### Remaining Migration Opportunities (59 occurrences)
-
-Additional packages can be migrated to use `switchy_env` for better determinism:
-
-- Database connection packages
-- Load balancer configuration
-- Authentication tokens
-- Debug flags
 
 ## 8. File System Operations
 
@@ -507,23 +613,44 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 - [x] Implement configuration injection
 - [x] Add type-safe access patterns
 
-**Core packages migrated (3 critical packages):**
+**✅ Correctly preserved simulation infrastructure (DO NOT MIGRATE):**
 
-- [x] `packages/uuid/src/simulator.rs` - SIMULATOR_UUID_SEED
-- [x] `packages/random/src/simulator.rs:13,48` - Random seeds
-- [x] `packages/time/src/simulator.rs:26,63` - Time offsets
+- ❌ `packages/random/src/simulator.rs:13,48` - SIMULATOR_SEED (controls simulation)
+- ❌ `packages/time/src/simulator.rs:26,63` - SIMULATOR_EPOCH_OFFSET, SIMULATOR_STEP_MULTIPLIER (controls simulation)
+- ❌ `packages/simvar/harness/src/lib.rs:52,115` - SIMULATOR_RUNS, SIMULATOR_MAX_PARALLEL (controls simulation)
+- ❌ `packages/simvar/harness/src/config.rs:55,377` - SIMULATOR_DURATION (controls simulation)
+- ❌ All compile-time env!() macros (8+ locations)
+- ❌ All CARGO_MANIFEST_DIR usage (10+ locations)
 
-**Additional migration opportunities (55+ occurrences):**
+**🔴 High Priority Application Migration (18 locations):**
 
-- [ ] `packages/database_connection/src/creds.rs:38-78` - Database credentials
-- [ ] `packages/env_utils/src/lib.rs:142-452` - All env utilities
-- [ ] `packages/auth/src/lib.rs:120` - TUNNEL_ACCESS_TOKEN
-- [ ] `packages/app/native/ui/src/api/tidal.rs:16,65-66` - Tidal credentials
-- [ ] `packages/simvar/harness/src/lib.rs:52,115` - Simulator config
-- [ ] `packages/simvar/harness/src/config.rs:55,377` - Simulator settings
-- [ ] `packages/load_balancer/src/server.rs:44,81` - SSL configuration
-- [ ] `packages/load_balancer/src/load_balancer.rs:12,19,26,30` - Port/SSL paths
-- [ ] Build scripts and main.rs files (10+ occurrences)
+- [ ] `packages/database_connection/src/creds.rs:38-78` - Database credentials (10 env vars)
+- [ ] `packages/auth/src/lib.rs:120` - TUNNEL_ACCESS_TOKEN (runtime token)
+- [ ] `packages/app/native/ui/src/api/tidal.rs:16,65-66` - TIDAL_CLIENT_ID, TIDAL_CLIENT_SECRET
+- [ ] `packages/load_balancer/src/load_balancer.rs:12,19,26,30` - PORT, SSL_PORT, SSL paths
+- [ ] `packages/load_balancer/src/server.rs:44,81` - CLUSTERS, SSL configuration
+- [ ] `packages/schema/src/lib.rs:236` - MOOSICBOX_SKIP_MIGRATION_EXECUTION
+
+**🟡 Medium Priority Application Migration (9 locations):**
+
+- [ ] `packages/server/simulator/src/main.rs:11` - PORT
+- [ ] `packages/upnp/src/player.rs:382` - UPNP_SEND_SIZE
+- [ ] `packages/telemetry/src/lib.rs:44` - OTEL_ENDPOINT
+
+**🟢 Low Priority Debug Flags (21+ locations):**
+
+- [ ] `packages/app/tauri/src-tauri/src/lib.rs:677` - TOKIO_CONSOLE
+- [ ] `packages/app/native/src/main.rs:29` - TOKIO_CONSOLE
+- [ ] `packages/marketing_site/src/main.rs:24` - TOKIO_CONSOLE
+- [ ] `packages/tunnel_server/src/main.rs:49` - TOKIO_CONSOLE
+- [ ] `packages/server/src/main.rs:38` - TOKIO_CONSOLE
+- [ ] `packages/hyperchad/renderer/egui/src/v1.rs:38` - DEBUG_RENDERER
+- [ ] `packages/hyperchad/renderer/fltk/src/lib.rs:56` - DEBUG_RENDERER
+- [ ] `packages/hyperchad/transformer/src/lib.rs:2826,3424,3430` - Debug attributes
+
+**📦 Technical Debt (15+ locations):**
+
+- [ ] `packages/env_utils/src/lib.rs:142-452` - Deprecate entire package in favor of switchy_env
 
 #### 1.4 Create `switchy_process` package
 
