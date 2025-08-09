@@ -24,13 +24,13 @@ async fn compare_channel_behavior() {
     println!("=== Testing Switchy Channel ===");
     // FIXME: Enable when bounded channel is implemented
     // let (switchy_tx, switchy_rx) = mpsc::bounded::<i32>(16);
-    let (switchy_tx, switchy_rx) = mpsc::unbounded_channel::<i32>();
+    let (switchy_tx, switchy_rx) = mpsc::unbounded::<i32>();
 
     // Test immediate drop
     {
         // FIXME: Enable when bounded channel is implemented
         // let (tx, rx) = switchy_mpsc::bounded::<i32>(16);
-        let (tx, rx) = mpsc::unbounded_channel::<i32>();
+        let (tx, rx) = mpsc::unbounded::<i32>();
         println!("Switchy: Created and dropping immediately");
         drop(tx);
         drop(rx);

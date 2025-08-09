@@ -16461,7 +16461,6 @@ dependencies = [
  "switchy_async",
  "switchy_http_models",
  "thiserror 2.0.12",
- "tokio",
 ]
 
 [[package]]

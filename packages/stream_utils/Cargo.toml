@@ -43,3 +43,12 @@ fail-on-warnings = []
 
 remote-bytestream = ["dep:switchy_http", "switchy_async/util"]
 stalled-monitor   = ["dep:thiserror", "switchy_async/sync", "switchy_async/time"]
+
+[[test]]
+name = "basic_tests"
+path = "tests/basic/mod.rs"
+
+[[test]]
+name = "remote_bytestream_tests"
+path = "tests/remote_bytestream/mod.rs"
+required-features = ["remote-bytestream"]
