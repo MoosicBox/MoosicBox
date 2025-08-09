@@ -175,22 +175,34 @@ Systematic replacement of all HashMap/HashSet with BTreeMap/BTreeSet
 
 ## 5. Random Number Generation
 
-**Status:** 🟢 Minor | ✅ Mostly Fixed
+**Status:** ✅ Fixed
 
-### Remaining Issues
+### Solution Implemented
 
-| File                           | Line | Usage             | Status   |
-| ------------------------------ | ---- | ----------------- | -------- |
-| `packages/clippier/src/lib.rs` | 193  | Feature shuffling | ✅ Fixed |
-| `packages/openport/src/lib.rs` | 85   | Port selection    | ✅ Fixed |
+All random operations now use `switchy_random` package which provides:
 
-### Recommendation
+- Deterministic random for testing (via simulator feature)
+- Real random for production (via rand feature)
 
-Continue using `switchy_random` for all random operations
+### Previously Fixed
+
+- `packages/clippier/src/lib.rs` - Now uses `switchy_random`
+- `packages/openport/src/lib.rs` - Now uses `switchy_random`
+- All other random usage migrated to `switchy_random`
+
+No further action needed.
 
 ## 6. Time Operations
 
-**Status:** 🟢 Minor | ✅ Mostly Fixed
+**Status:** 🟡 Important | ⏳ Mostly Fixed
+
+### Solution
+
+`switchy_time` package provides deterministic time with:
+
+- `now()` for SystemTime
+- `instant_now()` for Instant (recently added)
+- Simulator and standard implementations
 
 ### Fixed ✅
 
@@ -198,18 +210,24 @@ Continue using `switchy_random` for all random operations
 - Performance measurements use `switchy_time::instant_now()`
 - Timestamps use `switchy_time::now()`
 
-### Remaining
+### Remaining Direct Usage
 
 | File                                | Line     | Usage              | Priority     |
 | ----------------------------------- | -------- | ------------------ | ------------ |
 | `packages/files/src/lib.rs`         | 161, 192 | Performance timing | 🟢 Minor     |
 | `packages/audio_output/src/cpal.rs` | 596      | Audio timing       | 🟡 Important |
 
+These should migrate to use `switchy_time`.
+
 ## 7. Environment Variables
 
-**Status:** 🟡 Important | ❌ Needs design
+**Status:** 🟡 Important | ❌ No abstraction exists
 
-### Critical Variables (75 occurrences)
+### Problem
+
+Direct use of `std::env::var` throughout codebase without abstraction. Need to create `switchy_env` package.
+
+### Direct Usage (75 occurrences)
 
 | Category  | Variables                                | Usage              | Priority     |
 | --------- | ---------------------------------------- | ------------------ | ------------ |
@@ -220,17 +238,22 @@ Continue using `switchy_random` for all random operations
 
 ### Recommendation
 
-Create `switchy_env` package for:
+Create new `switchy_env` package with:
 
-- Deterministic environment variable mocking
-- Configuration injection for testing
-- Validation and type-safe access
+- Environment variable abstraction
+- Deterministic values for testing
+- Configuration injection
+- Type-safe access patterns
 
 ## 8. File System Operations
 
-**Status:** 🟡 Important | ❌ Needs design
+**Status:** 🟡 Important | ⏳ Partial solution exists
 
-### Major Areas (100+ occurrences)
+### Problem
+
+Many packages directly use `std::fs` instead of `switchy_fs`, and don't sort directory listings for deterministic ordering.
+
+### Major Areas Not Using switchy_fs
 
 | Package                | Operation      | Usage           | Priority     |
 | ---------------------- | -------------- | --------------- | ------------ |
@@ -241,15 +264,19 @@ Create `switchy_env` package for:
 
 ### Recommendation
 
-- Always sort directory listings before processing
-- Use `switchy_fs` for mockable file operations
-- Create deterministic file system abstraction for tests
+- Migrate all file operations to use existing `switchy_fs` package
+- Always sort directory listings before processing (add `.sort()` after collecting entries)
+- Use `switchy_fs::simulator` for testing
 
 ## 9. Process/Command Execution
 
-**Status:** 🟡 Important | ❌ Needs design
+**Status:** 🟡 Important | ❌ No abstraction exists
 
-### Occurrences (29 instances)
+### Problem
+
+Direct use of `std::process::Command` without abstraction layer. Need to create `switchy_process` package.
+
+### Direct Usage Occurrences (29 instances)
 
 | File                             | Command         | Usage          | Priority     |
 | -------------------------------- | --------------- | -------------- | ------------ |
@@ -260,35 +287,46 @@ Create `switchy_env` package for:
 
 ### Recommendation
 
-Create `switchy_process` for:
+Create new `switchy_process` package with:
 
-- Command execution mocking
-- Deterministic exit handling
-- Process output capture
+- Command execution abstraction
+- Deterministic output for testing
+- Process exit handling
 
 ## 10. Network Operations
 
-**Status:** 🔴 Critical | ❌ Needs comprehensive mocking
+**Status:** 🔴 Critical | ⏳ Abstractions exist but underutilized
 
-### Major Areas (100+ occurrences)
+### Problem
 
-| Package                   | Operation       | Usage              | Priority     |
-| ------------------------- | --------------- | ------------------ | ------------ |
-| `packages/tcp/`           | TCP connections | Core networking    | 🔴 Critical  |
-| `packages/http/`          | HTTP requests   | API calls          | 🔴 Critical  |
-| `packages/tunnel_sender/` | Tunnel requests | Remote connections | 🔴 Critical  |
-| `packages/upnp/`          | UPnP discovery  | Device discovery   | 🟡 Important |
-| `packages/openport/`      | Port binding    | Port allocation    | 🟡 Important |
+Many packages still use direct network operations instead of existing `switchy_tcp` and `switchy_http` abstractions.
+
+### Packages Not Using Switchy Network Abstractions
+
+| Package                   | Current Usage   | Should Use                    | Priority     |
+| ------------------------- | --------------- | ----------------------------- | ------------ |
+| `packages/tunnel_sender/` | Direct TCP/HTTP | `switchy_tcp`, `switchy_http` | 🔴 Critical  |
+| `packages/upnp/`          | Direct sockets  | `switchy_tcp`                 | 🟡 Important |
+| `packages/openport/`      | Direct binding  | `switchy_tcp`                 | 🟡 Important |
+| Various API packages      | Direct reqwest  | `switchy_http`                | 🔴 Critical  |
+
+Note: `packages/tcp/` and `packages/http/` ARE the switchy abstractions - they don't need fixing.
 
 ### Recommendation
 
-Leverage existing `switchy_tcp` and `switchy_http` more extensively
+- Migrate all TCP operations to use `switchy_tcp`
+- Migrate all HTTP operations to use `switchy_http`
+- Use simulator features for deterministic testing
 
-## 11. Async Race Conditions
+## 11. Async Race Conditions in Application Code
 
-**Status:** 🔴 Critical | ❌ Needs careful analysis
+**Status:** 🔴 Critical | ⏳ Partial solution via switchy_async
 
-### Problem Areas
+### Problem
+
+Application code has race conditions. `switchy_async` provides deterministic runtime for testing, but code needs to use it properly.
+
+### Problem Areas in Application Code
 
 | Pattern                     | Count | Risk                         | Priority     |
 | --------------------------- | ----- | ---------------------------- | ------------ |
@@ -299,7 +337,8 @@ Leverage existing `switchy_tcp` and `switchy_http` more extensively
 
 ### Recommendation
 
-- Use deterministic task ordering where possible
+- Use `switchy_async` runtime for deterministic testing
+- Replace `join_all` with sequential execution where order matters
 - Add explicit synchronization points
 - Document where race conditions are acceptable
 
