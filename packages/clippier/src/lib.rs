@@ -9,7 +9,6 @@ use std::{
 
 use clap::ValueEnum;
 use itertools::Itertools;
-use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
@@ -191,21 +190,17 @@ pub fn process_features(
 
     // Randomize features if requested
     if randomize {
-        use rand::SeedableRng;
+        use switchy_random::rand::rand::seq::SliceRandom;
 
         let actual_seed = seed.unwrap_or_else(|| {
             // Generate a random seed
-            let generated_seed = rand::random::<u64>();
+            let generated_seed = switchy_random::rng().next_u64();
             eprintln!("Generated seed: {generated_seed}");
             generated_seed
         });
 
-        // Convert u64 seed to 32-byte array for StdRng
-        let mut seed_bytes = [0u8; 32];
-        seed_bytes[..8].copy_from_slice(&actual_seed.to_le_bytes());
-
         // Use the seed (provided or generated) for deterministic randomization
-        let mut rng = rand::rngs::StdRng::from_seed(seed_bytes);
+        let mut rng = switchy_random::Rng::from_seed(actual_seed);
         features.shuffle(&mut rng);
     }
 

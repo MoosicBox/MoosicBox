@@ -14,7 +14,7 @@ version     = "0.1.2"
 independent = true
 
 [dependencies]
-rand = { workspace = true, optional = true }
+switchy_random = { workspace = true, features = ["rand"], optional = true }
 
 ### FEATURES #################################################################
 
@@ -25,4 +25,4 @@ fail-on-warnings = []
 
 # Add `pick_random_unused_port` pub fn that allows finding a random port
 # within the range 15000..25000
-rand = ["dep:rand"]
+rand = ["dep:switchy_random"]

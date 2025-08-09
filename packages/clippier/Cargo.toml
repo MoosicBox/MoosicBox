@@ -23,11 +23,11 @@ required-features = []
 
 [dependencies]
 moosicbox_logging = { workspace = true, features = ["free_log"] }
+switchy_random    = { workspace = true, features = ["rand"] }
 
 clap       = { workspace = true }
 itertools  = { workspace = true }
 log        = { workspace = true }
-rand       = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }
 tempfile   = { workspace = true }

@@ -2404,9 +2404,9 @@ dependencies = [
  "itertools 0.14.0",
  "log 0.4.27",
  "moosicbox_logging",
- "rand 0.9.2",
  "serde",
  "serde_json",
+ "switchy_random",
  "tempfile",
  "test-log",
  "toml 0.9.5",
@@ -9624,7 +9624,7 @@ dependencies = [
 name = "openport"
 version = "0.1.2"
 dependencies = [
- "rand 0.9.2",
+ "switchy_random",
 ]
 
 [[package]]
