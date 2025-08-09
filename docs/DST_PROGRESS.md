@@ -816,21 +816,9 @@ These tasks have no interdependencies and can execute simultaneously.
 
 **Implementation:** Added sorting after collecting entries for deterministic directory iteration
 
-#### 2.2 Document global lock hierarchy
-
-- [ ] Create `LOCK_HIERARCHY.md` documenting all Arc<RwLock> usage
-- [ ] Focus on: WebSocket connections, player state, cache maps
-
-#### 2.3 Add deadlock detection in debug builds
-
-- [ ] Add to all RwLock acquisitions in debug mode
-- [ ] Priority packages: `ws`, `server`, `tunnel_server`, `player`
-
-#### 2.4 Create deterministic file iteration helpers
+#### 2.2 Create deterministic file iteration helpers
 
 - [ ] Add to `switchy_fs` package: `read_dir_sorted()`, `walk_dir_sorted()`
-
-These are mechanical changes that don't conflict with each other.
 
 ### Phase 3: Web Server Preparation
 
@@ -1130,6 +1118,24 @@ Consider using fixed-point arithmetic or controlled rounding for determinism
 - Build-time operations (git version info)
 - Error handling (deterministic exits)
 - Optional features (profiling)
+
+### Phase 7: Deadlock Prevention (Optional)
+
+**Goal: Prevent deadlocks in concurrent code**
+
+**Note**: This phase is optional and focused on preventing deadlocks rather than improving determinism. Can be done after core DST work is complete.
+
+#### 7.1 Document global lock hierarchy
+
+- [ ] Create `LOCK_HIERARCHY.md` documenting all Arc<RwLock> usage
+- [ ] Focus on: WebSocket connections, player state, cache maps
+- [ ] Identify lock acquisition patterns and potential conflicts
+
+#### 7.2 Add deadlock detection in debug builds
+
+- [ ] Add deadlock detection to all RwLock acquisitions in debug mode
+- [ ] Priority packages: `ws`, `server`, `tunnel_server`, `player`
+- [ ] Add timeout-based deadlock detection for development
 
 ## Task Dependencies and Parallelization
 
