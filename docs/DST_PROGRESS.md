@@ -412,88 +412,107 @@ Application code has race conditions. `switchy_async` provides deterministic run
 
 **Files to modify (89 occurrences across 30 files):**
 
-- `packages/scan/src/output.rs:583,620,664` - HashSet<u64> for IDs
-- `packages/server/src/ws/server.rs:132,137,141` - Connection maps
-- `packages/server/src/auth.rs:108` - Query parameter collection
-- `packages/server/src/players/upnp.rs:23` - Player state map
-- `packages/ws/src/ws.rs:86` - CONNECTION_DATA static
-- `packages/player/src/api.rs:125` - PlaybackHandler map
-- `packages/player/src/lib.rs:228,364,365` - Query/headers maps
-- `packages/hyperchad/state/src/store.rs:14` - Cache storage
-- `packages/hyperchad/renderer/egui/src/v1.rs:229-777` - UI state maps (15+ occurrences)
-- `packages/hyperchad/renderer/egui/src/v2.rs:178-180,507` - UI element maps
-- `packages/hyperchad/renderer/fltk/src/lib.rs:284` - Image cache
-- `packages/hyperchad/renderer/src/lib.rs:298,308` - Headers parameters
-- `packages/hyperchad/renderer/vanilla_js/src/lib.rs:798,815` - Headers
-- `packages/hyperchad/renderer/html/src/lib.rs:49,257,268` - Responsive triggers
-- `packages/hyperchad/renderer/html/src/actix.rs:267` - Static headers
-- `packages/hyperchad/renderer/html/src/html.rs:1046` - Headers
-- `packages/hyperchad/renderer/html/src/lambda.rs:253` - Lambda headers
-- `packages/hyperchad/renderer/html/src/web_server.rs:233` - Web server headers
-- `packages/hyperchad/renderer/html/http/src/lib.rs:95` - HTTP headers
-- `packages/hyperchad/actions/src/dsl.rs:448` - DSL variables
-- `packages/tunnel_server/src/ws/server.rs:332,343-352,530` - WebSocket state
-- `packages/tunnel_sender/src/sender.rs:187,275,619-1013` - Request tracking
-- `packages/tunnel/src/lib.rs:46` - Tunnel headers
-- `packages/files/src/files/track_pool.rs:85-86` - Semaphore/pool maps
-- `packages/upnp/src/listener.rs:68-69` - Status tracking
-- `packages/load_balancer/src/server.rs:27,43,66` - Cluster configuration
-- `packages/load_balancer/src/load_balancer.rs:35,39` - Router maps
-- `packages/app/tauri/src-tauri/src/lib.rs:1220,1270,1284` - Headers and state
-- `packages/app/native/src/visualization.rs:227` - Visualization cache
-- `packages/app/state/src/lib.rs:225,231,1165,1182,1200` - Audio zone and player state
+- [ ] `packages/scan/src/output.rs:583,620,664` - HashSet<u64> for IDs
+- [ ] `packages/server/src/ws/server.rs:132,137,141` - Connection maps
+- [ ] `packages/server/src/auth.rs:108` - Query parameter collection
+- [ ] `packages/server/src/players/upnp.rs:23` - Player state map
+- [ ] `packages/ws/src/ws.rs:86` - CONNECTION_DATA static
+- [ ] `packages/player/src/api.rs:125` - PlaybackHandler map
+- [ ] `packages/player/src/lib.rs:228,364,365` - Query/headers maps
+- [ ] `packages/hyperchad/state/src/store.rs:14` - Cache storage
+- [ ] `packages/hyperchad/renderer/egui/src/v1.rs:229-777` - UI state maps (15+ occurrences)
+- [ ] `packages/hyperchad/renderer/egui/src/v2.rs:178-180,507` - UI element maps
+- [ ] `packages/hyperchad/renderer/fltk/src/lib.rs:284` - Image cache
+- [ ] `packages/hyperchad/renderer/src/lib.rs:298,308` - Headers parameters
+- [ ] `packages/hyperchad/renderer/vanilla_js/src/lib.rs:798,815` - Headers
+- [ ] `packages/hyperchad/renderer/html/src/lib.rs:49,257,268` - Responsive triggers
+- [ ] `packages/hyperchad/renderer/html/src/actix.rs:267` - Static headers
+- [ ] `packages/hyperchad/renderer/html/src/html.rs:1046` - Headers
+- [ ] `packages/hyperchad/renderer/html/src/lambda.rs:253` - Lambda headers
+- [ ] `packages/hyperchad/renderer/html/src/web_server.rs:233` - Web server headers
+- [ ] `packages/hyperchad/renderer/html/http/src/lib.rs:95` - HTTP headers
+- [ ] `packages/hyperchad/actions/src/dsl.rs:448` - DSL variables
+- [ ] `packages/tunnel_server/src/ws/server.rs:332,343-352,530` - WebSocket state
+- [ ] `packages/tunnel_sender/src/sender.rs:187,275,619-1013` - Request tracking
+- [ ] `packages/tunnel/src/lib.rs:46` - Tunnel headers
+- [ ] `packages/files/src/files/track_pool.rs:85-86` - Semaphore/pool maps
+- [ ] `packages/upnp/src/listener.rs:68-69` - Status tracking
+- [ ] `packages/load_balancer/src/server.rs:27,43,66` - Cluster configuration
+- [ ] `packages/load_balancer/src/load_balancer.rs:35,39` - Router maps
+- [ ] `packages/app/tauri/src-tauri/src/lib.rs:1220,1270,1284` - Headers and state
+- [ ] `packages/app/native/src/visualization.rs:227` - Visualization cache
+- [ ] `packages/app/state/src/lib.rs:225,231,1165,1182,1200` - Audio zone and player state
 
 #### 1.2 Create `switchy_uuid` package
 
+- [ ] Create new package structure
+- [ ] Implement deterministic UUID generation for testing
+- [ ] Implement cryptographically secure UUIDs for production
+- [ ] Add seeded UUID generation for simulations
+
 **Files needing migration (6 direct usages):**
 
-- `packages/tunnel_server/src/api.rs:27,110,129` - Token generation
-- `packages/auth/src/lib.rs:16,75,88` - Magic token generation
-- `packages/simvar/examples/api_testing/src/main.rs:20,276,398` - Test IDs
+- [ ] `packages/tunnel_server/src/api.rs:27,110,129` - Token generation
+- [ ] `packages/auth/src/lib.rs:16,75,88` - Magic token generation
+- [ ] `packages/simvar/examples/api_testing/src/main.rs:20,276,398` - Test IDs
 
 #### 1.3 Create `switchy_env` package
 
+- [ ] Create new package structure
+- [ ] Implement environment variable abstraction
+- [ ] Add deterministic values for testing
+- [ ] Implement configuration injection
+- [ ] Add type-safe access patterns
+
 **Files needing migration (58 occurrences):**
 
-- `packages/database_connection/src/creds.rs:38-78` - Database credentials
-- `packages/env_utils/src/lib.rs:142-452` - All env utilities
-- `packages/auth/src/lib.rs:120` - TUNNEL_ACCESS_TOKEN
-- `packages/app/native/ui/src/api/tidal.rs:16,65-66` - Tidal credentials
-- `packages/simvar/harness/src/lib.rs:52,115` - Simulator config
-- `packages/simvar/harness/src/config.rs:55,377` - Simulator settings
-- `packages/time/src/simulator.rs:26,63` - Time offsets
-- `packages/random/src/simulator.rs:13,48` - Random seeds
-- `packages/load_balancer/src/server.rs:44,81` - SSL configuration
-- `packages/load_balancer/src/load_balancer.rs:12,19,26,30` - Port/SSL paths
-- Build scripts and main.rs files (10+ occurrences)
+- [ ] `packages/database_connection/src/creds.rs:38-78` - Database credentials
+- [ ] `packages/env_utils/src/lib.rs:142-452` - All env utilities
+- [ ] `packages/auth/src/lib.rs:120` - TUNNEL_ACCESS_TOKEN
+- [ ] `packages/app/native/ui/src/api/tidal.rs:16,65-66` - Tidal credentials
+- [ ] `packages/simvar/harness/src/lib.rs:52,115` - Simulator config
+- [ ] `packages/simvar/harness/src/config.rs:55,377` - Simulator settings
+- [ ] `packages/time/src/simulator.rs:26,63` - Time offsets
+- [ ] `packages/random/src/simulator.rs:13,48` - Random seeds
+- [ ] `packages/load_balancer/src/server.rs:44,81` - SSL configuration
+- [ ] `packages/load_balancer/src/load_balancer.rs:12,19,26,30` - Port/SSL paths
+- [ ] Build scripts and main.rs files (10+ occurrences)
 
 #### 1.4 Create `switchy_process` package
 
+- [ ] Create new package structure
+- [ ] Implement command execution abstraction
+- [ ] Add deterministic output for testing
+- [ ] Implement process exit handling
+
 **Files needing migration (17 occurrences):**
 
-- `packages/bloaty/src/main.rs:113` - Process exit
-- `packages/server/src/lib.rs:769` - puffin_viewer launch
-- `packages/hyperchad/renderer/egui/src/v1.rs:3780` - puffin_viewer
-- `packages/hyperchad/js_bundler/src/node.rs` - Node.js command execution
-- `packages/assert/src/lib.rs:25,44,183,200,221,267,325,358` - Assertion exits
-- Build scripts: `tunnel_server`, `server`, `marketing_site`, `app/native`, `hyperchad/renderer/vanilla_js`
+- [ ] `packages/bloaty/src/main.rs:113` - Process exit
+- [ ] `packages/server/src/lib.rs:769` - puffin_viewer launch
+- [ ] `packages/hyperchad/renderer/egui/src/v1.rs:3780` - puffin_viewer
+- [ ] `packages/hyperchad/js_bundler/src/node.rs` - Node.js command execution
+- [ ] `packages/assert/src/lib.rs:25,44,183,200,221,267,325,358` - Assertion exits
+- [ ] Build scripts: `tunnel_server`, `server`, `marketing_site`, `app/native`, `hyperchad/renderer/vanilla_js`
 
 #### 1.5 Fix remaining direct time/instant usage
 
 **Files to modify:**
 
-- `packages/files/src/lib.rs:161,192` - Performance timing
-- `packages/audio_output/src/cpal.rs:596` - Audio timing
-- `packages/async/examples/simulated/src/main.rs:19` - SystemTime::now()
-- `packages/async/src/simulator/sync/mpmc/flume.rs:135` - Instant::now()
-- `packages/async/src/simulator/futures.rs:108-109` - SystemTime and Instant
-- `packages/async/src/simulator/mod.rs:260` - Instant::now()
+- [ ] `packages/files/src/lib.rs:161,192` - Performance timing
+- [ ] `packages/audio_output/src/cpal.rs:596` - Audio timing
+- [ ] `packages/async/examples/simulated/src/main.rs:19` - SystemTime::now()
+- [ ] `packages/async/src/simulator/sync/mpmc/flume.rs:135` - Instant::now()
+- [ ] `packages/async/src/simulator/futures.rs:108-109` - SystemTime and Instant
+- [ ] `packages/async/src/simulator/mod.rs:260` - Instant::now()
 
 Note: Files in `packages/time/src/` are part of the switchy_time implementation itself
 
 #### 1.6 Add chrono DateTime support to `switchy_time`
 
-- Extend `packages/time/src/lib.rs` with DateTime abstractions
+- [ ] Extend `packages/time/src/lib.rs` with DateTime abstractions
+- [ ] Add `datetime_now()` returning chrono DateTime types
+- [ ] Implement timezone-aware time functions
+- [ ] Add date formatting utilities
 
 These tasks have no interdependencies and can execute simultaneously.
 
@@ -507,30 +526,30 @@ These tasks have no interdependencies and can execute simultaneously.
 
 **Files to modify (9 occurrences):**
 
-- `packages/scan/src/output.rs:50` - Cover file scanning
-- `packages/scan/src/local.rs:566` - Directory scanning
-- `packages/files/src/lib.rs:450` - Cover directory reading
-- `packages/hyperchad/app/src/renderer.rs:452` - Resource copying
-- `packages/hyperchad/renderer/vanilla_js/build.rs:118` - Build script
-- `packages/clippier/tests/command_tests.rs:173,192` - Test utilities
-- `packages/clippier/test_utilities/src/lib.rs:192` - Test helpers
-- `packages/clippier/src/test_utils.rs:223` - Test utilities
+- [ ] `packages/scan/src/output.rs:50` - Cover file scanning
+- [ ] `packages/scan/src/local.rs:566` - Directory scanning
+- [ ] `packages/files/src/lib.rs:450` - Cover directory reading
+- [ ] `packages/hyperchad/app/src/renderer.rs:452` - Resource copying
+- [ ] `packages/hyperchad/renderer/vanilla_js/build.rs:118` - Build script
+- [ ] `packages/clippier/tests/command_tests.rs:173,192` - Test utilities
+- [ ] `packages/clippier/test_utilities/src/lib.rs:192` - Test helpers
+- [ ] `packages/clippier/src/test_utils.rs:223` - Test utilities
 
 **Implementation:** Add `.sort()` after collecting entries, migrate to `switchy_fs`
 
 #### 2.2 Document global lock hierarchy
 
-- Create `LOCK_HIERARCHY.md` documenting all Arc<RwLock> usage
-- Focus on: WebSocket connections, player state, cache maps
+- [ ] Create `LOCK_HIERARCHY.md` documenting all Arc<RwLock> usage
+- [ ] Focus on: WebSocket connections, player state, cache maps
 
 #### 2.3 Add deadlock detection in debug builds
 
-- Add to all RwLock acquisitions in debug mode
-- Priority packages: `ws`, `server`, `tunnel_server`, `player`
+- [ ] Add to all RwLock acquisitions in debug mode
+- [ ] Priority packages: `ws`, `server`, `tunnel_server`, `player`
 
 #### 2.4 Create deterministic file iteration helpers
 
-- Add to `switchy_fs` package: `read_dir_sorted()`, `walk_dir_sorted()`
+- [ ] Add to `switchy_fs` package: `read_dir_sorted()`, `walk_dir_sorted()`
 
 These are mechanical changes that don't conflict with each other.
 
@@ -544,48 +563,48 @@ These are mechanical changes that don't conflict with each other.
 
 **Create in `packages/web_server/src/traits/`:**
 
-- `request.rs` - Request trait abstracting HttpRequest
-- `response.rs` - Response trait abstracting HttpResponse
-- `extractors.rs` - Data extraction traits (Path, Query, Json, etc.)
-- `middleware.rs` - Middleware trait abstraction
-- `service.rs` - Service factory traits
+- [ ] `request.rs` - Request trait abstracting HttpRequest
+- [ ] `response.rs` - Response trait abstracting HttpResponse
+- [ ] `extractors.rs` - Data extraction traits (Path, Query, Json, etc.)
+- [ ] `middleware.rs` - Middleware trait abstraction
+- [ ] `service.rs` - Service factory traits
 
 #### 3.2 Implement traits (parallel after 3.1)
 
 **actix-web implementations:**
 
-- Create `packages/web_server/src/actix/` module
-- Implement all traits for actix types
+- [ ] Create `packages/web_server/src/actix/` module
+- [ ] Implement all traits for actix types
 
 **moosicbox_web_server implementations:**
 
-- Enhance existing `packages/web_server/src/`
-- Add missing features from Section 1 checklist
+- [ ] Enhance existing `packages/web_server/src/`
+- [ ] Add missing features from Section 1 checklist
 
 **Missing features to add (from Section 1):**
 
-- WebSocket support (critical for 5 packages)
-- Server-sent events
-- Multipart form handling
-- Custom error responses
-- Request guards/extractors
-- Middleware system
-- Static file serving
-- CORS configuration
+- [ ] WebSocket support (critical for 5 packages)
+- [ ] Server-sent events
+- [ ] Multipart form handling
+- [ ] Custom error responses
+- [ ] Request guards/extractors
+- [ ] Middleware system
+- [ ] Static file serving
+- [ ] CORS configuration
 
 #### 3.3 Build compatibility layer
 
-- Migration helpers in `packages/web_server/src/migration/`
-- Automated code transformation tools
-- Dual-mode operation support
+- [ ] Migration helpers in `packages/web_server/src/migration/`
+- [ ] Automated code transformation tools
+- [ ] Dual-mode operation support
 
 #### 3.4 Apply to leaf packages (proof of concept)
 
 **Start with simplest packages:**
 
-- `packages/config/src/api/` (simple REST)
-- `packages/scan/src/api.rs` (basic endpoints)
-- `packages/menu/src/api.rs` (no WebSockets)
+- [ ] `packages/config/src/api/` (simple REST)
+- [ ] `packages/scan/src/api.rs` (basic endpoints)
+- [ ] `packages/menu/src/api.rs` (no WebSockets)
 
 The trait design must complete before implementations begin. See Section 1 "Web Server Framework" for detailed feature requirements.
 
@@ -603,69 +622,69 @@ This phase executes the migration strategy detailed in Section 1.
 
 **Files to migrate:**
 
-- `packages/auth/src/lib.rs` - FromRequest implementations
-- `packages/auth/src/api.rs` - Auth endpoints
-- `packages/config/src/api/mod.rs` - Config service bindings
-- `packages/profiles/src/lib.rs` - Profile management
-- `packages/database/src/profiles.rs` - Database profile extractors
-- `packages/database/src/config.rs` - Database config extractors
-- `packages/library/music_api/src/profiles.rs` - Music API profiles
-- `packages/music_api/src/profiles.rs` - Music profiles
+- [ ] `packages/auth/src/lib.rs` - FromRequest implementations
+- [ ] `packages/auth/src/api.rs` - Auth endpoints
+- [ ] `packages/config/src/api/mod.rs` - Config service bindings
+- [ ] `packages/profiles/src/lib.rs` - Profile management
+- [ ] `packages/database/src/profiles.rs` - Database profile extractors
+- [ ] `packages/database/src/config.rs` - Database config extractors
+- [ ] `packages/library/music_api/src/profiles.rs` - Music API profiles
+- [ ] `packages/music_api/src/profiles.rs` - Music profiles
 
 #### 4.2 Media API group
 
 **Files to migrate:**
 
-- `packages/music_api/api/src/api.rs` - Core music API
-- `packages/library/src/api.rs` - Library endpoints
-- `packages/scan/src/api.rs` - Scan endpoints (#[actix_web::get] macros)
-- `packages/search/src/api.rs` - Search endpoints
-- `packages/qobuz/src/api.rs` - Qobuz API endpoints
-- `packages/qobuz/src/lib.rs` - Qobuz types (HttpResponse)
-- `packages/tidal/src/api.rs` - Tidal API endpoints
-- `packages/tidal/src/lib.rs` - Tidal types (HttpResponse)
-- `packages/yt/src/api.rs` - YouTube API endpoints
-- `packages/yt/src/lib.rs` - YouTube types (HttpResponse)
+- [ ] `packages/music_api/api/src/api.rs` - Core music API
+- [ ] `packages/library/src/api.rs` - Library endpoints
+- [ ] `packages/scan/src/api.rs` - Scan endpoints (#[actix_web::get] macros)
+- [ ] `packages/search/src/api.rs` - Search endpoints
+- [ ] `packages/qobuz/src/api.rs` - Qobuz API endpoints
+- [ ] `packages/qobuz/src/lib.rs` - Qobuz types (HttpResponse)
+- [ ] `packages/tidal/src/api.rs` - Tidal API endpoints
+- [ ] `packages/tidal/src/lib.rs` - Tidal types (HttpResponse)
+- [ ] `packages/yt/src/api.rs` - YouTube API endpoints
+- [ ] `packages/yt/src/lib.rs` - YouTube types (HttpResponse)
 
 #### 4.3 UI/Admin group
 
 **Files to migrate:**
 
-- `packages/admin_htmx/src/api/mod.rs` - Main HTMX endpoints
-- `packages/admin_htmx/src/api/info.rs` - Info endpoints
-- `packages/admin_htmx/src/api/profiles.rs` - Profile UI
-- `packages/admin_htmx/src/api/qobuz.rs` - Qobuz UI
-- `packages/admin_htmx/src/api/scan.rs` - Scan UI
-- `packages/admin_htmx/src/api/tidal.rs` - Tidal UI
-- `packages/menu/src/api.rs` - Menu API
+- [ ] `packages/admin_htmx/src/api/mod.rs` - Main HTMX endpoints
+- [ ] `packages/admin_htmx/src/api/info.rs` - Info endpoints
+- [ ] `packages/admin_htmx/src/api/profiles.rs` - Profile UI
+- [ ] `packages/admin_htmx/src/api/qobuz.rs` - Qobuz UI
+- [ ] `packages/admin_htmx/src/api/scan.rs` - Scan UI
+- [ ] `packages/admin_htmx/src/api/tidal.rs` - Tidal UI
+- [ ] `packages/menu/src/api.rs` - Menu API
 
 #### 4.4 Network/Files group
 
 **Files to migrate:**
 
-- `packages/upnp/src/api.rs` - UPnP discovery endpoints
-- `packages/downloader/src/api/mod.rs` - Download management
-- `packages/files/src/api.rs` - File serving (uses actix_files)
-- `packages/tunnel/src/lib.rs` - Tunnel types (HttpRequest/Response)
+- [ ] `packages/upnp/src/api.rs` - UPnP discovery endpoints
+- [ ] `packages/downloader/src/api/mod.rs` - Download management
+- [ ] `packages/files/src/api.rs` - File serving (uses actix_files)
+- [ ] `packages/tunnel/src/lib.rs` - Tunnel types (HttpRequest/Response)
 
 #### 4.5 Audio/Player group
 
 **Files to migrate:**
 
-- `packages/audio_zone/src/api/mod.rs` - Zone management
-- `packages/audio_output/src/api/mod.rs` - Output control
-- `packages/player/src/api.rs` - Player API (WebSocket critical)
-- `packages/session/src/api/mod.rs` - Session API (WebSocket critical)
+- [ ] `packages/audio_zone/src/api/mod.rs` - Zone management
+- [ ] `packages/audio_output/src/api/mod.rs` - Output control
+- [ ] `packages/player/src/api.rs` - Player API (WebSocket critical)
+- [ ] `packages/session/src/api/mod.rs` - Session API (WebSocket critical)
 
 #### 4.6 Middleware group
 
 **Files to migrate:**
 
-- `packages/middleware/src/api_logger.rs` - API logging middleware
-- `packages/middleware/src/service_info.rs` - Service info middleware
-- `packages/middleware/src/tunnel_info.rs` - Tunnel info middleware
-- `packages/telemetry/src/lib.rs` - Telemetry integration
-- `packages/telemetry/src/simulator.rs` - Simulator telemetry
+- [ ] `packages/middleware/src/api_logger.rs` - API logging middleware
+- [ ] `packages/middleware/src/service_info.rs` - Service info middleware
+- [ ] `packages/middleware/src/tunnel_info.rs` - Tunnel info middleware
+- [ ] `packages/telemetry/src/lib.rs` - Telemetry integration
+- [ ] `packages/telemetry/src/simulator.rs` - Simulator telemetry
 
 **Sequential requirements:**
 
@@ -673,75 +692,75 @@ This phase executes the migration strategy detailed in Section 1.
 
 **Files to migrate:**
 
-- `packages/hyperchad/renderer/html/actix/src/lib.rs` - Core actix renderer
-- `packages/hyperchad/renderer/html/actix/src/actions.rs` - Action handlers
-- `packages/hyperchad/renderer/html/actix/src/sse.rs` - Server-sent events
-- `packages/hyperchad/renderer/html/src/actix.rs` - Actix integration
-- `packages/hyperchad/renderer/html/src/web_server.rs` - Web server abstraction
-- `packages/hyperchad/renderer/html/web_server/src/lib.rs` - Web server impl
-- `packages/hyperchad/test_utils/src/http.rs` - HTTP test utilities
-- `packages/hyperchad/test_utils/src/lib.rs` - Test utilities
+- [ ] `packages/hyperchad/renderer/html/actix/src/lib.rs` - Core actix renderer
+- [ ] `packages/hyperchad/renderer/html/actix/src/actions.rs` - Action handlers
+- [ ] `packages/hyperchad/renderer/html/actix/src/sse.rs` - Server-sent events
+- [ ] `packages/hyperchad/renderer/html/src/actix.rs` - Actix integration
+- [ ] `packages/hyperchad/renderer/html/src/web_server.rs` - Web server abstraction
+- [ ] `packages/hyperchad/renderer/html/web_server/src/lib.rs` - Web server impl
+- [ ] `packages/hyperchad/test_utils/src/http.rs` - HTTP test utilities
+- [ ] `packages/hyperchad/test_utils/src/lib.rs` - Test utilities
 
 #### 4.8 Core server package (depends on all above)
 
 **Files to migrate:**
 
-- `packages/server/src/lib.rs` - Main server setup (HttpServer, 50+ service bindings)
-- `packages/server/src/api/mod.rs` - Core API module
-- `packages/server/src/api/openapi.rs` - OpenAPI endpoints
-- `packages/server/src/auth.rs` - Server auth
-- `packages/server/src/ws/server.rs` - WebSocket server (critical)
-- `packages/server/src/ws/handler.rs` - WebSocket handler (actix_ws)
-- `packages/server/src/events/audio_zone_event.rs` - Audio zone events (WebSocket)
-- `packages/server/src/events/session_event.rs` - Session events (WebSocket)
-- `packages/server/src/players/local.rs` - Local player (WebSocket)
-- `packages/server/src/players/upnp.rs` - UPnP player (WebSocket)
-- `packages/server/simulator/src/host/moosicbox_server.rs` - Simulator server
-- `packages/server/simulator/src/http.rs` - Simulator HTTP
+- [ ] `packages/server/src/lib.rs` - Main server setup (HttpServer, 50+ service bindings)
+- [ ] `packages/server/src/api/mod.rs` - Core API module
+- [ ] `packages/server/src/api/openapi.rs` - OpenAPI endpoints
+- [ ] `packages/server/src/auth.rs` - Server auth
+- [ ] `packages/server/src/ws/server.rs` - WebSocket server (critical)
+- [ ] `packages/server/src/ws/handler.rs` - WebSocket handler (actix_ws)
+- [ ] `packages/server/src/events/audio_zone_event.rs` - Audio zone events (WebSocket)
+- [ ] `packages/server/src/events/session_event.rs` - Session events (WebSocket)
+- [ ] `packages/server/src/players/local.rs` - Local player (WebSocket)
+- [ ] `packages/server/src/players/upnp.rs` - UPnP player (WebSocket)
+- [ ] `packages/server/simulator/src/host/moosicbox_server.rs` - Simulator server
+- [ ] `packages/server/simulator/src/http.rs` - Simulator HTTP
 
 #### 4.9 Tunnel server (after core server)
 
 **Files to migrate:**
 
-- `packages/tunnel_server/src/main.rs` - Main tunnel server (HttpServer)
-- `packages/tunnel_server/src/api.rs` - Tunnel API endpoints
-- `packages/tunnel_server/src/auth.rs` - Tunnel auth middleware
-- `packages/tunnel_server/src/db.rs` - Database error handling
-- `packages/tunnel_server/src/ws/api.rs` - Tunnel WebSocket API (actix_ws)
-- `packages/tunnel_server/src/ws/handler.rs` - Tunnel WebSocket handler
-- `packages/tunnel_sender/src/sender.rs` - WebSocket client side
+- [ ] `packages/tunnel_server/src/main.rs` - Main tunnel server (HttpServer)
+- [ ] `packages/tunnel_server/src/api.rs` - Tunnel API endpoints
+- [ ] `packages/tunnel_server/src/auth.rs` - Tunnel auth middleware
+- [ ] `packages/tunnel_server/src/db.rs` - Database error handling
+- [ ] `packages/tunnel_server/src/ws/api.rs` - Tunnel WebSocket API (actix_ws)
+- [ ] `packages/tunnel_server/src/ws/handler.rs` - Tunnel WebSocket handler
+- [ ] `packages/tunnel_sender/src/sender.rs` - WebSocket client side
 
 #### 4.10 WebSocket core (critical for real-time)
 
 **Files to migrate:**
 
-- `packages/ws/src/ws.rs` - Core WebSocket utilities (WebsocketContext)
-- All WebSocket files from 4.8 and 4.9 above (11 total files)
+- [ ] `packages/ws/src/ws.rs` - Core WebSocket utilities (WebsocketContext)
+- [ ] All WebSocket files from 4.8 and 4.9 above (11 total files)
 
 #### 4.11 Platform integrations
 
 **Files to migrate:**
 
-- `packages/app/tauri/src-tauri/src/lib.rs` - Tauri HTTP types
-- `packages/web_server/src/actix.rs` - Actix compatibility layer
-- `packages/web_server/src/lib.rs` - Web server core
-- `packages/web_server/src/openapi.rs` - OpenAPI support
+- [ ] `packages/app/tauri/src-tauri/src/lib.rs` - Tauri HTTP types
+- [ ] `packages/web_server/src/actix.rs` - Actix compatibility layer
+- [ ] `packages/web_server/src/lib.rs` - Web server core
+- [ ] `packages/web_server/src/openapi.rs` - OpenAPI support
 
 #### 4.12 Examples and tests
 
 **Files to migrate:**
 
-- `packages/simvar/examples/api_testing/src/main.rs` - API testing example
-- `packages/simvar/examples/basic_web_server/src/main.rs` - Basic server example
-- `packages/web_server/examples/nested_get/src/main.rs` - Nested routes example
-- `packages/web_server/examples/openapi/src/main.rs` - OpenAPI example
-- `packages/web_server/examples/simple_get/src/main.rs` - Simple GET example
+- [ ] `packages/simvar/examples/api_testing/src/main.rs` - API testing example
+- [ ] `packages/simvar/examples/basic_web_server/src/main.rs` - Basic server example
+- [ ] `packages/web_server/examples/nested_get/src/main.rs` - Nested routes example
+- [ ] `packages/web_server/examples/openapi/src/main.rs` - OpenAPI example
+- [ ] `packages/web_server/examples/simple_get/src/main.rs` - Simple GET example
 
 #### 4.13 Final cleanup
 
-- Remove actix-web, actix-ws, actix-files, actix-cors from all Cargo.toml files
-- Update all imports and use statements
-- Verify no remaining actix dependencies
+- [ ] Remove actix-web, actix-ws, actix-files, actix-cors from all Cargo.toml files
+- [ ] Update all imports and use statements
+- [ ] Verify no remaining actix dependencies
 
 **Migration complexity summary:**
 
@@ -761,46 +780,46 @@ This phase executes the migration strategy detailed in Section 1.
 
 **Focus areas:**
 
-- WebSocket message ordering in `packages/ws/`, `packages/server/src/ws/`
-- Player state updates in `packages/player/src/lib.rs`
-- Session management in `packages/session/`
-- Use `select_biased!` for deterministic future selection
+- [ ] WebSocket message ordering in `packages/ws/`, `packages/server/src/ws/`
+- [ ] Player state updates in `packages/player/src/lib.rs`
+- [ ] Session management in `packages/session/`
+- [ ] Use `select_biased!` for deterministic future selection
 
 **Specific files with select!/join!/spawn patterns:**
 
-- `packages/server/src/ws/server.rs` - WebSocket server with select!
-- `packages/player/src/lib.rs` - Player with tokio::spawn
-- `packages/app/tauri/ws/src/lib.rs` - Tauri WebSocket
-- `packages/app/state/src/ws.rs` - App WebSocket state
-- `packages/upnp/src/player.rs` - UPnP player async operations
+- [ ] `packages/server/src/ws/server.rs` - WebSocket server with select!
+- [ ] `packages/player/src/lib.rs` - Player with tokio::spawn
+- [ ] `packages/app/tauri/ws/src/lib.rs` - Tauri WebSocket
+- [ ] `packages/app/state/src/ws.rs` - App WebSocket state
+- [ ] `packages/upnp/src/player.rs` - UPnP player async operations
 
 #### 5.2 Address floating-point determinism
 
 **Specific files with float operations:**
 
-- `packages/player/src/signal_chain.rs` - Signal processing chains
-- `packages/player/src/volume_mixer.rs` - Volume mixing calculations
-- `packages/player/src/symphonia.rs` - Audio decoding with floats
-- `packages/player/src/symphonia_unsync.rs` - Unsync audio decoding
-- `packages/player/src/local.rs` - Local player volume
-- `packages/audio_output/src/lib.rs` - Output gain processing
-- `packages/audio_output/src/cpal.rs` - CPAL audio output
-- `packages/audio_zone/src/` - Zone volume management
-- `packages/resampler/` - Audio resampling algorithms
+- [ ] `packages/player/src/signal_chain.rs` - Signal processing chains
+- [ ] `packages/player/src/volume_mixer.rs` - Volume mixing calculations
+- [ ] `packages/player/src/symphonia.rs` - Audio decoding with floats
+- [ ] `packages/player/src/symphonia_unsync.rs` - Unsync audio decoding
+- [ ] `packages/player/src/local.rs` - Local player volume
+- [ ] `packages/audio_output/src/lib.rs` - Output gain processing
+- [ ] `packages/audio_output/src/cpal.rs` - CPAL audio output
+- [ ] `packages/audio_zone/src/` - Zone volume management
+- [ ] `packages/resampler/` - Audio resampling algorithms
 
 Consider using fixed-point arithmetic or controlled rounding for determinism
 
 #### 5.3 Update comprehensive documentation
 
-- Update README.md with determinism guarantees
-- Document all switchy packages and their usage
-- Add examples for deterministic testing
+- [ ] Update README.md with determinism guarantees
+- [ ] Document all switchy packages and their usage
+- [ ] Add examples for deterministic testing
 
 #### 5.4 Final testing sweep
 
-- Run full test suite with `SIMULATOR_*` variables
-- Verify identical outputs across multiple runs
-- Performance regression testing
+- [ ] Run full test suite with `SIMULATOR_*` variables
+- [ ] Verify identical outputs across multiple runs
+- [ ] Performance regression testing
 
 ## Task Dependencies and Parallelization
 
