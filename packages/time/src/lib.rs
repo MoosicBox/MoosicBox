@@ -11,7 +11,7 @@ pub mod simulator;
 #[allow(unused)]
 macro_rules! impl_time {
     ($module:ident $(,)?) => {
-        pub use $module::now;
+        pub use $module::{instant_now, now};
     };
 }
 

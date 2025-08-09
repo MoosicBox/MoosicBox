@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
-    sync::RwLock,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    sync::{LazyLock, RwLock},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use scoped_tls::scoped_thread_local;
@@ -144,4 +144,30 @@ pub fn now() -> SystemTime {
     UNIX_EPOCH
         .checked_add(Duration::from_millis(millis))
         .unwrap()
+}
+
+// Base instant for simulated monotonic time
+static BASE_INSTANT: LazyLock<Instant> = LazyLock::new(Instant::now);
+
+/// Returns a simulated monotonic instant based on the current step
+///
+/// # Panics
+///
+/// * If the simulated duration causes an overflow
+#[must_use]
+pub fn instant_now() -> Instant {
+    if REAL_TIME.is_set() {
+        return Instant::now();
+    }
+
+    let step_multiplier = step_multiplier();
+    let step = current_step();
+    let mult_step = step.checked_mul(step_multiplier).unwrap();
+    let duration = Duration::from_millis(mult_step);
+
+    log::trace!(
+        "instant_now: step={step} step_multiplier={step_multiplier} duration_millis={mult_step}"
+    );
+
+    *BASE_INSTANT + duration
 }
