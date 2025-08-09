@@ -28,7 +28,7 @@ pub fn parse_dependency_name(dep_spec: &str) -> String {
 // Basic parsing function for cargo lock changes
 #[must_use]
 pub fn parse_cargo_lock_changes(changes: &[(char, String)]) -> Vec<String> {
-    let mut changed_packages = std::collections::HashSet::new();
+    let mut changed_packages = std::collections::BTreeSet::new();
     let mut current_package = None;
     let mut has_version_change = false;
 

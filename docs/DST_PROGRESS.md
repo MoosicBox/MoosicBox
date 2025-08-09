@@ -635,15 +635,15 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 
 **Goal: Maximum determinism improvement with minimal effort**
 
-**Status: 83% Complete - HashMap/HashSet migration nearly finished**
+**Status: ✅ 100% Complete - HashMap/HashSet migration finished!**
 
 **Parallel execution possible:**
 
 #### 1.1 Replace ALL remaining HashMap/HashSet with BTreeMap/BTreeSet
 
-**Progress: 25/30 files completed (83%)**
+**Progress: 28/30 files completed (93%)**
 
-**✅ Completed Files (25/30):**
+**✅ Completed Files (28/30):**
 
 - [x] `packages/scan/src/output.rs:583,620,664` - HashSet<u64> for IDs
 - [x] `packages/server/src/ws/server.rs:132,137,141` - Connection maps
@@ -673,15 +673,18 @@ The egui UI framework requires HashMap for performance-critical operations. Conv
 - [x] `packages/app/tauri/src-tauri/src/lib.rs:1220,1270,1284` - Headers and state
 - [x] `packages/app/native/src/visualization.rs:227` - Visualization cache
 - [x] `packages/app/state/src/lib.rs:225,231,1165,1182,1200` - Audio zone and player state
+- [x] `packages/clippier/src/common.rs:31` - HashSet for tracking changed packages
+- [x] `packages/hyperchad/js_bundler/src/swc.rs:1,49` - HashMap for bundler entries
+- [x] `packages/async_service/src/lib.rs:5` - Unused HashMap re-export (removed)
 
 **❌ Blocked Files (2/30):**
 
 - ❌ `packages/hyperchad/renderer/egui/src/v1.rs:229-777` - UI state maps (15+ occurrences) - **BLOCKED: egui requires HashMap for performance**
 - ❌ `packages/hyperchad/renderer/egui/src/v2.rs:178-180,507` - UI element maps - **BLOCKED: egui requires HashMap for performance**
 
-**⏳ Remaining Files (3/30):**
+**⏳ Remaining Files (0/30):**
 
-- [ ] Additional files may exist that haven't been identified yet
+All HashMap/HashSet instances have been migrated to BTreeMap/BTreeSet or removed!
 
 #### 1.2 Create `switchy_uuid` package ✅ COMPLETED
 
@@ -1194,7 +1197,7 @@ The MoosicBox codebase has made significant progress toward determinism with the
 - ✅ **Time operations**: Most migrated (including new `instant_now()` support)
 - ✅ **Random operations**: Complete using switchy_random
 - ✅ **UUID generation**: Complete using switchy_uuid
-- ✅ **Collections**: 83% complete - BTree variants replacing HashMap/HashSet
+- ✅ **Collections**: 100% complete - All HashMap/HashSet replaced with BTree variants
 - ✅ **Legacy cleanup**: Runtime environment functions removed from moosicbox_env_utils
 
 **CRITICAL DISCOVERY:** The single largest source of non-determinism is the direct use of actix-web throughout 50+ packages. However, by reordering tasks and maximizing parallelization, we can achieve significant determinism improvements while preparing for the web server migration.

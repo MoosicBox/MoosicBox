@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::create_dir_all, path::Path};
+use std::{collections::BTreeMap, fs::create_dir_all, path::Path};
 
 use anyhow::Error;
 use swc_bundler::{Bundle, Bundler, Load, ModuleData, ModuleRecord, ModuleType};
@@ -46,10 +46,10 @@ pub fn bundle(target: &Path, out: &Path, minify: bool) {
         Box::new(Hook),
     );
 
-    let mut entries = HashMap::new();
+    let mut entries = BTreeMap::new();
     entries.insert("main".to_string(), FileName::Real(target.to_path_buf()));
 
-    let mut bundles = bundler.bundle(entries).unwrap();
+    let mut bundles = bundler.bundle(entries.into_iter().collect()).unwrap();
     println!("Bundled as {} bundles", bundles.len());
 
     if minify {

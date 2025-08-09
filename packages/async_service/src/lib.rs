@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-pub use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
+pub use std::{pin::Pin, sync::Arc, time::Duration};
 
 pub use async_trait::async_trait;
 pub use flume::{Receiver, RecvError, SendError, Sender, unbounded};
