@@ -14,6 +14,8 @@ pub struct SimulationRequest {
     pub query_string: String,
     pub headers: BTreeMap<String, String>,
     pub body: Option<Bytes>,
+    pub cookies: BTreeMap<String, String>,
+    pub remote_addr: Option<String>,
 }
 
 impl SimulationRequest {
@@ -25,6 +27,8 @@ impl SimulationRequest {
             query_string: String::new(),
             headers: BTreeMap::new(),
             body: None,
+            cookies: BTreeMap::new(),
+            remote_addr: None,
         }
     }
 
@@ -43,6 +47,24 @@ impl SimulationRequest {
     #[must_use]
     pub fn with_body(mut self, body: impl Into<Bytes>) -> Self {
         self.body = Some(body.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_cookies(mut self, cookies: impl IntoIterator<Item = (String, String)>) -> Self {
+        self.cookies.extend(cookies);
+        self
+    }
+
+    #[must_use]
+    pub fn with_cookie(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.cookies.insert(name.into(), value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_remote_addr(mut self, addr: impl Into<String>) -> Self {
+        self.remote_addr = Some(addr.into());
         self
     }
 }
@@ -82,6 +104,21 @@ impl SimulationStub {
     #[must_use]
     pub const fn body(&self) -> Option<&Bytes> {
         self.request.body.as_ref()
+    }
+
+    #[must_use]
+    pub fn cookie(&self, name: &str) -> Option<&str> {
+        self.request.cookies.get(name).map(String::as_str)
+    }
+
+    #[must_use]
+    pub const fn cookies(&self) -> &BTreeMap<String, String> {
+        &self.request.cookies
+    }
+
+    #[must_use]
+    pub fn remote_addr(&self) -> Option<&str> {
+        self.request.remote_addr.as_deref()
     }
 }
 

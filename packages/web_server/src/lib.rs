@@ -19,6 +19,8 @@ pub use utoipa;
 #[cfg(feature = "actix")]
 mod actix;
 
+pub mod handler;
+
 #[cfg(feature = "openapi")]
 pub mod openapi;
 
@@ -128,7 +130,11 @@ impl HttpRequest {
         match self {
             #[cfg(feature = "actix")]
             Self::Actix(x) => x.headers().get(name).and_then(|x| x.to_str().ok()),
-            Self::Stub(..) => unimplemented!("Stub can't access header with name={name}"),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => None,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.header(name),
+            },
         }
     }
 
@@ -137,7 +143,11 @@ impl HttpRequest {
         match self {
             #[cfg(feature = "actix")]
             Self::Actix(x) => x.path(),
-            Self::Stub(..) => unimplemented!(),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => "",
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.path(),
+            },
         }
     }
 
@@ -146,7 +156,101 @@ impl HttpRequest {
         match self {
             #[cfg(feature = "actix")]
             Self::Actix(x) => x.query_string(),
-            Self::Stub(..) => unimplemented!(),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => "",
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.query_string(),
+            },
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn method(&self) -> Method {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(x) => {
+                use actix_web::http::Method as ActixMethod;
+                match *x.method() {
+                    ActixMethod::GET => Method::Get,
+                    ActixMethod::POST => Method::Post,
+                    ActixMethod::PUT => Method::Put,
+                    ActixMethod::PATCH => Method::Patch,
+                    ActixMethod::DELETE => Method::Delete,
+                    ActixMethod::HEAD => Method::Head,
+                    ActixMethod::OPTIONS => Method::Options,
+                    ActixMethod::CONNECT => Method::Connect,
+                    _ => Method::Trace, // Default fallback for unknown methods
+                }
+            }
+            Self::Stub(stub) => match stub {
+                Stub::Empty => Method::Get,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => *sim.method(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub const fn body(&self) -> Option<&Bytes> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(_) => None, // Actix body is consumed during extraction
+            Self::Stub(stub) => match stub {
+                Stub::Empty => None,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.body(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn cookie(&self, name: &str) -> Option<String> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(x) => x.cookie(name).map(|c| c.value().to_string()),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => None,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.cookie(name).map(std::string::ToString::to_string),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn cookies(&self) -> std::collections::BTreeMap<String, String> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(x) => {
+                let mut cookies = std::collections::BTreeMap::new();
+                if let Ok(cookie_jar) = x.cookies() {
+                    for cookie in cookie_jar.iter() {
+                        cookies.insert(cookie.name().to_string(), cookie.value().to_string());
+                    }
+                }
+                cookies
+            }
+            Self::Stub(stub) => match stub {
+                Stub::Empty => std::collections::BTreeMap::new(),
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.cookies().clone(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn remote_addr(&self) -> Option<String> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(x) => x
+                .connection_info()
+                .peer_addr()
+                .map(std::string::ToString::to_string),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => None,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.remote_addr().map(std::string::ToString::to_string),
+            },
         }
     }
 
@@ -184,7 +288,11 @@ impl<'a> HttpRequestRef<'a> {
         match self {
             #[cfg(feature = "actix")]
             Self::Actix(x) => x.headers().get(name).and_then(|x| x.to_str().ok()),
-            Self::Stub(..) => unimplemented!("Stub can't access header with name={name}"),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => None,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.header(name),
+            },
         }
     }
 
@@ -193,7 +301,11 @@ impl<'a> HttpRequestRef<'a> {
         match self {
             #[cfg(feature = "actix")]
             Self::Actix(x) => x.path(),
-            Self::Stub(..) => unimplemented!(),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => "",
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.path(),
+            },
         }
     }
 
@@ -202,7 +314,101 @@ impl<'a> HttpRequestRef<'a> {
         match self {
             #[cfg(feature = "actix")]
             Self::Actix(x) => x.query_string(),
-            Self::Stub(..) => unimplemented!(),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => "",
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.query_string(),
+            },
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn method(&self) -> Method {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(x) => {
+                use actix_web::http::Method as ActixMethod;
+                match *x.method() {
+                    ActixMethod::GET => Method::Get,
+                    ActixMethod::POST => Method::Post,
+                    ActixMethod::PUT => Method::Put,
+                    ActixMethod::PATCH => Method::Patch,
+                    ActixMethod::DELETE => Method::Delete,
+                    ActixMethod::HEAD => Method::Head,
+                    ActixMethod::OPTIONS => Method::Options,
+                    ActixMethod::CONNECT => Method::Connect,
+                    _ => Method::Trace, // Default fallback for unknown methods
+                }
+            }
+            Self::Stub(stub) => match stub {
+                Stub::Empty => Method::Get,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => *sim.method(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub const fn body(&self) -> Option<&Bytes> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(_) => None, // Actix body is consumed during extraction
+            Self::Stub(stub) => match stub {
+                Stub::Empty => None,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.body(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn cookie(&self, name: &str) -> Option<String> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(x) => x.cookie(name).map(|c| c.value().to_string()),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => None,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.cookie(name).map(std::string::ToString::to_string),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn cookies(&self) -> std::collections::BTreeMap<String, String> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(x) => {
+                let mut cookies = std::collections::BTreeMap::new();
+                if let Ok(cookie_jar) = x.cookies() {
+                    for cookie in cookie_jar.iter() {
+                        cookies.insert(cookie.name().to_string(), cookie.value().to_string());
+                    }
+                }
+                cookies
+            }
+            Self::Stub(stub) => match stub {
+                Stub::Empty => std::collections::BTreeMap::new(),
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.cookies().clone(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn remote_addr(&self) -> Option<String> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix(x) => x
+                .connection_info()
+                .peer_addr()
+                .map(std::string::ToString::to_string),
+            Self::Stub(stub) => match stub {
+                Stub::Empty => None,
+                #[cfg(any(feature = "simulator", not(feature = "actix")))]
+                Stub::Simulator(sim) => sim.remote_addr().map(std::string::ToString::to_string),
+            },
         }
     }
 
@@ -553,6 +759,20 @@ impl Route {
             path: path.into(),
             method,
             handler: std::sync::Arc::new(Box::new(handler)),
+        }
+    }
+
+    #[must_use]
+    pub fn with_handler<H>(method: Method, path: impl Into<String>, handler: H) -> Self
+    where
+        H: crate::handler::IntoHandler<()> + Send + Sync + 'static,
+        H::Future: Send + 'static,
+    {
+        let handler_fn = handler.into_handler();
+        Self {
+            path: path.into(),
+            method,
+            handler: std::sync::Arc::new(Box::new(move |req| Box::pin(handler_fn(req)))),
         }
     }
 
