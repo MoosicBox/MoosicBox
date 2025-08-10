@@ -866,18 +866,25 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
 - ⏳ Body reading (0/4 tasks)
 - ⏳ Streaming responses (0/5 tasks)
 
-**Phase 3E: Middleware** - 0/15 tasks completed (0%)
+**Phase 3E: Extensible Middleware** - 0/25 tasks completed (0%)
 
-- ⏳ Middleware trait (0/6 tasks)
-- ⏳ Built-in middleware (0/9 tasks)
+- ⏳ Core framework (0/8 tasks)
+- ⏳ Middleware patterns (0/9 tasks)
+- ⏳ Plugin system (0/6 tasks)
+- ⏳ Example implementations (0/2 tasks)
 
-**Phase 3F: Advanced Features** - 0/21 tasks completed (0%)
+**Phase 3F: Advanced Features** - 0/18 tasks completed (0%)
 
-- ⏳ WebSocket support (0/8 tasks)
+- ⏳ WebSocket support (0/5 tasks)
 - ⏳ Static file serving (0/8 tasks)
 - ⏳ Route guards (0/5 tasks)
 
-**Overall Progress: 4/82 tasks completed (5%)**
+**Phase 3G: Migration Helpers** - 0/12 tasks completed (0%)
+
+- ⏳ Actix compatibility (0/7 tasks)
+- ⏳ Migration tools (0/5 tasks)
+
+**Overall Progress: 4/87 tasks completed (5%)**
 
 ### Phase 3A: Foundation (IMMEDIATE PRIORITY)
 
@@ -1026,46 +1033,110 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
 - [ ] Support backpressure and flow control
 - [ ] Add examples for file streaming and SSE
 
-### Phase 3E: Middleware System
+### Phase 3E: Extensible Middleware System
 
-#### 3E.1: Middleware Trait
+**Goal**: Plugin-like middleware architecture for arbitrary functionality
 
-**Goal**: Support request/response transformation
+#### 3E.1: Core Middleware Framework
 
-- [ ] Define Middleware trait in `packages/web_server/src/middleware.rs`:
+**Goal**: Build extensible plugin system from first principles
+
+**Design Principles**:
+
+- Middleware as plugins - Any functionality can be added via middleware
+- Composable - Middleware can be stacked in any order
+- No built-in assumptions - Core knows nothing about specific middleware
+- Multiple patterns - Support different middleware styles for different use cases
+
+**Core Framework Tasks**:
+
+- [ ] Define core middleware traits in `packages/web_server/src/middleware.rs`:
+
     ```rust
-    pub trait Middleware {
-        async fn process(&self, req: HttpRequest, next: Next) -> Result<HttpResponse, Error>;
+    // Transform pattern for complex stateful middleware
+    pub trait Transform<S> {
+        type Transform: Service;
+        type Future: Future<Output = Result<Self::Transform, Error>>;
+        fn new_transform(&self, service: S) -> Self::Future;
+    }
+
+    // Service pattern for request handling
+    pub trait Service {
+        type Future: Future<Output = Result<HttpResponse, Error>>;
+        fn call(&self, req: HttpRequest) -> Self::Future;
+    }
+
+    // Layer pattern for simple wrapping middleware
+    pub trait Layer<S> {
+        type Service;
+        fn layer(&self, inner: S) -> Self::Service;
     }
     ```
-- [ ] Create Next struct for calling next middleware in chain
-- [ ] Add `wrap()` method to Scope and Route
-- [ ] Implement middleware chain execution
-- [ ] Support middleware ordering and error handling
-- [ ] Add `wrap_fn()` for closure-based middleware
 
-#### 3E.2: Built-in Middleware
+- [ ] Create middleware composition/chaining system
+- [ ] Support middleware ordering and dependencies
+- [ ] Enable both sync and async middleware
+- [ ] Add middleware configuration system
+- [ ] Create middleware builder helpers (`from_fn`, factories)
+- [ ] Support middleware state and context passing
 
-**Goal**: Common middleware implementations
+#### 3E.2: Middleware Patterns
 
-- [ ] **CORS Middleware**:
-    - [ ] Port existing `moosicbox_web_server_cors` to new middleware system
-    - [ ] Support preflight requests (OPTIONS)
-    - [ ] Configurable origins, methods, headers
-- [ ] **Compression Middleware**:
-    - [ ] Implement gzip compression
-    - [ ] Add brotli support
-    - [ ] Content-type based compression rules
-    - [ ] Size threshold configuration
-- [ ] **Logging Middleware**:
-    - [ ] Request/response logging (ApiLogger pattern)
-    - [ ] Timing information
-    - [ ] Configurable log levels
-    - [ ] Structured logging support
-- [ ] **Authentication Middleware**:
-    - [ ] Token validation helpers
-    - [ ] Session management
-    - [ ] Role-based access control
+**Goal**: Support multiple ways to create custom middleware
+
+- [ ] **Transform Pattern** (for complex stateful middleware):
+    - [ ] Factory-based middleware creation
+    - [ ] Shared state management
+    - [ ] Lifecycle hooks (startup, shutdown)
+- [ ] **Layer Pattern** (for simple wrapping middleware):
+    - [ ] Simple request/response transformation
+    - [ ] Minimal boilerplate for common cases
+- [ ] **Functional Pattern** (for quick inline middleware):
+    - [ ] `from_fn()` helper for closure-based middleware
+    - [ ] Async closure support
+    - [ ] Context passing between middleware
+- [ ] **Factory Pattern** (for configurable middleware):
+    - [ ] Configuration-driven middleware creation
+    - [ ] Runtime middleware registration
+    - [ ] Parameterized middleware builders
+
+#### 3E.3: Plugin System Features
+
+**Goal**: Enable true extensibility and third-party middleware
+
+- [ ] **Middleware Composition**:
+    - [ ] Arbitrary middleware stacking: `app.wrap(A).wrap(B).wrap(C)`
+    - [ ] Conditional middleware application
+    - [ ] Per-route vs per-scope middleware
+- [ ] **Extension Points**:
+    - [ ] Before request processing hooks
+    - [ ] After request processing hooks
+    - [ ] Error handling hooks
+    - [ ] Request/response transformation points
+    - [ ] Custom context injection
+- [ ] **Third-party Support**:
+    - [ ] Standard middleware interface for external crates
+    - [ ] Documentation for creating custom middleware
+    - [ ] Examples of complex middleware patterns
+
+#### 3E.4: Example Implementations
+
+**Goal**: Demonstrate patterns, not provide required features
+
+These are **educational examples** showing how to use the framework:
+
+- [ ] **Example: Request ID Middleware**:
+    - [ ] Shows context injection pattern
+    - [ ] Demonstrates state passing between middleware
+- [ ] **Example: Timing Middleware**:
+    - [ ] Shows response transformation
+    - [ ] Demonstrates async middleware patterns
+- [ ] **Example: Echo Middleware**:
+    - [ ] Shows request inspection
+    - [ ] Demonstrates simple Layer pattern
+- [ ] **Example: Conditional Middleware**:
+    - [ ] Shows predicate-based middleware application
+    - [ ] Demonstrates middleware composition
 
 ### Phase 3F: Advanced Features
 
@@ -1085,10 +1156,6 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
     - [ ] Define WebSocketHandler trait
     - [ ] Support async message handling
     - [ ] Add automatic ping/pong heartbeat
-- [ ] **Compatibility Layer**:
-    - [ ] Support existing actix-ws patterns
-    - [ ] Implement StreamHandler compatibility
-    - [ ] Migrate existing WebSocket handlers
 
 #### 3F.2: Static File Serving
 
@@ -1126,6 +1193,44 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
     - [ ] Add guard support to Route and Scope
     - [ ] Support multiple guards per route
     - [ ] Proper error handling for guard failures
+
+### Phase 3G: Migration Helpers
+
+**Goal**: Ease migration from existing frameworks (NOT core architecture)
+
+#### 3G.1: Actix Compatibility Layer
+
+**Goal**: Bridge existing actix-web patterns during migration
+
+- [ ] **Actix Middleware Adapter**:
+    - [ ] Wrapper for existing actix middleware
+    - [ ] Bridge actix Transform trait to moosicbox Transform
+    - [ ] Handle actix-specific types and patterns
+- [ ] **WebSocket Compatibility**:
+    - [ ] Support existing actix-ws patterns
+    - [ ] Implement StreamHandler compatibility
+    - [ ] Bridge WebSocketContext differences
+- [ ] **Type Adapters**:
+    - [ ] Convert between actix and moosicbox types
+    - [ ] Handle request/response differences
+    - [ ] Support gradual migration patterns
+
+#### 3G.2: Migration Tools
+
+**Goal**: Automated migration assistance
+
+- [ ] **Code Migration Tools**:
+    - [ ] Automated import replacement
+    - [ ] Handler signature conversion
+    - [ ] Middleware registration updates
+- [ ] **Migration Guides**:
+    - [ ] Step-by-step migration documentation
+    - [ ] Common pattern conversions
+    - [ ] Troubleshooting guide
+- [ ] **Validation Tools**:
+    - [ ] Verify migration completeness
+    - [ ] Performance comparison tools
+    - [ ] Compatibility testing helpers
 
 ### Migration Strategy
 
