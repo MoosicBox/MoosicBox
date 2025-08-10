@@ -1283,59 +1283,101 @@ These are **educational examples** showing how to use the framework:
 
 ### Execution Priority & Next Steps
 
-#### Immediate Actions (Phase 3A.2 - Remove Send Requirement)
+**IMPORTANT**: The phases are organized logically for understanding, but should be executed in a different order based on technical dependencies.
 
-**CRITICAL**: This unblocks clean async function handlers
+#### Recommended Execution Order
 
-1. **First**: Remove Send from Future bound in handler.rs
-2. **Second**: Update HandlerFn type alias
-3. **Third**: Run clippy to verify no warnings
-4. **Fourth**: Test async function handlers work
+**Phase 3B → 3C.1 → 3A → 3C.2+ → 3D+ → Migration**
 
-#### Short Term (Phase 3A.3 - Fix Examples)
+This order builds the foundation first, then adds features that depend on it.
 
-**IMPORTANT**: Demonstrates actual improvements
+#### Step 1: Core Handler Infrastructure (Phase 3B)
 
-1. Fix compilation errors in examples
-2. Show real before/after improvement
-3. Validate examples build successfully
+**CRITICAL**: This is the actual foundation that enables everything else
 
-#### Medium Term (Phase 3B - Multiple Handlers)
+1. **Create core traits without Send requirement**:
+    - Define `IntoHandler` trait
+    - Define `FromRequest` trait
+    - Implement 0-parameter handler support
+2. **Add identity extractor**:
+    - Implement `FromRequest` for `HttpRequest` itself
+    - Test that basic pattern works
+3. **Add multi-parameter support**:
+    - Implement 1-parameter and 2-parameter handlers
+    - Test with simple extractors
+4. **Create macro for 0-16 implementations**:
+    - Generate all handler implementations via macro
+    - Test compilation and basic functionality
 
-**FOUNDATION**: Enables Axum-style extractors
+#### Step 2: First Real Extractor (Phase 3C.1)
 
-1. Create macro for 0-16 parameter implementations
-2. Define FromRequest trait
-3. Test with simple extractors
+**PROOF OF CONCEPT**: Proves the extractor system works
 
-#### Long Term (Phase 3C+ - Full Feature Set)
+1. Implement `Query<T>` extractor (100+ uses in codebase)
+2. Test with existing query parameter patterns
+3. Validate that `fn handler(Query(params): Query<MyParams>)` works
+4. Document the improvement over manual parsing
 
-**MIGRATION**: Enables package migration
+#### Step 3: Examples and Documentation (Phase 3A)
 
-1. Implement Query, Json, Path extractors
-2. Add middleware system
-3. Implement WebSocket support
-4. Begin package migration
+**VALIDATION**: Now the improvements are real and visible
 
-### Success Criteria
+1. Update examples to show actual improvements
+2. Create before/after comparisons
+3. Test all examples compile and run
+4. Document migration patterns
 
-- [ ] **Phase 3A Complete**: Clean async handlers work without Box::pin
-- [ ] **Phase 3B Complete**: Functions with extractors compile and run
-- [ ] **Phase 3C Complete**: Basic extractors (Query, Json, Path) functional
-- [ ] **Phase 3D Complete**: Body reading and streaming responses work
-- [ ] **Phase 3E Complete**: Middleware system supports common patterns
-- [ ] **Phase 3F Complete**: WebSocket and static file serving functional
-- [ ] **Migration Ready**: First package successfully migrated from actix-web
+#### Step 4: Remaining Extractors (Phase 3C.2+)
 
-### Current Blocker
+**EXPANSION**: Add remaining high-value extractors
 
-**Phase 3A.2 (Remove Send Requirement)** is the critical path. Until this is complete:
+1. **Path extractor** (50+ uses) - requires route pattern parsing
+2. **Json extractor** (73+ uses) - requires body reading support
+3. **Additional extractors** as needed
 
-- Async function handlers don't work
-- Examples show misleading patterns
-- Cannot demonstrate real improvements
+#### Step 5: Test Migration
 
-**Recommendation**: Focus all effort on completing Phase 3A before moving to Phase 3B.
+**VALIDATION**: Prove the system works end-to-end
+
+1. **Test Package Migration**: Migrate `packages/menu/` or `packages/config/`
+2. **Document Migration**: Create step-by-step migration guide
+3. **Validate Improvements**: Measure code reduction and clarity
+
+### Why This Order?
+
+#### Technical Dependencies
+
+- **3B enables 3A**: Multiple handler implementations make signatures clean
+- **3B enables 3C**: FromRequest trait is required for extractors
+- **3C.1 proves 3B**: Query extractor validates the foundation works
+- **3A becomes automatic**: Once extractors work, signatures are naturally clean
+
+#### Value Delivery
+
+- **3B alone**: Enables clean 0-parameter handlers immediately
+- **3B + 3C.1**: Shows dramatic improvement with extractors
+- **3A**: Documents and showcases the improvements
+- **Migration**: Proves real-world value
+
+### Success Criteria (Revised Order)
+
+- [ ] **Phase 3B Complete**: Multiple handler implementations work, 0-16 parameters supported
+- [ ] **Phase 3C.1 Complete**: Query extractor functional, shows real improvement
+- [ ] **Phase 3A Complete**: Examples updated, improvements documented
+- [ ] **Phase 3C.2+ Complete**: Json and Path extractors functional
+- [ ] **Test Migration Complete**: One package successfully migrated
+- [ ] **Phase 3D+ Complete**: Advanced features as needed for migration
+
+### Current Priority
+
+**Phase 3B (Multiple Handler Implementations)** is the critical path. This is the foundation that enables:
+
+- Clean async function handlers
+- Extractor support
+- Removal of Box::pin boilerplate
+- All improvements in one coherent system
+
+**Recommendation**: Start with Phase 3B core infrastructure, then add Query extractor to prove it works, then update examples to show the improvements.
 
 ### Phase 4: Web Server Migration
 
