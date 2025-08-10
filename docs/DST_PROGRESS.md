@@ -816,9 +816,19 @@ These tasks have no interdependencies and can execute simultaneously.
 
 **Implementation:** Added sorting after collecting entries for deterministic directory iteration
 
-#### 2.2 Create deterministic file iteration helpers
+#### 2.2 Create deterministic file iteration helpers ✅ COMPLETED
 
-- [ ] Add to `switchy_fs` package: `read_dir_sorted()`, `walk_dir_sorted()`
+- [x] Add to `switchy_fs` package: `read_dir_sorted()`, `walk_dir_sorted()`
+- [x] Add both sync and async versions for all implementations
+- [x] Support standard, tokio, and simulator modes
+- [x] Automatic sorting by filename for deterministic iteration
+
+**Functions added:**
+
+- `switchy_fs::sync::read_dir_sorted()` - Sync directory reading with sorting
+- `switchy_fs::sync::walk_dir_sorted()` - Sync recursive directory walking with sorting
+- `switchy_fs::unsync::read_dir_sorted()` - Async directory reading with sorting
+- `switchy_fs::unsync::walk_dir_sorted()` - Async recursive directory walking with sorting
 
 ### Phase 3: Web Server Preparation
 
@@ -1119,19 +1129,95 @@ Consider using fixed-point arithmetic or controlled rounding for determinism
 - Error handling (deterministic exits)
 - Optional features (profiling)
 
-### Phase 7: Deadlock Prevention (Optional)
+### Phase 7: File System Simulator Enhancement
+
+**Goal: Create a robust file system simulator for comprehensive testing**
+
+**Status: ⏳ Planned**
+
+The current `switchy_fs` simulator mode returns empty vectors for `read_dir_sorted()` and `walk_dir_sorted()`, making it unsuitable for testing file system operations. This phase will create a comprehensive virtual file system that can simulate real directory structures and file operations.
+
+#### 7.1 Design Virtual File System Architecture
+
+- [ ] Create `VirtualFileSystem` struct to track directory hierarchies
+- [ ] Design `VirtualDirEntry` type that mimics `std::fs::DirEntry`
+- [ ] Implement file metadata simulation (size, modified time, file type)
+- [ ] Add path normalization and validation utilities
+
+#### 7.2 Implement Core Virtual File System Operations
+
+**Files to enhance:**
+
+- [ ] `packages/fs/src/simulator.rs` - Core virtual file system implementation
+- [ ] Add `VirtualFileSystem::new()` constructor
+- [ ] Add `add_file(path, metadata)` and `add_dir(path)` methods
+- [ ] Add `remove_file(path)` and `remove_dir(path)` methods
+- [ ] Implement `exists(path)`, `is_file(path)`, `is_dir(path)` queries
+
+#### 7.3 Enhance Directory Operations
+
+**Update existing functions in `packages/fs/src/simulator.rs`:**
+
+- [ ] `read_dir_sorted()` - Return virtual directory entries instead of empty Vec
+- [ ] `walk_dir_sorted()` - Implement recursive directory traversal
+- [ ] Add proper error handling for non-existent paths
+- [ ] Maintain deterministic ordering (already sorted by filename)
+
+#### 7.4 Add File System State Management
+
+- [ ] Create `SimulatorFileSystem` global state with thread-safe access
+- [ ] Add `reset_filesystem()` function for test isolation
+- [ ] Add `populate_from_real_fs(path)` for testing against real directories
+- [ ] Add `dump_filesystem()` for debugging virtual state
+
+#### 7.5 Create Testing Utilities
+
+**New module: `packages/fs/src/testing.rs`**
+
+- [ ] `create_test_filesystem()` - Set up common test directory structures
+- [ ] `assert_filesystem_state()` - Verify virtual filesystem contents
+- [ ] `simulate_music_library()` - Create realistic music directory structure
+- [ ] `simulate_config_dirs()` - Create typical configuration directories
+
+#### 7.6 Integration with Existing Packages
+
+**Update packages that use file system operations:**
+
+- [ ] `packages/scan/` - Test music scanning with virtual directories
+- [ ] `packages/files/` - Test file serving with virtual files
+- [ ] `packages/hyperchad/app/` - Test resource copying with virtual assets
+- [ ] Add comprehensive test coverage using virtual file system
+
+#### 7.7 Documentation and Examples
+
+- [ ] Add `FILESYSTEM_SIMULATOR.md` documentation
+- [ ] Create examples showing virtual file system usage
+- [ ] Document testing patterns for file system operations
+- [ ] Add performance benchmarks comparing real vs virtual operations
+
+**Benefits of Enhanced Simulator:**
+
+- **Deterministic Testing**: Consistent file system state across test runs
+- **Isolation**: Tests don't interfere with real file system
+- **Speed**: Virtual operations are faster than real file I/O
+- **Flexibility**: Can simulate edge cases (permissions, missing files, etc.)
+- **Debugging**: Can inspect and modify virtual state during tests
+
+**Implementation Priority**: Medium - Improves testing capabilities but doesn't affect production determinism
+
+### Phase 8: Deadlock Prevention (Optional)
 
 **Goal: Prevent deadlocks in concurrent code**
 
 **Note**: This phase is optional and focused on preventing deadlocks rather than improving determinism. Can be done after core DST work is complete.
 
-#### 7.1 Document global lock hierarchy
+#### 8.1 Document global lock hierarchy
 
 - [ ] Create `LOCK_HIERARCHY.md` documenting all Arc<RwLock> usage
 - [ ] Focus on: WebSocket connections, player state, cache maps
 - [ ] Identify lock acquisition patterns and potential conflicts
 
-#### 7.2 Add deadlock detection in debug builds
+#### 8.2 Add deadlock detection in debug builds
 
 - [ ] Add deadlock detection to all RwLock acquisitions in debug mode
 - [ ] Priority packages: `ws`, `server`, `tunnel_server`, `player`

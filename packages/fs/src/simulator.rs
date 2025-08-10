@@ -220,6 +220,28 @@ pub mod sync {
         Ok(())
     }
 
+    /// Read directory entries and return them sorted by filename for deterministic iteration
+    ///
+    /// Note: In simulator mode, this returns an empty list as the simulator only tracks individual files
+    ///
+    /// # Errors
+    ///
+    /// * Never
+    pub fn read_dir_sorted<P: AsRef<Path>>(_path: P) -> std::io::Result<Vec<std::fs::DirEntry>> {
+        Ok(Vec::new())
+    }
+
+    /// Recursively walk directory tree and return all entries sorted by path for deterministic iteration
+    ///
+    /// Note: In simulator mode, this returns an empty list as the simulator only tracks individual files
+    ///
+    /// # Errors
+    ///
+    /// * Never
+    pub fn walk_dir_sorted<P: AsRef<Path>>(_path: P) -> std::io::Result<Vec<std::fs::DirEntry>> {
+        Ok(Vec::new())
+    }
+
     #[cfg(test)]
     mod test {
         use std::{
@@ -422,6 +444,38 @@ pub mod unsync {
     /// * Never
     pub async fn remove_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         super::sync::remove_dir_all(path)
+    }
+
+    /// Read directory entries and return them sorted by filename for deterministic iteration
+    ///
+    /// Note: In simulator mode, this returns an empty list as the simulator only tracks individual files
+    ///
+    /// # Errors
+    ///
+    /// * Never
+    pub async fn read_dir_sorted<P: AsRef<Path>>(
+        path: P,
+    ) -> std::io::Result<Vec<tokio::fs::DirEntry>> {
+        // In simulator mode, we don't have actual directories, so return empty
+        // This is a limitation of the current simulator implementation
+        let _ = path; // Suppress unused parameter warning
+        Ok(Vec::new())
+    }
+
+    /// Recursively walk directory tree and return all entries sorted by path for deterministic iteration
+    ///
+    /// Note: In simulator mode, this returns an empty list as the simulator only tracks individual files
+    ///
+    /// # Errors
+    ///
+    /// * Never
+    pub async fn walk_dir_sorted<P: AsRef<Path>>(
+        path: P,
+    ) -> std::io::Result<Vec<tokio::fs::DirEntry>> {
+        // In simulator mode, we don't have actual directories, so return empty
+        // This is a limitation of the current simulator implementation
+        let _ = path; // Suppress unused parameter warning
+        Ok(Vec::new())
     }
 
     #[cfg(test)]
