@@ -830,656 +830,203 @@ These tasks have no interdependencies and can execute simultaneously.
 - `switchy_fs::unsync::read_dir_sorted()` - Async directory reading with sorting
 - `switchy_fs::unsync::walk_dir_sorted()` - Async recursive directory walking with sorting
 
-### Phase 3: Web Server Enhancement (Incremental Plan)
+## Phase 3: Enhanced Web Server - Feature Parity with Actix-Web
 
-**Goal: Create a smooth migration path from actix-web to moosicbox_web_server**
+### Overview
 
-**Status: ⏳ Planning**
+Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web across 50+ packages.
 
-This phase is broken into small, incremental improvements that can be done one at a time. Each step adds value and moves us closer to full actix-web abstraction.
+**Key Architecture Decision**: Follow Actix's single-threaded-per-worker model
 
-#### 3.1 Core Route Definition Enhancements
+- Remove Send requirements from futures (matches Actix design)
+- Use Rc instead of Arc where possible (better performance)
+- Keep handlers Send+Sync (needed for cloning to workers)
 
-**Goal: Make route definition as clean as actix while keeping builder pattern**
+### Phase 3A: Foundation (IMMEDIATE PRIORITY)
 
-##### 3.1.1 Simplify Handler Signatures
+#### 3A.1: Fix Handler Signatures ✅
 
-**Current Problem:**
+**Status**: COMPLETED
+**Problem**: Verbose `Box::pin(async move { ... })` pattern everywhere
+**Solution**: IntoHandler trait for automatic conversion
+**Files**:
+
+- `packages/web_server/src/handler.rs` - Created IntoHandler trait
+- `packages/web_server/src/lib.rs` - Updated Route to use IntoHandler
+
+#### 3A.2: Remove Send Requirement (NEXT)
+
+**Status**: READY TO IMPLEMENT
+**Problem**: HttpRequest contains Rc<actix_web::HttpRequestInner> which isn't Send
+**Solution**: Remove Send bound from futures (match Actix's architecture)
+**Changes**:
+
 ```rust
-// Current moosicbox_web_server requires:
-.get("/path", |req| Box::pin(async move {
-    Ok(HttpResponse::ok().with_body("Hello"))
-}))
+// handler.rs - Remove Send from Future
+impl<F, Fut> IntoHandler for F
+where
+    F: Fn(HttpRequest) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<HttpResponse, Error>> + 'static,  // No Send!
 ```
 
-**Target Solution:**
-```rust
-// Should support:
-.get("/path", handle_request)
+**Benefits**:
 
-async fn handle_request(req: HttpRequest) -> Result<HttpResponse, Error> {
-    Ok(HttpResponse::ok().with_body("Hello"))
-}
+- Enables clean async function handlers
+- Aligns with Actix's performance model
+- Solves HttpRequest Send problem
+
+#### 3A.3: Fix Example Compilation
+
+**Status**: READY TO IMPLEMENT
+**Problems**:
+
+1. `nested_get` example missing HttpRequest import and type annotation
+2. `simple_get` example doesn't show real improvement (both patterns identical)
+   **Files**:
+
+- `packages/web_server/examples/nested_get/src/main.rs`
+- `packages/web_server/examples/simple_get/src/main.rs`
+
+### Phase 3B: Multiple Handler Implementations (Axum-style)
+
+#### 3B.1: Core Infrastructure
+
+**Goal**: Support 0-16 parameter handlers with automatic extraction
+**Implementation**:
+
+```rust
+// Generate via macro
+impl<F, Fut> IntoHandler for F where F: Fn() -> Fut
+impl<F, Fut, T1> IntoHandler for F where F: Fn(T1) -> Fut, T1: FromRequest
+impl<F, Fut, T1, T2> IntoHandler for F where F: Fn(T1, T2) -> Fut
+// ... up to 16 parameters
 ```
 
-**Implementation Tasks:**
-- [ ] Create `HandlerFn` type alias: `type HandlerFn = fn(HttpRequest) -> impl Future<Output = Result<HttpResponse, Error>>`
-- [ ] Add `IntoHandler` trait that converts async functions to boxed futures automatically
-- [ ] Implement for all Fn types that return futures
-- [ ] Support sync handlers that return immediate results
-- [ ] Add handler wrapper that does the boxing internally
-- [ ] Update Route struct to use new handler types
-- [ ] Maintain backward compatibility with existing boxed handlers
+#### 3B.2: FromRequest Trait
 
-**Files to modify:**
-- `packages/web_server/src/lib.rs` - Route and handler definitions
-- Create new `packages/web_server/src/handler.rs` for handler traits
+**Goal**: Define extraction interface
 
-##### 3.1.2 Add Route Attribute Macros
-
-**Current actix usage found:**
-```rust
-// From packages/scan/src/api.rs
-#[actix_web::get("/scan-origins")]
-async fn get_scan_origins_endpoint() -> Result<Json<Value>> { ... }
-
-#[actix_web::post("/scan/run")]
-async fn run_scan_endpoint(query: web::Query<RunScanQuery>) -> Result<Json<Value>> { ... }
-```
-
-**Target macro API:**
-```rust
-#[moosicbox::get("/scan-origins")]
-async fn get_scan_origins() -> Result<Json<Value>> { ... }
-
-#[moosicbox::post("/scan/run")]
-async fn run_scan(query: Query<RunScanQuery>) -> Result<Json<Value>> { ... }
-```
-
-**Implementation Tasks:**
-- [ ] Create new crate `moosicbox_web_server_macros` with proc-macro = true
-- [ ] Implement `#[get]`, `#[post]`, `#[put]`, `#[delete]`, `#[patch]`, `#[head]` macros
-- [ ] Parse path with regex to extract parameters: `/user/{id}/posts/{post_id}`
-- [ ] Generate wrapper function that extracts path params
-- [ ] Support query string in path: `/search?q={query}`
-- [ ] Generate `__bind_services()` function that collects all marked endpoints
-- [ ] Support route guards/filters in macro: `#[get("/admin", guard = "is_admin")]`
-- [ ] Support multiple paths: `#[get("/", "/index", "/home")]`
-- [ ] Add OpenAPI generation hints in macro
-
-**Macro internals:**
-- Parse function signature to identify extractors
-- Generate extractor calls in order
-- Handle error responses from extractors
-- Create route registration code
-
-##### 3.1.3 Service Registration Pattern
-
-**Current actix pattern (from 50+ packages):**
-```rust
-// From packages/config/src/api/mod.rs
-pub fn bind_services<T>(scope: Scope<T>) -> Scope<T> {
-    scope
-        .service(get_profiles_endpoint)
-        .service(create_profile_endpoint)
-}
-
-// From packages/server/src/lib.rs
-let app = app.service(moosicbox_config::api::bind_services(
-    actix_web::web::scope("/config")
-));
-```
-
-**Implementation Tasks:**
-- [ ] Add `.service()` method to Scope that takes a Route
-- [ ] Support `.service()` with function that has route macro
-- [ ] Implement `bind_services()` pattern generator in macros
-- [ ] Support nested scopes with prefix paths
-- [ ] Allow service configuration (middleware, guards)
-- [ ] Support conditional service registration
-- [ ] Maintain service registration order
-
-#### 3.2 Extractor System
-
-**Goal: Clean data extraction from requests without manual parsing**
-
-##### 3.2.1 Basic Extractors
-
-**Current actix usage analysis:**
-- `web::Query<T>` - 100+ uses across 30 files
-- `web::Json<T>` - 50+ uses for request/response
-- `web::Path<T>` - 20+ uses for URL segments
-- `web::Data<T>` - 50+ uses for shared state
-
-**Query Extractor Implementation:**
-```rust
-// Used like: query: web::Query<YtTrackFileUrlQuery>
-// From packages/yt/src/api.rs (20+ similar uses)
-
-pub struct Query<T>(pub T);
-
-impl<T: DeserializeOwned> Extractor for Query<T> {
-    type Error = ExtractorError;
-    
-    async fn extract(req: &HttpRequest) -> Result<Self, Self::Error> {
-        // Parse query string from req.query_string()
-        // Use serde_urlencoded or existing qs crate
-        // Return Query(parsed_value)
-    }
-}
-```
-
-**Json Extractor Implementation:**
-```rust
-// Used for request bodies and responses
-pub struct Json<T>(pub T);
-
-impl<T: DeserializeOwned> Extractor for Json<T> {
-    async fn extract(req: &HttpRequest) -> Result<Self, Self::Error> {
-        // Read body bytes
-        // Parse with serde_json
-        // Handle content-type validation
-        // Return Json(parsed_value)
-    }
-}
-```
-
-**Path Extractor Implementation:**
-```rust
-// For /user/{id}/post/{post_id} patterns
-pub struct Path<T>(pub T);
-
-impl<T: DeserializeOwned> Extractor for Path<T> {
-    async fn extract(req: &HttpRequest) -> Result<Self, Self::Error> {
-        // Get path pattern from route definition
-        // Extract segments from actual path
-        // Build HashMap of name->value
-        // Deserialize into T
-    }
-}
-```
-
-**Implementation Tasks:**
-- [ ] Create `Extractor` trait with async extract method
-- [ ] Implement Query with proper error messages for malformed queries
-- [ ] Implement Json with size limits (default 256KB)
-- [ ] Implement Path with segment extraction logic
-- [ ] Add ExtractorError type with common variants
-- [ ] Support optional extractors (Option<Query<T>>)
-- [ ] Add extractor configuration (JsonConfig, QueryConfig)
-- [ ] Implement tuple extractors for multiple: `(Query<T>, Json<U>)`
-
-##### 3.2.2 Advanced Extractors
-
-**Data Extractor (App State):**
-```rust
-// Used heavily for database connections, shared state
-// From packages/server/src/lib.rs
-.app_data(actix_web::web::Data::new(metrics_handler.clone()))
-```
-
-**Implementation Tasks:**
-- [ ] Implement Data<T> for shared application state
-- [ ] Add app_data() method to WebServerBuilder
-- [ ] Support multiple Data<T> types
-- [ ] Implement Arc wrapping internally
-- [ ] Add Data extraction from request extensions
-
-**Form Extractor:**
-- [ ] Parse application/x-www-form-urlencoded
-- [ ] Parse multipart/form-data
-- [ ] Support file uploads in forms
-- [ ] Add size and count limits
-
-**Header Extractor:**
-- [ ] Extract specific header values
-- [ ] Support typed header parsing
-- [ ] Handle missing headers gracefully
-
-**Bytes/Payload Extractors:**
-- [ ] Raw bytes for binary data
-- [ ] Streaming payload for large uploads
-- [ ] Backpressure support
-
-##### 3.2.3 Custom Extractors
-
-**Current custom extractors found:**
-```rust
-// From packages/auth/src/lib.rs
-impl FromRequest for NonTunnelRequestAuthorized { ... }
-impl FromRequest for TunnelRequestAuthorized { ... }
-
-// From packages/middleware/src/service_info.rs
-impl FromRequest for ServiceInfo { ... }
-```
-
-**FromRequest Trait:**
 ```rust
 pub trait FromRequest: Sized {
     type Error: Into<Error>;
-    type Future: Future<Output = Result<Self, Self::Error>>;
-    
+    type Future: Future<Output = Result<Self, Self::Error>>;  // No Send!
     fn from_request(req: &HttpRequest) -> Self::Future;
 }
 ```
 
-**Implementation Tasks:**
-- [ ] Define FromRequest trait matching actix pattern
-- [ ] Support async extraction
-- [ ] Add request extensions for passing data
-- [ ] Implement for common types (String, Bytes, etc.)
-- [ ] Add examples for auth extractors
-- [ ] Support extractor ordering/dependencies
-- [ ] Add macro for deriving FromRequest
-
-#### 3.3 Middleware System
-
-**Goal: Composable middleware pipeline**
-
-##### 3.3.1 Middleware Trait
-
-**Current middleware usage:**
-```rust
-// From packages/server/src/lib.rs
-let app = App::new()
-    .wrap(cors)
-    .wrap(metrics_handler.request_middleware())
-    .wrap(switchy_telemetry::RequestTracing::new())
-    .wrap(middleware::Compress::default())
-    .wrap(moosicbox_middleware::api_logger::ApiLogger::default());
-```
-
-**Middleware Trait Design:**
-```rust
-pub trait Middleware {
-    async fn process(
-        &self,
-        req: HttpRequest,
-        next: Next
-    ) -> Result<HttpResponse, Error>;
-}
-
-pub struct Next { ... }
-impl Next {
-    pub async fn call(self, req: HttpRequest) -> Result<HttpResponse, Error>;
-}
-```
-
-**Implementation Tasks:**
-- [ ] Design Middleware trait with before/after hooks
-- [ ] Implement wrap() method on Scope and Route
-- [ ] Create middleware chain executor
-- [ ] Support middleware ordering
-- [ ] Add wrap_fn() for closure middleware
-- [ ] Support per-route vs per-scope middleware
-- [ ] Implement middleware state/extensions
-
-##### 3.3.2 Common Middleware
-
-**CORS Middleware:**
-- [ ] Port existing moosicbox_web_server_cors
-- [ ] Support all CORS headers
-- [ ] Preflight request handling
-- [ ] Configurable origins, methods, headers
-
-**Compression:**
-- [ ] Gzip, Brotli, Deflate support
-- [ ] Content-type based compression
-- [ ] Size threshold configuration
-- [ ] Quality levels
-
-**Logging (ApiLogger pattern):**
-- [ ] Request/response logging
-- [ ] Timing information
-- [ ] Error logging
-- [ ] Configurable log levels
-- [ ] Structured logging support
-
-**Authentication:**
-- [ ] Token validation
-- [ ] Session management
-- [ ] Multiple auth strategies
-- [ ] Role-based access
-
-**Telemetry/Metrics:**
-- [ ] Request counting
-- [ ] Latency histograms
-- [ ] Error rates
-- [ ] OpenTelemetry integration
-
-##### 3.3.3 Custom Middleware Support
-
-- [ ] Support `wrap_fn()` for simple function middleware
-- [ ] Allow per-route and per-scope middleware
-- [ ] Middleware ordering guarantees
-
-#### 3.4 Error Handling
-
-**Goal: Automatic error-to-response conversion**
-
-##### 3.4.1 Error Response System
-
-**Current actix errors found (38+ files):**
-```rust
-use actix_web::error::{ErrorBadRequest, ErrorInternalServerError, ErrorUnauthorized};
-
-// Common pattern:
-.map_err(|e| ErrorInternalServerError(format!("Database error: {}", e)))?
-```
-
-**ResponseError Trait:**
-```rust
-pub trait ResponseError {
-    fn status_code(&self) -> StatusCode;
-    fn error_response(&self) -> HttpResponse;
-}
-```
-
-**Implementation Tasks:**
-- [ ] Define ResponseError trait
-- [ ] Auto-implement for common error types
-- [ ] JSON error response format
-- [ ] Error chain support
-- [ ] Debug vs production error messages
-- [ ] Error ID generation for tracking
-
-##### 3.4.2 Common Error Types
-
-**Implementation for each:**
-- [ ] ErrorBadRequest - 400 status, validation errors
-- [ ] ErrorUnauthorized - 401 status, auth failures  
-- [ ] ErrorForbidden - 403 status, permission denied
-- [ ] ErrorNotFound - 404 status, resource missing
-- [ ] ErrorConflict - 409 status, state conflicts
-- [ ] ErrorInternalServerError - 500 status, server errors
-- [ ] ErrorServiceUnavailable - 503 status, overload
-
-**Each error should:**
-- Include original error cause
-- Support custom messages
-- Generate appropriate status code
-- Format as JSON response
-- Include request ID
-
-#### 3.5 Response Types
-
-**Goal: Flexible response building**
-
-##### 3.5.1 Response Builder Enhancement
-
-**Current HttpResponse:**
-```rust
-HttpResponse::ok()
-    .with_body("content")
-    .with_location("/redirect")
-```
-
-**Enhancements needed:**
-- [ ] Content-Type helpers: `.json()`, `.html()`, `.text()`
-- [ ] Status shortcuts: `.created()`, `.accepted()`, `.no_content()`
-- [ ] Header builders: `.header()`, `.headers()`
-- [ ] Cookie support: `.cookie()`
-- [ ] Cache control: `.cache_control()`
-- [ ] CORS headers: `.allow_origin()`
-
-##### 3.5.2 Responder Trait
-
-**For custom return types:**
-```rust
-pub trait Responder {
-    fn respond_to(self, req: &HttpRequest) -> HttpResponse;
-}
-
-// Auto-implement for:
-impl Responder for String { ... }
-impl Responder for &str { ... }
-impl<T: Serialize> Responder for Json<T> { ... }
-impl Responder for Bytes { ... }
-```
-
-#### 3.6 Static File Serving
-
-**Goal: File serving with range requests**
-
-##### 3.6.1 Basic File Serving
-
-**Current usage (packages/files/src/api.rs):**
-```rust
-let file = actix_files::NamedFile::open_async(file_path).await?;
-```
-
-**NamedFile Implementation:**
-- [ ] Async file opening
-- [ ] MIME type detection from extension
-- [ ] Content-Disposition header
-- [ ] Last-Modified from file metadata
-- [ ] ETag generation
-- [ ] Conditional requests (If-None-Match, If-Modified-Since)
-
-##### 3.6.2 Advanced Features
-
-**Range Requests (critical for media):**
-- [ ] Parse Range header
-- [ ] Support single and multi-range
-- [ ] Generate 206 Partial Content
-- [ ] Content-Range headers
-- [ ] Handle invalid ranges
-
-**Implementation details:**
-- Support bytes=0-1023 format
-- Handle bytes=-1024 (last 1024 bytes)
-- Handle bytes=1024- (from 1024 to end)
-- Multi-range with multipart response
-
-#### 3.7 WebSocket Support
-
-**Goal: Real-time bidirectional communication**
-
-##### 3.7.1 WebSocket Abstraction
-
-**Current usage (11 files):**
-```rust
-// From packages/ws/src/ws.rs
-use actix_ws::WebsocketContext;
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketHandler { ... }
-```
-
-**WebSocket trait:**
-```rust
-pub trait WebSocketHandler {
-    async fn on_connect(&mut self, ctx: &mut WebSocketContext);
-    async fn on_message(&mut self, msg: Message, ctx: &mut WebSocketContext);
-    async fn on_close(&mut self, reason: CloseReason, ctx: &mut WebSocketContext);
-}
-```
-
-**Implementation Tasks:**
-- [ ] WebSocket upgrade handling
-- [ ] Message types (Text, Binary, Ping, Pong, Close)
-- [ ] Actor-based and callback-based APIs
-- [ ] Automatic ping/pong heartbeat
-- [ ] Connection lifecycle management
-- [ ] Backpressure handling
-
-##### 3.7.2 WebSocket Implementation
-
-**For actix-ws compatibility:**
-- [ ] Implement WebsocketContext
-- [ ] Support StreamHandler pattern
-- [ ] Binary and text frame handling
-- [ ] Close frame handling
-- [ ] Error recovery
-
-##### 3.7.3 WebSocket Context
-
-**Methods needed:**
-- [ ] `text()` - Send text message
-- [ ] `binary()` - Send binary message  
-- [ ] `ping()` - Send ping frame
-- [ ] `pong()` - Send pong frame
-- [ ] `close()` - Close connection
-- [ ] `stop()` - Stop actor
-
-#### 3.8 Server-Sent Events (SSE)
-
-**Goal: Server-to-client streaming**
-
-##### 3.8.1 SSE Implementation
-
-**Current usage (packages/hyperchad/renderer/html/actix/src/sse.rs):**
-```rust
-.content_type("text/event-stream")
-// Sending events like:
-Event::Data(EventData::new(body).event("view"))
-```
-
-**Event structure:**
-```rust
-pub struct Event {
-    pub id: Option<String>,
-    pub event: Option<String>,
-    pub data: String,
-    pub retry: Option<Duration>,
-}
-```
-
-**Implementation Tasks:**
-- [ ] SSE response type with text/event-stream
-- [ ] Event builder with id, event type, data
-- [ ] Automatic keep-alive with comments
-- [ ] Chunked transfer encoding
-- [ ] Event stream serialization
-
-##### 3.8.2 SSE Integration
-
-- [ ] Stream trait for event sources
-- [ ] Reconnection support with Last-Event-ID
-- [ ] Event buffering for slow clients
-- [ ] Compression support
-
-#### 3.9 Testing & Migration Tools
-
-**Goal: Smooth migration experience**
-
-##### 3.9.1 Compatibility Layer
-
-**Wrapper types for gradual migration:**
-```rust
-// Wrap actix types to work with new API
-pub struct ActixCompat<T>(pub T);
-
-impl From<actix_web::HttpRequest> for HttpRequest { ... }
-impl From<HttpResponse> for actix_web::HttpResponse { ... }
-```
-
-**Migration helpers:**
-- [ ] Type conversion functions
-- [ ] Macro to wrap actix handlers
-- [ ] Dual-mode service registration
-- [ ] Migration guide with examples
-
-##### 3.9.2 Testing Utilities
-
-**Test client:**
-```rust
-let client = TestClient::new(app);
-let response = client
-    .get("/api/test")
-    .header("Authorization", "Bearer token")
-    .json(&payload)
-    .send()
-    .await;
-assert_eq!(response.status(), 200);
-```
-
-**Testing tools:**
-- [ ] TestClient for integration tests
-- [ ] Mock request builder
-- [ ] Response assertions
-- [ ] WebSocket test client
-- [ ] SSE test client
-
-### Execution Priority
-
-**Phase 3A: Foundation (Do First)**
-
-1. Handler signature simplification (3.1.1)
-2. Basic extractors (3.2.1)
-3. Error response system (3.4.1)
-
-**Phase 3B: Core Features (Do Second)**
-
-1. Route attribute macros (3.1.2)
-2. Middleware trait (3.3.1)
-3. Advanced extractors (3.2.2)
-
-**Phase 3C: Advanced Features (Do Third)**
-
-1. WebSocket support (3.7)
-2. Static file serving (3.6)
-3. SSE support (3.8)
-
-**Phase 3D: Polish (Do Last)**
-
-1. Custom extractors (3.2.3)
-2. Testing utilities (3.9)
-3. Migration tools
+### Phase 3C: Basic Extractors
+
+#### 3C.1: Query Extractor
+
+**Usage**: `Query(params): Query<MyParams>`
+**Frequency**: 50+ uses in codebase
+**Implementation**: Parse from query string
+
+#### 3C.2: Json Extractor
+
+**Usage**: `Json(body): Json<MyBody>`
+**Frequency**: 73+ uses in codebase
+**Blocker**: Need body reading support first
+
+#### 3C.3: Path Extractor
+
+**Usage**: `Path(id): Path<u64>` or `Path((user, post)): Path<(u64, u64)>`
+**Frequency**: 50+ uses in codebase
+**Blocker**: Need route parameter parsing
+
+### Phase 3D: Body and Streaming
+
+#### 3D.1: Body Reading
+
+**Problem**: Can't read request body currently
+**Solution**: Add body extraction to HttpRequest
+**Enables**: Json extractor, form data, raw bytes
+
+#### 3D.2: Streaming Responses
+
+**Problem**: No streaming support
+**Solution**: Add HttpResponseStream variant
+**Use cases**: Large file downloads, SSE, chunked responses
+
+### Phase 3E: Middleware System
+
+#### 3E.1: Middleware Trait
+
+**Goal**: Support request/response transformation
+**Examples**: Authentication, logging, compression
+
+#### 3E.2: Built-in Middleware
+
+- CORS (already exists, needs integration)
+- Compression (gzip, brotli)
+- Authentication helpers
+- Request logging
+
+### Phase 3F: Advanced Features
+
+#### 3F.1: WebSocket Support
+
+**Files**: 11 files using actix WebSockets
+**Challenge**: Need full protocol implementation
+
+#### 3F.2: Static File Serving
+
+**Current**: Using actix_files
+**Solution**: Implement efficient file serving
+
+#### 3F.3: Route Guards
+
+**Goal**: Conditional route matching
+**Use cases**: Method guards, header guards, custom predicates
+
+### Migration Strategy
+
+#### Stage 1: Drop-in Compatibility (Phase 3A-3C)
+
+- Existing code continues working
+- New code can use cleaner patterns
+- No breaking changes
+
+#### Stage 2: Gradual Migration (Phase 3D-3E)
+
+- Add migration guide
+- Update examples
+- Provide codemods for common patterns
+
+#### Stage 3: Full Replacement (Phase 3F)
+
+- Feature parity achieved
+- Remove actix-web dependency
+- Performance benchmarks
 
 ### Success Metrics
 
-- **Clean API**: Endpoints should be as clean as actix
-- **Incremental Migration**: Packages can migrate one at a time
-- **No Breaking Changes**: Existing moosicbox_web_server code continues working
-- **Performance**: No significant performance regression
-- **Testing**: Comprehensive test coverage for all features
+1. **Compatibility**: All 50+ packages compile without changes
+2. **Ergonomics**: 50% less boilerplate in typical handlers
+3. **Performance**: Within 10% of actix-web benchmarks
+4. **Testing**: 100% deterministic tests (original goal)
 
-### Implementation Notes
+### Technical Decisions Log
 
-1. **Keep Builder Pattern**: The builder pattern stays as the foundation. Macros just generate builder calls.
+**Why remove Send from futures?**
 
-2. **Dual API Support**: Both macro-based and builder-based APIs work simultaneously, allowing gradual migration.
+- Actix uses single-threaded runtime per worker
+- Rc is faster than Arc (no atomics)
+- HttpRequest contains Rc<actix_web::HttpRequestInner>
+- Matches actix architecture = better performance
 
-3. **Feature Flags**: Each major feature (extractors, middleware, websockets) behind feature flags for incremental adoption.
+**Why multiple Handler implementations?**
 
-4. **Documentation First**: Write migration guide before implementation to ensure good developer experience.
+- Zero boilerplate for users
+- Type-safe extraction
+- Compile-time validation
+- Matches modern framework ergonomics (Axum, Rocket)
 
-5. **Test Package First**: Use `packages/config/` or `packages/menu/` as test migration targets (simpler APIs).
+**Why tuple struct extractors?**
 
-This incremental approach allows you to:
-
-- Make progress step by step
-- Test each feature thoroughly
-- Migrate packages gradually
-- Maintain a working system throughout
-
-Each checkbox represents a discrete task that adds value. You can work through them systematically, and the system remains functional at each step.
-
-### Migration Impact Analysis
-
-**Based on audit findings:**
-
-1. **Highest Impact Features** (must have):
-   - Query extractor (100+ uses)
-   - Json extractor (50+ uses)
-   - Service registration pattern (50+ packages)
-   - Error types (38+ files)
-
-2. **Critical Features** (blocking migration):
-   - WebSocket support (11 files, real-time features)
-   - Data extractor (shared state)
-   - Middleware system (auth, logging, compression)
-
-3. **Important Features** (quality of life):
-   - Route macros (cleaner code)
-   - Static file serving (media streaming)
-   - SSE support (live updates)
-
-4. **Nice to Have** (can add later):
-   - Advanced extractors
-   - Custom middleware
-   - Testing utilities
-
-This detailed plan shows exactly what needs to be implemented, why it's needed (based on actual usage), and how it should work to maintain compatibility while enabling smooth migration.
+- Valid Rust syntax for destructuring in function params
+- Clean usage: `Query(params): Query<T>`
+- Composable: multiple extractors per handler
 
 ### Phase 4: Web Server Migration
 
