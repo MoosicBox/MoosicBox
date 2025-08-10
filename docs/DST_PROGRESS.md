@@ -888,14 +888,14 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
 
 ### Phase 3A: Foundation (IMMEDIATE PRIORITY)
 
-#### 3A.1: Fix Handler Signatures ✅ COMPLETED
+#### 3A.1: Fix Handler Signatures
 
-- [x] Create IntoHandler trait in `packages/web_server/src/handler.rs`
-- [x] Update Route struct in `packages/web_server/src/lib.rs` to use IntoHandler
-- [x] Test backward compatibility with existing handlers
-- [x] Update example to demonstrate new handler pattern
+- [ ] Create IntoHandler trait in `packages/web_server/src/handler.rs`
+- [ ] Update Route struct in `packages/web_server/src/lib.rs` to use IntoHandler
+- [ ] Test backward compatibility with existing handlers
+- [ ] Update example to demonstrate new handler pattern
 
-#### 3A.2: Remove Send Requirement (NEXT)
+#### 3A.2: Remove Send Requirement
 
 **Problem**: HttpRequest contains Rc<actix_web::HttpRequestInner> which isn't Send
 **Solution**: Remove Send bound from futures (match Actix's architecture)
