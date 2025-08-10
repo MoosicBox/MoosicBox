@@ -844,106 +844,56 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
 
 ### Progress Tracking
 
-**Phase 3A: Foundation** - 4/12 tasks completed (33%)
-
-- ✅ Handler signatures (4/4 tasks)
-- ⏳ Send requirement removal (0/4 tasks)
-- ⏳ Example fixes (0/4 tasks)
-
-**Phase 3B: Multiple Handlers** - 0/7 tasks completed (0%)
-
-- ⏳ Core infrastructure (0/4 tasks)
-- ⏳ FromRequest trait (0/3 tasks)
-
-**Phase 3C: Basic Extractors** - 0/18 tasks completed (0%)
-
-- ⏳ Query extractor (0/6 tasks)
-- ⏳ Json extractor (0/7 tasks)
-- ⏳ Path extractor (0/5 tasks)
-
-**Phase 3D: Body & Streaming** - 0/9 tasks completed (0%)
-
-- ⏳ Body reading (0/4 tasks)
-- ⏳ Streaming responses (0/5 tasks)
-
-**Phase 3E: Extensible Middleware** - 0/25 tasks completed (0%)
-
-- ⏳ Core framework (0/8 tasks)
-- ⏳ Middleware patterns (0/9 tasks)
-- ⏳ Plugin system (0/6 tasks)
-- ⏳ Example implementations (0/2 tasks)
-
-**Phase 3F: Advanced Features** - 0/18 tasks completed (0%)
-
-- ⏳ WebSocket support (0/5 tasks)
-- ⏳ Static file serving (0/8 tasks)
-- ⏳ Route guards (0/5 tasks)
-
-**Phase 3G: Migration Helpers** - 0/12 tasks completed (0%)
-
-- ⏳ Actix compatibility (0/7 tasks)
-- ⏳ Migration tools (0/5 tasks)
-
 **Overall Progress: 4/87 tasks completed (5%)**
 
-### Phase 3A: Foundation (IMMEDIATE PRIORITY)
+**Step 1: Foundation** - 4/17 tasks completed (24%)
 
-#### 3A.1: Fix Handler Signatures
+- ✅ Handler signatures (4/4 tasks) - REVERTED, will be completed in Step 1
+- ⏳ Core traits (0/4 tasks)
+- ⏳ Multiple handler implementations (0/5 tasks)
+- ⏳ Route integration (0/4 tasks)
 
-- [ ] Create IntoHandler trait in `packages/web_server/src/handler.rs`
-- [ ] Update Route struct in `packages/web_server/src/lib.rs` to use IntoHandler
-- [ ] Test backward compatibility with existing handlers
-- [ ] Update example to demonstrate new handler pattern
+**Step 2: Core Extractors** - 0/25 tasks completed (0%)
 
-#### 3A.2: Remove Send Requirement
+- ⏳ Query extractor (0/6 tasks)
+- ⏳ Path extractor (0/7 tasks)
+- ⏳ Json extractor (0/8 tasks)
+- ⏳ Additional extractors (0/4 tasks)
 
-**Problem**: HttpRequest contains Rc<actix_web::HttpRequestInner> which isn't Send
-**Solution**: Remove Send bound from futures (match Actix's architecture)
+**Step 3: Validation & Documentation** - 0/8 tasks completed (0%)
 
-- [ ] Remove Send from Future bound in `packages/web_server/src/handler.rs`
-    ```rust
-    impl<F, Fut> IntoHandler for F
-    where
-        F: Fn(HttpRequest) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<HttpResponse, Error>> + 'static,  // Remove + Send
-    ```
-- [ ] Update HandlerFn type alias to remove Send from future
-- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` to verify no warnings
-- [ ] Test that async function handlers now work without Box::pin
+- ⏳ Fix examples (0/4 tasks)
+- ⏳ Test migration (0/2 tasks)
+- ⏳ Migration documentation (0/2 tasks)
 
-#### 3A.3: Fix Example Compilation
+**Step 4: Advanced Features** - 0/25 tasks completed (0%)
 
-**Problems**: Compilation errors and misleading examples
+- ⏳ Body & streaming (0/6 tasks)
+- ⏳ Extensible middleware (0/12 tasks)
+- ⏳ WebSocket support (0/4 tasks)
+- ⏳ Static file serving (0/3 tasks)
 
-- [ ] Fix `packages/web_server/examples/nested_get/src/main.rs`:
-    - [ ] Add `HttpRequest` import
-    - [ ] Add type annotation: `|req: HttpRequest|`
-- [ ] Fix `packages/web_server/examples/simple_get/src/main.rs`:
-    - [ ] Remove misleading "old vs new" comments (both patterns identical)
-    - [ ] Add working async function handler example
-    - [ ] Show actual improvement once Send requirement removed
-- [ ] Test all examples compile: `cargo build -p web_server_simple_get -p web_server_nested_get`
+**Step 5: Migration Support** - 0/12 tasks completed (0%)
 
-### Phase 3B: Multiple Handler Implementations (Axum-style)
+- ⏳ Compatibility layers (0/7 tasks)
+- ⏳ Migration tools (0/5 tasks)
 
-#### 3B.1: Core Infrastructure
+### Step 1: Foundation - Core Handler Infrastructure
 
-**Goal**: Support 0-16 parameter handlers with automatic extraction
+**Status**: READY TO START (Previous handler work was reverted)
+**Purpose**: Build the foundation that enables everything else
 
-- [ ] Create macro to generate multiple IntoHandler implementations
-- [ ] Generate implementations for 0-16 parameters:
-    - [ ] `impl<F, Fut> IntoHandler for F where F: Fn() -> Fut`
-    - [ ] `impl<F, Fut, T1> IntoHandler for F where F: Fn(T1) -> Fut, T1: FromRequest`
-    - [ ] `impl<F, Fut, T1, T2> IntoHandler for F where F: Fn(T1, T2) -> Fut`
-    - [ ] Continue up to 16 parameters
-- [ ] Add proper error handling for extractor failures
-- [ ] Test with different parameter combinations
+#### 1.1: Core Traits
 
-#### 3B.2: FromRequest Trait
+**Files to create/modify:**
 
-**Goal**: Define extraction interface
-
-- [ ] Define FromRequest trait in `packages/web_server/src/handler.rs`:
+- [ ] Create `packages/web_server/src/handler.rs` with core traits
+- [ ] Modify `packages/web_server/src/lib.rs`:
+    - [ ] Add handler module
+    - [ ] Export HandlerFn and IntoHandler types
+    - [ ] Add necessary imports (Future, Pin)
+- [ ] Define `IntoHandler` trait for converting functions to handlers
+- [ ] Define `FromRequest` trait for extracting data from requests:
     ```rust
     pub trait FromRequest: Sized {
         type Error: Into<Error>;
@@ -951,52 +901,110 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
         fn from_request(req: &HttpRequest) -> Self::Future;
     }
     ```
-- [ ] Add documentation with usage examples
-- [ ] Create error types for extraction failures
+- [ ] Remove Send requirement from Future bounds
+- [ ] Define `HandlerFn` type alias without Send on Future
 
-### Phase 3C: Basic Extractors
+#### 1.2: Multiple Handler Implementations
 
-#### 3C.1: Query Extractor
+**Files to modify:**
 
-**Usage**: `Query(params): Query<MyParams>` (50+ uses in codebase)
+- [ ] In `packages/web_server/src/handler.rs`:
+    - [ ] Implement IntoHandler for 0-parameter functions:
+        ```rust
+        impl<F, Fut> IntoHandler for F
+        where
+            F: Fn() -> Fut + Send + Sync + 'static,
+            Fut: Future<Output = Result<HttpResponse, Error>> + 'static,  // No Send!
+        ```
+    - [ ] Implement FromRequest for HttpRequest itself (identity extractor)
+    - [ ] Implement IntoHandler for 1-parameter functions with FromRequest
+    - [ ] Implement IntoHandler for 2-parameter functions
+    - [ ] Create macro to generate implementations for 3-16 parameters:
+        ```rust
+        macro_rules! impl_handler {
+            ($(($($ty:ident),*)),*) => {
+                $(
+                    impl<F, Fut, $($ty,)*> IntoHandler for F
+                    where
+                        F: Fn($($ty,)*) -> Fut + Send + Sync + 'static,
+                        $($ty: FromRequest,)*
+                        Fut: Future<Output = Result<HttpResponse, Error>> + 'static,
+                    {
+                        fn into_handler(self) -> HandlerFn {
+                            Box::new(move |req| {
+                                Box::pin(async move {
+                                    $(let $ty = $ty::from_request(&req).await?;)*
+                                    self($($ty,)*).await
+                                })
+                            })
+                        }
+                    }
+                )*
+            };
+        }
+        ```
+- [ ] Test that 0-16 parameter handlers compile and work
 
-- [ ] Create `Query<T>` tuple struct in new `packages/web_server/src/extractors.rs`
+#### 1.3: Route Integration
+
+**Files to modify:**
+
+- [ ] Update `packages/web_server/src/lib.rs`:
+    - [ ] Update Scope methods (route, get, post, put, delete, patch, head) to accept IntoHandler
+    - [ ] Update Route methods (new, get, post, put, delete, patch, head) to accept IntoHandler
+    - [ ] Update RouteHandler type alias to use new handler types
+    - [ ] Ensure backward compatibility with existing handlers
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` to verify no warnings
+
+### Step 2: Core Extractors
+
+**Status**: BLOCKED (Requires Step 1)
+**Purpose**: Implement the most-used extractors to prove the system works
+
+#### 2.1: Query Extractor (100+ uses in codebase)
+
+**Files to create/modify:**
+
+- [ ] Create `packages/web_server/src/extractors.rs`
+- [ ] Modify `packages/web_server/src/lib.rs`:
+    - [ ] Add extractors module
+    - [ ] Export Query, Path, Json, Data types
+
+**Implementation:**
+
+- [ ] Define `Query<T>` tuple struct
 - [ ] Implement FromRequest for Query<T>:
     - [ ] Parse query string using existing `qs` crate
     - [ ] Handle malformed query strings with proper error messages
     - [ ] Support optional query parameters
 - [ ] Add QueryConfig for size limits and custom error handling
 - [ ] Test with various query parameter types (strings, numbers, booleans, arrays)
-- [ ] Add documentation and examples
+- [ ] Verify `fn handler(Query(params): Query<MyParams>)` syntax works
 
-#### 3C.2: Json Extractor
+**Primary consumers (100+ uses):**
 
-**Usage**: `Json(body): Json<MyBody>` (73+ uses in codebase)
-**Blocker**: Need body reading support first
+- `packages/yt/src/api.rs` - YouTube API queries
+- `packages/music_api/api/src/api.rs` - Music API queries
+- `packages/library/src/api.rs` - Library queries
+- `packages/scan/src/api.rs` - Scan parameters
+- `packages/search/src/api.rs` - Search queries
 
-- [ ] Add body reading support to HttpRequest:
-    - [ ] Add `body()` method to HttpRequest enum
-    - [ ] Implement for both Actix and Stub variants
-    - [ ] Handle content-length limits
-- [ ] Create `Json<T>` tuple struct
-- [ ] Implement FromRequest for Json<T>:
-    - [ ] Read request body asynchronously
-    - [ ] Validate Content-Type header
-    - [ ] Parse JSON with serde_json
-    - [ ] Handle parse errors with detailed messages
-- [ ] Add JsonConfig for size limits (default 256KB)
-- [ ] Test with various JSON payloads and error cases
+#### 2.2: Path Extractor (50+ uses in codebase)
 
-#### 3C.3: Path Extractor
+**Files to modify:**
 
-**Usage**: `Path(id): Path<u64>` or `Path((user, post)): Path<(u64, u64)>` (50+ uses in codebase)
-**Blocker**: Need route parameter parsing
+- [ ] In `packages/web_server/src/extractors.rs`: Add Path implementation
+- [ ] In `packages/web_server/src/lib.rs` (Route struct):
+    - [ ] Add path pattern storage
+    - [ ] Add path parameter extraction logic
+
+**Implementation:**
 
 - [ ] Add route parameter parsing to Route struct:
     - [ ] Parse path patterns like `/users/{id}/posts/{post_id}`
     - [ ] Store parameter names and positions
     - [ ] Match actual paths against patterns
-- [ ] Create `Path<T>` tuple struct
+- [ ] Define `Path<T>` tuple struct
 - [ ] Implement FromRequest for Path<T>:
     - [ ] Extract path segments from request
     - [ ] Build parameter map from route definition
@@ -1005,52 +1013,167 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
 - [ ] Support tuples: `Path<(u64, u64)>` for `/users/{user_id}/posts/{post_id}`
 - [ ] Add proper error handling for missing/invalid parameters
 
-### Phase 3D: Body and Streaming
+**Primary consumers (50+ uses):**
 
-#### 3D.1: Body Reading
+- `packages/files/src/api.rs` - File path parameters
+- `packages/admin_htmx/src/api/*.rs` - Resource IDs
+- `packages/player/src/api.rs` - Player IDs
 
-**Problem**: Can't read request body currently
-**Enables**: Json extractor, form data, raw bytes
+#### 2.3: Json Extractor (73+ uses in codebase)
 
-- [ ] Add body reading methods to HttpRequest:
-    - [ ] `body() -> impl Future<Output = Result<Bytes, Error>>`
-    - [ ] `body_with_limit(size: usize) -> impl Future<Output = Result<Bytes, Error>>`
+**Blocker**: Requires body reading support
+
+**Files to modify:**
+
+- [ ] In `packages/web_server/src/lib.rs` (HttpRequest):
+    - [ ] Add body reading methods
+- [ ] In `packages/web_server/src/actix.rs`:
+    - [ ] Implement body extraction for Actix variant
+- [ ] In `packages/web_server/src/simulator.rs`:
+    - [ ] Implement body extraction for Simulator variant
+
+**Implementation:**
+
+- [ ] Add body reading support to HttpRequest:
+    - [ ] Add `body() -> impl Future<Output = Result<Bytes, Error>>`
+    - [ ] Add `body_with_limit(size: usize) -> impl Future<Output = Result<Bytes, Error>>`
     - [ ] Handle both Actix and Stub implementations
-- [ ] Add content-length validation and limits
-- [ ] Support streaming body reading for large payloads
-- [ ] Add proper error handling for body read failures
+    - [ ] Add content-length validation and limits
+- [ ] Define `Json<T>` tuple struct
+- [ ] Implement FromRequest for Json<T>:
+    - [ ] Read request body asynchronously
+    - [ ] Validate Content-Type header
+    - [ ] Parse JSON with serde_json
+    - [ ] Handle parse errors with detailed messages
+- [ ] Add JsonConfig for size limits (default 256KB)
+- [ ] Test with various JSON payloads and error cases
 
-#### 3D.2: Streaming Responses
+**Primary consumers (73+ uses):**
 
-**Problem**: No streaming support
-**Use cases**: Large file downloads, SSE, chunked responses
+- `packages/scan/src/api.rs` - JSON payloads
+- `packages/auth/src/api.rs` - Authentication data
+- `packages/config/src/api/mod.rs` - Configuration updates
 
-- [ ] Add HttpResponseStream variant to HttpResponse enum
-- [ ] Implement Stream trait for response bodies
-- [ ] Add streaming constructors:
-    - [ ] `HttpResponse::stream(stream)`
-    - [ ] `HttpResponse::chunked(stream)`
-- [ ] Support backpressure and flow control
-- [ ] Add examples for file streaming and SSE
+#### 2.4: Additional Core Extractors
 
-### Phase 3E: Extensible Middleware System
+**Files to modify:**
 
-**Goal**: Plugin-like middleware architecture for arbitrary functionality
+- [ ] In `packages/web_server/src/extractors.rs`: Add additional extractors
 
-#### 3E.1: Core Middleware Framework
+**Implementation:**
 
-**Goal**: Build extensible plugin system from first principles
+- [ ] **Data Extractor** (50+ uses for shared state):
+    - [ ] Implement Data<T> for shared application state
+    - [ ] Add app_data() method to WebServerBuilder
+    - [ ] Support multiple Data<T> types
+    - [ ] Implement Arc wrapping internally
+- [ ] **Form Extractor**:
+    - [ ] Parse application/x-www-form-urlencoded
+    - [ ] Parse multipart/form-data
+    - [ ] Support file uploads in forms
+- [ ] **Header Extractor**:
+    - [ ] Extract specific header values
+    - [ ] Support typed header parsing
 
-**Design Principles**:
+### Step 3: Validation & Documentation
 
-- Middleware as plugins - Any functionality can be added via middleware
-- Composable - Middleware can be stacked in any order
-- No built-in assumptions - Core knows nothing about specific middleware
-- Multiple patterns - Support different middleware styles for different use cases
+**Status**: BLOCKED (Requires Step 2)
+**Purpose**: Prove the improvements are real and document them
 
-**Core Framework Tasks**:
+#### 3.1: Fix Examples
 
-- [ ] Define core middleware traits in `packages/web_server/src/middleware.rs`:
+**Files to modify:**
+
+- [ ] `packages/web_server/examples/nested_get/src/main.rs`:
+    - [ ] Add HttpRequest import
+    - [ ] Add type annotations to closures
+- [ ] `packages/web_server/examples/simple_get/src/main.rs`:
+    - [ ] Update to show real improvements with extractors
+    - [ ] Add async function handler examples
+- [ ] `packages/web_server/examples/openapi/src/main.rs`:
+    - [ ] Update to demonstrate OpenAPI with extractors
+
+**Implementation:**
+
+- [ ] Remove misleading "old vs new" comments (both patterns identical)
+- [ ] Add working async function handler example
+- [ ] Create new example showing extractor usage:
+    ```rust
+    async fn handler(
+        Query(params): Query<SearchParams>,
+        Json(body): Json<RequestBody>,
+    ) -> Result<HttpResponse, Error> {
+        // Clean, no Box::pin, no manual parsing!
+    }
+    ```
+- [ ] Test all examples compile: `cargo build -p web_server_simple_get -p web_server_nested_get`
+
+#### 3.2: Test Migration
+
+**Candidate packages for test migration:**
+
+- [ ] Option A: `packages/menu/src/api.rs` (simpler, fewer endpoints)
+- [ ] Option B: `packages/config/src/api/mod.rs` (more complex, better validation)
+
+**Implementation:**
+
+- [ ] Choose test package and migrate all endpoints to new handler style
+- [ ] Document issues encountered during migration
+- [ ] Measure code reduction (expect 50% less boilerplate)
+- [ ] Validate functionality unchanged
+
+#### 3.3: Migration Documentation
+
+**Files to create:**
+
+- [ ] Create migration guide with step-by-step instructions
+- [ ] Document common patterns and their conversions
+- [ ] Create troubleshooting guide for common issues
+- [ ] Add performance comparison data
+
+### Step 4: Advanced Features
+
+**Status**: BLOCKED (Can start after Step 1)
+**Purpose**: Add remaining features needed for full actix-web replacement
+
+#### 4.1: Body and Streaming
+
+**Files to modify:**
+
+- [ ] `packages/web_server/src/lib.rs`:
+    - [ ] Extend HttpResponse for streaming support
+    - [ ] Add HttpResponseBody streaming variants
+
+**Implementation:**
+
+- [ ] **Streaming Responses**:
+    - [ ] Add HttpResponseStream variant to HttpResponse enum
+    - [ ] Implement Stream trait for response bodies
+    - [ ] Add streaming constructors (stream, chunked)
+    - [ ] Support backpressure and flow control
+    - [ ] Add examples for file streaming and SSE
+
+#### 4.2: Extensible Middleware System
+
+**Design Principle**: Plugin-like architecture for arbitrary functionality
+
+**Files to create:**
+
+- [ ] `packages/web_server/src/middleware.rs` - Core middleware traits
+- [ ] `packages/web_server/src/middleware/transform.rs` - Transform pattern
+- [ ] `packages/web_server/src/middleware/layer.rs` - Layer pattern
+- [ ] `packages/web_server/src/middleware/service.rs` - Service trait
+
+**Files to modify:**
+
+- [ ] `packages/web_server/src/lib.rs`:
+    - [ ] Add wrap() method to Scope
+    - [ ] Add wrap() method to Route
+    - [ ] Add middleware module exports
+
+**Core Framework:**
+
+- [ ] Define core middleware traits:
 
     ```rust
     // Transform pattern for complex stateful middleware
@@ -1077,72 +1200,47 @@ Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web ac
 - [ ] Support middleware ordering and dependencies
 - [ ] Enable both sync and async middleware
 - [ ] Add middleware configuration system
-- [ ] Create middleware builder helpers (`from_fn`, factories)
+- [ ] Create `from_fn()` helper for closure middleware
 - [ ] Support middleware state and context passing
 
-#### 3E.2: Middleware Patterns
+**Middleware Patterns:**
 
-**Goal**: Support multiple ways to create custom middleware
+- [ ] **Transform Pattern** (complex stateful middleware)
+- [ ] **Layer Pattern** (simple wrapping middleware)
+- [ ] **Functional Pattern** (inline middleware via `from_fn()`)
+- [ ] **Factory Pattern** (configurable middleware)
 
-- [ ] **Transform Pattern** (for complex stateful middleware):
-    - [ ] Factory-based middleware creation
-    - [ ] Shared state management
-    - [ ] Lifecycle hooks (startup, shutdown)
-- [ ] **Layer Pattern** (for simple wrapping middleware):
-    - [ ] Simple request/response transformation
-    - [ ] Minimal boilerplate for common cases
-- [ ] **Functional Pattern** (for quick inline middleware):
-    - [ ] `from_fn()` helper for closure-based middleware
-    - [ ] Async closure support
-    - [ ] Context passing between middleware
-- [ ] **Factory Pattern** (for configurable middleware):
-    - [ ] Configuration-driven middleware creation
-    - [ ] Runtime middleware registration
-    - [ ] Parameterized middleware builders
+**Plugin Features:**
 
-#### 3E.3: Plugin System Features
+- [ ] Arbitrary middleware stacking: `app.wrap(A).wrap(B).wrap(C)`
+- [ ] Extension points (before/after hooks, error handling)
+- [ ] Third-party middleware support
+- [ ] Standard interfaces for external crates
 
-**Goal**: Enable true extensibility and third-party middleware
+**Example Implementations** (educational, not required):
 
-- [ ] **Middleware Composition**:
-    - [ ] Arbitrary middleware stacking: `app.wrap(A).wrap(B).wrap(C)`
-    - [ ] Conditional middleware application
-    - [ ] Per-route vs per-scope middleware
-- [ ] **Extension Points**:
-    - [ ] Before request processing hooks
-    - [ ] After request processing hooks
-    - [ ] Error handling hooks
-    - [ ] Request/response transformation points
-    - [ ] Custom context injection
-- [ ] **Third-party Support**:
-    - [ ] Standard middleware interface for external crates
-    - [ ] Documentation for creating custom middleware
-    - [ ] Examples of complex middleware patterns
+- [ ] Request ID middleware (context injection)
+- [ ] Timing middleware (response transformation)
+- [ ] Echo middleware (request inspection)
 
-#### 3E.4: Example Implementations
+#### 4.3: WebSocket Support (Critical - 11 files use this)
 
-**Goal**: Demonstrate patterns, not provide required features
+**Files to create:**
 
-These are **educational examples** showing how to use the framework:
+- [ ] `packages/web_server/src/websocket.rs` - Core WebSocket support
+- [ ] `packages/web_server/src/websocket/context.rs` - WebSocket context
+- [ ] `packages/web_server/src/websocket/handler.rs` - Handler traits
 
-- [ ] **Example: Request ID Middleware**:
-    - [ ] Shows context injection pattern
-    - [ ] Demonstrates state passing between middleware
-- [ ] **Example: Timing Middleware**:
-    - [ ] Shows response transformation
-    - [ ] Demonstrates async middleware patterns
-- [ ] **Example: Echo Middleware**:
-    - [ ] Shows request inspection
-    - [ ] Demonstrates simple Layer pattern
-- [ ] **Example: Conditional Middleware**:
-    - [ ] Shows predicate-based middleware application
-    - [ ] Demonstrates middleware composition
+**Critical consumers (11 files):**
 
-### Phase 3F: Advanced Features
+- [ ] `packages/ws/src/ws.rs` - Core WebSocket utilities
+- [ ] `packages/server/src/ws/server.rs` - Server WebSocket
+- [ ] `packages/server/src/ws/handler.rs` - WebSocket handlers
+- [ ] `packages/tunnel_server/src/ws/api.rs` - Tunnel WebSocket
+- [ ] `packages/tunnel_server/src/ws/handler.rs` - Tunnel handlers
+- [ ] Plus 6 additional WebSocket-dependent files
 
-#### 3F.1: WebSocket Support
-
-**Critical**: 11 files using actix WebSockets for real-time features
+**Implementation:**
 
 - [ ] **WebSocket Upgrade**:
     - [ ] Add WebSocket upgrade handling to HttpRequest
@@ -1157,9 +1255,19 @@ These are **educational examples** showing how to use the framework:
     - [ ] Support async message handling
     - [ ] Add automatic ping/pong heartbeat
 
-#### 3F.2: Static File Serving
+#### 4.4: Static File Serving
 
-**Current**: Using actix_files for media streaming
+**Files to create:**
+
+- [ ] `packages/web_server/src/static_files.rs` - File serving support
+- [ ] `packages/web_server/src/static_files/named_file.rs` - NamedFile implementation
+- [ ] `packages/web_server/src/static_files/range.rs` - Range request support
+
+**Primary consumer:**
+
+- [ ] `packages/files/src/api.rs` - Currently uses actix_files
+
+**Implementation:**
 
 - [ ] **NamedFile Implementation**:
     - [ ] Async file opening and reading
@@ -1176,31 +1284,20 @@ These are **educational examples** showing how to use the framework:
     - [ ] Index file serving (index.html)
     - [ ] Content-Disposition headers for downloads
 
-#### 3F.3: Route Guards
+### Step 5: Migration Support
 
-**Goal**: Conditional route matching
+**Status**: BLOCKED (Do after core features)
+**Purpose**: Help migrate existing code (NOT core architecture)
 
-- [ ] **Guard Trait**:
-    - [ ] Define Guard trait for route conditions
-    - [ ] Support async guard evaluation
-    - [ ] Add guard composition (AND, OR, NOT)
-- [ ] **Built-in Guards**:
-    - [ ] Method guards (GET, POST, etc.)
-    - [ ] Header guards (check header values)
-    - [ ] Host guards (domain-based routing)
-    - [ ] Custom predicate guards
-- [ ] **Integration**:
-    - [ ] Add guard support to Route and Scope
-    - [ ] Support multiple guards per route
-    - [ ] Proper error handling for guard failures
+#### 5.1: Compatibility Layers
 
-### Phase 3G: Migration Helpers
+**Files to create:**
 
-**Goal**: Ease migration from existing frameworks (NOT core architecture)
+- [ ] `packages/web_server/src/compat/mod.rs` - Compatibility module
+- [ ] `packages/web_server/src/compat/actix.rs` - Actix bridge
+- [ ] `packages/web_server/src/compat/middleware.rs` - Middleware adapters
 
-#### 3G.1: Actix Compatibility Layer
-
-**Goal**: Bridge existing actix-web patterns during migration
+**Implementation:**
 
 - [ ] **Actix Middleware Adapter**:
     - [ ] Wrapper for existing actix middleware
@@ -1215,12 +1312,12 @@ These are **educational examples** showing how to use the framework:
     - [ ] Handle request/response differences
     - [ ] Support gradual migration patterns
 
-#### 3G.2: Migration Tools
+#### 5.2: Migration Tools
 
-**Goal**: Automated migration assistance
+**Implementation:**
 
-- [ ] **Code Migration Tools**:
-    - [ ] Automated import replacement
+- [ ] **Automated Tools**:
+    - [ ] Import replacement script
     - [ ] Handler signature conversion
     - [ ] Middleware registration updates
 - [ ] **Migration Guides**:
@@ -1228,29 +1325,27 @@ These are **educational examples** showing how to use the framework:
     - [ ] Common pattern conversions
     - [ ] Troubleshooting guide
 - [ ] **Validation Tools**:
-    - [ ] Verify migration completeness
+    - [ ] Migration completeness checker
     - [ ] Performance comparison tools
-    - [ ] Compatibility testing helpers
 
-### Migration Strategy
+### Migration Scope (Phase 4)
 
-#### Stage 1: Drop-in Compatibility (Phase 3A-3C)
+**Total migration scope: 75 files across 35+ packages**
 
-- Existing code continues working
-- New code can use cleaner patterns
-- No breaking changes
+Major package groups requiring migration:
 
-#### Stage 2: Gradual Migration (Phase 3D-3E)
-
-- Add migration guide
-- Update examples
-- Provide codemods for common patterns
-
-#### Stage 3: Full Replacement (Phase 3F)
-
-- Feature parity achieved
-- Remove actix-web dependency
-- Performance benchmarks
+- Auth/Config/Profiles group (8 files)
+- Media API group (10 files)
+- UI/Admin group (7 files)
+- Network/Files group (4 files)
+- Audio/Player group (4 files)
+- Middleware group (6 files)
+- Hyperchad/Renderer group (8 files)
+- Core server package (13 files)
+- Tunnel server (7 files)
+- WebSocket core (11 files)
+- Platform integrations (4 files)
+- Examples and tests (5 files)
 
 ### Success Metrics
 
@@ -1281,103 +1376,32 @@ These are **educational examples** showing how to use the framework:
 - Clean usage: `Query(params): Query<T>`
 - Composable: multiple extractors per handler
 
-### Execution Priority & Next Steps
+**Why extensible middleware as plugins?**
 
-**IMPORTANT**: The phases are organized logically for understanding, but should be executed in a different order based on technical dependencies.
+- Any functionality can be added via middleware
+- Third-party middleware is first-class
+- No hardcoded assumptions in core
+- Future-proof for new patterns
 
-#### Recommended Execution Order
+### Success Criteria
 
-**Phase 3B → 3C.1 → 3A → 3C.2+ → 3D+ → Migration**
-
-This order builds the foundation first, then adds features that depend on it.
-
-#### Step 1: Core Handler Infrastructure (Phase 3B)
-
-**CRITICAL**: This is the actual foundation that enables everything else
-
-1. **Create core traits without Send requirement**:
-    - Define `IntoHandler` trait
-    - Define `FromRequest` trait
-    - Implement 0-parameter handler support
-2. **Add identity extractor**:
-    - Implement `FromRequest` for `HttpRequest` itself
-    - Test that basic pattern works
-3. **Add multi-parameter support**:
-    - Implement 1-parameter and 2-parameter handlers
-    - Test with simple extractors
-4. **Create macro for 0-16 implementations**:
-    - Generate all handler implementations via macro
-    - Test compilation and basic functionality
-
-#### Step 2: First Real Extractor (Phase 3C.1)
-
-**PROOF OF CONCEPT**: Proves the extractor system works
-
-1. Implement `Query<T>` extractor (100+ uses in codebase)
-2. Test with existing query parameter patterns
-3. Validate that `fn handler(Query(params): Query<MyParams>)` works
-4. Document the improvement over manual parsing
-
-#### Step 3: Examples and Documentation (Phase 3A)
-
-**VALIDATION**: Now the improvements are real and visible
-
-1. Update examples to show actual improvements
-2. Create before/after comparisons
-3. Test all examples compile and run
-4. Document migration patterns
-
-#### Step 4: Remaining Extractors (Phase 3C.2+)
-
-**EXPANSION**: Add remaining high-value extractors
-
-1. **Path extractor** (50+ uses) - requires route pattern parsing
-2. **Json extractor** (73+ uses) - requires body reading support
-3. **Additional extractors** as needed
-
-#### Step 5: Test Migration
-
-**VALIDATION**: Prove the system works end-to-end
-
-1. **Test Package Migration**: Migrate `packages/menu/` or `packages/config/`
-2. **Document Migration**: Create step-by-step migration guide
-3. **Validate Improvements**: Measure code reduction and clarity
-
-### Why This Order?
-
-#### Technical Dependencies
-
-- **3B enables 3A**: Multiple handler implementations make signatures clean
-- **3B enables 3C**: FromRequest trait is required for extractors
-- **3C.1 proves 3B**: Query extractor validates the foundation works
-- **3A becomes automatic**: Once extractors work, signatures are naturally clean
-
-#### Value Delivery
-
-- **3B alone**: Enables clean 0-parameter handlers immediately
-- **3B + 3C.1**: Shows dramatic improvement with extractors
-- **3A**: Documents and showcases the improvements
-- **Migration**: Proves real-world value
-
-### Success Criteria (Revised Order)
-
-- [ ] **Phase 3B Complete**: Multiple handler implementations work, 0-16 parameters supported
-- [ ] **Phase 3C.1 Complete**: Query extractor functional, shows real improvement
-- [ ] **Phase 3A Complete**: Examples updated, improvements documented
-- [ ] **Phase 3C.2+ Complete**: Json and Path extractors functional
-- [ ] **Test Migration Complete**: One package successfully migrated
-- [ ] **Phase 3D+ Complete**: Advanced features as needed for migration
+- [ ] **Step 1 Complete**: Multiple handler implementations work, clean async functions compile
+- [ ] **Step 2 Complete**: Query, Path, Json extractors functional
+- [ ] **Step 3 Complete**: Examples show real improvements, test package migrated
+- [ ] **Step 4 Complete**: All advanced features implemented
+- [ ] **Step 5 Complete**: Migration tools available
+- [ ] **Phase 3 Complete**: First production package migrated from actix-web
 
 ### Current Priority
 
-**Phase 3B (Multiple Handler Implementations)** is the critical path. This is the foundation that enables:
+**Step 1 (Foundation)** is the critical path. This is the foundation that enables:
 
 - Clean async function handlers
 - Extractor support
 - Removal of Box::pin boilerplate
 - All improvements in one coherent system
 
-**Recommendation**: Start with Phase 3B core infrastructure, then add Query extractor to prove it works, then update examples to show the improvements.
+**Recommended Execution Order**: Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Migration
 
 ### Phase 4: Web Server Migration
 
