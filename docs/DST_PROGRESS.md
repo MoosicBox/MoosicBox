@@ -1002,6 +1002,12 @@ Before marking ANY checkbox complete:
 
 **Step 2: Handler System** - 0/25 tasks completed (0%)
 
+**TODO: After completing Send bounds fix:**
+
+- [ ] Update `packages/web_server/examples/basic_handler.rs` to use the same async handler for both Actix and Simulator backends
+- [ ] Remove the workaround in the Actix example that extracts data before the async block
+- [ ] Update the example to demonstrate that HttpRequest can now be used directly in async handlers for both backends
+
 - ⏳ Handler macro system - Unified Implementation (0/11 tasks)
 - ⏳ Handler macro system - Validation (0/4 tasks)
 - ⏳ FromRequest trait updates - Unified Implementation (0/6 tasks)

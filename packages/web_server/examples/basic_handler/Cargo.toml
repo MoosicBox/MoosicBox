@@ -1,0 +1,23 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "network-programming"]
+description = "Basic handler example demonstrating HttpRequest API across backends"
+edition     = { workspace = true }
+keywords    = ["async", "http", "network", "web", "example"]
+license     = { workspace = true }
+name        = "basic_handler_example"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_web_server = { path = "../..", default-features = false }
+futures              = { workspace = true }
+
+[features]
+default = ["simulator"]
+
+fail-on-warnings = []
+
+actix = ["moosicbox_web_server/actix"]
+simulator = ["moosicbox_web_server/simulator"]

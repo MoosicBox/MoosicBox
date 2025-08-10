@@ -89,17 +89,15 @@ impl FromRequest for HttpRequest {
     }
 }
 
-// Implementation for the current handler type (backward compatibility)
-impl<F> IntoHandler<()> for F
+// Implementation for async functions that return Result<HttpResponse, Error>
+impl<F, Fut> IntoHandler<()> for F
 where
-    F: Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
-        + Send
-        + Sync
-        + 'static,
+    F: Fn(HttpRequest) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<HttpResponse, Error>> + Send + 'static,
 {
     type Future = Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>;
 
     fn into_handler(self) -> Box<dyn Fn(HttpRequest) -> Self::Future + Send + Sync> {
-        Box::new(move |req| (self)(req))
+        Box::new(move |req| Box::pin((self)(req)))
     }
 }
