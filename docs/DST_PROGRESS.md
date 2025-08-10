@@ -834,580 +834,789 @@ These tasks have no interdependencies and can execute simultaneously.
 
 ### Overview
 
-Goal: Transform moosicbox_web_server into a drop-in replacement for actix-web across 50+ packages.
+Transform moosicbox_web_server into a drop-in replacement for actix-web across 50+ packages, building on existing HttpRequest/Simulator abstraction while adding clean handler syntax and complete simulator support.
 
-**Key Architecture Decision**: Follow Actix's single-threaded-per-worker model
+### 🚨 CRITICAL ARCHITECTURAL REQUIREMENT: Dual Runtime Support 🚨
 
-- Remove Send requirements from futures (matches Actix design)
-- Use Rc instead of Arc where possible (better performance)
-- Keep handlers Send+Sync (needed for cloning to workers)
+**This entire web server enhancement MUST support multiple swappable backends at compile-time via feature flags.**
+
+Every design decision, every trait definition, every implementation MUST account for:
+
+1. **Real Runtime Backend** (Actix-web initially, potentially others)
+
+    - Production use with real async I/O
+    - Real network operations
+    - Non-deterministic execution
+    - Performance-optimized
+
+2. **Simulator Runtime Backend** (Fully deterministic)
+    - Testing and debugging use
+    - 100% deterministic execution
+    - No real I/O (uses switchy abstractions)
+    - Reproducible behavior across runs
+
+**Architectural Principles:**
+
+- **NO hardcoding to specific backends** - Everything must work through abstractions
+- **Feature flags control backend selection** - Compile-time switching via `simulator` and `actix` features
+- **Shared trait definitions** - Both backends implement the same traits
+- **Zero runtime overhead** - Feature flags compile away unused code
+- **Consistent behavior** - Same inputs produce same logical outputs (though timing may differ)
+
+**Example Pattern (MUST follow for all components):**
+
+```rust
+// In lib.rs - Abstract type that switches based on feature
+#[cfg(feature = "actix")]
+pub type DefaultBackend = actix::ActixBackend;
+
+#[cfg(feature = "simulator")]
+pub type DefaultBackend = simulator::SimulatorBackend;
+
+// In handler.rs - Traits that work with any backend
+pub trait IntoHandler<B: Backend, Args> {
+    type Future: Future<Output = Result<HttpResponse, Error>>;
+    fn call(&self, req: B::Request) -> Self::Future;
+}
+
+// In actix/mod.rs - Actix-specific implementation
+#[cfg(feature = "actix")]
+impl Backend for ActixBackend {
+    type Request = actix_web::HttpRequest;
+    // ...
+}
+
+// In simulator/mod.rs - Simulator-specific implementation
+#[cfg(feature = "simulator")]
+impl Backend for SimulatorBackend {
+    type Request = SimulationRequest;
+    // ...
+}
+```
+
+**Testing Requirements:**
+
+- Every feature MUST be tested with BOTH backends
+- Tests should verify identical logical behavior
+- Simulator tests should verify determinism
+- Performance tests should run on real backend only
+
+**Migration Considerations:**
+
+When migrating packages from actix-web:
+
+1. First migrate to web_server with `actix` feature (no behavior change)
+2. Then enable `simulator` feature for deterministic testing
+3. Eventually, both features should work seamlessly
+
+⚠️ **Any implementation that breaks this dual-backend requirement MUST be rejected or refactored** ⚠️
+
+### 📋 MANDATORY COMPLETION CRITERIA: Zero Warnings, Full Compilation 📋
+
+**NO step is considered complete until:**
+
+1. **Full Project Compilation** ✅
+
+    - `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` succeeds without errors
+    - `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds without errors
+    - All examples compile: `TUNNEL_ACCESS_TOKEN=123 cargo build --examples`
+    - All tests compile: `TUNNEL_ACCESS_TOKEN=123 cargo test --no-run`
+
+2. **Zero Warnings** ⚠️
+
+    - `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` produces ZERO warnings
+    - `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` (for env-dependent code)
+    - No deprecated API usage warnings
+    - No unused code warnings
+
+3. **Examples Must Work** 🎯
+    - ALL examples in `packages/web_server/examples/` must compile
+    - Examples must run without panicking (basic smoke test)
+    - Examples must demonstrate the feature being implemented
+
+**Verification Commands (run after EVERY task):**
+
+```bash
+# Full compilation check
+TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features
+
+# Clippy check with zero warnings
+TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features
+
+# Examples compilation
+cargo build --examples -p moosicbox_web_server
+
+# Test compilation
+cargo test --no-run -p moosicbox_web_server
+```
+
+⛔ **If any of these fail, the task is NOT complete** ⛔
+
+**Incremental Progress Rules:**
+
+- Each commit must compile (no broken intermediate states)
+- Each subtask completion must maintain zero warnings
+- Temporary `#[allow(dead_code)]` is acceptable ONLY with a TODO comment
+- `unimplemented!()` is acceptable ONLY in simulator code being actively developed
+
+## Required Development Workflow
+
+Before starting ANY task:
+
+1. If on nixos (which you likely are), run everything in a nix-shell via `nix-shell --run "..."` with the shell.nix in the repo root.
+2. Ensure clean baseline: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows zero warnings
+3. Create a branch for your changes
+4. Make incremental changes, checking compilation after each
+
+After EVERY file save:
+
+1. Run `TUNNEL_ACCESS_TOKEN=123 cargo check -p moosicbox_web_server` for quick compilation check
+2. Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy -p moosicbox_web_server` before committing
+
+Before marking ANY checkbox complete:
+
+1. Full build: `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features`
+2. Full clippy: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features`
+3. Examples: `cargo build --examples -p moosicbox_web_server`
+4. Tests compile: `cargo test --no-run -p moosicbox_web_server`
+
+**Key Architecture Decision**: Build on existing abstraction rather than replace it
+
+- HttpRequest enum already abstracts between Actix and Stub/Simulator
+- Complete the simulator implementation (remove all `unimplemented!()`)
+- Add clean handler syntax without `Box::pin(async move {...})`
+- Support both deterministic simulator and real Actix runtime
 
 ### Progress Tracking
 
-**Overall Progress: 4/87 tasks completed (5%)**
+**Overall Progress: 0/237 tasks completed (0%)**
 
-**Step 1: Foundation** - 4/17 tasks completed (24%)
+**Step 1: Runtime Abstraction Enhancement** - 0/36 tasks completed (0%)
 
-- ✅ Handler signatures (4/4 tasks) - REVERTED, will be completed in Step 1
-- ⏳ Core traits (0/4 tasks)
-- ⏳ Multiple handler implementations (0/5 tasks)
-- ⏳ Route integration (0/4 tasks)
+- ⏳ Complete HttpRequest implementation (0/7 tasks)
+- ⏳ Enhance SimulationStub (0/6 tasks)
+- ⏳ Create core handler traits (0/6 tasks)
+- ⏳ Update Route to use new handler trait (0/13 tasks)
+- ⏳ Completion gate (0/4 tasks)
 
-**Step 2: Core Extractors** - 0/25 tasks completed (0%)
+**Step 2: Handler System** - 0/27 tasks completed (0%)
 
-- ⏳ Query extractor (0/6 tasks)
+- ⏳ Handler macro system (0/11 tasks)
+- ⏳ FromRequest trait updates (0/7 tasks)
+- ⏳ Route integration (0/5 tasks)
+- ⏳ Completion gate (0/4 tasks)
+
+**Step 3: Extractors Implementation** - 0/45 tasks completed (0%)
+
+- ⏳ Query extractor (0/9 tasks)
+- ⏳ Json extractor (0/9 tasks)
 - ⏳ Path extractor (0/7 tasks)
-- ⏳ Json extractor (0/8 tasks)
-- ⏳ Additional extractors (0/4 tasks)
+- ⏳ Header extractor (0/5 tasks)
+- ⏳ State extractor (0/5 tasks)
+- ⏳ Module organization (0/5 tasks)
+- ⏳ Completion gate (0/5 tasks)
 
-**Step 3: Validation & Documentation** - 0/8 tasks completed (0%)
+**Step 4: Simulator Runtime Completion** - 0/31 tasks completed (0%)
 
-- ⏳ Fix examples (0/4 tasks)
-- ⏳ Test migration (0/2 tasks)
-- ⏳ Migration documentation (0/2 tasks)
+- ⏳ Router implementation (0/6 tasks)
+- ⏳ Complete SimulatorWebServer (0/8 tasks)
+- ⏳ Deterministic async integration (0/5 tasks)
+- ⏳ Test utilities (0/7 tasks)
+- ⏳ Completion gate (0/5 tasks)
 
-**Step 4: Advanced Features** - 0/25 tasks completed (0%)
+**Step 5: Examples and Testing** - 0/35 tasks completed (0%)
 
-- ⏳ Body & streaming (0/6 tasks)
-- ⏳ Extensible middleware (0/12 tasks)
+- ⏳ Basic example (0/5 tasks)
+- ⏳ Extractor examples (0/4 tasks)
+- ⏳ Migration example (0/4 tasks)
+- ⏳ Test suite (0/12 tasks)
+- ⏳ Fix existing examples (0/5 tasks)
+- ⏳ Completion gate (0/5 tasks)
+
+**Step 6: Advanced Features** - 0/31 tasks completed (0%)
+
+- ⏳ Middleware system (0/7 tasks)
+- ⏳ CORS middleware integration (0/3 tasks)
+- ⏳ Common middleware (0/6 tasks)
 - ⏳ WebSocket support (0/4 tasks)
-- ⏳ Static file serving (0/3 tasks)
-
-**Step 5: Migration Support** - 0/12 tasks completed (0%)
-
-- ⏳ Compatibility layers (0/7 tasks)
-- ⏳ Migration tools (0/5 tasks)
-
-### Step 1: Foundation - Core Handler Infrastructure
-
-**Status**: READY TO START (Previous handler work was reverted)
-**Purpose**: Build the foundation that enables everything else
-
-#### 1.1: Core Traits
-
-**Files to create/modify:**
-
-- [ ] Create `packages/web_server/src/handler.rs` with core traits
-- [ ] Modify `packages/web_server/src/lib.rs`:
-    - [ ] Add handler module
-    - [ ] Export HandlerFn and IntoHandler types
-    - [ ] Add necessary imports (Future, Pin)
-- [ ] Define `IntoHandler` trait for converting functions to handlers
-- [ ] Define `FromRequest` trait for extracting data from requests:
-    ```rust
-    pub trait FromRequest: Sized {
-        type Error: Into<Error>;
-        type Future: Future<Output = Result<Self, Self::Error>>;  // No Send!
-        fn from_request(req: &HttpRequest) -> Self::Future;
-    }
-    ```
-- [ ] Remove Send requirement from Future bounds
-- [ ] Define `HandlerFn` type alias without Send on Future
-
-#### 1.2: Multiple Handler Implementations
-
-**Files to modify:**
-
-- [ ] In `packages/web_server/src/handler.rs`:
-    - [ ] Implement IntoHandler for 0-parameter functions:
-        ```rust
-        impl<F, Fut> IntoHandler for F
-        where
-            F: Fn() -> Fut + Send + Sync + 'static,
-            Fut: Future<Output = Result<HttpResponse, Error>> + 'static,  // No Send!
-        ```
-    - [ ] Implement FromRequest for HttpRequest itself (identity extractor)
-    - [ ] Implement IntoHandler for 1-parameter functions with FromRequest
-    - [ ] Implement IntoHandler for 2-parameter functions
-    - [ ] Create macro to generate implementations for 3-16 parameters:
-        ```rust
-        macro_rules! impl_handler {
-            ($(($($ty:ident),*)),*) => {
-                $(
-                    impl<F, Fut, $($ty,)*> IntoHandler for F
-                    where
-                        F: Fn($($ty,)*) -> Fut + Send + Sync + 'static,
-                        $($ty: FromRequest,)*
-                        Fut: Future<Output = Result<HttpResponse, Error>> + 'static,
-                    {
-                        fn into_handler(self) -> HandlerFn {
-                            Box::new(move |req| {
-                                Box::pin(async move {
-                                    $(let $ty = $ty::from_request(&req).await?;)*
-                                    self($($ty,)*).await
-                                })
-                            })
-                        }
-                    }
-                )*
-            };
-        }
-        ```
-- [ ] Test that 0-16 parameter handlers compile and work
-
-#### 1.3: Route Integration
-
-**Files to modify:**
-
-- [ ] Update `packages/web_server/src/lib.rs`:
-    - [ ] Update Scope methods (route, get, post, put, delete, patch, head) to accept IntoHandler
-    - [ ] Update Route methods (new, get, post, put, delete, patch, head) to accept IntoHandler
-    - [ ] Update RouteHandler type alias to use new handler types
-    - [ ] Ensure backward compatibility with existing handlers
-- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` to verify no warnings
-
-### Step 2: Core Extractors
-
-**Status**: BLOCKED (Requires Step 1)
-**Purpose**: Implement the most-used extractors to prove the system works
-
-#### 2.1: Query Extractor (100+ uses in codebase)
-
-**Files to create/modify:**
-
-- [ ] Create `packages/web_server/src/extractors.rs`
-- [ ] Modify `packages/web_server/src/lib.rs`:
-    - [ ] Add extractors module
-    - [ ] Export Query, Path, Json, Data types
-
-**Implementation:**
-
-- [ ] Define `Query<T>` tuple struct
-- [ ] Implement FromRequest for Query<T>:
-    - [ ] Parse query string using existing `qs` crate
-    - [ ] Handle malformed query strings with proper error messages
-    - [ ] Support optional query parameters
-- [ ] Add QueryConfig for size limits and custom error handling
-- [ ] Test with various query parameter types (strings, numbers, booleans, arrays)
-- [ ] Verify `fn handler(Query(params): Query<MyParams>)` syntax works
-
-**Primary consumers (100+ uses):**
-
-- `packages/yt/src/api.rs` - YouTube API queries
-- `packages/music_api/api/src/api.rs` - Music API queries
-- `packages/library/src/api.rs` - Library queries
-- `packages/scan/src/api.rs` - Scan parameters
-- `packages/search/src/api.rs` - Search queries
-
-#### 2.2: Path Extractor (50+ uses in codebase)
-
-**Files to modify:**
-
-- [ ] In `packages/web_server/src/extractors.rs`: Add Path implementation
-- [ ] In `packages/web_server/src/lib.rs` (Route struct):
-    - [ ] Add path pattern storage
-    - [ ] Add path parameter extraction logic
-
-**Implementation:**
-
-- [ ] Add route parameter parsing to Route struct:
-    - [ ] Parse path patterns like `/users/{id}/posts/{post_id}`
-    - [ ] Store parameter names and positions
-    - [ ] Match actual paths against patterns
-- [ ] Define `Path<T>` tuple struct
-- [ ] Implement FromRequest for Path<T>:
-    - [ ] Extract path segments from request
-    - [ ] Build parameter map from route definition
-    - [ ] Deserialize into target type T
-- [ ] Support single values: `Path<u64>` for `/users/{id}`
-- [ ] Support tuples: `Path<(u64, u64)>` for `/users/{user_id}/posts/{post_id}`
-- [ ] Add proper error handling for missing/invalid parameters
-
-**Primary consumers (50+ uses):**
-
-- `packages/files/src/api.rs` - File path parameters
-- `packages/admin_htmx/src/api/*.rs` - Resource IDs
-- `packages/player/src/api.rs` - Player IDs
-
-#### 2.3: Json Extractor (73+ uses in codebase)
-
-**Blocker**: Requires body reading support
-
-**Files to modify:**
-
-- [ ] In `packages/web_server/src/lib.rs` (HttpRequest):
-    - [ ] Add body reading methods
-- [ ] In `packages/web_server/src/actix.rs`:
-    - [ ] Implement body extraction for Actix variant
-- [ ] In `packages/web_server/src/simulator.rs`:
-    - [ ] Implement body extraction for Simulator variant
-
-**Implementation:**
-
-- [ ] Add body reading support to HttpRequest:
-    - [ ] Add `body() -> impl Future<Output = Result<Bytes, Error>>`
-    - [ ] Add `body_with_limit(size: usize) -> impl Future<Output = Result<Bytes, Error>>`
-    - [ ] Handle both Actix and Stub implementations
-    - [ ] Add content-length validation and limits
-- [ ] Define `Json<T>` tuple struct
-- [ ] Implement FromRequest for Json<T>:
-    - [ ] Read request body asynchronously
-    - [ ] Validate Content-Type header
-    - [ ] Parse JSON with serde_json
-    - [ ] Handle parse errors with detailed messages
-- [ ] Add JsonConfig for size limits (default 256KB)
-- [ ] Test with various JSON payloads and error cases
+- ⏳ State management (0/6 tasks)
+- ⏳ Completion gate (0/5 tasks)
+
+**Step 7: Migration** - 0/32 tasks completed (0%)
+
+- ⏳ Migration documentation (0/5 tasks)
+- ⏳ Compatibility layer (0/4 tasks)
+- ⏳ Update package dependencies (0/3 tasks)
+- ⏳ Migration script (0/4 tasks)
+- ⏳ Package migration plan (0/5 tasks)
+- ⏳ Validation strategy (0/6 tasks)
+- ⏳ Completion gate (0/5 tasks)
+
+## Step 1: Runtime Abstraction Enhancement (Foundation)
+
+### 1.1 Complete HttpRequest Implementation
 
-**Primary consumers (73+ uses):**
+**File**: `packages/web_server/src/lib.rs`
+
+- [ ] Fix `HttpRequest::Stub` variant's `header()` method (remove `unimplemented!()`)
+- [ ] Fix `HttpRequest::Stub` variant's `path()` method (remove `unimplemented!()`)
+- [ ] Fix `HttpRequest::Stub` variant's `query_string()` method (remove `unimplemented!()`)
+- [ ] Add `body()` method to HttpRequest enum for body access
+- [ ] Add `method()` method to HttpRequest enum
+- [ ] Update `HttpRequestRef` to match all new HttpRequest methods
+- [ ] Ensure all methods delegate properly to SimulationStub
 
-- `packages/scan/src/api.rs` - JSON payloads
-- `packages/auth/src/api.rs` - Authentication data
-- `packages/config/src/api/mod.rs` - Configuration updates
+### 1.2 Enhance SimulationStub
 
-#### 2.4: Additional Core Extractors
+**File**: `packages/web_server/src/simulator.rs`
 
-**Files to modify:**
+- [ ] Add `body()` method to SimulationStub
+- [ ] Add `method()` method to SimulationStub (already exists ✓)
+- [ ] Add cookie handling to SimulationRequest struct
+- [ ] Add connection info (remote_addr, etc.) to SimulationRequest
+- [ ] Add `with_cookies()` builder method to SimulationRequest
+- [ ] Add `with_remote_addr()` builder method to SimulationRequest
+
+### 1.3 Create Core Handler Traits
 
-- [ ] In `packages/web_server/src/extractors.rs`: Add additional extractors
+**File**: `packages/web_server/src/handler.rs` (new file)
 
-**Implementation:**
+- [ ] Define `IntoHandler<Args>` trait without Send requirement
+- [ ] Define `HandlerFuture<F>` wrapper struct
+- [ ] Implement `Future` for `HandlerFuture<F>`
+- [ ] Add feature-gated Send bounds for different runtimes
+- [ ] Add error conversion utilities for handler errors
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Verify traits work with both HttpRequest::Actix and HttpRequest::Stub variants
+
+### 1.4 Update Route to Use New Handler Trait
+
+**File**: `packages/web_server/src/lib.rs`
 
-- [ ] **Data Extractor** (50+ uses for shared state):
-    - [ ] Implement Data<T> for shared application state
-    - [ ] Add app_data() method to WebServerBuilder
-    - [ ] Support multiple Data<T> types
-    - [ ] Implement Arc wrapping internally
-- [ ] **Form Extractor**:
-    - [ ] Parse application/x-www-form-urlencoded
-    - [ ] Parse multipart/form-data
-    - [ ] Support file uploads in forms
-- [ ] **Header Extractor**:
-    - [ ] Extract specific header values
-    - [ ] Support typed header parsing
+- [ ] Change `RouteHandler` type alias to use `IntoHandler<()>`
+- [ ] Update `Route::new()` to accept `impl IntoHandler<()>`
+- [ ] Remove `Pin<Box<...>>` requirement from `Scope::route()`
+- [ ] Remove `Pin<Box<...>>` requirement from `Scope::get()`
+- [ ] Remove `Pin<Box<...>>` requirement from `Scope::post()`
+- [ ] Remove `Pin<Box<...>>` requirement from `Scope::put()`
+- [ ] Remove `Pin<Box<...>>` requirement from `Scope::delete()`
+- [ ] Remove `Pin<Box<...>>` requirement from `Scope::patch()`
+- [ ] Remove `Pin<Box<...>>` requirement from `Scope::head()`
+- [ ] **COMPILATION CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - must succeed
+- [ ] **WARNING CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` - must show ZERO warnings
+- [ ] **EXAMPLES CHECK**: Verify all examples still compile with changes
+
+### Step 1 Completion Gate 🚦
 
-### Step 3: Validation & Documentation
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
+- [ ] All existing examples still compile and run
+- [ ] No regression in existing functionality
 
-**Status**: BLOCKED (Requires Step 2)
-**Purpose**: Prove the improvements are real and document them
+## Step 2: Handler System with Multiple Implementations
 
-#### 3.1: Fix Examples
+### 2.1 Create Handler Macro System
 
-**Files to modify:**
+**File**: `packages/web_server/src/handler.rs`
 
-- [ ] `packages/web_server/examples/nested_get/src/main.rs`:
-    - [ ] Add HttpRequest import
-    - [ ] Add type annotations to closures
-- [ ] `packages/web_server/examples/simple_get/src/main.rs`:
-    - [ ] Update to show real improvements with extractors
-    - [ ] Add async function handler examples
-- [ ] `packages/web_server/examples/openapi/src/main.rs`:
-    - [ ] Update to demonstrate OpenAPI with extractors
+- [ ] Create `impl_handler!` macro for generating handler implementations
+- [ ] Generate handler implementation for 0 parameters
+- [ ] Generate handler implementation for 1 parameter
+- [ ] Generate handler implementation for 2 parameters
+- [ ] Generate handler implementation for 3 parameters
+- [ ] Generate handler implementation for 4 parameters
+- [ ] Generate handler implementation for 5-8 parameters
+- [ ] Generate handler implementation for 9-12 parameters
+- [ ] Generate handler implementation for 13-16 parameters
+- [ ] Add extraction error handling in macro
+- [ ] Add async extraction support in macro
 
-**Implementation:**
+### 2.2 Update FromRequest Trait
 
-- [ ] Remove misleading "old vs new" comments (both patterns identical)
-- [ ] Add working async function handler example
-- [ ] Create new example showing extractor usage:
-    ```rust
-    async fn handler(
-        Query(params): Query<SearchParams>,
-        Json(body): Json<RequestBody>,
-    ) -> Result<HttpResponse, Error> {
-        // Clean, no Box::pin, no manual parsing!
-    }
-    ```
-- [ ] Test all examples compile: `cargo build -p web_server_simple_get -p web_server_nested_get`
+**File**: `packages/web_server/src/from_request.rs` (new file)
 
-#### 3.2: Test Migration
-
-**Candidate packages for test migration:**
+- [ ] Move existing `FromRequest` trait from lib.rs
+- [ ] Add `Error` associated type to `FromRequest`
+- [ ] Update `Future` associated type to be more flexible
+- [ ] Add default implementations for common types
+- [ ] Implement `FromRequest` for `HttpRequest`
+- [ ] Implement `FromRequest` for `HttpRequestRef`
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Ensure FromRequest works with both Actix and Simulator HttpRequest variants
 
-- [ ] Option A: `packages/menu/src/api.rs` (simpler, fewer endpoints)
-- [ ] Option B: `packages/config/src/api/mod.rs` (more complex, better validation)
+### 2.3 Integration with Existing Route System
 
-**Implementation:**
-
-- [ ] Choose test package and migrate all endpoints to new handler style
-- [ ] Document issues encountered during migration
-- [ ] Measure code reduction (expect 50% less boilerplate)
-- [ ] Validate functionality unchanged
+**File**: `packages/web_server/src/lib.rs`
 
-#### 3.3: Migration Documentation
+- [ ] Update `Route` struct to store new handler type
+- [ ] Ensure backward compatibility with existing handlers
+- [ ] Add conversion utilities for old-style handlers
+- [ ] **COMPILATION CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - must succeed
+- [ ] **WARNING CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` - must show ZERO warnings
 
-**Files to create:**
+### Step 2 Completion Gate 🚦
 
-- [ ] Create migration guide with step-by-step instructions
-- [ ] Document common patterns and their conversions
-- [ ] Create troubleshooting guide for common issues
-- [ ] Add performance comparison data
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
+- [ ] All existing examples still compile and run
+- [ ] Handler macro system generates working code for 0-16 parameters
 
-### Step 4: Advanced Features
+## Step 3: Extractors Implementation
 
-**Status**: BLOCKED (Can start after Step 1)
-**Purpose**: Add remaining features needed for full actix-web replacement
+### 3.1 Query Extractor (Highest Priority - 100+ uses)
 
-#### 4.1: Body and Streaming
+**File**: `packages/web_server/src/extractors/query.rs` (new file)
 
-**Files to modify:**
+- [ ] Create `Query<T>` struct wrapper
+- [ ] Implement `FromRequest` for `Query<T>`
+- [ ] Add `QueryError` enum for extraction errors
+- [ ] Handle URL decoding in query extraction
+- [ ] Add support for arrays/multiple values
+- [ ] Add comprehensive error messages
+- [ ] Write unit tests for Query extractor
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Test Query extractor with both Actix and Simulator backends
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Verify identical query parsing behavior across backends
 
-- [ ] `packages/web_server/src/lib.rs`:
-    - [ ] Extend HttpResponse for streaming support
-    - [ ] Add HttpResponseBody streaming variants
+### 3.2 Json Extractor
 
-**Implementation:**
+**File**: `packages/web_server/src/extractors/json.rs` (new file)
 
-- [ ] **Streaming Responses**:
-    - [ ] Add HttpResponseStream variant to HttpResponse enum
-    - [ ] Implement Stream trait for response bodies
-    - [ ] Add streaming constructors (stream, chunked)
-    - [ ] Support backpressure and flow control
-    - [ ] Add examples for file streaming and SSE
-
-#### 4.2: Extensible Middleware System
-
-**Design Principle**: Plugin-like architecture for arbitrary functionality
-
-**Files to create:**
+- [ ] Create `Json<T>` struct wrapper
+- [ ] Implement `FromRequest` for `Json<T>`
+- [ ] Add `JsonError` enum for extraction errors
+- [ ] Handle content-type validation
+- [ ] Add body size limits
+- [ ] Support both Actix and Simulator body reading
+- [ ] Write unit tests for Json extractor
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Verify Json extraction works identically with both backends
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Test error handling consistency across backends
 
-- [ ] `packages/web_server/src/middleware.rs` - Core middleware traits
-- [ ] `packages/web_server/src/middleware/transform.rs` - Transform pattern
-- [ ] `packages/web_server/src/middleware/layer.rs` - Layer pattern
-- [ ] `packages/web_server/src/middleware/service.rs` - Service trait
+### 3.3 Path Extractor
 
-**Files to modify:**
+**File**: `packages/web_server/src/extractors/path.rs` (new file)
 
-- [ ] `packages/web_server/src/lib.rs`:
-    - [ ] Add wrap() method to Scope
-    - [ ] Add wrap() method to Route
-    - [ ] Add middleware module exports
+- [ ] Create `Path<T>` struct wrapper
+- [ ] Implement `FromRequest` for `Path<T>`
+- [ ] Add `PathError` enum for extraction errors
+- [ ] Add route pattern matching logic
+- [ ] Support named path parameters
+- [ ] Support typed path parameters (i32, uuid, etc.)
+- [ ] Write unit tests for Path extractor
 
-**Core Framework:**
+### 3.4 Header Extractor
 
-- [ ] Define core middleware traits:
+**File**: `packages/web_server/src/extractors/header.rs` (new file)
 
-    ```rust
-    // Transform pattern for complex stateful middleware
-    pub trait Transform<S> {
-        type Transform: Service;
-        type Future: Future<Output = Result<Self::Transform, Error>>;
-        fn new_transform(&self, service: S) -> Self::Future;
-    }
-
-    // Service pattern for request handling
-    pub trait Service {
-        type Future: Future<Output = Result<HttpResponse, Error>>;
-        fn call(&self, req: HttpRequest) -> Self::Future;
-    }
-
-    // Layer pattern for simple wrapping middleware
-    pub trait Layer<S> {
-        type Service;
-        fn layer(&self, inner: S) -> Self::Service;
-    }
-    ```
+- [ ] Create `Header<T>` struct wrapper
+- [ ] Implement `FromRequest` for `Header<T>`
+- [ ] Add typed header extraction (Authorization, ContentType, etc.)
+- [ ] Handle missing headers gracefully
+- [ ] Write unit tests for Header extractor
 
-- [ ] Create middleware composition/chaining system
-- [ ] Support middleware ordering and dependencies
-- [ ] Enable both sync and async middleware
-- [ ] Add middleware configuration system
-- [ ] Create `from_fn()` helper for closure middleware
-- [ ] Support middleware state and context passing
+### 3.5 State Extractor
 
-**Middleware Patterns:**
+**File**: `packages/web_server/src/extractors/state.rs` (new file)
 
-- [ ] **Transform Pattern** (complex stateful middleware)
-- [ ] **Layer Pattern** (simple wrapping middleware)
-- [ ] **Functional Pattern** (inline middleware via `from_fn()`)
-- [ ] **Factory Pattern** (configurable middleware)
-
-**Plugin Features:**
-
-- [ ] Arbitrary middleware stacking: `app.wrap(A).wrap(B).wrap(C)`
-- [ ] Extension points (before/after hooks, error handling)
-- [ ] Third-party middleware support
-- [ ] Standard interfaces for external crates
+- [ ] Create `State<T>` struct wrapper
+- [ ] Implement `FromRequest` for `State<T>`
+- [ ] Add application state container
+- [ ] Ensure thread-safe state access
+- [ ] Write unit tests for State extractor
 
-**Example Implementations** (educational, not required):
+### 3.6 Extractor Module Organization
 
-- [ ] Request ID middleware (context injection)
-- [ ] Timing middleware (response transformation)
-- [ ] Echo middleware (request inspection)
-
-#### 4.3: WebSocket Support (Critical - 11 files use this)
-
-**Files to create:**
-
-- [ ] `packages/web_server/src/websocket.rs` - Core WebSocket support
-- [ ] `packages/web_server/src/websocket/context.rs` - WebSocket context
-- [ ] `packages/web_server/src/websocket/handler.rs` - Handler traits
-
-**Critical consumers (11 files):**
-
-- [ ] `packages/ws/src/ws.rs` - Core WebSocket utilities
-- [ ] `packages/server/src/ws/server.rs` - Server WebSocket
-- [ ] `packages/server/src/ws/handler.rs` - WebSocket handlers
-- [ ] `packages/tunnel_server/src/ws/api.rs` - Tunnel WebSocket
-- [ ] `packages/tunnel_server/src/ws/handler.rs` - Tunnel handlers
-- [ ] Plus 6 additional WebSocket-dependent files
-
-**Implementation:**
-
-- [ ] **WebSocket Upgrade**:
-    - [ ] Add WebSocket upgrade handling to HttpRequest
-    - [ ] Implement handshake validation
-    - [ ] Support WebSocket subprotocols
-- [ ] **WebSocket Context**:
-    - [ ] Create WebSocketContext for message handling
-    - [ ] Implement message types (Text, Binary, Ping, Pong, Close)
-    - [ ] Add connection lifecycle management
-- [ ] **WebSocket Handler Trait**:
-    - [ ] Define WebSocketHandler trait
-    - [ ] Support async message handling
-    - [ ] Add automatic ping/pong heartbeat
-
-#### 4.4: Static File Serving
-
-**Files to create:**
-
-- [ ] `packages/web_server/src/static_files.rs` - File serving support
-- [ ] `packages/web_server/src/static_files/named_file.rs` - NamedFile implementation
-- [ ] `packages/web_server/src/static_files/range.rs` - Range request support
-
-**Primary consumer:**
-
-- [ ] `packages/files/src/api.rs` - Currently uses actix_files
-
-**Implementation:**
-
-- [ ] **NamedFile Implementation**:
-    - [ ] Async file opening and reading
-    - [ ] MIME type detection from file extension
-    - [ ] ETag generation and validation
-    - [ ] Last-Modified header support
-- [ ] **Range Requests** (critical for media):
-    - [ ] Parse Range header (bytes=0-1023, bytes=-1024, bytes=1024-)
-    - [ ] Generate 206 Partial Content responses
-    - [ ] Support multi-range requests
-    - [ ] Content-Range header generation
-- [ ] **File Serving Helpers**:
-    - [ ] Directory listing support
-    - [ ] Index file serving (index.html)
-    - [ ] Content-Disposition headers for downloads
-
-### Step 5: Migration Support
-
-**Status**: BLOCKED (Do after core features)
-**Purpose**: Help migrate existing code (NOT core architecture)
-
-#### 5.1: Compatibility Layers
-
-**Files to create:**
-
-- [ ] `packages/web_server/src/compat/mod.rs` - Compatibility module
-- [ ] `packages/web_server/src/compat/actix.rs` - Actix bridge
-- [ ] `packages/web_server/src/compat/middleware.rs` - Middleware adapters
-
-**Implementation:**
-
-- [ ] **Actix Middleware Adapter**:
-    - [ ] Wrapper for existing actix middleware
-    - [ ] Bridge actix Transform trait to moosicbox Transform
-    - [ ] Handle actix-specific types and patterns
-- [ ] **WebSocket Compatibility**:
-    - [ ] Support existing actix-ws patterns
-    - [ ] Implement StreamHandler compatibility
-    - [ ] Bridge WebSocketContext differences
-- [ ] **Type Adapters**:
-    - [ ] Convert between actix and moosicbox types
-    - [ ] Handle request/response differences
-    - [ ] Support gradual migration patterns
-
-#### 5.2: Migration Tools
-
-**Implementation:**
-
-- [ ] **Automated Tools**:
-    - [ ] Import replacement script
-    - [ ] Handler signature conversion
-    - [ ] Middleware registration updates
-- [ ] **Migration Guides**:
-    - [ ] Step-by-step migration documentation
-    - [ ] Common pattern conversions
-    - [ ] Troubleshooting guide
-- [ ] **Validation Tools**:
-    - [ ] Migration completeness checker
-    - [ ] Performance comparison tools
-
-### Migration Scope (Phase 4)
-
-**Total migration scope: 75 files across 35+ packages**
-
-Major package groups requiring migration:
-
-- Auth/Config/Profiles group (8 files)
-- Media API group (10 files)
-- UI/Admin group (7 files)
-- Network/Files group (4 files)
-- Audio/Player group (4 files)
-- Middleware group (6 files)
-- Hyperchad/Renderer group (8 files)
-- Core server package (13 files)
-- Tunnel server (7 files)
-- WebSocket core (11 files)
-- Platform integrations (4 files)
-- Examples and tests (5 files)
-
-### Success Metrics
-
-1. **Compatibility**: All 50+ packages compile without changes
-2. **Ergonomics**: 50% less boilerplate in typical handlers
-3. **Performance**: Within 10% of actix-web benchmarks
-4. **Testing**: 100% deterministic tests (original goal)
+**File**: `packages/web_server/src/extractors/mod.rs` (new file)
+
+- [ ] Re-export all extractors
+- [ ] Add convenience imports
+- [ ] Add extractor documentation
+
+**File**: `packages/web_server/src/lib.rs`
+
+- [ ] Add `pub mod extractors;`
+- [ ] Re-export common extractors at crate root
+- [ ] **COMPILATION CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - must succeed
+- [ ] **WARNING CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` - must show ZERO warnings
+
+### Step 3 Completion Gate 🚦
+
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
+- [ ] All existing examples still compile and run
+- [ ] Query, Json, Path extractors work with both backends
+- [ ] Extractor syntax `Query(params): Query<T>` compiles and works
+
+## Step 4: Simulator Runtime Completion
+
+### 4.1 Router Implementation
+
+**File**: `packages/web_server/src/simulator/router.rs` (new file)
+
+- [ ] Create `SimulatorRouter` struct
+- [ ] Implement deterministic route matching
+- [ ] Add path parameter extraction
+- [ ] Handle route precedence (specific before wildcard)
+- [ ] Add route compilation for performance
+- [ ] Support nested scopes
+
+### 4.2 Complete SimulatorWebServer
+
+**File**: `packages/web_server/src/simulator.rs`
+
+- [ ] Remove `unimplemented!()` from `start()` method
+- [ ] Implement actual request routing using SimulatorRouter
+- [ ] Add proper error handling (404, 500, etc.)
+- [ ] Add middleware chain execution
+- [ ] Integrate with switchy::unsync for deterministic async
+- [ ] Add request/response logging
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Verify simulator produces same logical results as Actix for identical requests
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Ensure deterministic execution (same results across multiple runs)
+
+### 4.3 Deterministic Async Integration
+
+**File**: `packages/web_server/src/simulator/runtime.rs` (new file)
+
+- [ ] Create `SimulatorRuntime` struct
+- [ ] Integrate with `switchy::unsync` for deterministic timing
+- [ ] Implement deterministic request ID generation
+- [ ] Add deterministic error handling
+- [ ] Ensure reproducible execution order
+
+### 4.4 Test Utilities
+
+**File**: `packages/web_server/src/simulator/test.rs` (new file)
+
+- [ ] Create `TestRequest` builder
+- [ ] Create `TestResponse` assertions
+- [ ] Add helper functions for common test scenarios
+- [ ] Add deterministic test execution utilities
+
+**File**: `packages/web_server/src/simulator/mod.rs`
+
+- [ ] Add module organization
+- [ ] Re-export test utilities
+- [ ] Update existing simulator module structure
+- [ ] **COMPILATION CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - must succeed
+- [ ] **WARNING CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` - must show ZERO warnings
+
+### Step 4 Completion Gate 🚦
+
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
+- [ ] All existing examples still compile and run
+- [ ] Simulator produces deterministic, reproducible results
+- [ ] Zero `unimplemented!()` calls remaining in simulator code
+
+## Step 5: Examples and Testing
+
+### 5.1 Basic Example
+
+**File**: `packages/web_server/examples/basic.rs` (new file)
+
+- [ ] Create simple handler without Box::pin
+- [ ] Demonstrate Query extractor usage
+- [ ] Demonstrate Json extractor usage
+- [ ] Show feature flag switching between runtimes
+- [ ] Add comprehensive comments explaining improvements
+
+### 5.2 Extractor Examples
+
+**File**: `packages/web_server/examples/extractors.rs` (new file)
+
+- [ ] Demonstrate all extractor types
+- [ ] Show multiple extractors in one handler
+- [ ] Show error handling patterns
+- [ ] Add performance comparison with old approach
+
+### 5.3 Migration Example
+
+**File**: `packages/web_server/examples/migration.rs` (new file)
+
+- [ ] Show before/after code comparison
+- [ ] Demonstrate handler signature improvements
+- [ ] Show extractor benefits over manual parsing
+- [ ] Include common migration patterns
+
+### 5.4 Test Suite
+
+**File**: `packages/web_server/tests/integration.rs` (new file)
+
+- [ ] Create shared test functions for both runtimes
+- [ ] Test routing with both Actix and Simulator
+- [ ] Test all extractors with both runtimes
+- [ ] Verify identical behavior between runtimes
+- [ ] Add determinism tests for simulator
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: All tests must pass with both `--features actix` and `--features simulator`
+
+**File**: `packages/web_server/tests/extractors.rs` (new file)
+
+- [ ] Test Query extractor edge cases
+- [ ] Test Json extractor error conditions
+- [ ] Test Path extractor with various patterns
+- [ ] Test Header extractor with missing headers
+- [ ] Test State extractor thread safety
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Run all extractor tests against both backends
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Verify error messages are consistent across backends
+
+### 5.5 Fix Existing Examples
+
+**File**: `packages/web_server/examples/` (existing files)
+
+- [ ] Update existing examples to use new handler syntax
+- [ ] Ensure all examples compile with both runtimes
+- [ ] Add feature flag demonstrations
+- [ ] **COMPILATION CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo build --examples -p moosicbox_web_server` - must succeed
+- [ ] **RUNTIME CHECK**: All examples must run without panicking
+
+### Step 5 Completion Gate 🚦
+
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
+- [ ] ALL examples compile and run successfully
+- [ ] Examples demonstrate real improvements (no Box::pin, clean extractors)
+- [ ] Test suite passes for both Actix and Simulator backends
+
+## Step 6: Advanced Features
+
+### 6.1 Middleware System
+
+**File**: `packages/web_server/src/middleware/mod.rs` (new file)
+
+- [ ] Define `Middleware` trait
+- [ ] Create `Next` struct for middleware chaining
+- [ ] Implement middleware execution pipeline
+- [ ] Add middleware registration to WebServerBuilder
+- [ ] Support both sync and async middleware
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Ensure middleware works with both Actix and Simulator backends
+- [ ] **🚨 DUAL BACKEND CHECKPOINT**: Verify middleware execution order is consistent across backends
+
+### 6.2 CORS Middleware Integration
+
+**File**: `packages/web_server/src/middleware/cors.rs` (new file)
+
+- [ ] Integrate existing `moosicbox_web_server_cors`
+- [ ] Adapt CORS to new middleware system
+- [ ] Ensure compatibility with both runtimes
+
+### 6.3 Common Middleware
+
+**File**: `packages/web_server/src/middleware/logging.rs` (new file)
+
+- [ ] Create request/response logging middleware
+- [ ] Add configurable log levels
+- [ ] Support structured logging
+
+**File**: `packages/web_server/src/middleware/compression.rs` (new file)
+
+- [ ] Create response compression middleware
+- [ ] Support gzip/deflate compression
+- [ ] Add compression level configuration
+
+### 6.4 WebSocket Support (Lower Priority)
+
+**File**: `packages/web_server/src/websocket.rs` (new file)
+
+- [ ] Define WebSocket abstraction
+- [ ] Implement for Actix runtime
+- [ ] Implement for Simulator runtime
+- [ ] Add WebSocket handler trait
+
+### 6.5 State Management
+
+**File**: `packages/web_server/src/state.rs` (new file)
+
+- [ ] Create application state container
+- [ ] Add type-safe state registration
+- [ ] Integrate with State extractor
+- [ ] Support both runtimes
+- [ ] **COMPILATION CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - must succeed
+- [ ] **WARNING CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` - must show ZERO warnings
+
+### Step 6 Completion Gate 🚦
+
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
+- [ ] All existing examples still compile and run
+- [ ] Middleware system works with both backends
+- [ ] Advanced features integrate cleanly with existing code
+
+## Step 7: Migration
+
+### 7.1 Migration Documentation
+
+**File**: `packages/web_server/MIGRATION.md` (new file)
+
+- [ ] Write step-by-step migration guide
+- [ ] Document common patterns and replacements
+- [ ] Add troubleshooting section
+- [ ] Include performance benefits explanation
+- [ ] Add feature flag configuration guide
+
+### 7.2 Compatibility Layer
+
+**File**: `packages/web_server/src/compat.rs` (new file)
+
+- [ ] Create adapter for old-style handlers
+- [ ] Add compatibility macros
+- [ ] Provide migration helpers
+- [ ] Add deprecation warnings
+
+### 7.3 Update Package Dependencies
+
+**File**: `packages/web_server/Cargo.toml`
+
+- [ ] Add feature flags for runtime selection
+- [ ] Ensure proper feature dependencies
+- [ ] Add dev-dependencies for testing both runtimes
+
+### 7.4 Migration Script
+
+**File**: `scripts/migrate_to_web_server.sh` (new file)
+
+- [ ] Create automated import replacement script
+- [ ] Add handler signature detection
+- [ ] Flag manual review items
+- [ ] Generate migration report
+
+### 7.5 Package-by-Package Migration Plan
+
+**Documentation**: Update `docs/DST_PROGRESS.md`
+
+- [ ] Identify leaf packages (no web dependencies)
+- [ ] Plan intermediate package migration order
+- [ ] Schedule core package migrations
+- [ ] Create migration timeline
+- [ ] Add rollback procedures
+
+### 7.6 Validation Strategy
+
+- [ ] Define success criteria for each migrated package
+- [ ] Create automated testing for migrated packages
+- [ ] Plan performance regression testing
+- [ ] Set up monitoring for migration issues
+- [ ] **COMPILATION CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - must succeed
+- [ ] **WARNING CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` - must show ZERO warnings
+
+### Step 7 Completion Gate 🚦
+
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
+- [ ] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
+- [ ] All existing examples still compile and run
+- [ ] Migration documentation is complete and accurate
+- [ ] Migration tools work correctly on test packages
+
+## Success Metrics & Validation
+
+### Build Health Requirements (Non-Negotiable)
+
+- [ ] **Zero Warnings Policy**: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` produces no warnings at ANY point
+- [ ] **Continuous Compilation**: Project compiles successfully after EVERY merged change
+- [ ] **Examples Always Work**: All examples compile and run throughout development
+- [ ] **No Broken Commits**: Every commit in history must compile
+- [ ] **Test Compilation**: All tests must compile even if not all pass initially
+
+### Functionality Validation
+
+- [ ] All 50+ packages compile with new web_server
+- [ ] All existing tests pass without modification
+- [ ] Simulator and Actix produce identical results for same inputs
+- [ ] No performance regression (< 5% overhead)
+- [ ] All examples compile and run correctly
+
+### Code Quality Improvements
+
+- [ ] 50% reduction in handler boilerplate (measure LOC)
+- [ ] Zero `Box::pin(async move {...})` in new handlers
+- [ ] Clean extraction syntax: `Query(params): Query<T>`
+- [ ] Type-safe, compile-time checked extractors
+- [ ] Comprehensive error messages for extraction failures
+
+### Architecture Validation
+
+- [ ] Zero `unimplemented!()` calls in simulator
+- [ ] Deterministic test execution (same results across runs)
+- [ ] Clean separation between runtime implementations
+- [ ] Extensible middleware system working
+- [ ] Complete feature parity between runtimes
+- [ ] **🚨 DUAL BACKEND VALIDATION**: All features work with both `--features actix` and `--features simulator`
+- [ ] **🚨 DUAL BACKEND VALIDATION**: No backend-specific code in shared modules
+- [ ] **🚨 DUAL BACKEND VALIDATION**: Feature flags properly isolate backend implementations
+- [ ] **🚨 DUAL BACKEND VALIDATION**: Identical logical behavior across backends (verified by tests)
+
+## Task Summary
+
+**Total Tasks: 87**
+
+### By Step:
+
+- **Step 1**: 13 tasks (Foundation)
+- **Step 2**: 14 tasks (Handler System)
+- **Step 3**: 22 tasks (Extractors)
+- **Step 4**: 10 tasks (Simulator)
+- **Step 5**: 11 tasks (Examples/Tests)
+- **Step 6**: 11 tasks (Advanced)
+- **Step 7**: 6 tasks (Migration)
+
+### Priority Levels:
+
+- **Critical Path**: 25 tasks (Steps 1.1-1.4, 2.1-2.2, 3.1, 4.1-4.2)
+- **High Priority**: 35 tasks (Core extractors, basic examples, migration guide)
+- **Medium Priority**: 20 tasks (Advanced extractors, comprehensive tests)
+- **Low Priority**: 7 tasks (WebSocket, benchmarks, automation)
 
 ### Technical Decisions Log
+
+**Why build on existing abstraction?**
+
+- HttpRequest enum already abstracts between Actix and Stub/Simulator
+- SimulationStub provides simulator-specific request handling
+- Feature-gated implementations already switch between actix and simulator
+- Enhancement is less disruptive than replacement
 
 **Why remove Send from futures?**
 
 - Actix uses single-threaded runtime per worker
-- Rc is faster than Arc (no atomics)
-- HttpRequest contains Rc<actix_web::HttpRequestInner>
+- HttpRequest contains Rc<actix_web::HttpRequestInner> which isn't Send
 - Matches actix architecture = better performance
+- Simulator can still be Send for testing flexibility
 
 **Why multiple Handler implementations?**
 
-- Zero boilerplate for users
-- Type-safe extraction
-- Compile-time validation
+- Zero boilerplate for users: `async fn handler(Query(params): Query<T>)`
+- Type-safe extraction with compile-time validation
 - Matches modern framework ergonomics (Axum, Rocket)
+- Enables extractors without Box::pin
 
-**Why tuple struct extractors?**
+**Why complete the simulator?**
 
-- Valid Rust syntax for destructuring in function params
-- Clean usage: `Query(params): Query<T>`
-- Composable: multiple extractors per handler
-
-**Why extensible middleware as plugins?**
-
-- Any functionality can be added via middleware
-- Third-party middleware is first-class
-- No hardcoded assumptions in core
-- Future-proof for new patterns
+- Deterministic testing is core requirement
+- Remove all `unimplemented!()` calls
+- Full feature parity with Actix runtime
+- Integration with switchy::unsync for deterministic async
 
 ### Success Criteria
 
-- [ ] **Step 1 Complete**: Multiple handler implementations work, clean async functions compile
-- [ ] **Step 2 Complete**: Query, Path, Json extractors functional
-- [ ] **Step 3 Complete**: Examples show real improvements, test package migrated
-- [ ] **Step 4 Complete**: All advanced features implemented
-- [ ] **Step 5 Complete**: Migration tools available
-- [ ] **Phase 3 Complete**: First production package migrated from actix-web
+- [ ] **Step 1 Complete**: Clean async handlers without Box::pin
+- [ ] **Step 2 Complete**: Multiple handler implementations work
+- [ ] **Step 3 Complete**: Query, Path, Json extractors functional
+- [ ] **Step 4 Complete**: Simulator fully implemented and deterministic
+- [ ] **Step 5 Complete**: Examples show real improvements
+- [ ] **Step 6 Complete**: Advanced features implemented
+- [ ] **Step 7 Complete**: Migration tools and documentation ready
+- [ ] **Phase 3 Complete**: First production package migrated successfully
 
 ### Current Priority
 
-**Step 1 (Foundation)** is the critical path. This is the foundation that enables:
+**Step 1 (Foundation)** is the critical path that enables everything else:
 
-- Clean async function handlers
-- Extractor support
-- Removal of Box::pin boilerplate
-- All improvements in one coherent system
+- Complete HttpRequest abstraction (remove unimplemented!())
+- Create handler traits that work with existing abstraction
+- Enable clean async function handlers
+- Foundation for all extractors and improvements
 
-**Recommended Execution Order**: Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Migration
+**Recommended Execution Order**: Step 1 → Step 2 → Step 3 → Step 4 → Step 5 → Step 6 → Step 7
 
-### Phase 4: Web Server Migration
+## Phase 4: Web Server Migration
 
 **Goal: Systematic migration with minimal disruption**
-
-This phase executes the migration strategy detailed in Section 1.
 
 **Total scope: 75 files across 35+ packages** (64 with actix types + 11 WebSocket-specific)
 
