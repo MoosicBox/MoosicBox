@@ -830,60 +830,259 @@ These tasks have no interdependencies and can execute simultaneously.
 - `switchy_fs::unsync::read_dir_sorted()` - Async directory reading with sorting
 - `switchy_fs::unsync::walk_dir_sorted()` - Async recursive directory walking with sorting
 
-### Phase 3: Web Server Preparation
+### Phase 3: Web Server Enhancement (Incremental Plan)
 
-**Goal: Minimize rework during web server migration**
+**Goal: Create a smooth migration path from actix-web to moosicbox_web_server**
 
-**Execution order:**
+**Status: ⏳ Planning**
 
-#### 3.1 Design trait abstractions for web concepts
+This phase is broken into small, incremental improvements that can be done one at a time. Each step adds value and moves us closer to full actix-web abstraction.
 
-**Create in `packages/web_server/src/traits/`:**
+#### 3.1 Core Route Definition Enhancements
 
-- [ ] `request.rs` - Request trait abstracting HttpRequest
-- [ ] `response.rs` - Response trait abstracting HttpResponse
-- [ ] `extractors.rs` - Data extraction traits (Path, Query, Json, etc.)
-- [ ] `middleware.rs` - Middleware trait abstraction
-- [ ] `service.rs` - Service factory traits
+**Goal: Make route definition as clean as actix while keeping builder pattern**
 
-#### 3.2 Implement traits (parallel after 3.1)
+##### 3.1.1 Simplify Handler Signatures
 
-**actix-web implementations:**
+- [ ] Remove need for manual `Pin<Box<dyn Future>>` boxing
+- [ ] Create `HandlerFn` type alias for cleaner signatures
+- [ ] Add automatic async function wrapping
+- [ ] Support both sync and async handlers
 
-- [ ] Create `packages/web_server/src/actix/` module
-- [ ] Implement all traits for actix types
+##### 3.1.2 Add Route Attribute Macros
 
-**moosicbox_web_server implementations:**
+- [ ] Create `moosicbox_web_server_macros` crate
+- [ ] Implement `#[get("/path")]`, `#[post("/path")]`, etc.
+- [ ] Support path parameters in macros: `#[get("/user/{id}")]`
+- [ ] Generate `bind_services()` function from macros
+- [ ] Keep builder pattern as foundation (macros generate builder calls)
 
-- [ ] Enhance existing `packages/web_server/src/`
-- [ ] Add missing features from Section 1 checklist
+##### 3.1.3 Service Registration Pattern
 
-**Missing features to add (from Section 1):**
+- [ ] Implement `.service()` method matching actix pattern
+- [ ] Support `bind_services(scope)` convention used by all packages
+- [ ] Allow mixing macro-defined and builder-defined routes
 
-- [ ] WebSocket support (critical for 5 packages)
-- [ ] Server-sent events
-- [ ] Multipart form handling
-- [ ] Custom error responses
-- [ ] Request guards/extractors
-- [ ] Middleware system
-- [ ] Static file serving
-- [ ] CORS configuration
+#### 3.2 Extractor System
 
-#### 3.3 Build compatibility layer
+**Goal: Clean data extraction from requests without manual parsing**
 
-- [ ] Migration helpers in `packages/web_server/src/migration/`
-- [ ] Automated code transformation tools
-- [ ] Dual-mode operation support
+##### 3.2.1 Basic Extractors
 
-#### 3.4 Apply to leaf packages (proof of concept)
+- [ ] Create `Extractor` trait for all extractors
+- [ ] Implement `Json<T>` - JSON body parsing (used in 30+ files)
+- [ ] Implement `Query<T>` - Query string parsing (100+ uses)
+- [ ] Implement `Path<T>` - URL path parameters (20+ uses)
+- [ ] Add extractor error handling with automatic responses
 
-**Start with simplest packages:**
+##### 3.2.2 Advanced Extractors
 
-- [ ] `packages/config/src/api/` (simple REST)
-- [ ] `packages/scan/src/api.rs` (basic endpoints)
-- [ ] `packages/menu/src/api.rs` (no WebSockets)
+- [ ] Implement `Data<T>` - Shared app state (50+ uses)
+- [ ] Implement `Form<T>` - Form data parsing
+- [ ] Implement `Header` - Header value extraction
+- [ ] Implement `Bytes` - Raw body bytes
+- [ ] Implement `Payload` - Streaming body
 
-The trait design must complete before implementations begin. See Section 1 "Web Server Framework" for detailed feature requirements.
+##### 3.2.3 Custom Extractors
+
+- [ ] Create `FromRequest` trait for custom extractors
+- [ ] Support async extraction
+- [ ] Add examples for auth extractors (like `NonTunnelRequestAuthorized`)
+- [ ] Support multiple extractors in handler parameters
+
+#### 3.3 Middleware System
+
+**Goal: Composable middleware pipeline**
+
+##### 3.3.1 Middleware Trait
+
+- [ ] Design `Middleware` trait simpler than actix
+- [ ] Support `wrap()` method for applying middleware
+- [ ] Allow middleware composition/chaining
+- [ ] Support both sync and async middleware
+
+##### 3.3.2 Common Middleware
+
+- [ ] CORS middleware (already exists, needs integration)
+- [ ] Compression middleware (`Compress::default()` pattern)
+- [ ] Logging middleware (`ApiLogger` pattern)
+- [ ] Authentication middleware (StaticTokenAuth pattern)
+- [ ] Telemetry/metrics middleware
+
+##### 3.3.3 Custom Middleware Support
+
+- [ ] Support `wrap_fn()` for simple function middleware
+- [ ] Allow per-route and per-scope middleware
+- [ ] Middleware ordering guarantees
+
+#### 3.4 Error Handling
+
+**Goal: Automatic error-to-response conversion**
+
+##### 3.4.1 Error Response System
+
+- [ ] Create `ResponseError` trait
+- [ ] Automatic status code selection
+- [ ] JSON error responses
+- [ ] Error type registry
+
+##### 3.4.2 Common Error Types
+
+- [ ] `ErrorBadRequest` (38+ uses)
+- [ ] `ErrorInternalServerError` (30+ uses)
+- [ ] `ErrorUnauthorized` (15+ uses)
+- [ ] `ErrorNotFound` (10+ uses)
+- [ ] Custom error types with `impl ResponseError`
+
+#### 3.5 Response Types
+
+**Goal: Flexible response building**
+
+##### 3.5.1 Response Builder Enhancement
+
+- [ ] Improve `HttpResponse` builder pattern
+- [ ] Add content type helpers
+- [ ] Support streaming responses
+- [ ] Add redirect helpers
+
+##### 3.5.2 Responder Trait
+
+- [ ] Create `Responder` trait for custom types
+- [ ] Automatic JSON serialization
+- [ ] Support `impl Responder` returns
+- [ ] Multiple response format support
+
+#### 3.6 Static File Serving
+
+**Goal: File serving with range requests**
+
+##### 3.6.1 Basic File Serving
+
+- [ ] Create `NamedFile` equivalent
+- [ ] Support async file operations
+- [ ] MIME type detection
+- [ ] Content-Disposition headers
+
+##### 3.6.2 Advanced Features
+
+- [ ] Range request support (for media streaming)
+- [ ] ETag/Last-Modified support
+- [ ] Directory listing (optional)
+- [ ] Compression for static files
+
+#### 3.7 WebSocket Support
+
+**Goal: Real-time bidirectional communication**
+
+##### 3.7.1 WebSocket Abstraction
+
+- [ ] Create WebSocket trait abstraction
+- [ ] Support both actor-based and callback patterns
+- [ ] Message type abstraction
+- [ ] Connection lifecycle management
+
+##### 3.7.2 WebSocket Implementation
+
+- [ ] Actix-ws backend implementation
+- [ ] Simulator backend for testing
+- [ ] Auto-reconnection support
+- [ ] Heartbeat/ping-pong
+
+##### 3.7.3 WebSocket Context
+
+- [ ] Create `WebsocketContext` equivalent
+- [ ] Support `StreamHandler` pattern
+- [ ] Binary and text message support
+
+#### 3.8 Server-Sent Events (SSE)
+
+**Goal: Server-to-client streaming**
+
+##### 3.8.1 SSE Implementation
+
+- [ ] Create SSE response type
+- [ ] Event stream builder
+- [ ] Automatic keep-alive
+- [ ] Event ID support
+
+##### 3.8.2 SSE Integration
+
+- [ ] Content-Type: text/event-stream
+- [ ] Chunked transfer encoding
+- [ ] Client reconnection handling
+
+#### 3.9 Testing & Migration Tools
+
+**Goal: Smooth migration experience**
+
+##### 3.9.1 Compatibility Layer
+
+- [ ] Actix type wrappers
+- [ ] Migration guide documentation
+- [ ] Automated migration scripts
+- [ ] Dual-mode operation (both APIs work)
+
+##### 3.9.2 Testing Utilities
+
+- [ ] Test client for endpoints
+- [ ] Mock request/response builders
+- [ ] Assertion helpers
+- [ ] Integration test framework
+
+### Execution Priority
+
+**Phase 3A: Foundation (Do First)**
+
+1. Handler signature simplification (3.1.1)
+2. Basic extractors (3.2.1)
+3. Error response system (3.4.1)
+
+**Phase 3B: Core Features (Do Second)**
+
+1. Route attribute macros (3.1.2)
+2. Middleware trait (3.3.1)
+3. Advanced extractors (3.2.2)
+
+**Phase 3C: Advanced Features (Do Third)**
+
+1. WebSocket support (3.7)
+2. Static file serving (3.6)
+3. SSE support (3.8)
+
+**Phase 3D: Polish (Do Last)**
+
+1. Custom extractors (3.2.3)
+2. Testing utilities (3.9)
+3. Migration tools
+
+### Success Metrics
+
+- **Clean API**: Endpoints should be as clean as actix
+- **Incremental Migration**: Packages can migrate one at a time
+- **No Breaking Changes**: Existing moosicbox_web_server code continues working
+- **Performance**: No significant performance regression
+- **Testing**: Comprehensive test coverage for all features
+
+### Implementation Notes
+
+1. **Keep Builder Pattern**: The builder pattern stays as the foundation. Macros just generate builder calls.
+
+2. **Dual API Support**: Both macro-based and builder-based APIs work simultaneously, allowing gradual migration.
+
+3. **Feature Flags**: Each major feature (extractors, middleware, websockets) behind feature flags for incremental adoption.
+
+4. **Documentation First**: Write migration guide before implementation to ensure good developer experience.
+
+5. **Test Package First**: Use `packages/config/` or `packages/menu/` as test migration targets (simpler APIs).
+
+This incremental approach allows you to:
+
+- Make progress step by step
+- Test each feature thoroughly
+- Migrate packages gradually
+- Maintain a working system throughout
+
+Each checkbox represents a discrete task that adds value. You can work through them systematically, and the system remains functional at each step.
 
 ### Phase 4: Web Server Migration
 
