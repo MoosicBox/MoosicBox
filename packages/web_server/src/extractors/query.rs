@@ -1,3 +1,5 @@
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
 use serde::de::DeserializeOwned;
 
 use crate::{Error, HttpRequest, from_request::FromRequest, qs};
