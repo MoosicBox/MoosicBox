@@ -78,6 +78,65 @@ pub fn parse_path_pattern(path: &str) -> PathPattern {
     PathPattern::new(segments)
 }
 
+/// Type alias for path parameters extracted from route matching
+pub type PathParams = BTreeMap<String, String>;
+
+/// Matches a path pattern against an actual request path
+///
+/// Returns `Some(PathParams)` if the path matches the pattern, with any extracted parameters.
+/// Returns `None` if the path does not match the pattern.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_web_server::simulator::{parse_path_pattern, match_path};
+///
+/// // Exact match
+/// let pattern = parse_path_pattern("/users/profile");
+/// let params = match_path(&pattern, "/users/profile").unwrap();
+/// assert!(params.is_empty());
+///
+/// // Parameter extraction
+/// let pattern = parse_path_pattern("/users/{id}");
+/// let params = match_path(&pattern, "/users/123").unwrap();
+/// assert_eq!(params.get("id"), Some(&"123".to_string()));
+/// ```
+#[must_use]
+pub fn match_path(pattern: &PathPattern, actual_path: &str) -> Option<PathParams> {
+    let actual_pattern = parse_path_pattern(actual_path);
+    let actual_segments = actual_pattern.segments();
+    let pattern_segments = pattern.segments();
+
+    // Must have same number of segments
+    if actual_segments.len() != pattern_segments.len() {
+        return None;
+    }
+
+    let mut params = PathParams::new();
+
+    for (pattern_segment, actual_segment) in pattern_segments.iter().zip(actual_segments.iter()) {
+        match (pattern_segment, actual_segment) {
+            // Both are literals - must match exactly
+            (PathSegment::Literal(pattern_lit), PathSegment::Literal(actual_lit)) => {
+                if pattern_lit != actual_lit {
+                    return None;
+                }
+            }
+            // Pattern has parameter, actual has literal - extract parameter
+            (PathSegment::Parameter(param_name), PathSegment::Literal(actual_value)) => {
+                params.insert(param_name.clone(), actual_value.clone());
+            }
+            // Pattern has literal, actual has parameter - no match
+            // Both are parameters - this shouldn't happen in normal usage
+            (PathSegment::Literal(_) | PathSegment::Parameter(_), PathSegment::Parameter(_)) => {
+                return None;
+            }
+        }
+    }
+
+    Some(params)
+}
+
 /// Simulation-specific implementation of HTTP request data
 #[derive(Debug, Clone)]
 pub struct SimulationRequest {
@@ -224,7 +283,6 @@ impl From<SimulationRequest> for SimulationStub {
 
 struct SimulatorWebServer {
     scopes: Vec<crate::Scope>,
-    #[allow(unused)] // TODO: Remove in 5.1.3 when find_route() is implemented
     routes: BTreeMap<(Method, String), RouteHandler>,
     #[allow(unused)] // TODO: Remove in 5.1.6 when state management methods are implemented
     state: Arc<RwLock<BTreeMap<TypeId, Box<dyn Any + Send + Sync>>>>,
@@ -234,6 +292,41 @@ impl SimulatorWebServer {
     #[allow(unused)] // TODO: Remove in 5.1.7 when register_scope() calls this method
     pub fn register_route(&mut self, method: Method, path: &str, handler: RouteHandler) {
         self.routes.insert((method, path.to_string()), handler);
+    }
+
+    /// Finds a route that matches the given method and path
+    ///
+    /// Returns the handler and extracted path parameters if a match is found.
+    /// Implements route precedence: exact matches are preferred over parameterized matches.
+    #[allow(unused)] // TODO: Remove in 5.1.4 when process_request() uses this method
+    #[must_use]
+    pub fn find_route(&self, method: Method, path: &str) -> Option<(&RouteHandler, PathParams)> {
+        let mut exact_matches = Vec::new();
+        let mut parameterized_matches = Vec::new();
+
+        // Collect all potential matches
+        for ((route_method, route_path), handler) in &self.routes {
+            if *route_method != method {
+                continue;
+            }
+
+            let route_pattern = parse_path_pattern(route_path);
+            if let Some(params) = match_path(&route_pattern, path) {
+                // Check if this is an exact match (no parameters extracted)
+                if params.is_empty() {
+                    exact_matches.push((handler, params));
+                } else {
+                    parameterized_matches.push((handler, params));
+                }
+            }
+        }
+
+        // Prefer exact matches over parameterized matches
+        if let Some((handler, params)) = exact_matches.into_iter().next() {
+            Some((handler, params))
+        } else {
+            parameterized_matches.into_iter().next()
+        }
     }
 }
 
@@ -404,5 +497,155 @@ mod tests {
             pattern.segments()[1],
             PathSegment::Parameter("id".to_string())
         );
+    }
+
+    #[test]
+    fn test_match_path_exact_route() {
+        let pattern = parse_path_pattern("/api/users");
+        let params = match_path(&pattern, "/api/users").unwrap();
+
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn test_match_path_parameterized_route() {
+        let pattern = parse_path_pattern("/users/{id}");
+        let params = match_path(&pattern, "/users/123").unwrap();
+
+        assert_eq!(params.len(), 1);
+        assert_eq!(params.get("id"), Some(&"123".to_string()));
+    }
+
+    #[test]
+    fn test_match_path_multiple_parameters() {
+        let pattern = parse_path_pattern("/users/{id}/posts/{post_id}");
+        let params = match_path(&pattern, "/users/123/posts/456").unwrap();
+
+        assert_eq!(params.len(), 2);
+        assert_eq!(params.get("id"), Some(&"123".to_string()));
+        assert_eq!(params.get("post_id"), Some(&"456".to_string()));
+    }
+
+    #[test]
+    fn test_match_path_no_match_different_segments() {
+        let pattern = parse_path_pattern("/users/{id}");
+        let result = match_path(&pattern, "/posts/123");
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_match_path_no_match_different_length() {
+        let pattern = parse_path_pattern("/users/{id}");
+        let result = match_path(&pattern, "/users/123/extra");
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_route_exact_match() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+
+        let handler = create_test_handler();
+        server.register_route(Method::Get, "/api/users", handler);
+
+        let result = server.find_route(Method::Get, "/api/users");
+        assert!(result.is_some());
+
+        let (_, params) = result.unwrap();
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn test_find_route_parameterized_match() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+
+        let handler = create_test_handler();
+        server.register_route(Method::Get, "/users/{id}", handler);
+
+        let result = server.find_route(Method::Get, "/users/123");
+        assert!(result.is_some());
+
+        let (_, params) = result.unwrap();
+        assert_eq!(params.len(), 1);
+        assert_eq!(params.get("id"), Some(&"123".to_string()));
+    }
+
+    #[test]
+    fn test_find_route_method_discrimination() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+
+        let get_handler = create_test_handler();
+        let post_handler = create_test_handler();
+        server.register_route(Method::Get, "/users", get_handler);
+        server.register_route(Method::Post, "/users", post_handler);
+
+        // GET request should match GET route
+        let get_result = server.find_route(Method::Get, "/users");
+        assert!(get_result.is_some());
+
+        // POST request should match POST route
+        let post_result = server.find_route(Method::Post, "/users");
+        assert!(post_result.is_some());
+
+        // PUT request should not match any route
+        let put_result = server.find_route(Method::Put, "/users");
+        assert!(put_result.is_none());
+    }
+
+    #[test]
+    fn test_find_route_no_match_404() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+
+        let handler = create_test_handler();
+        server.register_route(Method::Get, "/users", handler);
+
+        // Different path should not match
+        let result = server.find_route(Method::Get, "/posts");
+        assert!(result.is_none());
+
+        // Different method should not match
+        let result = server.find_route(Method::Post, "/users");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_route_precedence_exact_over_parameterized() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+
+        let exact_handler = create_test_handler();
+        let param_handler = create_test_handler();
+
+        // Register parameterized route first
+        server.register_route(Method::Get, "/users/{id}", param_handler);
+        // Register exact route second
+        server.register_route(Method::Get, "/users/profile", exact_handler);
+
+        // Request for "/users/profile" should match exact route (empty params)
+        let result = server.find_route(Method::Get, "/users/profile");
+        assert!(result.is_some());
+
+        let (_, params) = result.unwrap();
+        assert!(params.is_empty()); // Exact match should have no parameters
     }
 }
