@@ -989,7 +989,7 @@ Before marking ANY checkbox complete:
 
 ### Progress Tracking
 
-**Overall Progress: 150/315 tasks completed (48%)** - **STEP 5 PARTIALLY IMPLEMENTED**
+**Overall Progress: 150/280 tasks completed (54%)** - **REORGANIZED FOR CLEARER EXECUTION**
 
 **Step 1: Runtime Abstraction Enhancement** - ✅ **44/44 tasks completed (100%)**
 
@@ -1048,49 +1048,42 @@ Before marking ANY checkbox complete:
     - All examples compile and run with both Actix and Simulator backends
     - **Critical Discovery**: Examples revealed abstraction is incomplete (require feature gates)
 
-**Step 5: Complete Web Server Abstraction** - ⏳ **7/20 tasks completed (35%)** - **PARTIALLY IMPLEMENTED**
+**Step 5: Complete Web Server Abstraction** - ⏳ **5/101 tasks completed (5%)** - **REORGANIZED AND EXPANDED**
 
 - ✅ Create unified WebServer trait (5/5 tasks) - **COMPLETED** (trait exists in web_server_core, both backends implement it)
-- ⏳ Complete SimulatorWebServer implementation (2/8 tasks) - **PARTIALLY DONE** (structure exists, missing request handling logic)
-- ❌ Create unified TestClient abstraction (0/4 tasks) - **BLOCKS VALIDATION**
-- ❌ Remove feature gates from examples (0/3 tasks) - **BLOCKS CLEAN API**
+- ❌ Complete SimulatorWebServer basics (0/84 tasks) - **DETAILED BREAKDOWN** (route storage, handler execution, response generation, state management, scope processing, comprehensive testing)
+- ❌ Create unified TestClient abstraction (0/4 tasks) - **ENHANCED WITH SIMULATOR SPECIFICS**
+- ❌ Create unified server builder/runtime (0/5 tasks) - **ENHANCED WITH 5.1 API USAGE**
+- ❌ Update examples to remove feature gates (0/3 tasks) - **ENHANCED WITH CONCRETE VALIDATION**
 
-**Step 6: Router and Advanced Features** - ⏳ **0/25 tasks completed (0%)** - **BLOCKED BY STEP 5**
+**Step 6: Advanced Routing and Async Integration** - ⏳ **0/11 tasks completed (0%)** - **SIMPLIFIED AND FOCUSED**
 
-- ⏳ Router implementation (0/6 tasks) - **BLOCKED: Needs complete abstraction**
-- ⏳ Complete SimulatorWebServer (0/8 tasks) - **MOVED TO STEP 5**
-- ⏳ Deterministic async integration (0/5 tasks) - **BLOCKED: Needs Step 5**
-- ⏳ Migration Guide and Documentation (0/6 tasks) - **BLOCKED: Needs working abstraction**
+- ⏳ Advanced routing features (0/6 tasks) - **REORGANIZED** (regex patterns, route guards, nested routers, precedence)
+- ⏳ Deterministic async integration (0/5 tasks) - **UNCHANGED** (switchy_async integration, deterministic timers, ordered requests)
 
-**Step 7: Examples and Testing** - 0/35 tasks completed (0%)
+**Step 7: Advanced Examples and Comprehensive Testing** - 0/20 tasks completed (0%) - **FOCUSED ON ADVANCED SCENARIOS**
 
-- ⏳ Basic example (0/5 tasks)
-- ⏳ Extractor examples (0/4 tasks)
-- ⏳ Migration example (0/4 tasks)
-- ⏳ Test suite (0/12 tasks)
-- ⏳ Fix existing examples (0/5 tasks)
-- ⏳ Completion gate (0/5 tasks)
+- ⏳ Advanced examples (0/8 tasks) - **REORGANIZED** (WebSockets, streaming, file uploads, complex middleware)
+- ⏳ Comprehensive test suite (0/7 tasks) - **ENHANCED** (cross-backend compatibility, performance benchmarks, stress testing)
+- ⏳ Example documentation (0/5 tasks) - **NEW** (patterns, best practices, troubleshooting)
 
-**Step 8: Advanced Features** - 0/31 tasks completed (0%)
+**Step 8: Advanced Features** - 0/25 tasks completed (0%) - **FOCUSED ON TRULY ADVANCED FEATURES**
 
-- ⏳ Middleware system (0/7 tasks)
-- ⏳ CORS middleware integration (0/3 tasks)
-- ⏳ Common middleware (0/6 tasks)
-- ⏳ WebSocket support (0/4 tasks)
-- ⏳ State management (0/6 tasks)
-- ⏳ Completion gate (0/5 tasks)
+- ⏳ Full middleware system (0/7 tasks) - **UNCHANGED** (middleware traits, chaining, ordering)
+- ⏳ CORS middleware integration (0/3 tasks) - **UNCHANGED** (already exists, needs integration)
+- ⏳ WebSocket support (0/4 tasks) - **UNCHANGED** (complex, needs careful design)
+- ⏳ Streaming support (0/4 tasks) - **NEW** (server-sent events, chunked responses)
+- ⏳ Advanced state patterns (0/4 tasks) - **REORGANIZED** (dependency injection, scoped state)
+- ⏳ Completion gate (0/3 tasks) - **SIMPLIFIED**
 
-**Step 9: Migration** - 0/32 tasks completed (0%)
+**Step 9: Consolidated Migration and Package Updates** - 0/35 tasks completed (0%) - **CONSOLIDATED MIGRATION EFFORT**
 
-- ⏳ Migration documentation (0/5 tasks)
-- ⏳ Compatibility layer (0/4 tasks)
-- ⏳ Update package dependencies (0/3 tasks)
-- ⏳ Migration script (0/4 tasks)
-- ⏳ Package migration plan (0/5 tasks)
-- ⏳ Validation strategy (0/6 tasks)
-- ⏳ Completion gate (0/5 tasks)
+- ⏳ Comprehensive migration guide (0/8 tasks) - **ENHANCED** (step-by-step from actix-web, patterns, gotchas, performance)
+- ⏳ Automated migration tools (0/6 tasks) - **NEW** (scripts, validation, testing)
+- ⏳ Package migration execution (0/15 tasks) - **EXPANDED** (prioritized list, parallel migration, validation)
+- ⏳ Migration validation (0/6 tasks) - **CONSOLIDATED** (testing strategy, rollback plans, monitoring)
 
-**Step 10: Routing Macro System** - 0/65 tasks completed (0%)
+**Step 10: Routing Macro System** - 0/65 tasks completed (0%) - **UNCHANGED**
 
 - ⏳ Create proc macro crate (0/5 tasks)
 - ⏳ Attribute macros for HTTP methods (0/15 tasks)
@@ -1102,6 +1095,97 @@ Before marking ANY checkbox complete:
 - ⏳ Testing and validation (0/8 tasks)
 - ⏳ Migration and documentation (0/4 tasks)
 - ⏳ Completion gate (0/5 tasks)
+
+## Step 5 Detailed Implementation Plan: Complete Web Server Abstraction
+
+⏳ Complete SimulatorWebServer basics (0/84 tasks) - **MOVED FROM STEP 6** (route storage, handler execution, response generation, state management, scope processing, comprehensive testing)
+
+⏳ Create unified TestClient abstraction (0/4 tasks) - **BLOCKS VALIDATION**
+
+⏳ Create unified server builder/runtime (0/5 tasks) - **NEW** (eliminates feature gates in server construction)
+
+⏳ Update examples to remove feature gates (0/3 tasks) - **PROOF OF CONCEPT**
+
+### Step 5 Success Criteria
+
+**Must Have**:
+
+- [ ] At least one example runs without ANY feature gates in the example code
+- [ ] TestClient works with both backends using same test code
+- [ ] Server can be started/stopped with unified API
+- [ ] Tests can be written once and run with either backend
+- [ ] SimulatorWebServer handles basic request/response cycle
+- [ ] Full compilation with zero warnings: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features`
+
+**Validation Commands**:
+
+```bash
+# Test with Actix backend
+cargo run --example unified_server --features actix
+
+# Test with Simulator backend
+cargo run --example unified_server --features simulator
+
+# Run unified tests with both backends
+cargo test --features actix
+cargo test --features simulator
+```
+
+## Step 6 Detailed Implementation Plan: Advanced Routing and Async Integration
+
+### 6.1 Advanced Routing Features (6 tasks)
+
+**Goal**: Extend basic routing with advanced patterns and features
+
+- [ ] Implement regex route patterns
+    - Support `/users/{id:\\d+}` syntax for typed path parameters
+    - Add regex compilation and caching
+    - Integrate with existing path parameter extraction
+- [ ] Add route guards and filters
+    - Pre-request filtering based on headers, query params, etc.
+    - Conditional route matching
+    - Integration with middleware system
+- [ ] Implement nested routers/scopes
+    - Hierarchical route organization
+    - Scope-level middleware application
+    - Path prefix handling
+- [ ] Add route precedence rules
+    - Deterministic route matching order
+    - Conflict resolution for overlapping patterns
+    - Performance optimization for route lookup
+- [ ] Create route introspection
+    - List all registered routes
+    - Route debugging and diagnostics
+    - OpenAPI integration support
+- [ ] Add route-level configuration
+    - Per-route timeouts
+    - Route-specific middleware
+    - Custom extractors per route
+
+### 6.2 Deterministic Async Integration (5 tasks)
+
+**Goal**: Ensure deterministic behavior in async operations
+
+- [ ] Integrate with switchy_async runtime
+    - Use deterministic task scheduling in simulator mode
+    - Maintain real async behavior in production mode
+    - Handle concurrent request processing deterministically
+- [ ] Add deterministic timer handling
+    - Request timeouts that are deterministic in tests
+    - Retry logic with deterministic backoff
+    - Rate limiting with deterministic timing
+- [ ] Implement ordered concurrent requests
+    - Process multiple requests in deterministic order during simulation
+    - Maintain performance in production mode
+    - Handle request queuing and prioritization
+- [ ] Add async middleware support
+    - Middleware that can perform async operations
+    - Deterministic middleware execution order
+    - Error handling in async middleware chain
+- [ ] Create async testing utilities
+    - Deterministic async test helpers
+    - Concurrent request testing
+    - Async assertion utilities
 
 ## Example Milestone Strategy
 
@@ -3122,75 +3206,245 @@ mod simulator_tests {
 - [ ] Documentation is complete and accurate
 - [ ] Migration guide is clear and actionable
 
-## Step 5: Simulator Runtime Completion
+## Step 5: Complete Web Server Abstraction (CRITICAL)
 
-### 5.1 Router Implementation
+**Status:** 🔴 CRITICAL | ❌ **Abstraction layer incomplete - BLOCKS ALL FURTHER PROGRESS**
 
-**File**: `packages/web_server/src/simulator/router.rs` (new file)
+**🎯 GOAL**: Fix the fundamental architectural issue discovered in Step 4.3 - the web server abstraction is incomplete, requiring feature-gated code instead of providing a unified API.
 
-**Simulator-Specific Implementation** (no Actix equivalent needed):
+### 5.1 Complete SimulatorWebServer Basics (84 tasks) - **MOVED FROM STEP 6**
 
-- [ ] Create `SimulatorRouter` struct
-- [ ] Implement deterministic route matching
-- [ ] Add path parameter extraction
-- [ ] Handle route precedence (specific before wildcard)
-- [ ] Add route compilation for performance
-- [ ] Support nested scopes
+**Overview**: Transform SimulatorWebServer from stub implementation to fully functional web server capable of route storage, handler execution, response generation, and basic state management. This provides the foundation for eliminating feature gates from examples.
 
-### 5.2 Complete SimulatorWebServer
+**Files**: `packages/web_server/src/simulator.rs`, `packages/web_server/tests/simulator_integration.rs`
+
+#### 5.1.1 Route Storage Infrastructure (7 tasks)
 
 **File**: `packages/web_server/src/simulator.rs`
 
-**Simulator-Specific Implementation**:
+- [ ] Add `routes` field to SimulatorWebServer struct: `BTreeMap<(Method, String), BoxedHandler>`
+- [ ] Add `state` field to SimulatorWebServer struct: `Arc<RwLock<BTreeMap<TypeId, Box<dyn Any + Send + Sync>>>>`
+- [ ] Update `SimulatorWebServer::new()` to initialize empty routes and state collections
+- [ ] Add `register_route(&mut self, method: Method, path: &str, handler: BoxedHandler)` method
+- [ ] Add unit test: verify route registration stores handler correctly
+- [ ] Add unit test: verify multiple routes can be registered without conflict
+- [ ] **Validation**: `cargo test simulator_route_storage` passes
 
-- [ ] Remove `unimplemented!()` from `start()` method
-- [ ] Implement actual request routing using SimulatorRouter
-- [ ] Add proper error handling (404, 500, etc.)
-- [ ] Add middleware chain execution
-- [ ] Integrate with switchy::unsync for deterministic async
-- [ ] Add request/response logging
+#### 5.1.2 Path Pattern Parsing (8 tasks)
 
-**Validation Against Actix**:
+**File**: `packages/web_server/src/simulator.rs`
 
-- [ ] Verify simulator handles same route patterns as Actix
-- [ ] Verify simulator returns same status codes as Actix for identical requests
-- [ ] Verify simulator middleware execution order matches Actix
-- [ ] Ensure deterministic execution (same results across multiple runs)
+- [ ] Create `PathPattern` enum with variants: `Exact(String)`, `WithParams(Vec<PathSegment>)`
+- [ ] Create `PathSegment` enum with variants: `Static(String)`, `Param(String)`
+- [ ] Implement `parse_path_pattern(path: &str) -> PathPattern` function
+- [ ] Add support for `{param}` syntax in paths (e.g., `/users/{id}`)
+- [ ] Add unit test: parse exact path `/api/users` correctly
+- [ ] Add unit test: parse parameterized path `/users/{id}/posts/{post_id}` correctly
+- [ ] Add unit test: handle edge cases (empty path, trailing slashes, special characters)
+- [ ] **Validation**: All path parsing tests pass
 
-### 5.3 Deterministic Async Integration
+#### 5.1.3 Route Matching Logic (11 tasks)
 
-**File**: `packages/web_server/src/simulator/runtime.rs` (new file)
+**File**: `packages/web_server/src/simulator.rs`
 
-- [ ] Create `SimulatorRuntime` struct
-- [ ] Integrate with `switchy::unsync` for deterministic timing
-- [ ] Implement deterministic request ID generation
-- [ ] Add deterministic error handling
-- [ ] Ensure reproducible execution order
+- [ ] Create `PathParams` type alias: `BTreeMap<String, String>`
+- [ ] Implement `match_path(pattern: &PathPattern, actual_path: &str) -> Option<PathParams>`
+- [ ] Add exact path matching (return empty PathParams on match)
+- [ ] Add parameterized path matching (extract and return parameters)
+- [ ] Implement `find_route(&self, method: &Method, path: &str) -> Option<(&BoxedHandler, PathParams)>`
+- [ ] Add route precedence: exact matches before parameterized matches
+- [ ] Add unit test: exact route `/api/users` matches correctly
+- [ ] Add unit test: parameterized route `/users/{id}` matches `/users/123` and extracts `id=123`
+- [ ] Add unit test: method discrimination (GET `/users` vs POST `/users`)
+- [ ] Add unit test: 404 case when no routes match
+- [ ] **Validation**: `cargo test simulator_route_matching` passes
 
-### 5.4 Test Utilities
+#### 5.1.4 Request Processing Pipeline (13 tasks)
 
-**File**: `packages/web_server/src/simulator/test.rs` (new file)
+**File**: `packages/web_server/src/simulator.rs`
 
-- [ ] Create `TestRequest` builder
-- [ ] Create `TestResponse` assertions
-- [ ] Add helper functions for common test scenarios
-- [ ] Add deterministic test execution utilities
+- [ ] Add `path_params` field to SimulationRequest: `BTreeMap<String, String>`
+- [ ] Add builder method `with_path_params(params: PathParams)` to SimulationRequest
+- [ ] Implement `SimulationStub::path_param(&self, name: &str) -> Option<&str>` method
+- [ ] Implement `process_request(&self, request: SimulationRequest) -> SimulationResponse`
+- [ ] In process_request: find matching route using `find_route()`
+- [ ] In process_request: inject path params into request
+- [ ] In process_request: create HttpRequest::Stub from enhanced request
+- [ ] In process_request: execute matched handler with request
+- [ ] In process_request: return 404 response if no route matches
+- [ ] Add integration test: simple GET request to registered route
+- [ ] Add integration test: POST request with path parameters
+- [ ] Add integration test: 404 response for unmatched route
+- [ ] **Validation**: `cargo test simulator_request_processing` passes
 
-**File**: `packages/web_server/src/simulator/mod.rs`
+#### 5.1.5 Response Generation (10 tasks)
 
-- [ ] Add module organization
-- [ ] Re-export test utilities
-- [ ] Update existing simulator module structure
-- [ ] **COMPILATION CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - must succeed
-- [ ] **WARNING CHECK**: Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets` - must show ZERO warnings
+**File**: `packages/web_server/src/simulator.rs`
+
+- [ ] Implement conversion from `HttpResponse` to `SimulationResponse`
+- [ ] Handle JSON response bodies (serialize to string)
+- [ ] Handle HTML response bodies (pass through as string)
+- [ ] Handle plain text response bodies
+- [ ] Preserve status codes in conversion
+- [ ] Preserve headers in conversion
+- [ ] Add unit test: JSON response conversion preserves content-type
+- [ ] Add unit test: status codes are preserved (200, 404, 500)
+- [ ] Add unit test: custom headers are preserved
+- [ ] **Validation**: `cargo test simulator_response_generation` passes
+
+#### 5.1.6 State Management (9 tasks)
+
+**File**: `packages/web_server/src/simulator.rs`
+
+- [ ] Implement `insert_state<T: Send + Sync + 'static>(&mut self, state: T)` method
+- [ ] Implement `get_state<T: Send + Sync + 'static>(&self) -> Option<Arc<T>>` method
+- [ ] Add `app_state` method to SimulationStub to access server state
+- [ ] Update `State<T>` extractor to work with simulator backend
+- [ ] Add unit test: insert and retrieve string state
+- [ ] Add unit test: insert and retrieve custom struct state
+- [ ] Add unit test: state is shared across multiple requests
+- [ ] Add integration test: handler can extract state via `State<T>`
+- [ ] **Validation**: `cargo test simulator_state_management` passes
+
+#### 5.1.7 Scope Processing (8 tasks)
+
+**File**: `packages/web_server/src/simulator.rs`
+
+- [ ] Implement `register_scope(&mut self, scope: Scope)` method
+- [ ] Process scope prefix (e.g., `/api` prefix for all routes in scope)
+- [ ] Process all routes within scope with prefix prepended
+- [ ] Handle nested scopes recursively
+- [ ] Add unit test: scope with prefix `/api` and route `/users` creates `/api/users`
+- [ ] Add unit test: nested scopes combine prefixes correctly
+- [ ] Add integration test: request to scoped route works correctly
+- [ ] **Validation**: `cargo test simulator_scope_processing` passes
+
+#### 5.1.8 Comprehensive Integration Testing (11 tasks)
+
+**File**: `packages/web_server/tests/simulator_integration.rs` (new)
+
+- [ ] Create test that registers multiple routes with different methods
+- [ ] Create test with complex path parameters `/users/{id}/posts/{post_id}`
+- [ ] Create test that uses Query, Json, and Path extractors together
+- [ ] Create test that demonstrates state extraction in handlers
+- [ ] Create test that shows 404 handling for unmatched routes
+- [ ] Create test that validates deterministic execution order
+- [ ] Add performance test: 1000 route registrations
+- [ ] Add performance test: 10000 request matches
+- [ ] **Validation**: All integration tests pass
+- [ ] **Validation**: `TUNNEL_ACCESS_TOKEN=123 cargo clippy -p moosicbox_web_server` - ZERO warnings
+- [ ] **Validation**: Example compiles: `cargo build --example unified_server --features simulator`
+
+### 5.2 Create Unified TestClient Abstraction (4 tasks) - **BLOCKS VALIDATION**
+
+**Files**: `packages/web_server/src/test_client/`
+
+- [ ] Design TestClient trait
+    - Define core trait with HTTP methods (GET, POST, PUT, DELETE)
+    - Create TestRequestBuilder for fluent request construction
+    - Design TestResponse wrapper with assertion helpers
+    - Add serialization support for JSON/form bodies
+- [ ] Implement TestClient for Actix backend
+    - Wrap actix_web::test::TestServer
+    - Implement all TestClient trait methods
+    - Convert actix responses to TestResponse
+    - Handle async operations with proper futures
+- [ ] Implement TestClient for Simulator backend
+    - Use SimulatorWebServer::process_request() for direct invocation
+    - No network calls - direct method calls
+    - Return SimulationResponse wrapped as TestResponse
+    - Ensure deterministic execution order
+- [ ] Add request/response testing utilities
+    - Create TestResponseExt trait with assertion methods
+    - Add JSON body comparison helpers
+    - Implement status code assertion groups (2xx, 3xx, 4xx, 5xx)
+    - Create request builder patterns for common scenarios
+
+### 5.3 Create Unified Server Builder/Runtime (5 tasks) - **NEW**
+
+**Files**: `packages/web_server/src/server_builder.rs`, `packages/web_server/src/runtime.rs`
+
+- [ ] Design unified ServerBuilder
+    - Configuration that works for both backends
+    - Fluent API for server setup (bind, routes, middleware)
+    - Feature-flag based backend selection at compile time
+    - App configuration abstraction
+- [ ] Implement ActixServerBuilder
+    - Wrap actix_web::HttpServer configuration
+    - Convert unified config to actix-specific setup
+    - Handle actix-specific features (workers, keep-alive, etc.)
+    - Integrate with existing actix middleware
+- [ ] Implement SimulatorServerBuilder
+    - Use SimulatorWebServer::register_route() for route setup
+    - Use SimulatorWebServer::register_scope() for scope setup
+    - Use SimulatorWebServer::insert_state() for state configuration
+    - Handle simulator-specific features (deterministic execution)
+- [ ] Create unified runtime abstraction
+    - Abstract over actix_web::rt and futures::executor
+    - Provide consistent async runtime interface
+    - Handle server lifecycle (start, stop, graceful shutdown)
+    - Support both tokio and futures executors
+- [ ] Add server lifecycle management
+    - Unified start/stop interface
+    - Port binding abstraction
+    - Health check endpoints
+    - Graceful shutdown with timeout
+
+### 5.4 Update Examples to Remove Feature Gates (3 tasks) - **PROOF OF CONCEPT**
+
+**Files**: `packages/web_server/examples/`
+
+- [ ] Create unified server example
+    - Must use APIs from 5.1 (route registration, state, etc.)
+    - Must compile with both --features actix AND --features simulator
+    - Must produce identical output with both backends
+    - Demonstrate server builder usage from 5.3
+- [ ] Update existing basic example
+    - Remove all `#[cfg(feature = "...")]` blocks
+    - Use unified ServerBuilder and TestClient
+    - Verify works with both actix and simulator features
+    - Document the unified patterns
+- [ ] Create migration documentation
+    - Show before/after code examples
+    - Explain how to write backend-agnostic code
+    - Document feature flag usage for end users
+    - Provide troubleshooting guide
+
+### Step 5 Success Criteria
+
+**Must Have**:
+
+- [ ] At least one example runs without ANY feature gates in the example code
+- [ ] TestClient works with both backends using same test code
+- [ ] Server can be started/stopped with unified API
+- [ ] Tests can be written once and run with either backend
+- [ ] SimulatorWebServer handles basic request/response cycle
+- [ ] Full compilation with zero warnings: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features`
+
+**Validation Commands**:
+
+```bash
+# Test with Actix backend
+cargo run --example unified_server --features actix
+
+# Test with Simulator backend
+cargo run --example unified_server --features simulator
+
+# Run unified tests with both backends
+cargo test --features actix
+cargo test --features simulator
+```
 
 ### Step 5 Completion Gate 🚦
 
 - [ ] `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
 - [ ] `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
 - [ ] All existing examples still compile and run
-- [ ] Simulator produces deterministic, reproducible results
-- [ ] Zero `unimplemented!()` calls remaining in simulator code
+- [ ] At least one example runs without ANY feature gates in the example code
+- [ ] TestClient works with both backends using same test code
+- [ ] Server can be started/stopped with unified API
+- [ ] Tests can be written once and run with either backend
+- [ ] SimulatorWebServer handles basic request/response cycle
 
 ## Step 6: Legacy Examples and Additional Testing
 
