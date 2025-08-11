@@ -122,6 +122,12 @@ impl SimulationStub {
     }
 }
 
+impl From<SimulationRequest> for SimulationStub {
+    fn from(request: SimulationRequest) -> Self {
+        Self::new(request)
+    }
+}
+
 struct SimulatorWebServer {
     scopes: Vec<crate::Scope>,
 }

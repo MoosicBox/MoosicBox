@@ -24,6 +24,9 @@ pub use from_request::{Json, Path, Query};
 #[cfg(feature = "actix")]
 mod actix;
 
+// New extractors module with enhanced functionality
+pub mod extractors;
+
 pub mod from_request;
 pub mod handler;
 
