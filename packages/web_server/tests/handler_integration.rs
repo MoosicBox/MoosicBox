@@ -24,32 +24,28 @@
 //! * **Shared logic**: Common test functions used by both backends
 
 // Core imports (always available)
-use moosicbox_web_server::{
-    Error, HttpRequest, HttpResponse, Stub, extractors::State, handler::IntoHandler,
-};
+use moosicbox_web_server::{Error, HttpRequest, HttpResponse, Stub, handler::IntoHandler};
 
-// Serde-dependent imports
-#[cfg(feature = "serde")]
-use moosicbox_web_server::extractors::{Header, Json, Path, Query};
-
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+// No module-level conditional imports - using function-local imports instead
 
 // Serde-dependent test data
 #[cfg(feature = "serde")]
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
-struct TestParams {
-    name: String,
-    age: Option<u32>,
-    active: Option<bool>,
-}
+mod serde_test_data {
+    use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "serde")]
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
-struct TestUser {
-    id: u64,
-    name: String,
-    email: String,
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+    pub struct TestParams {
+        pub name: String,
+        pub age: Option<u32>,
+        pub active: Option<bool>,
+    }
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq, Clone)]
+    pub struct TestUser {
+        pub id: u64,
+        pub name: String,
+        pub email: String,
+    }
 }
 
 // Non-serde test data
@@ -111,7 +107,7 @@ mod test_utils {
 
     /// Helper to create a JSON response
     #[cfg(feature = "serde")]
-    pub fn json_response<T: Serialize>(data: &T) -> HttpResponse {
+    pub fn json_response<T: serde::Serialize>(data: &T) -> HttpResponse {
         // For now, just return ok response since HttpResponse::json doesn't exist yet
         let _ = data; // Suppress unused parameter warning
         HttpResponse::ok()
@@ -133,9 +129,9 @@ mod basic_handlers {
     }
 
     pub async fn handler_state_only(
-        State(config): State<TestConfig>,
+        state: moosicbox_web_server::extractors::State<TestConfig>,
     ) -> Result<HttpResponse, Error> {
-        Ok(test_utils::text_response(&config.app_name))
+        Ok(test_utils::text_response(&state.0.app_name))
     }
 }
 
@@ -143,6 +139,8 @@ mod basic_handlers {
 #[cfg(feature = "serde")]
 mod serde_handlers {
     use super::*;
+    use crate::serde_test_data::{TestParams, TestUser};
+    use moosicbox_web_server::extractors::{Header, Json, Path, Query, State};
 
     // 1-parameter handlers
     pub async fn handler_1_param_query(
@@ -151,20 +149,24 @@ mod serde_handlers {
         Ok(test_utils::json_response(&params))
     }
 
+    #[cfg(any(feature = "actix", feature = "simulator"))]
     pub async fn handler_1_param_json(Json(user): Json<TestUser>) -> Result<HttpResponse, Error> {
         Ok(test_utils::json_response(&user))
     }
 
+    #[cfg(any(feature = "actix", feature = "simulator"))]
     pub async fn handler_1_param_path(Path(id): Path<u64>) -> Result<HttpResponse, Error> {
         Ok(test_utils::json_response(&id))
     }
 
+    #[cfg(any(feature = "actix", feature = "simulator"))]
     pub async fn handler_1_param_header(
         Header(auth): Header<String>,
     ) -> Result<HttpResponse, Error> {
         Ok(test_utils::json_response(&auth))
     }
 
+    #[cfg(any(feature = "actix", feature = "simulator"))]
     pub async fn handler_1_param_state(
         State(config): State<TestConfig>,
     ) -> Result<HttpResponse, Error> {
@@ -277,7 +279,6 @@ mod serde_actix_tests {
 #[cfg(feature = "simulator")]
 mod basic_simulator_tests {
     use super::*;
-    use moosicbox_web_server::extractors::StateContainer;
 
     #[test]
     fn test_basic_handlers() {
@@ -289,6 +290,8 @@ mod basic_simulator_tests {
 
     #[test]
     fn test_state_container_functionality() {
+        use moosicbox_web_server::extractors::StateContainer;
+
         // Test StateContainer functionality directly
         let mut state_container = StateContainer::new();
         let test_config = test_utils::create_test_state();
