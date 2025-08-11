@@ -393,7 +393,7 @@ local-ip-address = "0.6.5"
 log = { version = "0.4.27", features = ["release_max_level_trace"] }
 maud = "0.27.0"
 md5 = "0.8.0"
-mdns-sd = "0.13.11"
+mdns-sd = "0.14.0"
 mime_guess = "2.0.5"
 mime_multipart = { version = "0.6.1", default-features = false }
 moosicbox_audiotags = { version = "0.1.0" }
@@ -430,7 +430,7 @@ postgres-openssl = "0.5.1"
 postgres-protocol = "0.6.8"
 pretty_assertions = "1.4.1"
 pretty_env_logger = "0.5.0"
-proc-macro2 = "1.0.95"
+proc-macro2 = "1.0.96"
 proc-macro2-diagnostics = { version = "0.10.1", default-features = false }
 profiling = "1.0.17"
 puffin = "0.19.1"
@@ -530,7 +530,7 @@ utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
 uuid = { version = "1.17.0", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.0"
-whoami = "1.6.0"
+whoami = "1.6.1"
 xml = "0.8.20"
 
 [patch.crates-io]
