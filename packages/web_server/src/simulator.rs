@@ -185,38 +185,91 @@ pub fn match_path(pattern: &PathPattern, actual_path: &str) -> Option<PathParams
 
 /// Converts an `HttpResponse` to a `SimulationResponse`
 ///
-/// This is a basic conversion that will be enhanced in Section 5.1.5
+/// Enhanced conversion that preserves all headers and handles different body types.
+/// Implemented as part of Section 5.1.5.2.
 fn convert_http_response_to_simulation_response(
     http_response: crate::HttpResponse,
 ) -> SimulationResponse {
-    let status = match http_response.status_code {
-        switchy_http_models::StatusCode::NotFound => 404,
-        switchy_http_models::StatusCode::InternalServerError => 500,
-        switchy_http_models::StatusCode::BadRequest => 400,
-        switchy_http_models::StatusCode::Unauthorized => 401,
-        switchy_http_models::StatusCode::Forbidden => 403,
-        switchy_http_models::StatusCode::TemporaryRedirect => 307,
-        switchy_http_models::StatusCode::PermanentRedirect => 308,
-        // Default to OK for all other status codes (including Ok)
-        _ => 200,
-    };
+    // Map status code to u16
+    let status = status_code_to_u16(http_response.status_code);
 
-    let mut response = SimulationResponse::new(status);
+    // Create response with direct header copy (no inference needed!)
+    let mut response = SimulationResponse {
+        status,
+        headers: http_response.headers, // Direct BTreeMap copy
+        body: None,
+    };
 
     // Handle body conversion
     if let Some(body) = http_response.body {
         let body_string = match body {
             crate::HttpResponseBody::Bytes(bytes) => String::from_utf8_lossy(&bytes).to_string(),
         };
-        response = response.with_body(body_string);
+        response.body = Some(body_string);
     }
 
-    // Handle location header for redirects
+    // Keep backwards compatibility with location field
     if let Some(location) = http_response.location {
-        response = response.with_header("Location", location);
+        response.headers.insert("Location".to_string(), location);
     }
 
     response
+}
+
+/// Maps `StatusCode` enum to u16 for `SimulationResponse`
+const fn status_code_to_u16(status_code: switchy_http_models::StatusCode) -> u16 {
+    match status_code {
+        switchy_http_models::StatusCode::Ok => 200,
+        switchy_http_models::StatusCode::Created => 201,
+        switchy_http_models::StatusCode::Accepted => 202,
+        switchy_http_models::StatusCode::NoContent => 204,
+        switchy_http_models::StatusCode::MovedPermanently => 301,
+        switchy_http_models::StatusCode::Found => 302,
+        switchy_http_models::StatusCode::SeeOther => 303,
+        switchy_http_models::StatusCode::NotModified => 304,
+        switchy_http_models::StatusCode::TemporaryRedirect => 307,
+        switchy_http_models::StatusCode::PermanentRedirect => 308,
+        switchy_http_models::StatusCode::BadRequest => 400,
+        switchy_http_models::StatusCode::Unauthorized => 401,
+        switchy_http_models::StatusCode::PaymentRequired => 402,
+        switchy_http_models::StatusCode::Forbidden => 403,
+        switchy_http_models::StatusCode::NotFound => 404,
+        switchy_http_models::StatusCode::MethodNotAllowed => 405,
+        switchy_http_models::StatusCode::NotAcceptable => 406,
+        switchy_http_models::StatusCode::ProxyAuthenticationRequired => 407,
+        switchy_http_models::StatusCode::RequestTimeout => 408,
+        switchy_http_models::StatusCode::Conflict => 409,
+        switchy_http_models::StatusCode::Gone => 410,
+        switchy_http_models::StatusCode::LengthRequired => 411,
+        switchy_http_models::StatusCode::PreconditionFailed => 412,
+        switchy_http_models::StatusCode::ContentTooLarge => 413,
+        switchy_http_models::StatusCode::URITooLong => 414,
+        switchy_http_models::StatusCode::UnsupportedMediaType => 415,
+        switchy_http_models::StatusCode::RangeNotSatisfiable => 416,
+        switchy_http_models::StatusCode::ExpectationFailed => 417,
+        switchy_http_models::StatusCode::ImATeapot => 418,
+        switchy_http_models::StatusCode::MisdirectedRequest => 421,
+        switchy_http_models::StatusCode::UncompressableContent => 422,
+        switchy_http_models::StatusCode::Locked => 423,
+        switchy_http_models::StatusCode::FailedDependency => 424,
+        switchy_http_models::StatusCode::UpgradeRequired => 426,
+        switchy_http_models::StatusCode::PreconditionRequired => 428,
+        switchy_http_models::StatusCode::TooManyRequests => 429,
+        switchy_http_models::StatusCode::RequestHeaderFieldsTooLarge => 431,
+        switchy_http_models::StatusCode::UnavailableForLegalReasons => 451,
+        switchy_http_models::StatusCode::NotImplemented => 501,
+        switchy_http_models::StatusCode::BadGateway => 502,
+        switchy_http_models::StatusCode::ServiceUnavailable => 503,
+        switchy_http_models::StatusCode::GatewayTimeout => 504,
+        switchy_http_models::StatusCode::HTTPVersionNotSupported => 505,
+        switchy_http_models::StatusCode::VariantAlsoNegotiates => 506,
+        switchy_http_models::StatusCode::InsufficientStorage => 507,
+        switchy_http_models::StatusCode::LoopDetected => 508,
+        switchy_http_models::StatusCode::NotExtended => 510,
+        switchy_http_models::StatusCode::NetworkAuthenticationRequired => 511,
+        // Handle any other status codes (including InternalServerError)
+        _ => 500, // Default to Internal Server Error
+    }
 }
 
 /// Simulation-specific implementation of HTTP request data
@@ -842,5 +895,132 @@ mod tests {
         assert_eq!(stub.path_param("id"), Some("456"));
         assert_eq!(stub.path_param("name"), Some("john"));
         assert_eq!(stub.path_param("nonexistent"), None);
+    }
+
+    // Response Generation Tests (Section 5.1.5.2)
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn test_json_response_conversion_preserves_content_type() {
+        use serde_json::json;
+
+        let test_data = json!({"message": "Hello, World!", "status": "success"});
+        let http_response = HttpResponse::json(&test_data).unwrap();
+
+        let simulation_response = convert_http_response_to_simulation_response(http_response);
+
+        assert_eq!(simulation_response.status, 200);
+        assert_eq!(
+            simulation_response.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+        assert!(simulation_response.body.is_some());
+
+        // Verify the JSON content is preserved
+        let body = simulation_response.body.unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(parsed["message"], "Hello, World!");
+        assert_eq!(parsed["status"], "success");
+    }
+
+    #[test]
+    fn test_status_codes_are_preserved() {
+        // Test 200 OK
+        let ok_response = HttpResponse::ok();
+        let sim_response = convert_http_response_to_simulation_response(ok_response);
+        assert_eq!(sim_response.status, 200);
+
+        // Test 404 Not Found
+        let not_found_response = HttpResponse::not_found();
+        let sim_response = convert_http_response_to_simulation_response(not_found_response);
+        assert_eq!(sim_response.status, 404);
+
+        // Test 500 Internal Server Error
+        let error_response =
+            HttpResponse::from_status_code(switchy_http_models::StatusCode::InternalServerError);
+        let sim_response = convert_http_response_to_simulation_response(error_response);
+        assert_eq!(sim_response.status, 500);
+
+        // Test 201 Created
+        let created_response =
+            HttpResponse::from_status_code(switchy_http_models::StatusCode::Created);
+        let sim_response = convert_http_response_to_simulation_response(created_response);
+        assert_eq!(sim_response.status, 201);
+
+        // Test 401 Unauthorized
+        let unauthorized_response =
+            HttpResponse::from_status_code(switchy_http_models::StatusCode::Unauthorized);
+        let sim_response = convert_http_response_to_simulation_response(unauthorized_response);
+        assert_eq!(sim_response.status, 401);
+    }
+
+    #[test]
+    fn test_custom_headers_are_preserved() {
+        let http_response = HttpResponse::ok()
+            .with_header("X-Custom-Header", "custom-value")
+            .with_header("X-Another-Header", "another-value")
+            .with_content_type("text/plain")
+            .with_body("Hello, World!");
+
+        let simulation_response = convert_http_response_to_simulation_response(http_response);
+
+        assert_eq!(simulation_response.status, 200);
+        assert_eq!(
+            simulation_response.headers.get("X-Custom-Header"),
+            Some(&"custom-value".to_string())
+        );
+        assert_eq!(
+            simulation_response.headers.get("X-Another-Header"),
+            Some(&"another-value".to_string())
+        );
+        assert_eq!(
+            simulation_response.headers.get("Content-Type"),
+            Some(&"text/plain".to_string())
+        );
+        assert_eq!(simulation_response.body, Some("Hello, World!".to_string()));
+    }
+
+    #[test]
+    fn test_html_response_conversion() {
+        let html_content = "<h1>Hello, World!</h1><p>This is a test.</p>";
+        let http_response = HttpResponse::html(html_content);
+
+        let simulation_response = convert_http_response_to_simulation_response(http_response);
+
+        assert_eq!(simulation_response.status, 200);
+        assert_eq!(
+            simulation_response.headers.get("Content-Type"),
+            Some(&"text/html; charset=utf-8".to_string())
+        );
+        assert_eq!(simulation_response.body, Some(html_content.to_string()));
+    }
+
+    #[test]
+    fn test_text_response_conversion() {
+        let text_content = "This is plain text content.";
+        let http_response = HttpResponse::text(text_content);
+
+        let simulation_response = convert_http_response_to_simulation_response(http_response);
+
+        assert_eq!(simulation_response.status, 200);
+        assert_eq!(
+            simulation_response.headers.get("Content-Type"),
+            Some(&"text/plain; charset=utf-8".to_string())
+        );
+        assert_eq!(simulation_response.body, Some(text_content.to_string()));
+    }
+
+    #[test]
+    fn test_location_header_backwards_compatibility() {
+        let redirect_response =
+            HttpResponse::temporary_redirect().with_location("https://example.com/new-location");
+
+        let simulation_response = convert_http_response_to_simulation_response(redirect_response);
+
+        assert_eq!(simulation_response.status, 307);
+        assert_eq!(
+            simulation_response.headers.get("Location"),
+            Some(&"https://example.com/new-location".to_string())
+        );
     }
 }
