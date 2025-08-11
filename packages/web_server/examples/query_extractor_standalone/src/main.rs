@@ -3,14 +3,14 @@
 #![allow(clippy::multiple_crate_versions)]
 
 #[cfg(any(feature = "actix", feature = "simulator"))]
-use moosicbox_web_server::{Error, HttpResponse, Method, Query, RequestData, Route};
-
+use moosicbox_web_server::{Error, HttpResponse, Query, RequestData};
 #[cfg(any(feature = "actix", feature = "simulator"))]
 use serde::Deserialize;
 
 // Simple query parameters
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // Fields are demonstrated in Debug output
 struct SimpleQuery {
     name: String,
     age: u32,
@@ -19,6 +19,7 @@ struct SimpleQuery {
 // Query parameters with optional fields
 #[cfg(any(feature = "actix", feature = "simulator"))]
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // Fields are demonstrated in Debug output
 struct OptionalQuery {
     search: String,
     limit: Option<u32>,
@@ -28,6 +29,7 @@ struct OptionalQuery {
 
 // Handler demonstrating simple query extraction
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn simple_query_handler(query: Query<SimpleQuery>) -> Result<HttpResponse, Error> {
     let response = format!(
         "Simple Query Extraction:\n  Name: {}\n  Age: {}\n  Query struct: {:?}",
@@ -38,6 +40,7 @@ async fn simple_query_handler(query: Query<SimpleQuery>) -> Result<HttpResponse,
 
 // Handler demonstrating optional query parameters
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn optional_query_handler(query: Query<OptionalQuery>) -> Result<HttpResponse, Error> {
     let response = format!(
         "Optional Query Parameters:\n  Search: {}\n  Limit: {:?}\n  Offset: {:?}\n  Sort: {:?}",
@@ -48,6 +51,7 @@ async fn optional_query_handler(query: Query<OptionalQuery>) -> Result<HttpRespo
 
 // Handler combining query extraction with other extractors
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn combined_handler(
     query: Query<SimpleQuery>,
     data: RequestData,
@@ -61,6 +65,7 @@ async fn combined_handler(
 
 // Handler demonstrating error handling (simplified)
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     let response = format!(
         "Query Extraction Demo:\n  Query String: '{}'\n  Tip: Try ?name=John&age=25 for simple_query_handler\n  Tip: Try ?search=rust&limit=10 for optional_query_handler",
@@ -73,29 +78,43 @@ async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
 fn run_actix_examples() {
     println!("🚀 Running Actix Backend Query Extractor Examples...");
 
-    // Create routes using the new handler system with query extractors
-    let simple_route = Route::with_handler1(Method::Get, "/simple", simple_query_handler);
-    let optional_route = Route::with_handler1(Method::Get, "/optional", optional_query_handler);
-    let combined_route = Route::with_handler2(Method::Get, "/combined", combined_handler);
-    let error_route = Route::with_handler1(Method::Get, "/error", error_demo_handler);
+    let routes = [
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Get,
+            "/simple",
+            simple_query_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Get,
+            "/optional",
+            optional_query_handler,
+        ),
+        moosicbox_web_server::Route::with_handler2(
+            moosicbox_web_server::Method::Get,
+            "/combined",
+            combined_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Get,
+            "/error",
+            error_demo_handler,
+        ),
+    ];
 
     println!("✅ Query extractor routes created successfully:");
-    println!(
-        "   Simple:   {} {} (requires: ?name=X&age=N)",
-        simple_route.method, simple_route.path
-    );
-    println!(
-        "   Optional: {} {} (requires: ?search=X, optional: limit,offset,sort)",
-        optional_route.method, optional_route.path
-    );
-    println!(
-        "   Combined: {} {} (requires: ?name=X&age=N)",
-        combined_route.method, combined_route.path
-    );
-    println!(
-        "   Error:    {} {} (demonstrates query string access)",
-        error_route.method, error_route.path
-    );
+    for (i, route) in routes.iter().enumerate() {
+        let description = match i {
+            0 => "(requires: ?name=X&age=N)",
+            1 => "(requires: ?search=X, optional: limit,offset,sort)",
+            2 => "(requires: ?name=X&age=N + RequestData)",
+            3 => "(demonstrates error handling)",
+            _ => "",
+        };
+        println!(
+            "   {}: {} {} {}",
+            route.method, route.path, route.method, description
+        );
+    }
     println!("   Backend: Actix Web");
 }
 
@@ -107,28 +126,53 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🧪 Running Simulator Backend Query Extractor Examples...");
 
-    // Create routes
-    let simple_route = Route::with_handler1(Method::Get, "/simple", simple_query_handler);
-    let optional_route = Route::with_handler1(Method::Get, "/optional", optional_query_handler);
-    let combined_route = Route::with_handler2(Method::Get, "/combined", combined_handler);
-    let error_route = Route::with_handler1(Method::Get, "/error", error_demo_handler);
+    let routes = [
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Get,
+            "/simple",
+            simple_query_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Get,
+            "/optional",
+            optional_query_handler,
+        ),
+        moosicbox_web_server::Route::with_handler2(
+            moosicbox_web_server::Method::Get,
+            "/combined",
+            combined_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Get,
+            "/error",
+            error_demo_handler,
+        ),
+    ];
 
     println!("✅ Query extractor routes created successfully:");
-    println!("   Simple:   {} {}", simple_route.method, simple_route.path);
-    println!(
-        "   Optional: {} {}",
-        optional_route.method, optional_route.path
-    );
-    println!(
-        "   Combined: {} {}",
-        combined_route.method, combined_route.path
-    );
-    println!("   Error:    {} {}", error_route.method, error_route.path);
+    for route in &routes {
+        println!("   {}: {} {}", route.method, route.path, route.method);
+    }
     println!("   Backend: Simulator");
+
+    // Test error demo handler (always available)
+    println!("\n📋 Testing Error Demo Handler (RequestData only):");
+    let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/error")
+        .with_query_string("test=1&debug=true")
+        .with_header("user-agent", "MoosicBox-QueryTest/1.0");
+
+    let stub = SimulationStub::new(request);
+    let http_request =
+        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
+
+    let data = RequestData::from_request_sync(&http_request)?;
+    println!("✅ RequestData extracted successfully:");
+    println!("   Query: {}", data.query);
+    println!("   Path: {}", data.path);
 
     // Test the simple query handler
     println!("\n📋 Testing Simple Query Handler:");
-    let request = SimulationRequest::new(Method::Get, "/simple")
+    let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/simple")
         .with_query_string("name=Alice&age=30")
         .with_header("user-agent", "MoosicBox-QueryTest/1.0");
 
@@ -143,7 +187,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test the optional query handler
     println!("\n📋 Testing Optional Query Handler:");
-    let request = SimulationRequest::new(Method::Get, "/optional")
+    let request = SimulationRequest::new(moosicbox_web_server::Method::Get, "/optional")
         .with_query_string("search=rust&limit=10&sort=date");
 
     let stub = SimulationStub::new(request);
@@ -156,24 +200,9 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Limit: {:?}", query.0.limit);
     println!("   Sort: {:?}", query.0.sort);
 
-    // Test error handling
-    println!("\n📋 Testing Query String Access:");
-    let request = SimulationRequest::new(Method::Get, "/error")
-        .with_query_string("invalid=query&missing=required_fields");
-
-    let stub = SimulationStub::new(request);
-    let http_request =
-        moosicbox_web_server::HttpRequest::Stub(moosicbox_web_server::Stub::Simulator(stub));
-
-    let data = RequestData::from_request_sync(&http_request)?;
-    println!("✅ RequestData extracted successfully:");
-    println!("   Query String: '{}'", data.query);
-    println!("   Path: {}", data.path);
-
     Ok(())
 }
 
-#[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unnecessary_wraps)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 Query Extractor Examples - Query<T> Usage");
@@ -192,31 +221,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!();
     }
 
+    #[cfg(not(any(feature = "actix", feature = "simulator")))]
+    {
+        eprintln!("╔════════════════════════════════════════════════════════════╗");
+        eprintln!("║                Query Extractor Example                     ║");
+        eprintln!("╠════════════════════════════════════════════════════════════╣");
+        eprintln!("║ This example demonstrates query parameter extraction       ║");
+        eprintln!("║ with serde deserialization.                               ║");
+        eprintln!("║                                                            ║");
+        eprintln!("║ To run this example, enable a backend feature:            ║");
+        eprintln!("║                                                            ║");
+        eprintln!("║   cargo run --features actix                              ║");
+        eprintln!("║   cargo run --features simulator                          ║");
+        eprintln!("║                                                            ║");
+        eprintln!("║ The 'actix' feature uses the production Actix Web backend.║");
+        eprintln!("║ The 'simulator' feature uses a test simulator backend.    ║");
+        eprintln!("╚════════════════════════════════════════════════════════════╝");
+    }
+
     println!("✅ Query Extractor Examples Complete!");
     println!("   - Query<T> extractor working with serde deserialization");
     println!("   - Support for required and optional query parameters");
+    println!("   - Type-safe query parameter parsing");
+    println!("   - Combined Query + RequestData extraction");
+    println!("   - Error handling for malformed query strings");
     println!("   - Works with both Actix and Simulator backends");
-    println!("   - URL decoding handled automatically");
-    println!("   - Ready for production use with complex query structures");
-    println!("   - Note: Full async handler execution needs async runtime");
+    println!("   - Real-world query parameter patterns");
 
     Ok(())
-}
-
-#[cfg(not(any(feature = "actix", feature = "simulator")))]
-fn main() {
-    eprintln!("╔════════════════════════════════════════════════════════════╗");
-    eprintln!("║                  Query Extractor Example                   ║");
-    eprintln!("╠════════════════════════════════════════════════════════════╣");
-    eprintln!("║ This example demonstrates Query<T> extractor for URL       ║");
-    eprintln!("║ parameter parsing with serde deserialization.             ║");
-    eprintln!("║                                                            ║");
-    eprintln!("║ To run this example, enable a backend feature:            ║");
-    eprintln!("║                                                            ║");
-    eprintln!("║   cargo run --example query_extractor --features actix    ║");
-    eprintln!("║   cargo run --example query_extractor --features simulator║");
-    eprintln!("║                                                            ║");
-    eprintln!("║ The 'actix' feature uses the production Actix Web backend.║");
-    eprintln!("║ The 'simulator' feature uses a test simulator backend.    ║");
-    eprintln!("╚════════════════════════════════════════════════════════════╝");
 }

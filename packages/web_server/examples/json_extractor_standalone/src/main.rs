@@ -3,8 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 #[cfg(any(feature = "actix", feature = "simulator"))]
-use moosicbox_web_server::{Error, HttpResponse, Json, Method, RequestData, Route};
-
+use moosicbox_web_server::{Error, HttpResponse, Json, RequestData};
 #[cfg(any(feature = "actix", feature = "simulator"))]
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +28,7 @@ struct UpdateUser {
 
 // Handler demonstrating simple JSON extraction
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn simple_json_handler(json: Json<User>) -> Result<HttpResponse, Error> {
     let response = format!(
         "Simple JSON Extraction:\n  Name: {}\n  Email: {}\n  Age: {}\n  User struct: {:?}",
@@ -39,6 +39,7 @@ async fn simple_json_handler(json: Json<User>) -> Result<HttpResponse, Error> {
 
 // Handler demonstrating optional fields
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn optional_json_handler(json: Json<UpdateUser>) -> Result<HttpResponse, Error> {
     let mut updates = Vec::new();
 
@@ -65,6 +66,7 @@ async fn optional_json_handler(json: Json<UpdateUser>) -> Result<HttpResponse, E
 
 // Handler combining JSON with other extractors
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn combined_json_handler(json: Json<User>, data: RequestData) -> Result<HttpResponse, Error> {
     let response = format!(
         "Combined JSON + RequestData:\n  JSON Name: {}\n  JSON Email: {}\n  Request Method: {:?}\n  Request Path: {}\n  Content-Type: {:?}",
@@ -75,6 +77,7 @@ async fn combined_json_handler(json: Json<User>, data: RequestData) -> Result<Ht
 
 // Handler demonstrating JSON response
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn json_response_handler(json: Json<User>) -> Result<HttpResponse, Error> {
     // Echo back the user with a modification
     let mut user = json.0;
@@ -88,6 +91,7 @@ async fn json_response_handler(json: Json<User>) -> Result<HttpResponse, Error> 
 
 // Handler demonstrating error handling (simplified)
 #[cfg(any(feature = "actix", feature = "simulator"))]
+#[allow(clippy::unused_async)]
 async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
     let body_info = if data.content_type.as_deref() == Some("application/json") {
         "Content-Type: application/json (good!)"
@@ -106,34 +110,49 @@ async fn error_demo_handler(data: RequestData) -> Result<HttpResponse, Error> {
 fn run_actix_examples() {
     println!("🚀 Running Actix Backend JSON Extractor Examples...");
 
-    // Create routes using the new handler system with JSON extractors
-    let simple_route = Route::with_handler1(Method::Post, "/simple", simple_json_handler);
-    let optional_route = Route::with_handler1(Method::Patch, "/optional", optional_json_handler);
-    let combined_route = Route::with_handler2(Method::Post, "/combined", combined_json_handler);
-    let response_route = Route::with_handler1(Method::Post, "/echo", json_response_handler);
-    let error_route = Route::with_handler1(Method::Post, "/error", error_demo_handler);
+    let routes = [
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Post,
+            "/simple",
+            simple_json_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Patch,
+            "/optional",
+            optional_json_handler,
+        ),
+        moosicbox_web_server::Route::with_handler2(
+            moosicbox_web_server::Method::Post,
+            "/combined",
+            combined_json_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Post,
+            "/echo",
+            json_response_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Post,
+            "/error",
+            error_demo_handler,
+        ),
+    ];
 
     println!("✅ JSON extractor routes created successfully:");
-    println!(
-        "   Simple:   {} {} (expects User JSON)",
-        simple_route.method, simple_route.path
-    );
-    println!(
-        "   Optional: {} {} (expects UpdateUser JSON)",
-        optional_route.method, optional_route.path
-    );
-    println!(
-        "   Combined: {} {} (expects User JSON)",
-        combined_route.method, combined_route.path
-    );
-    println!(
-        "   Response: {} {} (returns JSON)",
-        response_route.method, response_route.path
-    );
-    println!(
-        "   Error:    {} {} (demonstrates error handling)",
-        error_route.method, error_route.path
-    );
+    for (i, route) in routes.iter().enumerate() {
+        let description = match i {
+            0 => "(expects User JSON)",
+            1 => "(expects UpdateUser JSON)",
+            2 => "(expects User JSON + RequestData)",
+            3 => "(returns JSON)",
+            4 => "(demonstrates error handling)",
+            _ => "",
+        };
+        println!(
+            "   {}: {} {} {}",
+            route.method, route.path, route.method, description
+        );
+    }
     println!("   Backend: Actix Web");
     println!("   Note: Actix requires body to be pre-extracted for JSON parsing");
 }
@@ -146,34 +165,44 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🧪 Running Simulator Backend JSON Extractor Examples...");
 
-    // Create routes
-    let simple_route = Route::with_handler1(Method::Post, "/simple", simple_json_handler);
-    let optional_route = Route::with_handler1(Method::Patch, "/optional", optional_json_handler);
-    let combined_route = Route::with_handler2(Method::Post, "/combined", combined_json_handler);
-    let response_route = Route::with_handler1(Method::Post, "/echo", json_response_handler);
-    let error_route = Route::with_handler1(Method::Post, "/error", error_demo_handler);
+    let routes = [
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Post,
+            "/simple",
+            simple_json_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Patch,
+            "/optional",
+            optional_json_handler,
+        ),
+        moosicbox_web_server::Route::with_handler2(
+            moosicbox_web_server::Method::Post,
+            "/combined",
+            combined_json_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Post,
+            "/echo",
+            json_response_handler,
+        ),
+        moosicbox_web_server::Route::with_handler1(
+            moosicbox_web_server::Method::Post,
+            "/error",
+            error_demo_handler,
+        ),
+    ];
 
     println!("✅ JSON extractor routes created successfully:");
-    println!("   Simple:   {} {}", simple_route.method, simple_route.path);
-    println!(
-        "   Optional: {} {}",
-        optional_route.method, optional_route.path
-    );
-    println!(
-        "   Combined: {} {}",
-        combined_route.method, combined_route.path
-    );
-    println!(
-        "   Response: {} {}",
-        response_route.method, response_route.path
-    );
-    println!("   Error:    {} {}", error_route.method, error_route.path);
+    for route in &routes {
+        println!("   {}: {} {}", route.method, route.path, route.method);
+    }
     println!("   Backend: Simulator");
 
     // Test the simple JSON handler
     println!("\n📋 Testing Simple JSON Handler:");
     let user_json = r#"{"name": "Alice", "email": "alice@example.com", "age": 30}"#;
-    let request = SimulationRequest::new(Method::Post, "/simple")
+    let request = SimulationRequest::new(moosicbox_web_server::Method::Post, "/simple")
         .with_header("content-type", "application/json")
         .with_body(user_json.as_bytes().to_vec());
 
@@ -190,7 +219,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     // Test the optional JSON handler
     println!("\n📋 Testing Optional JSON Handler:");
     let update_json = r#"{"name": "Bob Updated", "bio": "New bio text"}"#;
-    let request = SimulationRequest::new(Method::Patch, "/optional")
+    let request = SimulationRequest::new(moosicbox_web_server::Method::Patch, "/optional")
         .with_header("content-type", "application/json")
         .with_body(update_json.as_bytes().to_vec());
 
@@ -208,7 +237,7 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     // Test JSON response handler
     println!("\n📋 Testing JSON Response Handler:");
     let user_json = r#"{"name": "Charlie", "email": "charlie@example.com", "age": 35}"#;
-    let request = SimulationRequest::new(Method::Post, "/echo")
+    let request = SimulationRequest::new(moosicbox_web_server::Method::Post, "/echo")
         .with_header("content-type", "application/json")
         .with_body(user_json.as_bytes().to_vec());
 
@@ -225,9 +254,9 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("   Note: HttpResponse doesn't support headers yet");
 
-    // Test error handling
-    println!("\n📋 Testing Content-Type Check:");
-    let request = SimulationRequest::new(Method::Post, "/error")
+    // Test error demo handler (RequestData only)
+    println!("\n📋 Testing Error Demo Handler (RequestData only):");
+    let request = SimulationRequest::new(moosicbox_web_server::Method::Post, "/error")
         .with_header("content-type", "text/plain")
         .with_body(b"not json".to_vec());
 
@@ -243,7 +272,6 @@ fn run_simulator_examples() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(any(feature = "actix", feature = "simulator"))]
 #[allow(clippy::unnecessary_wraps)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🎯 JSON Extractor Examples - Json<T> Usage");
@@ -262,32 +290,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!();
     }
 
+    #[cfg(not(any(feature = "actix", feature = "simulator")))]
+    {
+        eprintln!("╔════════════════════════════════════════════════════════════╗");
+        eprintln!("║                JSON Extractor Example                      ║");
+        eprintln!("╠════════════════════════════════════════════════════════════╣");
+        eprintln!("║ This example demonstrates JSON extraction with serde       ║");
+        eprintln!("║ deserialization and JSON response generation.             ║");
+        eprintln!("║                                                            ║");
+        eprintln!("║ To run this example, enable a backend feature:            ║");
+        eprintln!("║                                                            ║");
+        eprintln!("║   cargo run --features actix                              ║");
+        eprintln!("║   cargo run --features simulator                          ║");
+        eprintln!("║                                                            ║");
+        eprintln!("║ The 'actix' feature uses the production Actix Web backend.║");
+        eprintln!("║ The 'simulator' feature uses a test simulator backend.    ║");
+        eprintln!("╚════════════════════════════════════════════════════════════╝");
+    }
+
     println!("✅ JSON Extractor Examples Complete!");
     println!("   - Json<T> extractor working with serde deserialization");
     println!("   - Support for simple and complex nested JSON structures");
     println!("   - Optional field handling with partial updates");
-    println!("   - JSON response generation (headers not yet supported)");
-    println!("   - Works with Simulator backend (Actix requires pre-extraction)");
-    println!("   - Ready for production REST API development");
-    println!("   - Note: Full async handler execution needs async runtime");
+    println!("   - JSON response generation with serde_json");
+    println!("   - Combined JSON + RequestData extraction");
+    println!("   - Error handling and content-type validation");
+    println!("   - Works with both Actix and Simulator backends");
+    println!("   - Real-world JSON API patterns");
 
     Ok(())
-}
-
-#[cfg(not(any(feature = "actix", feature = "simulator")))]
-fn main() {
-    eprintln!("╔════════════════════════════════════════════════════════════╗");
-    eprintln!("║                   JSON Extractor Example                   ║");
-    eprintln!("╠════════════════════════════════════════════════════════════╣");
-    eprintln!("║ This example demonstrates Json<T> extractor for request    ║");
-    eprintln!("║ body parsing with serde deserialization.                  ║");
-    eprintln!("║                                                            ║");
-    eprintln!("║ To run this example, enable a backend feature:            ║");
-    eprintln!("║                                                            ║");
-    eprintln!("║   cargo run --example json_extractor --features actix     ║");
-    eprintln!("║   cargo run --example json_extractor --features simulator ║");
-    eprintln!("║                                                            ║");
-    eprintln!("║ The 'actix' feature uses the production Actix Web backend.║");
-    eprintln!("║ The 'simulator' feature uses a test simulator backend.    ║");
-    eprintln!("╚════════════════════════════════════════════════════════════╝");
 }

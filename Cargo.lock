@@ -1617,6 +1617,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "basic_handler_standalone_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_web_server",
+]
+
+[[package]]
 name = "better_scoped_tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2502,6 +2509,15 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "combined_extractors_standalone_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_web_server",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -6343,6 +6359,15 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "json_extractor_standalone_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_web_server",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -11062,6 +11087,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d464fae65fff2680baf48019211ce37aaec0c78e9264c84a3e484717f965104e"
 dependencies = [
  "percent-encoding 2.3.1",
+]
+
+[[package]]
+name = "query_extractor_standalone_example"
+version = "0.1.0"
+dependencies = [
+ "moosicbox_web_server",
+ "serde",
 ]
 
 [[package]]

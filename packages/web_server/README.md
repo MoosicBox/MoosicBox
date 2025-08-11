@@ -309,7 +309,7 @@ mod openapi_example {
 
 ## Examples
 
-This package includes comprehensive examples demonstrating various web server features and patterns. Examples are located in the `examples/` directory.
+This package includes comprehensive examples demonstrating various web server features and patterns. Examples are located in the `examples/` directory as standalone Cargo projects.
 
 ### Prerequisites
 
@@ -317,41 +317,59 @@ This package includes comprehensive examples demonstrating various web server fe
 - Understanding of async Rust
 - Basic HTTP knowledge
 
+### Example Structure
+
+Each example is a complete Cargo project with:
+- Its own `Cargo.toml` with appropriate dependencies
+- Comprehensive `README.md` with usage instructions
+- Self-contained code demonstrating specific features
+- Support for both Actix and Simulator backends
+
 ### Running Examples
 
-Examples require feature flags to select the backend implementation:
+The standalone examples are workspace members and can be run directly:
 
 ```bash
-# With Actix Web (default backend)
-cargo run --example [example_name] --features actix
+# Run with default features (simulator)
+cargo run -p basic_handler_standalone_example
+cargo run -p json_extractor_standalone_example
+cargo run -p query_extractor_standalone_example
+cargo run -p combined_extractors_standalone_example
 
-# With Simulator (for testing)
-cargo run --example [example_name] --features simulator
+# Run with Actix backend
+cargo run -p basic_handler_standalone_example --features actix --no-default-features
+cargo run -p json_extractor_standalone_example --features actix --no-default-features
 ```
 
 ### Available Examples
 
-#### Standalone Examples (Single Files)
+#### Standalone Example Projects
 
-**Handler Macros** (`handler_macros.rs`)
-- **Purpose**: Demonstrates handler macro usage for 0-2 parameter handlers
-- **Run**: `cargo run --example handler_macros --features actix`
-- **Shows**: Different handler signatures and macro expansions
+Each example is a complete Cargo project with its own dependencies and comprehensive README:
 
-**Query Extractor** (`query_extractor.rs`)
-- **Purpose**: Shows Query<T> extractor for URL parameters
-- **Run**: `cargo run --example query_extractor --features actix`
-- **Shows**: Parsing query strings into typed structs with serde
+**Basic Handler** (`basic_handler_standalone/`)
+- **Purpose**: Demonstrates RequestData extraction without any serde dependencies
+- **Run**: `cargo run -p basic_handler_standalone_example`
+- **Features**: Simple request handling, multiple extractors, no JSON dependencies
+- **[Full Documentation](examples/basic_handler_standalone/README.md)**
 
-**JSON Extractor** (`json_extractor.rs`)
-- **Purpose**: Demonstrates Json<T> extractor for request bodies
-- **Run**: `cargo run --example json_extractor --features actix`
-- **Shows**: JSON deserialization and response handling
+**JSON Extractor** (`json_extractor_standalone/`)
+- **Purpose**: Shows JSON request/response handling with serde
+- **Run**: `cargo run -p json_extractor_standalone_example`
+- **Features**: Json<T> extractor, optional fields, JSON responses, error handling
+- **[Full Documentation](examples/json_extractor_standalone/README.md)**
 
-**Combined Extractors** (`combined_extractors.rs`)
+**Query Extractor** (`query_extractor_standalone/`)
+- **Purpose**: Demonstrates query parameter parsing with serde
+- **Run**: `cargo run -p query_extractor_standalone_example`
+- **Features**: Query<T> extractor, optional parameters, type-safe parsing
+- **[Full Documentation](examples/query_extractor_standalone/README.md)**
+
+**Combined Extractors** (`combined_extractors_standalone/`)
 - **Purpose**: Shows multiple extractors working together
-- **Run**: `cargo run --example combined_extractors --features actix`
-- **Shows**: Complex handlers with Path, Query, and Json extractors
+- **Run**: `cargo run -p combined_extractors_standalone_example`
+- **Features**: Query + RequestData, Json + RequestData combinations, JSON API patterns
+- **[Full Documentation](examples/combined_extractors_standalone/README.md)**
 
 #### Directory Examples (With Individual READMEs)
 
@@ -377,12 +395,19 @@ cargo run --example [example_name] --features simulator
 
 ### Testing Examples
 
-#### Unit Tests
+#### Running Tests
 ```bash
-cargo test --example [example_name] --features actix
+# Test individual examples
+cargo test -p basic_handler_standalone_example
+cargo test -p json_extractor_standalone_example
+
+# Test the main web_server package
+cargo test -p moosicbox_web_server --features "actix,serde"
 ```
 
 #### Manual Testing with curl
+
+The standalone examples include detailed curl examples in their individual READMEs. When running with Actix backend:
 
 **GET Requests**
 ```bash

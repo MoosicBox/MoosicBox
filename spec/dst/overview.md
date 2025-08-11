@@ -1041,10 +1041,10 @@ Before marking ANY checkbox complete:
     - All tests passing: 7/7 Actix tests, 8/8 Simulator tests
 - ✅ Complete Working Examples (5/5 tasks) - Comprehensive example suite validating current implementation
     - Fixed basic_handler example to use RequestData (Send-safe)
-    - Created handler_macros.rs example (0-2 parameter handlers)
-    - Created query_extractor.rs example (Query<T> with serde)
-    - Created json_extractor.rs example (Json<T> with serde)
-    - Created combined_extractors.rs example (multiple extractors)
+    - Created basic_handler_standalone example (basic handlers without serde)
+    - Created query_extractor_standalone example (Query<T> with serde)
+    - Created json_extractor_standalone example (Json<T> with serde)
+    - Created combined_extractors_standalone example (multiple extractors)
     - All examples compile and run with both Actix and Simulator backends
     - **Critical Discovery**: Examples revealed abstraction is incomplete (require feature gates)
 
@@ -1134,9 +1134,9 @@ To ensure functionality works as intended, we create examples at key milestone p
 - Path extractor usage
 - Multiple extractors in one handler
 - **Examples**:
-    - `packages/web_server/examples/query_extractor.rs`
-    - `packages/web_server/examples/json_extractor.rs`
-    - `packages/web_server/examples/combined_extractors.rs`
+    - `packages/web_server/examples/query_extractor_standalone/`
+    - `packages/web_server/examples/json_extractor_standalone/`
+    - `packages/web_server/examples/combined_extractors_standalone/`
 
 ### 🎯 **After Step 5** - Unified Server Example
 
@@ -2885,21 +2885,21 @@ mod simulator_tests {
     - Works with both Actix and Simulator backends
     - Validates handler compilation and route creation
 
-- [x] **Query Extractor Example** - `packages/web_server/examples/query_extractor.rs` ✅ COMPLETED
+- [x] **Query Extractor Example** - `packages/web_server/examples/query_extractor_standalone/` ✅ COMPLETED
 
     - Demonstrates `Query<T>` extractor with serde deserialization
     - Shows required and optional query parameters
     - Includes error handling and URL decoding
     - Works with both backends, validates extraction patterns
 
-- [x] **JSON Extractor Example** - `packages/web_server/examples/json_extractor.rs` ✅ COMPLETED
+- [x] **JSON Extractor Example** - `packages/web_server/examples/json_extractor_standalone/` ✅ COMPLETED
 
     - Demonstrates `Json<T>` extractor with serde deserialization
     - Shows simple and complex JSON structures with optional fields
     - Includes JSON response generation (headers not yet supported)
     - Works with Simulator backend (Actix requires pre-extraction)
 
-- [x] **Combined Extractors Example** - `packages/web_server/examples/combined_extractors.rs` ✅ COMPLETED
+- [x] **Combined Extractors Example** - `packages/web_server/examples/combined_extractors_standalone/` ✅ COMPLETED
     - Demonstrates multiple extractors working together (up to 2 parameters)
     - Shows Query+RequestData, Json+RequestData, RequestData+RequestData combinations
     - Includes JSON API response patterns
