@@ -156,13 +156,7 @@ Always use: `packages/[package_name]/src/[file].rs:[line_numbers]`
 
 - If it's not in the spec, it's not part of the DST effort
 - If it contradicts the spec, the spec wins
-- If the spec is wrong, update the spec first with evidence
-
-### Progress Over Perfection
-
-- Partial determinism is better than none
-- Document partial completions with percentages
-- Quick wins build momentum
+- If the spec is wrong, BRING IT UP TO ME, and if I agree, update the spec first with evidence
 
 ### Patterns Over Instances
 
@@ -200,5 +194,3 @@ By following this framework, work on the DST spec will:
 - Build a knowledge base for future work
 
 The goal is not just to check boxes, but to create a comprehensive record of a complex technical transformation where every change is documented, validated, and reusable.
-
-**Remember: The spec is only as valuable as the completion details it contains.**
