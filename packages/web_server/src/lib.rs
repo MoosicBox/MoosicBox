@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{borrow::Cow, pin::Pin};
+use std::{borrow::Cow, collections::BTreeMap, pin::Pin};
 
 use bytes::Bytes;
 
@@ -501,6 +501,7 @@ impl From<String> for HttpResponseBody {
 pub struct HttpResponse {
     pub status_code: StatusCode,
     pub location: Option<String>,
+    pub headers: BTreeMap<String, String>,
     pub body: Option<HttpResponseBody>,
 }
 
@@ -537,13 +538,18 @@ impl HttpResponse {
         Self {
             status_code: status_code.into(),
             location: None,
+            headers: BTreeMap::new(),
             body: None,
         }
     }
 
     #[must_use]
     pub fn with_location<T: Into<String>, O: Into<Option<T>>>(mut self, location: O) -> Self {
-        self.location = location.into().map(Into::into);
+        if let Some(loc) = location.into() {
+            let loc_string = loc.into();
+            self.location = Some(loc_string.clone()); // Keep for backwards compatibility
+            self.headers.insert("Location".to_string(), loc_string); // Also set in headers
+        }
         self
     }
 
@@ -551,6 +557,59 @@ impl HttpResponse {
     pub fn with_body<T: Into<HttpResponseBody>, B: Into<Option<T>>>(mut self, body: B) -> Self {
         self.body = body.into().map(Into::into);
         self
+    }
+
+    /// Add a single header to the response
+    #[must_use]
+    pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(name.into(), value.into());
+        self
+    }
+
+    /// Set the Content-Type header
+    #[must_use]
+    pub fn with_content_type(self, content_type: impl Into<String>) -> Self {
+        self.with_header("Content-Type", content_type)
+    }
+
+    /// Add multiple headers to the response
+    #[must_use]
+    pub fn with_headers(mut self, headers: BTreeMap<String, String>) -> Self {
+        self.headers.extend(headers);
+        self
+    }
+
+    /// Create a JSON response with automatic Content-Type header
+    ///
+    /// # Errors
+    ///
+    /// * Returns `Error::Http` with `StatusCode::InternalServerError` if JSON serialization fails
+    #[cfg(feature = "serde")]
+    pub fn json<T: serde::Serialize>(value: &T) -> Result<Self, crate::Error> {
+        let body = serde_json::to_string(value).map_err(|e| crate::Error::Http {
+            status_code: StatusCode::InternalServerError,
+            source: Box::new(e),
+        })?;
+
+        Ok(Self::ok()
+            .with_content_type("application/json")
+            .with_body(HttpResponseBody::from(body)))
+    }
+
+    /// Create an HTML response with automatic Content-Type header
+    #[must_use]
+    pub fn html(body: impl Into<String>) -> Self {
+        Self::ok()
+            .with_content_type("text/html; charset=utf-8")
+            .with_body(HttpResponseBody::from(body.into()))
+    }
+
+    /// Create a plain text response with automatic Content-Type header
+    #[must_use]
+    pub fn text(body: impl Into<String>) -> Self {
+        Self::ok()
+            .with_content_type("text/plain; charset=utf-8")
+            .with_body(HttpResponseBody::from(body.into()))
     }
 }
 

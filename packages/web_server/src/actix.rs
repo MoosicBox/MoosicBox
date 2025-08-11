@@ -279,10 +279,18 @@ impl WebServerBuilder {
                             result.map(|resp| {
                                 let mut actix_resp =
                                     actix_web::HttpResponseBuilder::new(resp.status_code.into());
+
+                                // Insert all headers from the BTreeMap
+                                for (name, value) in resp.headers {
+                                    actix_resp.insert_header((name, value));
+                                }
+
+                                // Keep backwards compatibility with location field
                                 if let Some(location) = resp.location {
                                     actix_resp
                                         .insert_header((actix_http::header::LOCATION, location));
                                 }
+
                                 match resp.body {
                                     Some(crate::HttpResponseBody::Bytes(bytes)) => {
                                         actix_resp.body(bytes)

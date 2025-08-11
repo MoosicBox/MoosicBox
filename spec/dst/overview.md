@@ -1048,10 +1048,10 @@ Before marking ANY checkbox complete:
     - All examples compile and run with both Actix and Simulator backends
     - **Critical Discovery**: Examples revealed abstraction is incomplete (require feature gates)
 
-**Step 5: Complete Web Server Abstraction** - ⏳ **5/101 tasks completed (5%)** - **REORGANIZED AND EXPANDED**
+**Step 5: Complete Web Server Abstraction** - ⏳ **5/107 tasks completed (4.7%)** - **REORGANIZED AND EXPANDED**
 
 - ✅ Create unified WebServer trait (5/5 tasks) - **COMPLETED** (trait exists in web_server_core, both backends implement it)
-- ❌ Complete SimulatorWebServer basics (0/84 tasks) - **DETAILED BREAKDOWN** (route storage, handler execution, response generation, state management, scope processing, comprehensive testing)
+- ❌ Complete SimulatorWebServer basics (0/91 tasks) - **DETAILED BREAKDOWN** (route storage, handler execution, response generation, state management, scope processing, comprehensive testing)
 - ❌ Create unified TestClient abstraction (0/4 tasks) - **ENHANCED WITH SIMULATOR SPECIFICS**
 - ❌ Create unified server builder/runtime (0/5 tasks) - **ENHANCED WITH 5.1 API USAGE**
 - ❌ Update examples to remove feature gates (0/3 tasks) - **ENHANCED WITH CONCRETE VALIDATION**
@@ -1076,12 +1076,13 @@ Before marking ANY checkbox complete:
 - ⏳ Advanced state patterns (0/4 tasks) - **REORGANIZED** (dependency injection, scoped state)
 - ⏳ Completion gate (0/3 tasks) - **SIMPLIFIED**
 
-**Step 9: Consolidated Migration and Package Updates** - 0/35 tasks completed (0%) - **CONSOLIDATED MIGRATION EFFORT**
+**Step 9: Consolidated Migration and Package Updates** - 0/40 tasks completed (0%) - **CONSOLIDATED MIGRATION EFFORT**
 
 - ⏳ Comprehensive migration guide (0/8 tasks) - **ENHANCED** (step-by-step from actix-web, patterns, gotchas, performance)
 - ⏳ Automated migration tools (0/6 tasks) - **NEW** (scripts, validation, testing)
 - ⏳ Package migration execution (0/15 tasks) - **EXPANDED** (prioritized list, parallel migration, validation)
 - ⏳ Migration validation (0/6 tasks) - **CONSOLIDATED** (testing strategy, rollback plans, monitoring)
+- ⏳ Performance optimizations (0/5 tasks) - **NEW** (header performance, route matching, allocation reduction)
 
 **Step 10: Routing Macro System** - 0/65 tasks completed (0%) - **UNCHANGED**
 
@@ -3212,7 +3213,7 @@ mod simulator_tests {
 
 **🎯 GOAL**: Fix the fundamental architectural issue discovered in Step 4.3 - the web server abstraction is incomplete, requiring feature-gated code instead of providing a unified API.
 
-### 5.1 Complete SimulatorWebServer Basics (85 tasks) - **47.1% COMPLETE (40/85 tasks)**
+### 5.1 Complete SimulatorWebServer Basics (91 tasks) - **44.0% COMPLETE (40/91 tasks)**
 
 **Overview**: Transform SimulatorWebServer from stub implementation to fully functional web server capable of route storage, handler execution, response generation, and basic state management. This provides the foundation for eliminating feature gates from examples.
 
@@ -3390,19 +3391,66 @@ mod simulator_tests {
 - Path parameters: Full integration with route matching and handler execution ✅
 - Code quality: Modern Rust patterns (let...else, map_or_else, const fn) ✅
 
-#### 5.1.5 Response Generation (10 tasks)
+#### 5.1.5 Response Generation (16 tasks)
+
+##### 5.1.5.1 HttpResponse Header Support (6 tasks) - **NEW PREREQUISITE**
+
+**Files**: `packages/web_server/src/lib.rs`, `packages/web_server/src/actix.rs`
+
+- [ ] Add `headers: BTreeMap<String, String>` field to HttpResponse struct
+    - Update all constructors to initialize empty BTreeMap
+    - Maintain backwards compatibility during transition
+- [ ] Migrate `location` field to use headers
+    - Update `with_location()` method to set "Location" header
+    - Keep location field temporarily for backwards compatibility
+- [ ] Add header builder methods
+    - Implement `with_header(name, value)` method
+    - Implement `with_content_type(content_type)` helper method
+    - Implement `with_headers(BTreeMap)` for bulk header setting
+- [ ] Add content-type specific constructors
+    - Implement `HttpResponse::json<T: Serialize>(value)` method with automatic content-type
+    - Implement `HttpResponse::html(body)` method with "text/html; charset=utf-8"
+    - Implement `HttpResponse::text(body)` method with "text/plain; charset=utf-8"
+- [ ] Update actix backend to use all headers
+    - Modify actix.rs conversion to insert all headers from BTreeMap
+    - Remove special-case location handling (now in headers)
+    - Ensure header precedence works correctly
+- [ ] Update existing code for compatibility
+    - Fix compilation issues in examples and tests
+    - Run clippy to ensure zero warnings
+    - **Validation**: `TUNNEL_ACCESS_TOKEN=123 cargo clippy -p moosicbox_web_server` - ZERO warnings
+
+##### 5.1.5.2 Response Generation (10 tasks) - **DEPENDS ON 5.1.5.1**
 
 **File**: `packages/web_server/src/simulator.rs`
 
-- [ ] Implement conversion from `HttpResponse` to `SimulationResponse`
+- [ ] Implement enhanced conversion from `HttpResponse` to `SimulationResponse`
+    - Direct copy of headers BTreeMap (no inference needed)
+    - Proper status code mapping
 - [ ] Handle JSON response bodies (serialize to string)
+    - Content-type already set by HttpResponse::json()
+    - Preserve JSON formatting in body
 - [ ] Handle HTML response bodies (pass through as string)
+    - Content-type already set by HttpResponse::html()
+    - Preserve HTML structure
 - [ ] Handle plain text response bodies
+    - Content-type already set by HttpResponse::text()
+    - Handle UTF-8 encoding properly
 - [ ] Preserve status codes in conversion
+    - Map all StatusCode variants to u16
+    - Handle edge cases and unknown codes
 - [ ] Preserve headers in conversion
+    - Direct BTreeMap copy from HttpResponse
+    - Maintain header order and case
 - [ ] Add unit test: JSON response conversion preserves content-type
+    - Test HttpResponse::json() -> SimulationResponse
+    - Verify "application/json" content-type header
 - [ ] Add unit test: status codes are preserved (200, 404, 500)
+    - Test various StatusCode -> u16 conversions
+    - Verify error status codes work correctly
 - [ ] Add unit test: custom headers are preserved
+    - Test arbitrary header preservation
+    - Verify header case and order
 - [ ] **Validation**: `cargo test simulator_response_generation` passes
 
 #### 5.1.6 State Management (9 tasks)
@@ -4007,6 +4055,51 @@ async fn get_user(Path(id): Path<u32>) -> Result<Json<User>, Error> {
 - [ ] No regression in existing functionality
 - [ ] **COMPILATION CHECK**: `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
 - [ ] **WARNING CHECK**: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
+
+## Performance Optimizations
+
+**🎯 GOAL**: Optimize performance bottlenecks identified during implementation, particularly in hot paths like response header handling.
+
+### Response Header Performance (5 tasks)
+
+**Problem**: The HttpResponse header implementation from Section 5.1.5.1 uses `BTreeMap<String, String>` which requires allocation and iteration when converting to actix responses. This adds unnecessary overhead in the hot path of every HTTP response.
+
+**Files**: `packages/web_server/src/lib.rs`, `packages/web_server/src/actix.rs`
+
+**Background**: During implementation of Section 5.1.5.1, we added header support to HttpResponse using BTreeMap for deterministic behavior in the simulator. However, the actix backend now iterates through this BTreeMap on every response, creating performance overhead.
+
+- [ ] **Investigate alternative header storage strategies**
+    - Option 1: Use `SmallVec<[(String, String); N]>` for common header counts (most responses have <8 headers)
+    - Option 2: Use `http::HeaderMap` which is optimized for HTTP headers
+    - Option 3: Lazy evaluation - only build BTreeMap when needed for simulator mode
+    - Option 4: Feature-gated storage - different types for actix vs simulator
+    - Create benchmarks with `criterion` to measure current performance
+- [ ] **Design zero-cost abstraction for headers**
+    - Create trait-based approach that abstracts over header storage
+    - Ensure simulator gets deterministic BTreeMap behavior
+    - Ensure actix gets optimal performance (minimal allocations)
+    - Maintain API compatibility with existing `with_header()` methods
+- [ ] **Implement chosen optimization**
+    - Implement new header storage strategy
+    - Update actix conversion to use optimized path
+    - Ensure simulator conversion maintains determinism
+    - Add performance regression tests
+- [ ] **Benchmark and validate improvements**
+    - Measure response throughput improvement
+    - Verify memory allocation reduction
+    - Ensure no performance regression in simulator mode
+    - Document performance characteristics
+- [ ] **Update documentation and examples**
+    - Document performance considerations in header usage
+    - Update examples to show best practices
+    - Add performance tips to migration guide
+
+**Success Criteria**:
+
+- [ ] Measurable improvement in response throughput for header-heavy responses
+- [ ] Reduced memory allocations in actix response path
+- [ ] Zero performance regression in simulator mode
+- [ ] Maintained API compatibility
 
 ## Success Metrics & Validation
 
