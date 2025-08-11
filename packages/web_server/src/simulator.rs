@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, pin::Pin};
+use std::{collections::BTreeMap, pin::Pin, sync::Arc};
 
 use bytes::Bytes;
 use moosicbox_web_server_core::WebServer;
@@ -73,12 +73,26 @@ impl SimulationRequest {
 #[derive(Debug, Clone)]
 pub struct SimulationStub {
     pub request: SimulationRequest,
+    /// State container for the simulation
+    pub state_container: Option<Arc<crate::extractors::state::StateContainer>>,
 }
 
 impl SimulationStub {
     #[must_use]
     pub const fn new(request: SimulationRequest) -> Self {
-        Self { request }
+        Self {
+            request,
+            state_container: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_state_container(
+        mut self,
+        container: Arc<crate::extractors::state::StateContainer>,
+    ) -> Self {
+        self.state_container = Some(container);
+        self
     }
 
     #[must_use]
@@ -119,6 +133,14 @@ impl SimulationStub {
     #[must_use]
     pub fn remote_addr(&self) -> Option<&str> {
         self.request.remote_addr.as_deref()
+    }
+
+    /// Get state of type T from the state container
+    #[must_use]
+    pub fn state<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
+        self.state_container
+            .as_ref()
+            .and_then(|container| container.get::<T>())
     }
 }
 
