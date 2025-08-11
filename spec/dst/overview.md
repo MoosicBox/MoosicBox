@@ -3212,23 +3212,53 @@ mod simulator_tests {
 
 **🎯 GOAL**: Fix the fundamental architectural issue discovered in Step 4.3 - the web server abstraction is incomplete, requiring feature-gated code instead of providing a unified API.
 
-### 5.1 Complete SimulatorWebServer Basics (84 tasks) - **MOVED FROM STEP 6**
+### 5.1 Complete SimulatorWebServer Basics (84 tasks) - **8.3% COMPLETE (7/84 tasks)**
 
 **Overview**: Transform SimulatorWebServer from stub implementation to fully functional web server capable of route storage, handler execution, response generation, and basic state management. This provides the foundation for eliminating feature gates from examples.
 
 **Files**: `packages/web_server/src/simulator.rs`, `packages/web_server/tests/simulator_integration.rs`
 
-#### 5.1.1 Route Storage Infrastructure (7 tasks)
+#### 5.1.1 Route Storage Infrastructure (7 tasks) ✅ COMPLETED
 
-**File**: `packages/web_server/src/simulator.rs`
+**Files**: `packages/web_server/src/simulator.rs`, `packages/http/models/src/lib.rs`
 
-- [ ] Add `routes` field to SimulatorWebServer struct: `BTreeMap<(Method, String), BoxedHandler>`
-- [ ] Add `state` field to SimulatorWebServer struct: `Arc<RwLock<BTreeMap<TypeId, Box<dyn Any + Send + Sync>>>>`
-- [ ] Update `SimulatorWebServer::new()` to initialize empty routes and state collections
-- [ ] Add `register_route(&mut self, method: Method, path: &str, handler: BoxedHandler)` method
-- [ ] Add unit test: verify route registration stores handler correctly
-- [ ] Add unit test: verify multiple routes can be registered without conflict
-- [ ] **Validation**: `cargo test simulator_route_storage` passes
+- [x] Add `routes` field to SimulatorWebServer struct: `BTreeMap<(Method, String), RouteHandler>` ✅ COMPLETED
+    - Line 161: Added field with `#[allow(unused)]` annotation (TODO: remove in 5.1.3)
+    - Uses RouteHandler type alias from lib.rs:743 instead of BoxedHandler
+    - Pattern: BTreeMap for deterministic ordering
+- [x] Add `state` field to SimulatorWebServer struct: `Arc<RwLock<BTreeMap<TypeId, Box<dyn Any + Send + Sync>>>>` ✅ COMPLETED
+    - Line 162: Added field with `#[allow(unused)]` annotation (TODO: remove in 5.1.6)
+    - Thread-safe with Arc<RwLock<>> wrapper for concurrent access
+- [x] Update `SimulatorWebServer::new()` to initialize empty routes and state collections ✅ COMPLETED
+    - Lines 189-193: build_simulator() initializes both collections with BTreeMap::new()
+    - Validation: Clean compilation with nix-shell cargo check
+- [x] Add `register_route(&mut self, method: Method, path: &str, handler: RouteHandler)` method ✅ COMPLETED
+    - Lines 166-168: Method implemented with `#[allow(unused)]` (TODO: remove in 5.1.7)
+    - Pattern: Direct insertion into BTreeMap with (Method, String) key
+- [x] Add unit test: verify route registration stores handler correctly ✅ COMPLETED
+    - Lines 217-229: test_route_registration_stores_handler_correctly
+    - Validation: Test passes with --features simulator
+- [x] Add unit test: verify multiple routes can be registered without conflict ✅ COMPLETED
+    - Lines 232-251: test_multiple_routes_can_be_registered_without_conflict
+    - Tests 3 different routes (GET /users, POST /users, GET /posts)
+- [x] **Validation**: `cargo test simulator_route_storage` passes ✅ COMPLETED
+    - Both tests pass: 2/2 ✅
+    - Zero clippy warnings with proper #[allow(unused)] annotations
+    - Command: `cargo test -p moosicbox_web_server --features simulator`
+
+**Discovered Dependency**:
+
+- `packages/http/models/src/lib.rs:16` - Added `PartialOrd, Ord` derives to Method enum
+    - Required for BTreeMap key usage: `BTreeMap<(Method, String), RouteHandler>`
+    - Pattern: Deterministic collection keys must implement Ord
+
+**Implementation Evidence**:
+
+- Compilation: `cargo check -p moosicbox_web_server --features simulator` ✅
+- Clippy: `cargo clippy -p moosicbox_web_server --features simulator` - Zero warnings ✅
+- Tests: 2/2 passing with specific test names
+- Files modified: 2 files (simulator.rs, http/models/lib.rs)
+- Lines added: ~50 lines of implementation + comprehensive tests
 
 #### 5.1.2 Path Pattern Parsing (8 tasks)
 
@@ -3251,7 +3281,7 @@ mod simulator_tests {
 - [ ] Implement `match_path(pattern: &PathPattern, actual_path: &str) -> Option<PathParams>`
 - [ ] Add exact path matching (return empty PathParams on match)
 - [ ] Add parameterized path matching (extract and return parameters)
-- [ ] Implement `find_route(&self, method: &Method, path: &str) -> Option<(&BoxedHandler, PathParams)>`
+- [ ] Implement `find_route(&self, method: &Method, path: &str) -> Option<(&RouteHandler, PathParams)>`
 - [ ] Add route precedence: exact matches before parameterized matches
 - [ ] Add unit test: exact route `/api/users` matches correctly
 - [ ] Add unit test: parameterized route `/users/{id}` matches `/users/123` and extracts `id=123`

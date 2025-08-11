@@ -1,10 +1,16 @@
-use std::{collections::BTreeMap, pin::Pin, sync::Arc};
+use std::{
+    any::{Any, TypeId},
+    collections::BTreeMap,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, RwLock},
+};
 
 use bytes::Bytes;
 use moosicbox_web_server_core::WebServer;
 use switchy_http_models::Method;
 
-use crate::WebServerBuilder;
+use crate::{RouteHandler, WebServerBuilder};
 
 /// Simulation-specific implementation of HTTP request data
 #[derive(Debug, Clone)]
@@ -152,6 +158,17 @@ impl From<SimulationRequest> for SimulationStub {
 
 struct SimulatorWebServer {
     scopes: Vec<crate::Scope>,
+    #[allow(unused)] // TODO: Remove in 5.1.3 when find_route() is implemented
+    routes: BTreeMap<(Method, String), RouteHandler>,
+    #[allow(unused)] // TODO: Remove in 5.1.6 when state management methods are implemented
+    state: Arc<RwLock<BTreeMap<TypeId, Box<dyn Any + Send + Sync>>>>,
+}
+
+impl SimulatorWebServer {
+    #[allow(unused)] // TODO: Remove in 5.1.7 when register_scope() calls this method
+    pub fn register_route(&mut self, method: Method, path: &str, handler: RouteHandler) {
+        self.routes.insert((method, path.to_string()), handler);
+    }
 }
 
 impl WebServer for SimulatorWebServer {
@@ -180,6 +197,73 @@ impl WebServerBuilder {
     pub fn build_simulator(self) -> Box<dyn WebServer> {
         Box::new(SimulatorWebServer {
             scopes: self.scopes,
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{HttpRequest, HttpResponse};
+
+    fn create_test_handler() -> RouteHandler {
+        Box::new(|_req: HttpRequest| {
+            Box::pin(async move { Ok(HttpResponse::ok().with_body("test response")) })
+        })
+    }
+
+    #[test]
+    fn test_route_registration_stores_handler_correctly() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+
+        let handler = create_test_handler();
+        server.register_route(Method::Get, "/test", handler);
+
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Get, "/test".to_string()))
+        );
+        assert_eq!(server.routes.len(), 1);
+    }
+
+    #[test]
+    fn test_multiple_routes_can_be_registered_without_conflict() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+
+        let handler1 = create_test_handler();
+        let handler2 = create_test_handler();
+        let handler3 = create_test_handler();
+
+        server.register_route(Method::Get, "/users", handler1);
+        server.register_route(Method::Post, "/users", handler2);
+        server.register_route(Method::Get, "/posts", handler3);
+
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Get, "/users".to_string()))
+        );
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Post, "/users".to_string()))
+        );
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Get, "/posts".to_string()))
+        );
+        assert_eq!(server.routes.len(), 3);
     }
 }
