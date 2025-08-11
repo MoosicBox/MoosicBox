@@ -15,7 +15,7 @@
 //! * [`Query<T>`] - Extract URL query parameters
 //! * [`Json<T>`] - Extract JSON request body
 //! * [`Path<T>`] - Extract URL path parameters
-//! * [`Header<T>`] - Extract specific headers (coming soon)
+//! * [`Header<T>`] - Extract specific headers
 //! * [`State<T>`] - Extract application state (coming soon)
 //!
 //! # Usage Examples
@@ -67,6 +67,9 @@ pub mod json;
 #[cfg(feature = "serde")]
 pub mod path;
 
+#[cfg(feature = "serde")]
+pub mod header;
+
 // Re-export extractors for convenient access
 #[cfg(feature = "serde")]
 pub use query::{Query, QueryError};
@@ -77,8 +80,8 @@ pub use json::{Json, JsonError};
 #[cfg(feature = "serde")]
 pub use path::{Path, PathError};
 
-// pub mod header;
-// pub use header::{Header, HeaderError};
+#[cfg(feature = "serde")]
+pub use header::{Header, HeaderError};
 
 // pub mod state;
 // pub use state::{State, StateError};

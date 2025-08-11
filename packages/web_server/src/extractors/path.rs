@@ -445,7 +445,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "simulator"))]
 mod tests {
     use super::*;
     use crate::{HttpRequest, Stub};
