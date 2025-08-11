@@ -13,7 +13,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, EnumString};
 
-#[derive(Debug, Clone, Copy, AsRefStr, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, AsRefStr, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "SCREAMING_SNAKE_CASE"))]
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
