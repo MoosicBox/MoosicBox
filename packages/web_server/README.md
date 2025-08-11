@@ -307,6 +307,146 @@ mod openapi_example {
 - Built-in constructors for common HTTP status codes
 - Automatic conversion from query parsing errors
 
+## Examples
+
+This package includes comprehensive examples demonstrating various web server features and patterns. Examples are located in the `examples/` directory.
+
+### Prerequisites
+
+- Rust toolchain (see root README)
+- Understanding of async Rust
+- Basic HTTP knowledge
+
+### Running Examples
+
+Examples require feature flags to select the backend implementation:
+
+```bash
+# With Actix Web (default backend)
+cargo run --example [example_name] --features actix
+
+# With Simulator (for testing)
+cargo run --example [example_name] --features simulator
+```
+
+### Available Examples
+
+#### Standalone Examples (Single Files)
+
+**Handler Macros** (`handler_macros.rs`)
+- **Purpose**: Demonstrates handler macro usage for 0-2 parameter handlers
+- **Run**: `cargo run --example handler_macros --features actix`
+- **Shows**: Different handler signatures and macro expansions
+
+**Query Extractor** (`query_extractor.rs`)
+- **Purpose**: Shows Query<T> extractor for URL parameters
+- **Run**: `cargo run --example query_extractor --features actix`
+- **Shows**: Parsing query strings into typed structs with serde
+
+**JSON Extractor** (`json_extractor.rs`)
+- **Purpose**: Demonstrates Json<T> extractor for request bodies
+- **Run**: `cargo run --example json_extractor --features actix`
+- **Shows**: JSON deserialization and response handling
+
+**Combined Extractors** (`combined_extractors.rs`)
+- **Purpose**: Shows multiple extractors working together
+- **Run**: `cargo run --example combined_extractors --features actix`
+- **Shows**: Complex handlers with Path, Query, and Json extractors
+
+#### Directory Examples (With Individual READMEs)
+
+**Basic Handler** (`basic_handler/`)
+- **Purpose**: Fundamental handler implementation using RequestData
+- **Run**: `cargo run --example basic_handler --features actix`
+- **Shows**: Basic request/response handling with the new abstraction layer
+
+**Simple GET** (`simple_get/`)
+- **Purpose**: Simple GET endpoint implementation
+- **Run**: `cargo run --example simple_get --features actix`
+- **Shows**: Basic routing and response generation
+
+**Nested GET** (`nested_get/`)
+- **Purpose**: Demonstrates nested route structures
+- **Run**: `cargo run --example nested_get --features actix`
+- **Shows**: Route organization and scope nesting
+
+**OpenAPI Integration** (`openapi/`)
+- **Purpose**: OpenAPI documentation generation
+- **Run**: `cargo run --example openapi --features "actix,openapi-all"`
+- **Shows**: API documentation with utoipa integration
+
+### Testing Examples
+
+#### Unit Tests
+```bash
+cargo test --example [example_name] --features actix
+```
+
+#### Manual Testing with curl
+
+**GET Requests**
+```bash
+curl http://localhost:8080/endpoint
+```
+
+**POST with JSON**
+```bash
+curl -X POST http://localhost:8080/endpoint \
+  -H "Content-Type: application/json" \
+  -d '{"key": "value"}'
+```
+
+**Query Parameters**
+```bash
+curl "http://localhost:8080/endpoint?page=1&limit=10"
+```
+
+### Troubleshooting
+
+#### Feature Flag Issues
+**Problem**: "trait bound not satisfied" errors
+**Solution**: Ensure correct feature flags are enabled (`actix` or `simulator`)
+
+#### Port Conflicts
+**Problem**: "address already in use"
+**Solution**: Change port in example or kill existing process with `lsof -ti:8080 | xargs kill`
+
+#### Compilation Errors
+**Problem**: Missing traits or types
+**Solution**: Check feature dependencies and ensure all required features are enabled
+
+### Current Architecture Limitations
+
+The web server abstraction currently requires feature flags to select between Actix and Simulator backends. This is a known limitation that will be addressed in future versions.
+
+Examples must use conditional compilation:
+- `#[cfg(feature = "actix")]` for Actix-specific code
+- `#[cfg(feature = "simulator")]` for test simulator code
+
+Future versions will provide a unified API that removes this requirement.
+
+### Migration Guide
+
+#### From Raw Actix Web
+
+**Handler Changes**
+- Replace `HttpRequest` with `RequestData` for Send-safety
+- Use handler macros instead of manual implementations
+- Extractors remain mostly the same but work through the abstraction layer
+
+**Route Registration**
+```rust
+// Before (raw Actix)
+App::new().route("/api/users", web::get().to(get_users))
+
+// After (MoosicBox abstraction)
+Scope::new("/api").with_route(Route {
+    path: "/users",
+    method: Method::Get,
+    handler: &get_users_handler,
+})
+```
+
 ## Dependencies
 
 - `switchy_http_models` - HTTP types and status codes

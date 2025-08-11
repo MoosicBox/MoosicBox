@@ -12,7 +12,6 @@ version     = "0.1.0"
 
 [dependencies]
 moosicbox_web_server = { path = "../..", default-features = false }
-futures              = { workspace = true }
 
 [features]
 default = ["simulator"]
