@@ -30,6 +30,7 @@ serde             = { workspace = true }
 serde-querystring = { workspace = true }
 serde_json        = { workspace = true, optional = true }
 thiserror         = { workspace = true }
+urlencoding       = { workspace = true }
 utoipa            = { workspace = true, optional = true }
 utoipa-rapidoc    = { workspace = true, optional = true }
 utoipa-redoc      = { workspace = true, optional = true }

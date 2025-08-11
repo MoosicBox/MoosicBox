@@ -17,9 +17,11 @@ use switchy_http_models::StatusCode;
 pub use utoipa;
 
 // Re-export from_request module and key types
+#[cfg(feature = "serde")]
+pub use extractors::Path;
 pub use from_request::{FromRequest, Headers, IntoHandlerError, RequestData, RequestInfo};
 #[cfg(feature = "serde")]
-pub use from_request::{Json, Path, Query};
+pub use from_request::{Json, Query};
 
 #[cfg(feature = "actix")]
 mod actix;
