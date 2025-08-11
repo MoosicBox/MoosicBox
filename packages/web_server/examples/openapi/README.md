@@ -77,11 +77,41 @@ Comprehensive route documentation with parameters and responses.
 
 Automatically binding OpenAPI documentation endpoints.
 
+## Prerequisites
+
+⚠️ **Important**: This example requires the `serde` feature to be enabled because the FromRequest implementations use `serde_json` for parsing.
+
 ## Running the example
 
 ```bash
-cargo run --package web_server_openapi
+# From repository root
+cargo run -p web_server_openapi --features "moosicbox_web_server/serde"
+
+# With NixOS
+nix-shell --run "cargo run -p web_server_openapi --features 'moosicbox_web_server/serde'"
+
+# From example directory
+cd packages/web_server/examples/openapi
+cargo run --features "moosicbox_web_server/serde"
 ```
+
+## Build only (for testing compilation)
+
+```bash
+# Build the example
+cargo build -p web_server_openapi --features "moosicbox_web_server/serde"
+```
+
+## Troubleshooting
+
+### Missing serde feature error
+If you see `use of unresolved module or unlinked crate 'serde_json'`, make sure to include the serde feature:
+```bash
+--features "moosicbox_web_server/serde"
+```
+
+### Package name error
+The package name is `web_server_openapi`, not `openapi`.
 
 The server will start with both the API and documentation endpoints.
 

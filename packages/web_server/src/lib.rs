@@ -16,9 +16,15 @@ use switchy_http_models::StatusCode;
 #[cfg(feature = "openapi")]
 pub use utoipa;
 
+// Re-export from_request module and key types
+pub use from_request::{FromRequest, Headers, IntoHandlerError, RequestData, RequestInfo};
+#[cfg(feature = "serde")]
+pub use from_request::{Json, Path, Query};
+
 #[cfg(feature = "actix")]
 mod actix;
 
+pub mod from_request;
 pub mod handler;
 
 #[cfg(feature = "openapi")]
@@ -106,7 +112,7 @@ impl WebServerHandle {
     // }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum HttpRequest {
     #[cfg(feature = "actix")]
     Actix(actix_web::HttpRequest),
@@ -668,14 +674,14 @@ pub enum Error {
     #[error("HTTP Error {status_code}: {source:?}")]
     Http {
         status_code: StatusCode,
-        source: Box<dyn std::error::Error>,
+        source: Box<dyn std::error::Error + Send + Sync>,
     },
 }
 
 impl Error {
     pub fn from_http_status_code(
         status_code: StatusCode,
-        source: impl std::error::Error + 'static,
+        source: impl std::error::Error + Send + Sync + 'static,
     ) -> Self {
         Self::Http {
             status_code,
@@ -685,33 +691,35 @@ impl Error {
 
     pub fn from_http_status_code_u16(
         status_code: u16,
-        source: impl std::error::Error + 'static,
+        source: impl std::error::Error + Send + Sync + 'static,
     ) -> Self {
         Self::from_http_status_code(StatusCode::from_u16(status_code), source)
     }
 
-    pub fn bad_request(error: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn bad_request(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
         Self::Http {
             status_code: StatusCode::BadRequest,
             source: error.into(),
         }
     }
 
-    pub fn unauthorized(error: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn unauthorized(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
         Self::Http {
             status_code: StatusCode::Unauthorized,
             source: error.into(),
         }
     }
 
-    pub fn not_found(error: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn not_found(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> Self {
         Self::Http {
             status_code: StatusCode::NotFound,
             source: error.into(),
         }
     }
 
-    pub fn internal_server_error(error: impl Into<Box<dyn std::error::Error>>) -> Self {
+    pub fn internal_server_error(
+        error: impl Into<Box<dyn std::error::Error + Send + Sync>>,
+    ) -> Self {
         Self::Http {
             status_code: StatusCode::InternalServerError,
             source: error.into(),
@@ -725,12 +733,7 @@ impl From<qs::Error> for Error {
     }
 }
 
-pub trait FromRequest {
-    type Error;
-    type Future;
-
-    fn from_request(req: HttpRequestRef) -> Self::Future;
-}
+// FromRequest trait moved to from_request.rs module
 
 pub type RouteHandler = Box<
     dyn Fn(HttpRequest) -> Pin<Box<dyn Future<Output = Result<HttpResponse, Error>> + Send>>
@@ -767,6 +770,41 @@ impl Route {
     where
         H: crate::handler::IntoHandler<()> + Send + Sync + 'static,
         H::Future: Send + 'static,
+    {
+        let handler_fn = handler.into_handler();
+        Self {
+            path: path.into(),
+            method,
+            handler: std::sync::Arc::new(Box::new(move |req| Box::pin(handler_fn(req)))),
+        }
+    }
+
+    // TODO: Remove this method once Step 8 (Routing Macro System) is complete
+    // This is technical debt - should be replaced with clean macro API
+    #[must_use]
+    pub fn with_handler1<H, T1>(method: Method, path: impl Into<String>, handler: H) -> Self
+    where
+        H: crate::handler::IntoHandler<(T1,)> + Send + Sync + 'static,
+        H::Future: Send + 'static,
+        T1: crate::from_request::FromRequest + Send + 'static,
+    {
+        let handler_fn = handler.into_handler();
+        Self {
+            path: path.into(),
+            method,
+            handler: std::sync::Arc::new(Box::new(move |req| Box::pin(handler_fn(req)))),
+        }
+    }
+
+    // TODO: Remove this method once Step 8 (Routing Macro System) is complete
+    // This is technical debt - should be replaced with clean macro API
+    #[must_use]
+    pub fn with_handler2<H, T1, T2>(method: Method, path: impl Into<String>, handler: H) -> Self
+    where
+        H: crate::handler::IntoHandler<(T1, T2)> + Send + Sync + 'static,
+        H::Future: Send + 'static,
+        T1: crate::from_request::FromRequest + Send + 'static,
+        T2: crate::from_request::FromRequest + Send + 'static,
     {
         let handler_fn = handler.into_handler();
         Self {

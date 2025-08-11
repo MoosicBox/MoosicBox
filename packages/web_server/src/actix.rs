@@ -140,9 +140,12 @@ impl TryFrom<Error> for crate::Error {
     type Error = TryFromU16StatusCodeError;
 
     fn try_from(value: Error) -> Result<Self, Self::Error> {
+        // Convert actix_web::Error to a Send + Sync error
+        let status_code = StatusCode::try_from_u16(value.error_response().status().as_u16())?;
+        let error_message = format!("Actix error: {value}");
         Ok(Self::from_http_status_code(
-            StatusCode::try_from_u16(value.error_response().status().as_u16())?,
-            value,
+            status_code,
+            std::io::Error::other(error_message),
         ))
     }
 }

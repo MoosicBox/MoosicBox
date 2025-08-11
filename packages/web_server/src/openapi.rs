@@ -104,7 +104,9 @@ mod openapi_spec {
                         Err(Error::not_found("Swagger path not found"))
                     }
                 }
-                Err(e) => Err(Error::internal_server_error(e)),
+                Err(e) => Err(Error::internal_server_error(std::io::Error::other(
+                    e.to_string(),
+                ))),
             }
         })
     }

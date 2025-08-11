@@ -1,0 +1,22 @@
+[package]
+authors     = { workspace = true }
+categories  = ["web-programming"]
+description = "Test examples for MoosicBox web server FromRequest trait"
+edition     = { workspace = true }
+keywords    = ["extraction", "request", "server", "test", "web"]
+license     = { workspace = true }
+name        = "from_request_test"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+moosicbox_web_server = { workspace = true, features = ["simulator"] }
+tokio                = { version = "1.0", features = ["full"] }
+
+[[bin]]
+name = "test_sync_extraction"
+path = "src/test_sync_extraction.rs"
+
+[[bin]]
+name = "test_async_extraction"
+path = "src/test_async_extraction.rs"

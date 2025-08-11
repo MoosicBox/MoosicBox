@@ -125,6 +125,8 @@ members = [
     "packages/web_server/core",
     "packages/web_server/cors",
     "packages/web_server/examples/basic_handler",
+    "packages/web_server/examples/from_request_test",
+    "packages/web_server/examples/handler_macro_test",
     "packages/web_server/examples/nested_get",
     "packages/web_server/examples/openapi",
     "packages/web_server/examples/simple_get",
