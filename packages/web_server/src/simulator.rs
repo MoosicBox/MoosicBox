@@ -1,5 +1,4 @@
 use std::{
-    any::{Any, TypeId},
     collections::BTreeMap,
     future::Future,
     pin::Pin,
@@ -348,7 +347,7 @@ impl SimulationRequest {
 pub struct SimulationStub {
     pub request: SimulationRequest,
     /// State container for the simulation
-    pub state_container: Option<Arc<crate::extractors::state::StateContainer>>,
+    pub state_container: Option<Arc<RwLock<crate::extractors::state::StateContainer>>>,
 }
 
 impl SimulationStub {
@@ -363,7 +362,7 @@ impl SimulationStub {
     #[must_use]
     pub fn with_state_container(
         mut self,
-        container: Arc<crate::extractors::state::StateContainer>,
+        container: Arc<RwLock<crate::extractors::state::StateContainer>>,
     ) -> Self {
         self.state_container = Some(container);
         self
@@ -412,15 +411,30 @@ impl SimulationStub {
     /// Get state of type T from the state container
     #[must_use]
     pub fn state<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
-        self.state_container
-            .as_ref()
-            .and_then(|container| container.get::<T>())
+        self.state_container.as_ref().and_then(|container| {
+            container
+                .read()
+                .map_or_else(|_| None, |state| state.get::<T>())
+        })
     }
 
     /// Get a path parameter by name
     #[must_use]
     pub fn path_param(&self, name: &str) -> Option<&str> {
         self.request.path_params.get(name).map(String::as_str)
+    }
+
+    /// Access application state from the server
+    ///
+    /// This method provides access to the server's state container, which can be used
+    /// by extractors like `State<T>` to retrieve typed state values.
+    ///
+    /// Returns `None` if no state container has been set on this stub.
+    #[must_use]
+    pub const fn app_state(
+        &self,
+    ) -> Option<&Arc<RwLock<crate::extractors::state::StateContainer>>> {
+        self.state_container.as_ref()
     }
 }
 
@@ -433,8 +447,7 @@ impl From<SimulationRequest> for SimulationStub {
 struct SimulatorWebServer {
     scopes: Vec<crate::Scope>,
     routes: BTreeMap<(Method, String), RouteHandler>,
-    #[allow(unused)] // TODO: Remove in 5.1.6 when state management methods are implemented
-    state: Arc<RwLock<BTreeMap<TypeId, Box<dyn Any + Send + Sync>>>>,
+    state: Arc<RwLock<crate::extractors::state::StateContainer>>,
 }
 
 impl SimulatorWebServer {
@@ -500,8 +513,10 @@ impl SimulatorWebServer {
         // Inject path params into request
         request.path_params = path_params;
 
-        // Create HttpRequest::Stub from enhanced request
-        let simulation_stub = SimulationStub::new(request);
+        // Create HttpRequest::Stub from enhanced request with state container
+        let simulation_stub =
+            SimulationStub::new(request).with_state_container(Arc::clone(&self.state));
+
         let http_request = crate::HttpRequest::Stub(crate::Stub::Simulator(simulation_stub));
 
         // Execute matched handler with request
@@ -515,6 +530,52 @@ impl SimulatorWebServer {
                 convert_http_response_to_simulation_response(http_response)
             },
         )
+    }
+
+    /// Insert state of type T into the server's state container
+    ///
+    /// This state can later be retrieved by handlers using the `State<T>` extractor.
+    /// The state is stored in a thread-safe manner and can be accessed concurrently.
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - The state value to store
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // SimulatorWebServer is an internal implementation detail
+    /// let mut server = SimulatorWebServer::new();
+    /// server.insert_state("Hello, World!".to_string());
+    /// ```
+    #[allow(dead_code)] // Used in tests
+    pub fn insert_state<T: Send + Sync + 'static>(&self, state: T) {
+        if let Ok(mut state_container) = self.state.write() {
+            state_container.insert(state);
+        }
+    }
+
+    /// Retrieve state of type T from the server's state container
+    ///
+    /// Returns `Some(Arc<T>)` if state of the requested type exists,
+    /// or `None` if no state of that type has been inserted.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // SimulatorWebServer is an internal implementation detail
+    /// let mut server = SimulatorWebServer::new();
+    /// server.insert_state("Hello, World!".to_string());
+    ///
+    /// let state: Option<std::sync::Arc<String>> = server.get_state();
+    /// assert!(state.is_some());
+    /// ```
+    #[must_use]
+    #[allow(dead_code)] // Used in tests
+    pub fn get_state<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
+        self.state
+            .read()
+            .map_or_else(|_| None, |state_container| state_container.get::<T>())
     }
 }
 
@@ -545,7 +606,7 @@ impl WebServerBuilder {
         Box::new(SimulatorWebServer {
             scopes: self.scopes,
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         })
     }
 }
@@ -566,7 +627,7 @@ mod tests {
         let mut server = SimulatorWebServer {
             scopes: Vec::new(),
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         };
 
         let handler = create_test_handler();
@@ -585,7 +646,7 @@ mod tests {
         let mut server = SimulatorWebServer {
             scopes: Vec::new(),
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         };
 
         let handler1 = create_test_handler();
@@ -735,7 +796,7 @@ mod tests {
         let mut server = SimulatorWebServer {
             scopes: Vec::new(),
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         };
 
         let handler = create_test_handler();
@@ -753,7 +814,7 @@ mod tests {
         let mut server = SimulatorWebServer {
             scopes: Vec::new(),
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         };
 
         let handler = create_test_handler();
@@ -772,7 +833,7 @@ mod tests {
         let mut server = SimulatorWebServer {
             scopes: Vec::new(),
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         };
 
         let get_handler = create_test_handler();
@@ -798,7 +859,7 @@ mod tests {
         let mut server = SimulatorWebServer {
             scopes: Vec::new(),
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         };
 
         let handler = create_test_handler();
@@ -818,7 +879,7 @@ mod tests {
         let mut server = SimulatorWebServer {
             scopes: Vec::new(),
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         };
 
         let exact_handler = create_test_handler();
@@ -844,7 +905,7 @@ mod tests {
         let mut server = SimulatorWebServer {
             scopes: Vec::new(),
             routes: BTreeMap::new(),
-            state: Arc::new(RwLock::new(BTreeMap::new())),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
         };
 
         let handler = create_test_handler();
@@ -1022,5 +1083,144 @@ mod tests {
             simulation_response.headers.get("Location"),
             Some(&"https://example.com/new-location".to_string())
         );
+    }
+
+    // State Management Tests (Section 5.1.6)
+
+    #[test]
+    fn test_simulator_state_management_string_state() {
+        let server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        // Insert string state
+        let test_string = "Hello, World!".to_string();
+        server.insert_state(test_string.clone());
+
+        // Retrieve string state
+        let retrieved_state: Option<Arc<String>> = server.get_state();
+        assert!(retrieved_state.is_some());
+        assert_eq!(*retrieved_state.unwrap(), test_string);
+    }
+
+    #[test]
+    fn test_simulator_state_management_custom_struct_state() {
+        #[derive(Debug, Clone, PartialEq)]
+        struct AppConfig {
+            name: String,
+            version: u32,
+            debug: bool,
+        }
+
+        let server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        // Insert custom struct state
+        let config = AppConfig {
+            name: "TestApp".to_string(),
+            version: 42,
+            debug: true,
+        };
+        server.insert_state(config.clone());
+
+        // Retrieve custom struct state
+        let retrieved_config: Option<Arc<AppConfig>> = server.get_state();
+        assert!(retrieved_config.is_some());
+        assert_eq!(*retrieved_config.unwrap(), config);
+    }
+
+    #[test]
+    fn test_simulator_state_management_multiple_types() {
+        let server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        // Insert multiple different types
+        server.insert_state("Hello".to_string());
+        server.insert_state(42u32);
+        server.insert_state(true);
+
+        // Retrieve each type independently
+        let string_state: Option<Arc<String>> = server.get_state();
+        let u32_state: Option<Arc<u32>> = server.get_state();
+        let bool_state: Option<Arc<bool>> = server.get_state();
+
+        assert!(string_state.is_some());
+        assert!(u32_state.is_some());
+        assert!(bool_state.is_some());
+
+        assert_eq!(*string_state.unwrap(), "Hello");
+        assert_eq!(*u32_state.unwrap(), 42);
+        assert!(*bool_state.unwrap());
+    }
+
+    #[test]
+    fn test_simulator_state_management_shared_across_requests() {
+        let server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        // Insert shared state
+        let shared_data = "Shared across requests".to_string();
+        server.insert_state(shared_data.clone());
+
+        // Create multiple requests
+        let request1 = SimulationRequest::new(Method::Get, "/test1");
+        let request2 = SimulationRequest::new(Method::Get, "/test2");
+
+        // Create simulation stubs with state container
+        let stub1 = SimulationStub::new(request1).with_state_container(Arc::clone(&server.state));
+        let stub2 = SimulationStub::new(request2).with_state_container(Arc::clone(&server.state));
+
+        // Both stubs should access the same state
+        let state1: Option<Arc<String>> = stub1.state();
+        let state2: Option<Arc<String>> = stub2.state();
+
+        assert!(state1.is_some());
+        assert!(state2.is_some());
+        assert_eq!(*state1.unwrap(), shared_data);
+        assert_eq!(*state2.unwrap(), shared_data);
+
+        // Verify they're actually the same Arc (same memory location)
+        let state1_again: Option<Arc<String>> = stub1.state();
+        let state2_again: Option<Arc<String>> = stub2.state();
+        assert!(Arc::ptr_eq(&state1_again.unwrap(), &state2_again.unwrap()));
+    }
+
+    #[test]
+    fn test_simulator_state_management_handler_extraction() {
+        use crate::{extractors::state::State, from_request::FromRequest};
+
+        let server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        // Insert state that will be extracted by handler
+        let app_name = "TestApplication".to_string();
+        server.insert_state(app_name.clone());
+
+        // Create a request and simulation stub with state
+        let request = SimulationRequest::new(Method::Get, "/app-info");
+        let simulation_stub =
+            SimulationStub::new(request).with_state_container(Arc::clone(&server.state));
+        let http_request = crate::HttpRequest::Stub(crate::Stub::Simulator(simulation_stub));
+
+        // Test that State<T> extractor works with the simulator backend
+        let state_result: Result<State<String>, _> = State::from_request_sync(&http_request);
+
+        assert!(state_result.is_ok());
+        let State(extracted_name) = state_result.unwrap();
+        assert_eq!(*extracted_name, app_name);
     }
 }

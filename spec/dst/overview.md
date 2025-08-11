@@ -3485,21 +3485,31 @@ mod simulator_tests {
 - `packages/web_server/src/actix.rs`: Updated to use all headers from BTreeMap
 - `packages/web_server/src/simulator.rs`: Complete response conversion rewrite with comprehensive testing
 
-**Next**: Section 5.1.6 State Management - implementing state storage and retrieval for the simulator backend.
+**Next**: Section 5.1.7 Scope Processing - implementing scope registration and prefix handling for the simulator backend.
 
 #### 5.1.6 State Management (9 tasks)
 
 **File**: `packages/web_server/src/simulator.rs`
 
-- [ ] Implement `insert_state<T: Send + Sync + 'static>(&mut self, state: T)` method
-- [ ] Implement `get_state<T: Send + Sync + 'static>(&self) -> Option<Arc<T>>` method
-- [ ] Add `app_state` method to SimulationStub to access server state
-- [ ] Update `State<T>` extractor to work with simulator backend
-- [ ] Add unit test: insert and retrieve string state
-- [ ] Add unit test: insert and retrieve custom struct state
-- [ ] Add unit test: state is shared across multiple requests
-- [ ] Add integration test: handler can extract state via `State<T>`
-- [ ] **Validation**: `cargo test simulator_state_management` passes
+- [x] Implement `insert_state<T: Send + Sync + 'static>(&self, state: T)` method
+- [x] Implement `get_state<T: Send + Sync + 'static>(&self) -> Option<Arc<T>>` method
+- [x] Add `app_state` method to SimulationStub to access server state
+- [x] Update `State<T>` extractor to work with simulator backend
+- [x] Add unit test: insert and retrieve string state
+- [x] Add unit test: insert and retrieve custom struct state
+- [x] Add unit test: state is shared across multiple requests
+- [x] Add integration test: handler can extract state via `State<T>`
+- [x] **Validation**: `cargo test simulator_state_management` passes
+
+**Section 5.1.6 COMPLETED** ✅
+
+**Key Implementation Details**:
+
+- Changed SimulatorWebServer to use StateContainer directly instead of TypeId-based storage
+- Modified `insert_state` to take `&self` instead of `&mut self` for better thread safety
+- State storage uses `Arc<RwLock<StateContainer>>` for concurrent access
+- State<T> extractor seamlessly works with simulator backend via `sim.state::<T>()`
+- All 5 state management tests passing with zero clippy warnings
 
 #### 5.1.7 Scope Processing (8 tasks)
 
