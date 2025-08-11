@@ -12,6 +12,72 @@ use switchy_http_models::Method;
 
 use crate::{RouteHandler, WebServerBuilder};
 
+/// Represents a segment in a URL path pattern
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PathSegment {
+    /// A literal path segment (e.g., "users" in "/users/profile")
+    Literal(String),
+    /// A parameter segment (e.g., "id" in "/users/{id}")
+    Parameter(String),
+}
+
+/// Represents a parsed path pattern for route matching
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PathPattern {
+    segments: Vec<PathSegment>,
+}
+
+impl PathPattern {
+    #[must_use]
+    pub const fn new(segments: Vec<PathSegment>) -> Self {
+        Self { segments }
+    }
+
+    #[must_use]
+    pub fn segments(&self) -> &[PathSegment] {
+        &self.segments
+    }
+}
+
+/// Parses a path pattern string into a `PathPattern`
+///
+/// Supports both literal segments and parameter segments using `{param}` syntax.
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_web_server::simulator::{parse_path_pattern, PathSegment};
+///
+/// let pattern = parse_path_pattern("/users/{id}/profile");
+/// assert_eq!(pattern.segments().len(), 3);
+/// assert_eq!(pattern.segments()[0], PathSegment::Literal("users".to_string()));
+/// assert_eq!(pattern.segments()[1], PathSegment::Parameter("id".to_string()));
+/// assert_eq!(pattern.segments()[2], PathSegment::Literal("profile".to_string()));
+/// ```
+#[must_use]
+pub fn parse_path_pattern(path: &str) -> PathPattern {
+    let path = path.strip_prefix('/').unwrap_or(path);
+
+    if path.is_empty() {
+        return PathPattern::new(Vec::new());
+    }
+
+    let segments = path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| {
+            if segment.starts_with('{') && segment.ends_with('}') {
+                let param_name = &segment[1..segment.len() - 1];
+                PathSegment::Parameter(param_name.to_string())
+            } else {
+                PathSegment::Literal(segment.to_string())
+            }
+        })
+        .collect();
+
+    PathPattern::new(segments)
+}
+
 /// Simulation-specific implementation of HTTP request data
 #[derive(Debug, Clone)]
 pub struct SimulationRequest {
@@ -265,5 +331,78 @@ mod tests {
                 .contains_key(&(Method::Get, "/posts".to_string()))
         );
         assert_eq!(server.routes.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_literal_path_pattern() {
+        let pattern = parse_path_pattern("/users/profile");
+
+        assert_eq!(pattern.segments().len(), 2);
+        assert_eq!(
+            pattern.segments()[0],
+            PathSegment::Literal("users".to_string())
+        );
+        assert_eq!(
+            pattern.segments()[1],
+            PathSegment::Literal("profile".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_parameterized_path_pattern() {
+        let pattern = parse_path_pattern("/{id}");
+
+        assert_eq!(pattern.segments().len(), 1);
+        assert_eq!(
+            pattern.segments()[0],
+            PathSegment::Parameter("id".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_mixed_literal_and_parameter_path_pattern() {
+        let pattern = parse_path_pattern("/users/{id}/posts/{post_id}");
+
+        assert_eq!(pattern.segments().len(), 4);
+        assert_eq!(
+            pattern.segments()[0],
+            PathSegment::Literal("users".to_string())
+        );
+        assert_eq!(
+            pattern.segments()[1],
+            PathSegment::Parameter("id".to_string())
+        );
+        assert_eq!(
+            pattern.segments()[2],
+            PathSegment::Literal("posts".to_string())
+        );
+        assert_eq!(
+            pattern.segments()[3],
+            PathSegment::Parameter("post_id".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_empty_path_pattern() {
+        let pattern = parse_path_pattern("");
+        assert_eq!(pattern.segments().len(), 0);
+
+        let pattern = parse_path_pattern("/");
+        assert_eq!(pattern.segments().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_path_pattern_without_leading_slash() {
+        let pattern = parse_path_pattern("users/{id}");
+
+        assert_eq!(pattern.segments().len(), 2);
+        assert_eq!(
+            pattern.segments()[0],
+            PathSegment::Literal("users".to_string())
+        );
+        assert_eq!(
+            pattern.segments()[1],
+            PathSegment::Parameter("id".to_string())
+        );
     }
 }
