@@ -13,7 +13,7 @@
 //! # Available Extractors
 //!
 //! * [`Query<T>`] - Extract URL query parameters
-//! * [`Json<T>`] - Extract JSON request body (coming soon)
+//! * [`Json<T>`] - Extract JSON request body
 //! * [`Path<T>`] - Extract URL path parameters (coming soon)
 //! * [`Header<T>`] - Extract specific headers (coming soon)
 //! * [`State<T>`] - Extract application state (coming soon)
@@ -61,17 +61,18 @@
 #[cfg(feature = "serde")]
 pub mod query;
 
+#[cfg(feature = "serde")]
+pub mod json;
+
 // Re-export extractors for convenient access
 #[cfg(feature = "serde")]
 pub use query::{Query, QueryError};
 
+#[cfg(feature = "serde")]
+pub use json::{Json, JsonError};
+
 // Placeholder modules for future extractors
 // These will be implemented in subsequent steps
-
-// #[cfg(feature = "serde")]
-// pub mod json;
-// #[cfg(feature = "serde")]
-// pub use json::{Json, JsonError};
 
 // #[cfg(feature = "serde")]
 // pub mod path;

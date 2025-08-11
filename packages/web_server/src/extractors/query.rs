@@ -212,7 +212,8 @@ mod tests {
         HttpRequest::Stub(Stub::Simulator(sim_request.into()))
     }
 
-    #[cfg(not(any(feature = "simulator", not(feature = "actix"))))]
+    #[cfg(all(feature = "actix", not(feature = "simulator")))]
+    #[allow(dead_code)]
     fn create_test_request(_query: &str) -> HttpRequest {
         // For actix-only builds, we can't create a proper test request
         // This is a limitation of the current test setup
