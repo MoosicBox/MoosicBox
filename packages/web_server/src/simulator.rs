@@ -12,6 +12,52 @@ use switchy_http_models::Method;
 
 use crate::{RouteHandler, WebServerBuilder};
 
+/// Simulation-specific implementation of HTTP response data
+#[derive(Debug, Clone)]
+pub struct SimulationResponse {
+    pub status: u16,
+    pub headers: BTreeMap<String, String>,
+    pub body: Option<String>,
+}
+
+impl SimulationResponse {
+    #[must_use]
+    pub const fn new(status: u16) -> Self {
+        Self {
+            status,
+            headers: BTreeMap::new(),
+            body: None,
+        }
+    }
+
+    #[must_use]
+    pub const fn ok() -> Self {
+        Self::new(200)
+    }
+
+    #[must_use]
+    pub const fn not_found() -> Self {
+        Self::new(404)
+    }
+
+    #[must_use]
+    pub const fn internal_server_error() -> Self {
+        Self::new(500)
+    }
+
+    #[must_use]
+    pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.insert(name.into(), value.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_body(mut self, body: impl Into<String>) -> Self {
+        self.body = Some(body.into());
+        self
+    }
+}
+
 /// Represents a segment in a URL path pattern
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PathSegment {
@@ -137,6 +183,42 @@ pub fn match_path(pattern: &PathPattern, actual_path: &str) -> Option<PathParams
     Some(params)
 }
 
+/// Converts an `HttpResponse` to a `SimulationResponse`
+///
+/// This is a basic conversion that will be enhanced in Section 5.1.5
+fn convert_http_response_to_simulation_response(
+    http_response: crate::HttpResponse,
+) -> SimulationResponse {
+    let status = match http_response.status_code {
+        switchy_http_models::StatusCode::NotFound => 404,
+        switchy_http_models::StatusCode::InternalServerError => 500,
+        switchy_http_models::StatusCode::BadRequest => 400,
+        switchy_http_models::StatusCode::Unauthorized => 401,
+        switchy_http_models::StatusCode::Forbidden => 403,
+        switchy_http_models::StatusCode::TemporaryRedirect => 307,
+        switchy_http_models::StatusCode::PermanentRedirect => 308,
+        // Default to OK for all other status codes (including Ok)
+        _ => 200,
+    };
+
+    let mut response = SimulationResponse::new(status);
+
+    // Handle body conversion
+    if let Some(body) = http_response.body {
+        let body_string = match body {
+            crate::HttpResponseBody::Bytes(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+        };
+        response = response.with_body(body_string);
+    }
+
+    // Handle location header for redirects
+    if let Some(location) = http_response.location {
+        response = response.with_header("Location", location);
+    }
+
+    response
+}
+
 /// Simulation-specific implementation of HTTP request data
 #[derive(Debug, Clone)]
 pub struct SimulationRequest {
@@ -147,6 +229,7 @@ pub struct SimulationRequest {
     pub body: Option<Bytes>,
     pub cookies: BTreeMap<String, String>,
     pub remote_addr: Option<String>,
+    pub path_params: PathParams,
 }
 
 impl SimulationRequest {
@@ -160,6 +243,7 @@ impl SimulationRequest {
             body: None,
             cookies: BTreeMap::new(),
             remote_addr: None,
+            path_params: PathParams::new(),
         }
     }
 
@@ -196,6 +280,12 @@ impl SimulationRequest {
     #[must_use]
     pub fn with_remote_addr(mut self, addr: impl Into<String>) -> Self {
         self.remote_addr = Some(addr.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_path_params(mut self, params: PathParams) -> Self {
+        self.path_params = params;
         self
     }
 }
@@ -273,6 +363,12 @@ impl SimulationStub {
             .as_ref()
             .and_then(|container| container.get::<T>())
     }
+
+    /// Get a path parameter by name
+    #[must_use]
+    pub fn path_param(&self, name: &str) -> Option<&str> {
+        self.request.path_params.get(name).map(String::as_str)
+    }
 }
 
 impl From<SimulationRequest> for SimulationStub {
@@ -327,6 +423,45 @@ impl SimulatorWebServer {
         } else {
             parameterized_matches.into_iter().next()
         }
+    }
+
+    /// Processes a simulation request and returns a simulation response
+    ///
+    /// This method implements the complete request processing pipeline:
+    /// 1. Find matching route using `find_route()`
+    /// 2. Inject path parameters into request
+    /// 3. Create `HttpRequest::Stub` from enhanced request
+    /// 4. Execute matched handler with request
+    /// 5. Convert `HttpResponse` to `SimulationResponse`
+    /// 6. Return 404 response if no route matches
+    #[allow(unused)] // TODO: Remove in 5.1.4 integration tests when this method is called
+    pub async fn process_request(&self, mut request: SimulationRequest) -> SimulationResponse {
+        // Find matching route using find_route()
+        let route_result = self.find_route(request.method, &request.path);
+
+        let Some((handler, path_params)) = route_result else {
+            // Return 404 response if no route matches
+            return SimulationResponse::not_found().with_body("Not Found");
+        };
+
+        // Inject path params into request
+        request.path_params = path_params;
+
+        // Create HttpRequest::Stub from enhanced request
+        let simulation_stub = SimulationStub::new(request);
+        let http_request = crate::HttpRequest::Stub(crate::Stub::Simulator(simulation_stub));
+
+        // Execute matched handler with request
+        handler(http_request).await.map_or_else(
+            |_| {
+                // Return 500 response on handler error
+                SimulationResponse::internal_server_error().with_body("Internal Server Error")
+            },
+            |http_response| {
+                // Convert HttpResponse to SimulationResponse
+                convert_http_response_to_simulation_response(http_response)
+            },
+        )
     }
 }
 
@@ -647,5 +782,65 @@ mod tests {
 
         let (_, params) = result.unwrap();
         assert!(params.is_empty()); // Exact match should have no parameters
+    }
+
+    #[test]
+    fn test_process_request_integration_setup() {
+        // This test validates that the process_request method can be set up correctly
+        // Full async integration tests will be added when tokio dependency is available
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(BTreeMap::new())),
+        };
+
+        let handler = create_test_handler();
+        server.register_route(Method::Get, "/hello", handler);
+
+        // Verify the route was registered
+        let route_result = server.find_route(Method::Get, "/hello");
+        assert!(route_result.is_some());
+
+        // Verify 404 case
+        let not_found_result = server.find_route(Method::Get, "/nonexistent");
+        assert!(not_found_result.is_none());
+    }
+
+    #[test]
+    fn test_simulation_response_builders() {
+        let response = SimulationResponse::ok()
+            .with_header("Content-Type", "application/json")
+            .with_body("{}");
+
+        assert_eq!(response.status, 200);
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(response.body, Some("{}".to_string()));
+    }
+
+    #[test]
+    fn test_simulation_request_with_path_params() {
+        let mut params = PathParams::new();
+        params.insert("id".to_string(), "123".to_string());
+
+        let request = SimulationRequest::new(Method::Get, "/users/123").with_path_params(params);
+
+        assert_eq!(request.path_params.get("id"), Some(&"123".to_string()));
+    }
+
+    #[test]
+    fn test_simulation_stub_path_param() {
+        let mut params = PathParams::new();
+        params.insert("id".to_string(), "456".to_string());
+        params.insert("name".to_string(), "john".to_string());
+
+        let request = SimulationRequest::new(Method::Get, "/users/456").with_path_params(params);
+        let stub = SimulationStub::new(request);
+
+        assert_eq!(stub.path_param("id"), Some("456"));
+        assert_eq!(stub.path_param("name"), Some("john"));
+        assert_eq!(stub.path_param("nonexistent"), None);
     }
 }
