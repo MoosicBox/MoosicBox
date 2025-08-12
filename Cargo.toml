@@ -326,7 +326,7 @@ actix-web-opentelemetry = { version = "0.22.0", features = [
     "prometheus",
 ] }
 actix-ws = "0.3.0"
-anyhow = "1.0.98"
+anyhow = "1.0.99"
 arrayvec = "0.7.6"
 async-recursion = "1.1.1"
 async-trait = "0.1.88"
@@ -345,7 +345,7 @@ chrono = { version = "0.4.41", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.43", features = ["derive"] }
+clap = { version = "4.5.44", features = ["derive"] }
 color-backtrace = { version = "0.7.0", default-features = false, features = [
     "use-btparse-crate",
 ] }
@@ -377,7 +377,7 @@ futures-util = { version = "0.3.31", default-features = false, features = [
 ] }
 getrandom = "0.3.3"
 git2 = "0.20.2"
-glob = "0.3.2"
+glob = "0.3.3"
 hex = "0.4.3"
 home = "0.5.11"
 hostname = "0.4.1"
@@ -397,7 +397,7 @@ local-ip-address = "0.6.5"
 log = { version = "0.4.27", features = ["release_max_level_trace"] }
 maud = "0.27.0"
 md5 = "0.8.0"
-mdns-sd = "0.13.11"
+mdns-sd = "0.14.0"
 mime_guess = "2.0.5"
 mime_multipart = { version = "0.6.1", default-features = false }
 moosicbox_audiotags = { version = "0.1.0" }
@@ -434,7 +434,7 @@ postgres-openssl = "0.5.1"
 postgres-protocol = "0.6.8"
 pretty_assertions = "1.4.1"
 pretty_env_logger = "0.5.0"
-proc-macro2 = "1.0.95"
+proc-macro2 = "1.0.97"
 proc-macro2-diagnostics = { version = "0.10.1", default-features = false }
 profiling = "1.0.17"
 puffin = "0.19.1"
@@ -449,7 +449,7 @@ ratatui = "0.29.0"
 rb = "0.4.1"
 rcgen = "0.14.3"
 regex = "1.11.1"
-reqwest = { version = "0.12.22", default-features = false, features = [
+reqwest = { version = "0.12.23", default-features = false, features = [
     "rustls-tls",
     "stream",
 ] }
@@ -507,7 +507,7 @@ tauri-plugin-log = "2.6.0"
 tauri-plugin-notification = "2.3.0"
 tempfile = "3.20.0"
 test-log = "0.2.18"
-thiserror = "2.0.12"
+thiserror = "2.0.14"
 throttle = "0.1.0"
 tl = "0.7.8"
 tokio = { version = "1.47.1" }
@@ -531,10 +531,10 @@ utoipa-rapidoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-redoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
-uuid = { version = "1.17.0", features = ["v4"] }
+uuid = { version = "1.18.0", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.0"
-whoami = "1.6.0"
+whoami = "1.6.1"
 xml = "0.8.20"
 
 [patch.crates-io]
