@@ -1048,10 +1048,10 @@ Before marking ANY checkbox complete:
     - All examples compile and run with both Actix and Simulator backends
     - **Critical Discovery**: Examples revealed abstraction is incomplete (require feature gates)
 
-**Step 5: Complete Web Server Abstraction** - ⏳ **21/107 tasks completed (19.6%)** - **REORGANIZED AND EXPANDED**
+**Step 5: Complete Web Server Abstraction** - ⏳ **29/107 tasks completed (27.1%)** - **REORGANIZED AND EXPANDED**
 
 - ✅ Create unified WebServer trait (5/5 tasks) - **COMPLETED** (trait exists in web_server_core, both backends implement it)
-- ⏳ Complete SimulatorWebServer basics (56/91 tasks) - **DETAILED BREAKDOWN** (route storage, handler execution, response generation, state management, scope processing, comprehensive testing)
+- ⏳ Complete SimulatorWebServer basics (73/91 tasks) - **DETAILED BREAKDOWN** (route storage, handler execution, response generation, state management, scope processing, comprehensive testing)
 - ❌ Create unified TestClient abstraction (0/4 tasks) - **ENHANCED WITH SIMULATOR SPECIFICS**
 - ❌ Create unified server builder/runtime (0/5 tasks) - **ENHANCED WITH 5.1 API USAGE**
 - ❌ Update examples to remove feature gates (0/3 tasks) - **ENHANCED WITH CONCRETE VALIDATION**
@@ -3213,7 +3213,7 @@ mod simulator_tests {
 
 **🎯 GOAL**: Fix the fundamental architectural issue discovered in Step 4.3 - the web server abstraction is incomplete, requiring feature-gated code instead of providing a unified API.
 
-### 5.1 Complete SimulatorWebServer Basics (91 tasks) - **61.5% COMPLETE (56/91 tasks)**
+### 5.1 Complete SimulatorWebServer Basics (91 tasks) - **80.2% COMPLETE (73/91 tasks)**
 
 **Overview**: Transform SimulatorWebServer from stub implementation to fully functional web server capable of route storage, handler execution, response generation, and basic state management. This provides the foundation for eliminating feature gates from examples.
 
@@ -3485,7 +3485,7 @@ mod simulator_tests {
 - `packages/web_server/src/actix.rs`: Updated to use all headers from BTreeMap
 - `packages/web_server/src/simulator.rs`: Complete response conversion rewrite with comprehensive testing
 
-**Next**: Section 5.1.7 Scope Processing - implementing scope registration and prefix handling for the simulator backend.
+**Next**: Section 5.1.8 Comprehensive Integration Testing - creating full integration tests for the simulator backend.
 
 #### 5.1.6 State Management (9 tasks)
 
@@ -3511,18 +3511,27 @@ mod simulator_tests {
 - State<T> extractor seamlessly works with simulator backend via `sim.state::<T>()`
 - All 5 state management tests passing with zero clippy warnings
 
-#### 5.1.7 Scope Processing (8 tasks)
+#### 5.1.7 Scope Processing (8 tasks) ✅ **COMPLETED**
 
 **File**: `packages/web_server/src/simulator.rs`
 
-- [ ] Implement `register_scope(&mut self, scope: Scope)` method
-- [ ] Process scope prefix (e.g., `/api` prefix for all routes in scope)
-- [ ] Process all routes within scope with prefix prepended
-- [ ] Handle nested scopes recursively
-- [ ] Add unit test: scope with prefix `/api` and route `/users` creates `/api/users`
-- [ ] Add unit test: nested scopes combine prefixes correctly
-- [ ] Add integration test: request to scoped route works correctly
-- [ ] **Validation**: `cargo test simulator_scope_processing` passes
+- [x] Implement `register_scope(&mut self, scope: Scope)` method
+- [x] Process scope prefix (e.g., `/api` prefix for all routes in scope)
+- [x] Process all routes within scope with prefix prepended
+- [x] Handle nested scopes recursively
+- [x] Add unit test: scope with prefix `/api` and route `/users` creates `/api/users`
+- [x] Add unit test: nested scopes combine prefixes correctly
+- [x] Add integration test: request to scoped route works correctly
+- [x] **Validation**: `cargo test simulator_scope_processing` passes
+
+**Implementation Notes**:
+
+- `register_scope(&mut self, scope: &Scope)` method processes scopes recursively
+- `process_scope_recursive()` helper handles nested scope prefix combination
+- Routes registered with full paths including all scope prefixes (e.g., `/api/v1/users`)
+- Existing `find_route()` method works seamlessly with scoped routes
+- 5 comprehensive tests cover single routes, multiple routes, nested scopes, empty prefixes, and deep nesting
+- All 89 tests passing with zero clippy warnings
 
 #### 5.1.8 Comprehensive Integration Testing (11 tasks)
 

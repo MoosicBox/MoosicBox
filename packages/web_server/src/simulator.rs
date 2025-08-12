@@ -451,9 +451,74 @@ struct SimulatorWebServer {
 }
 
 impl SimulatorWebServer {
-    #[allow(unused)] // TODO: Remove in 5.1.7 when register_scope() calls this method
+    #[allow(dead_code)] // Used in tests and scope processing
     pub fn register_route(&mut self, method: Method, path: &str, handler: RouteHandler) {
         self.routes.insert((method, path.to_string()), handler);
+    }
+
+    /// Register a scope and all its routes and nested scopes
+    ///
+    /// This method processes a scope recursively, registering all routes with their
+    /// full paths (including scope prefixes) and handling nested scopes.
+    ///
+    /// # Arguments
+    ///
+    /// * `scope` - The scope to register
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let mut server = SimulatorWebServer::new();
+    /// let scope = Scope::new("/api")
+    ///     .route(Method::Get, "/users", handler);
+    /// server.register_scope(scope);
+    /// // This registers a route at "/api/users"
+    /// ```
+    #[allow(dead_code)] // Used in tests
+    pub fn register_scope(&mut self, scope: &crate::Scope) {
+        self.process_scope_recursive(scope, "");
+    }
+
+    /// Recursively process a scope and register all its routes
+    ///
+    /// This helper method handles the recursive processing of scopes, building
+    /// the full path by combining parent prefixes with the current scope path.
+    ///
+    /// # Arguments
+    ///
+    /// * `scope` - The scope to process
+    /// * `parent_prefix` - The accumulated path prefix from parent scopes
+    fn process_scope_recursive(&mut self, scope: &crate::Scope, parent_prefix: &str) {
+        // Build the full prefix for this scope
+        let full_prefix = if parent_prefix.is_empty() {
+            scope.path.clone()
+        } else {
+            format!("{}{}", parent_prefix, scope.path)
+        };
+
+        // Register all routes in this scope with the full prefix
+        for route in &scope.routes {
+            let full_path = if full_prefix.is_empty() {
+                route.path.clone()
+            } else {
+                format!("{}{}", full_prefix, route.path)
+            };
+
+            // Clone the Arc<RouteHandler> and extract the inner RouteHandler
+            let handler_arc = Arc::clone(&route.handler);
+            // We need to create a new Box that wraps the Arc-ed handler
+            let handler: RouteHandler = Box::new(move |req| {
+                let handler_arc = Arc::clone(&handler_arc);
+                handler_arc(req)
+            });
+
+            self.register_route(route.method, &full_path, handler);
+        }
+
+        // Recursively process nested scopes
+        for nested_scope in &scope.scopes {
+            self.process_scope_recursive(nested_scope, &full_prefix);
+        }
     }
 
     /// Finds a route that matches the given method and path
@@ -1222,5 +1287,188 @@ mod tests {
         assert!(state_result.is_ok());
         let State(extracted_name) = state_result.unwrap();
         assert_eq!(*extracted_name, app_name);
+    }
+
+    // Scope Processing Tests (Section 5.1.7)
+
+    #[test]
+    fn test_register_scope_with_single_route() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        let scope = crate::Scope::new("/api").with_route(crate::Route::new(
+            Method::Get,
+            "/users",
+            |_req: crate::HttpRequest| {
+                Box::pin(async move { Ok(crate::HttpResponse::ok().with_body("test response")) })
+            },
+        ));
+
+        server.register_scope(&scope);
+
+        // Verify the route was registered with the full path
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Get, "/api/users".to_string()))
+        );
+        assert_eq!(server.routes.len(), 1);
+    }
+
+    #[test]
+    fn test_register_scope_with_multiple_routes() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        let scope = crate::Scope::new("/api")
+            .with_route(crate::Route::new(
+                Method::Get,
+                "/users",
+                |_req: crate::HttpRequest| {
+                    Box::pin(async move { Ok(crate::HttpResponse::ok().with_body("get users")) })
+                },
+            ))
+            .with_route(crate::Route::new(
+                Method::Post,
+                "/users",
+                |_req: crate::HttpRequest| {
+                    Box::pin(async move { Ok(crate::HttpResponse::ok().with_body("create user")) })
+                },
+            ));
+
+        server.register_scope(&scope);
+
+        // Verify both routes were registered with the full path
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Get, "/api/users".to_string()))
+        );
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Post, "/api/users".to_string()))
+        );
+        assert_eq!(server.routes.len(), 2);
+    }
+
+    #[test]
+    fn test_register_scope_with_nested_scopes() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        let nested_scope = crate::Scope::new("/v1").with_route(crate::Route::new(
+            Method::Get,
+            "/users",
+            |_req: crate::HttpRequest| {
+                Box::pin(async move { Ok(crate::HttpResponse::ok().with_body("v1 users")) })
+            },
+        ));
+
+        let scope = crate::Scope::new("/api")
+            .with_route(crate::Route::new(
+                Method::Get,
+                "/health",
+                |_req: crate::HttpRequest| {
+                    Box::pin(async move { Ok(crate::HttpResponse::ok().with_body("healthy")) })
+                },
+            ))
+            .with_scope(nested_scope)
+            .with_route(crate::Route::new(
+                Method::Post,
+                "/auth",
+                |_req: crate::HttpRequest| {
+                    Box::pin(
+                        async move { Ok(crate::HttpResponse::ok().with_body("authenticated")) },
+                    )
+                },
+            ));
+
+        server.register_scope(&scope);
+
+        // Verify all routes were registered with correct full paths
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Get, "/api/health".to_string()))
+        );
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Get, "/api/v1/users".to_string()))
+        );
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Post, "/api/auth".to_string()))
+        );
+        assert_eq!(server.routes.len(), 3);
+    }
+
+    #[test]
+    fn test_register_scope_with_empty_prefix() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        let scope = crate::Scope::new("").with_route(crate::Route::new(
+            Method::Get,
+            "/users",
+            |_req: crate::HttpRequest| {
+                Box::pin(async move { Ok(crate::HttpResponse::ok().with_body("users")) })
+            },
+        ));
+
+        server.register_scope(&scope);
+
+        // Verify the route was registered without prefix
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Get, "/users".to_string()))
+        );
+        assert_eq!(server.routes.len(), 1);
+    }
+
+    #[test]
+    fn test_register_scope_with_deeply_nested_scopes() {
+        let mut server = SimulatorWebServer {
+            scopes: Vec::new(),
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        };
+
+        // Create deeply nested scopes: /api/v1/admin/users
+        let admin_scope = crate::Scope::new("/admin").with_route(crate::Route::new(
+            Method::Delete,
+            "/users/{id}",
+            |_req: crate::HttpRequest| {
+                Box::pin(async move { Ok(crate::HttpResponse::ok().with_body("user deleted")) })
+            },
+        ));
+
+        let v1_scope = crate::Scope::new("/v1").with_scope(admin_scope);
+        let api_scope = crate::Scope::new("/api").with_scope(v1_scope);
+
+        server.register_scope(&api_scope);
+
+        // Verify the deeply nested route was registered correctly
+        assert!(
+            server
+                .routes
+                .contains_key(&(Method::Delete, "/api/v1/admin/users/{id}".to_string()))
+        );
+        assert_eq!(server.routes.len(), 1);
     }
 }
