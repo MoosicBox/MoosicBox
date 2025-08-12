@@ -38,6 +38,8 @@ pub mod openapi;
 #[cfg(any(feature = "simulator", not(feature = "actix")))]
 pub mod simulator;
 
+pub mod test_client;
+
 #[derive(Debug)]
 pub struct WebServerBuilder {
     addr: String,
