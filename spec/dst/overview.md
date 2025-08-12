@@ -4457,22 +4457,171 @@ This ensures consistency across the entire MoosicBox codebase.
 
 **Files Modified**: `packages/web_server/src/test_client/actix_impl.rs`
 
-##### 5.2.4.2 Nested Scope Support (Addresses recursive scope concern)
+##### 5.2.4.2 Nested Scope Support (7 sub-steps) - **ADDRESSES CRITICAL GAP IN 5.2.4.1**
 
-**Purpose**: Add support for nested scopes with proper recursion
-**Scope**: Multi-level scope nesting
+**Purpose**: Add support for nested scopes with proper recursion through systematic, risk-mitigated implementation
+**Scope**: Multi-level scope nesting with comprehensive testing and optimization
 
-- [ ] Implement recursive `convert_scope_to_actix()` function
-- [ ] Handle scope path concatenation correctly
-- [ ] Test deeply nested scopes (3+ levels)
-- [ ] Ensure route inheritance works properly
-- [ ] Add integration tests for nested scopes
+**Critical Issue Discovered**: The current 5.2.4.1 implementation completely ignores nested scopes (`scope.scopes` field is never accessed), creating silent failures where nested scope configurations are accepted but not processed.
+
+**Architecture Decision**: Implement through scope tree flattening first, then optionally optimize with Actix-native nesting.
+
+###### 5.2.4.2.1: Foundation - Validate Current State & Add Safety Checks ✅ **COMPLETE**
+
+**Purpose**: Ensure we understand exactly what works and add explicit guards
+**Risk Mitigation**: Prevents silent failures and establishes clear baseline
+
+**Tasks**:
+
+- [x] ✅ Add explicit test that demonstrates nested scopes are currently ignored
+- [x] ✅ Add warning comment in actix_impl.rs about unhandled nested scopes
+- [x] ✅ Create helper function `has_nested_scopes(&Scope) -> bool` to detect nesting
+- [x] ✅ Add runtime warning/panic if nested scopes are detected (temporary)
+- [x] ✅ Document current limitations clearly in code
+
+**Success Criteria**: ✅ **ALL MET**
+
+- [x] ✅ Test fails showing nested scopes don't work (`test_actix_nested_scopes_cause_panic`)
+- [x] ✅ Code explicitly acknowledges the limitation (comprehensive module documentation)
+- [x] ✅ No silent failures possible (panic prevents ActixWebServer creation with nested scopes)
+
+**Implementation Summary**:
+
+- **Test Added**: `test_actix_nested_scopes_cause_panic` with `#[should_panic]` proves detection works
+- **Helper Function**: `has_nested_scopes()` recursively detects nested scope structures
+- **Safety Check**: ActixWebServer panics immediately if nested scopes detected
+- **Documentation**: Comprehensive module docs explain all limitations and workarounds
+- **Warning Comments**: Inline comments in scope processing loop explain the issue
+
+**Key Achievement**: Silent failures eliminated - nested scopes now cause immediate, clear panic with helpful error message directing users to SimulatorWebServer or future implementation.
+
+###### 5.2.4.2.2: Design - Create Recursive Conversion Architecture
+
+**Purpose**: Design the recursive algorithm before implementation
+**Risk Mitigation**: Ensures we handle all edge cases
+
+**Tasks**:
+
+- [ ] Design `flatten_scope_tree()` function signature
+- [ ] Document path concatenation rules (e.g., `/api` + `/v1` = `/api/v1`)
+- [ ] Handle edge cases: empty paths, trailing slashes, root scopes
+- [ ] Design test cases for all nesting patterns
+- [ ] Create data structure for flattened routes with full paths
 
 **Success Criteria**:
+
+- Clear algorithm documented
+- All edge cases identified
+- Test cases defined but not yet implemented
+
+###### 5.2.4.2.3: Implementation - Basic Recursive Scope Flattening
+
+**Purpose**: Implement core recursion without Actix integration
+**Risk Mitigation**: Test logic independently of Actix
+
+**Tasks**:
+
+- [ ] Implement `flatten_scope_tree()` that returns Vec<(full_path, route)>
+- [ ] Handle path concatenation with proper separator handling
+- [ ] Support arbitrary nesting depth
+- [ ] Unit test with 1, 2, 3+ levels of nesting
+- [ ] Test edge cases (empty paths, root paths, etc.)
+
+**Success Criteria**:
+
+- Scope tree correctly flattened to route list
+- All paths correctly concatenated
+- Works with any nesting depth
+- Pure function, no Actix dependencies
+
+###### 5.2.4.2.4: Integration - Connect Flattened Routes to Actix
+
+**Purpose**: Wire up flattened routes to existing Actix conversion
+**Risk Mitigation**: Reuse existing working code
+
+**Tasks**:
+
+- [ ] Replace current loop with `flatten_scope_tree()` call
+- [ ] Iterate over flattened routes instead of scope.routes
+- [ ] Preserve all existing handler conversion logic
+- [ ] Remove temporary warning/panic from 5.2.4.2.1
+- [ ] Verify all existing tests still pass
+
+**Success Criteria**:
+
+- Existing flat scope tests still pass
+- Nested scopes now work
+- No regression in functionality
+
+###### 5.2.4.2.5: Testing - Comprehensive Nested Scope Tests
+
+**Purpose**: Validate all nesting scenarios work correctly
+**Risk Mitigation**: Catch edge cases before production
+
+**Tasks**:
+
+- [ ] Test 2-level nesting: `/api/v1`
+- [ ] Test 3-level nesting: `/api/v1/users`
+- [ ] Test mixed nesting: some scopes have sub-scopes, others don't
+- [ ] Test empty path scopes: `Scope::new("")`
+- [ ] Test root scope with nested scopes
+- [ ] Test sibling scopes at same level
+- [ ] Integration test with actual HTTP requests
+
+**Success Criteria**:
+
+- All nesting patterns work
+- Routes accessible at correct paths
+- No path duplication or corruption
+- Real HTTP requests succeed
+
+###### 5.2.4.2.6: Optimization - Actix-Native Nested Scopes
+
+**Purpose**: Use Actix's native scope nesting for better performance
+**Risk Mitigation**: Optional optimization after working implementation
+
+**Tasks**:
+
+- [ ] Research if Actix supports `scope.service(nested_scope)`
+- [ ] Implement recursive `convert_scope_to_actix()` if supported
+- [ ] Compare performance: flattening vs native nesting
+- [ ] Choose optimal approach based on benchmarks
+- [ ] Document the decision and trade-offs
+
+**Success Criteria**:
+
+- Performance measured and documented
+- Optimal approach selected
+- Code remains maintainable
+
+###### 5.2.4.2.7: Documentation - Update Spec and Examples
+
+**Purpose**: Ensure future developers understand the implementation
+**Risk Mitigation**: Prevent future regressions
+
+**Tasks**:
+
+- [ ] Update spec to mark 5.2.4.2 complete
+- [ ] Add code examples of nested scope usage
+- [ ] Document any limitations discovered
+- [ ] Add architecture notes about recursion approach
+- [ ] Update AGENTS.md if needed
+
+**Success Criteria**:
+
+- Clear documentation of how nesting works
+- Examples demonstrate common patterns
+- Limitations explicitly stated
+- Architecture decisions recorded
+
+**Overall 5.2.4.2 Success Criteria**:
 
 - Nested scopes work (`/api` -> `/v1` -> `/users`)
 - Path concatenation is correct
 - No path duplication issues
+- All edge cases handled
+- Performance optimized
+- Comprehensive documentation
 
 ##### 5.2.4.3 Route Parameters & Pattern Matching (Addresses dynamic routes)
 

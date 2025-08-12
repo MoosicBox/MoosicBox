@@ -9,13 +9,24 @@
 //! - Simple GET/POST routes working
 //! - Body preservation verified
 //!
-//! TODO(5.2.4.2+): Remaining features:
-//! - Nested scope support (5.2.4.2)
-//! - Route parameters (5.2.4.3)
-//! - State management (5.2.4.4)
-//! - Middleware system (5.2.4.5)
-//! - Builder addr/port configuration (5.2.4.7)
-//! - See Section 5.2.4 in spec/dst/overview.md for full details
+//! ## Current Limitations (5.2.4.2.1)
+//!
+//! ⚠️  **CRITICAL**: This implementation has significant limitations that cause **SILENT FAILURES**:
+//!
+//! ### 🚨 Nested Scopes NOT Supported
+//! - **Problem**: Nested scopes (`scope.scopes`) are completely ignored
+//! - **Impact**: Routes like `/api/v1/users` defined as nested scopes will return 404
+//! - **Detection**: Now panics when nested scopes are detected (5.2.4.2.1 safety check)
+//! - **Workaround**: Use `SimulatorWebServer` which fully supports nested scopes
+//! - **Fix**: Planned in 5.2.4.2.2+ (recursive scope processing)
+//!
+//! ### Other Missing Features:
+//! - Route parameters (5.2.4.3) - `/users/{id}` patterns not supported
+//! - State management (5.2.4.4) - No shared state injection
+//! - Middleware system (5.2.4.5) - No middleware support
+//! - Builder addr/port configuration (5.2.4.7) - Configuration ignored
+//!
+//! See Section 5.2.4 in spec/dst/overview.md for implementation roadmap.
 //!
 //! NOTE: This module is incompatible with simulator runtime and will not compile
 //! when the simulator feature is enabled. See Section 5.2.3.2 for details.
@@ -25,6 +36,22 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(all(feature = "actix", not(feature = "simulator")))]
 use ::actix_test::{TestServer, start};
+
+/// Helper function to detect if a scope has nested scopes (recursively)
+///
+/// This function is used in 5.2.4.2.1 to detect when nested scopes are present
+/// so we can warn users that they will be ignored.
+///
+/// # Arguments
+/// * `scope` - The scope to check for nesting
+///
+/// # Returns
+/// * `true` if the scope or any of its nested scopes contain further nesting
+/// * `false` if this is a flat scope structure
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn has_nested_scopes(scope: &crate::Scope) -> bool {
+    !scope.scopes.is_empty() || scope.scopes.iter().any(has_nested_scopes)
+}
 
 /// Actix Web Server wrapper for testing
 ///
@@ -57,11 +84,35 @@ impl ActixWebServer {
     /// * If the test server fails to start
     #[must_use]
     pub fn new(scopes: Vec<crate::Scope>) -> Self {
+        // 🚨 TEMPORARY SAFETY CHECK (5.2.4.2.1): Panic if nested scopes detected
+        // This prevents silent failures by making the limitation explicit.
+        // TODO(5.2.4.2.4): Remove this panic once nested scope support is implemented
+        for scope in &scopes {
+            if has_nested_scopes(scope) {
+                panic!(
+                    "🚨 NESTED SCOPES NOT SUPPORTED: Scope '{}' contains nested scopes which are ignored by ActixWebServer. \
+                    This would cause silent failures where nested routes return 404. \
+                    Use SimulatorWebServer for nested scope support, or wait for 5.2.4.2+ implementation. \
+                    See spec/dst/overview.md Section 5.2.4.2 for details.",
+                    scope.path
+                );
+            }
+        }
+
         // 5.2.4.1: Convert Scope/Route to Actix configuration
         let app = move || {
             let mut app = actix_web::App::new();
 
             for scope in &scopes {
+                // ⚠️  WARNING (5.2.4.2.1): NESTED SCOPES ARE IGNORED!
+                // This loop only processes the top-level scopes and their direct routes.
+                // Any nested scopes (scope.scopes) are completely ignored, creating silent failures.
+                //
+                // Example: If you have /api -> /v1 -> /users, only /api routes will work.
+                // The /api/v1/users route will return 404 even though it's defined.
+                //
+                // TODO(5.2.4.2.2): Implement recursive scope processing to handle nested scopes
+
                 let mut actix_scope = actix_web::web::scope(&scope.path);
 
                 for route in &scope.routes {
