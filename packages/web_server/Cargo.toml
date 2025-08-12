@@ -21,6 +21,7 @@ actix-cors    = { workspace = true, optional = true }
 actix-htmx    = { workspace = true, optional = true }
 actix-http    = { workspace = true, optional = true }
 actix-service = { workspace = true, optional = true }
+actix-test    = { workspace = true, optional = true }
 actix-web     = { workspace = true, optional = true }
 
 base64            = { workspace = true }
@@ -29,6 +30,7 @@ futures           = { workspace = true }
 const_format      = { workspace = true, optional = true }
 log               = { workspace = true }
 paste             = { workspace = true }
+reqwest           = { workspace = true, optional = true }
 serde             = { workspace = true }
 serde-querystring = { workspace = true }
 serde_json        = { workspace = true, optional = true }
@@ -48,9 +50,14 @@ fail-on-warnings = []
 actix = [
     "dep:actix-http",
     "dep:actix-service",
+    "dep:actix-test",
     "dep:actix-web",
+    "dep:reqwest",
     "dep:switchy_async",
     "switchy_async/tokio",
+    "switchy_async/io",
+    "switchy_async/net",
+    "switchy_async/time",
     "switchy_http_models/actix",
 ]
 

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
 pub mod actix;
 pub mod request_builder;
 pub mod response;

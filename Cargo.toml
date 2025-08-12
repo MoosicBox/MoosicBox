@@ -319,6 +319,7 @@ actix-htmx = "0.3.2"
 actix-http = "3.11.0"
 actix-rt = "2.10.0"
 actix-service = "2.0.3"
+actix-test = "0.1.5"
 actix-web = "4.11.0"
 actix-web-opentelemetry = { version = "0.22.0", features = [
     "metrics",
