@@ -22,7 +22,9 @@ actix-http    = { workspace = true, optional = true }
 actix-service = { workspace = true, optional = true }
 actix-web     = { workspace = true, optional = true }
 
+base64            = { workspace = true }
 bytes             = { workspace = true }
+futures           = { workspace = true }
 const_format      = { workspace = true, optional = true }
 log               = { workspace = true }
 paste             = { workspace = true }
