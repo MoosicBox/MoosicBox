@@ -444,10 +444,10 @@ impl From<SimulationRequest> for SimulationStub {
     }
 }
 
-struct SimulatorWebServer {
-    scopes: Vec<crate::Scope>,
-    routes: BTreeMap<(Method, String), RouteHandler>,
-    state: Arc<RwLock<crate::extractors::state::StateContainer>>,
+pub struct SimulatorWebServer {
+    pub scopes: Vec<crate::Scope>,
+    pub routes: BTreeMap<(Method, String), RouteHandler>,
+    pub state: Arc<RwLock<crate::extractors::state::StateContainer>>,
 }
 
 impl SimulatorWebServer {
