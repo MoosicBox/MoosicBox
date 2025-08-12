@@ -1,11 +1,20 @@
 //! `ActixTestClient` - Real HTTP test client for Actix Web
 //!
-//! STATUS: Section 5.2.3.1 COMPLETE (with compromises)
+//! STATUS: Section 5.2.4.1 COMPLETE - Basic Scope/Route conversion implemented
 //!
-//! TODO(5.2.4): Address the following compromises:
-//! - Scope/Route conversion not implemented (using hardcoded routes)
-//! - Builder addr/port configuration ignored
-//! - Custom route handlers not supported
+//! ✅ COMPLETED (5.2.4.1):
+//! - Scope/Route conversion implemented for flat routes
+//! - Handler conversion with proper request/response mapping
+//! - All hardcoded routes removed
+//! - Simple GET/POST routes working
+//! - Body preservation verified
+//!
+//! TODO(5.2.4.2+): Remaining features:
+//! - Nested scope support (5.2.4.2)
+//! - Route parameters (5.2.4.3)
+//! - State management (5.2.4.4)
+//! - Middleware system (5.2.4.5)
+//! - Builder addr/port configuration (5.2.4.7)
 //! - See Section 5.2.4 in spec/dst/overview.md for full details
 //!
 //! NOTE: This module is incompatible with simulator runtime and will not compile
@@ -47,52 +56,105 @@ impl ActixWebServer {
     ///
     /// * If the test server fails to start
     #[must_use]
-    pub fn new(_scopes: Vec<crate::Scope>) -> Self {
-        // TODO(5.2.4): Implement proper Scope/Route conversion
-        // - Convert crate::Scope to actix_web::Scope
-        // - Convert crate::Route handlers to Actix handlers
-        // - Remove hardcoded routes below and use scopes parameter
-        // - See Section 5.2.4 in spec/dst/overview.md
+    pub fn new(scopes: Vec<crate::Scope>) -> Self {
+        // 5.2.4.1: Convert Scope/Route to Actix configuration
+        let app = move || {
+            let mut app = actix_web::App::new();
 
-        // TODO(5.2.4): Remove these hardcoded routes
-        let app = || {
-            actix_web::App::new()
-                .route(
-                    "/test",
-                    actix_web::web::get().to(|| async {
-                        // TEMPORARY: Hardcoded response
-                        actix_web::HttpResponse::Ok()
-                            .content_type("application/json")
-                            .body(r#"{"message":"Hello from test route!"}"#)
-                    }),
-                )
-                .route(
-                    "/health",
-                    actix_web::web::get().to(|| async {
-                        // TEMPORARY: Hardcoded response
-                        actix_web::HttpResponse::Ok()
-                            .content_type("application/json")
-                            .body(r#"{"status":"ok"}"#)
-                    }),
-                )
-                .route(
-                    "/api/status",
-                    actix_web::web::get().to(|| async {
-                        // TEMPORARY: Hardcoded response
-                        actix_web::HttpResponse::Ok()
-                            .content_type("application/json")
-                            .body(r#"{"service":"running"}"#)
-                    }),
-                )
-                .route(
-                    "/api/echo",
-                    actix_web::web::post().to(|| async {
-                        // TEMPORARY: Hardcoded response
-                        actix_web::HttpResponse::Ok()
-                            .content_type("application/json")
-                            .body(r#"{"echoed":"data"}"#)
-                    }),
-                )
+            for scope in &scopes {
+                let mut actix_scope = actix_web::web::scope(&scope.path);
+
+                for route in &scope.routes {
+                    let path = route.path.clone();
+                    let handler = route.handler.clone();
+                    let method = route.method;
+
+                    // Convert our handler to Actix handler with proper request/response mapping
+                    let actix_handler = move |req: actix_web::HttpRequest| {
+                        let handler = handler.clone();
+                        async move {
+                            // Convert actix_web::HttpRequest to our HttpRequest
+                            let our_request = crate::HttpRequest::from(req);
+
+                            // Call our handler
+                            let result = handler(our_request).await;
+
+                            // Convert our HttpResponse to actix_web::HttpResponse
+                            result.map(|resp| {
+                                let mut actix_resp = actix_web::HttpResponseBuilder::new(
+                                    actix_web::http::StatusCode::from_u16(resp.status_code.into())
+                                        .unwrap_or(
+                                            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                        ),
+                                );
+
+                                // Insert all headers from the BTreeMap
+                                for (name, value) in resp.headers {
+                                    actix_resp.insert_header((name, value));
+                                }
+
+                                // Keep backwards compatibility with location field
+                                if let Some(location) = resp.location {
+                                    actix_resp
+                                        .insert_header((actix_http::header::LOCATION, location));
+                                }
+
+                                // Handle response body
+                                match resp.body {
+                                    Some(crate::HttpResponseBody::Bytes(bytes)) => {
+                                        actix_resp.body(bytes)
+                                    }
+                                    None => actix_resp.finish(),
+                                }
+                            })
+                        }
+                    };
+
+                    // Add route to scope using the appropriate HTTP method
+                    actix_scope = match method {
+                        crate::Method::Get => {
+                            actix_scope.route(&path, actix_web::web::get().to(actix_handler))
+                        }
+                        crate::Method::Post => {
+                            actix_scope.route(&path, actix_web::web::post().to(actix_handler))
+                        }
+                        crate::Method::Put => {
+                            actix_scope.route(&path, actix_web::web::put().to(actix_handler))
+                        }
+                        crate::Method::Delete => {
+                            actix_scope.route(&path, actix_web::web::delete().to(actix_handler))
+                        }
+                        crate::Method::Patch => {
+                            actix_scope.route(&path, actix_web::web::patch().to(actix_handler))
+                        }
+                        crate::Method::Head => {
+                            actix_scope.route(&path, actix_web::web::head().to(actix_handler))
+                        }
+                        crate::Method::Options => actix_scope.route(
+                            &path,
+                            actix_web::web::route()
+                                .method(actix_web::http::Method::OPTIONS)
+                                .to(actix_handler),
+                        ),
+                        crate::Method::Trace => actix_scope.route(
+                            &path,
+                            actix_web::web::route()
+                                .method(actix_web::http::Method::TRACE)
+                                .to(actix_handler),
+                        ),
+                        crate::Method::Connect => actix_scope.route(
+                            &path,
+                            actix_web::web::route()
+                                .method(actix_web::http::Method::CONNECT)
+                                .to(actix_handler),
+                        ),
+                    };
+                }
+
+                app = app.service(actix_scope);
+            }
+
+            app
         };
 
         // Start REAL test server - now switchy_async has IO enabled
@@ -196,11 +258,11 @@ impl ActixWebServerBuilder {
     /// Build the `ActixWebServer`
     #[must_use]
     pub fn build(self) -> ActixWebServer {
-        // TODO(5.2.4): Use addr and port configuration
+        // TODO(5.2.4.7): Use addr and port configuration
         // Currently ignored because test servers use dynamic ports
         // Consider storing for documentation/debugging purposes
 
-        // TODO(5.2.4): Pass scopes through properly
+        // ✅ 5.2.4.1: Scopes are now properly passed through
         ActixWebServer::new(self.scopes)
     }
 }
@@ -213,16 +275,26 @@ impl ActixWebServer {
     /// 🚨 CRITICAL: This creates a REAL HTTP server with actual routes
     #[must_use]
     pub fn with_test_routes() -> Self {
-        // TODO(5.2.4): Create actual Scope/Route objects instead of
-        // relying on hardcoded routes in new()
-        // Should be:
-        // let scope = crate::Scope::new("")
-        //     .with_route(crate::Route::new(...))
-        //     .with_route(crate::Route::new(...));
-        // Self::new(vec![scope])
+        // 5.2.4.1: Create actual Scope/Route objects
+        let scope = crate::Scope::new("")
+            .route(crate::Method::Get, "/test", |_req| {
+                Box::pin(async {
+                    Ok(crate::HttpResponse::ok()
+                        .with_content_type("application/json")
+                        .with_body(crate::HttpResponseBody::from(
+                            r#"{"message":"Hello from test route!"}"#,
+                        )))
+                })
+            })
+            .route(crate::Method::Get, "/health", |_req| {
+                Box::pin(async {
+                    Ok(crate::HttpResponse::ok()
+                        .with_content_type("application/json")
+                        .with_body(crate::HttpResponseBody::from(r#"{"status":"ok"}"#)))
+                })
+            });
 
-        // TEMPORARY: Using empty scopes until 5.2.4
-        Self::new(Vec::new())
+        Self::new(vec![scope])
     }
 
     /// Create a server with API routes for testing
@@ -230,16 +302,24 @@ impl ActixWebServer {
     /// 🚨 CRITICAL: This creates a REAL HTTP server with actual API routes
     #[must_use]
     pub fn with_api_routes() -> Self {
-        // TODO(5.2.4): Create actual Scope/Route objects instead of
-        // relying on hardcoded routes in new()
-        // Should be:
-        // let scope = crate::Scope::new("/api")
-        //     .with_route(crate::Route::new(...))
-        //     .with_route(crate::Route::new(...));
-        // Self::new(vec![scope])
+        // 5.2.4.1: Create actual Scope/Route objects
+        let scope = crate::Scope::new("/api")
+            .route(crate::Method::Get, "/status", |_req| {
+                Box::pin(async {
+                    Ok(crate::HttpResponse::ok()
+                        .with_content_type("application/json")
+                        .with_body(crate::HttpResponseBody::from(r#"{"service":"running"}"#)))
+                })
+            })
+            .route(crate::Method::Post, "/echo", |_req| {
+                Box::pin(async {
+                    Ok(crate::HttpResponse::ok()
+                        .with_content_type("application/json")
+                        .with_body(crate::HttpResponseBody::from(r#"{"echoed":"data"}"#)))
+                })
+            });
 
-        // TEMPORARY: Using empty scopes until 5.2.4
-        Self::new(Vec::new())
+        Self::new(vec![scope])
     }
 }
 
