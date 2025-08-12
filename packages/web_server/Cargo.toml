@@ -14,6 +14,7 @@ version     = "0.1.4"
 moosicbox_assert          = { workspace = true }
 moosicbox_web_server_core = { workspace = true }
 moosicbox_web_server_cors = { workspace = true, optional = true }
+switchy_async             = { workspace = true, optional = true }
 switchy_http_models       = { workspace = true }
 
 actix-cors    = { workspace = true, optional = true }
@@ -48,6 +49,8 @@ actix = [
     "dep:actix-http",
     "dep:actix-service",
     "dep:actix-web",
+    "dep:switchy_async",
+    "switchy_async/tokio",
     "switchy_http_models/actix",
 ]
 
