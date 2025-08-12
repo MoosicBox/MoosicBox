@@ -274,7 +274,6 @@ impl<T: Send + Sync + 'static> FromRequest for State<T> {
                 crate::Stub::Empty => Err(StateError::NotInitialized {
                     backend: "empty-stub".to_string(),
                 }),
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 crate::Stub::Simulator(sim) => {
                     // Extract from custom state container
                     sim.state::<T>().map(Self::new).ok_or(StateError::NotFound {

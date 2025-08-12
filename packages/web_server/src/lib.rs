@@ -35,7 +35,6 @@ pub mod handler;
 #[cfg(feature = "openapi")]
 pub mod openapi;
 
-#[cfg(any(feature = "simulator", not(feature = "actix")))]
 pub mod simulator;
 
 pub mod test_client;
@@ -145,7 +144,6 @@ impl HttpRequest {
             Self::Actix(x) => x.headers().get(name).and_then(|x| x.to_str().ok()),
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.header(name),
             },
         }
@@ -158,7 +156,6 @@ impl HttpRequest {
             Self::Actix(x) => x.path(),
             Self::Stub(stub) => match stub {
                 Stub::Empty => "",
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.path(),
             },
         }
@@ -171,7 +168,6 @@ impl HttpRequest {
             Self::Actix(x) => x.query_string(),
             Self::Stub(stub) => match stub {
                 Stub::Empty => "",
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.query_string(),
             },
         }
@@ -198,7 +194,6 @@ impl HttpRequest {
             }
             Self::Stub(stub) => match stub {
                 Stub::Empty => Method::Get,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => *sim.method(),
             },
         }
@@ -211,7 +206,6 @@ impl HttpRequest {
             Self::Actix(_) => None, // Actix body is consumed during extraction
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.body(),
             },
         }
@@ -224,7 +218,6 @@ impl HttpRequest {
             Self::Actix(x) => x.cookie(name).map(|c| c.value().to_string()),
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.cookie(name).map(std::string::ToString::to_string),
             },
         }
@@ -245,7 +238,6 @@ impl HttpRequest {
             }
             Self::Stub(stub) => match stub {
                 Stub::Empty => std::collections::BTreeMap::new(),
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.cookies().clone(),
             },
         }
@@ -261,7 +253,6 @@ impl HttpRequest {
                 .map(std::string::ToString::to_string),
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.remote_addr().map(std::string::ToString::to_string),
             },
         }
@@ -278,7 +269,6 @@ impl HttpRequest {
 #[derive(Debug, Clone)]
 pub enum Stub {
     Empty,
-    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     Simulator(simulator::SimulationStub),
 }
 
@@ -303,7 +293,6 @@ impl<'a> HttpRequestRef<'a> {
             Self::Actix(x) => x.headers().get(name).and_then(|x| x.to_str().ok()),
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.header(name),
             },
         }
@@ -316,7 +305,6 @@ impl<'a> HttpRequestRef<'a> {
             Self::Actix(x) => x.path(),
             Self::Stub(stub) => match stub {
                 Stub::Empty => "",
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.path(),
             },
         }
@@ -329,7 +317,6 @@ impl<'a> HttpRequestRef<'a> {
             Self::Actix(x) => x.query_string(),
             Self::Stub(stub) => match stub {
                 Stub::Empty => "",
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.query_string(),
             },
         }
@@ -356,7 +343,6 @@ impl<'a> HttpRequestRef<'a> {
             }
             Self::Stub(stub) => match stub {
                 Stub::Empty => Method::Get,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => *sim.method(),
             },
         }
@@ -369,7 +355,6 @@ impl<'a> HttpRequestRef<'a> {
             Self::Actix(_) => None, // Actix body is consumed during extraction
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.body(),
             },
         }
@@ -382,7 +367,6 @@ impl<'a> HttpRequestRef<'a> {
             Self::Actix(x) => x.cookie(name).map(|c| c.value().to_string()),
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.cookie(name).map(std::string::ToString::to_string),
             },
         }
@@ -403,7 +387,6 @@ impl<'a> HttpRequestRef<'a> {
             }
             Self::Stub(stub) => match stub {
                 Stub::Empty => std::collections::BTreeMap::new(),
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.cookies().clone(),
             },
         }
@@ -419,7 +402,6 @@ impl<'a> HttpRequestRef<'a> {
                 .map(std::string::ToString::to_string),
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
-                #[cfg(any(feature = "simulator", not(feature = "actix")))]
                 Stub::Simulator(sim) => sim.remote_addr().map(std::string::ToString::to_string),
             },
         }

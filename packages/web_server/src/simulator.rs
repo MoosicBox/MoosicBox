@@ -642,6 +642,117 @@ impl SimulatorWebServer {
             .read()
             .map_or_else(|_| None, |state_container| state_container.get::<T>())
     }
+
+    /// Create a new simulator web server with the given scopes
+    #[must_use]
+    pub fn new(scopes: Vec<crate::Scope>) -> Self {
+        Self {
+            scopes,
+            routes: BTreeMap::new(),
+            state: Arc::new(RwLock::new(crate::extractors::state::StateContainer::new())),
+        }
+    }
+
+    /// Create a server with test routes
+    #[must_use]
+    pub fn with_test_routes() -> Self {
+        let mut server = Self::new(Vec::new());
+
+        // Register test routes similar to Actix implementation
+        server.register_route(
+            Method::Get,
+            "/test",
+            Box::new(|_req| {
+                Box::pin(async {
+                    Ok(crate::HttpResponse::ok()
+                        .with_header("content-type", "application/json")
+                        .with_body(r#"{"message":"Hello from test route!"}"#))
+                })
+            }),
+        );
+
+        server.register_route(
+            Method::Get,
+            "/health",
+            Box::new(|_req| {
+                Box::pin(async {
+                    Ok(crate::HttpResponse::ok()
+                        .with_header("content-type", "application/json")
+                        .with_body(r#"{"status":"ok"}"#))
+                })
+            }),
+        );
+
+        server
+    }
+
+    /// Create a server with API routes
+    #[must_use]
+    pub fn with_api_routes() -> Self {
+        let mut server = Self::new(Vec::new());
+
+        // Register API routes similar to Actix implementation
+        server.register_route(
+            Method::Get,
+            "/api/status",
+            Box::new(|_req| {
+                Box::pin(async {
+                    Ok(crate::HttpResponse::ok()
+                        .with_header("content-type", "application/json")
+                        .with_body(r#"{"service":"running"}"#))
+                })
+            }),
+        );
+
+        server.register_route(
+            Method::Post,
+            "/api/echo",
+            Box::new(|_req| {
+                Box::pin(async {
+                    Ok(crate::HttpResponse::ok()
+                        .with_header("content-type", "application/json")
+                        .with_body(r#"{"echoed":"data"}"#))
+                })
+            }),
+        );
+
+        server
+    }
+}
+
+/// Error type for simulator web server operations
+#[derive(Debug, thiserror::Error)]
+pub enum SimulatorWebServerError {
+    /// Server startup error
+    #[error("Server startup failed: {0}")]
+    Startup(String),
+    /// Server shutdown error
+    #[error("Server shutdown failed: {0}")]
+    Shutdown(String),
+}
+
+impl crate::test_client::GenericTestServer for SimulatorWebServer {
+    type Error = SimulatorWebServerError;
+
+    fn url(&self) -> String {
+        // Simulator doesn't have a real URL, so return a placeholder
+        "http://simulator".to_string()
+    }
+
+    fn port(&self) -> u16 {
+        // Simulator doesn't use a real port, so return a placeholder
+        8080
+    }
+
+    fn start(&mut self) -> Result<(), Self::Error> {
+        // Simulator doesn't need to start, so this is a no-op
+        Ok(())
+    }
+
+    fn stop(&mut self) -> Result<(), Self::Error> {
+        // Simulator doesn't need to stop, so this is a no-op
+        Ok(())
+    }
 }
 
 impl WebServer for SimulatorWebServer {
