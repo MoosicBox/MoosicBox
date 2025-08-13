@@ -261,9 +261,9 @@ impl<T: Send + Sync + 'static> FromRequest for State<T> {
     fn from_request_sync(req: &HttpRequest) -> Result<Self, Self::Error> {
         match req {
             #[cfg(feature = "actix")]
-            HttpRequest::Actix(actix_req) => {
+            HttpRequest::Actix { inner, .. } => {
                 // Extract from Actix's web::Data
-                actix_req
+                inner
                     .app_data::<actix_web::web::Data<T>>()
                     .map(|data| Self(Arc::clone(data)))
                     .ok_or(StateError::NotFound {

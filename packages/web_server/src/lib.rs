@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::{borrow::Cow, collections::BTreeMap, pin::Pin};
+use std::{borrow::Cow, collections::BTreeMap, pin::Pin, sync::Arc};
 
 use bytes::Bytes;
 
@@ -124,7 +124,10 @@ impl WebServerHandle {
 #[derive(Debug, Clone)]
 pub enum HttpRequest {
     #[cfg(feature = "actix")]
-    Actix(actix_web::HttpRequest),
+    Actix {
+        inner: actix_web::HttpRequest,
+        context: Arc<RequestContext>,
+    },
     Stub(Stub),
 }
 
@@ -133,7 +136,7 @@ impl HttpRequest {
     pub const fn as_ref(&self) -> HttpRequestRef<'_> {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(x) => HttpRequestRef::Actix(x),
+            Self::Actix { inner, .. } => HttpRequestRef::Actix(inner),
             Self::Stub(x) => HttpRequestRef::Stub(x),
         }
     }
@@ -144,7 +147,7 @@ impl HttpRequest {
     pub fn header(&self, name: &str) -> Option<&str> {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(x) => x.headers().get(name).and_then(|x| x.to_str().ok()),
+            Self::Actix { inner, .. } => inner.headers().get(name).and_then(|x| x.to_str().ok()),
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
                 Stub::Simulator(sim) => sim.header(name),
@@ -156,7 +159,7 @@ impl HttpRequest {
     pub fn path(&self) -> &str {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(x) => x.path(),
+            Self::Actix { inner, .. } => inner.path(),
             Self::Stub(stub) => match stub {
                 Stub::Empty => "",
                 Stub::Simulator(sim) => sim.path(),
@@ -168,7 +171,7 @@ impl HttpRequest {
     pub fn query_string(&self) -> &str {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(x) => x.query_string(),
+            Self::Actix { inner, .. } => inner.query_string(),
             Self::Stub(stub) => match stub {
                 Stub::Empty => "",
                 Stub::Simulator(sim) => sim.query_string(),
@@ -181,9 +184,9 @@ impl HttpRequest {
     pub fn method(&self) -> Method {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(x) => {
+            Self::Actix { inner, .. } => {
                 use actix_web::http::Method as ActixMethod;
-                match *x.method() {
+                match *inner.method() {
                     ActixMethod::GET => Method::Get,
                     ActixMethod::POST => Method::Post,
                     ActixMethod::PUT => Method::Put,
@@ -206,7 +209,7 @@ impl HttpRequest {
     pub const fn body(&self) -> Option<&Bytes> {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(_) => None, // Actix body is consumed during extraction
+            Self::Actix { .. } => None, // Actix body is consumed during extraction
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
                 Stub::Simulator(sim) => sim.body(),
@@ -218,7 +221,7 @@ impl HttpRequest {
     pub fn cookie(&self, name: &str) -> Option<String> {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(x) => x.cookie(name).map(|c| c.value().to_string()),
+            Self::Actix { inner, .. } => inner.cookie(name).map(|c| c.value().to_string()),
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
                 Stub::Simulator(sim) => sim.cookie(name).map(std::string::ToString::to_string),
@@ -230,9 +233,9 @@ impl HttpRequest {
     pub fn cookies(&self) -> std::collections::BTreeMap<String, String> {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(x) => {
+            Self::Actix { inner, .. } => {
                 let mut cookies = std::collections::BTreeMap::new();
-                if let Ok(cookie_jar) = x.cookies() {
+                if let Ok(cookie_jar) = inner.cookies() {
                     for cookie in cookie_jar.iter() {
                         cookies.insert(cookie.name().to_string(), cookie.value().to_string());
                     }
@@ -250,7 +253,7 @@ impl HttpRequest {
     pub fn remote_addr(&self) -> Option<String> {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(x) => x
+            Self::Actix { inner, .. } => inner
                 .connection_info()
                 .peer_addr()
                 .map(std::string::ToString::to_string),
@@ -355,7 +358,7 @@ impl<'a> HttpRequestRef<'a> {
     pub const fn body(&self) -> Option<&Bytes> {
         match self {
             #[cfg(feature = "actix")]
-            Self::Actix(_) => None, // Actix body is consumed during extraction
+            Self::Actix { .. } => None, // Actix body is consumed during extraction
             Self::Stub(stub) => match stub {
                 Stub::Empty => None,
                 Stub::Simulator(sim) => sim.body(),
