@@ -1,0 +1,31 @@
+[package]
+authors     = { workspace = true }
+categories  = ["database", "development-tools"]
+description = "Generic schema migration system for switchy_database"
+edition     = { workspace = true }
+keywords    = ["database", "migration", "schema", "switchy"]
+license     = { workspace = true }
+name        = "switchy_schema"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+async-trait      = { workspace = true }
+switchy_database = { workspace = true }
+thiserror        = { workspace = true }
+
+[features]
+default = ["embedded"]
+
+fail-on-warnings = []
+
+all-discovery = ["code", "directory", "embedded"]
+code          = []
+directory     = []
+embedded      = []
+test-utils    = []
+validation    = []
