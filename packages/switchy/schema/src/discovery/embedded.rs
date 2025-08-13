@@ -1,17 +1,19 @@
 use crate::{Result, migration::Migration, migration::MigrationSource};
 use async_trait::async_trait;
-use include_dir::Dir;
+use bytes::Bytes;
+use include_dir::{Dir, DirEntry};
+use std::collections::BTreeMap;
 
 /// Migration implementation for embedded migrations using `include_dir`
 pub struct EmbeddedMigration {
     id: String,
-    up_content: String,
-    down_content: Option<String>,
+    up_content: Option<Bytes>,
+    down_content: Option<Bytes>,
 }
 
 impl EmbeddedMigration {
     #[must_use]
-    pub const fn new(id: String, up_content: String, down_content: Option<String>) -> Self {
+    pub const fn new(id: String, up_content: Option<Bytes>, down_content: Option<Bytes>) -> Self {
         Self {
             id,
             up_content,
@@ -27,13 +29,27 @@ impl Migration for EmbeddedMigration {
     }
 
     async fn up(&self, db: &dyn switchy_database::Database) -> Result<()> {
-        db.exec_raw(&self.up_content).await?;
+        match &self.up_content {
+            Some(sql) if !sql.is_empty() => {
+                let sql_str = String::from_utf8_lossy(sql);
+                db.exec_raw(&sql_str).await?;
+            }
+            _ => {
+                // Empty or missing up.sql is a no-op
+            }
+        }
         Ok(())
     }
 
     async fn down(&self, db: &dyn switchy_database::Database) -> Result<()> {
-        if let Some(down_sql) = &self.down_content {
-            db.exec_raw(down_sql).await?;
+        match &self.down_content {
+            Some(sql) if !sql.is_empty() => {
+                let sql_str = String::from_utf8_lossy(sql);
+                db.exec_raw(&sql_str).await?;
+            }
+            _ => {
+                // Empty or missing down.sql is a no-op
+            }
         }
         Ok(())
     }
@@ -41,7 +57,6 @@ impl Migration for EmbeddedMigration {
 
 /// Migration source for embedded migrations using `include_dir`
 pub struct EmbeddedMigrationSource {
-    #[allow(dead_code)] // Will be used when actual discovery is implemented
     migrations_dir: &'static Dir<'static>,
 }
 
@@ -50,16 +65,136 @@ impl EmbeddedMigrationSource {
     pub const fn new(migrations_dir: &'static Dir<'static>) -> Self {
         Self { migrations_dir }
     }
+
+    /// Extract migrations from the embedded directory structure
+    fn extract_migrations(&self) -> BTreeMap<String, EmbeddedMigration> {
+        let mut migrations = BTreeMap::new();
+
+        for entry in self.migrations_dir.entries() {
+            if let DirEntry::Dir(migration_dir) = entry {
+                let migration_id = migration_dir
+                    .path()
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(String::from);
+
+                if let Some(id) = migration_id {
+                    // Look for up.sql and down.sql files within this migration directory
+                    let mut up_content = None;
+                    let mut down_content = None;
+
+                    for file in migration_dir.files() {
+                        if let Some(file_name) = file.path().file_name().and_then(|n| n.to_str()) {
+                            match file_name {
+                                "up.sql" => up_content = Some(Bytes::from(file.contents())),
+                                "down.sql" => down_content = Some(Bytes::from(file.contents())),
+                                _ => {} // Ignore other files
+                            }
+                        }
+                    }
+
+                    let migration = EmbeddedMigration::new(id.clone(), up_content, down_content);
+                    migrations.insert(id, migration);
+                }
+            }
+        }
+
+        migrations
+    }
 }
 
 #[async_trait]
 impl MigrationSource for EmbeddedMigrationSource {
     async fn migrations(&self) -> Result<Vec<Box<dyn Migration>>> {
-        let migrations: Vec<Box<dyn Migration>> = Vec::new();
+        let migration_map = self.extract_migrations();
 
-        // TODO: Implement actual migration discovery from include_dir
-        // This is a placeholder implementation
+        let migrations: Vec<Box<dyn Migration>> = migration_map
+            .into_values()
+            .map(|migration| Box::new(migration) as Box<dyn Migration>)
+            .collect();
 
         Ok(migrations)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use include_dir::include_dir;
+
+    static TEST_MIGRATIONS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/test_migrations");
+
+    #[tokio::test]
+    async fn test_extract_migrations() {
+        let source = EmbeddedMigrationSource::new(&TEST_MIGRATIONS);
+        let migration_map = source.extract_migrations();
+
+        // Should find 4 migrations
+        assert_eq!(migration_map.len(), 4);
+
+        // Check migration IDs are extracted correctly
+        assert!(migration_map.contains_key("2023-10-13-195407_create_users"));
+        assert!(migration_map.contains_key("2023-10-14-120000_add_timestamps"));
+        assert!(migration_map.contains_key("2023-10-15-090000_empty_migration"));
+        assert!(migration_map.contains_key("2023-10-16-150000_up_only"));
+    }
+
+    #[tokio::test]
+    async fn test_migration_content_loading() {
+        let source = EmbeddedMigrationSource::new(&TEST_MIGRATIONS);
+        let migration_map = source.extract_migrations();
+
+        // Test migration with both up and down
+        let create_users = &migration_map["2023-10-13-195407_create_users"];
+        assert!(create_users.up_content.is_some());
+        assert!(create_users.down_content.is_some());
+
+        let up_sql = String::from_utf8_lossy(create_users.up_content.as_ref().unwrap());
+        assert!(up_sql.contains("CREATE TABLE users"));
+
+        let down_sql = String::from_utf8_lossy(create_users.down_content.as_ref().unwrap());
+        assert!(down_sql.contains("DROP TABLE users"));
+
+        // Test migration with only up.sql
+        let up_only = &migration_map["2023-10-16-150000_up_only"];
+        assert!(up_only.up_content.is_some());
+        assert!(up_only.down_content.is_none());
+
+        // Test empty migration
+        let empty = &migration_map["2023-10-15-090000_empty_migration"];
+        assert!(empty.up_content.is_some());
+        assert!(empty.up_content.as_ref().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_migrations_source_trait() {
+        let source = EmbeddedMigrationSource::new(&TEST_MIGRATIONS);
+        let migrations = source.migrations().await.unwrap();
+
+        // Should return 4 migrations
+        assert_eq!(migrations.len(), 4);
+
+        // Migrations should be sorted by ID (BTreeMap guarantees this)
+        let ids: Vec<&str> = migrations.iter().map(|m| m.id()).collect();
+        assert_eq!(ids[0], "2023-10-13-195407_create_users");
+        assert_eq!(ids[1], "2023-10-14-120000_add_timestamps");
+        assert_eq!(ids[2], "2023-10-15-090000_empty_migration");
+        assert_eq!(ids[3], "2023-10-16-150000_up_only");
+    }
+
+    #[test]
+    fn test_embedded_migration_creation() {
+        let up_content = Some(Bytes::from("CREATE TABLE test;"));
+        let down_content = Some(Bytes::from("DROP TABLE test;"));
+
+        let migration = EmbeddedMigration::new(
+            "test_migration".to_string(),
+            up_content.clone(),
+            down_content.clone(),
+        );
+
+        assert_eq!(migration.id(), "test_migration");
+        assert_eq!(migration.up_content, up_content);
+        assert_eq!(migration.down_content, down_content);
     }
 }

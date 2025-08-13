@@ -18,6 +18,10 @@ async-trait      = { workspace = true }
 switchy_database = { workspace = true }
 thiserror        = { workspace = true }
 
+# Optional dependencies for discovery features
+bytes       = { workspace = true }
+include_dir = { workspace = true, optional = true }
+
 [features]
 default = ["embedded"]
 
@@ -26,6 +30,9 @@ fail-on-warnings = []
 all-discovery = ["code", "directory", "embedded"]
 code          = []
 directory     = []
-embedded      = []
+embedded      = ["dep:include_dir"]
 test-utils    = []
 validation    = []
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

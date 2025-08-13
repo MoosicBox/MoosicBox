@@ -46,7 +46,7 @@ The current `moosicbox_schema` package contains excellent migration logic but is
 - Follow Rust best practices (traits, builders, async/await)
 - Support feature flags for discovery methods
 - Maintain compatibility with include_dir for embedded migrations
-- Use deterministic migration ordering (timestamp-based)
+- Use deterministic migration ordering (alphabetical by ID)
 - No SQL validation - pass through to database as-is
 - Migration IDs can be any valid string
 - Provide comprehensive test utilities
@@ -82,6 +82,7 @@ The current `moosicbox_schema` package contains excellent migration logic but is
 - `include_dir` - Compile-time directory embedding
 - `async-trait` - Async trait support
 - `thiserror` - Error handling
+- `bytes` - Binary data handling
 - `chrono` - Timestamp handling
 
 ### Optional Dependencies

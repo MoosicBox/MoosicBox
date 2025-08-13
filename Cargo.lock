@@ -14131,8 +14131,11 @@ name = "switchy_schema"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
+ "include_dir",
  "switchy_database",
  "thiserror 2.0.14",
+ "tokio",
 ]
 
 [[package]]

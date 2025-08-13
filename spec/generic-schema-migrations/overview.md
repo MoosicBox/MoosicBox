@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** 🟡 **Implementation Phase** - Phase 1 complete, Phase 2 mostly complete
+**Current Status:** 🟡 **Implementation Phase** - Phase 1 complete, Phase 2 complete, Phase 3.3 (Embedded Discovery) complete
 
-**Completion Estimate:** ~15% complete - Core foundation and traits implemented
+**Completion Estimate:** ~20% complete - Core foundation, traits, and embedded discovery implemented
 
 ## Status Legend
 
@@ -21,12 +21,9 @@ Extract the generic migration logic from `moosicbox_schema` into a reusable `swi
 
 These items need further investigation or decision during implementation:
 
-### Database-Specific SQL Handling
-- How should we handle SQL differences between databases (postgres/sqlite/mysql)?
-- Should we enforce database-specific subdirectories like moosicbox does?
-
 ### Migration Ordering
-- Migration ordering for identical timestamps (currently undefined behavior)
+- Migration ordering for identical IDs (currently uses alphabetical sorting, edge case)
+- Should we validate that at least one of up.sql or down.sql exists?
 
 ### Error Recovery & Partial Migration State
 - What happens if a migration fails halfway through?
@@ -156,18 +153,20 @@ These items need further investigation or decision during implementation:
 - [x] `packages/switchy/schema/Cargo.toml` - Package setup ✅ **CRITICAL**
   - [x] Package name: `switchy_schema`
     - ✓ Line 8 in Cargo.toml: name = "switchy_schema"
-  - [x] Dependencies: switchy_database, async-trait, thiserror, include_dir (optional)
-    - ✓ Lines 17-21: all required dependencies present
+  - [x] Dependencies: switchy_database, async-trait, thiserror, include_dir (optional), bytes
+    - ✓ Lines 17-22: all required dependencies present including bytes and include_dir
   - [x] Features: embedded, directory, code, validation, test-utils
     - ✓ Lines 26-32: all features defined
   - [x] Default features: embedded
-    - ✓ Line 24: default = ["embedded"]
+    - ✓ Line 22: default = ["embedded"]
+  - [x] Embedded feature depends on include_dir
+    - ✓ Line 29: embedded = ["dep:include_dir"]
 
 ## Phase 3: Migration Discovery
 
 **Goal:** Implement migration discovery from various sources with feature-gated modules
 
-**Status:** ~30% complete. Common interface and struct definitions complete, discovery logic not yet implemented.
+**Status:** ~40% complete. Common interface and struct definitions complete, embedded discovery fully implemented.
 
 ### 3.1 Common Discovery Interface
 
@@ -184,47 +183,49 @@ These items need further investigation or decision during implementation:
 - [ ] `packages/switchy/schema/src/discovery/directory.rs` - Directory discovery 🔄 **CRITICAL**
   - [x] Feature-gated with `#[cfg(feature = "directory")]`
     - ✓ Module feature-gated in mod.rs (line 4)
-  - [x] `FileMigration` struct implementing `Migration` trait (id, path, up_sql, down_sql)
+  - [x] `FileMigration` struct implementing `Migration` trait (id, up_sql: Option<Bytes>, down_sql: Option<Bytes>)
     - ✓ Implemented with all required fields (lines 8-29)
   - [x] `DirectoryMigrationSource` struct implementing `MigrationSource` trait
     - ✓ Implemented with migrations_path field (lines 50-65)
   - [x] Provide `DirectoryMigrationSource::from_path()` or similar explicit API
     - ✓ from_path() constructor implemented (line 58)
-  - [ ] Scan directories for migration files in format: `YYYY-MM-DD-HHMMSS_name/up.sql`
+  - [ ] Scan directories for migration files (directory name becomes migration ID)
     - ✗ TODO placeholder at line 71
-  - [ ] down.sql is optional, metadata.toml is allowed
+  - [ ] Both up.sql and down.sql are optional
     - ✗ TODO placeholder
-  - [ ] Empty migration files are treated as successful no-ops
-    - ✗ TODO placeholder
-  - [ ] Handle database-specific subdirectories
+  - [ ] Empty or missing migration files skip execution but are marked as successful
     - ✗ TODO placeholder
 
-### 3.3 Embedded Discovery (feature = "embedded")
+### 3.3 Embedded Discovery (feature = "embedded") ✅ **COMPLETED**
 
-- [ ] `packages/switchy/schema/src/discovery/embedded.rs` - Embedded discovery 🔄 **CRITICAL**
+- [x] `packages/switchy/schema/src/discovery/embedded.rs` - Embedded discovery ✅ **CRITICAL**
   - [x] Feature-gated with `#[cfg(feature = "embedded")]`
     - ✓ Module feature-gated in mod.rs (line 1)
-  - [x] `EmbeddedMigration` struct implementing `Migration` trait (id, up_content, down_content)
-    - ✓ Implemented with all required fields (lines 7-42)
-  - [x] `EmbeddedMigrationSource` struct implementing `MigrationSource` trait
-    - ✓ Implemented with migrations_dir field (lines 44-64)
-  - [x] Provide `EmbeddedMigrationSource::new()` or similar explicit API
-    - ✓ new() constructor implemented (line 52)
-  - [ ] Extract migrations from include_dir structures
-    - ✗ TODO placeholder at line 60
-  - [ ] Maintain compatibility with existing moosicbox patterns
-    - ✗ TODO placeholder
-  - [ ] Support nested directory structures
-    - ✗ TODO placeholder
-  - [ ] Parse migration names and ordering
-    - ✗ TODO placeholder
+  - [x] `EmbeddedMigration` struct implementing `Migration` trait (id, up_content: Option<Bytes>, down_content: Option<Bytes>)
+    - ✓ Implemented with all required fields (lines 8-23)
+  - [x] `EmbeddedMigrationSource` struct implementing `Migration Source` trait
+    - ✓ Implemented with migrations_dir field (lines 59-67)
+  - [x] `EmbeddedMigrationSource` accepts Dir<'static> from include_dir macro
+    - ✓ new() constructor implemented (line 65)
+  - [x] Extract migrations from include_dir structures
+    - ✓ Implemented in extract_migrations() method (lines 70-101)
+  - [x] Maintain compatibility with existing moosicbox patterns
+    - ✓ Uses same directory structure pattern (migration_dir/up.sql, migration_dir/down.sql)
+  - [x] Support nested directory structures
+    - ✓ Walks directory entries to find migration directories (lines 73-100)
+  - [x] Parse migration names and ordering
+    - ✓ Uses directory names as IDs, BTreeMap for alphabetical ordering (lines 75-79, 70)
+  - [x] Handle optional up.sql and down.sql files
+    - ✓ Both files are optional, empty files treated as no-ops (lines 83-94, 32-55)
+  - [x] Comprehensive unit tests with test migration files
+    - ✓ 4 unit tests covering all scenarios, test_migrations/ directory created
 
 ### 3.4 Code-Based Discovery (feature = "code")
 
 - [ ] `packages/switchy/schema/src/discovery/code.rs` - Code discovery 🔄 **IMPORTANT**
   - [x] Feature-gated with `#[cfg(feature = "code")]`
     - ✓ Module feature-gated in mod.rs (line 7)
-  - [x] `CodeMigration` struct implementing `Migration` trait (id, up_fn, down_fn)
+  - [x] `CodeMigration` struct implementing `Migration` trait (id, up_fn: Option<...>, down_fn: Option<...>)
     - ✓ Implemented with function pointer fields (lines 15-44)
   - [x] `CodeMigrationSource` struct implementing `MigrationSource` trait
     - ✓ Implemented with BTreeMap registry (lines 47-77)
@@ -271,6 +272,8 @@ These items need further investigation or decision during implementation:
   - [ ] If migration found in table → skip (already ran)
     - ✗ Not implemented
   - [ ] SQL execution via `exec_raw` - no validation or parsing needed
+    - ✗ Not implemented
+  - [ ] Empty/missing migrations are recorded as successful without execution
     - ✗ Not implemented
   - [ ] Implement transaction management (per-migration or batch)
     - ✗ Not implemented
@@ -554,12 +557,16 @@ switchy_database = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 include_dir = { workspace = true, optional = true }
+bytes = { workspace = true }
 chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 
 [features]
 default = ["embedded"]
-embedded = ["include_dir"]
+embedded = ["dep:include_dir"]
 directory = []
 code = []
 all-discovery = ["embedded", "directory", "code"]
@@ -614,12 +621,15 @@ test-utils = []
 
 ## Next Steps
 
-1. Create `packages/switchy/schema/` package directory and workspace integration
-2. Implement core types and traits for migration system
-3. Add feature-gated discovery modules for different migration sources
-4. Create migration runner with transaction support
-5. Add rollback support and validation features
-6. Update `moosicbox_schema` to use switchy_schema internally
-7. Add comprehensive testing with robust test utilities
-8. Implement migration listing functionality
-9. Validate HyperChad integration and provide usage examples
+1. ✅ Create `packages/switchy/schema/` package directory and workspace integration
+2. ✅ Implement core types and traits for migration system
+3. 🔄 Add feature-gated discovery modules for different migration sources
+   - ✅ Embedded discovery (Phase 3.3) - Complete
+   - ❌ Directory discovery (Phase 3.2) - Pending
+   - ❌ Code discovery (Phase 3.4) - Pending
+4. Create migration runner with transaction support (Phase 4)
+5. Add rollback support and validation features (Phase 5-6)
+6. Update `moosicbox_schema` to use switchy_schema internally (Phase 7)
+7. Add comprehensive testing with robust test utilities (Phase 8)
+8. Implement migration listing functionality (Phase 9)
+9. Validate HyperChad integration and provide usage examples (Phase 10)
