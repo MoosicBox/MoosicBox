@@ -43,348 +43,348 @@ These items need further investigation or decision during implementation:
 
 **Goal:** Create the switchy_schema package and integrate it into the workspace
 
-### Package Creation
+### 1.1 Package Creation
 
 - [ ] Create package directory structure ❌ **CRITICAL**
-  - Create `packages/switchy/schema/` directory
-  - Create `packages/switchy/schema/src/` directory
-  - Create `packages/switchy/schema/src/lib.rs` with initial module structure
-  - Create `packages/switchy/schema/Cargo.toml` with package metadata
+  - [ ] Create `packages/switchy/schema/` directory
+  - [ ] Create `packages/switchy/schema/src/` directory
+  - [ ] Create `packages/switchy/schema/src/lib.rs` with initial module structure
+  - [ ] Create `packages/switchy/schema/Cargo.toml` with package metadata
 
-### Workspace Integration
+### 1.2 Workspace Integration
 
 - [ ] Update root `Cargo.toml` ❌ **CRITICAL**
-  - Add `packages/switchy/schema` to workspace members
-  - Add `switchy_schema` to workspace dependencies section
-  - Define version as `{ path = "packages/switchy/schema" }`
+  - [ ] Add `packages/switchy/schema` to workspace members
+  - [ ] Add `switchy_schema` to workspace dependencies section
+  - [ ] Define version as `{ path = "packages/switchy/schema" }`
 
-### Initial Module Structure
+### 1.3 Initial Module Structure
 
 - [ ] Create placeholder module files ❌ **CRITICAL**
-  - Create empty `src/migration.rs`
-  - Create empty `src/runner.rs`
-  - Create `src/discovery/mod.rs`
-  - Create empty `src/version.rs`
-  - Wire up modules in `src/lib.rs`
+  - [ ] Create empty `src/migration.rs`
+  - [ ] Create empty `src/runner.rs`
+  - [ ] Create `src/discovery/mod.rs`
+  - [ ] Create empty `src/version.rs`
+  - [ ] Wire up modules in `src/lib.rs`
 
-### Build Verification
+### 1.4 Build Verification
 
 - [ ] Verify package builds ❌ **CRITICAL**
-  - Run `cargo build -p switchy_schema`
-  - Ensure no compilation errors
-  - Verify workspace recognizes the new package
+  - [ ] Run `cargo build -p switchy_schema`
+  - [ ] Ensure no compilation errors
+  - [ ] Verify workspace recognizes the new package
 
 ## Phase 2: Core Migration Types
 
 **Goal:** Define fundamental types and traits for the migration system
 
-### Migration Trait Definition
+### 2.1 Migration Trait Definition
 
 - [ ] `packages/switchy/schema/src/migration.rs` - Core migration trait ❌ **CRITICAL**
-  - Define `Migration` trait with `id()`, `up()`, `down()` methods
-  - down() has default empty Ok(()) implementation
-  - Add optional `description()`, `depends_on()`, `supported_databases()`
-  - Use async-trait for database operations
-  - Support both SQL and code-based migrations
+  - [ ] Define `Migration` trait with `id()`, `up()`, `down()` methods
+  - [ ] down() has default empty Ok(()) implementation
+  - [ ] Add optional `description()`, `depends_on()`, `supported_databases()`
+  - [ ] Use async-trait for database operations
+  - [ ] Support both SQL and code-based migrations
 
-### Error Types
+### 2.2 Error Types
 
 - [ ] `packages/switchy/schema/src/lib.rs` - Error handling ❌ **CRITICAL**
-  - Define `MigrationError` enum with database, validation, dependency errors
-  - Use thiserror for comprehensive error messages
-  - Include context for debugging (migration ID, SQL, etc.)
+  - [ ] Define `MigrationError` enum with database, validation, dependency errors
+  - [ ] Use thiserror for comprehensive error messages
+  - [ ] Include context for debugging (migration ID, SQL, etc.)
 
-### Migration Source Trait
+### 2.3 Migration Source Trait
 
 - [ ] `packages/switchy/schema/src/migration.rs` - Source trait ❌ **CRITICAL**
-  - Define `MigrationSource` trait
-  - async fn migrations() -> Result<Vec<Box<dyn Migration>>, MigrationError>
-  - Return migration collections
-  - Handle source-specific errors
+  - [ ] Define `MigrationSource` trait
+  - [ ] async fn migrations() -> Result<Vec<Box<dyn Migration>>, MigrationError>
+  - [ ] Return migration collections
+  - [ ] Handle source-specific errors
 
-### Migration Error Types
+### 2.4 Migration Error Types
 
 - [ ] `packages/switchy/schema/src/lib.rs` - Unified error handling ❌ **CRITICAL**
-  - Define `MigrationError` with thiserror
-  - Cases for database errors (#[from] DatabaseError)
-  - Cases for discovery errors
-  - Cases for validation errors
-  - Use async-trait for Migration trait
+  - [ ] Define `MigrationError` with thiserror
+  - [ ] Cases for database errors (#[from] DatabaseError)
+  - [ ] Cases for discovery errors
+  - [ ] Cases for validation errors
+  - [ ] Use async-trait for Migration trait
 
-### Package Configuration
+### 2.5 Package Configuration
 
 - [ ] `packages/switchy/schema/Cargo.toml` - Package setup ❌ **CRITICAL**
-  - Package name: `switchy_schema`
-  - Dependencies: switchy_database, async-trait, thiserror, include_dir (optional)
-  - Features: embedded, directory, code, validation, test-utils
-  - Default features: embedded
+  - [ ] Package name: `switchy_schema`
+  - [ ] Dependencies: switchy_database, async-trait, thiserror, include_dir (optional)
+  - [ ] Features: embedded, directory, code, validation, test-utils
+  - [ ] Default features: embedded
 
 ## Phase 3: Migration Discovery
 
 **Goal:** Implement migration discovery from various sources with feature-gated modules
 
-### Common Discovery Interface
+### 3.1 Common Discovery Interface
 
 - [ ] `packages/switchy/schema/src/discovery/mod.rs` - Common types ❌ **CRITICAL**
-  - Define `DiscoverySource` trait
-  - Common discovery errors
-  - Migration collection types
-  - Shared utility functions
+  - [ ] Define `DiscoverySource` trait
+  - [ ] Common discovery errors
+  - [ ] Migration collection types
+  - [ ] Shared utility functions
 
-### File-Based Discovery (feature = "directory")
+### 3.2 File-Based Discovery (feature = "directory")
 
 - [ ] `packages/switchy/schema/src/discovery/directory.rs` - Directory discovery ❌ **CRITICAL**
-  - Feature-gated with `#[cfg(feature = "directory")]`
-  - Implements `MigrationSource` trait with async migrations() method
-  - Provide `DirectoryMigrations::from_path()` or similar explicit API
-  - Scan directories for migration files in format: `YYYY-MM-DD-HHMMSS_name/up.sql`
-  - down.sql is optional, metadata.toml is allowed
-  - Empty migration files are treated as successful no-ops
-  - Handle database-specific subdirectories
+  - [ ] Feature-gated with `#[cfg(feature = "directory")]`
+  - [ ] Implements `MigrationSource` trait with async migrations() method
+  - [ ] Provide `DirectoryMigrations::from_path()` or similar explicit API
+  - [ ] Scan directories for migration files in format: `YYYY-MM-DD-HHMMSS_name/up.sql`
+  - [ ] down.sql is optional, metadata.toml is allowed
+  - [ ] Empty migration files are treated as successful no-ops
+  - [ ] Handle database-specific subdirectories
 
-### Embedded Discovery (feature = "embedded")
+### 3.3 Embedded Discovery (feature = "embedded")
 
 - [ ] `packages/switchy/schema/src/discovery/embedded.rs` - Embedded discovery ❌ **CRITICAL**
-  - Feature-gated with `#[cfg(feature = "embedded")]`
-  - Implements `MigrationSource` trait with async migrations() method
-  - Provide `EmbeddedMigrations::new()` or similar explicit API
-  - Extract migrations from include_dir structures
-  - Maintain compatibility with existing moosicbox patterns
-  - Support nested directory structures
-  - Parse migration names and ordering
+  - [ ] Feature-gated with `#[cfg(feature = "embedded")]`
+  - [ ] Implements `MigrationSource` trait with async migrations() method
+  - [ ] Provide `EmbeddedMigrations::new()` or similar explicit API
+  - [ ] Extract migrations from include_dir structures
+  - [ ] Maintain compatibility with existing moosicbox patterns
+  - [ ] Support nested directory structures
+  - [ ] Parse migration names and ordering
 
-### Code-Based Discovery (feature = "code")
+### 3.4 Code-Based Discovery (feature = "code")
 
 - [ ] `packages/switchy/schema/src/discovery/code.rs` - Code discovery ❌ **IMPORTANT**
-  - Feature-gated with `#[cfg(feature = "code")]`
-  - Implements `MigrationSource` trait with async migrations() method
-  - Provide explicit API for code-based migrations
-  - Registry for programmatically defined migrations
-  - Type-safe migration definitions
-  - Integration with trait-based migrations
+  - [ ] Feature-gated with `#[cfg(feature = "code")]`
+  - [ ] Implements `MigrationSource` trait with async migrations() method
+  - [ ] Provide explicit API for code-based migrations
+  - [ ] Registry for programmatically defined migrations
+  - [ ] Type-safe migration definitions
+  - [ ] Integration with trait-based migrations
 
-### Package Compilation
+### 3.5 Package Compilation
 
 - [ ] Ensure clean compilation ❌ **CRITICAL**
-  - Package must compile without warnings when no discovery features are enabled
-  - Core types and traits are always available
-  - Discovery implementations are feature-gated additions
+  - [ ] Package must compile without warnings when no discovery features are enabled
+  - [ ] Core types and traits are always available
+  - [ ] Discovery implementations are feature-gated additions
 
 ## Phase 4: Migration Runner
 
 **Goal:** Core execution engine for running migrations
 
-### Runner Implementation
+### 4.1 Runner Implementation
 
 - [ ] `packages/switchy/schema/src/runner.rs` - Migration runner ❌ **CRITICAL**
-  - Create `MigrationRunner` struct with configurable options
-  - Provide specific constructors: new_embedded(), new_directory(), new_code()
-  - Support different execution strategies (All, UpTo, Steps, DryRun)
-  - Use BTreeMap for deterministic ordering (like moosicbox_schema)
-  - Follow moosicbox pattern: query tracking table for each migration individually
-  - If migration not found in table → execute and record it
-  - If migration found in table → skip (already ran)
-  - SQL execution via `exec_raw` - no validation or parsing needed
-  - Implement transaction management (per-migration or batch)
-  - NOTE: Verify switchy_database transaction support at implementation time
-  - Add migration hooks (before/after/error callbacks)
+  - [ ] Create `MigrationRunner` struct with configurable options
+  - [ ] Provide specific constructors: new_embedded(), new_directory(), new_code()
+  - [ ] Support different execution strategies (All, UpTo, Steps, DryRun)
+  - [ ] Use BTreeMap for deterministic ordering (like moosicbox_schema)
+  - [ ] Follow moosicbox pattern: query tracking table for each migration individually
+  - [ ] If migration not found in table → execute and record it
+  - [ ] If migration found in table → skip (already ran)
+  - [ ] SQL execution via `exec_raw` - no validation or parsing needed
+  - [ ] Implement transaction management (per-migration or batch)
+  - [ ] NOTE: Verify switchy_database transaction support at implementation time
+  - [ ] Add migration hooks (before/after/error callbacks)
 
-### Version Tracking
+### 4.2 Version Tracking
 
 - [ ] `packages/switchy/schema/src/version.rs` - Version management ❌ **CRITICAL**
-  - Create standard migrations tracking table (default: `__switchy_migrations`)
-  - Exact schema matching moosicbox: name (Text, NOT NULL), run_on (DateTime, NOT NULL, DEFAULT NOW)
-  - Support configurable table names
-  - Handle rollback tracking
+  - [ ] Create standard migrations tracking table (default: `__switchy_migrations`)
+  - [ ] Exact schema matching moosicbox: name (Text, NOT NULL), run_on (DateTime, NOT NULL, DEFAULT NOW)
+  - [ ] Support configurable table names
+  - [ ] Handle rollback tracking
 
-### Dependency Resolution
+### 4.3 Dependency Resolution
 
 - [ ] `packages/switchy/schema/src/runner.rs` - Dependency handling ❌ **IMPORTANT**
-  - Topological sort for migration ordering
-  - Validate dependency cycles
-  - Support conditional dependencies
-  - Clear error messages for missing dependencies
+  - [ ] Topological sort for migration ordering
+  - [ ] Validate dependency cycles
+  - [ ] Support conditional dependencies
+  - [ ] Clear error messages for missing dependencies
 
 ## Phase 5: Rollback Support
 
 **Goal:** Safe rollback functionality with comprehensive validation
 
-### Rollback Engine
+### 5.1 Rollback Engine
 
 - [ ] `packages/switchy/schema/src/rollback.rs` - Rollback implementation ❌ **IMPORTANT**
-  - Implement rollback by N steps
-  - Validate down() methods exist before rollback
-  - Update tracking table with rollback status
-  - Support dry-run rollback validation
+  - [ ] Implement rollback by N steps
+  - [ ] Validate down() methods exist before rollback
+  - [ ] Update tracking table with rollback status
+  - [ ] Support dry-run rollback validation
 
-### Rollback Validation
+### 5.2 Rollback Validation
 
 - [ ] `packages/switchy/schema/src/rollback.rs` - Rollback safety ❌ **IMPORTANT**
-  - Verify rollback path exists for all migrations
-  - Check for data loss warnings
-  - Validate rollback order and dependencies
-  - Provide rollback impact analysis
+  - [ ] Verify rollback path exists for all migrations
+  - [ ] Check for data loss warnings
+  - [ ] Validate rollback order and dependencies
+  - [ ] Provide rollback impact analysis
 
 ## Phase 6: Validation & Safety
 
 **Goal:** Comprehensive validation to prevent migration issues
 
-### Migration Validator
+### 6.1 Migration Validator
 
 - [ ] `packages/switchy/schema/src/validation.rs` - Validation engine ❌ **IMPORTANT**
-  - Checksum validation for applied migrations
-  - Dependency cycle detection
-  - SQL syntax validation (basic)
-  - Migration naming convention validation
+  - [ ] Checksum validation for applied migrations
+  - [ ] Dependency cycle detection
+  - [ ] Migration naming convention validation
+  - [ ] Validate migration sources are accessible
 
-### Dry Run Support
+### 6.2 Dry Run Support
 
 - [ ] `packages/switchy/schema/src/validation.rs` - Dry run ❌ **IMPORTANT**
-  - Parse and validate SQL without execution
-  - Generate execution plan and impact report
-  - Estimate migration execution time
-  - Identify potential issues before execution
+  - [ ] Generate execution plan showing which migrations would run
+  - [ ] Show migration order and dependencies
+  - [ ] Display migration metadata (ID, description, etc.)
+  - [ ] Validate migration sources are accessible
 
-### Safety Checks
+### 6.3 Safety Checks
 
 - [ ] `packages/switchy/schema/src/validation.rs` - Safety features ❌ **IMPORTANT**
-  - Prevent running migrations on production without confirmation
-  - Backup recommendations before destructive operations
-  - Lock file support to prevent concurrent migrations
-  - Environment-specific migration controls
+  - [ ] Prevent running migrations on production without confirmation
+  - [ ] Backup recommendations before destructive operations
+  - [ ] Lock file support to prevent concurrent migrations
+  - [ ] Environment-specific migration controls
 
 ## Phase 7: moosicbox_schema Migration
 
 **Goal:** Update existing moosicbox_schema to use switchy_schema
 
-### Wrapper Implementation
+### 7.1 Wrapper Implementation
 
 - [ ] `packages/schema/src/lib.rs` - Update moosicbox_schema ❌ **CRITICAL**
-  - Replace direct migration logic with switchy_schema calls
-  - Maintain existing public API unchanged
-  - Use MigrationRunner with embedded sources
-  - Keep existing function signatures and behavior
+  - [ ] Replace direct migration logic with switchy_schema calls
+  - [ ] Maintain existing public API unchanged
+  - [ ] Use MigrationRunner with embedded sources
+  - [ ] Keep existing function signatures and behavior
 
-### Migration Compatibility
+### 7.2 Migration Compatibility
 
 - [ ] `packages/schema/src/lib.rs` - Ensure compatibility ❌ **CRITICAL**
-  - Verify all existing migrations continue to work
-  - Maintain migration table name compatibility
-  - Preserve migration ordering and checksums
-  - Test against existing databases
-  - Add unit tests using in-memory SQLite similar to existing tests
-  - Verify migrations run without clippy warnings
+  - [ ] Verify all existing migrations continue to work
+  - [ ] Maintain migration table name compatibility
+  - [ ] Preserve migration ordering and checksums
+  - [ ] Test against existing databases
+  - [ ] Add unit tests using in-memory SQLite similar to existing tests
+  - [ ] Verify migrations run without clippy warnings
 
-### Feature Propagation
+### 7.3 Feature Propagation
 
 - [ ] `packages/schema/Cargo.toml` - Update dependencies ❌ **CRITICAL**
-  - Add switchy_schema dependency
-  - Propagate feature flags appropriately
-  - Maintain existing feature compatibility
-  - Update documentation
+  - [ ] Add switchy_schema dependency
+  - [ ] Propagate feature flags appropriately
+  - [ ] Maintain existing feature compatibility
+  - [ ] Update documentation
 
 ## Phase 8: Testing Infrastructure
 
 **Goal:** Comprehensive testing utilities and coverage
 
-### Test Utilities
+### 8.1 Test Utilities
 
 - [ ] `packages/switchy/schema/src/test_utils.rs` - Test helpers ❌ **IMPORTANT**
-  - `TestDatabase` using switchy_database simulated/in-memory SQLite
-  - `TestMigrationBuilder` for creating test migrations
-  - Migration assertion helpers
-  - Complex migration verification utilities (like test_api_sources_table_migration)
-  - Support for testing data transformations during migrations
+  - [ ] `TestDatabase` using switchy_database simulated/in-memory SQLite
+  - [ ] `TestMigrationBuilder` for creating test migrations
+  - [ ] Migration assertion helpers
+  - [ ] Complex migration verification utilities (like test_api_sources_table_migration)
+  - [ ] Support for testing data transformations during migrations
 
-### Integration Tests
+### 8.2 Integration Tests
 
 - [ ] `packages/switchy/schema/tests/` - Integration tests ❌ **CRITICAL**
-  - Test migration execution across all database types
-  - Test rollback functionality
-  - Test dependency resolution
-  - Test error handling and recovery
+  - [ ] Test migration execution across all database types
+  - [ ] Test rollback functionality
+  - [ ] Test dependency resolution
+  - [ ] Test error handling and recovery
 
-### Compatibility Tests
+### 8.3 Compatibility Tests
 
 - [ ] `packages/schema/tests/` - Compatibility tests ❌ **CRITICAL**
-  - Verify moosicbox_schema continues to work unchanged
-  - Test migration state preservation
-  - Test feature flag combinations
-  - Performance regression tests
+  - [ ] Verify moosicbox_schema continues to work unchanged
+  - [ ] Test migration state preservation
+  - [ ] Test feature flag combinations
+  - [ ] Performance regression tests
 
 ## Phase 9: Migration Listing
 
 **Goal:** Provide ability to list available migrations
 
-### List Implementation
+### 9.1 List Implementation
 
 - [ ] Add `list()` method to migration sources ❌ **MINOR**
-  - Returns list of available migrations
-  - Include migration ID, description if available
-  - Indicate which migrations have been applied
-  - Sort by migration order
+  - [ ] Returns list of available migrations
+  - [ ] Include migration ID, description if available
+  - [ ] Indicate which migrations have been applied
+  - [ ] Sort by migration order
 
 ## Phase 10: Documentation & Examples
 
 **Goal:** Comprehensive documentation and usage examples
 
-### API Documentation
+### 10.1 API Documentation
 
 - [ ] `packages/switchy/schema/src/lib.rs` - API docs ❌ **IMPORTANT**
-  - Basic rustdoc for public APIs
-  - Simple usage examples
+  - [ ] Basic rustdoc for public APIs
+  - [ ] Simple usage examples
 
-### Usage Examples
+### 10.2 Usage Examples
 
 - [ ] `packages/switchy/schema/examples/` - Example applications ❌ **MINOR**
-  - `basic_usage.rs` - Simple migration example
-  - `hyperchad_integration.rs` - HyperChad-specific example
+  - [ ] `basic_usage.rs` - Simple migration example
+  - [ ] `hyperchad_integration.rs` - HyperChad-specific example
 
 ## Phase 11: Future Enhancements
 
 **Goal:** Consider advanced features after core functionality is complete
 
-### CLI Integration
+### 11.1 CLI Integration
 
 - [ ] CLI implementation ❌ **MINOR**
-  - `create` - Generate new migration files
-  - `status` - Show migration status and pending migrations
-  - `migrate` - Run pending migrations
-  - `rollback` - Rollback N migrations
-  - Basic environment variable configuration
-  - Database connection string handling
+  - [ ] `create` - Generate new migration files
+  - [ ] `status` - Show migration status and pending migrations
+  - [ ] `migrate` - Run pending migrations
+  - [ ] `rollback` - Rollback N migrations
+  - [ ] Basic environment variable configuration
+  - [ ] Database connection string handling
 
-### Error Recovery Investigation
+### 11.2 Error Recovery Investigation
 
 - [ ] Research error recovery patterns ❌ **MINOR**
-  - Investigate partial migration recovery strategies
-  - Design "dirty" state detection
-  - Document recovery best practices
+  - [ ] Investigate partial migration recovery strategies
+  - [ ] Design "dirty" state detection
+  - [ ] Document recovery best practices
 
-### Checksum Implementation
+### 11.3 Checksum Implementation
 
 - [ ] Add checksum validation ❌ **MINOR**
-  - Choose checksum algorithm (SHA256 recommended)
-  - Implement checksum calculation for migrations
-  - Add checksum verification before execution
-  - Handle checksum mismatches gracefully
+  - [ ] Choose checksum algorithm (SHA256 recommended)
+  - [ ] Implement checksum calculation for migrations
+  - [ ] Add checksum verification before execution
+  - [ ] Handle checksum mismatches gracefully
 
-### Remote Discovery Implementation
+### 11.4 Remote Discovery Implementation
 
 - [ ] Remote migration source ❌ **MINOR**
-  - Implement `MigrationSource` trait for remote sources
-  - Feature-gated with `#[cfg(feature = "remote")]`
-  - Fetch migrations from remote sources
-  - Authentication and caching support
-  - Network error handling
+  - [ ] Implement `MigrationSource` trait for remote sources
+  - [ ] Feature-gated with `#[cfg(feature = "remote")]`
+  - [ ] Fetch migrations from remote sources
+  - [ ] Authentication and caching support
+  - [ ] Network error handling
 
-### Migration State Query API
+### 11.5 Migration State Query API
 
 - [ ] Query API for migration state ❌ **MINOR**
-  - Check if specific migration is applied
-  - Get list of pending migrations
-  - Get migration history
-  - Separate from MigrationRunner for focused API
+  - [ ] Check if specific migration is applied
+  - [ ] Get list of pending migrations
+  - [ ] Get migration history
+  - [ ] Separate from MigrationRunner for focused API
 
 ## Success Metrics
 
