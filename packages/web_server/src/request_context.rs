@@ -1,4 +1,4 @@
-use crate::simulator::PathParams;
+use crate::PathParams;
 
 /// Type-safe context for request-scoped data
 ///

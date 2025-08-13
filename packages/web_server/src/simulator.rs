@@ -9,7 +9,7 @@ use bytes::Bytes;
 use moosicbox_web_server_core::WebServer;
 use switchy_http_models::Method;
 
-use crate::{RouteHandler, WebServerBuilder};
+use crate::{PathParams, RouteHandler, WebServerBuilder};
 
 /// Simulation-specific implementation of HTTP response data
 #[derive(Debug, Clone)]
@@ -122,9 +122,6 @@ pub fn parse_path_pattern(path: &str) -> PathPattern {
 
     PathPattern::new(segments)
 }
-
-/// Type alias for path parameters extracted from route matching
-pub type PathParams = BTreeMap<String, String>;
 
 /// Matches a path pattern against an actual request path
 ///

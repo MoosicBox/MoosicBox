@@ -3303,7 +3303,8 @@ mod simulator_tests {
 **File**: `packages/web_server/src/simulator.rs`
 
 - [x] Create `PathParams` type alias: `BTreeMap<String, String>` ✅ COMPLETED
-    - Line 69: Type alias for extracted path parameters using deterministic BTreeMap
+    - **Updated**: Moved from simulator.rs to lib.rs as core type (architectural improvement)
+    - Line 10: Type alias for extracted path parameters using deterministic BTreeMap
 - [x] Implement `match_path(pattern: &PathPattern, actual_path: &str) -> Option<PathParams>` ✅ COMPLETED
     - Lines 71-139: Complete implementation with comprehensive documentation and examples
     - Handles segment count validation, literal matching, and parameter extraction
@@ -5003,7 +5004,7 @@ Decision: Native nesting selected as default for optimal performance while maint
 ```rust
 // packages/web_server/src/request_context.rs
 use std::sync::Arc;
-use crate::simulator::PathParams;
+use crate::PathParams;
 
 /// Type-safe context for request-scoped data
 ///
@@ -5076,23 +5077,29 @@ impl From<actix_web::HttpRequest> for HttpRequest {
 }
 ```
 
-**5.2.4.3.1.3: Add Request-Scoped Data Accessors**
+**5.2.4.3.1.3: Add Request-Scoped Data Accessors** ✅ **COMPLETED**
 
 **Purpose**: Provide clean API for accessing both request-scoped and app-scoped data
 **Philosophy**: Separate concerns - request data vs app data
 
 **Tasks**:
 
-- [ ] Add `path_params(&self) -> &PathParams` method
-- [ ] Add `path_param(&self, name: &str) -> Option<&str>` convenience method
-- [ ] Add `context(&self) -> &RequestContext` for direct access
-- [ ] Keep existing methods working with inner field
-- [ ] Ensure State extractor continues using inner.app_data()
-- [ ] Document the separation of concerns
+- [x] Add `path_params(&self) -> &PathParams` method
+- [x] Add `path_param(&self, name: &str) -> Option<&str>` convenience method
+- [x] Add `context(&self) -> Option<&RequestContext>` for direct access
+- [x] Keep existing methods working with inner field
+- [x] Ensure State extractor continues using inner.app_data()
+- [x] Document the separation of concerns
+
+**Architectural Note**: PathParams was moved from `simulator.rs` to `lib.rs` as a core type to avoid inappropriate module dependencies and ensure it's available regardless of feature flags.
 
 **Implementation**:
 
 ```rust
+// packages/web_server/src/lib.rs
+/// Type alias for path parameters extracted from route matching
+pub type PathParams = BTreeMap<String, String>;
+
 impl HttpRequest {
     /// Get path parameters from request context
     #[must_use]

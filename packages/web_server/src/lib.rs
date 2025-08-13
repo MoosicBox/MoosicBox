@@ -6,6 +6,9 @@ use std::{borrow::Cow, collections::BTreeMap, pin::Pin};
 
 use bytes::Bytes;
 
+/// Type alias for path parameters extracted from route matching
+pub type PathParams = BTreeMap<String, String>;
+
 pub use moosicbox_web_server_core as core;
 #[cfg(feature = "cors")]
 pub use moosicbox_web_server_cors as cors;
@@ -143,6 +146,37 @@ impl HttpRequest {
 }
 
 impl HttpRequest {
+    /// Get path parameters from request context
+    #[must_use]
+    pub fn path_params(&self) -> &PathParams {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix { context, .. } => &context.path_params,
+            Self::Stub(Stub::Simulator(sim)) => &sim.request.path_params,
+            Self::Stub(Stub::Empty) => {
+                static EMPTY: PathParams = BTreeMap::new();
+                &EMPTY
+            }
+        }
+    }
+
+    /// Get a specific path parameter by name
+    #[must_use]
+    pub fn path_param(&self, name: &str) -> Option<&str> {
+        self.path_params().get(name).map(String::as_str)
+    }
+
+    /// Get the request context (for advanced use)
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn context(&self) -> Option<&RequestContext> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix { context, .. } => Some(context),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub fn header(&self, name: &str) -> Option<&str> {
         match self {

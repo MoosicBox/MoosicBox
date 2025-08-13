@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use super::traits::GenericTestClient;
 use super::{HttpMethod, TestClient, TestRequestBuilder, TestResponse};
-use crate::simulator::{PathParams, SimulationRequest, SimulatorWebServer};
+use crate::{
+    PathParams,
+    simulator::{SimulationRequest, SimulatorWebServer},
+};
 use bytes::Bytes;
 use switchy_http_models::Method;
 
