@@ -167,58 +167,85 @@ These items need further investigation or decision during implementation:
 
 **Goal:** Implement migration discovery from various sources with feature-gated modules
 
-**Status:** 0% complete. Only empty trait placeholder exists.
+**Status:** ~30% complete. Common interface and struct definitions complete, discovery logic not yet implemented.
 
 ### 3.1 Common Discovery Interface
 
-- [ ] `packages/switchy/schema/src/discovery/mod.rs` - Common types ❌ **CRITICAL**
-  - [ ] Define `DiscoverySource` trait
-    - ✗ Only empty trait placeholder - no methods defined (lines 1-3)
-  - [ ] Common discovery errors
-    - ✗ Not implemented
-  - [ ] Migration collection types
-    - ✗ Not implemented
-  - [ ] Shared utility functions
-    - ✗ Not implemented
+- [x] `packages/switchy/schema/src/discovery/mod.rs` - Feature-gated re-exports ✅ **CRITICAL**
+  - [x] Remove empty `DiscoverySource` trait (use `MigrationSource` directly)
+    - ✓ Removed and replaced with feature-gated re-exports (lines 1-8)
+  - [x] Add feature-gated re-exports for discovery implementations
+    - ✓ All three discovery modules properly feature-gated
+  - [x] Minimal shared utilities (only if duplication emerges)
+    - ✓ Started with no shared code as planned
 
 ### 3.2 File-Based Discovery (feature = "directory")
 
-- [ ] `packages/switchy/schema/src/discovery/directory.rs` - Directory discovery ❌ **CRITICAL**
-  - [ ] Feature-gated with `#[cfg(feature = "directory")]`
-  - [ ] Implements `MigrationSource` trait with async migrations() method
-  - [ ] Provide `DirectoryMigrations::from_path()` or similar explicit API
+- [ ] `packages/switchy/schema/src/discovery/directory.rs` - Directory discovery 🔄 **CRITICAL**
+  - [x] Feature-gated with `#[cfg(feature = "directory")]`
+    - ✓ Module feature-gated in mod.rs (line 4)
+  - [x] `FileMigration` struct implementing `Migration` trait (id, path, up_sql, down_sql)
+    - ✓ Implemented with all required fields (lines 8-29)
+  - [x] `DirectoryMigrationSource` struct implementing `MigrationSource` trait
+    - ✓ Implemented with migrations_path field (lines 50-65)
+  - [x] Provide `DirectoryMigrationSource::from_path()` or similar explicit API
+    - ✓ from_path() constructor implemented (line 58)
   - [ ] Scan directories for migration files in format: `YYYY-MM-DD-HHMMSS_name/up.sql`
+    - ✗ TODO placeholder at line 71
   - [ ] down.sql is optional, metadata.toml is allowed
+    - ✗ TODO placeholder
   - [ ] Empty migration files are treated as successful no-ops
+    - ✗ TODO placeholder
   - [ ] Handle database-specific subdirectories
+    - ✗ TODO placeholder
 
 ### 3.3 Embedded Discovery (feature = "embedded")
 
-- [ ] `packages/switchy/schema/src/discovery/embedded.rs` - Embedded discovery ❌ **CRITICAL**
-  - [ ] Feature-gated with `#[cfg(feature = "embedded")]`
-  - [ ] Implements `MigrationSource` trait with async migrations() method
-  - [ ] Provide `EmbeddedMigrations::new()` or similar explicit API
+- [ ] `packages/switchy/schema/src/discovery/embedded.rs` - Embedded discovery 🔄 **CRITICAL**
+  - [x] Feature-gated with `#[cfg(feature = "embedded")]`
+    - ✓ Module feature-gated in mod.rs (line 1)
+  - [x] `EmbeddedMigration` struct implementing `Migration` trait (id, up_content, down_content)
+    - ✓ Implemented with all required fields (lines 7-42)
+  - [x] `EmbeddedMigrationSource` struct implementing `MigrationSource` trait
+    - ✓ Implemented with migrations_dir field (lines 44-64)
+  - [x] Provide `EmbeddedMigrationSource::new()` or similar explicit API
+    - ✓ new() constructor implemented (line 52)
   - [ ] Extract migrations from include_dir structures
+    - ✗ TODO placeholder at line 60
   - [ ] Maintain compatibility with existing moosicbox patterns
+    - ✗ TODO placeholder
   - [ ] Support nested directory structures
+    - ✗ TODO placeholder
   - [ ] Parse migration names and ordering
+    - ✗ TODO placeholder
 
 ### 3.4 Code-Based Discovery (feature = "code")
 
-- [ ] `packages/switchy/schema/src/discovery/code.rs` - Code discovery ❌ **IMPORTANT**
-  - [ ] Feature-gated with `#[cfg(feature = "code")]`
-  - [ ] Implements `MigrationSource` trait with async migrations() method
-  - [ ] Provide explicit API for code-based migrations
-  - [ ] Registry for programmatically defined migrations
+- [ ] `packages/switchy/schema/src/discovery/code.rs` - Code discovery 🔄 **IMPORTANT**
+  - [x] Feature-gated with `#[cfg(feature = "code")]`
+    - ✓ Module feature-gated in mod.rs (line 7)
+  - [x] `CodeMigration` struct implementing `Migration` trait (id, up_fn, down_fn)
+    - ✓ Implemented with function pointer fields (lines 15-44)
+  - [x] `CodeMigrationSource` struct implementing `MigrationSource` trait
+    - ✓ Implemented with BTreeMap registry (lines 47-77)
+  - [x] Provide explicit API for code-based migrations
+    - ✓ new() and add_migration() methods implemented
+  - [x] Registry for programmatically defined migrations
+    - ✓ BTreeMap-based registry implemented (line 49)
   - [ ] Type-safe migration definitions
+    - 🔄 Partially implemented - need better cloning strategy
   - [ ] Integration with trait-based migrations
+    - ✗ TODO placeholder at line 74
 
 ### 3.5 Package Compilation
 
-- [ ] Ensure clean compilation ❌ **CRITICAL**
-  - [ ] Package must compile without warnings when no discovery features are enabled
-  - [ ] Core types and traits are always available
-  - [ ] Discovery implementations are feature-gated additions
+- [x] Ensure clean compilation ✅ **CRITICAL**
+  - [x] Package must compile without warnings when no discovery features are enabled
+    - ✓ Verified with cargo check --no-default-features
+  - [x] Core types and traits are always available
+    - ✓ Migration and MigrationSource traits always available
+  - [x] Discovery implementations are feature-gated additions
+    - ✓ All discovery modules properly feature-gated
 
 ## Phase 4: Migration Runner
 
