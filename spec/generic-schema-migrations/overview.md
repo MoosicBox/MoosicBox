@@ -6,7 +6,7 @@ Extract the generic migration logic from `moosicbox_schema` into a reusable `swi
 
 **Current Status:** 🟡 **Implementation Phase** - Phase 1 complete, Phase 2 complete, Phase 3.3 (Embedded Discovery) complete
 
-**Completion Estimate:** ~20% complete - Core foundation, traits, and embedded discovery implemented
+**Completion Estimate:** ~15% complete - Core foundation, traits, and embedded discovery implemented. Directory and code discovery require significant rework.
 
 ## Status Legend
 
@@ -166,7 +166,7 @@ These items need further investigation or decision during implementation:
 
 **Goal:** Implement migration discovery from various sources with feature-gated modules
 
-**Status:** ~40% complete. Common interface and struct definitions complete, embedded discovery fully implemented.
+**Status:** ~25% complete. Common interface and struct definitions complete, embedded discovery fully implemented. Directory and code discovery need complete reimplementation.
 
 ### 3.1 Common Discovery Interface
 
@@ -189,12 +189,12 @@ These items need further investigation or decision during implementation:
     - ✓ Implemented with migrations_path field (lines 50-65)
   - [x] Provide `DirectoryMigrationSource::from_path()` or similar explicit API
     - ✓ from_path() constructor implemented (line 58)
-  - [ ] Scan directories for migration files (directory name becomes migration ID)
-    - ✗ TODO placeholder at line 71
-  - [ ] Both up.sql and down.sql are optional
-    - ✗ TODO placeholder
-  - [ ] Empty or missing migration files skip execution but are marked as successful
-    - ✗ TODO placeholder
+  - ~~[ ] Scan directories for migration files (directory name becomes migration ID)~~
+    - ~~✗ TODO placeholder at line 71~~ (Superseded by Phase 3.5)
+  - ~~[ ] Both up.sql and down.sql are optional~~
+    - ~~✗ TODO placeholder~~ (Superseded by Phase 3.5)
+  - ~~[ ] Empty or missing migration files skip execution but are marked as successful~~
+    - ~~✗ TODO placeholder~~ (Superseded by Phase 3.5)
 
 ### 3.3 Embedded Discovery (feature = "embedded") ✅ **COMPLETED**
 
@@ -233,12 +233,116 @@ These items need further investigation or decision during implementation:
     - ✓ new() and add_migration() methods implemented
   - [x] Registry for programmatically defined migrations
     - ✓ BTreeMap-based registry implemented (line 49)
-  - [ ] Type-safe migration definitions
-    - 🔄 Partially implemented - need better cloning strategy
-  - [ ] Integration with trait-based migrations
-    - ✗ TODO placeholder at line 74
+  - ~~[ ] Type-safe migration definitions~~
+    - ~~🔄 Partially implemented - need better cloning strategy~~ (Superseded by Phase 3.6)
+  - ~~[ ] Integration with trait-based migrations~~
+    - ~~✗ TODO placeholder at line 74~~ (Superseded by Phase 3.6)
 
-### 3.5 Package Compilation
+### 3.5 Complete Directory Discovery Implementation
+
+**Goal:** Implement full directory-based migration discovery using async file operations
+
+**Status:** ❌ Not started
+
+#### 3.5.1 Update Dependencies
+- [ ] Add `moosicbox_fs` dependency to `Cargo.toml` ❌ **CRITICAL**
+  - [ ] Add under `[dependencies]` with `workspace = true`
+  - [ ] Make it optional, tied to `directory` feature
+
+#### 3.5.2 Implement Directory Scanning
+- [ ] Update `packages/switchy/schema/src/discovery/directory.rs` ❌ **CRITICAL**
+  - [ ] Import `moosicbox_fs::tokio::unsync::{read_to_string, read_dir_sorted}`
+  - [ ] Add `extract_migrations()` method to `DirectoryMigrationSource`
+  - [ ] Scan directory for subdirectories (each subdirectory = one migration)
+  - [ ] Use directory name as migration ID (as-is, no validation)
+  - [ ] For each migration directory:
+    - [ ] Check for `up.sql` file
+    - [ ] Check for `down.sql` file
+    - [ ] Read file contents as `String` (not `Bytes`)
+    - [ ] Handle missing files (both are optional)
+    - [ ] Handle empty files (treat as no-op)
+  - [ ] Return `BTreeMap<String, FileMigration>` for deterministic ordering
+
+#### 3.5.3 Update FileMigration Implementation
+- [ ] Keep `FileMigration` using `String` for SQL content (not `Bytes`) ❌ **CRITICAL**
+- [ ] Update `up()` method to handle empty strings as no-ops
+- [ ] Update `down()` method to handle `None` and empty strings as no-ops
+
+#### 3.5.4 Add Tests
+- [ ] Create test migration directories under `test_migrations_dir/` ❌ **IMPORTANT**
+- [ ] Test various scenarios:
+  - [ ] Migration with both up.sql and down.sql
+  - [ ] Migration with only up.sql
+  - [ ] Migration with empty up.sql
+  - [ ] Migration with no SQL files (should be skipped)
+- [ ] Test async file operations
+- [ ] Test alphabetical ordering by migration ID
+
+### 3.6 Implement Code Discovery with IntoSql Integration
+
+**Goal:** Implement code-based migrations using query builders from switchy_database with lifetime-aware traits
+
+**Status:** ❌ Not started
+
+#### 3.6.1 Update Core Migration Traits for Lifetimes
+- [ ] Update `packages/switchy/schema/src/migration.rs` ❌ **CRITICAL**
+  - [ ] Change `Migration` trait to `Migration<'a>: Send + Sync + 'a`
+  - [ ] Change `MigrationSource` trait to `MigrationSource<'a>: Send + Sync`
+  - [ ] Update return type to `Result<Vec<Box<dyn Migration<'a> + 'a>>>`
+
+#### 3.6.2 Add IntoSql Trait to switchy_database
+- [ ] Create `packages/database/src/into_sql.rs` ❌ **CRITICAL**
+  - [ ] Define `IntoSql` trait:
+    - [ ] `fn into_sql(&self) -> Result<String, DatabaseError>`
+    - [ ] `async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError>`
+  - [ ] Implement `IntoSql` for `CreateTableStatement<'_>`
+    - [ ] Generate proper CREATE TABLE SQL
+    - [ ] Handle IF NOT EXISTS clause
+    - [ ] Handle columns with types
+    - [ ] Handle primary key
+    - [ ] Handle foreign keys
+  - [ ] Implement `IntoSql` for `InsertStatement<'_>`
+  - [ ] Implement `IntoSql` for `UpdateStatement<'_>`
+  - [ ] Implement `IntoSql` for `DeleteStatement<'_>`
+  - [ ] Implement `IntoSql` for `UpsertStatement<'_>`
+  - [ ] Implement `IntoSql` for `String` and `&str` (for raw SQL)
+- [ ] Export `IntoSql` from `packages/database/src/lib.rs`
+
+#### 3.6.3 Update Existing Discovery Implementations for Lifetimes
+- [ ] Update `EmbeddedMigration` to implement `Migration<'static>` ❌ **CRITICAL**
+- [ ] Update `EmbeddedMigrationSource` to implement `MigrationSource<'static>`
+- [ ] Update `FileMigration` to implement `Migration<'static>`
+- [ ] Update `DirectoryMigrationSource` to implement `MigrationSource<'static>`
+
+#### 3.6.4 Implement Code Discovery with Lifetimes
+- [ ] Update `packages/switchy/schema/src/discovery/code.rs` ❌ **CRITICAL**
+  - [ ] Remove function pointer types
+  - [ ] Create `CodeMigration<'a>` struct:
+    - [ ] `id: String`
+    - [ ] `up_sql: Box<dyn IntoSql + 'a>`
+    - [ ] `down_sql: Option<Box<dyn IntoSql + 'a>>`
+  - [ ] Implement `Migration<'a>` for `CodeMigration<'a>`
+    - [ ] Use `up_sql.execute(db)` in `up()` method
+    - [ ] Use `down_sql.execute(db)` in `down()` method
+  - [ ] Update `CodeMigrationSource` to `CodeMigrationSource<'a>`
+    - [ ] Store `BTreeMap<String, Box<dyn Migration<'a> + 'a>>`
+    - [ ] Implement `add_migration()` with generic `IntoSql` parameters
+    - [ ] Support both raw SQL strings and query builders
+  - [ ] Implement `MigrationSource<'a>` for `CodeMigrationSource<'a>`
+
+#### 3.6.5 Add Tests for Code Discovery
+- [ ] Test with raw SQL strings ❌ **IMPORTANT**
+- [ ] Test with `CreateTableStatement` builders
+- [ ] Test with mixed migration types
+- [ ] Test lifetime handling with non-'static data
+- [ ] Test ordering and retrieval
+
+#### 3.6.6 Update Documentation
+- [ ] Add examples showing query builder usage ❌ **MINOR**
+- [ ] Document lifetime requirements
+- [ ] Show both 'static and non-'static usage patterns
+
+### 3.7 Package Compilation
 
 - [x] Ensure clean compilation ✅ **CRITICAL**
   - [x] Package must compile without warnings when no discovery features are enabled
@@ -625,8 +729,8 @@ test-utils = []
 2. ✅ Implement core types and traits for migration system
 3. 🔄 Add feature-gated discovery modules for different migration sources
    - ✅ Embedded discovery (Phase 3.3) - Complete
-   - ❌ Directory discovery (Phase 3.2) - Pending
-   - ❌ Code discovery (Phase 3.4) - Pending
+   - ❌ Directory discovery (Phase 3.5) - Complete reimplementation needed
+   - ❌ Code discovery (Phase 3.6) - Complete reimplementation with IntoSql integration needed
 4. Create migration runner with transaction support (Phase 4)
 5. Add rollback support and validation features (Phase 5-6)
 6. Update `moosicbox_schema` to use switchy_schema internally (Phase 7)
