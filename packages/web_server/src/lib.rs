@@ -22,6 +22,7 @@ pub use extractors::Path;
 pub use from_request::{FromRequest, Headers, IntoHandlerError, RequestData, RequestInfo};
 #[cfg(feature = "serde")]
 pub use from_request::{Json, Query};
+pub use request_context::RequestContext;
 
 #[cfg(feature = "actix")]
 mod actix;
@@ -34,6 +35,8 @@ pub mod handler;
 
 #[cfg(feature = "openapi")]
 pub mod openapi;
+
+pub mod request_context;
 
 pub mod simulator;
 

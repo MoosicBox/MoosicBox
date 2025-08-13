@@ -1052,7 +1052,7 @@ Before marking ANY checkbox complete:
 
 - ✅ Create unified WebServer trait (5/5 tasks) - **COMPLETED** (trait exists in web_server_core, both backends implement it)
 - ⏳ Complete SimulatorWebServer basics (84/91 tasks) - **DETAILED BREAKDOWN** (route storage, handler execution, response generation, state management, scope processing, comprehensive testing)
-- ⏳ Create unified TestClient abstraction (26/32 tasks) - **5.2.4.1 COMPLETE** (5.2.1, 5.2.2, 5.2.3.1-5.2.3.2 done, 5.2.3.3 core complete 4/6 tasks, 5.2.4.1 basic route conversion complete 5/5 tasks)
+- ⏳ Create unified TestClient abstraction (34/49 tasks) - **5.2.4.1 & 5.2.4.2 COMPLETE** (5.2.1, 5.2.2, 5.2.3.1-5.2.3.2 done, 5.2.3.3 core complete 4/6 tasks, 5.2.4.1 basic route conversion complete 5/5 tasks, 5.2.4.2 nested scope support complete 7/7 tasks)
 - ❌ Create unified server builder/runtime (0/5 tasks) - **ENHANCED WITH 5.1 API USAGE**
 - ❌ Update examples to remove feature gates (0/3 tasks) - **ENHANCED WITH CONCRETE VALIDATION**
 
@@ -4424,8 +4424,8 @@ This ensures consistency across the entire MoosicBox codebase.
 - ✅ **RESOLVED (5.2.4.1)**: The `scopes` parameter in `ActixWebServer::new()` is completely ignored
 - ✅ **RESOLVED (5.2.4.1)**: Custom route handlers not supported
 - ⏳ **REMAINING**: Builder addr/port configuration ignored (5.2.4.7)
-- ⏳ **REMAINING**: Nested scope support missing (5.2.4.2)
-- ⏳ **REMAINING**: Route parameters not handled (5.2.4.3)
+- ✅ **COMPLETE**: Nested scope support (5.2.4.2) - All 7 sub-sections complete
+- ⏳ **REMAINING**: Route parameters not handled (5.2.4.3) - **BLOCKED**: Requires 5.2.4.3.1 infrastructure first
 - ⏳ **REMAINING**: State management not implemented (5.2.4.4)
 - ⏳ **REMAINING**: Middleware system not integrated (5.2.4.5)
 
@@ -4963,20 +4963,551 @@ Decision: Native nesting selected as default for optimal performance while maint
 ##### 5.2.4.3 Route Parameters & Pattern Matching (Addresses dynamic routes)
 
 **Purpose**: Support dynamic route segments like `/users/{id}`
-**Scope**: Actix-compatible route patterns
+**Scope**: Actix-compatible route patterns with Path extractor integration
 
-- [ ] Detect and convert route parameters from our format to Actix format
-- [ ] Implement parameter extraction in handlers
-- [ ] Support multiple parameters in single route
-- [ ] Add regex pattern support for parameters
-- [ ] Test with complex route patterns
+**Critical Gap Identified**: Investigation revealed that while routes preserve `{id}` syntax, there is NO actual parameter extraction occurring. The Path extractor reads raw URL segments instead of matched parameters, and HttpRequest has no way to access Actix's `match_info()`.
+
+**Implementation Strategy**: First implement type-safe infrastructure for parameter extraction, then build incrementally from single parameters to complex patterns, ensuring compatibility with both flattening and native nesting approaches.
+
+###### 5.2.4.3.1: Type-Safe RequestContext Infrastructure - PREREQUISITE
+
+**Purpose**: Add path parameter extraction infrastructure using a type-safe RequestContext pattern, avoiding the `Any` type completely while maintaining clean separation between request-scoped and app-scoped data.
+
+**Architecture Decision**:
+
+- Use explicit `RequestContext` struct for request-scoped data (path parameters, future: request ID, auth)
+- Keep app-scoped data (state, config) accessed through the inner Actix request
+- This avoids generic type proliferation while maintaining complete type safety
+
+**Implementation Strategy**: Wrap Actix HttpRequest with typed context, extract parameters at handler boundary, make them available to all extractors.
+
+**Sub-tasks**:
+
+**5.2.4.3.1.1: Create RequestContext Structure** ✅ **COMPLETED**
+
+**Purpose**: Define the type-safe context for request-scoped data
+**Philosophy**: Start simple, extend through Options with defaults for backwards compatibility
+
+**Tasks**:
+
+- [x] Create RequestContext struct with path_params field
+- [x] Implement Debug, Clone, Default traits
+- [x] Add constructor `new(path_params: PathParams) -> Self`
+- [x] Add builder method `with_path_params(mut self, params: PathParams) -> Self`
+- [x] Document that future fields should be Options with defaults
+- [x] Place in new module: `packages/web_server/src/request_context.rs`
+- [x] Export from lib.rs
+
+**Implementation**:
+
+```rust
+// packages/web_server/src/request_context.rs
+use std::sync::Arc;
+use crate::simulator::PathParams;
+
+/// Type-safe context for request-scoped data
+///
+/// This struct holds data extracted from the request that needs to be
+/// available to handlers and extractors. App-scoped data (like state)
+/// remains accessible through the inner request.
+#[derive(Debug, Clone, Default)]
+pub struct RequestContext {
+    /// Path parameters extracted from route matching
+    pub path_params: PathParams,
+
+    // Future additions should be Options with defaults:
+    // pub request_id: Option<Uuid>,
+    // pub auth: Option<AuthContext>,
+}
+
+impl RequestContext {
+    /// Create new context with path parameters
+    #[must_use]
+    pub fn new(path_params: PathParams) -> Self {
+        Self { path_params }
+    }
+
+    /// Builder method for setting path parameters
+    #[must_use]
+    pub fn with_path_params(mut self, params: PathParams) -> Self {
+        self.path_params = params;
+        self
+    }
+}
+```
+
+**5.2.4.3.1.2: Refactor HttpRequest Enum**
+
+**Purpose**: Modify HttpRequest to include RequestContext while maintaining backwards compatibility
+**Philosophy**: Explicit struct variant is clearer than tuple variant
+
+**Tasks**:
+
+- [ ] Change HttpRequest::Actix from tuple to struct variant
+- [ ] Add `inner: actix_web::HttpRequest` field
+- [ ] Add `context: Arc<RequestContext>` field
+- [ ] Update all pattern matches throughout codebase
+- [ ] Update From implementations to initialize empty context
+- [ ] Ensure all existing methods still work
+- [ ] Run tests to verify no breakage
+
+**Implementation**:
+
+```rust
+// packages/web_server/src/lib.rs
+#[derive(Debug, Clone)]
+pub enum HttpRequest {
+    #[cfg(feature = "actix")]
+    Actix {
+        inner: actix_web::HttpRequest,
+        context: Arc<RequestContext>,
+    },
+    Stub(Stub),
+}
+
+// Update From implementation
+impl From<actix_web::HttpRequest> for HttpRequest {
+    fn from(inner: actix_web::HttpRequest) -> Self {
+        Self::Actix {
+            inner,
+            context: Arc::new(RequestContext::default()),
+        }
+    }
+}
+```
+
+**5.2.4.3.1.3: Add Request-Scoped Data Accessors**
+
+**Purpose**: Provide clean API for accessing both request-scoped and app-scoped data
+**Philosophy**: Separate concerns - request data vs app data
+
+**Tasks**:
+
+- [ ] Add `path_params(&self) -> &PathParams` method
+- [ ] Add `path_param(&self, name: &str) -> Option<&str>` convenience method
+- [ ] Add `context(&self) -> &RequestContext` for direct access
+- [ ] Keep existing methods working with inner field
+- [ ] Ensure State extractor continues using inner.app_data()
+- [ ] Document the separation of concerns
+
+**Implementation**:
+
+```rust
+impl HttpRequest {
+    /// Get path parameters from request context
+    #[must_use]
+    pub fn path_params(&self) -> &PathParams {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix { context, .. } => &context.path_params,
+            Self::Stub(Stub::Simulator(sim)) => &sim.request.path_params,
+            Self::Stub(Stub::Empty) => {
+                static EMPTY: PathParams = BTreeMap::new();
+                &EMPTY
+            }
+        }
+    }
+
+    /// Get a specific path parameter by name
+    #[must_use]
+    pub fn path_param(&self, name: &str) -> Option<&str> {
+        self.path_params().get(name).map(String::as_str)
+    }
+
+    /// Get the request context (for advanced use)
+    #[must_use]
+    pub fn context(&self) -> Option<&RequestContext> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix { context, .. } => Some(context),
+            _ => None,
+        }
+    }
+
+    // Existing methods updated to use inner:
+    #[must_use]
+    pub fn header(&self, name: &str) -> Option<&str> {
+        match self {
+            #[cfg(feature = "actix")]
+            Self::Actix { inner, .. } => {
+                inner.headers().get(name).and_then(|x| x.to_str().ok())
+            }
+            // ... rest unchanged
+        }
+    }
+}
+```
+
+**5.2.4.3.1.4: Create Parameter Extraction Function**
+
+**Purpose**: Extract path parameters from Actix's match_info
+**Philosophy**: Centralize Actix-specific logic, make it reusable
+
+**Tasks**:
+
+- [ ] Create `extract_actix_path_params(req: &actix_web::HttpRequest) -> PathParams`
+- [ ] Use `req.match_info()` to iterate over all parameters
+- [ ] Convert each parameter to String for storage
+- [ ] Handle URL decoding if needed
+- [ ] Skip internal Actix parameters (those starting with '\_\_')
+- [ ] Add unit tests for various patterns
+
+**Implementation**:
+
+```rust
+// packages/web_server/src/test_client/actix_impl.rs
+
+/// Extract path parameters from Actix request
+fn extract_actix_path_params(req: &actix_web::HttpRequest) -> PathParams {
+    let match_info = req.match_info();
+    let mut params = PathParams::new();
+
+    // Iterate over all matched parameters
+    for (key, value) in match_info.iter() {
+        // Skip internal Actix parameters
+        if !key.starts_with("__") {
+            params.insert(key.to_string(), value.to_string());
+        }
+    }
+
+    params
+}
+```
+
+**5.2.4.3.1.5: Update Handler Conversion - Flattening Approach**
+
+**Purpose**: Modify handler to extract parameters and create context
+**Location**: `packages/web_server/src/test_client/actix_impl.rs` around line 340
+
+**Tasks**:
+
+- [ ] Extract parameters before creating HttpRequest
+- [ ] Create RequestContext with parameters
+- [ ] Build HttpRequest::Actix with context
+- [ ] Ensure Arc is used for efficient cloning
+- [ ] Test parameter extraction works
+
+**Implementation**:
+
+```rust
+// In flatten_scope_tree, around line 340
+let actix_handler = move |req: actix_web::HttpRequest| {
+    let handler = handler.clone();
+    async move {
+        // Extract path parameters from Actix
+        let path_params = extract_actix_path_params(&req);
+
+        // Create context with parameters
+        let context = Arc::new(RequestContext::new(path_params));
+
+        // Build our request with context
+        let our_request = crate::HttpRequest::Actix {
+            inner: req,
+            context,
+        };
+
+        // Call our handler with parameter-aware request
+        let result = handler(our_request).await;
+
+        // Convert response (rest unchanged)
+        result.map(|resp| {
+            // ... existing response conversion
+        })
+    }
+};
+```
+
+**5.2.4.3.1.6: Update Handler Conversion - Native Nesting Approach**
+
+**Purpose**: Apply same parameter extraction to native nesting
+**Location**: `packages/web_server/src/test_client/actix_impl.rs` around line 540
+
+**Tasks**:
+
+- [ ] Apply identical parameter extraction logic
+- [ ] Ensure consistency between approaches
+- [ ] Consider extracting handler conversion to shared function
+- [ ] Test both approaches work identically
+
+**Implementation**: Same pattern as 5.2.4.3.1.5
+
+**5.2.4.3.1.7: Update Path Extractor**
+
+**Purpose**: Modify Path<T> to use pre-extracted parameters
+**Location**: `packages/web_server/src/extractors/path.rs`
+
+**Tasks**:
+
+- [ ] Check for path_params first in from_request_sync
+- [ ] Implement deserialization from PathParams
+- [ ] Handle single values (Path<u64>)
+- [ ] Handle tuples (Path<(String, u64)>)
+- [ ] Handle structs via serde
+- [ ] Remove or deprecate segment-based extraction
+- [ ] Add clear error messages
+
+**Implementation**:
+
+```rust
+impl<T> FromRequest for Path<T>
+where
+    T: DeserializeOwned + Send + 'static,
+{
+    fn from_request_sync(req: &HttpRequest) -> Result<Self, Self::Error> {
+        let params = req.path_params();
+
+        if params.is_empty() {
+            return Err(PathError::NoParameters);
+        }
+
+        // Determine extraction strategy based on type
+        let type_name = std::any::type_name::<T>();
+
+        let value = if type_name.starts_with('(') {
+            // Tuple - extract by position
+            deserialize_tuple_from_params::<T>(params)?
+        } else if /* is struct */ {
+            // Struct - use serde
+            deserialize_struct_from_params::<T>(params)?
+        } else {
+            // Single value - get first parameter
+            deserialize_single_from_params::<T>(params)?
+        };
+
+        Ok(Self(value))
+    }
+}
+```
+
+**5.2.4.3.1.8: Update State Extractor Documentation**
+
+**Purpose**: Clarify that State uses inner request, not context
+**Philosophy**: Document the separation of concerns
+
+**Tasks**:
+
+- [ ] Add comment explaining State accesses app-scoped data
+- [ ] Document that RequestContext is for request-scoped data
+- [ ] Ensure State extractor continues working unchanged
+- [ ] Add example showing both State and Path usage
+
+**5.2.4.3.1.9: Comprehensive Testing**
+
+**Purpose**: Verify everything works correctly with type safety
+
+**Tasks**:
+
+- [ ] Create test: `/users/{id}` with Path<u64> extractor
+- [ ] Create test: `/items/{category}/{id}` with Path<(String, u64)>
+- [ ] Test both flattening and native nesting approaches
+- [ ] Test State extractor still works
+- [ ] Test combining State and Path in same handler
+- [ ] Test error cases (missing params, type mismatch)
+- [ ] Benchmark performance vs baseline
+- [ ] Document any limitations
+
+**Test Example**:
+
+```rust
+#[test]
+fn test_path_parameters_with_context() {
+    // Define handler using Path extractor
+    async fn get_user(
+        Path(user_id): Path<u64>,
+        State(db): State<Database>,
+    ) -> Result<HttpResponse, Error> {
+        // Both extractors work!
+        let user = db.get_user(user_id).await?;
+        Ok(HttpResponse::ok().with_json(&user))
+    }
+
+    // Create scope with parameter route
+    let scope = Scope::new("/api")
+        .route(Method::Get, "/users/{id}", get_user.into_handler());
+
+    // Test with both server implementations
+    for server in [
+        ActixWebServer::new_with_flattening(&[scope.clone()]),
+        ActixWebServer::new_with_native_nesting(&[scope.clone()]),
+    ] {
+        let response = server.get("/api/users/123").send().await?;
+        assert_eq!(response.status(), 200);
+        // Verify user 123 was fetched
+    }
+}
+```
 
 **Success Criteria**:
 
+- [ ] Path<T> successfully extracts from route parameters
+- [ ] State<T> continues to work unchanged
+- [ ] Both implementation approaches work identically
+- [ ] No use of `Any` type anywhere
+- [ ] No generic type proliferation
+- [ ] Clean separation of request vs app scoped data
+- [ ] Performance within 5% of baseline
+- [ ] All existing tests pass
+
+**Benefits of This Approach**:
+
+1. **Type Safety**: Complete compile-time checking, no `Any`
+2. **Separation of Concerns**: Request data (params) vs app data (state) clearly separated
+3. **No Generics**: HttpRequest doesn't become generic, avoiding signature pollution
+4. **Extensible**: Future fields can be added as Options
+5. **Performance**: Direct field access, no HashMap lookups
+6. **Testable**: Easy to construct test contexts
+7. **Maintainable**: Explicit fields make code self-documenting
+
+**Estimated Effort**: 4-6 hours
+
+- RequestContext & refactor: 1-2 hours
+- Parameter extraction: 1 hour
+- Handler updates: 1 hour
+- Path extractor update: 1 hour
+- Testing: 1 hour
+
+**Definition of Done**:
+
+- [ ] RequestContext implemented with path_params
+- [ ] HttpRequest refactored to struct variant with context
+- [ ] Parameters extracted in both handler approaches
+- [ ] Path extractor reads from context
+- [ ] State extractor unchanged and working
+- [ ] All tests passing
+- [ ] Ready for 5.2.4.3.2 without compromises
+
+###### 5.2.4.3.2: Basic Single Parameter Support
+
+**Purpose**: Implement support for single parameter routes like `/users/{id}`
+**Risk Mitigation**: Start simple, validate approach works
+**Prerequisites**: 5.2.4.3.1 infrastructure must be complete
+
+**Tasks**:
+
+- [ ] Create failing test for `/users/{id}` parameter extraction
+- [ ] Verify parameter detection works with infrastructure
+- [ ] Test Path<String> and Path<u32> extractors
+- [ ] Validate both flattening and native nesting approaches
+- [ ] Make the failing test pass
+
+**Success Criteria**:
+
+- Single parameter routes work
+- Path<String> and Path<u32> extractors work
+- Tests pass for basic parameter extraction
+
+###### 5.2.4.3.3: Multiple Parameters Support
+
+**Purpose**: Support routes with multiple parameters
+**Risk Mitigation**: Build on single parameter success
+**Prerequisites**: 5.2.4.3.2 basic single parameter support must be complete
+
+**Tasks**:
+
+- [ ] Create test for `/posts/{post_id}/comments/{comment_id}`
+- [ ] Implement multiple parameter extraction
+- [ ] Support tuple extraction Path<(String, u32)>
+- [ ] Support struct extraction with named fields
+- [ ] Test various parameter combinations
+
+**Success Criteria**:
+
+- Multiple parameter routes work
+- Tuple and struct extraction work
+- Complex patterns tested and working
+
+###### 5.2.4.3.4: Integration with Both Approaches
+
+**Purpose**: Ensure parameters work with both flattening and native nesting
+**Risk Mitigation**: Maintain compatibility with existing implementation
+**Prerequisites**: 5.2.4.3.3 multiple parameters support must be complete
+
+**Tasks**:
+
+- [ ] Test parameters with flattening approach
+- [ ] Test parameters with native nesting approach
+- [ ] Update path normalization to preserve parameter patterns
+- [ ] Ensure nested scopes with parameters work
+- [ ] Add integration tests for both approaches
+
+**Success Criteria**:
+
+- Parameters work with both approaches
+- Nested scopes with parameters work
+- No regressions in existing functionality
+
+###### 5.2.4.3.5: Advanced Pattern Support (Optional)
+
+**Purpose**: Add regex constraints and validation
+**Risk Mitigation**: Optional enhancement after basic support works
+**Prerequisites**: 5.2.4.3.4 integration must be complete
+
+**Tasks**:
+
+- [ ] Add regex pattern support for parameters
+- [ ] Implement parameter constraints (e.g., `{id:[0-9]+}`)
+- [ ] Add parameter validation
+- [ ] Support optional parameters if needed
+- [ ] Test edge cases and invalid patterns
+
+**Success Criteria**:
+
+- Regex constraints work
+- Invalid parameters rejected appropriately
+- Edge cases handled gracefully
+
+###### 5.2.4.3.6: Comprehensive Testing & Documentation
+
+**Purpose**: Ensure robust implementation with good examples
+**Risk Mitigation**: Prevent future regressions
+**Prerequisites**: 5.2.4.3.5 advanced patterns (or 5.2.4.3.4 if skipping advanced) must be complete
+
+**Tasks**:
+
+- [ ] Create comprehensive parameter tests
+- [ ] Test all parameter types and patterns
+- [ ] Document parameter usage with examples
+- [ ] Update spec with implementation details
+- [ ] Performance testing if needed
+
+**Success Criteria**:
+
+- All parameter patterns tested
+- Documentation complete with examples
+- No performance regressions
+- Spec updated
+
+**Implementation Order & Dependencies**:
+
+```
+5.2.4.3.1 (RequestContext Infrastructure) ← Start here (PREREQUISITE)
+    ↓
+5.2.4.3.2 (Basic Single Parameter)
+    ↓
+5.2.4.3.3 (Multiple Parameters)
+    ↓
+5.2.4.3.4 (Integration with Both Approaches)
+    ↓
+5.2.4.3.5 (Advanced Patterns) ← Optional, can be deferred
+    ↓
+5.2.4.3.6 (Testing & Documentation)
+```
+
+**Technical Approach**:
+
+- **Parameter Format**: Use Actix's `{id}` format (already preserved in current tests)
+- **Storage Mechanism**: Use HttpRequest extensions to store extracted parameters
+- **Extraction**: Modify handler conversion to extract parameters from Actix and store them
+- **Path Extractor**: Update to read from stored parameters instead of just path segments
+- **Compatibility**: Ensure both flattening and native nesting preserve parameter patterns
+
+**Overall 5.2.4.3 Success Criteria**:
+
 - Routes like `/users/{id}` work
 - Multiple parameters supported (`/posts/{post_id}/comments/{comment_id}`)
-- Parameters accessible in handlers
-- Regex constraints work
+- Parameters accessible in handlers via Path<T> extractor
+- Regex constraints work (optional)
+- Compatible with both flattening and native nesting approaches
 
 ##### 5.2.4.4 State Management Infrastructure (Addresses state injection)
 
@@ -5098,7 +5629,7 @@ Each sub-step:
 
 - ✅ **5.2.4.1 COMPLETE** (5/5 tasks) - Basic route conversion working
 - ⏳ **5.2.4.2 PENDING** (0/5 tasks) - Nested scope support
-- ⏳ **5.2.4.3 PENDING** (0/5 tasks) - Route parameters
+- ⏳ **5.2.4.3 PENDING** (0/25 tasks) - Route parameters (5 sub-sections: 5.2.4.3.1-5.2.4.3.5)
 - ⏳ **5.2.4.4 PENDING** (0/5 tasks) - State management
 - ⏳ **5.2.4.5 PENDING** (0/5 tasks) - Middleware system
 - ⏳ **5.2.4.6 PENDING** (0/5 tasks) - Request body preservation
