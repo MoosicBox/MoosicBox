@@ -166,7 +166,7 @@ These items need further investigation or decision during implementation:
 
 **Goal:** Implement migration discovery from various sources with feature-gated modules
 
-**Status:** ~25% complete. Common interface and struct definitions complete, embedded discovery fully implemented. Directory and code discovery need complete reimplementation.
+**Status:** ~67% complete. Common interface and struct definitions complete, embedded discovery fully implemented, directory discovery fully implemented. Code discovery needs complete reimplementation with IntoSql integration.
 
 ### 3.1 Common Discovery Interface
 
@@ -178,23 +178,25 @@ These items need further investigation or decision during implementation:
   - [x] Minimal shared utilities (only if duplication emerges)
     - ✓ Started with no shared code as planned
 
-### 3.2 File-Based Discovery (feature = "directory")
+### 3.2 File-Based Discovery (feature = "directory") ✅ **COMPLETED**
 
-- [ ] `packages/switchy/schema/src/discovery/directory.rs` - Directory discovery 🔄 **CRITICAL**
+- [x] `packages/switchy/schema/src/discovery/directory.rs` - Directory discovery ✅ **CRITICAL**
   - [x] Feature-gated with `#[cfg(feature = "directory")]`
     - ✓ Module feature-gated in mod.rs (line 4)
-  - [x] `FileMigration` struct implementing `Migration` trait (id, up_sql: Option<Bytes>, down_sql: Option<Bytes>)
-    - ✓ Implemented with all required fields (lines 8-29)
+  - [x] `FileMigration` struct implementing `Migration` trait (id, up_sql: Option<String>, down_sql: Option<String>)
+    - ✓ Implemented with consistent optional fields (lines 6-11)
   - [x] `DirectoryMigrationSource` struct implementing `MigrationSource` trait
-    - ✓ Implemented with migrations_path field (lines 50-65)
+    - ✓ Implemented with migrations_path field (lines 52-64)
   - [x] Provide `DirectoryMigrationSource::from_path()` or similar explicit API
-    - ✓ from_path() constructor implemented (line 58)
-  - ~~[ ] Scan directories for migration files (directory name becomes migration ID)~~
-    - ~~✗ TODO placeholder at line 71~~ (Superseded by Phase 3.5)
-  - ~~[ ] Both up.sql and down.sql are optional~~
-    - ~~✗ TODO placeholder~~ (Superseded by Phase 3.5)
-  - ~~[ ] Empty or missing migration files skip execution but are marked as successful~~
-    - ~~✗ TODO placeholder~~ (Superseded by Phase 3.5)
+    - ✓ from_path() constructor implemented (line 56)
+  - [x] Scan directories for migration files (directory name becomes migration ID)
+    - ✓ Fully implemented in extract_migrations() method (lines 89-137)
+  - [x] Both up.sql and down.sql are optional with consistent handling
+    - ✓ Both use Option<String>, missing files → None, empty files → Some("")
+  - [x] Empty or missing migration files skip execution but are marked as successful
+    - ✓ Implemented with proper None/empty string handling in up()/down() methods
+  - [x] Directories with no SQL files are skipped entirely
+    - ✓ Implemented with early continue when both files are None (lines 118-120)
 
 ### 3.3 Embedded Discovery (feature = "embedded") ✅ **COMPLETED**
 
@@ -242,41 +244,51 @@ These items need further investigation or decision during implementation:
 
 **Goal:** Implement full directory-based migration discovery using async file operations
 
-**Status:** ❌ Not started
+**Status:** ✅ Complete
 
 #### 3.5.1 Update Dependencies
-- [ ] Add `moosicbox_fs` dependency to `Cargo.toml` ❌ **CRITICAL**
-  - [ ] Add under `[dependencies]` with `workspace = true`
-  - [ ] Make it optional, tied to `directory` feature
+- [x] Add `switchy_fs` dependency to `Cargo.toml` ✅ **CRITICAL**
+  - [x] Add under `[dependencies]` with `workspace = true` and features = ["async", "tokio"]
+  - [x] Make it optional, tied to `directory` feature
 
 #### 3.5.2 Implement Directory Scanning
-- [ ] Update `packages/switchy/schema/src/discovery/directory.rs` ❌ **CRITICAL**
-  - [ ] Import `moosicbox_fs::tokio::unsync::{read_to_string, read_dir_sorted}`
-  - [ ] Add `extract_migrations()` method to `DirectoryMigrationSource`
-  - [ ] Scan directory for subdirectories (each subdirectory = one migration)
-  - [ ] Use directory name as migration ID (as-is, no validation)
-  - [ ] For each migration directory:
-    - [ ] Check for `up.sql` file
-    - [ ] Check for `down.sql` file
-    - [ ] Read file contents as `String` (not `Bytes`)
-    - [ ] Handle missing files (both are optional)
-    - [ ] Handle empty files (treat as no-op)
-  - [ ] Return `BTreeMap<String, FileMigration>` for deterministic ordering
+- [x] Update `packages/switchy/schema/src/discovery/directory.rs` ✅ **CRITICAL**
+  - [x] Import `switchy_fs::unsync::{read_to_string, read_dir_sorted}`
+  - [x] Add `extract_migrations()` method to `DirectoryMigrationSource`
+  - [x] Scan directory for subdirectories (each subdirectory = one migration)
+  - [x] Use directory name as migration ID (as-is, no validation)
+  - [x] For each migration directory:
+    - [x] Check for `up.sql` file
+    - [x] Check for `down.sql` file
+    - [x] Read file contents as `String` (not `Bytes`)
+    - [x] Handle missing files (both are optional)
+    - [x] Handle empty files (treat as no-op)
+    - [x] Skip directories with no SQL files entirely
+  - [x] Return `BTreeMap<String, FileMigration>` for deterministic ordering
 
 #### 3.5.3 Update FileMigration Implementation
-- [ ] Keep `FileMigration` using `String` for SQL content (not `Bytes`) ❌ **CRITICAL**
-- [ ] Update `up()` method to handle empty strings as no-ops
-- [ ] Update `down()` method to handle `None` and empty strings as no-ops
+- [x] Update `FileMigration` to use `Option<String>` for both up_sql and down_sql (consistent handling) ✅ **CRITICAL**
+- [x] Update `up()` method to handle `None` and empty strings as no-ops
+- [x] Update `down()` method to handle `None` and empty strings as no-ops
 
 #### 3.5.4 Add Tests
-- [ ] Create test migration directories under `test_migrations_dir/` ❌ **IMPORTANT**
-- [ ] Test various scenarios:
-  - [ ] Migration with both up.sql and down.sql
-  - [ ] Migration with only up.sql
-  - [ ] Migration with empty up.sql
-  - [ ] Migration with no SQL files (should be skipped)
-- [ ] Test async file operations
-- [ ] Test alphabetical ordering by migration ID
+- [x] Create test migration directories under `test_migrations_dir/` ✅ **IMPORTANT**
+- [x] Test various scenarios:
+  - [x] Migration with both up.sql and down.sql
+  - [x] Migration with only up.sql
+  - [x] Migration with empty up.sql
+  - [x] Migration with no SQL files (should be skipped)
+  - [x] Migration with None SQL content handling
+- [x] Test async file operations
+- [x] Test alphabetical ordering by migration ID
+
+#### Migration File Handling Rules (Implemented):
+- Both `up.sql` and `down.sql` are optional (`Option<String>`)
+- Missing files → `None`
+- Empty files → `Some("")` (treated as no-op during execution)
+- Directories with no SQL files are skipped entirely (not included in migration list)
+- Directories with at least one SQL file create a migration
+- Consistent handling: both files use the same optional pattern
 
 ### 3.6 Implement Code Discovery with IntoSql Integration
 

@@ -19,17 +19,21 @@ switchy_database = { workspace = true }
 thiserror        = { workspace = true }
 
 # Optional dependencies for discovery features
-bytes       = { workspace = true }
+bytes = { workspace = true }
 include_dir = { workspace = true, optional = true }
+switchy_fs = { workspace = true, optional = true, features = [
+    "async",
+    "tokio",
+] }
 
 [features]
-default = ["embedded"]
+default = ["all-discovery"]
 
 fail-on-warnings = []
 
 all-discovery = ["code", "directory", "embedded"]
 code          = []
-directory     = []
+directory     = ["dep:switchy_fs"]
 embedded      = ["dep:include_dir"]
 test-utils    = []
 validation    = []

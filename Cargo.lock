@@ -14134,6 +14134,7 @@ dependencies = [
  "bytes",
  "include_dir",
  "switchy_database",
+ "switchy_fs",
  "thiserror 2.0.14",
  "tokio",
 ]
