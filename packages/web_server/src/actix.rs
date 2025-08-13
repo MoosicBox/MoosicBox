@@ -14,7 +14,7 @@ use actix_web::{
     error::{self},
 };
 
-use crate::Method;
+use crate::{Method, RequestContext};
 use moosicbox_web_server_core::WebServer;
 #[cfg(feature = "cors")]
 use moosicbox_web_server_cors::AllOrSome;
@@ -25,7 +25,7 @@ impl From<HttpRequest> for actix_web::HttpRequest {
     fn from(value: HttpRequest) -> Self {
         #[allow(clippy::match_wildcard_for_single_variants)]
         match value {
-            HttpRequest::Actix(x) => x,
+            HttpRequest::Actix { inner, .. } => inner,
             _ => panic!("Invalid HttpRequest"),
         }
     }
@@ -43,8 +43,11 @@ impl<'a> From<HttpRequestRef<'a>> for &'a actix_web::HttpRequest {
 }
 
 impl From<actix_web::HttpRequest> for HttpRequest {
-    fn from(value: actix_web::HttpRequest) -> Self {
-        Self::Actix(value)
+    fn from(inner: actix_web::HttpRequest) -> Self {
+        Self::Actix {
+            inner,
+            context: Arc::new(RequestContext::default()),
+        }
     }
 }
 
