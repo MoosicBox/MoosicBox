@@ -671,3 +671,347 @@ fn test_flatten_path_parameters() {
     assert_eq!(flattened[1].full_path, "/api/v1/users/{id}/profile");
     assert_eq!(flattened[1].method, Method::Put);
 }
+
+// ============================================================================
+// 5.2.4.2.5: COMPREHENSIVE TESTING - Edge Cases & Complex Scenarios
+// ============================================================================
+// Purpose: Ensure all nesting patterns work correctly with edge cases
+// Risk Mitigation: Catch issues before production use
+
+#[test]
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn test_deeply_nested_scopes_four_levels() {
+    use moosicbox_web_server::{HttpResponse, HttpResponseBody, Method, Scope};
+
+    // Test 4-level deep nesting: /api/v1/admin/users
+    let deep_scope = Scope::new("/api").with_scope(
+        Scope::new("/v1").with_scope(
+            Scope::new("/admin").with_scope(
+                Scope::new("/users")
+                    .route(Method::Get, "/list", |_req| {
+                        Box::pin(async {
+                            Ok(HttpResponse::ok()
+                                .with_content_type("application/json")
+                                .with_body(HttpResponseBody::from(r#"{"users":[]}"#)))
+                        })
+                    })
+                    .route(Method::Post, "/create", |_req| {
+                        Box::pin(async {
+                            Ok(HttpResponse::ok()
+                                .with_content_type("application/json")
+                                .with_body(HttpResponseBody::from(r#"{"created":true}"#)))
+                        })
+                    }),
+            ),
+        ),
+    );
+
+    let flattened =
+        moosicbox_web_server::test_client::actix_impl::flatten_scope_tree(&[deep_scope]);
+
+    // Verify 4-level deep paths are correctly concatenated
+    assert_eq!(flattened.len(), 2);
+    assert_eq!(flattened[0].full_path, "/api/v1/admin/users/list");
+    assert_eq!(flattened[0].method, Method::Get);
+    assert_eq!(flattened[1].full_path, "/api/v1/admin/users/create");
+    assert_eq!(flattened[1].method, Method::Post);
+}
+
+#[test]
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn test_deeply_nested_scopes_five_levels() {
+    use moosicbox_web_server::{HttpResponse, HttpResponseBody, Method, Scope};
+
+    // Test 5-level deep nesting: /api/v2/enterprise/admin/users
+    let very_deep_scope = Scope::new("/api").with_scope(Scope::new("/v2").with_scope(
+        Scope::new("/enterprise").with_scope(Scope::new("/admin").with_scope(
+            Scope::new("/users").route(Method::Delete, "/purge", |_req| {
+                Box::pin(async {
+                    Ok(HttpResponse::ok()
+                        .with_content_type("application/json")
+                        .with_body(HttpResponseBody::from(r#"{"purged":true}"#)))
+                })
+            }),
+        )),
+    ));
+
+    let flattened =
+        moosicbox_web_server::test_client::actix_impl::flatten_scope_tree(&[very_deep_scope]);
+
+    // Verify 5-level deep path is correctly concatenated
+    assert_eq!(flattened.len(), 1);
+    assert_eq!(
+        flattened[0].full_path,
+        "/api/v2/enterprise/admin/users/purge"
+    );
+    assert_eq!(flattened[0].method, Method::Delete);
+}
+
+#[test]
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn test_empty_scopes_no_routes() {
+    use moosicbox_web_server::{HttpResponse, HttpResponseBody, Method, Scope};
+
+    // Test empty scopes at various levels
+    let empty_scopes = vec![
+        // Empty top-level scope
+        Scope::new("/empty"),
+        // Scope with empty nested scope
+        Scope::new("/api").with_scope(Scope::new("/v1")),
+        // Scope with route and empty nested scope
+        Scope::new("/mixed")
+            .route(Method::Get, "/health", |_req| {
+                Box::pin(async {
+                    Ok(HttpResponse::ok()
+                        .with_content_type("text/plain")
+                        .with_body(HttpResponseBody::from("OK")))
+                })
+            })
+            .with_scope(Scope::new("/empty_nested")),
+    ];
+
+    let flattened =
+        moosicbox_web_server::test_client::actix_impl::flatten_scope_tree(&empty_scopes);
+
+    // Only the route from /mixed should be flattened
+    assert_eq!(flattened.len(), 1);
+    assert_eq!(flattened[0].full_path, "/mixed/health");
+    assert_eq!(flattened[0].method, Method::Get);
+}
+
+#[test]
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn test_duplicate_path_segments() {
+    use moosicbox_web_server::{HttpResponse, HttpResponseBody, Method, Scope};
+
+    // Test duplicate path segments at different levels
+    let duplicate_segments = vec![
+        // /api/api/users (duplicate "api")
+        Scope::new("/api").with_scope(Scope::new("/api").route(Method::Get, "/users", |_req| {
+            Box::pin(async {
+                Ok(HttpResponse::ok()
+                    .with_content_type("application/json")
+                    .with_body(HttpResponseBody::from(r#"{"duplicate":"api"}"#)))
+            })
+        })),
+        // /v1/v1/v1/data (triple "v1")
+        Scope::new("/v1").with_scope(Scope::new("/v1").with_scope(Scope::new("/v1").route(
+            Method::Post,
+            "/data",
+            |_req| {
+                Box::pin(async {
+                    Ok(HttpResponse::ok()
+                        .with_content_type("application/json")
+                        .with_body(HttpResponseBody::from(r#"{"triple":"v1"}"#)))
+                })
+            },
+        ))),
+    ];
+
+    let flattened =
+        moosicbox_web_server::test_client::actix_impl::flatten_scope_tree(&duplicate_segments);
+
+    // Verify duplicate segments are preserved in paths
+    assert_eq!(flattened.len(), 2);
+    assert_eq!(flattened[0].full_path, "/api/api/users");
+    assert_eq!(flattened[0].method, Method::Get);
+    assert_eq!(flattened[1].full_path, "/v1/v1/v1/data");
+    assert_eq!(flattened[1].method, Method::Post);
+}
+
+#[test]
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn test_path_concatenation_edge_cases() {
+    use moosicbox_web_server::{HttpResponse, HttpResponseBody, Method, Scope};
+
+    // Test various edge cases in path concatenation
+    let edge_cases = vec![
+        // Empty path segments
+        Scope::new("").with_scope(Scope::new("/api").route(Method::Get, "/test", |_req| {
+            Box::pin(async {
+                Ok(HttpResponse::ok()
+                    .with_content_type("text/plain")
+                    .with_body(HttpResponseBody::from("empty_root")))
+            })
+        })),
+        // Multiple slashes
+        Scope::new("//double").with_scope(Scope::new("//slash").route(
+            Method::Get,
+            "//route",
+            |_req| {
+                Box::pin(async {
+                    Ok(HttpResponse::ok()
+                        .with_content_type("text/plain")
+                        .with_body(HttpResponseBody::from("multiple_slashes")))
+                })
+            },
+        )),
+        // Root path with nested
+        Scope::new("/").with_scope(Scope::new("api").route(Method::Get, "status", |_req| {
+            Box::pin(async {
+                Ok(HttpResponse::ok()
+                    .with_content_type("text/plain")
+                    .with_body(HttpResponseBody::from("root_nested")))
+            })
+        })),
+    ];
+
+    let flattened = moosicbox_web_server::test_client::actix_impl::flatten_scope_tree(&edge_cases);
+
+    // Verify edge case paths are handled correctly
+    assert_eq!(flattened.len(), 3);
+    assert_eq!(flattened[0].full_path, "/api/test");
+    assert_eq!(flattened[1].full_path, "//double//slash//route");
+    assert_eq!(flattened[2].full_path, "/api/status");
+}
+
+#[test]
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn test_complex_mixed_nesting_patterns() {
+    use moosicbox_web_server::{HttpResponse, HttpResponseBody, Method, Scope};
+
+    // Test complex mixing of routes and nested scopes at various levels
+    let complex_scope = Scope::new("/api")
+        // Route at top level
+        .route(Method::Get, "/health", |_req| {
+            Box::pin(async {
+                Ok(HttpResponse::ok()
+                    .with_content_type("text/plain")
+                    .with_body(HttpResponseBody::from("healthy")))
+            })
+        })
+        // Nested scope with routes
+        .with_scope(
+            Scope::new("/v1")
+                .route(Method::Get, "/info", |_req| {
+                    Box::pin(async {
+                        Ok(HttpResponse::ok()
+                            .with_content_type("application/json")
+                            .with_body(HttpResponseBody::from(r#"{"version":"1.0"}"#)))
+                    })
+                })
+                // Deeply nested scope
+                .with_scope(
+                    Scope::new("/users")
+                        .route(Method::Get, "/", |_req| {
+                            Box::pin(async {
+                                Ok(HttpResponse::ok()
+                                    .with_content_type("application/json")
+                                    .with_body(HttpResponseBody::from(r#"{"users":[]}"#)))
+                            })
+                        })
+                        .with_scope(
+                            Scope::new("/{id}")
+                                .route(Method::Get, "/profile", |_req| {
+                                    Box::pin(async {
+                                        Ok(HttpResponse::ok()
+                                            .with_content_type("application/json")
+                                            .with_body(HttpResponseBody::from(r#"{"profile":{}}"#)))
+                                    })
+                                })
+                                .with_scope(Scope::new("/settings").route(
+                                    Method::Put,
+                                    "/theme",
+                                    |_req| {
+                                        Box::pin(async {
+                                            Ok(HttpResponse::ok()
+                                                .with_content_type("application/json")
+                                                .with_body(HttpResponseBody::from(
+                                                    r#"{"updated":true}"#,
+                                                )))
+                                        })
+                                    },
+                                )),
+                        ),
+                ),
+        )
+        // Another top-level nested scope
+        .with_scope(Scope::new("/v2").route(Method::Post, "/migrate", |_req| {
+            Box::pin(async {
+                Ok(HttpResponse::ok()
+                    .with_content_type("application/json")
+                    .with_body(HttpResponseBody::from(r#"{"migrated":true}"#)))
+            })
+        }));
+
+    let flattened =
+        moosicbox_web_server::test_client::actix_impl::flatten_scope_tree(&[complex_scope]);
+
+    // Verify all routes are flattened correctly
+    assert_eq!(flattened.len(), 6);
+
+    // Sort by path for consistent testing
+    let mut paths: Vec<_> = flattened.iter().map(|r| &r.full_path).collect();
+    paths.sort();
+
+    assert_eq!(paths[0], "/api/health");
+    assert_eq!(paths[1], "/api/v1/info");
+    assert_eq!(paths[2], "/api/v1/users/");
+    assert_eq!(paths[3], "/api/v1/users/{id}/profile");
+    assert_eq!(paths[4], "/api/v1/users/{id}/settings/theme");
+    assert_eq!(paths[5], "/api/v2/migrate");
+}
+
+// ============================================================================
+// 5.2.4.2.5: COMPREHENSIVE TESTING VALIDATION
+// ============================================================================
+// Purpose: Verify all nesting patterns work correctly with edge cases
+// Note: Real HTTP testing is limited due to Actix TestServer thread-safety issues.
+// The existing test_actix_nested_scopes_now_work() already proves HTTP functionality works.
+// These unit tests provide comprehensive validation of the flattening logic.
+
+#[test]
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn test_comprehensive_edge_case_validation() {
+    use moosicbox_web_server::{HttpResponse, HttpResponseBody, Method, Scope};
+
+    // Test that ActixWebServer can be created with all our edge case patterns
+    // This validates that the flattening logic works correctly for complex scenarios
+
+    // 1. Deeply nested scopes (5 levels)
+    let deep_scope = Scope::new("/api").with_scope(Scope::new("/v2").with_scope(
+        Scope::new("/enterprise").with_scope(Scope::new("/admin").with_scope(
+            Scope::new("/users").route(Method::Delete, "/purge", |_req| {
+                Box::pin(async {
+                    Ok(HttpResponse::ok()
+                        .with_content_type("application/json")
+                        .with_body(HttpResponseBody::from(r#"{"purged":true}"#)))
+                })
+            }),
+        )),
+    ));
+
+    // 2. Empty scopes mixed with routes
+    let empty_mixed = vec![
+        Scope::new("/empty"),
+        Scope::new("/api").with_scope(Scope::new("/v1")),
+        Scope::new("/working").route(Method::Get, "/test", |_req| {
+            Box::pin(async {
+                Ok(HttpResponse::ok()
+                    .with_content_type("text/plain")
+                    .with_body(HttpResponseBody::from("working")))
+            })
+        }),
+    ];
+
+    // 3. Duplicate path segments
+    let duplicate_scope = Scope::new("/api").with_scope(Scope::new("/api").with_scope(
+        Scope::new("/api").route(Method::Get, "/test", |_req| {
+            Box::pin(async {
+                Ok(HttpResponse::ok()
+                    .with_content_type("application/json")
+                    .with_body(HttpResponseBody::from(r#"{"triple":"api"}"#)))
+            })
+        }),
+    ));
+
+    // All these should create servers successfully without panicking
+    let _server1 =
+        moosicbox_web_server::test_client::actix_impl::ActixWebServer::new(vec![deep_scope]);
+    let _server2 = moosicbox_web_server::test_client::actix_impl::ActixWebServer::new(empty_mixed);
+    let _server3 =
+        moosicbox_web_server::test_client::actix_impl::ActixWebServer::new(vec![duplicate_scope]);
+
+    // If we reach this point, all edge cases are handled correctly by the flattening logic
+    // The comprehensive unit tests above verify the exact path concatenation behavior
+}

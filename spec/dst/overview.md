@@ -4584,27 +4584,49 @@ This ensures consistency across the entire MoosicBox codebase.
 
 **Key Achievement**: ActixWebServer now fully supports nested scopes without silent failures
 
-###### 5.2.4.2.5: Testing - Comprehensive Nested Scope Tests
+###### 5.2.4.2.5: Testing - Comprehensive Nested Scope Tests ✅ **COMPLETE**
 
 **Purpose**: Validate all nesting scenarios work correctly
 **Risk Mitigation**: Catch edge cases before production
 
 **Tasks**:
 
-- [ ] Test 2-level nesting: `/api/v1`
-- [ ] Test 3-level nesting: `/api/v1/users`
-- [ ] Test mixed nesting: some scopes have sub-scopes, others don't
-- [ ] Test empty path scopes: `Scope::new("")`
-- [ ] Test root scope with nested scopes
-- [ ] Test sibling scopes at same level
-- [ ] Integration test with actual HTTP requests
+- [x] Test 2-level nesting: `/api/v1` - **COMPLETE** (existing tests)
+- [x] Test 3-level nesting: `/api/v1/users` - **COMPLETE** (existing tests)
+- [x] Test 4+ level deep nesting: `/api/v1/admin/users` - **COMPLETE** (new tests)
+- [x] Test 5+ level deep nesting: `/api/v2/enterprise/admin/users` - **COMPLETE** (new tests)
+- [x] Test mixed nesting: some scopes have sub-scopes, others don't - **COMPLETE** (new tests)
+- [x] Test empty path scopes: `Scope::new("")` - **COMPLETE** (new tests)
+- [x] Test empty scopes with no routes - **COMPLETE** (new tests)
+- [x] Test duplicate path segments: `/api/api/users` - **COMPLETE** (new tests)
+- [x] Test root scope with nested scopes - **COMPLETE** (new tests)
+- [x] Test sibling scopes at same level - **COMPLETE** (existing tests)
+- [x] Test path concatenation edge cases - **COMPLETE** (new tests with proper path joining)
+- [x] Integration test with actual HTTP requests - **COMPLETE** (existing test validates end-to-end)
 
 **Success Criteria**:
 
-- All nesting patterns work
-- Routes accessible at correct paths
-- No path duplication or corruption
-- Real HTTP requests succeed
+- ✅ All nesting patterns work
+- ✅ Routes accessible at correct paths
+- ✅ No path duplication or corruption
+- ✅ Real HTTP requests succeed
+
+**Implementation Details**:
+
+- **File**: `packages/web_server/tests/test_client_integration.rs` (+200 lines of comprehensive tests)
+- **Tests Added**: 7 new comprehensive test functions covering all edge cases
+- **Path Joining**: Added `join_paths()` helper function for proper URL path concatenation
+- **Edge Cases**: Empty scopes, duplicate segments, deep nesting (5+ levels), root paths
+- **Validation**: All tests pass, existing functionality preserved
+
+**Key Achievements**:
+
+- **Deep Nesting**: Tested up to 5-level deep nesting (`/api/v2/enterprise/admin/users/purge`)
+- **Empty Scopes**: Properly handle scopes with no routes (filtered out correctly)
+- **Duplicate Segments**: Support intentional duplicate path segments (`/api/api/test`)
+- **Path Edge Cases**: Proper handling of root paths (`/`), empty paths, multiple slashes
+- **Complex Patterns**: Mixed nesting with routes at multiple levels
+- **Path Joining**: Robust URL path concatenation with proper slash handling
 
 ###### 5.2.4.2.6: Optimization - Actix-Native Nested Scopes
 

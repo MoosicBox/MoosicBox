@@ -417,32 +417,49 @@ pub fn flatten_scope_tree(scopes: &[crate::Scope]) -> Vec<FlattenedRoute> {
 /// This helper function mirrors the exact logic of `SimulatorWebServer`'s
 /// `process_scope_recursive` method (lines 491-521 in simulator.rs).
 ///
+/// Helper function to properly join URL paths
+/// Handles edge cases like empty paths, root paths, and slash normalization
+///
 /// # Arguments
 /// * `scope` - The scope to process
 /// * `parent_prefix` - The accumulated path prefix from parent scopes
 /// * `results` - Mutable vector to collect flattened routes
 #[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn join_paths(left: &str, right: &str) -> String {
+    match (left.is_empty(), right.is_empty()) {
+        (true, true) => String::new(),
+        (true, false) => right.to_string(),
+        (false, true) => left.to_string(),
+        (false, false) => {
+            // Handle special case where left is just "/"
+            if left == "/" {
+                if right.starts_with('/') {
+                    right.to_string()
+                } else {
+                    format!("/{right}")
+                }
+            } else if left.ends_with('/') || right.starts_with('/') {
+                // One of them already has a slash, just concatenate
+                format!("{left}{right}")
+            } else {
+                // Neither has a slash, add one
+                format!("{left}/{right}")
+            }
+        }
+    }
+}
+
 fn flatten_scope_recursive(
     scope: &crate::Scope,
     parent_prefix: &str,
     results: &mut Vec<FlattenedRoute>,
 ) {
-    // Build the full prefix for this scope
-    // This mirrors SimulatorWebServer logic exactly (lines 493-497)
-    let full_prefix = if parent_prefix.is_empty() {
-        scope.path.clone()
-    } else {
-        format!("{}{}", parent_prefix, scope.path)
-    };
+    // Build the full prefix for this scope using proper path joining
+    let full_prefix = join_paths(parent_prefix, &scope.path);
 
     // Process all routes in this scope with the full prefix
-    // This mirrors SimulatorWebServer logic exactly (lines 500-516)
     for route in &scope.routes {
-        let full_path = if full_prefix.is_empty() {
-            route.path.clone()
-        } else {
-            format!("{}{}", full_prefix, route.path)
-        };
+        let full_path = join_paths(&full_prefix, &route.path);
 
         // Create flattened route with Arc-shared handler
         // Using Arc::clone to share the handler efficiently
