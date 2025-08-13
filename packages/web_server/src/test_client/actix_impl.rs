@@ -37,21 +37,7 @@ use std::sync::{Arc, Mutex};
 #[cfg(all(feature = "actix", not(feature = "simulator")))]
 use ::actix_test::{TestServer, start};
 
-/// Helper function to detect if a scope has nested scopes (recursively)
-///
-/// This function is used in 5.2.4.2.1 to detect when nested scopes are present
-/// so we can warn users that they will be ignored.
-///
-/// # Arguments
-/// * `scope` - The scope to check for nesting
-///
-/// # Returns
-/// * `true` if the scope or any of its nested scopes contain further nesting
-/// * `false` if this is a flat scope structure
-#[cfg(all(feature = "actix", not(feature = "simulator")))]
-fn has_nested_scopes(scope: &crate::Scope) -> bool {
-    !scope.scopes.is_empty() || scope.scopes.iter().any(has_nested_scopes)
-}
+// Note: has_nested_scopes function removed in 5.2.4.2.4 since nested scopes are now supported
 
 /// Flattened route representation for Actix conversion
 ///
@@ -63,7 +49,7 @@ fn has_nested_scopes(scope: &crate::Scope) -> bool {
 ///
 /// Since Actix Web doesn't handle nested scopes the same way as our Scope structure,
 /// we need to flatten the tree into individual routes with full paths.
-/// This approach mirrors how SimulatorWebServer processes nested scopes.
+/// This approach mirrors how `SimulatorWebServer` processes nested scopes.
 ///
 /// # Examples
 ///
@@ -89,7 +75,7 @@ pub struct FlattenedRoute {
 
     /// The route handler (shared via Arc for efficiency)
     ///
-    /// Using Arc allows multiple FlattenedRoute instances to share the same handler
+    /// Using Arc allows multiple `FlattenedRoute` instances to share the same handler
     /// without cloning the expensive handler closure. This is especially important
     /// when the same handler is used in multiple routes or when handlers capture
     /// large amounts of state.
@@ -132,7 +118,7 @@ impl std::fmt::Debug for FlattenedRoute {
 ///
 /// This function recursively processes a scope tree and converts it into a flat
 /// list of routes where each route has its complete path (including all parent
-/// scope prefixes). This mirrors the behavior of SimulatorWebServer's
+/// scope prefixes). This mirrors the behavior of `SimulatorWebServer`'s
 /// `process_scope_recursive` method.
 ///
 /// # Design Principles
@@ -144,7 +130,7 @@ impl std::fmt::Debug for FlattenedRoute {
 ///
 /// # Path Concatenation Rules
 ///
-/// The path concatenation follows the exact same logic as SimulatorWebServer's
+/// The path concatenation follows the exact same logic as `SimulatorWebServer`'s
 /// `process_scope_recursive` method (lines 493-505 in simulator.rs):
 ///
 /// ## Scope Prefix Building
@@ -228,7 +214,7 @@ impl std::fmt::Debug for FlattenedRoute {
 /// 2. **For each scope in `flatten_scope_recursive(scope, parent_prefix)`**:
 ///    - Build full prefix: `parent_prefix + scope.path`
 ///    - For each route in scope.routes:
-///      - Create FlattenedRoute with `full_prefix + route.path`
+///      - Create `FlattenedRoute` with `full_prefix + route.path`
 ///      - Add to results vector
 ///    - For each nested scope in scope.scopes:
 ///      - Recursively call `flatten_scope_recursive(nested_scope, full_prefix)`
@@ -238,7 +224,7 @@ impl std::fmt::Debug for FlattenedRoute {
 ///
 /// # Edge Cases Handled
 ///
-/// Based on analysis of existing tests and SimulatorWebServer behavior:
+/// Based on analysis of existing tests and `SimulatorWebServer` behavior:
 ///
 /// ## Empty Paths
 /// ```ignore
@@ -414,6 +400,7 @@ impl std::fmt::Debug for FlattenedRoute {
 ///
 /// # Implementation (5.2.4.2.3): Recursive scope flattening
 #[cfg(all(feature = "actix", not(feature = "simulator")))]
+#[must_use]
 pub fn flatten_scope_tree(scopes: &[crate::Scope]) -> Vec<FlattenedRoute> {
     let mut flattened_routes = Vec::new();
 
@@ -427,7 +414,7 @@ pub fn flatten_scope_tree(scopes: &[crate::Scope]) -> Vec<FlattenedRoute> {
 
 /// Recursively flatten a single scope and its nested scopes
 ///
-/// This helper function mirrors the exact logic of SimulatorWebServer's
+/// This helper function mirrors the exact logic of `SimulatorWebServer`'s
 /// `process_scope_recursive` method (lines 491-521 in simulator.rs).
 ///
 /// # Arguments
@@ -506,124 +493,95 @@ impl ActixWebServer {
     /// * If the test server fails to start
     #[must_use]
     pub fn new(scopes: Vec<crate::Scope>) -> Self {
-        // 🚨 TEMPORARY SAFETY CHECK (5.2.4.2.1): Panic if nested scopes detected
-        // This prevents silent failures by making the limitation explicit.
-        // TODO(5.2.4.2.4): Remove this panic once nested scope support is implemented
-        for scope in &scopes {
-            if has_nested_scopes(scope) {
-                panic!(
-                    "🚨 NESTED SCOPES NOT SUPPORTED: Scope '{}' contains nested scopes which are ignored by ActixWebServer. \
-                    This would cause silent failures where nested routes return 404. \
-                    Use SimulatorWebServer for nested scope support, or wait for 5.2.4.2+ implementation. \
-                    See spec/dst/overview.md Section 5.2.4.2 for details.",
-                    scope.path
-                );
-            }
-        }
-        // 5.2.4.1: Convert Scope/Route to Actix configuration
+        // ✅ NESTED SCOPES SUPPORTED (5.2.4.2.4): Using flatten_scope_tree() for full support
+        // Nested scopes are now properly handled by flattening the scope tree into individual routes
+        // with complete paths before registering with Actix Web.
+        // 5.2.4.2.4: Convert flattened routes to Actix configuration
         let app = move || {
             let mut app = actix_web::App::new();
 
-            for scope in &scopes {
-                // ⚠️  WARNING (5.2.4.2.1): NESTED SCOPES ARE IGNORED!
-                // This loop only processes the top-level scopes and their direct routes.
-                // Any nested scopes (scope.scopes) are completely ignored, creating silent failures.
-                //
-                // Example: If you have /api -> /v1 -> /users, only /api routes will work.
-                // The /api/v1/users route will return 404 even though it's defined.
-                //
-                // TODO(5.2.4.2.2): Implement recursive scope processing to handle nested scopes
+            // Flatten the scope tree into individual routes with complete paths
+            let flattened_routes = flatten_scope_tree(&scopes);
 
-                let mut actix_scope = actix_web::web::scope(&scope.path);
+            // Register each flattened route directly with the app
+            for flattened_route in flattened_routes {
+                let path = flattened_route.full_path;
+                let handler = flattened_route.handler;
+                let method = flattened_route.method;
 
-                for route in &scope.routes {
-                    let path = route.path.clone();
-                    let handler = route.handler.clone();
-                    let method = route.method;
+                // Convert our handler to Actix handler with proper request/response mapping
+                let actix_handler = move |req: actix_web::HttpRequest| {
+                    let handler = handler.clone();
+                    async move {
+                        // Convert actix_web::HttpRequest to our HttpRequest
+                        let our_request = crate::HttpRequest::from(req);
 
-                    // Convert our handler to Actix handler with proper request/response mapping
-                    let actix_handler = move |req: actix_web::HttpRequest| {
-                        let handler = handler.clone();
-                        async move {
-                            // Convert actix_web::HttpRequest to our HttpRequest
-                            let our_request = crate::HttpRequest::from(req);
+                        // Call our handler
+                        let result = handler(our_request).await;
 
-                            // Call our handler
-                            let result = handler(our_request).await;
+                        // Convert our HttpResponse to actix_web::HttpResponse
+                        result.map(|resp| {
+                            let mut actix_resp = actix_web::HttpResponseBuilder::new(
+                                actix_web::http::StatusCode::from_u16(resp.status_code.into())
+                                    .unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
+                            );
 
-                            // Convert our HttpResponse to actix_web::HttpResponse
-                            result.map(|resp| {
-                                let mut actix_resp = actix_web::HttpResponseBuilder::new(
-                                    actix_web::http::StatusCode::from_u16(resp.status_code.into())
-                                        .unwrap_or(
-                                            actix_web::http::StatusCode::INTERNAL_SERVER_ERROR,
-                                        ),
-                                );
+                            // Insert all headers from the BTreeMap
+                            for (name, value) in resp.headers {
+                                actix_resp.insert_header((name, value));
+                            }
 
-                                // Insert all headers from the BTreeMap
-                                for (name, value) in resp.headers {
-                                    actix_resp.insert_header((name, value));
+                            // Keep backwards compatibility with location field
+                            if let Some(location) = resp.location {
+                                actix_resp.insert_header((actix_http::header::LOCATION, location));
+                            }
+
+                            // Handle response body
+                            match resp.body {
+                                Some(crate::HttpResponseBody::Bytes(bytes)) => {
+                                    actix_resp.body(bytes)
                                 }
+                                None => actix_resp.finish(),
+                            }
+                        })
+                    }
+                };
 
-                                // Keep backwards compatibility with location field
-                                if let Some(location) = resp.location {
-                                    actix_resp
-                                        .insert_header((actix_http::header::LOCATION, location));
-                                }
-
-                                // Handle response body
-                                match resp.body {
-                                    Some(crate::HttpResponseBody::Bytes(bytes)) => {
-                                        actix_resp.body(bytes)
-                                    }
-                                    None => actix_resp.finish(),
-                                }
-                            })
-                        }
-                    };
-
-                    // Add route to scope using the appropriate HTTP method
-                    actix_scope = match method {
-                        crate::Method::Get => {
-                            actix_scope.route(&path, actix_web::web::get().to(actix_handler))
-                        }
-                        crate::Method::Post => {
-                            actix_scope.route(&path, actix_web::web::post().to(actix_handler))
-                        }
-                        crate::Method::Put => {
-                            actix_scope.route(&path, actix_web::web::put().to(actix_handler))
-                        }
-                        crate::Method::Delete => {
-                            actix_scope.route(&path, actix_web::web::delete().to(actix_handler))
-                        }
-                        crate::Method::Patch => {
-                            actix_scope.route(&path, actix_web::web::patch().to(actix_handler))
-                        }
-                        crate::Method::Head => {
-                            actix_scope.route(&path, actix_web::web::head().to(actix_handler))
-                        }
-                        crate::Method::Options => actix_scope.route(
-                            &path,
-                            actix_web::web::route()
-                                .method(actix_web::http::Method::OPTIONS)
-                                .to(actix_handler),
-                        ),
-                        crate::Method::Trace => actix_scope.route(
-                            &path,
-                            actix_web::web::route()
-                                .method(actix_web::http::Method::TRACE)
-                                .to(actix_handler),
-                        ),
-                        crate::Method::Connect => actix_scope.route(
-                            &path,
-                            actix_web::web::route()
-                                .method(actix_web::http::Method::CONNECT)
-                                .to(actix_handler),
-                        ),
-                    };
-                }
-
-                app = app.service(actix_scope);
+                // Add route directly to app using the appropriate HTTP method
+                app = match method {
+                    crate::Method::Get => app.route(&path, actix_web::web::get().to(actix_handler)),
+                    crate::Method::Post => {
+                        app.route(&path, actix_web::web::post().to(actix_handler))
+                    }
+                    crate::Method::Put => app.route(&path, actix_web::web::put().to(actix_handler)),
+                    crate::Method::Delete => {
+                        app.route(&path, actix_web::web::delete().to(actix_handler))
+                    }
+                    crate::Method::Patch => {
+                        app.route(&path, actix_web::web::patch().to(actix_handler))
+                    }
+                    crate::Method::Head => {
+                        app.route(&path, actix_web::web::head().to(actix_handler))
+                    }
+                    crate::Method::Options => app.route(
+                        &path,
+                        actix_web::web::route()
+                            .method(actix_web::http::Method::OPTIONS)
+                            .to(actix_handler),
+                    ),
+                    crate::Method::Trace => app.route(
+                        &path,
+                        actix_web::web::route()
+                            .method(actix_web::http::Method::TRACE)
+                            .to(actix_handler),
+                    ),
+                    crate::Method::Connect => app.route(
+                        &path,
+                        actix_web::web::route()
+                            .method(actix_web::http::Method::CONNECT)
+                            .to(actix_handler),
+                    ),
+                };
             }
 
             app
