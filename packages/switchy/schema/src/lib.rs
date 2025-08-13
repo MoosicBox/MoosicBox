@@ -18,19 +18,22 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum MigrationError {
-    #[error("Database error: {0}")]
+    #[error(transparent)]
     Database(#[from] DatabaseError),
 
-    #[error("Migration discovery error: {0}")]
+    #[error("IO error")]
+    Io(#[from] std::io::Error),
+
+    #[error("Migration discovery failed: {0}")]
     Discovery(String),
 
-    #[error("Migration validation error: {0}")]
+    #[error("Migration validation failed: {0}")]
     Validation(String),
 
     #[error("Migration dependency error: {0}")]
     Dependency(String),
 
-    #[error("Migration execution error: {0}")]
+    #[error("Migration execution failed: {0}")]
     Execution(String),
 }
 
