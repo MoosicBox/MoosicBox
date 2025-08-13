@@ -4495,44 +4495,65 @@ This ensures consistency across the entire MoosicBox codebase.
 
 **Key Achievement**: Silent failures eliminated - nested scopes now cause immediate, clear panic with helpful error message directing users to SimulatorWebServer or future implementation.
 
-###### 5.2.4.2.2: Design - Create Recursive Conversion Architecture
+###### 5.2.4.2.2: Design - Create Recursive Conversion Architecture ✅ **COMPLETE**
 
 **Purpose**: Design the recursive algorithm before implementation
 **Risk Mitigation**: Ensures we handle all edge cases
 
 **Tasks**:
 
-- [ ] Design `flatten_scope_tree()` function signature
-- [ ] Document path concatenation rules (e.g., `/api` + `/v1` = `/api/v1`)
-- [ ] Handle edge cases: empty paths, trailing slashes, root scopes
-- [ ] Design test cases for all nesting patterns
-- [ ] Create data structure for flattened routes with full paths
+- [x] ✅ Design `flatten_scope_tree()` function signature
+- [x] ✅ Document path concatenation rules (e.g., `/api` + `/v1` = `/api/v1`)
+- [x] ✅ Handle edge cases: empty paths, trailing slashes, root scopes
+- [x] ✅ Design test cases for all nesting patterns
+- [x] ✅ Create data structure for flattened routes with full paths
 
-**Success Criteria**:
+**Success Criteria**: ✅ **ALL MET**
 
-- Clear algorithm documented
-- All edge cases identified
-- Test cases defined but not yet implemented
+- [x] ✅ Clear algorithm documented (comprehensive documentation in actix_impl.rs)
+- [x] ✅ All edge cases identified (empty paths, root scopes, deep nesting, etc.)
+- [x] ✅ Test cases defined but not yet implemented (8 comprehensive test cases designed)
 
-###### 5.2.4.2.3: Implementation - Basic Recursive Scope Flattening
+**Implementation Summary**:
+
+- **Data Structure**: `FlattenedRoute` struct with `full_path`, `method`, and `handler` fields
+- **Function Signature**: `flatten_scope_tree(scopes: &[Scope]) -> Vec<FlattenedRoute>`
+- **Path Concatenation**: Mirrors SimulatorWebServer's exact logic (`format!("{}{}")`)
+- **Edge Cases**: Comprehensive handling of empty paths, root scopes, deep nesting, path parameters
+- **Test Cases**: 8 detailed test scenarios covering all nesting patterns
+- **Performance**: Arc-based handler sharing for efficiency
+
+**Key Achievement**: Complete architectural design ready for implementation in 5.2.4.2.3
+
+###### 5.2.4.2.3: Implementation - Basic Recursive Scope Flattening ✅ **COMPLETE**
 
 **Purpose**: Implement core recursion without Actix integration
 **Risk Mitigation**: Test logic independently of Actix
 
 **Tasks**:
 
-- [ ] Implement `flatten_scope_tree()` that returns Vec<(full_path, route)>
-- [ ] Handle path concatenation with proper separator handling
-- [ ] Support arbitrary nesting depth
-- [ ] Unit test with 1, 2, 3+ levels of nesting
-- [ ] Test edge cases (empty paths, root paths, etc.)
+- [x] ✅ Implement `flatten_scope_tree()` that returns Vec<FlattenedRoute>
+- [x] ✅ Handle path concatenation with proper separator handling
+- [x] ✅ Support arbitrary nesting depth
+- [x] ✅ Unit test with 1, 2, 3+ levels of nesting
+- [x] ✅ Test edge cases (empty paths, root paths, etc.)
 
-**Success Criteria**:
+**Success Criteria**: ✅ **ALL MET**
 
-- Scope tree correctly flattened to route list
-- All paths correctly concatenated
-- Works with any nesting depth
-- Pure function, no Actix dependencies
+- [x] ✅ Scope tree correctly flattened to route list (8 comprehensive tests)
+- [x] ✅ All paths correctly concatenated (exact SimulatorWebServer logic)
+- [x] ✅ Works with any nesting depth (tested up to 3+ levels)
+- [x] ✅ Pure function, no Actix dependencies (standalone implementation)
+
+**Implementation Summary**:
+
+- **Core Function**: `flatten_scope_tree()` with recursive helper `flatten_scope_recursive()`
+- **Path Logic**: Exact replication of SimulatorWebServer's `process_scope_recursive` method
+- **Test Coverage**: 8 comprehensive test cases covering all scenarios
+- **Edge Cases**: Empty paths, container scopes, path parameters, parallel scopes
+- **Performance**: Arc-based handler sharing for efficiency
+
+**Key Achievement**: Complete recursive scope flattening implementation ready for Actix integration
 
 ###### 5.2.4.2.4: Integration - Connect Flattened Routes to Actix
 

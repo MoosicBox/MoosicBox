@@ -53,6 +53,428 @@ fn has_nested_scopes(scope: &crate::Scope) -> bool {
     !scope.scopes.is_empty() || scope.scopes.iter().any(has_nested_scopes)
 }
 
+/// Flattened route representation for Actix conversion
+///
+/// This structure represents a single route with its complete path after
+/// flattening the nested scope tree. It contains all information needed
+/// to register the route with Actix Web.
+///
+/// # Design Rationale
+///
+/// Since Actix Web doesn't handle nested scopes the same way as our Scope structure,
+/// we need to flatten the tree into individual routes with full paths.
+/// This approach mirrors how SimulatorWebServer processes nested scopes.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Original nested structure:
+/// // /api -> /v1 -> /users (GET "")
+/// //
+/// // Becomes flattened route:
+/// FlattenedRoute {
+///     full_path: "/api/v1/users".to_string(),
+///     method: Method::Get,
+///     handler: Arc::clone(&original_handler),
+/// }
+/// ```
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+pub struct FlattenedRoute {
+    /// The complete path including all scope prefixes
+    /// Examples: "/api/v1/users", "/admin/settings", "/health"
+    pub full_path: String,
+
+    /// HTTP method for this route
+    pub method: crate::Method,
+
+    /// The route handler (shared via Arc for efficiency)
+    ///
+    /// Using Arc allows multiple FlattenedRoute instances to share the same handler
+    /// without cloning the expensive handler closure. This is especially important
+    /// when the same handler is used in multiple routes or when handlers capture
+    /// large amounts of state.
+    pub handler: std::sync::Arc<crate::RouteHandler>,
+}
+
+impl FlattenedRoute {
+    /// Create a new flattened route
+    ///
+    /// # Arguments
+    /// * `full_path` - Complete path including all scope prefixes
+    /// * `method` - HTTP method for this route
+    /// * `handler` - Shared reference to the route handler
+    #[cfg(all(feature = "actix", not(feature = "simulator")))]
+    fn new(
+        full_path: String,
+        method: crate::Method,
+        handler: std::sync::Arc<crate::RouteHandler>,
+    ) -> Self {
+        Self {
+            full_path,
+            method,
+            handler,
+        }
+    }
+}
+
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+impl std::fmt::Debug for FlattenedRoute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FlattenedRoute")
+            .field("full_path", &self.full_path)
+            .field("method", &self.method)
+            .field("handler", &"<RouteHandler>")
+            .finish()
+    }
+}
+
+/// Flatten a nested scope tree into a list of routes with complete paths
+///
+/// This function recursively processes a scope tree and converts it into a flat
+/// list of routes where each route has its complete path (including all parent
+/// scope prefixes). This mirrors the behavior of SimulatorWebServer's
+/// `process_scope_recursive` method.
+///
+/// # Design Principles
+///
+/// 1. **Path Concatenation**: Parent prefix + scope path + route path
+/// 2. **Recursive Processing**: Handle arbitrarily deep nesting
+/// 3. **Preserve Handlers**: Use Arc to share handlers efficiently
+/// 4. **Deterministic Order**: Process routes in consistent order
+///
+/// # Path Concatenation Rules
+///
+/// The path concatenation follows the exact same logic as SimulatorWebServer's
+/// `process_scope_recursive` method (lines 493-505 in simulator.rs):
+///
+/// ## Scope Prefix Building
+/// ```ignore
+/// let full_prefix = if parent_prefix.is_empty() {
+///     scope.path.clone()           // First scope: "/api"
+/// } else {
+///     format!("{}{}", parent_prefix, scope.path)  // Nested: "/api" + "/v1" = "/api/v1"
+/// };
+/// ```
+///
+/// ## Route Path Building
+/// ```ignore
+/// let full_path = if full_prefix.is_empty() {
+///     route.path.clone()           // Root route: "/health"
+/// } else {
+///     format!("{}{}", full_prefix, route.path)    // Scoped: "/api/v1" + "/users" = "/api/v1/users"
+/// };
+/// ```
+///
+/// ## Examples
+///
+/// | Parent Prefix | Scope Path | Result Prefix | Route Path | Final Path |
+/// |---------------|------------|---------------|------------|------------|
+/// | `""` | `"/api"` | `"/api"` | `"/users"` | `"/api/users"` |
+/// | `"/api"` | `"/v1"` | `"/api/v1"` | `"/users"` | `"/api/v1/users"` |
+/// | `"/api/v1"` | `"/admin"` | `"/api/v1/admin"` | `"/settings"` | `"/api/v1/admin/settings"` |
+/// | `""` | `""` | `""` | `"/health"` | `"/health"` |
+/// | `"/api"` | `""` | `"/api"` | `""` | `"/api"` |
+///
+/// ## Key Rules
+///
+/// 1. **No automatic separators**: Paths are concatenated directly with `format!("{}{}")`
+/// 2. **Leading slashes required**: All scope and route paths should start with "/"
+/// 3. **Empty handling**: Empty strings are handled gracefully
+/// 4. **No trailing slash normalization**: Paths are used exactly as provided
+///
+/// # Arguments
+///
+/// * `scopes` - The list of top-level scopes to flatten
+///
+/// # Returns
+///
+/// A vector of `FlattenedRoute` structs, each containing:
+/// * `full_path`: Complete path including all prefixes
+/// * `method`: HTTP method
+/// * `handler`: Shared reference to the route handler
+///
+/// # Examples
+///
+/// ```ignore
+/// // Input scope tree:
+/// let api_scope = Scope::new("/api")
+///     .with_scope(
+///         Scope::new("/v1")
+///             .with_scope(
+///                 Scope::new("/users")
+///                     .route(Method::Get, "", get_users_handler)
+///                     .route(Method::Post, "", create_user_handler)
+///             )
+///             .route(Method::Get, "/health", health_handler)
+///     )
+///     .route(Method::Get, "/status", status_handler);
+///
+/// // Output flattened routes:
+/// vec![
+///     FlattenedRoute { full_path: "/api/status", method: Method::Get, handler: status_handler },
+///     FlattenedRoute { full_path: "/api/v1/health", method: Method::Get, handler: health_handler },
+///     FlattenedRoute { full_path: "/api/v1/users", method: Method::Get, handler: get_users_handler },
+///     FlattenedRoute { full_path: "/api/v1/users", method: Method::Post, handler: create_user_handler },
+/// ]
+/// ```
+///
+/// # Implementation Strategy (5.2.4.2.3)
+///
+/// The implementation will follow this recursive algorithm:
+///
+/// 1. **For each scope in the input list**:
+///    - Call `flatten_scope_recursive(scope, "")` with empty parent prefix
+///
+/// 2. **For each scope in `flatten_scope_recursive(scope, parent_prefix)`**:
+///    - Build full prefix: `parent_prefix + scope.path`
+///    - For each route in scope.routes:
+///      - Create FlattenedRoute with `full_prefix + route.path`
+///      - Add to results vector
+///    - For each nested scope in scope.scopes:
+///      - Recursively call `flatten_scope_recursive(nested_scope, full_prefix)`
+///      - Append results to main vector
+///
+/// 3. **Return the complete flattened list**
+///
+/// # Edge Cases Handled
+///
+/// Based on analysis of existing tests and SimulatorWebServer behavior:
+///
+/// ## Empty Paths
+/// ```ignore
+/// // Empty route path (common pattern)
+/// Scope::new("/users").route(Method::Get, "", handler)
+/// // Results in: "/users" (scope path + empty route path)
+///
+/// // Empty scope path (root scope)
+/// Scope::new("").route(Method::Get, "/health", handler)
+/// // Results in: "/health" (empty scope + route path)
+///
+/// // Both empty
+/// Scope::new("").route(Method::Get, "", handler)
+/// // Results in: "" (empty + empty = empty, handled gracefully)
+/// ```
+///
+/// ## Root Scopes and Deep Nesting
+/// ```ignore
+/// // Root scope (parent_prefix starts empty)
+/// let root = Scope::new("/api");  // parent_prefix = "", result = "/api"
+///
+/// // Deep nesting (tested in simulator_integration.rs:188-221)
+/// /api -> /v1 -> /admin -> /users/{id}
+/// // Results in: "/api/v1/admin/users/{id}"
+/// ```
+///
+/// ## Scopes Without Routes
+/// ```ignore
+/// // Scope with no direct routes, only nested scopes
+/// let container = Scope::new("/api")
+///     .with_scope(
+///         Scope::new("/v1")
+///             .route(Method::Get, "/users", handler)
+///     );
+/// // Container scope contributes no routes but passes "/api" prefix to children
+/// // Result: "/api/v1/users"
+/// ```
+///
+/// ## Scopes Without Nested Scopes (Leaf Scopes)
+/// ```ignore
+/// // Simple leaf scope with multiple routes
+/// let users = Scope::new("/users")
+///     .route(Method::Get, "", get_handler)
+///     .route(Method::Post, "", post_handler)
+///     .route(Method::Get, "/{id}", get_by_id_handler);
+/// // Results in: "/users", "/users", "/users/{id}"
+/// ```
+///
+/// ## Path Parameter Handling
+/// ```ignore
+/// // Path parameters are preserved exactly (tested in simulator)
+/// Scope::new("/users").route(Method::Delete, "/{id}", handler)
+/// // Results in: "/users/{id}" (parameters preserved for Actix routing)
+/// ```
+///
+/// ## Special Characters and Encoding
+/// ```ignore
+/// // Paths are used exactly as provided - no encoding/decoding
+/// // Leading slashes are required for proper concatenation
+/// // Trailing slashes are preserved if present
+/// ```
+///
+/// # Performance Considerations
+///
+/// * **Arc sharing**: Handlers are shared, not cloned
+/// * **String allocation**: Paths are built once during flattening
+/// * **Memory efficiency**: Flat structure is more cache-friendly than tree traversal
+///
+/// # Test Cases Design (5.2.4.2.5)
+///
+/// The following test cases will be implemented to validate the flattening algorithm:
+///
+/// ## Test Case 1: Simple Single-Level Scopes
+/// ```ignore
+/// let scopes = vec![
+///     Scope::new("/api").route(Method::Get, "/health", handler1),
+///     Scope::new("/admin").route(Method::Post, "/users", handler2),
+/// ];
+/// // Expected: ["/api/health" GET, "/admin/users" POST]
+/// ```
+///
+/// ## Test Case 2: Two-Level Nesting (Current Failing Case)
+/// ```ignore
+/// let api_scope = Scope::new("/api")
+///     .with_scope(
+///         Scope::new("/v1")
+///             .route(Method::Get, "/users", handler)
+///     );
+/// // Expected: ["/api/v1/users" GET]
+/// // Currently fails in ActixWebServer (returns 404)
+/// ```
+///
+/// ## Test Case 3: Deep Nesting (3+ Levels)
+/// ```ignore
+/// let deep_scope = Scope::new("/api")
+///     .with_scope(
+///         Scope::new("/v1")
+///             .with_scope(
+///                 Scope::new("/admin")
+///                     .route(Method::Delete, "/users/{id}", handler)
+///             )
+///     );
+/// // Expected: ["/api/v1/admin/users/{id}" DELETE]
+/// ```
+///
+/// ## Test Case 4: Mixed Routes and Nested Scopes
+/// ```ignore
+/// let mixed_scope = Scope::new("/api")
+///     .route(Method::Get, "/status", status_handler)  // Direct route
+///     .with_scope(
+///         Scope::new("/v1")
+///             .route(Method::Get, "/health", health_handler)  // Nested route
+///             .with_scope(
+///                 Scope::new("/users")
+///                     .route(Method::Get, "", list_handler)    // Deep nested
+///                     .route(Method::Post, "", create_handler) // Multiple routes
+///             )
+///     );
+/// // Expected: [
+/// //   "/api/status" GET,
+/// //   "/api/v1/health" GET,
+/// //   "/api/v1/users" GET,
+/// //   "/api/v1/users" POST
+/// // ]
+/// ```
+///
+/// ## Test Case 5: Empty Path Edge Cases
+/// ```ignore
+/// let edge_cases = vec![
+///     Scope::new("/users").route(Method::Get, "", handler1),      // Empty route path
+///     Scope::new("").route(Method::Get, "/health", handler2),     // Empty scope path
+///     Scope::new("").route(Method::Get, "", handler3),           // Both empty
+/// ];
+/// // Expected: ["/users" GET, "/health" GET, "" GET]
+/// ```
+///
+/// ## Test Case 6: Multiple Scopes at Same Level
+/// ```ignore
+/// let parallel_scopes = Scope::new("/api")
+///     .with_scope(
+///         Scope::new("/v1").route(Method::Get, "/users", v1_handler)
+///     )
+///     .with_scope(
+///         Scope::new("/v2").route(Method::Get, "/users", v2_handler)
+///     );
+/// // Expected: ["/api/v1/users" GET, "/api/v2/users" GET]
+/// ```
+///
+/// ## Test Case 7: Container Scopes (No Direct Routes)
+/// ```ignore
+/// let container = Scope::new("/api")  // No direct routes
+///     .with_scope(
+///         Scope::new("/v1")           // No direct routes
+///             .with_scope(
+///                 Scope::new("/users").route(Method::Get, "", handler)
+///             )
+///     );
+/// // Expected: ["/api/v1/users" GET]
+/// // Container scopes contribute prefix but no routes
+/// ```
+///
+/// ## Test Case 8: Path Parameters Preservation
+/// ```ignore
+/// let params_scope = Scope::new("/api")
+///     .with_scope(
+///         Scope::new("/v1")
+///             .route(Method::Get, "/users/{id}", get_user)
+///             .route(Method::Put, "/users/{id}/profile", update_profile)
+///     );
+/// // Expected: ["/api/v1/users/{id}" GET, "/api/v1/users/{id}/profile" PUT]
+/// // Path parameters must be preserved exactly
+/// ```
+///
+/// # Implementation (5.2.4.2.3): Recursive scope flattening
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+pub fn flatten_scope_tree(scopes: &[crate::Scope]) -> Vec<FlattenedRoute> {
+    let mut flattened_routes = Vec::new();
+
+    // Process each top-level scope with empty parent prefix
+    for scope in scopes {
+        flatten_scope_recursive(scope, "", &mut flattened_routes);
+    }
+
+    flattened_routes
+}
+
+/// Recursively flatten a single scope and its nested scopes
+///
+/// This helper function mirrors the exact logic of SimulatorWebServer's
+/// `process_scope_recursive` method (lines 491-521 in simulator.rs).
+///
+/// # Arguments
+/// * `scope` - The scope to process
+/// * `parent_prefix` - The accumulated path prefix from parent scopes
+/// * `results` - Mutable vector to collect flattened routes
+#[cfg(all(feature = "actix", not(feature = "simulator")))]
+fn flatten_scope_recursive(
+    scope: &crate::Scope,
+    parent_prefix: &str,
+    results: &mut Vec<FlattenedRoute>,
+) {
+    // Build the full prefix for this scope
+    // This mirrors SimulatorWebServer logic exactly (lines 493-497)
+    let full_prefix = if parent_prefix.is_empty() {
+        scope.path.clone()
+    } else {
+        format!("{}{}", parent_prefix, scope.path)
+    };
+
+    // Process all routes in this scope with the full prefix
+    // This mirrors SimulatorWebServer logic exactly (lines 500-516)
+    for route in &scope.routes {
+        let full_path = if full_prefix.is_empty() {
+            route.path.clone()
+        } else {
+            format!("{}{}", full_prefix, route.path)
+        };
+
+        // Create flattened route with Arc-shared handler
+        // Using Arc::clone to share the handler efficiently
+        let flattened_route = FlattenedRoute::new(
+            full_path,
+            route.method,
+            std::sync::Arc::clone(&route.handler),
+        );
+
+        results.push(flattened_route);
+    }
+
+    // Recursively process nested scopes
+    // This mirrors SimulatorWebServer logic exactly (lines 518-521)
+    for nested_scope in &scope.scopes {
+        flatten_scope_recursive(nested_scope, &full_prefix, results);
+    }
+}
+
 /// Actix Web Server wrapper for testing
 ///
 /// This wrapper provides a testable interface to an Actix web server,
@@ -98,7 +520,6 @@ impl ActixWebServer {
                 );
             }
         }
-
         // 5.2.4.1: Convert Scope/Route to Actix configuration
         let app = move || {
             let mut app = actix_web::App::new();
