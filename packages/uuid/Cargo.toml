@@ -15,7 +15,7 @@ group = "switchy"
 
 [dependencies]
 log = { workspace = true }
-uuid = { version = "1.18", features = ["v4"] }
+uuid = { workspace = true, features = ["v4"] }
 switchy_random = { workspace = true, optional = true, features = ["simulator"] }
 switchy_env = { workspace = true, optional = true, features = ["simulator"] }
 

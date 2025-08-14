@@ -14,7 +14,7 @@ version     = "0.1.4"
 group = "switchy"
 
 [dependencies]
-switchy_async = { version = "0.1.0", path = "../async", default-features = false, features = [
+switchy_async = { workspace = true, default-features = false, features = [
     "io",
     "macros",
     "sync",

@@ -12,7 +12,7 @@ version     = "0.1.0"
 [dependencies]
 moosicbox_web_server = { workspace = true }
 serde                = { workspace = true, features = ["derive"] }
-tokio                = { version = "1.47", features = ["full"] }
+tokio                = { workspace = true, features = ["full"] }
 
 [[bin]]
 name              = "test_actix"
