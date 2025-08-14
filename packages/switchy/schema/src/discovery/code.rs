@@ -167,21 +167,19 @@ impl<'a> Migration<'a> for CodeMigration<'a> {
 
 /// Migration source for code-based migrations with registry
 pub struct CodeMigrationSource<'a> {
-    migrations: Option<Vec<CodeMigration<'a>>>,
+    migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
 }
 
 impl<'a> CodeMigrationSource<'a> {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            migrations: Some(Vec::new()),
+            migrations: Vec::new(),
         }
     }
 
     pub fn add_migration(&mut self, migration: CodeMigration<'a>) {
-        if let Some(ref mut migrations) = self.migrations {
-            migrations.push(migration);
-        }
+        self.migrations.push(Arc::new(migration));
     }
 }
 
@@ -194,9 +192,10 @@ impl Default for CodeMigrationSource<'_> {
 #[async_trait]
 impl<'a> MigrationSource<'a> for CodeMigrationSource<'a> {
     async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>> {
-        // For now, return empty vec - this implementation needs to be completed
-        // when we have concrete use cases for code-based migrations
-        Ok(Vec::new())
+        // Sort migrations by ID for deterministic ordering
+        let mut sorted_migrations = self.migrations.clone();
+        sorted_migrations.sort_by(|a, b| a.id().cmp(b.id()));
+        Ok(sorted_migrations)
     }
 }
 
@@ -226,9 +225,10 @@ mod tests {
 
         source.add_migration(migration);
 
-        // Test that migrations() can be called (even if it returns empty for now)
+        // Test that migrations() returns the added migration
         let migrations = source.migrations().await.unwrap();
-        assert_eq!(migrations.len(), 0); // Current implementation returns empty
+        assert_eq!(migrations.len(), 1);
+        assert_eq!(migrations[0].id(), "001_test");
     }
 
     #[tokio::test]
@@ -254,5 +254,36 @@ mod tests {
         );
 
         assert_eq!(migration.id(), "001_create_users");
+    }
+
+    #[tokio::test]
+    async fn test_code_migration_source_ordering() {
+        let mut source = CodeMigrationSource::new();
+
+        // Add migrations in non-alphabetical order
+        source.add_migration(CodeMigration::new(
+            "003_third".to_string(),
+            Box::new("SELECT 3;".to_string()),
+            None,
+        ));
+
+        source.add_migration(CodeMigration::new(
+            "001_first".to_string(),
+            Box::new("SELECT 1;".to_string()),
+            None,
+        ));
+
+        source.add_migration(CodeMigration::new(
+            "002_second".to_string(),
+            Box::new("SELECT 2;".to_string()),
+            None,
+        ));
+
+        // Test that migrations are returned in sorted order
+        let migrations = source.migrations().await.unwrap();
+        assert_eq!(migrations.len(), 3);
+        assert_eq!(migrations[0].id(), "001_first");
+        assert_eq!(migrations[1].id(), "002_second");
+        assert_eq!(migrations[2].id(), "003_third");
     }
 }

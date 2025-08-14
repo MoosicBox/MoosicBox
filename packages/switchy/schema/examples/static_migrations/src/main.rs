@@ -256,7 +256,6 @@ mod tests {
         ));
 
         let migrations = source.migrations().await.unwrap();
-        // Note: Current implementation returns empty vec, but structure is correct
-        assert_eq!(migrations.len(), 0);
+        assert_eq!(migrations.len(), 1);
     }
 }

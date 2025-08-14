@@ -342,8 +342,10 @@ These items need further investigation or decision during implementation:
     - [x] Store `Vec<CodeMigration<'a>>` for simpler ownership model
     - [x] Implement `add_migration()` with `CodeMigration` parameters
     - [x] Support both raw SQL strings and query builders
-  - [ ] Implement `MigrationSource<'a>` for `CodeMigrationSource<'a>` ❌ **INCOMPLETE**
-    - ✗ Currently returns empty Vec - needs proper implementation
+  - [x] Implement `MigrationSource<'a>` for `CodeMigrationSource<'a>` ✅ **COMPLETE**
+    - ✓ Returns stored migrations with deterministic sorting by ID
+    - ✓ Changed storage from `Vec<CodeMigration>` to `Vec<Arc<dyn Migration>>`
+    - ✓ All tests pass including ordering verification
 
 #### 3.6.5 Add Tests for Code Discovery
 - [x] Test with raw SQL strings ✅ **IMPORTANT**
