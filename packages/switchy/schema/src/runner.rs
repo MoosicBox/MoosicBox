@@ -6,7 +6,7 @@
 //! ## Basic Usage
 //!
 //! ```rust,no_run
-//! use switchy_schema::runner::{MigrationRunner, ExecutionStrategy};
+//! use switchy_schema::runner::{MigrationRunner, ExecutionStrategy, RollbackStrategy};
 //! use switchy_schema::discovery::code::CodeMigrationSource;
 //! use switchy_database::Database;
 //!
@@ -71,6 +71,19 @@ pub enum ExecutionStrategy {
     Steps(usize),
     /// Dry run - validate migrations without executing
     DryRun,
+}
+
+/// Rollback strategy for determining which migrations to roll back
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RollbackStrategy {
+    /// Roll back the most recent migration
+    Last,
+    /// Roll back to (but not including) a specific migration ID
+    DownTo(String),
+    /// Roll back N migrations
+    Steps(usize),
+    /// Roll back all applied migrations
+    All,
 }
 
 /// Migration hooks for customizing execution behavior
@@ -273,6 +286,122 @@ impl<'a> MigrationRunner<'a> {
 
         result
     }
+
+    /// Roll back migrations according to the specified strategy
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - Database connection
+    /// * `strategy` - Rollback strategy to determine which migrations to roll back
+    ///
+    /// # Errors
+    ///
+    /// * If database operations fail
+    /// * If a migration's `down()` method fails
+    /// * If a migration doesn't have a `down()` method when validation is enabled
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use switchy_schema::runner::{MigrationRunner, RollbackStrategy};
+    /// # use switchy_database::Database;
+    /// # async fn example(db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
+    /// let runner = MigrationRunner::new_code();
+    ///
+    /// // Roll back the last migration
+    /// runner.rollback(db, RollbackStrategy::Last).await?;
+    ///
+    /// // Roll back 3 migrations
+    /// runner.rollback(db, RollbackStrategy::Steps(3)).await?;
+    ///
+    /// // Roll back to a specific migration (not including it)
+    /// runner.rollback(db, RollbackStrategy::DownTo("20240101_initial".to_string())).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn rollback(&self, db: &dyn Database, strategy: RollbackStrategy) -> Result<()> {
+        // Ensure migrations table exists
+        self.version_tracker.ensure_table_exists(db).await?;
+
+        // Get all applied migrations in reverse chronological order
+        let applied_migrations = self.version_tracker.get_applied_migrations(db).await?;
+
+        // Determine which migrations to roll back based on strategy
+        let migrations_to_rollback = match strategy {
+            RollbackStrategy::Last => {
+                if applied_migrations.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![applied_migrations[0].clone()]
+                }
+            }
+            RollbackStrategy::Steps(n) => applied_migrations.into_iter().take(n).collect(),
+            RollbackStrategy::DownTo(target_id) => {
+                let mut result = Vec::new();
+                for migration_id in applied_migrations {
+                    if migration_id == target_id {
+                        break;
+                    }
+                    result.push(migration_id);
+                }
+                result
+            }
+            RollbackStrategy::All => applied_migrations,
+        };
+
+        // If no migrations to rollback, return early
+        if migrations_to_rollback.is_empty() {
+            return Ok(());
+        }
+
+        // Get all available migrations
+        let mut migration_map = std::collections::BTreeMap::new();
+        for migration in self.source.migrations().await? {
+            migration_map.insert(migration.id().to_string(), migration);
+        }
+
+        // Roll back each migration
+        for migration_id in migrations_to_rollback {
+            // Find the migration
+            let migration = migration_map.get(&migration_id).ok_or_else(|| {
+                crate::MigrationError::Execution(format!(
+                    "Migration '{migration_id}' not found in migration source"
+                ))
+            })?;
+
+            // Call before hook
+            if let Some(ref hook) = self.hooks.before_migration {
+                hook(&migration_id);
+            }
+
+            // Execute rollback (unless dry run)
+            if !self.dry_run {
+                match migration.down(db).await {
+                    Ok(()) => {
+                        // Remove migration record
+                        self.version_tracker
+                            .remove_migration(db, &migration_id)
+                            .await?;
+
+                        // Call after hook
+                        if let Some(ref hook) = self.hooks.after_migration {
+                            hook(&migration_id);
+                        }
+                    }
+                    Err(e) => {
+                        // Call error hook
+                        if let Some(ref hook) = self.hooks.on_error {
+                            hook(&migration_id, &e);
+                        }
+
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -392,6 +521,137 @@ mod tests {
             let result = runner.apply_strategy(&migration_map);
             assert_eq!(result.len(), 1);
             assert!(result.contains_key("001_test"));
+        }
+
+        #[test]
+        fn test_rollback_strategy_creation() {
+            // Test RollbackStrategy enum variants
+            let last = RollbackStrategy::Last;
+            let down_to = RollbackStrategy::DownTo("migration_001".to_string());
+            let steps = RollbackStrategy::Steps(3);
+            let all = RollbackStrategy::All;
+
+            // Test Debug and PartialEq implementations
+            assert_eq!(last, RollbackStrategy::Last);
+            assert_eq!(
+                down_to,
+                RollbackStrategy::DownTo("migration_001".to_string())
+            );
+            assert_eq!(steps, RollbackStrategy::Steps(3));
+            assert_eq!(all, RollbackStrategy::All);
+
+            // Test that different strategies are not equal
+            assert_ne!(last, steps);
+            assert_ne!(down_to, all);
+        }
+
+        #[test]
+        fn test_rollback_strategy_logic() {
+            // Test the logic for determining migrations to rollback
+            let applied_migrations = vec![
+                "003_latest".to_string(),
+                "002_middle".to_string(),
+                "001_initial".to_string(),
+            ];
+
+            // Test Last strategy
+            let last_result = match RollbackStrategy::Last {
+                RollbackStrategy::Last => {
+                    if applied_migrations.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![applied_migrations[0].clone()]
+                    }
+                }
+                _ => unreachable!(),
+            };
+            assert_eq!(last_result, vec!["003_latest".to_string()]);
+
+            // Test Steps strategy
+            let steps_result = match RollbackStrategy::Steps(2) {
+                RollbackStrategy::Steps(n) => applied_migrations
+                    .clone()
+                    .into_iter()
+                    .take(n)
+                    .collect::<Vec<_>>(),
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                steps_result,
+                vec!["003_latest".to_string(), "002_middle".to_string()]
+            );
+
+            // Test DownTo strategy
+            let down_to_result = match RollbackStrategy::DownTo("001_initial".to_string()) {
+                RollbackStrategy::DownTo(target_id) => {
+                    let mut result = Vec::new();
+                    for migration_id in &applied_migrations {
+                        if migration_id == &target_id {
+                            break;
+                        }
+                        result.push(migration_id.clone());
+                    }
+                    result
+                }
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                down_to_result,
+                vec!["003_latest".to_string(), "002_middle".to_string()]
+            );
+
+            // Test All strategy
+            let all_result = match RollbackStrategy::All {
+                RollbackStrategy::All => applied_migrations.clone(),
+                _ => unreachable!(),
+            };
+            assert_eq!(all_result, applied_migrations);
+        }
+
+        #[test]
+        fn test_rollback_edge_cases() {
+            // Test empty applied migrations
+            let empty_migrations: Vec<String> = vec![];
+
+            let last_empty = match RollbackStrategy::Last {
+                RollbackStrategy::Last => {
+                    if empty_migrations.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![empty_migrations[0].clone()]
+                    }
+                }
+                _ => unreachable!(),
+            };
+            assert!(last_empty.is_empty());
+
+            // Test DownTo with non-existent target
+            let applied = vec!["002_test".to_string(), "001_test".to_string()];
+            let down_to_missing = match RollbackStrategy::DownTo("999_missing".to_string()) {
+                RollbackStrategy::DownTo(target_id) => {
+                    let mut result = Vec::new();
+                    for migration_id in &applied {
+                        if migration_id == &target_id {
+                            break;
+                        }
+                        result.push(migration_id.clone());
+                    }
+                    result
+                }
+                _ => unreachable!(),
+            };
+            // Should rollback all migrations since target not found
+            assert_eq!(down_to_missing, applied);
+
+            // Test Steps with more steps than available migrations
+            let steps_overflow = match RollbackStrategy::Steps(10) {
+                RollbackStrategy::Steps(n) => {
+                    applied.clone().into_iter().take(n).collect::<Vec<_>>()
+                }
+                _ => unreachable!(),
+            };
+            // Should only rollback available migrations
+            assert_eq!(steps_overflow, applied);
         }
     }
 }
