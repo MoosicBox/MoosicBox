@@ -7,15 +7,22 @@
 //!
 //! ```rust,no_run
 //! use switchy_schema::runner::{MigrationRunner, ExecutionStrategy, RollbackStrategy};
-//! use switchy_schema::discovery::code::CodeMigrationSource;
+//! use switchy_schema::migration::{Migration, MigrationSource};
 //! use switchy_database::Database;
 //!
 //! # async fn example(db: &dyn Database) -> switchy_schema::Result<()> {
-//! // Create a migration source
-//! let source = CodeMigrationSource::new();
+//! // Create a mock migration source for demonstration
+//! struct MockSource;
+//!
+//! #[async_trait::async_trait]
+//! impl MigrationSource<'static> for MockSource {
+//!     async fn migrations(&self) -> switchy_schema::Result<Vec<Box<dyn Migration<'static> + 'static>>> {
+//!         Ok(vec![])
+//!     }
+//! }
 //!
 //! // Create and configure the runner
-//! let runner = MigrationRunner::new(Box::new(source))
+//! let runner = MigrationRunner::new(Box::new(MockSource))
 //!     .with_strategy(ExecutionStrategy::All);
 //!
 //! // Run migrations
@@ -304,9 +311,18 @@ impl<'a> MigrationRunner<'a> {
     ///
     /// ```rust,no_run
     /// # use switchy_schema::runner::{MigrationRunner, RollbackStrategy};
+    /// # use switchy_schema::migration::{Migration, MigrationSource};
     /// # use switchy_database::Database;
     /// # async fn example(db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
-    /// let runner = MigrationRunner::new_code();
+    /// # // Create a mock migration source for demonstration
+    /// # struct MockSource;
+    /// # #[async_trait::async_trait]
+    /// # impl MigrationSource<'static> for MockSource {
+    /// #     async fn migrations(&self) -> switchy_schema::Result<Vec<Box<dyn Migration<'static> + 'static>>> {
+    /// #         Ok(vec![])
+    /// #     }
+    /// # }
+    /// let runner = MigrationRunner::new(Box::new(MockSource));
     ///
     /// // Roll back the last migration
     /// runner.rollback(db, RollbackStrategy::Last).await?;
@@ -317,8 +333,7 @@ impl<'a> MigrationRunner<'a> {
     /// // Roll back to a specific migration (not including it)
     /// runner.rollback(db, RollbackStrategy::DownTo("20240101_initial".to_string())).await?;
     /// # Ok(())
-    /// # }
-    /// ```
+    /// # }    /// ```
     pub async fn rollback(&self, db: &dyn Database, strategy: RollbackStrategy) -> Result<()> {
         // Ensure migrations table exists
         self.version_tracker.ensure_table_exists(db).await?;
