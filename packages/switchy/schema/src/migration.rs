@@ -109,10 +109,6 @@ pub trait Migration<'a>: Send + Sync + 'a {
         None
     }
 
-    fn depends_on(&self) -> Vec<&str> {
-        Vec::new()
-    }
-
     fn supported_databases(&self) -> Vec<&str> {
         vec!["sqlite", "postgres", "mysql"]
     }

@@ -30,9 +30,6 @@ pub enum MigrationError {
     #[error("Migration validation failed: {0}")]
     Validation(String),
 
-    #[error("Migration dependency error: {0}")]
-    Dependency(String),
-
     #[error("Migration execution failed: {0}")]
     Execution(String),
 }

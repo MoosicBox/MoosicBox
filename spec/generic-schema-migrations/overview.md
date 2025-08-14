@@ -36,6 +36,13 @@ These items need further investigation or decision during implementation:
 - Lock mechanism (database locks, file locks, etc.)?
 - Timeout handling for stuck migrations?
 
+### Advanced Safety Features
+- Production environment detection and confirmation prompts
+- Backup recommendations before destructive operations
+- Migration checksum validation (deferred to Phase 11.3)
+- Environment-specific migration controls
+- Rollback safety checks and warnings
+
 ## Phase 1: Package Creation and Setup ✅ **COMPLETED**
 
 **Goal:** Create the switchy_schema package and integrate it into the workspace
@@ -111,7 +118,7 @@ These items need further investigation or decision during implementation:
 ### 2.2 Error Types
 
 - [x] `packages/switchy/schema/src/lib.rs` - Error handling ✅ **CRITICAL**
-  - [x] Define `MigrationError` enum with database, validation, dependency errors
+  - [x] Define `MigrationError` enum with database, validation, execution errors
     - ✓ Lines 19-35 in lib.rs with 5 error variants
   - [x] Use thiserror for comprehensive error messages
     - ✓ Line 19: #[derive(Debug, Error)] with error messages
@@ -384,16 +391,16 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 - 17 comprehensive unit tests
 
 #### Deferred to Future Phases
-1. **Dependency Resolution (4.3)** → Moved to Phase 12
+1. **Dependency Resolution (4.3)** → Removed entirely
    - Not critical for initial functionality
-   - Most migrations don't have complex dependencies
+   - Users can handle ordering themselves with naming conventions
 
-2. **Dynamic Table Names** → Moved to Phase 13
+2. **Dynamic Table Names** → Moved to Phase 12
    - Limited by switchy_database requiring `&'static str`
    - Default table name works for 99% of use cases
    - Documented limitation with error messages
 
-3. **Transaction Support** → Moved to Phase 14
+3. **Transaction Support** → Moved to Phase 13
    - Requires switchy_database enhancement
    - Current implementation is still safe (fails fast on errors)
 
@@ -414,7 +421,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
   - [x] SQL execution via migration.up() using Executable trait
   - [x] Empty/missing migrations are recorded as successful
   - [x] Add migration hooks (before/after/error callbacks)
-  - [~] Transaction management - DEFERRED to Phase 14
+  - [~] Transaction management - DEFERRED to Phase 13
   - [x] NOTE: Verified switchy_database lacks transaction support
 
 ### 4.2 Version Tracking ✅ **COMPLETED**
@@ -476,39 +483,48 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 **Rationale:** Simple deletion approach is cleaner than complex rollback status tracking. The migrations table always reflects the current state of applied migrations.
 
-## Phase 6: Validation & Safety
+## ~~Phase 6: Validation & Safety~~ ❌ **REMOVED**
 
-**Goal:** Comprehensive validation to prevent migration issues
+~~**Goal:** Comprehensive validation to prevent migration issues~~
 
-### 6.1 Migration Validator
+**Status:** ❌ **REMOVED** - Validation features deemed unnecessary for core functionality:
+- Migration IDs can be any valid string (no naming convention needed)
+- Checksum validation moved to Phase 11.3 (Future Enhancements)
+- Dependency resolution removed entirely (users handle ordering themselves)
+- Advanced safety features moved to Open Questions section
 
-- [ ] `packages/switchy/schema/src/validation.rs` - Validation engine ❌ **IMPORTANT**
-  - [ ] Checksum validation for applied migrations
-  - [ ] Dependency cycle detection
-  - [ ] Migration naming convention validation
-  - [ ] Validate migration sources are accessible
+## Phase 7: Testing Infrastructure
 
-### 6.2 Dry Run Support
+**Goal:** Comprehensive testing utilities and coverage
 
-- [ ] `packages/switchy/schema/src/validation.rs` - Dry run ❌ **IMPORTANT**
-  - [ ] Generate execution plan showing which migrations would run
-  - [ ] Show migration order and dependencies
-  - [ ] Display migration metadata (ID, description, etc.)
-  - [ ] Validate migration sources are accessible
+### 7.1 Test Utilities
 
-### 6.3 Safety Checks
+- [ ] `packages/switchy/schema/src/test_utils.rs` - Test helpers ❌ **IMPORTANT**
+  - [ ] `TestDatabase` using switchy_database simulated/in-memory SQLite
+  - [ ] `TestMigrationBuilder` for creating test migrations
+  - [ ] Migration assertion helpers
+  - [ ] Complex migration verification utilities (like test_api_sources_table_migration)
+  - [ ] Support for testing data transformations during migrations
 
-- [ ] `packages/switchy/schema/src/validation.rs` - Safety features ❌ **IMPORTANT**
-  - [ ] Prevent running migrations on production without confirmation
-  - [ ] Backup recommendations before destructive operations
-  - [ ] Lock file support to prevent concurrent migrations
-  - [ ] Environment-specific migration controls
+### 7.2 Integration Tests
 
-## Phase 7: moosicbox_schema Migration
+- [ ] `packages/switchy/schema/tests/` - Integration tests ❌ **CRITICAL**
+  - [ ] Test migration execution across all database types
+  - [ ] Test rollback functionality
+  - [ ] Test error handling and recovery
+
+### 7.3 Test Data Helpers
+
+- [ ] Test fixtures and utilities ❌ **IMPORTANT**
+  - [ ] Fixtures for common migration patterns
+  - [ ] Helper functions for setting up test scenarios
+  - [ ] Utilities for verifying data transformations
+
+## Phase 8: moosicbox_schema Migration
 
 **Goal:** Update existing moosicbox_schema to use switchy_schema
 
-### 7.1 Wrapper Implementation
+### 8.1 Wrapper Implementation
 
 - [ ] `packages/schema/src/lib.rs` - Update moosicbox_schema ❌ **CRITICAL**
   - [ ] Replace direct migration logic with switchy_schema calls
@@ -516,7 +532,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
   - [ ] Use MigrationRunner with embedded sources
   - [ ] Keep existing function signatures and behavior
 
-### 7.2 Migration Compatibility
+### 8.2 Migration Compatibility
 
 - [ ] `packages/schema/src/lib.rs` - Ensure compatibility ❌ **CRITICAL**
   - [ ] Verify all existing migrations continue to work
@@ -526,42 +542,13 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
   - [ ] Add unit tests using in-memory SQLite similar to existing tests
   - [ ] Verify migrations run without clippy warnings
 
-### 7.3 Feature Propagation
+### 8.3 Feature Propagation
 
 - [ ] `packages/schema/Cargo.toml` - Update dependencies ❌ **CRITICAL**
   - [ ] Add switchy_schema dependency
   - [ ] Propagate feature flags appropriately
   - [ ] Maintain existing feature compatibility
   - [ ] Update documentation
-
-## Phase 8: Testing Infrastructure
-
-**Goal:** Comprehensive testing utilities and coverage
-
-### 8.1 Test Utilities
-
-- [ ] `packages/switchy/schema/src/test_utils.rs` - Test helpers ❌ **IMPORTANT**
-  - [ ] `TestDatabase` using switchy_database simulated/in-memory SQLite
-  - [ ] `TestMigrationBuilder` for creating test migrations
-  - [ ] Migration assertion helpers
-  - [ ] Complex migration verification utilities (like test_api_sources_table_migration)
-  - [ ] Support for testing data transformations during migrations
-
-### 8.2 Integration Tests
-
-- [ ] `packages/switchy/schema/tests/` - Integration tests ❌ **CRITICAL**
-  - [ ] Test migration execution across all database types
-  - [ ] Test rollback functionality
-  - [ ] Test dependency resolution
-  - [ ] Test error handling and recovery
-
-### 8.3 Compatibility Tests
-
-- [ ] `packages/schema/tests/` - Compatibility tests ❌ **CRITICAL**
-  - [ ] Verify moosicbox_schema continues to work unchanged
-  - [ ] Test migration state preservation
-  - [ ] Test feature flag combinations
-  - [ ] Performance regression tests
 
 ## Phase 9: Migration Listing
 
@@ -637,31 +624,17 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
   - [ ] Get migration history
   - [ ] Separate from MigrationRunner for focused API
 
-## Phase 12: Migration Dependency Resolution
+## ~~Phase 12: Migration Dependency Resolution~~ ❌ **REMOVED**
 
-**Goal:** Advanced dependency management for complex migration scenarios
+~~**Goal:** Advanced dependency management for complex migration scenarios~~
 
-**Status:** Not started (deferred from Phase 4.3)
+**Status:** ❌ **REMOVED** - Dependency resolution deemed unnecessary:
+- Users can handle migration ordering themselves using naming conventions
+- Adds unnecessary complexity to the core package
+- Most migrations don't require complex dependencies
+- Ordering can be managed through migration IDs (e.g., timestamp prefixes)
 
-**Rationale:** Most migrations don't require complex dependencies. This can be added later without breaking changes.
-
-### 12.1 Dependency Engine
-
-- [ ] `packages/switchy/schema/src/dependency.rs` - Dependency resolver ❌ **IMPORTANT**
-  - [ ] Topological sort for migration ordering
-  - [ ] Validate dependency cycles
-  - [ ] Support conditional dependencies
-  - [ ] Clear error messages for missing dependencies
-  - [ ] Integration with MigrationRunner
-
-### 12.2 Dependency Declaration
-
-- [ ] Enhanced Migration trait for dependencies ❌ **IMPORTANT**
-  - [ ] Update depends_on() method to be more expressive
-  - [ ] Support conditional dependencies (database-specific)
-  - [ ] Add dependency validation at compile time where possible
-
-## Phase 13: Dynamic Table Name Support
+## Phase 12: Dynamic Table Name Support
 
 **Goal:** Enable truly configurable migration table names
 
@@ -669,21 +642,21 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 **Blocker:** Requires enhancement to switchy_database to support dynamic table names
 
-### 13.1 Database Enhancement
+### 12.1 Database Enhancement
 
 - [ ] Enhance switchy_database to support dynamic table names ❌ **CRITICAL**
   - [ ] Add query_raw and exec_query_raw methods that return data
   - [ ] OR: Add runtime table name resolution to existing methods
   - [ ] Maintain backward compatibility
 
-### 13.2 Version Tracker Update
+### 12.2 Version Tracker Update
 
 - [ ] Update VersionTracker to use dynamic table names ❌ **IMPORTANT**
   - [ ] Remove current limitation/error messages
   - [ ] Full support for custom table names
   - [ ] Update all database operations to use dynamic names
 
-## Phase 14: Transaction Support
+## Phase 13: Transaction Support
 
 **Goal:** Add transaction isolation for migration execution
 
@@ -691,7 +664,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 **Blocker:** Requires transaction support in switchy_database
 
-### 14.1 Database Transaction Support
+### 13.1 Database Transaction Support
 
 - [ ] Add transaction support to switchy_database ❌ **CRITICAL**
   - [ ] begin_transaction() method
@@ -699,7 +672,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
   - [ ] rollback() method
   - [ ] Nested transaction support (savepoints)
 
-### 14.2 Runner Transaction Integration
+### 13.2 Runner Transaction Integration
 
 - [ ] Update MigrationRunner to use transactions ❌ **IMPORTANT**
   - [ ] Per-migration transactions (default)
@@ -739,7 +712,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 ### Migration Ordering Strategy
 - Timestamp-based naming for deterministic ordering
 - Dependency system for complex migration relationships
-- Topological sort for dependency resolution
+- Simple timestamp-based ordering for deterministic execution
 - Clear error messages for ordering conflicts
 
 ## Package Structure
@@ -817,9 +790,8 @@ test-utils = []
 9. **Phase 9** (Migration Listing) - Can proceed now
 10. **Phase 10** (Documentation) - Can proceed now
 11. **Phase 11** (Future Enhancements) - After core phases
-12. **Phase 12** (Dependency Resolution) - Requires Phase 4
-13. **Phase 13** (Dynamic Table Names) - Requires switchy_database enhancement
-14. **Phase 14** (Transaction Support) - Requires switchy_database enhancement
+12. **Phase 12** (Dynamic Table Names) - Requires switchy_database enhancement
+13. **Phase 13** (Transaction Support) - Requires switchy_database enhancement
 
 ### Parallel Work Opportunities
 - Core types and discovery can be developed simultaneously
@@ -833,8 +805,8 @@ test-utils = []
 ### Risk: Breaking existing moosicbox_schema functionality
 **Mitigation:** Maintain moosicbox_schema as thin wrapper, comprehensive compatibility tests
 
-### Risk: Complex dependency resolution
-**Mitigation:** Start with simple timestamp ordering, add dependencies incrementally
+### Risk: Migration ordering conflicts
+**Mitigation:** Use timestamp-based naming conventions, clear documentation on ordering
 
 ### Risk: Database-specific migration differences
 **Mitigation:** Leverage switchy_database abstractions, test across all database types
