@@ -120,12 +120,13 @@ jobs:
                   name: cargo-machete.exe
                   path: ~/.cargo/bin/cargo-machete.exe
 
-    upgrade-compatible:
-        name: Upgrade compatible dependencies
+    upgrade-dependencies:
+        name: Upgrade dependencies (compatible and incompatible)
         runs-on: ubuntu-latest
         needs: [build-cargo-upgrade]
         outputs:
-            upgraded: ${{ steps.upgrade.outputs.upgraded }}
+            compatible-upgraded: ${{ steps.upgrade-compatible.outputs.upgraded }}
+            incompatible-upgraded: ${{ steps.upgrade-incompatible.outputs.upgraded }}
             branch-name: ${{ steps.branch.outputs.name }}
             incompatible-branch: ${{ steps.branch.outputs.incompatible }}
         steps:
@@ -193,34 +194,58 @@ jobs:
               shell: bash
               run: chmod +x ~/.cargo/bin/cargo-upgrade.exe
 
-            - name: Create upgrade branch
+            - name: Setup git config
               run: |
                   git config user.name "MoosicBoxBot"
                   git config user.email "MoosicBoxBot@gmail.com"
+
+            - name: Create compatible upgrade branch
+              run: |
                   git checkout -b ${{ steps.branch.outputs.name }}
 
             - name: Upgrade compatible dependencies
-              id: upgrade
+              id: upgrade-compatible
               shell: bash
               run: |
                   cargo upgrade --skip-git-dependencies
                   cargo update
                   if [ -n "$(git status --porcelain)" ]; then
-                      echo "Found upgrades"
+                      echo "Found compatible upgrades"
                       git add .
                       git commit --message "Upgrade compatible Cargo dependencies"
                       git push origin ${{ steps.branch.outputs.name }}
                       echo "upgraded=true" >> "$GITHUB_OUTPUT"
                   else
-                      echo "No upgrades"
+                      echo "No compatible upgrades"
+                      echo "upgraded=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Create incompatible upgrade branch (based on compatible)
+              run: |
+                  git checkout -b ${{ steps.branch.outputs.incompatible }}
+
+            - name: Upgrade incompatible dependencies
+              id: upgrade-incompatible
+              shell: bash
+              run: |
+                  cargo upgrade --skip-git-dependencies --incompatible
+                  cargo update
+                  if [ -n "$(git status --porcelain)" ]; then
+                      echo "Found incompatible upgrades"
+                      git add .
+                      git commit --message "Upgrade incompatible Cargo dependencies"
+                      git push origin ${{ steps.branch.outputs.incompatible }}
+                      echo "upgraded=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "No incompatible upgrades"
                       echo "upgraded=false" >> "$GITHUB_OUTPUT"
                   fi
 
     validate-compatible:
         name: Validate compatible upgrades
         runs-on: ubuntu-latest
-        needs: [upgrade-compatible, build-clippier]
-        if: ${{ needs.upgrade-compatible.outputs.upgraded == 'true' }}
+        needs: [upgrade-dependencies, build-clippier]
+        if: ${{ needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' }}
         outputs:
             matrix: ${{ steps.build-matrix.outputs.matrix }}
         steps:
@@ -231,8 +256,8 @@ jobs:
 
             - name: Checkout upgrade branch
               run: |
-                  git fetch origin ${{ needs.upgrade-compatible.outputs.branch-name }}
-                  git checkout ${{ needs.upgrade-compatible.outputs.branch-name }}
+                  git fetch origin ${{ needs.upgrade-dependencies.outputs.branch-name }}
+                  git checkout ${{ needs.upgrade-dependencies.outputs.branch-name }}
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -297,8 +322,8 @@ jobs:
     test-compatible:
         name: Test compatible upgrades
         runs-on: ${{ matrix.package.os }}
-        needs: [upgrade-compatible, validate-compatible, build-cargo-machete]
-        if: ${{ needs.upgrade-compatible.outputs.upgraded == 'true' && needs.validate-compatible.outputs.matrix != '[]' }}
+        needs: [upgrade-dependencies, validate-compatible, build-cargo-machete]
+        if: ${{ needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' && needs.validate-compatible.outputs.matrix != '[]' }}
         strategy:
             fail-fast: false
             matrix:
@@ -311,8 +336,8 @@ jobs:
 
             - name: Checkout upgrade branch
               run: |
-                  git fetch origin ${{ needs.upgrade-compatible.outputs.branch-name }}
-                  git checkout ${{ needs.upgrade-compatible.outputs.branch-name }}
+                  git fetch origin ${{ needs.upgrade-dependencies.outputs.branch-name }}
+                  git checkout ${{ needs.upgrade-dependencies.outputs.branch-name }}
 
             - uses: dtolnay/rust-toolchain@stable
               with:
@@ -427,8 +452,8 @@ jobs:
     commit-compatible:
         name: Commit compatible upgrades
         runs-on: ubuntu-latest
-        needs: [upgrade-compatible, validate-compatible, test-compatible]
-        if: ${{ always() && needs.upgrade-compatible.outputs.upgraded == 'true' }}
+        needs: [upgrade-dependencies, validate-compatible, test-compatible]
+        if: ${{ always() && needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -438,8 +463,8 @@ jobs:
 
             - name: Checkout upgrade branch
               run: |
-                  git fetch origin ${{ needs.upgrade-compatible.outputs.branch-name }}
-                  git checkout ${{ needs.upgrade-compatible.outputs.branch-name }}
+                  git fetch origin ${{ needs.upgrade-dependencies.outputs.branch-name }}
+                  git checkout ${{ needs.upgrade-dependencies.outputs.branch-name }}
 
             - name: Merge to master if tests passed
               if: ${{ needs.test-compatible.result == 'success' || needs.validate-compatible.outputs.matrix == '[]' }}
@@ -450,76 +475,20 @@ jobs:
                   git rebase origin/master
                   git checkout master
                   git pull origin master
-                  git merge --ff-only ${{ needs.upgrade-compatible.outputs.branch-name }}
+                  git merge --ff-only ${{ needs.upgrade-dependencies.outputs.branch-name }}
                   git push origin master
                   echo "✅ Compatible upgrades merged to master"
 
             - name: Leave branch if tests failed
               if: ${{ needs.test-compatible.result == 'failure' }}
               run: |
-                  echo "❌ Tests failed - leaving branch ${{ needs.upgrade-compatible.outputs.branch-name }} for manual review"
-
-    upgrade-incompatible:
-        name: Upgrade incompatible dependencies
-        runs-on: ubuntu-latest
-        needs: [upgrade-compatible, commit-compatible, build-cargo-upgrade]
-        if: ${{ always() && (needs.commit-compatible.result == 'success' || (needs.upgrade-compatible.outputs.upgraded == 'true' && needs.validate-compatible.outputs.matrix == '[]')) }}
-        outputs:
-            upgraded: ${{ steps.upgrade.outputs.upgraded }}
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                  token: ${{ secrets.MOOSICBOX_BOT_UPGRADES_TOKEN }}
-                  fetch-depth: 0
-
-            - name: Update to latest master
-              run: |
-                  git fetch origin master
-                  git checkout master
-                  git pull origin master
-
-            - uses: dtolnay/rust-toolchain@stable
-              with:
-                  components: rustfmt, clippy
-
-            - uses: actions/download-artifact@master
-              with:
-                  name: cargo-upgrade-ubuntu
-                  path: ~/.cargo/bin
-
-            - name: Make cargo-upgrade executable
-              shell: bash
-              run: chmod +x ~/.cargo/bin/cargo-upgrade
-
-            - name: Create incompatible upgrade branch
-              run: |
-                  git config user.name "MoosicBoxBot"
-                  git config user.email "MoosicBoxBot@gmail.com"
-                  git checkout -b ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
-
-            - name: Upgrade incompatible dependencies
-              id: upgrade
-              shell: bash
-              run: |
-                  cargo upgrade --skip-git-dependencies --incompatible
-                  cargo update
-                  if [ -n "$(git status --porcelain)" ]; then
-                      echo "Found incompatible upgrades"
-                      git add .
-                      git commit --message "Upgrade incompatible Cargo dependencies"
-                      git push origin ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
-                      echo "upgraded=true" >> "$GITHUB_OUTPUT"
-                  else
-                      echo "No incompatible upgrades"
-                      echo "upgraded=false" >> "$GITHUB_OUTPUT"
-                  fi
+                  echo "❌ Tests failed - leaving branch ${{ needs.upgrade-dependencies.outputs.branch-name }} for manual review"
 
     validate-incompatible:
         name: Validate incompatible upgrades
         runs-on: ubuntu-latest
-        needs: [upgrade-compatible, upgrade-incompatible, build-clippier]
-        if: ${{ needs.upgrade-incompatible.outputs.upgraded == 'true' }}
+        needs: [upgrade-dependencies, build-clippier]
+        if: ${{ needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' }}
         outputs:
             matrix: ${{ steps.build-matrix.outputs.matrix }}
         steps:
@@ -530,8 +499,8 @@ jobs:
 
             - name: Checkout incompatible upgrade branch
               run: |
-                  git fetch origin ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
-                  git checkout ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+                  git fetch origin ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
+                  git checkout ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
 
             - uses: dtolnay/rust-toolchain@stable
 
@@ -597,13 +566,8 @@ jobs:
         name: Test incompatible upgrades
         runs-on: ${{ matrix.package.os }}
         needs:
-            [
-                upgrade-compatible,
-                upgrade-incompatible,
-                validate-incompatible,
-                build-cargo-machete,
-            ]
-        if: ${{ needs.upgrade-incompatible.outputs.upgraded == 'true' && needs.validate-incompatible.outputs.matrix != '[]' }}
+            [upgrade-dependencies, validate-incompatible, build-cargo-machete]
+        if: ${{ needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' && needs.validate-incompatible.outputs.matrix != '[]' }}
         strategy:
             fail-fast: false
             matrix:
@@ -616,8 +580,8 @@ jobs:
 
             - name: Checkout incompatible upgrade branch
               run: |
-                  git fetch origin ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
-                  git checkout ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+                  git fetch origin ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
+                  git checkout ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
 
             - uses: dtolnay/rust-toolchain@stable
               with:
@@ -722,14 +686,8 @@ jobs:
     commit-incompatible:
         name: Commit incompatible upgrades
         runs-on: ubuntu-latest
-        needs:
-            [
-                upgrade-compatible,
-                upgrade-incompatible,
-                validate-incompatible,
-                test-incompatible,
-            ]
-        if: ${{ always() && needs.upgrade-incompatible.outputs.upgraded == 'true' }}
+        needs: [upgrade-dependencies, validate-incompatible, test-incompatible]
+        if: ${{ always() && needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -739,8 +697,8 @@ jobs:
 
             - name: Checkout incompatible upgrade branch
               run: |
-                  git fetch origin ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
-                  git checkout ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+                  git fetch origin ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
+                  git checkout ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
 
             - name: Merge to master if tests passed
               if: ${{ needs.test-incompatible.result == 'success' || needs.validate-incompatible.outputs.matrix == '[]' }}
@@ -751,11 +709,11 @@ jobs:
                   git rebase origin/master
                   git checkout master
                   git pull origin master
-                  git merge --ff-only ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
+                  git merge --ff-only ${{ needs.upgrade-dependencies.outputs.incompatible-branch }}
                   git push origin master
                   echo "✅ Incompatible upgrades merged to master"
 
             - name: Leave branch if tests failed
               if: ${{ needs.test-incompatible.result == 'failure' }}
               run: |
-                  echo "❌ Tests failed - leaving branch ${{ needs.upgrade-compatible.outputs.incompatible-branch }} for manual review"
+                  echo "❌ Tests failed - leaving branch ${{ needs.upgrade-dependencies.outputs.incompatible-branch }} for manual review"
