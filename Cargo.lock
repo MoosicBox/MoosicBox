@@ -14090,6 +14090,7 @@ dependencies = [
  "bytes",
  "log 0.4.27",
  "pretty_assertions",
+ "scoped-tls",
  "switchy_async",
  "tokio",
 ]

@@ -180,12 +180,13 @@ database-connection-tls = [
     "switchy_database_connection?/tls",
 ]
 
-fs           = ["dep:switchy_fs"]
-fs-async     = ["fs", "switchy_fs?/async"]
-fs-simulator = ["fs", "switchy_fs?/simulator"]
-fs-std       = ["fs", "switchy_fs?/std"]
-fs-sync      = ["fs", "switchy_fs?/sync"]
-fs-tokio     = ["fs", "switchy_fs?/tokio"]
+fs                   = ["dep:switchy_fs"]
+fs-async             = ["fs", "switchy_fs?/async"]
+fs-simulator         = ["fs", "switchy_fs?/simulator"]
+fs-simulator-real-fs = ["fs", "switchy_fs?/simulator-real-fs"]
+fs-std               = ["fs", "switchy_fs?/std"]
+fs-sync              = ["fs", "switchy_fs?/sync"]
+fs-tokio             = ["fs", "switchy_fs?/tokio"]
 
 http           = ["dep:switchy_http"]
 http-json      = ["http", "switchy_http?/json"]

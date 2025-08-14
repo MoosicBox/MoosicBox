@@ -20,6 +20,7 @@ mod simulator;
 struct TestWithPathInput {
     crate_path: syn::Path,
     use_real_time: bool,
+    use_real_fs: bool,
     function: syn::ItemFn,
 }
 
@@ -28,32 +29,38 @@ impl syn::parse::Parse for TestWithPathInput {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         use syn::Token;
 
-        // Parse: (@path ::some::path [; real_time]) function_definition
+        // Parse: (@path ::some::path [; real_time] [; real_fs]) function_definition
         let _: Token![@] = input.parse()?;
         let _path_ident: syn::Ident = input.parse()?; // Should be "path"
         let _: Token![=] = input.parse()?;
         let crate_path: syn::Path = input.parse()?;
         let _: Token![;] = input.parse()?;
 
-        // Check for optional real_time parameter
-        let use_real_time = if input.peek(syn::Ident) {
-            let ident: syn::Ident = input.fork().parse()?;
+        // Check for optional real_time and real_fs parameters
+        let mut use_real_time = false;
+        let mut use_real_fs = false;
+
+        while input.peek(syn::Ident) {
+            let ident: syn::Ident = input.parse()?;
             if ident == "real_time" {
-                let _: syn::Ident = input.parse()?;
-                let _: Token![;] = input.parse()?;
-                true
+                use_real_time = true;
+            } else if ident == "real_fs" {
+                use_real_fs = true;
             } else {
-                false
+                return Err(syn::Error::new_spanned(
+                    ident,
+                    "Expected 'real_time' or 'real_fs'",
+                ));
             }
-        } else {
-            false
-        };
+            let _: Token![;] = input.parse()?;
+        }
 
         let function: syn::ItemFn = input.parse()?;
 
         Ok(Self {
             crate_path,
             use_real_time,
+            use_real_fs,
             function,
         })
     }
@@ -135,6 +142,7 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as TestWithPathInput);
     let crate_path = input.crate_path;
     let use_real_time = input.use_real_time;
+    let use_real_fs = input.use_real_fs;
     let input_fn = input.function;
 
     let fn_name = &input_fn.sig.ident;
@@ -150,26 +158,79 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
         .filter(|attr| !attr.path().is_ident("test"))
         .collect();
 
-    let result = if use_real_time {
-        quote! {
-            #(#filtered_attrs)*
-            #[::core::prelude::v1::test]
-            #fn_vis fn #fn_name(#fn_inputs) #fn_output {
-                #crate_path::time::simulator::with_real_time(|| {
+    // Determine the correct paths for fs and time modules based on crate_path
+    let (fs_path, time_path) = if crate_path == syn::parse_quote!(switchy_async)
+        || crate_path == syn::parse_quote!(crate)
+    {
+        // Direct invocation from switchy_async or internal tests
+        // Try to use switchy umbrella crate first, but fall back to direct crate access
+        // if switchy is not available (e.g., in packages that only depend on switchy_async)
+        (quote!(switchy_fs), quote!(switchy_time))
+    } else if let Some(first_segment) = crate_path.segments.first() {
+        if first_segment.ident == "switchy" {
+            // Any path starting with switchy (like switchy::unsync)
+            // We need to use switchy::fs, not switchy::unsync::fs
+            (quote!(switchy::fs), quote!(switchy::time))
+        } else {
+            // Some other crate that might have its own fs/time modules
+            (quote!(#crate_path::fs), quote!(#crate_path::time))
+        }
+    } else {
+        // Fallback - assume the crate_path has fs and time
+        (quote!(#crate_path::fs), quote!(#crate_path::time))
+    };
+
+    let result = match (use_real_time, use_real_fs) {
+        (true, true) => {
+            quote! {
+                #(#filtered_attrs)*
+                #[::core::prelude::v1::test]
+                #fn_vis fn #fn_name(#fn_inputs) #fn_output {
+                    #time_path::simulator::with_real_time(|| {
+                        #fs_path::simulator::with_real_fs(|| {
+                            let rt = #crate_path::Builder::new().build().unwrap();
+                            rt.block_on(async move #fn_block)
+                            // Don't call rt.wait() as it can hang in tests
+                        })
+                    })
+                }
+            }
+        }
+        (true, false) => {
+            quote! {
+                #(#filtered_attrs)*
+                #[::core::prelude::v1::test]
+                #fn_vis fn #fn_name(#fn_inputs) #fn_output {
+                    #time_path::simulator::with_real_time(|| {
+                        let rt = #crate_path::Builder::new().build().unwrap();
+                        rt.block_on(async move #fn_block)
+                        // Don't call rt.wait() as it can hang in tests
+                    })
+                }
+            }
+        }
+        (false, true) => {
+            quote! {
+                #(#filtered_attrs)*
+                #[::core::prelude::v1::test]
+                #fn_vis fn #fn_name(#fn_inputs) #fn_output {
+                    #fs_path::simulator::with_real_fs(|| {
+                        let rt = #crate_path::Builder::new().build().unwrap();
+                        rt.block_on(async move #fn_block)
+                        // Don't call rt.wait() as it can hang in tests
+                    })
+                }
+            }
+        }
+        (false, false) => {
+            quote! {
+                #(#filtered_attrs)*
+                #[::core::prelude::v1::test]
+                #fn_vis fn #fn_name(#fn_inputs) #fn_output {
                     let rt = #crate_path::Builder::new().build().unwrap();
                     rt.block_on(async move #fn_block)
                     // Don't call rt.wait() as it can hang in tests
-                })
-            }
-        }
-    } else {
-        quote! {
-            #(#filtered_attrs)*
-            #[::core::prelude::v1::test]
-            #fn_vis fn #fn_name(#fn_inputs) #fn_output {
-                let rt = #crate_path::Builder::new().build().unwrap();
-                rt.block_on(async move #fn_block)
-                // Don't call rt.wait() as it can hang in tests
+                }
             }
         }
     };
@@ -189,16 +250,34 @@ pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = if args_str.trim() == "real_time" {
-        quote! {
-            @path = crate;
-            real_time;
-            #item_tokens
+    let input_tokens = match args_str.trim() {
+        "real_time" => {
+            quote! {
+                @path = crate;
+                real_time;
+                #item_tokens
+            }
         }
-    } else {
-        quote! {
-            @path = crate;
-            #item_tokens
+        "real_fs" => {
+            quote! {
+                @path = crate;
+                real_fs;
+                #item_tokens
+            }
+        }
+        "real_time, real_fs" | "real_fs, real_time" => {
+            quote! {
+                @path = crate;
+                real_time;
+                real_fs;
+                #item_tokens
+            }
+        }
+        _ => {
+            quote! {
+                @path = crate;
+                #item_tokens
+            }
         }
     };
 
@@ -217,16 +296,34 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = if args_str.trim() == "real_time" {
-        quote! {
-            @path = switchy_async;
-            real_time;
-            #item_tokens
+    let input_tokens = match args_str.trim() {
+        "real_time" => {
+            quote! {
+                @path = switchy_async;
+                real_time;
+                #item_tokens
+            }
         }
-    } else {
-        quote! {
-            @path = switchy_async;
-            #item_tokens
+        "real_fs" => {
+            quote! {
+                @path = switchy_async;
+                real_fs;
+                #item_tokens
+            }
+        }
+        "real_time, real_fs" | "real_fs, real_time" => {
+            quote! {
+                @path = switchy_async;
+                real_time;
+                real_fs;
+                #item_tokens
+            }
+        }
+        _ => {
+            quote! {
+                @path = switchy_async;
+                #item_tokens
+            }
         }
     };
 
@@ -245,16 +342,34 @@ pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = if args_str.trim() == "real_time" {
-        quote! {
-            @path = switchy::unsync;
-            real_time;
-            #item_tokens
+    let input_tokens = match args_str.trim() {
+        "real_time" => {
+            quote! {
+                @path = switchy::unsync;
+                real_time;
+                #item_tokens
+            }
         }
-    } else {
-        quote! {
-            @path = switchy::unsync;
-            #item_tokens
+        "real_fs" => {
+            quote! {
+                @path = switchy::unsync;
+                real_fs;
+                #item_tokens
+            }
+        }
+        "real_time, real_fs" | "real_fs, real_time" => {
+            quote! {
+                @path = switchy::unsync;
+                real_time;
+                real_fs;
+                #item_tokens
+            }
+        }
+        _ => {
+            quote! {
+                @path = switchy::unsync;
+                #item_tokens
+            }
         }
     };
 

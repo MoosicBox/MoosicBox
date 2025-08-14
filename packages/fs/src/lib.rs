@@ -28,6 +28,7 @@ pub trait GenericAsyncFile:
 #[allow(unused)]
 macro_rules! impl_open_options {
     ($(,)?) => {
+        #[derive(Clone)]
         pub struct OpenOptions {
             pub(crate) create: bool,
             pub(crate) append: bool,

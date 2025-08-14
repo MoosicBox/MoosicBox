@@ -106,6 +106,21 @@ pub mod unsync {
         }
     }
 
+    impl From<OpenOptions> for std::fs::OpenOptions {
+        fn from(value: OpenOptions) -> Self {
+            let mut options = Self::new();
+
+            options
+                .create(value.create)
+                .append(value.append)
+                .read(value.read)
+                .write(value.write)
+                .truncate(value.truncate);
+
+            options
+        }
+    }
+
     #[cfg(not(feature = "simulator"))]
     impl OpenOptions {
         /// # Errors

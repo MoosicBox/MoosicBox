@@ -20,9 +20,10 @@ switchy_async = { workspace = true, optional = true, features = [
     "sync",
 ] }
 
-bytes = { workspace = true, optional = true }
-log   = { workspace = true }
-tokio = { workspace = true, optional = true }
+bytes      = { workspace = true, optional = true }
+log        = { workspace = true }
+scoped-tls = { workspace = true, optional = true }
+tokio      = { workspace = true, optional = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
@@ -35,6 +36,7 @@ default = ["async", "simulator", "std", "sync", "tokio"]
 fail-on-warnings = []
 
 simulator = ["dep:bytes", "sync"]
+simulator-real-fs = ["dep:scoped-tls", "dep:switchy_async", "switchy_async/rt-multi-thread"]
 std       = ["sync"]
 tokio     = ["async", "dep:tokio", "switchy_async/fs", "switchy_async/tokio"]
 

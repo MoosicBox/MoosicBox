@@ -6,6 +6,92 @@ use std::{
 
 use bytes::BytesMut;
 
+// Module that contains all real_fs functionality
+#[cfg(feature = "simulator-real-fs")]
+mod real_fs_support {
+    use bytes::BytesMut;
+    use scoped_tls::scoped_thread_local;
+    use std::sync::{Arc, Mutex};
+
+    pub struct RealFs;
+
+    scoped_thread_local! {
+        pub(super) static REAL_FS: RealFs
+    }
+
+    pub fn with_real_fs<T>(f: impl FnOnce() -> T) -> T {
+        REAL_FS.set(&RealFs, f)
+    }
+
+    #[inline]
+    pub fn is_real_fs() -> bool {
+        REAL_FS.is_set()
+    }
+
+    // Simple conversion for std::fs::File to simulator File
+    pub fn convert_std_file_to_simulator(
+        std_file: std::fs::File,
+        path: impl AsRef<std::path::Path>,
+        write: bool,
+    ) -> std::io::Result<super::sync::File> {
+        use std::io::Read;
+
+        let mut std_file = std_file;
+        let mut content = Vec::new();
+        std_file.read_to_end(&mut content)?;
+
+        Ok(super::sync::File {
+            path: path.as_ref().to_path_buf(),
+            data: Arc::new(Mutex::new(BytesMut::from(content.as_slice()))),
+            position: 0,
+            write,
+        })
+    }
+
+    // Async conversion for std::fs::File to simulator File
+    #[cfg(feature = "async")]
+    pub async fn convert_std_file_to_simulator_async(
+        std_file: std::fs::File,
+        path: impl AsRef<std::path::Path>,
+        write: bool,
+    ) -> std::io::Result<super::unsync::File> {
+        let path_buf = path.as_ref().to_path_buf();
+        let content = switchy_async::task::spawn_blocking(move || {
+            use std::io::Read;
+            let mut std_file = std_file;
+            let mut content = Vec::new();
+            std_file.read_to_end(&mut content)?;
+            Ok::<Vec<u8>, std::io::Error>(content)
+        })
+        .await
+        .unwrap()?;
+
+        Ok(super::unsync::File {
+            path: path_buf,
+            data: Arc::new(Mutex::new(BytesMut::from(content.as_slice()))),
+            position: 0,
+            write,
+        })
+    }
+}
+
+// When the feature is not enabled, provide no-op implementations
+#[cfg(not(feature = "simulator-real-fs"))]
+mod real_fs_support {
+    pub fn with_real_fs<T>(f: impl FnOnce() -> T) -> T {
+        f()
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    pub const fn is_real_fs() -> bool {
+        false
+    }
+}
+
+// Re-export at module level for clean access
+pub use real_fs_support::with_real_fs;
+
 thread_local! {
     static FILES: RefCell<RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>> =
         const { RefCell::new(RwLock::new(BTreeMap::new())) };
@@ -100,6 +186,34 @@ macro_rules! impl_file_sync {
     };
 }
 
+/// File type information for directory entries
+#[derive(Debug, Clone)]
+pub struct FileType {
+    is_dir: bool,
+    is_file: bool,
+    is_symlink: bool,
+}
+
+impl FileType {
+    /// Returns `true` if this entry represents a directory
+    #[must_use]
+    pub const fn is_dir(&self) -> bool {
+        self.is_dir
+    }
+
+    /// Returns `true` if this entry represents a regular file
+    #[must_use]
+    pub const fn is_file(&self) -> bool {
+        self.is_file
+    }
+
+    /// Returns `true` if this entry represents a symbolic link
+    #[must_use]
+    pub const fn is_symlink(&self) -> bool {
+        self.is_symlink
+    }
+}
+
 #[cfg(feature = "sync")]
 pub mod sync {
     use std::{
@@ -151,6 +265,17 @@ pub mod sync {
         ///
         /// * If the `FILES` `RwLock` fails to read.
         pub fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
+            // Only try to use real fs if both simulator-real-fs AND std features are enabled
+            #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+            if super::real_fs_support::is_real_fs() {
+                let std_options: std::fs::OpenOptions = self.clone().into();
+                let std_file = std_options.open(&path)?;
+                return super::real_fs_support::convert_std_file_to_simulator(
+                    std_file, &path, self.write,
+                );
+            }
+
+            // Original simulator implementation (fallback)
             let location = path_to_str!(path)?;
             let data = if let Some(data) =
                 FILES.with_borrow(|x| x.read().unwrap().get(location).cloned())
@@ -194,6 +319,12 @@ pub mod sync {
     ///
     /// * If the `FILES` `RwLock` fails to read.
     pub fn read_to_string<P: AsRef<Path>>(path: P) -> std::io::Result<String> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::read_to_string(path);
+        }
+
+        // Original simulator implementation (fallback)
         let location = path_to_str!(path)?;
         let Some(existing) = FILES.with_borrow(|x| x.read().unwrap().get(location).cloned()) else {
             return Err(std::io::Error::new(
@@ -208,15 +339,25 @@ pub mod sync {
 
     /// # Errors
     ///
-    /// * Never
-    pub fn create_dir_all<P: AsRef<Path>>(_path: P) -> std::io::Result<()> {
+    /// * If underlying `std::fs::create_dir_all` fails (when using real filesystem)
+    #[allow(unused_variables)]
+    pub fn create_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::create_dir_all(path);
+        }
         Ok(())
     }
 
     /// # Errors
     ///
-    /// * Never
-    pub fn remove_dir_all<P: AsRef<Path>>(_path: P) -> std::io::Result<()> {
+    /// * If underlying `std::fs::remove_dir_all` fails (when using real filesystem)
+    #[allow(unused_variables)]
+    pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            return crate::standard::sync::remove_dir_all(path);
+        }
         Ok(())
     }
 
@@ -226,8 +367,18 @@ pub mod sync {
     ///
     /// # Errors
     ///
-    /// * Never
-    pub fn read_dir_sorted<P: AsRef<Path>>(_path: P) -> std::io::Result<Vec<std::fs::DirEntry>> {
+    /// * If underlying `std::fs::read_dir` fails (when using real filesystem)
+    /// * If any directory entry cannot be read (when using real filesystem)
+    #[allow(unused_variables)]
+    pub fn read_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            let std_entries = crate::standard::sync::read_dir_sorted(path)?;
+            return std_entries
+                .into_iter()
+                .map(|x| DirEntry::from_std(&x))
+                .collect::<std::io::Result<Vec<_>>>();
+        }
         Ok(Vec::new())
     }
 
@@ -237,9 +388,64 @@ pub mod sync {
     ///
     /// # Errors
     ///
-    /// * Never
-    pub fn walk_dir_sorted<P: AsRef<Path>>(_path: P) -> std::io::Result<Vec<std::fs::DirEntry>> {
+    /// * If any directory cannot be read (when using real filesystem)
+    /// * If any directory entry cannot be accessed (when using real filesystem)
+    #[allow(unused_variables)]
+    pub fn walk_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
+        if super::real_fs_support::is_real_fs() {
+            let std_entries = crate::standard::sync::walk_dir_sorted(path)?;
+            return std_entries
+                .into_iter()
+                .map(|x| DirEntry::from_std(&x))
+                .collect::<std::io::Result<Vec<_>>>();
+        }
         Ok(Vec::new())
+    }
+
+    /// Directory entry for synchronous filesystem operations
+    pub struct DirEntry {
+        path: PathBuf,
+        file_name: std::ffi::OsString,
+        file_type_info: super::FileType,
+    }
+
+    impl DirEntry {
+        /// Create a new `DirEntry` from `std::fs::DirEntry`
+        ///
+        /// # Errors
+        ///
+        /// * If the file type cannot be determined
+        pub fn from_std(entry: &std::fs::DirEntry) -> std::io::Result<Self> {
+            let file_type = entry.file_type()?;
+            Ok(Self {
+                path: entry.path(),
+                file_name: entry.file_name(),
+                file_type_info: super::FileType {
+                    is_dir: file_type.is_dir(),
+                    is_file: file_type.is_file(),
+                    is_symlink: file_type.is_symlink(),
+                },
+            })
+        }
+
+        /// Returns the full path to this entry
+        #[must_use]
+        pub fn path(&self) -> PathBuf {
+            self.path.clone()
+        }
+
+        /// Returns the file name of this entry
+        #[must_use]
+        pub fn file_name(&self) -> std::ffi::OsString {
+            self.file_name.clone()
+        }
+
+        /// Returns the file type of this entry
+        #[must_use]
+        pub const fn file_type(&self) -> &super::FileType {
+            &self.file_type_info
+        }
     }
 
     #[cfg(test)]
@@ -417,8 +623,25 @@ pub mod unsync {
         /// # Panics
         ///
         /// * If the `FILES` `RwLock` fails to read.
-        #[allow(clippy::unused_async)]
+        #[allow(clippy::unused_async, clippy::future_not_send)]
         pub async fn open(self, path: impl AsRef<::std::path::Path>) -> ::std::io::Result<File> {
+            #[cfg(all(feature = "simulator-real-fs", feature = "async",))]
+            if super::real_fs_support::is_real_fs() {
+                let path_buf = path.as_ref().to_path_buf();
+                let options = self.clone();
+                let std_file = switchy_async::task::spawn_blocking(move || {
+                    let std_options: std::fs::OpenOptions = options.into();
+                    std_options.open(&path_buf)
+                })
+                .await
+                .unwrap()?;
+                return super::real_fs_support::convert_std_file_to_simulator_async(
+                    std_file, &path, self.write,
+                )
+                .await;
+            }
+
+            // Fallback to sync simulator implementation
             Ok(self.into_sync().open(path)?.into_async())
         }
     }
@@ -428,22 +651,108 @@ pub mod unsync {
     /// * If the file doesn't exist
     /// * If the file contents cannot be converted to a UTF-8 encoded `String`
     /// * If the file `Path` cannot be converted to a `str`
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails
     pub async fn read_to_string<P: AsRef<Path>>(path: P) -> std::io::Result<String> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || std::fs::read_to_string(path))
+                .await
+                .unwrap();
+        }
+
+        // Fallback to sync simulator implementation
         super::sync::read_to_string(path)
     }
 
     /// # Errors
     ///
-    /// * Never
+    /// * If underlying `std::fs::create_dir_all` fails (when using real filesystem)
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails
     pub async fn create_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || std::fs::create_dir_all(path))
+                .await
+                .unwrap();
+        }
+
         super::sync::create_dir_all(path)
     }
 
     /// # Errors
     ///
-    /// * Never
+    /// * If underlying `std::fs::remove_dir_all` fails (when using real filesystem)
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails
     pub async fn remove_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || std::fs::remove_dir_all(path))
+                .await
+                .unwrap();
+        }
+
         super::sync::remove_dir_all(path)
+    }
+
+    /// Directory entry for asynchronous filesystem operations
+    pub struct DirEntry {
+        path: PathBuf,
+        file_name: std::ffi::OsString,
+        file_type_info: super::FileType,
+    }
+
+    impl DirEntry {
+        /// Create a new `DirEntry` from `std::fs::DirEntry`
+        ///
+        /// # Errors
+        ///
+        /// * If the file type cannot be determined
+        pub fn from_std(entry: &std::fs::DirEntry) -> std::io::Result<Self> {
+            let file_type = entry.file_type()?;
+            Ok(Self {
+                path: entry.path(),
+                file_name: entry.file_name(),
+                file_type_info: super::FileType {
+                    is_dir: file_type.is_dir(),
+                    is_file: file_type.is_file(),
+                    is_symlink: file_type.is_symlink(),
+                },
+            })
+        }
+
+        /// Returns the full path to this entry
+        #[must_use]
+        pub fn path(&self) -> PathBuf {
+            self.path.clone()
+        }
+
+        /// Returns the file name of this entry
+        #[must_use]
+        pub fn file_name(&self) -> std::ffi::OsString {
+            self.file_name.clone()
+        }
+
+        /// Returns the file type of this entry
+        ///
+        /// # Errors
+        ///
+        /// * Infallible
+        #[allow(clippy::unused_async)]
+        pub async fn file_type(&self) -> std::io::Result<super::FileType> {
+            Ok(self.file_type_info.clone())
+        }
     }
 
     /// Read directory entries and return them sorted by filename for deterministic iteration
@@ -452,13 +761,31 @@ pub mod unsync {
     ///
     /// # Errors
     ///
-    /// * Never
-    pub async fn read_dir_sorted<P: AsRef<Path>>(
-        path: P,
-    ) -> std::io::Result<Vec<tokio::fs::DirEntry>> {
-        // In simulator mode, we don't have actual directories, so return empty
-        // This is a limitation of the current simulator implementation
-        let _ = path; // Suppress unused parameter warning
+    /// * If underlying `tokio::fs::read_dir` fails (when using real filesystem)
+    /// * If any directory entry cannot be read (when using real filesystem)
+    /// * If using `real_fs` with simulator runtime (type incompatibility)
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails
+    #[allow(unused_variables)]
+    pub async fn read_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || {
+                // Reuse existing logic from standard::sync
+                let std_entries = crate::standard::sync::read_dir_sorted(path)?;
+                // Convert to simulator DirEntry
+                std_entries
+                    .into_iter()
+                    .map(|x| DirEntry::from_std(&x))
+                    .collect::<std::io::Result<Vec<_>>>()
+            })
+            .await
+            .unwrap();
+        }
+
         Ok(Vec::new())
     }
 
@@ -468,13 +795,31 @@ pub mod unsync {
     ///
     /// # Errors
     ///
-    /// * Never
-    pub async fn walk_dir_sorted<P: AsRef<Path>>(
-        path: P,
-    ) -> std::io::Result<Vec<tokio::fs::DirEntry>> {
-        // In simulator mode, we don't have actual directories, so return empty
-        // This is a limitation of the current simulator implementation
-        let _ = path; // Suppress unused parameter warning
+    /// * If any directory cannot be read (when using real filesystem)
+    /// * If any directory entry cannot be accessed (when using real filesystem)
+    /// * If using `real_fs` with simulator runtime (type incompatibility)
+    ///
+    /// # Panics
+    ///
+    /// * If the `spawn_blocking` task fails
+    #[allow(unused_variables)]
+    pub async fn walk_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
+        #[cfg(all(feature = "simulator-real-fs", feature = "async"))]
+        if super::real_fs_support::is_real_fs() {
+            let path = path.as_ref().to_path_buf();
+            return switchy_async::task::spawn_blocking(move || {
+                // Reuse existing logic from standard::sync
+                let std_entries = crate::standard::sync::walk_dir_sorted(path)?;
+                // Convert to simulator DirEntry
+                std_entries
+                    .into_iter()
+                    .map(|x| DirEntry::from_std(&x))
+                    .collect::<std::io::Result<Vec<_>>>()
+            })
+            .await
+            .unwrap();
+        }
+
         Ok(Vec::new())
     }
 
@@ -537,5 +882,38 @@ pub mod unsync {
 
             assert_eq!(read_count, 3);
         }
+    }
+}
+
+#[cfg(test)]
+mod real_fs_tests {
+    use std::io::Write as _;
+
+    #[switchy_async::test]
+    async fn test_simulator_mode_no_real_fs() {
+        // Verify that real_fs is NOT set in normal test
+        assert!(
+            !super::real_fs_support::is_real_fs(),
+            "real_fs should NOT be set in normal test"
+        );
+
+        // This test should use simulated filesystem
+        let content = "test content";
+        let path = "/simulated/path/file.txt";
+
+        // Write to simulated filesystem
+        let mut file = crate::sync::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        // Read from simulated filesystem
+        let read_content = super::sync::read_to_string(path).unwrap();
+        assert_eq!(read_content, content);
+
+        // This file should not exist on real filesystem
+        assert!(!std::path::Path::new(path).exists());
     }
 }

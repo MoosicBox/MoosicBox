@@ -138,10 +138,11 @@ impl DirectoryMigrationSource {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::Path;
 
-    #[switchy_async::test]
+    use super::*;
+
+    #[switchy_async::test(real_fs)]
     async fn test_directory_migration_source() {
         let test_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("test_migrations_dir");
 
@@ -157,7 +158,7 @@ mod tests {
         assert_eq!(migrations[2].id(), "003_empty_migration");
     }
 
-    #[switchy_async::test]
+    #[switchy_async::test(real_fs)]
     async fn test_file_migration_with_content() {
         let test_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("test_migrations_dir");
 
