@@ -117,8 +117,11 @@
 //! # }
 //! ```
 
-use crate::{Result, migration::Migration, migration::MigrationSource};
+use std::sync::Arc;
+
 use async_trait::async_trait;
+
+use crate::{Result, migration::Migration, migration::MigrationSource};
 use switchy_database::Executable;
 
 /// Migration implementation for code-based migrations using `Executable`
@@ -190,7 +193,7 @@ impl Default for CodeMigrationSource<'_> {
 
 #[async_trait]
 impl<'a> MigrationSource<'a> for CodeMigrationSource<'a> {
-    async fn migrations(&self) -> Result<Vec<Box<dyn Migration<'a> + 'a>>> {
+    async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>> {
         // For now, return empty vec - this implementation needs to be completed
         // when we have concrete use cases for code-based migrations
         Ok(Vec::new())

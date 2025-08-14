@@ -12,6 +12,7 @@
 //! - [`CodeMigration`](crate::discovery::code::CodeMigration) with owned SQL strings
 //!
 //! ```rust
+//! use std::sync::Arc;
 //! use switchy_schema::migration::Migration;
 //! use switchy_database::Database;
 //! use async_trait::async_trait;
@@ -68,16 +69,17 @@
 //! Migration sources provide collections of migrations and also use lifetime parameters:
 //!
 //! ```rust
+//! use std::sync::Arc;
 //! use switchy_schema::migration::{Migration, MigrationSource};
 //! use async_trait::async_trait;
 //!
 //! struct MyMigrationSource {
-//!     migrations: Vec<Box<dyn Migration<'static> + 'static>>,
+//!     migrations: Vec<Arc<dyn Migration<'static> + 'static>>,
 //! }
 //!
 //! #[async_trait]
 //! impl MigrationSource<'static> for MyMigrationSource {
-//!     async fn migrations(&self) -> switchy_schema::Result<Vec<Box<dyn Migration<'static> + 'static>>> {
+//!     async fn migrations(&self) -> switchy_schema::Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
 //!         // Return owned migrations
 //!         Ok(vec![])
 //!     }
@@ -92,6 +94,8 @@
 //! - **Code migrations can be either** - Depending on whether they own or borrow data
 
 use crate::Result;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use switchy_database::Database;
 
@@ -116,5 +120,5 @@ pub trait Migration<'a>: Send + Sync + 'a {
 
 #[async_trait]
 pub trait MigrationSource<'a>: Send + Sync {
-    async fn migrations(&self) -> Result<Vec<Box<dyn Migration<'a> + 'a>>>;
+    async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>>;
 }

@@ -3,6 +3,8 @@
 //! This example demonstrates the most common usage patterns with static lifetimes,
 //! covering all three discovery methods: embedded, directory, and code-based migrations.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use switchy_database::{
     schema::{create_table, Column, DataType},
@@ -93,16 +95,16 @@ impl CustomMigrationSource {
 
 #[async_trait]
 impl MigrationSource<'static> for CustomMigrationSource {
-    async fn migrations(&self) -> Result<Vec<Box<dyn Migration<'static> + 'static>>> {
-        let migrations: Vec<Box<dyn Migration<'static> + 'static>> = self
+    async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
+        let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = self
             .migrations
             .iter()
             .map(|m| {
-                Box::new(CustomMigration::new(
+                Arc::new(CustomMigration::new(
                     m.id.clone(),
                     m.up_sql.clone(),
                     m.down_sql.clone(),
-                )) as Box<dyn Migration<'static> + 'static>
+                )) as Arc<dyn Migration<'static> + 'static>
             })
             .collect();
         Ok(migrations)

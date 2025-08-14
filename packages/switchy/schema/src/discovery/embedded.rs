@@ -1,8 +1,10 @@
 use crate::{Result, migration::Migration, migration::MigrationSource};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use bytes::Bytes;
 use include_dir::{Dir, DirEntry};
-use std::collections::BTreeMap;
 
 /// Migration implementation for embedded migrations using `include_dir`
 pub struct EmbeddedMigration {
@@ -105,12 +107,12 @@ impl EmbeddedMigrationSource {
 
 #[async_trait]
 impl MigrationSource<'static> for EmbeddedMigrationSource {
-    async fn migrations(&self) -> Result<Vec<Box<dyn Migration<'static> + 'static>>> {
+    async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
         let migration_map = self.extract_migrations();
 
-        let migrations: Vec<Box<dyn Migration<'static> + 'static>> = migration_map
+        let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = migration_map
             .into_values()
-            .map(|m| Box::new(m) as Box<dyn Migration<'static> + 'static>)
+            .map(|m| Arc::new(m) as Arc<dyn Migration<'static> + 'static>)
             .collect();
 
         Ok(migrations)

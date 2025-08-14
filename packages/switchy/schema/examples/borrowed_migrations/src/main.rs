@@ -4,7 +4,7 @@
 //! showing how to create migrations that borrow data and use explicit lifetime management.
 
 use async_trait::async_trait;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use switchy_database::{
     schema::{create_table, Column, DataType},
     Database,
@@ -182,8 +182,8 @@ impl<'a> ConfigBasedMigrationSource<'a> {
 
 #[async_trait]
 impl<'a> MigrationSource<'a> for ConfigBasedMigrationSource<'a> {
-    async fn migrations(&self) -> Result<Vec<Box<dyn Migration<'a> + 'a>>> {
-        let mut migrations: Vec<Box<dyn Migration<'a> + 'a>> = Vec::new();
+    async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>> {
+        let mut migrations: Vec<Arc<dyn Migration<'a> + 'a>> = Vec::new();
 
         // Create migrations for each table in the configuration
         for table_name in self.config.tables.keys() {
@@ -192,7 +192,7 @@ impl<'a> MigrationSource<'a> for ConfigBasedMigrationSource<'a> {
                 self.config,
                 table_name,
             );
-            migrations.push(Box::new(migration));
+            migrations.push(Arc::new(migration));
         }
 
         // Sort by migration ID for deterministic ordering

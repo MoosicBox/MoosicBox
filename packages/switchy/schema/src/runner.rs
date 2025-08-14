@@ -6,6 +6,7 @@
 //! ## Basic Usage
 //!
 //! ```rust,no_run
+//! use std::sync::Arc;
 //! use switchy_schema::runner::{MigrationRunner, ExecutionStrategy, RollbackStrategy};
 //! use switchy_schema::migration::{Migration, MigrationSource};
 //! use switchy_database::Database;
@@ -16,7 +17,7 @@
 //!
 //! #[async_trait::async_trait]
 //! impl MigrationSource<'static> for MockSource {
-//!     async fn migrations(&self) -> switchy_schema::Result<Vec<Box<dyn Migration<'static> + 'static>>> {
+//!     async fn migrations(&self) -> switchy_schema::Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
 //!         Ok(vec![])
 //!     }
 //! }
@@ -60,8 +61,9 @@
 //! # let runner = MigrationRunner::new_code();
 //! ```
 
+use std::{collections::BTreeMap, sync::Arc};
+
 use crate::{Result, migration::MigrationSource, version::VersionTracker};
-use std::collections::BTreeMap;
 use switchy_database::Database;
 
 #[cfg(feature = "embedded")]
@@ -260,8 +262,8 @@ impl<'a> MigrationRunner<'a> {
     #[allow(clippy::borrowed_box)]
     fn apply_strategy<'b>(
         &self,
-        migration_map: &'b BTreeMap<String, Box<dyn crate::migration::Migration<'a> + 'a>>,
-    ) -> BTreeMap<String, &'b Box<dyn crate::migration::Migration<'a> + 'a>> {
+        migration_map: &'b BTreeMap<String, Arc<dyn crate::migration::Migration<'a> + 'a>>,
+    ) -> BTreeMap<String, &'b Arc<dyn crate::migration::Migration<'a> + 'a>> {
         let mut result = BTreeMap::new();
 
         match &self.strategy {
@@ -311,6 +313,7 @@ impl<'a> MigrationRunner<'a> {
     ///
     /// ```rust,no_run
     /// # use switchy_schema::runner::{MigrationRunner, RollbackStrategy};
+    /// # use std::sync::Arc;
     /// # use switchy_schema::migration::{Migration, MigrationSource};
     /// # use switchy_database::Database;
     /// # async fn example(db: &dyn Database) -> Result<(), switchy_schema::MigrationError> {
@@ -318,7 +321,7 @@ impl<'a> MigrationRunner<'a> {
     /// # struct MockSource;
     /// # #[async_trait::async_trait]
     /// # impl MigrationSource<'static> for MockSource {
-    /// #     async fn migrations(&self) -> switchy_schema::Result<Vec<Box<dyn Migration<'static> + 'static>>> {
+    /// #     async fn migrations(&self) -> switchy_schema::Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
     /// #         Ok(vec![])
     /// #     }
     /// # }
@@ -459,18 +462,18 @@ mod tests {
             let runner = MigrationRunner::new(Box::new(source));
 
             let mut migration_map = BTreeMap::new();
-            let migration1 = Box::new(CodeMigration::new(
+            let migration1 = Arc::new(CodeMigration::new(
                 "001_test".to_string(),
                 Box::new("CREATE TABLE test1 (id INTEGER);".to_string()) as Box<dyn Executable>,
                 None,
             ))
-                as Box<dyn crate::migration::Migration<'static> + 'static>;
-            let migration2 = Box::new(CodeMigration::new(
+                as Arc<dyn crate::migration::Migration<'static> + 'static>;
+            let migration2 = Arc::new(CodeMigration::new(
                 "002_test".to_string(),
                 Box::new("CREATE TABLE test2 (id INTEGER);".to_string()) as Box<dyn Executable>,
                 None,
             ))
-                as Box<dyn crate::migration::Migration<'static> + 'static>;
+                as Arc<dyn crate::migration::Migration<'static> + 'static>;
 
             migration_map.insert("001_test".to_string(), migration1);
             migration_map.insert("002_test".to_string(), migration2);
@@ -488,18 +491,18 @@ mod tests {
                 .with_strategy(ExecutionStrategy::UpTo("001_test".to_string()));
 
             let mut migration_map = BTreeMap::new();
-            let migration1 = Box::new(CodeMigration::new(
+            let migration1 = Arc::new(CodeMigration::new(
                 "001_test".to_string(),
                 Box::new("CREATE TABLE test1 (id INTEGER);".to_string()) as Box<dyn Executable>,
                 None,
             ))
-                as Box<dyn crate::migration::Migration<'static> + 'static>;
-            let migration2 = Box::new(CodeMigration::new(
+                as Arc<dyn crate::migration::Migration<'static> + 'static>;
+            let migration2 = Arc::new(CodeMigration::new(
                 "002_test".to_string(),
                 Box::new("CREATE TABLE test2 (id INTEGER);".to_string()) as Box<dyn Executable>,
                 None,
             ))
-                as Box<dyn crate::migration::Migration<'static> + 'static>;
+                as Arc<dyn crate::migration::Migration<'static> + 'static>;
 
             migration_map.insert("001_test".to_string(), migration1);
             migration_map.insert("002_test".to_string(), migration2);
@@ -517,18 +520,18 @@ mod tests {
                 MigrationRunner::new(Box::new(source)).with_strategy(ExecutionStrategy::Steps(1));
 
             let mut migration_map = BTreeMap::new();
-            let migration1 = Box::new(CodeMigration::new(
+            let migration1 = Arc::new(CodeMigration::new(
                 "001_test".to_string(),
                 Box::new("CREATE TABLE test1 (id INTEGER);".to_string()) as Box<dyn Executable>,
                 None,
             ))
-                as Box<dyn crate::migration::Migration<'static> + 'static>;
-            let migration2 = Box::new(CodeMigration::new(
+                as Arc<dyn crate::migration::Migration<'static> + 'static>;
+            let migration2 = Arc::new(CodeMigration::new(
                 "002_test".to_string(),
                 Box::new("CREATE TABLE test2 (id INTEGER);".to_string()) as Box<dyn Executable>,
                 None,
             ))
-                as Box<dyn crate::migration::Migration<'static> + 'static>;
+                as Arc<dyn crate::migration::Migration<'static> + 'static>;
 
             migration_map.insert("001_test".to_string(), migration1);
             migration_map.insert("002_test".to_string(), migration2);

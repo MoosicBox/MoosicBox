@@ -1,6 +1,8 @@
-use crate::{Result, migration::Migration, migration::MigrationSource};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+
 use async_trait::async_trait;
-use std::{collections::BTreeMap, path::PathBuf};
+
+use crate::{Result, migration::Migration, migration::MigrationSource};
 
 /// Migration implementation for file-based migrations
 pub struct FileMigration {
@@ -75,11 +77,11 @@ impl DirectoryMigrationSource {
 
 #[async_trait]
 impl MigrationSource<'static> for DirectoryMigrationSource {
-    async fn migrations(&self) -> Result<Vec<Box<dyn Migration<'static> + 'static>>> {
+    async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
         let migration_map = self.extract_migrations().await?;
-        let migrations: Vec<Box<dyn Migration<'static> + 'static>> = migration_map
+        let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = migration_map
             .into_values()
-            .map(|m| Box::new(m) as Box<dyn Migration<'static> + 'static>)
+            .map(|m| Arc::new(m) as Arc<dyn Migration<'static> + 'static>)
             .collect();
         Ok(migrations)
     }
