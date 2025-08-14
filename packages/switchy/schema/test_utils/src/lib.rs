@@ -8,11 +8,15 @@
 //! correctness and behavior. It supports testing migrations with fresh databases,
 //! pre-seeded state, and interleaved mutations between migrations.
 
-use switchy_database::DatabaseError;
-use switchy_schema::MigrationError;
+use std::{future::Future, pin::Pin, sync::Arc};
 
-#[cfg(feature = "sqlite")]
-use switchy_database::Database;
+use async_trait::async_trait;
+use switchy_database::{Database, DatabaseError};
+use switchy_schema::{
+    MigrationError,
+    migration::{Migration, MigrationSource},
+    runner::{MigrationRunner, RollbackStrategy},
+};
 
 /// Re-export core types for convenience
 pub use switchy_database;
@@ -39,4 +43,296 @@ pub async fn create_empty_in_memory()
 -> Result<Box<dyn Database>, switchy_database_connection::InitSqliteSqlxDatabaseError> {
     // Create in-memory SQLite database using sqlx
     switchy_database_connection::init_sqlite_sqlx(None).await
+}
+
+/// Internal helper struct that wraps a Vec of migrations into a `MigrationSource`
+struct VecMigrationSource<'a> {
+    migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
+}
+
+impl<'a> VecMigrationSource<'a> {
+    fn new(migrations: Vec<Arc<dyn Migration<'a> + 'a>>) -> Self {
+        Self { migrations }
+    }
+}
+
+#[async_trait]
+impl<'a> MigrationSource<'a> for VecMigrationSource<'a> {
+    async fn migrations(&self) -> switchy_schema::Result<Vec<Arc<dyn Migration<'a> + 'a>>> {
+        Ok(self.migrations.clone()) // Cheap Arc cloning!
+    }
+}
+
+/// Test migrations from fresh state - runs migrations forward then backward
+///
+/// This function creates a `MigrationRunner` internally and tests the full migration
+/// cycle: applying all migrations forward, then rolling them all back.
+///
+/// # Arguments
+///
+/// * `db` - Database connection to test against
+/// * `migrations` - Vector of migrations to test
+///
+/// # Errors
+///
+/// * If any migration fails during forward execution
+/// * If any migration fails during rollback
+/// * If database operations fail
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use std::sync::Arc;
+/// use switchy_schema_test_utils::{verify_migrations_full_cycle, TestError};
+/// use switchy_schema::migration::Migration;
+/// use switchy_database::Database;
+///
+/// # async fn example(db: &dyn Database, migrations: Vec<Arc<dyn Migration<'static> + 'static>>) -> Result<(), TestError> {
+/// // Test a set of migrations
+/// verify_migrations_full_cycle(db, migrations).await?;
+/// # Ok(())
+/// # }
+/// ```
+pub async fn verify_migrations_full_cycle<'a>(
+    db: &dyn Database,
+    migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
+) -> Result<(), TestError> {
+    // Create VecMigrationSource from provided migrations
+    let source = VecMigrationSource::new(migrations);
+
+    // Create MigrationRunner internally
+    let runner = MigrationRunner::new(Box::new(source));
+
+    // Run all migrations forward (up)
+    runner.run(db).await?;
+
+    // Run all migrations backward (down) using rollback functionality
+    runner.rollback(db, RollbackStrategy::All).await?;
+
+    Ok(())
+}
+
+/// Test migrations with pre-seeded state - runs setup, then migrations forward and backward
+///
+/// This function allows testing migrations against a database that already contains data.
+/// It executes a setup closure first, then runs the full migration cycle.
+///
+/// # Arguments
+///
+/// * `db` - Database connection to test against
+/// * `migrations` - Vector of migrations to test
+/// * `setup` - Closure to populate initial database state
+///
+/// # Errors
+///
+/// * If the setup closure fails
+/// * If any migration fails during forward execution
+/// * If any migration fails during rollback
+/// * If database operations fail
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use std::sync::Arc;
+/// use switchy_schema_test_utils::{verify_migrations_with_state, TestError};
+/// use switchy_schema::migration::Migration;
+/// use switchy_database::{Database, DatabaseError};
+///
+/// # async fn example(db: &dyn Database, migrations: Vec<Arc<dyn Migration<'static> + 'static>>) -> Result<(), TestError> {
+/// // Test migrations with pre-existing data
+/// verify_migrations_with_state(
+///     db,
+///     migrations,
+///     |db| Box::pin(async move {
+///         // Setup initial state
+///         db.exec_raw("CREATE TABLE existing_table (id INTEGER)").await?;
+///         db.exec_raw("INSERT INTO existing_table (id) VALUES (1)").await?;
+///         Ok(())
+///     })
+/// ).await?;
+/// # Ok(())
+/// # }
+/// ```
+pub async fn verify_migrations_with_state<'a, F>(
+    db: &dyn Database,
+    migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
+    setup: F,
+) -> Result<(), TestError>
+where
+    F: for<'db> FnOnce(
+        &'db dyn Database,
+    )
+        -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'db>>,
+{
+    // Execute setup closure to populate initial state
+    setup(db).await?;
+
+    // Create VecMigrationSource from provided migrations
+    let source = VecMigrationSource::new(migrations);
+
+    // Create MigrationRunner internally
+    let runner = MigrationRunner::new(Box::new(source));
+
+    // Run all migrations forward
+    runner.run(db).await?;
+
+    // Run all migrations backward using rollback functionality
+    runner.rollback(db, RollbackStrategy::All).await?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_schema::migration::Migration;
+
+    // Mock migration for testing
+    struct TestMigration {
+        id: String,
+        up_sql: String,
+        down_sql: Option<String>,
+    }
+
+    impl TestMigration {
+        fn new(id: &str, up_sql: &str, down_sql: Option<&str>) -> Self {
+            Self {
+                id: id.to_string(),
+                up_sql: up_sql.to_string(),
+                down_sql: down_sql.map(String::from),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl Migration<'static> for TestMigration {
+        fn id(&self) -> &str {
+            &self.id
+        }
+
+        async fn up(&self, db: &dyn Database) -> switchy_schema::Result<()> {
+            db.exec_raw(&self.up_sql).await?;
+            Ok(())
+        }
+
+        async fn down(&self, db: &dyn Database) -> switchy_schema::Result<()> {
+            if let Some(down_sql) = &self.down_sql {
+                db.exec_raw(down_sql).await?;
+            }
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_vec_migration_source() {
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let migration2 = Arc::new(TestMigration::new(
+            "002_create_posts",
+            "CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER)",
+            Some("DROP TABLE posts"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let test_migrations = vec![migration1, migration2];
+        let source = VecMigrationSource::new(test_migrations.clone());
+
+        // Test that migrations() returns the same migrations
+        let result = source.migrations().await.unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].id(), "001_create_users");
+        assert_eq!(result[1].id(), "002_create_posts");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_verify_migrations_full_cycle() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let migration2 = Arc::new(TestMigration::new(
+            "002_create_posts",
+            "CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT)",
+            Some("DROP TABLE posts"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let test_migrations = vec![migration1, migration2];
+
+        // This should run migrations forward then backward without errors
+        let result = verify_migrations_full_cycle(db.as_ref(), test_migrations).await;
+        assert!(result.is_ok(), "Full cycle verification failed: {result:?}");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_verify_migrations_with_state() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let migration2 = Arc::new(TestMigration::new(
+            "002_add_email_column",
+            "ALTER TABLE existing_data ADD COLUMN email TEXT",
+            Some("ALTER TABLE existing_data DROP COLUMN email"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let test_migrations = vec![migration1, migration2];
+
+        // Test with pre-seeded state
+        let result = verify_migrations_with_state(db.as_ref(), test_migrations, |db| {
+            Box::pin(async move {
+                // Setup initial state
+                db.exec_raw("CREATE TABLE existing_data (id INTEGER PRIMARY KEY, name TEXT)")
+                    .await?;
+                db.exec_raw("INSERT INTO existing_data (name) VALUES ('test')")
+                    .await?;
+                Ok(())
+            })
+        })
+        .await;
+
+        assert!(result.is_ok(), "With state verification failed: {result:?}");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_verify_migrations_empty_list() {
+        let db = create_empty_in_memory().await.unwrap();
+        let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = vec![];
+
+        // Empty migration list should work fine
+        let result = verify_migrations_full_cycle(db.as_ref(), migrations).await;
+        assert!(result.is_ok(), "Empty migration list failed: {result:?}");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_verify_migrations_single_migration() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration = Arc::new(TestMigration::new(
+            "001_single_table",
+            "CREATE TABLE single_table (id INTEGER PRIMARY KEY)",
+            Some("DROP TABLE single_table"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let single_migration = vec![migration];
+
+        // Single migration should work
+        let result = verify_migrations_full_cycle(db.as_ref(), single_migration).await;
+        assert!(result.is_ok(), "Single migration failed: {result:?}");
+    }
 }

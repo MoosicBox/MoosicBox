@@ -4,7 +4,7 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** 🟡 **Implementation Phase** - Phase 1-5 complete, Phase 7.1-7.2.5 complete, ready for Phase 7.3
+**Current Status:** 🟡 **Implementation Phase** - Phase 1-5 complete, Phase 7.1-7.3 complete, ready for Phase 7.4
 
 **Completion Estimate:** ~25% complete - Core foundation, traits, discovery methods, migration runner, rollback, and Arc migration completed. Test utilities in progress.
 
@@ -544,11 +544,11 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
     - ✓ Allows testing with any database type
     - ✓ No database creation logic in core test utilities (ready for Phase 7.3+)
 
-### 7.3 Core Test Utilities
+### 7.3 Core Test Utilities ✅ **COMPLETED**
 
-- [ ] `packages/switchy/schema/test_utils/src/lib.rs` - Core test functionality ❌ **CRITICAL**
+- [x] `packages/switchy/schema/test_utils/src/lib.rs` - Core test functionality ✅ **CRITICAL**
 
-  - [ ] **VecMigrationSource helper** - Internal utility for test functions:
+  - [x] **VecMigrationSource helper** - Internal utility for test functions:
     ```rust
     struct VecMigrationSource<'a> {
         migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
@@ -560,27 +560,27 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         }
     }
     ```
-    - [ ] Used internally by test functions to wrap Vec into MigrationSource
-    - [ ] Leverages Arc for cheap cloning without RefCell or unsafe code
-    - [ ] Simple constructor: `VecMigrationSource::new(migrations)`
+    - [x] Used internally by test functions to wrap Vec into MigrationSource
+    - [x] Leverages Arc for cheap cloning without RefCell or unsafe code
+    - [x] Simple constructor: `VecMigrationSource::new(migrations)`
 
-  - [ ] **Basic migration verification** - Test migrations from fresh state:
+  - [x] **Basic migration verification** - Test migrations from fresh state:
     ```rust
     pub async fn verify_migrations_full_cycle<'a>(
         db: &dyn Database,
         migrations: Vec<Arc<dyn Migration<'a> + 'a>>
     ) -> Result<(), TestError>
     ```
-    - [ ] Create `VecMigrationSource` from provided migrations
-    - [ ] Create `MigrationRunner` internally from switchy_schema
-    - [ ] Run all migrations forward (up) on provided database
-    - [ ] Verify no errors during forward migration
-    - [ ] Run all migrations backward (down) using rollback functionality
-    - [ ] Verify database returns to initial state
-    - [ ] Verify no errors during rollback
-    - [ ] Add unit tests for this functionality
+    - [x] Create `VecMigrationSource` from provided migrations
+    - [x] Create `MigrationRunner` internally from switchy_schema
+    - [x] Run all migrations forward (up) on provided database
+    - [x] Verify no errors during forward migration
+    - [x] Run all migrations backward (down) using rollback functionality
+    - [x] Verify database returns to initial state
+    - [x] Verify no errors during rollback
+    - [x] Add unit tests for this functionality
 
-  - [ ] **Pre-seeded state verification** - Test with existing data:
+  - [x] **Pre-seeded state verification** - Test with existing data:
     ```rust
     pub async fn verify_migrations_with_state<'a, F, Fut>(
         db: &dyn Database,
@@ -591,14 +591,14 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         F: FnOnce(&dyn Database) -> Fut,
         Fut: Future<Output = Result<(), DatabaseError>>
     ```
-    - [ ] Execute setup closure to populate initial state
-    - [ ] Create `VecMigrationSource` from provided migrations
-    - [ ] Create `MigrationRunner` internally from switchy_schema
-    - [ ] Run all migrations forward
-    - [ ] Verify migrations handle existing data correctly
-    - [ ] Run all migrations backward using rollback functionality
-    - [ ] Verify rollback preserves/restores initial state
-    - [ ] Add unit tests for this functionality
+    - [x] Execute setup closure to populate initial state
+    - [x] Create `VecMigrationSource` from provided migrations
+    - [x] Create `MigrationRunner` internally from switchy_schema
+    - [x] Run all migrations forward
+    - [x] Verify migrations handle existing data correctly
+    - [x] Run all migrations backward using rollback functionality
+    - [x] Verify rollback preserves/restores initial state
+    - [x] Add unit tests for this functionality
 ### 7.4 Mutation Provider and Advanced Testing
 
 - [ ] `packages/switchy/schema/test_utils/src/mutations.rs` - Mutation handling ❌ **IMPORTANT**
@@ -858,6 +858,40 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
   - [ ] Implement proper migration ordering (BTreeMap-based)
   - [ ] Add comprehensive tests for code-based migration functionality
   - [ ] Update documentation with working examples
+
+### 11.8 Ergonomic Async Closure Support for Test Utilities
+
+**Goal:** Improve the ergonomics of `verify_migrations_with_state` to avoid requiring `Box::pin`
+
+**Current Issue:** Users must write `|db| Box::pin(async move { ... })` which is verbose and non-intuitive
+
+**Potential Solutions to Evaluate:**
+
+#### Option 1: Dual Function Approach
+- [ ] Create `verify_migrations_with_sync_setup` for simple synchronous setup ❌ **MINOR**
+- [ ] Keep `verify_migrations_with_async_setup` for complex async cases
+- **Pros:** Clear separation, optimal for each use case
+- **Cons:** API duplication, more functions to maintain
+
+#### Option 2: Builder Pattern
+- [ ] Create `MigrationTest` builder with `.with_setup()` method ❌ **MINOR**
+- [ ] Builder handles the boxing internally
+- **Pros:** Fluent API, extensible for future options
+- **Cons:** More complex API, departure from current simple functions
+
+#### Option 3: Helper Function (`setup_fn`)
+- [ ] Add `setup_fn()` helper that wraps closure and returns boxed future ❌ **MINOR**
+- [ ] Users write `setup_fn(|db| async move { ... })`
+- **Pros:** Minimal API change, backward compatible, clear intent
+- **Cons:** Still requires wrapping, though more discoverable than `Box::pin`
+
+#### Option 4: Trait-Based Approach
+- [ ] Define `SetupFn` trait that auto-implements for async closures ❌ **MINOR**
+- [ ] Trait implementation handles boxing internally
+- **Pros:** Most ergonomic, no wrapping needed
+- **Cons:** Complex trait bounds, potential compilation issues
+
+**Recommendation:** Defer decision until we have more real-world usage patterns. The current `Box::pin` approach is standard in the Rust async ecosystem and well-understood by developers.
 
 ## ~~Phase 12: Migration Dependency Resolution~~ ❌ **REMOVED**
 

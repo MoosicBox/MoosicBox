@@ -14,10 +14,14 @@ version     = "0.1.0"
 group = "switchy"
 
 [dependencies]
+async-trait                 = { workspace = true }
 switchy_database            = { workspace = true }
 switchy_database_connection = { workspace = true, optional = true }
 switchy_schema              = { workspace = true }
 thiserror                   = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["fail-on-warnings"]
