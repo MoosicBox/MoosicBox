@@ -449,6 +449,7 @@ jobs:
                   git fetch origin master
                   git rebase origin/master
                   git checkout master
+                  git pull origin master
                   git merge --ff-only ${{ needs.upgrade-compatible.outputs.branch-name }}
                   git push origin master
                   echo "✅ Compatible upgrades merged to master"
@@ -749,6 +750,7 @@ jobs:
                   git fetch origin master
                   git rebase origin/master
                   git checkout master
+                  git pull origin master
                   git merge --ff-only ${{ needs.upgrade-compatible.outputs.incompatible-branch }}
                   git push origin master
                   echo "✅ Incompatible upgrades merged to master"
