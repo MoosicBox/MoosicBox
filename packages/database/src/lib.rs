@@ -3,6 +3,7 @@
 #![allow(clippy::multiple_crate_versions)]
 
 pub mod config;
+pub mod executable;
 #[cfg(feature = "postgres-raw")]
 pub mod postgres;
 pub mod profiles;
@@ -470,3 +471,6 @@ where
         U::try_from_db(self, db).await
     }
 }
+
+// Re-export Executable trait
+pub use executable::Executable;
