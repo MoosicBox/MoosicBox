@@ -22,6 +22,9 @@ use switchy_schema::{
 pub use switchy_database;
 pub use switchy_schema;
 
+/// Mutation handling for advanced migration testing
+pub mod mutations;
+
 /// Test error type that wraps existing errors from `switchy_schema` and `switchy_database`
 #[derive(Debug, thiserror::Error)]
 pub enum TestError {
@@ -182,6 +185,86 @@ where
     Ok(())
 }
 
+/// Test migrations with data changes between migration steps
+///
+/// This function allows testing migrations with mutations (data changes) that occur
+/// between specific migration steps. This verifies that migrations handle intermediate
+/// state changes correctly and that rollback works with mutated data.
+///
+/// # Arguments
+///
+/// * `db` - Database connection to test against
+/// * `migrations` - Vector of migrations to test
+/// * `mutations` - Provider for mutations to execute between migrations
+///
+/// # Errors
+///
+/// * If any migration fails during forward execution
+/// * If any mutation fails during execution
+/// * If any migration fails during rollback
+/// * If database operations fail
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use std::{collections::BTreeMap, sync::Arc};
+/// use switchy_schema_test_utils::{verify_migrations_with_mutations, TestError, mutations::MutationProvider};
+/// use switchy_schema::migration::Migration;
+/// use switchy_database::{Database, Executable};
+///
+/// # async fn example(db: &dyn Database, migrations: Vec<Arc<dyn Migration<'static> + 'static>>) -> Result<(), TestError> {
+/// // Create mutations to execute between migrations
+/// let mut mutation_map = BTreeMap::new();
+/// mutation_map.insert(
+///     "001_create_users".to_string(),
+///     Arc::new("INSERT INTO users (name) VALUES ('test_user')".to_string()) as Arc<dyn Executable>
+/// );
+///
+/// // Test migrations with mutations
+/// verify_migrations_with_mutations(db, migrations, mutation_map).await?;
+/// # Ok(())
+/// # }
+/// ```
+pub async fn verify_migrations_with_mutations<'a, M>(
+    db: &dyn Database,
+    migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
+    mutations: M,
+) -> Result<(), TestError>
+where
+    M: mutations::MutationProvider,
+{
+    // Create VecMigrationSource from provided migrations
+    let source = VecMigrationSource::new(migrations.clone());
+
+    // Create MigrationRunner internally
+    let runner = MigrationRunner::new(Box::new(source));
+
+    // We need to run migrations one by one to execute mutations between them
+    // First, get all migrations in order
+    let mut migration_map = std::collections::BTreeMap::new();
+    for migration in &migrations {
+        migration_map.insert(migration.id().to_string(), Arc::clone(migration));
+    }
+
+    // Execute migrations one by one with mutations
+    for (migration_id, migration) in &migration_map {
+        // Run this single migration
+        let single_migration_source = VecMigrationSource::new(vec![Arc::clone(migration)]);
+        let single_runner = MigrationRunner::new(Box::new(single_migration_source));
+        single_runner.run(db).await?;
+
+        // Execute any mutation for this migration
+        if let Some(mutation) = mutations.get_mutation(migration_id).await {
+            mutation.execute(db).await?;
+        }
+    }
+
+    // Now rollback all migrations
+    runner.rollback(db, RollbackStrategy::All).await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,5 +417,117 @@ mod tests {
         // Single migration should work
         let result = verify_migrations_full_cycle(db.as_ref(), single_migration).await;
         assert!(result.is_ok(), "Single migration failed: {result:?}");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_verify_migrations_with_mutations_btreemap() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let migration2 = Arc::new(TestMigration::new(
+            "002_create_posts",
+            "CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER, title TEXT)",
+            Some("DROP TABLE posts"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let test_migrations = vec![migration1, migration2];
+
+        // Create mutations using BTreeMap
+        let mut mutation_map = std::collections::BTreeMap::new();
+        mutation_map.insert(
+            "001_create_users".to_string(),
+            Arc::new("INSERT INTO users (name) VALUES ('test_user')".to_string())
+                as Arc<dyn switchy_database::Executable>,
+        );
+
+        // Test migrations with mutations
+        let result =
+            verify_migrations_with_mutations(db.as_ref(), test_migrations, mutation_map).await;
+        assert!(result.is_ok(), "Mutations with BTreeMap failed: {result:?}");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_verify_migrations_with_mutations_vec() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let test_migrations = vec![migration1];
+
+        // Create mutations using Vec
+        let mutations = vec![(
+            "001_create_users".to_string(),
+            Arc::new("INSERT INTO users (name) VALUES ('test_user')".to_string())
+                as Arc<dyn switchy_database::Executable>,
+        )];
+
+        // Test migrations with mutations
+        let result =
+            verify_migrations_with_mutations(db.as_ref(), test_migrations, mutations).await;
+        assert!(result.is_ok(), "Mutations with Vec failed: {result:?}");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_verify_migrations_with_mutations_builder() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let test_migrations = vec![migration1];
+
+        // Create mutations using builder pattern
+        let mutations = crate::mutations::MutationBuilder::new()
+            .add_mutation(
+                "001_create_users",
+                "INSERT INTO users (name) VALUES ('builder_user')",
+            )
+            .build();
+
+        // Test migrations with mutations
+        let result =
+            verify_migrations_with_mutations(db.as_ref(), test_migrations, mutations).await;
+        assert!(result.is_ok(), "Mutations with builder failed: {result:?}");
+    }
+
+    #[cfg(feature = "sqlite")]
+    #[tokio::test]
+    async fn test_verify_migrations_with_no_mutations() {
+        let db = create_empty_in_memory().await.unwrap();
+
+        let migration1 = Arc::new(TestMigration::new(
+            "001_create_users",
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)",
+            Some("DROP TABLE users"),
+        )) as Arc<dyn Migration<'static> + 'static>;
+
+        let test_migrations = vec![migration1];
+
+        // Create empty mutations
+        let mutations =
+            std::collections::BTreeMap::<String, Arc<dyn switchy_database::Executable>>::new();
+
+        // Test migrations with no mutations (should work like normal)
+        let result =
+            verify_migrations_with_mutations(db.as_ref(), test_migrations, mutations).await;
+        assert!(
+            result.is_ok(),
+            "Migrations with no mutations failed: {result:?}"
+        );
     }
 }

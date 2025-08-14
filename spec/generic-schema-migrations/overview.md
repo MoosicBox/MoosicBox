@@ -4,7 +4,7 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** 🟡 **Implementation Phase** - Phase 1-5 complete, Phase 7.1-7.3 complete, ready for Phase 7.4
+**Current Status:** 🟡 **Implementation Phase** - Phase 1-5 complete, Phase 7.1-7.4 complete, ready for Phase 7.5
 
 **Completion Estimate:** ~25% complete - Core foundation, traits, discovery methods, migration runner, rollback, and Arc migration completed. Test utilities in progress.
 
@@ -599,40 +599,42 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
     - [x] Run all migrations backward using rollback functionality
     - [x] Verify rollback preserves/restores initial state
     - [x] Add unit tests for this functionality
-### 7.4 Mutation Provider and Advanced Testing
 
-- [ ] `packages/switchy/schema/test_utils/src/mutations.rs` - Mutation handling ❌ **IMPORTANT**
-  - [ ] Define `MutationProvider` trait:
+### 7.4 Mutation Provider and Advanced Testing ✅ **COMPLETED**
+
+- [x] `packages/switchy/schema/test_utils/src/mutations.rs` - Mutation handling ✅ **IMPORTANT**
+  - [x] Define `MutationProvider` trait:
     ```rust
     pub trait MutationProvider {
         async fn get_mutation(&self, after_migration_id: &str)
-            -> Option<Box<dyn Executable>>;
+            -> Option<Arc<dyn Executable>>;
     }
     ```
-  - [ ] Implement for common patterns:
-    - [ ] `BTreeMap<String, Box<dyn Executable>>` - Map migration IDs to mutations (NOT HashMap!)
-    - [ ] `Vec<(String, Box<dyn Executable>)>` - Ordered list of mutations
-    - [ ] Builder pattern for constructing mutation sequences
-  - [ ] Add unit tests for each implementation
+  - [x] Implement for common patterns:
+    - [x] `BTreeMap<String, Arc<dyn Executable>>` - Map migration IDs to mutations (NOT HashMap!)
+    - [x] `Vec<(String, Arc<dyn Executable>)>` - Ordered list of mutations
+    - [x] Builder pattern for constructing mutation sequences
+  - [x] Add unit tests for each implementation
 
-- [ ] `packages/switchy/schema/test_utils/src/lib.rs` - Advanced mutation testing ❌ **IMPORTANT**
-  - [ ] **Interleaved state mutations** - Test with data changes between migrations:
+- [x] `packages/switchy/schema/test_utils/src/lib.rs` - Advanced mutation testing ✅ **IMPORTANT**
+  - [x] **Interleaved state mutations** - Test with data changes between migrations:
     ```rust
     pub async fn verify_migrations_with_mutations<'a, M>(
         db: &dyn Database,
-        migrations: Vec<Box<dyn Migration<'a> + 'a>>,
+        migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
         mutations: M
-    ) -> Result<(), MigrationError>
+    ) -> Result<(), TestError>
     where M: MutationProvider
     ```
-    - [ ] Support mutations via:
-      - [ ] Raw SQL strings
-      - [ ] `Box<dyn Executable>` (query builders)
-      - [ ] Arbitrary closures: `FnOnce(&dyn Database) -> Result<(), DatabaseError>`
-    - [ ] Execute mutations between specific migrations
-    - [ ] Verify migrations handle intermediate state changes
-    - [ ] Verify rollback works with mutated data
-    - [ ] Add unit tests for this functionality
+    - **Note**: Uses `Arc` for consistency with Phase 7.2.5 migration and `TestError` for consistency with Phase 7.3 test utilities
+    - [x] Support mutations via:
+      - [x] Raw SQL strings
+      - [x] `Arc<dyn Executable>` (query builders)
+      - [x] Arbitrary closures: `FnOnce(&dyn Database) -> Result<(), DatabaseError>` (via Executable trait)
+    - [x] Execute mutations between specific migrations
+    - [x] Verify migrations handle intermediate state changes
+    - [x] Verify rollback works with mutated data
+    - [x] Add unit tests for this functionality
 
 ### 7.5 Test Assertion Helpers
 
