@@ -14184,6 +14184,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "switchy_schema_test_utils"
+version = "0.1.0"
+dependencies = [
+ "switchy_database",
+ "switchy_database_connection",
+ "switchy_schema",
+ "thiserror 2.0.14",
+]
+
+[[package]]
 name = "switchy_tcp"
 version = "0.1.4"
 dependencies = [

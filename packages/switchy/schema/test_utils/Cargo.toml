@@ -1,0 +1,29 @@
+[package]
+authors     = { workspace = true }
+categories  = ["development-tools", "testing"]
+description = "Switchy Schema Test Utils package"
+edition     = { workspace = true }
+keywords    = ["database", "migration", "schema", "testing"]
+license     = { workspace = true }
+name        = "switchy_schema_test_utils"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+switchy_database            = { workspace = true }
+switchy_database_connection = { workspace = true, optional = true }
+switchy_schema              = { workspace = true }
+thiserror                   = { workspace = true }
+
+[features]
+default = ["fail-on-warnings"]
+
+fail-on-warnings = []
+sqlite = [
+    "dep:switchy_database_connection",
+    "switchy_database_connection/sqlite-sqlx",
+]

@@ -115,6 +115,7 @@ members = [
     "packages/switchy/schema",
     "packages/switchy/schema/examples/static_migrations",
     "packages/switchy/schema/examples/borrowed_migrations",
+    "packages/switchy/schema/test_utils",
     "packages/tcp",
     "packages/telemetry",
     "packages/tidal",
@@ -270,6 +271,7 @@ switchy_http_models         = { version = "0.1.3", default-features = false, pat
 switchy_mdns                = { version = "0.1.3", default-features = false, path = "packages/mdns" }
 switchy_random              = { version = "0.1.3", default-features = false, path = "packages/random" }
 switchy_schema              = { version = "0.1.0", default-features = false, path = "packages/switchy/schema" }
+switchy_schema_test_utils   = { version = "0.1.0", default-features = false, path = "packages/switchy/schema/test_utils" }
 switchy_tcp                 = { version = "0.1.3", default-features = false, path = "packages/tcp" }
 switchy_telemetry           = { version = "0.1.3", default-features = false, path = "packages/telemetry" }
 switchy_time                = { version = "0.1.3", default-features = false, path = "packages/time" }

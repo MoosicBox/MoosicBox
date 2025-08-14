@@ -499,37 +499,47 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 **Status:** Not started
 
-### 7.1 Test Utilities Package Creation
+### 7.1 Test Utilities Package Creation ✅ **COMPLETED**
 
-- [ ] Create `packages/switchy/schema/test_utils/` package structure ❌ **CRITICAL**
-  - [ ] Create `packages/switchy/schema/test_utils/` directory
-  - [ ] Create `packages/switchy/schema/test_utils/src/` directory
-  - [ ] Create `packages/switchy/schema/test_utils/src/lib.rs`
-  - [ ] Create `packages/switchy/schema/test_utils/Cargo.toml`
-    - Package name: `switchy_schema_test_utils`
-    - Dependencies:
+- [x] Create `packages/switchy/schema/test_utils/` package structure ✅ **CRITICAL**
+  - [x] Create `packages/switchy/schema/test_utils/` directory
+    - ✓ Created at packages/switchy/schema/test_utils/
+  - [x] Create `packages/switchy/schema/test_utils/src/` directory
+    - ✓ Created at packages/switchy/schema/test_utils/src/
+  - [x] Create `packages/switchy/schema/test_utils/src/lib.rs`
+    - ✓ Created with clippy config, error types, and feature-gated helper (40 lines)
+  - [x] Create `packages/switchy/schema/test_utils/Cargo.toml`
+    - ✓ Package name: `switchy_schema_test_utils`
+    - ✓ Dependencies:
       - `switchy_schema = { workspace = true }`
       - `switchy_database = { workspace = true }`
       - `switchy_database_connection = { workspace = true, optional = true }`
       - `async-trait = { workspace = true }`
-      - `thiserror = { workspace = true }` (only if wrapper error needed)
-    - Features:
-      - `sqlite = ["dep:switchy_database_connection"]` - For in-memory SQLite helper
-  - [ ] Update root `Cargo.toml` to include new package in workspace
-  - [ ] Add error wrapper type if needed (similar to `MigrationError` in switchy_schema)
+      - `thiserror = { workspace = true }`
+    - ✓ Features:
+      - `fail-on-warnings = []` (default)
+      - `sqlite = ["dep:switchy_database_connection", "switchy_database_connection/sqlite-sqlx"]`
+  - [x] Update root `Cargo.toml` to include new package in workspace
+    - ✓ Added to workspace members at line 118
+    - ✓ Added to workspace dependencies at line 274
+  - [x] Add error wrapper type (similar to `MigrationError` in switchy_schema)
+    - ✓ `TestError` enum that propagates `MigrationError` and `DatabaseError`
 
-### 7.2 Database Helper Functions
+### 7.2 Database Helper Functions ✅ **COMPLETED**
 
-- [ ] `packages/switchy/schema/test_utils/src/lib.rs` - Database creation helpers ❌ **CRITICAL**
-  - [ ] Feature-gated in-memory database helper:
+- [x] `packages/switchy/schema/test_utils/src/lib.rs` - Database creation helpers ✅ **CRITICAL**
+  - [x] Feature-gated in-memory database helper:
     ```rust
     #[cfg(feature = "sqlite")]
-    pub async fn create_empty_in_memory() -> Result<Box<dyn Database>, DatabaseError>
+    pub async fn create_empty_in_memory() -> Result<Box<dyn Database>, switchy_database_connection::InitSqliteSqlxDatabaseError>
     ```
-  - [ ] All test functions accept `&dyn Database` as parameter:
-    - User provides the database instance they want to test against
-    - Allows testing with any database type
-    - No database creation logic in core test utilities
+    - ✓ Uses `switchy_database_connection::init_sqlite_sqlx(None)` for in-memory SQLite
+    - ✓ Proper error handling with specific error type
+    - ✓ Comprehensive documentation with error section
+  - [x] All test functions accept `&dyn Database` as parameter:
+    - ✓ User provides the database instance they want to test against
+    - ✓ Allows testing with any database type
+    - ✓ No database creation logic in core test utilities (ready for Phase 7.3+)
 
 ### 7.3 Core Test Utilities
 
@@ -625,6 +635,17 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 - Feature-gated SQLite helper - `create_empty_in_memory()` only available with `sqlite` feature
 - BTreeMap over HashMap - Always use `BTreeMap` for deterministic ordering
 - Tests alongside implementation - Each component gets unit tests as it's built, not separately
+
+**Implementation Notes (Added 2025-01-14):**
+
+✅ **Phase 7.1 and 7.2 Completed Successfully:**
+- Package structure follows exact pattern from `hyperchad_test_utils`
+- `TestError` wrapper type implemented for clean error propagation
+- SQLite feature enables both `switchy_database_connection` dependency and `sqlite-sqlx` feature
+- `create_empty_in_memory()` uses `init_sqlite_sqlx(None)` for in-memory database creation
+- Zero clippy warnings with full pedantic linting enabled
+- Comprehensive documentation with proper backticks and error sections
+- Workspace integration at correct locations (line 118 members, line 274 dependencies)
 
 **Out of Scope for Phase 7:**
 - Testing against different database types (PostgreSQL, MySQL) - user provides the database
