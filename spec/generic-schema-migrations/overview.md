@@ -427,7 +427,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 ## Phase 5: Rollback Support
 
-**Goal:** Safe rollback functionality with comprehensive validation
+**Goal:** Simple, safe rollback functionality
 
 **Status:** Not started
 
@@ -435,28 +435,28 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 ### 5.1 Rollback Engine
 
-- [ ] `packages/switchy/schema/src/rollback.rs` - Rollback implementation ❌ **IMPORTANT**
-  - [ ] Add rollback() method to MigrationRunner
-  - [ ] Support rollback strategies (Last, DownTo, Steps, All)
-  - [ ] Implement rollback by N steps
-  - [ ] Validate down() methods exist before rollback
-  - [ ] Support dry-run rollback validation
+- [ ] Add rollback() method to MigrationRunner ❌ **IMPORTANT**
+  - [ ] Support rollback strategies:
+    - [ ] Last: Roll back the most recent migration
+    - [ ] DownTo(id): Roll back to (but not including) a specific migration
+    - [ ] Steps(n): Roll back N migrations
+    - [ ] All: Roll back all applied migrations
+  - [ ] Use reverse chronological order (most recent first)
+  - [ ] Validate down() methods exist before attempting rollback
+  - [ ] Support dry-run to preview what would be rolled back
+  - [ ] Integration with existing MigrationRunner and hooks system
 
-### 5.2 Rollback Tracking
+### 5.2 Rollback Tracking (Simplified)
 
-- [ ] Update VersionTracker for rollback tracking
-  - [ ] Add rollback_on column to migrations table
-  - [ ] Track which migrations have been rolled back
-  - [ ] Prevent re-running rolled back migrations
-  - [ ] Update tracking table with rollback status
+- [ ] Update VersionTracker for simple rollback tracking ❌ **IMPORTANT**
+  - [ ] When migration is successfully rolled back:
+    - [ ] Execute migration.down()
+    - [ ] DELETE the row from __switchy_migrations table
+  - [ ] This makes the migration eligible to run again if needed
+  - [ ] No schema changes required to the tracking table
+  - [ ] Maintains principle: "migrations table shows what's currently applied"
 
-### 5.3 Rollback Validation
-
-- [ ] `packages/switchy/schema/src/rollback.rs` - Rollback safety ❌ **IMPORTANT**
-  - [ ] Verify rollback path exists for all migrations
-  - [ ] Check for data loss warnings
-  - [ ] Validate rollback order and dependencies
-  - [ ] Provide rollback impact analysis
+**Rationale:** Simple deletion approach is cleaner than complex rollback status tracking. The migrations table always reflects the current state of applied migrations.
 
 ## Phase 6: Validation & Safety
 
