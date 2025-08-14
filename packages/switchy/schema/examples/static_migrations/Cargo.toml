@@ -1,0 +1,22 @@
+[package]
+authors     = { workspace = true }
+categories  = ["database", "development-tools"]
+description = "Example demonstrating static lifetime migrations with switchy_schema"
+edition     = "2021"
+keywords    = ["database", "example", "migration", "schema"]
+license     = { workspace = true }
+name        = "static_migrations_example"
+publish     = false
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+async-trait = { workspace = true }
+switchy_database = { workspace = true }
+switchy_schema = { workspace = true, features = [
+    "code",
+    "directory",
+    "embedded",
+] }
+tokio = { workspace = true, features = ["full"] }
+

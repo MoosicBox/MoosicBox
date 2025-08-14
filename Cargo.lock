@@ -1908,6 +1908,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "borrowed_migrations_example"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "switchy_database",
+ "switchy_schema",
+ "tokio",
+]
+
+[[package]]
 name = "borsh"
 version = "1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13347,6 +13357,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "static_migrations_example"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "switchy_database",
+ "switchy_schema",
+ "tokio",
 ]
 
 [[package]]

@@ -261,8 +261,33 @@ match source.migrations().await {
 
 See the `examples/` directory for complete working examples:
 
-- `static_migrations.rs` - Basic usage with static lifetimes
-- `borrowed_migrations.rs` - Advanced usage with borrowed data
+### Running Examples
+
+Both examples are full Cargo projects with proper dependencies:
+
+```bash
+# Static migrations example (most common patterns)
+cd examples/static_migrations
+cargo run
+
+# Borrowed migrations example (advanced lifetime patterns)
+cd examples/borrowed_migrations
+cargo run
+```
+
+### Example Projects
+
+- **`examples/static_migrations/`** - Complete project demonstrating:
+  - Custom migration implementations with `'static` lifetimes
+  - All three discovery methods (embedded, directory, code)
+  - Query builder integration
+  - Comprehensive test coverage
+
+- **`examples/borrowed_migrations/`** - Advanced project showing:
+  - Configuration-driven migrations with borrowed data
+  - Explicit lifetime management (`'a`)
+  - Temporary migration sources
+  - Function-based migration generation
 
 ## License
 
