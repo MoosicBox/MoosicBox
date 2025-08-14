@@ -544,57 +544,42 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 ### 7.3 Core Test Utilities
 
 - [ ] `packages/switchy/schema/test_utils/src/lib.rs` - Core test functionality ❌ **CRITICAL**
-  - [ ] `MigrationTestRunner` struct that accepts `&dyn Database`
 
   - [ ] **Basic migration verification** - Test migrations from fresh state:
     ```rust
-    pub async fn verify_migrations_full_cycle(
+    pub async fn verify_migrations_full_cycle<'a>(
         db: &dyn Database,
-        migrations: Vec<Box<dyn Migration>>
-    ) -> Result<(), MigrationError>
+        migrations: Vec<Box<dyn Migration<'a> + 'a>>
+    ) -> Result<(), TestError>
     ```
+    - [ ] Create `MigrationRunner` internally from switchy_schema
     - [ ] Run all migrations forward (up) on provided database
     - [ ] Verify no errors during forward migration
-    - [ ] Run all migrations backward (down)
+    - [ ] Run all migrations backward (down) using rollback functionality
     - [ ] Verify database returns to initial state
     - [ ] Verify no errors during rollback
     - [ ] Add unit tests for this functionality
 
   - [ ] **Pre-seeded state verification** - Test with existing data:
     ```rust
-    pub async fn verify_migrations_with_state<F>(
+    pub async fn verify_migrations_with_state<'a, F, Fut>(
         db: &dyn Database,
-        migrations: Vec<Box<dyn Migration>>,
+        migrations: Vec<Box<dyn Migration<'a> + 'a>>,
         setup: F
-    ) -> Result<(), MigrationError>
-    where F: FnOnce(&dyn Database) -> Result<(), DatabaseError>
+    ) -> Result<(), TestError>
+    where
+        F: FnOnce(&dyn Database) -> Fut,
+        Fut: Future<Output = Result<(), DatabaseError>>
     ```
     - [ ] Execute setup closure to populate initial state
+    - [ ] Create `MigrationRunner` internally from switchy_schema
     - [ ] Run all migrations forward
     - [ ] Verify migrations handle existing data correctly
-    - [ ] Run all migrations backward
+    - [ ] Run all migrations backward using rollback functionality
     - [ ] Verify rollback preserves/restores initial state
     - [ ] Add unit tests for this functionality
 
-  - [ ] **Interleaved state mutations** - Test with data changes between migrations:
-    ```rust
-    pub async fn verify_migrations_with_mutations<M>(
-        db: &dyn Database,
-        migrations: Vec<Box<dyn Migration>>,
-        mutations: M
-    ) -> Result<(), MigrationError>
-    where M: MutationProvider
-    ```
-    - [ ] Support mutations via:
-      - [ ] Raw SQL strings
-      - [ ] `Box<dyn Executable>` (query builders)
-      - [ ] Arbitrary closures: `FnOnce(&dyn Database) -> Result<(), DatabaseError>`
-    - [ ] Execute mutations between specific migrations
-    - [ ] Verify migrations handle intermediate state changes
-    - [ ] Verify rollback works with mutated data
-    - [ ] Add unit tests for this functionality
-
-### 7.4 Mutation Provider Trait
+### 7.4 Mutation Provider and Advanced Testing
 
 - [ ] `packages/switchy/schema/test_utils/src/mutations.rs` - Mutation handling ❌ **IMPORTANT**
   - [ ] Define `MutationProvider` trait:
@@ -609,6 +594,25 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
     - [ ] `Vec<(String, Box<dyn Executable>)>` - Ordered list of mutations
     - [ ] Builder pattern for constructing mutation sequences
   - [ ] Add unit tests for each implementation
+
+- [ ] `packages/switchy/schema/test_utils/src/lib.rs` - Advanced mutation testing ❌ **IMPORTANT**
+  - [ ] **Interleaved state mutations** - Test with data changes between migrations:
+    ```rust
+    pub async fn verify_migrations_with_mutations<'a, M>(
+        db: &dyn Database,
+        migrations: Vec<Box<dyn Migration<'a> + 'a>>,
+        mutations: M
+    ) -> Result<(), MigrationError>
+    where M: MutationProvider
+    ```
+    - [ ] Support mutations via:
+      - [ ] Raw SQL strings
+      - [ ] `Box<dyn Executable>` (query builders)
+      - [ ] Arbitrary closures: `FnOnce(&dyn Database) -> Result<(), DatabaseError>`
+    - [ ] Execute mutations between specific migrations
+    - [ ] Verify migrations handle intermediate state changes
+    - [ ] Verify rollback works with mutated data
+    - [ ] Add unit tests for this functionality
 
 ### 7.5 Test Assertion Helpers
 
