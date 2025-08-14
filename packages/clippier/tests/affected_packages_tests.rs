@@ -604,3 +604,300 @@ fn test_external_dependency_integration() {
 
     insta::assert_yaml_snapshot!("external_deps_integration", test_data);
 }
+
+/// Create a test workspace with nested packages to test the switchy/switchy_schema scenario
+fn create_nested_packages_workspace() -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+
+    // Create workspace Cargo.toml
+    let workspace_toml = r#"
+[workspace]
+members = [
+    "packages/parent",
+    "packages/parent/nested",
+    "packages/sibling"
+]
+"#;
+    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml)
+        .expect("Failed to write workspace Cargo.toml");
+
+    // Parent package (like switchy)
+    let parent_dir = temp_dir.path().join("packages/parent");
+    fs::create_dir_all(parent_dir.join("src")).expect("Failed to create parent directory");
+    let parent_cargo = r#"
+[package]
+name = "parent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sibling = { workspace = true }
+"#;
+    fs::write(parent_dir.join("Cargo.toml"), parent_cargo)
+        .expect("Failed to write parent Cargo.toml");
+    fs::write(parent_dir.join("src/lib.rs"), "// parent").expect("Failed to write parent lib.rs");
+
+    // Nested package (like switchy_schema)
+    let nested_dir = temp_dir.path().join("packages/parent/nested");
+    fs::create_dir_all(nested_dir.join("src")).expect("Failed to create nested directory");
+    let nested_cargo = r#"
+[package]
+name = "parent_nested"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+parent = { workspace = true }
+"#;
+    fs::write(nested_dir.join("Cargo.toml"), nested_cargo)
+        .expect("Failed to write nested Cargo.toml");
+    fs::write(nested_dir.join("src/lib.rs"), "// nested").expect("Failed to write nested lib.rs");
+    fs::write(nested_dir.join("README.md"), "# Nested Package")
+        .expect("Failed to write nested README.md");
+
+    // Sibling package (independent)
+    let sibling_dir = temp_dir.path().join("packages/sibling");
+    fs::create_dir_all(sibling_dir.join("src")).expect("Failed to create sibling directory");
+    let sibling_cargo = r#"
+[package]
+name = "sibling"
+version = "0.1.0"
+edition = "2021"
+"#;
+    fs::write(sibling_dir.join("Cargo.toml"), sibling_cargo)
+        .expect("Failed to write sibling Cargo.toml");
+    fs::write(sibling_dir.join("src/lib.rs"), "// sibling")
+        .expect("Failed to write sibling lib.rs");
+
+    temp_dir
+}
+
+#[test]
+fn test_nested_package_change_does_not_affect_parent() {
+    let temp_dir = create_nested_packages_workspace();
+
+    // Change a file in the nested package
+    let changed_files = vec!["packages/parent/nested/README.md".to_string()];
+
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+        .expect("Failed to find affected packages");
+
+    // Only the nested package should be affected, not the parent
+    assert_eq!(result, vec!["parent_nested"]);
+    assert!(!result.contains(&"parent".to_string()));
+}
+
+#[test]
+fn test_nested_package_source_change_does_not_affect_parent() {
+    let temp_dir = create_nested_packages_workspace();
+
+    // Change a source file in the nested package
+    let changed_files = vec!["packages/parent/nested/src/lib.rs".to_string()];
+
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+        .expect("Failed to find affected packages");
+
+    // Only the nested package should be affected, not the parent
+    assert_eq!(result, vec!["parent_nested"]);
+    assert!(!result.contains(&"parent".to_string()));
+}
+
+#[test]
+fn test_parent_package_change_affects_dependent_nested() {
+    let temp_dir = create_nested_packages_workspace();
+
+    // Change a file in the parent package (but not in nested directory)
+    let changed_files = vec!["packages/parent/src/lib.rs".to_string()];
+
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+        .expect("Failed to find affected packages");
+
+    // Both parent and nested should be affected because nested depends on parent
+    let mut sorted_result = result;
+    sorted_result.sort();
+    assert_eq!(sorted_result, vec!["parent", "parent_nested"]);
+}
+
+#[test]
+fn test_nested_package_with_reasoning() {
+    let temp_dir = create_nested_packages_workspace();
+
+    // Change a file in the nested package
+    let changed_files = vec!["packages/parent/nested/README.md".to_string()];
+
+    let result = clippier::find_affected_packages_with_reasoning(temp_dir.path(), &changed_files)
+        .expect("Failed to find affected packages with reasoning");
+
+    // Should only affect the nested package with proper reasoning
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].name, "parent_nested");
+    assert_eq!(
+        result[0].reasoning,
+        Some(vec![
+            "Contains changed file: packages/parent/nested/README.md".to_string()
+        ])
+    );
+}
+
+#[test]
+fn test_multiple_nested_changes() {
+    let temp_dir = create_nested_packages_workspace();
+
+    // Change files in both parent and nested packages
+    let changed_files = vec![
+        "packages/parent/src/lib.rs".to_string(),
+        "packages/parent/nested/src/lib.rs".to_string(),
+    ];
+
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+        .expect("Failed to find affected packages");
+
+    // Both packages should be affected, but each only by their own files
+    let mut sorted_result = result;
+    sorted_result.sort();
+    assert_eq!(sorted_result, vec!["parent", "parent_nested"]);
+}
+
+#[test]
+fn test_deeply_nested_packages() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+
+    // Create workspace with deeply nested structure
+    let workspace_toml = r#"
+[workspace]
+members = [
+    "packages/level1",
+    "packages/level1/level2",
+    "packages/level1/level2/level3"
+]
+"#;
+    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml)
+        .expect("Failed to write workspace Cargo.toml");
+
+    // Level 1 package
+    let level1_dir = temp_dir.path().join("packages/level1");
+    fs::create_dir_all(level1_dir.join("src")).expect("Failed to create level1 directory");
+    let level1_cargo = r#"
+[package]
+name = "level1"
+version = "0.1.0"
+edition = "2021"
+"#;
+    fs::write(level1_dir.join("Cargo.toml"), level1_cargo)
+        .expect("Failed to write level1 Cargo.toml");
+    fs::write(level1_dir.join("src/lib.rs"), "// level1").expect("Failed to write level1 lib.rs");
+
+    // Level 2 package
+    let level2_dir = temp_dir.path().join("packages/level1/level2");
+    fs::create_dir_all(level2_dir.join("src")).expect("Failed to create level2 directory");
+    let level2_cargo = r#"
+[package]
+name = "level2"
+version = "0.1.0"
+edition = "2021"
+"#;
+    fs::write(level2_dir.join("Cargo.toml"), level2_cargo)
+        .expect("Failed to write level2 Cargo.toml");
+    fs::write(level2_dir.join("src/lib.rs"), "// level2").expect("Failed to write level2 lib.rs");
+
+    // Level 3 package
+    let level3_dir = temp_dir.path().join("packages/level1/level2/level3");
+    fs::create_dir_all(level3_dir.join("src")).expect("Failed to create level3 directory");
+    let level3_cargo = r#"
+[package]
+name = "level3"
+version = "0.1.0"
+edition = "2021"
+"#;
+    fs::write(level3_dir.join("Cargo.toml"), level3_cargo)
+        .expect("Failed to write level3 Cargo.toml");
+    fs::write(level3_dir.join("src/lib.rs"), "// level3").expect("Failed to write level3 lib.rs");
+
+    // Test that changing the deepest level only affects that package
+    let changed_files = vec!["packages/level1/level2/level3/src/lib.rs".to_string()];
+
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+        .expect("Failed to find affected packages");
+
+    // Only the deepest package should be affected
+    assert_eq!(result, vec!["level3"]);
+    assert!(!result.contains(&"level1".to_string()));
+    assert!(!result.contains(&"level2".to_string()));
+}
+
+/// Create a test workspace with independent nested packages (no dependencies between them)
+fn create_independent_nested_packages_workspace() -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+
+    // Create workspace Cargo.toml
+    let workspace_toml = r#"
+[workspace]
+members = [
+    "packages/parent",
+    "packages/parent/independent_nested"
+]
+"#;
+    fs::write(temp_dir.path().join("Cargo.toml"), workspace_toml)
+        .expect("Failed to write workspace Cargo.toml");
+
+    // Parent package
+    let parent_dir = temp_dir.path().join("packages/parent");
+    fs::create_dir_all(parent_dir.join("src")).expect("Failed to create parent directory");
+    let parent_cargo = r#"
+[package]
+name = "parent"
+version = "0.1.0"
+edition = "2021"
+"#;
+    fs::write(parent_dir.join("Cargo.toml"), parent_cargo)
+        .expect("Failed to write parent Cargo.toml");
+    fs::write(parent_dir.join("src/lib.rs"), "// parent").expect("Failed to write parent lib.rs");
+
+    // Independent nested package (no dependency on parent)
+    let nested_dir = temp_dir.path().join("packages/parent/independent_nested");
+    fs::create_dir_all(nested_dir.join("src")).expect("Failed to create nested directory");
+    let nested_cargo = r#"
+[package]
+name = "independent_nested"
+version = "0.1.0"
+edition = "2021"
+"#;
+    fs::write(nested_dir.join("Cargo.toml"), nested_cargo)
+        .expect("Failed to write nested Cargo.toml");
+    fs::write(nested_dir.join("src/lib.rs"), "// independent nested")
+        .expect("Failed to write nested lib.rs");
+    fs::write(nested_dir.join("README.md"), "# Independent Nested Package")
+        .expect("Failed to write nested README.md");
+
+    temp_dir
+}
+
+#[test]
+fn test_independent_nested_package_does_not_affect_parent() {
+    let temp_dir = create_independent_nested_packages_workspace();
+
+    // Change a file in the independent nested package
+    let changed_files = vec!["packages/parent/independent_nested/README.md".to_string()];
+
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+        .expect("Failed to find affected packages");
+
+    // Only the nested package should be affected, not the parent
+    assert_eq!(result, vec!["independent_nested"]);
+    assert!(!result.contains(&"parent".to_string()));
+}
+
+#[test]
+fn test_independent_parent_package_does_not_affect_nested() {
+    let temp_dir = create_independent_nested_packages_workspace();
+
+    // Change a file in the parent package (but not in nested directory)
+    let changed_files = vec!["packages/parent/src/lib.rs".to_string()];
+
+    let result = clippier::find_affected_packages(temp_dir.path(), &changed_files)
+        .expect("Failed to find affected packages");
+
+    // Only the parent package should be affected, not the nested
+    assert_eq!(result, vec!["parent"]);
+    assert!(!result.contains(&"independent_nested".to_string()));
+}

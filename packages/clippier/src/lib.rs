@@ -1890,15 +1890,31 @@ pub fn find_affected_packages(
     for changed_file in changed_files {
         let changed_path = std::path::PathBuf::from(changed_file);
 
-        // Check if the changed file belongs to a workspace package
+        // Find the most specific (longest) matching package path for this changed file
+        // This prevents nested packages from incorrectly affecting their parent packages
+        let mut best_match: Option<(&String, &String)> = None;
+        let mut best_match_length = 0;
+
         for (package_path, package_name) in &package_path_to_name {
             let package_path_buf = std::path::PathBuf::from(package_path);
 
             // Check if the changed file is within this package's directory
             if changed_path.starts_with(&package_path_buf) {
-                log::trace!("📝 File {changed_file} affects package {package_name}");
-                directly_affected_packages.insert(package_name.clone());
+                let path_length = package_path.len();
+                // Only update if this is a longer (more specific) match
+                if path_length > best_match_length {
+                    best_match = Some((package_path, package_name));
+                    best_match_length = path_length;
+                }
             }
+        }
+
+        // Only add the most specific match to avoid nested package false positives
+        if let Some((package_path, package_name)) = best_match {
+            log::trace!(
+                "📝 File {changed_file} affects package {package_name} (path: {package_path})"
+            );
+            directly_affected_packages.insert(package_name.clone());
         }
     }
 
@@ -2045,23 +2061,39 @@ pub fn find_affected_packages_with_reasoning(
     for changed_file in changed_files {
         let changed_path = std::path::PathBuf::from(changed_file);
 
-        // Check if the changed file belongs to a workspace package
+        // Find the most specific (longest) matching package path for this changed file
+        // This prevents nested packages from incorrectly affecting their parent packages
+        let mut best_match: Option<(&String, &String)> = None;
+        let mut best_match_length = 0;
+
         for (package_path, package_name) in &package_path_to_name {
             let package_path_buf = std::path::PathBuf::from(package_path);
 
             // Check if the changed file is within this package's directory
             if changed_path.starts_with(&package_path_buf) {
-                log::trace!("📝 File {changed_file} affects package {package_name}");
-                directly_affected_packages
-                    .entry(package_name.clone())
-                    .or_insert_with(Vec::new)
-                    .push(changed_file.clone());
-
-                reasoning_map
-                    .entry(package_name.clone())
-                    .or_default()
-                    .push(format!("Contains changed file: {changed_file}"));
+                let path_length = package_path.len();
+                // Only update if this is a longer (more specific) match
+                if path_length > best_match_length {
+                    best_match = Some((package_path, package_name));
+                    best_match_length = path_length;
+                }
             }
+        }
+
+        // Only add the most specific match to avoid nested package false positives
+        if let Some((package_path, package_name)) = best_match {
+            log::trace!(
+                "📝 File {changed_file} affects package {package_name} (path: {package_path})"
+            );
+            directly_affected_packages
+                .entry(package_name.clone())
+                .or_insert_with(Vec::new)
+                .push(changed_file.clone());
+
+            reasoning_map
+                .entry(package_name.clone())
+                .or_default()
+                .push(format!("Contains changed file: {changed_file}"));
         }
     }
 
