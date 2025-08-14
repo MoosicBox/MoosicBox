@@ -15,7 +15,7 @@ group = "switchy"
 
 [dependencies]
 async-trait      = { workspace = true }
-switchy_database = { workspace = true }
+switchy_database = { workspace = true, features = ["schema"] }
 thiserror        = { workspace = true }
 
 # Optional dependencies for discovery features
@@ -25,6 +25,10 @@ switchy_fs = { workspace = true, optional = true, features = [
     "async",
     "tokio",
 ] }
+
+[dev-dependencies]
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+tokio         = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["all-discovery"]
@@ -37,6 +41,3 @@ directory     = ["dep:switchy_fs"]
 embedded      = ["dep:include_dir"]
 test-utils    = []
 validation    = []
-
-[dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt"] }

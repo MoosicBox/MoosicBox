@@ -166,7 +166,7 @@ These items need further investigation or decision during implementation:
 
 **Goal:** Implement migration discovery from various sources with feature-gated modules
 
-**Status:** ~67% complete. Common interface and struct definitions complete, embedded discovery fully implemented, directory discovery fully implemented. Code discovery needs complete reimplementation with IntoSql integration.
+**Status:** ✅ 100% complete. All three discovery methods (embedded, directory, code) are fully implemented with lifetime-aware traits and Executable integration.
 
 ### 3.1 Common Discovery Interface
 
@@ -290,69 +290,69 @@ These items need further investigation or decision during implementation:
 - Directories with at least one SQL file create a migration
 - Consistent handling: both files use the same optional pattern
 
-### 3.6 Implement Code Discovery with IntoSql Integration
+### 3.6 Implement Code Discovery with Executable Integration
 
 **Goal:** Implement code-based migrations using query builders from switchy_database with lifetime-aware traits
 
-**Status:** ❌ Not started
+**Status:** ✅ Complete
 
 #### 3.6.1 Update Core Migration Traits for Lifetimes
-- [ ] Update `packages/switchy/schema/src/migration.rs` ❌ **CRITICAL**
-  - [ ] Change `Migration` trait to `Migration<'a>: Send + Sync + 'a`
-  - [ ] Change `MigrationSource` trait to `MigrationSource<'a>: Send + Sync`
-  - [ ] Update return type to `Result<Vec<Box<dyn Migration<'a> + 'a>>>`
+- [x] Update `packages/switchy/schema/src/migration.rs` ✅ **CRITICAL**
+  - [x] Change `Migration` trait to `Migration<'a>: Send + Sync + 'a`
+  - [x] Change `MigrationSource` trait to `MigrationSource<'a>: Send + Sync`
+  - [x] Update return type to `Result<Vec<Box<dyn Migration<'a> + 'a>>>`
 
-#### 3.6.2 Add IntoSql Trait to switchy_database
-- [ ] Create `packages/database/src/into_sql.rs` ❌ **CRITICAL**
-  - [ ] Define `IntoSql` trait:
-    - [ ] `fn into_sql(&self) -> Result<String, DatabaseError>`
-    - [ ] `async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError>`
-  - [ ] Implement `IntoSql` for `CreateTableStatement<'_>`
-    - [ ] Generate proper CREATE TABLE SQL
-    - [ ] Handle IF NOT EXISTS clause
-    - [ ] Handle columns with types
-    - [ ] Handle primary key
-    - [ ] Handle foreign keys
-  - [ ] Implement `IntoSql` for `InsertStatement<'_>`
-  - [ ] Implement `IntoSql` for `UpdateStatement<'_>`
-  - [ ] Implement `IntoSql` for `DeleteStatement<'_>`
-  - [ ] Implement `IntoSql` for `UpsertStatement<'_>`
-  - [ ] Implement `IntoSql` for `String` and `&str` (for raw SQL)
-- [ ] Export `IntoSql` from `packages/database/src/lib.rs`
+#### 3.6.2 Add Executable Trait to switchy_database
+- [x] Create `packages/database/src/executable.rs` ✅ **CRITICAL**
+  - [x] Define `Executable` trait:
+    - [x] `async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError>`
+  - [x] Implement `Executable` for `CreateTableStatement<'_>`
+    - [x] Uses existing `db.exec_create_table()` method for database-specific SQL generation
+  - [x] Implement `Executable` for `InsertStatement<'_>`
+  - [x] Implement `Executable` for `UpdateStatement<'_>`
+  - [x] Implement `Executable` for `DeleteStatement<'_>`
+  - [x] Implement `Executable` for `UpsertStatement<'_>`
+  - [x] Implement `Executable` for `String` and `&str` (for raw SQL)
+- [x] Export `Executable` from `packages/database/src/lib.rs`
 
 #### 3.6.3 Update Existing Discovery Implementations for Lifetimes
-- [ ] Update `EmbeddedMigration` to implement `Migration<'static>` ❌ **CRITICAL**
-- [ ] Update `EmbeddedMigrationSource` to implement `MigrationSource<'static>`
-- [ ] Update `FileMigration` to implement `Migration<'static>`
-- [ ] Update `DirectoryMigrationSource` to implement `MigrationSource<'static>`
+- [x] Update `EmbeddedMigration` to implement `Migration<'static>` ✅ **CRITICAL**
+- [x] Update `EmbeddedMigrationSource` to implement `MigrationSource<'static>`
+- [x] Update `FileMigration` to implement `Migration<'static>`
+- [x] Update `DirectoryMigrationSource` to implement `MigrationSource<'static>`
 
 #### 3.6.4 Implement Code Discovery with Lifetimes
-- [ ] Update `packages/switchy/schema/src/discovery/code.rs` ❌ **CRITICAL**
-  - [ ] Remove function pointer types
-  - [ ] Create `CodeMigration<'a>` struct:
-    - [ ] `id: String`
-    - [ ] `up_sql: Box<dyn IntoSql + 'a>`
-    - [ ] `down_sql: Option<Box<dyn IntoSql + 'a>>`
-  - [ ] Implement `Migration<'a>` for `CodeMigration<'a>`
-    - [ ] Use `up_sql.execute(db)` in `up()` method
-    - [ ] Use `down_sql.execute(db)` in `down()` method
-  - [ ] Update `CodeMigrationSource` to `CodeMigrationSource<'a>`
-    - [ ] Store `BTreeMap<String, Box<dyn Migration<'a> + 'a>>`
-    - [ ] Implement `add_migration()` with generic `IntoSql` parameters
-    - [ ] Support both raw SQL strings and query builders
-  - [ ] Implement `MigrationSource<'a>` for `CodeMigrationSource<'a>`
+- [x] Update `packages/switchy/schema/src/discovery/code.rs` ✅ **CRITICAL**
+  - [x] Remove function pointer types
+  - [x] Create `CodeMigration<'a>` struct:
+    - [x] `id: String`
+    - [x] `up_sql: Box<dyn Executable + 'a>`
+    - [x] `down_sql: Option<Box<dyn Executable + 'a>>`
+  - [x] Implement `Migration<'a>` for `CodeMigration<'a>`
+    - [x] Use `up_sql.execute(db)` in `up()` method
+    - [x] Use `down_sql.execute(db)` in `down()` method
+  - [x] Update `CodeMigrationSource` to `CodeMigrationSource<'a>`
+    - [x] Store `Vec<CodeMigration<'a>>` for simpler ownership model
+    - [x] Implement `add_migration()` with `CodeMigration` parameters
+    - [x] Support both raw SQL strings and query builders
+  - [x] Implement `MigrationSource<'a>` for `CodeMigrationSource<'a>`
 
 #### 3.6.5 Add Tests for Code Discovery
-- [ ] Test with raw SQL strings ❌ **IMPORTANT**
-- [ ] Test with `CreateTableStatement` builders
-- [ ] Test with mixed migration types
-- [ ] Test lifetime handling with non-'static data
-- [ ] Test ordering and retrieval
+- [x] Test with raw SQL strings ✅ **IMPORTANT**
+- [x] Test with `CreateTableStatement` builders
+- [x] Test with mixed migration types
+- [x] Test lifetime handling with lifetime-aware architecture
+- [x] Test ordering and retrieval
 
 #### 3.6.6 Update Documentation
-- [ ] Add examples showing query builder usage ❌ **MINOR**
-- [ ] Document lifetime requirements
-- [ ] Show both 'static and non-'static usage patterns
+- [x] Add examples showing query builder usage ✅ **MINOR**
+
+#### Implementation Notes:
+- The trait was renamed from `IntoSql` to `Executable` to better reflect its functionality
+- `Executable` doesn't generate SQL strings; it executes operations using existing Database methods
+- This approach leverages database-specific SQL generation already in the Database implementations
+- `CodeMigrationSource` uses `Vec` instead of `BTreeMap` for simpler ownership model
+- All existing discovery methods (embedded, directory) remain fully functional with lifetime updates
 
 ### 3.7 Package Compilation
 

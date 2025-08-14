@@ -23,7 +23,7 @@ impl EmbeddedMigration {
 }
 
 #[async_trait]
-impl Migration for EmbeddedMigration {
+impl Migration<'static> for EmbeddedMigration {
     fn id(&self) -> &str {
         &self.id
     }
@@ -104,13 +104,13 @@ impl EmbeddedMigrationSource {
 }
 
 #[async_trait]
-impl MigrationSource for EmbeddedMigrationSource {
-    async fn migrations(&self) -> Result<Vec<Box<dyn Migration>>> {
+impl MigrationSource<'static> for EmbeddedMigrationSource {
+    async fn migrations(&self) -> Result<Vec<Box<dyn Migration<'static> + 'static>>> {
         let migration_map = self.extract_migrations();
 
-        let migrations: Vec<Box<dyn Migration>> = migration_map
+        let migrations: Vec<Box<dyn Migration<'static> + 'static>> = migration_map
             .into_values()
-            .map(|migration| Box::new(migration) as Box<dyn Migration>)
+            .map(|m| Box::new(m) as Box<dyn Migration<'static> + 'static>)
             .collect();
 
         Ok(migrations)

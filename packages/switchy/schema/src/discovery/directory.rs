@@ -32,7 +32,7 @@ impl FileMigration {
 }
 
 #[async_trait]
-impl Migration for FileMigration {
+impl Migration<'static> for FileMigration {
     fn id(&self) -> &str {
         &self.id
     }
@@ -74,12 +74,12 @@ impl DirectoryMigrationSource {
 }
 
 #[async_trait]
-impl MigrationSource for DirectoryMigrationSource {
-    async fn migrations(&self) -> Result<Vec<Box<dyn Migration>>> {
+impl MigrationSource<'static> for DirectoryMigrationSource {
+    async fn migrations(&self) -> Result<Vec<Box<dyn Migration<'static> + 'static>>> {
         let migration_map = self.extract_migrations().await?;
-        let migrations: Vec<Box<dyn Migration>> = migration_map
+        let migrations: Vec<Box<dyn Migration<'static> + 'static>> = migration_map
             .into_values()
-            .map(|m| Box::new(m) as Box<dyn Migration>)
+            .map(|m| Box::new(m) as Box<dyn Migration<'static> + 'static>)
             .collect();
         Ok(migrations)
     }
@@ -141,7 +141,7 @@ mod tests {
     use super::*;
     use std::path::Path;
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_directory_migration_source() {
         let test_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("test_migrations_dir");
 
@@ -157,7 +157,7 @@ mod tests {
         assert_eq!(migrations[2].id(), "003_empty_migration");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_file_migration_with_content() {
         let test_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("test_migrations_dir");
 
@@ -201,7 +201,7 @@ mod tests {
         assert!(!migration_map.contains_key("004_no_sql_files"));
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_file_migration_execution() {
         let migration = FileMigration::new(
             "test".to_string(),
@@ -217,7 +217,7 @@ mod tests {
         assert_eq!(migration.path(), &PathBuf::from("/test"));
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_empty_sql_handling() {
         let migration = FileMigration::new(
             "empty".to_string(),
@@ -230,7 +230,7 @@ mod tests {
         assert_eq!(migration.id(), "empty");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_migration_with_no_sql_files() {
         let migration =
             FileMigration::new("no_sql".to_string(), PathBuf::from("/no_sql"), None, None);
