@@ -495,30 +495,143 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 ## Phase 7: Testing Infrastructure
 
-**Goal:** Comprehensive testing utilities and coverage
+**Goal:** Provide comprehensive test utilities for verifying migration correctness and behavior
 
-### 7.1 Test Utilities
+**Status:** Not started
 
-- [ ] `packages/switchy/schema/src/test_utils.rs` - Test helpers ❌ **IMPORTANT**
-  - [ ] `TestDatabase` using switchy_database simulated/in-memory SQLite
-  - [ ] `TestMigrationBuilder` for creating test migrations
-  - [ ] Migration assertion helpers
-  - [ ] Complex migration verification utilities (like test_api_sources_table_migration)
-  - [ ] Support for testing data transformations during migrations
+### 7.1 Test Utilities Package Creation
 
-### 7.2 Integration Tests
+- [ ] Create `packages/switchy/schema/test_utils/` package structure ❌ **CRITICAL**
+  - [ ] Create `packages/switchy/schema/test_utils/` directory
+  - [ ] Create `packages/switchy/schema/test_utils/src/` directory
+  - [ ] Create `packages/switchy/schema/test_utils/src/lib.rs`
+  - [ ] Create `packages/switchy/schema/test_utils/Cargo.toml`
+    - Package name: `switchy_schema_test_utils`
+    - Dependencies:
+      - `switchy_schema = { workspace = true }`
+      - `switchy_database = { workspace = true }`
+      - `switchy_database_connection = { workspace = true, optional = true }`
+      - `async-trait = { workspace = true }`
+      - `thiserror = { workspace = true }` (only if wrapper error needed)
+    - Features:
+      - `sqlite = ["dep:switchy_database_connection"]` - For in-memory SQLite helper
+  - [ ] Update root `Cargo.toml` to include new package in workspace
+  - [ ] Add error wrapper type if needed (similar to `MigrationError` in switchy_schema)
 
-- [ ] `packages/switchy/schema/tests/` - Integration tests ❌ **CRITICAL**
-  - [ ] Test migration execution across all database types
-  - [ ] Test rollback functionality
-  - [ ] Test error handling and recovery
+### 7.2 Database Helper Functions
 
-### 7.3 Test Data Helpers
+- [ ] `packages/switchy/schema/test_utils/src/lib.rs` - Database creation helpers ❌ **CRITICAL**
+  - [ ] Feature-gated in-memory database helper:
+    ```rust
+    #[cfg(feature = "sqlite")]
+    pub async fn create_empty_in_memory() -> Result<Box<dyn Database>, DatabaseError>
+    ```
+  - [ ] All test functions accept `&dyn Database` as parameter:
+    - User provides the database instance they want to test against
+    - Allows testing with any database type
+    - No database creation logic in core test utilities
 
-- [ ] Test fixtures and utilities ❌ **IMPORTANT**
-  - [ ] Fixtures for common migration patterns
-  - [ ] Helper functions for setting up test scenarios
-  - [ ] Utilities for verifying data transformations
+### 7.3 Core Test Utilities
+
+- [ ] `packages/switchy/schema/test_utils/src/lib.rs` - Core test functionality ❌ **CRITICAL**
+  - [ ] `MigrationTestRunner` struct that accepts `&dyn Database`
+
+  - [ ] **Basic migration verification** - Test migrations from fresh state:
+    ```rust
+    pub async fn verify_migrations_full_cycle(
+        db: &dyn Database,
+        migrations: Vec<Box<dyn Migration>>
+    ) -> Result<(), MigrationError>
+    ```
+    - [ ] Run all migrations forward (up) on provided database
+    - [ ] Verify no errors during forward migration
+    - [ ] Run all migrations backward (down)
+    - [ ] Verify database returns to initial state
+    - [ ] Verify no errors during rollback
+    - [ ] Add unit tests for this functionality
+
+  - [ ] **Pre-seeded state verification** - Test with existing data:
+    ```rust
+    pub async fn verify_migrations_with_state<F>(
+        db: &dyn Database,
+        migrations: Vec<Box<dyn Migration>>,
+        setup: F
+    ) -> Result<(), MigrationError>
+    where F: FnOnce(&dyn Database) -> Result<(), DatabaseError>
+    ```
+    - [ ] Execute setup closure to populate initial state
+    - [ ] Run all migrations forward
+    - [ ] Verify migrations handle existing data correctly
+    - [ ] Run all migrations backward
+    - [ ] Verify rollback preserves/restores initial state
+    - [ ] Add unit tests for this functionality
+
+  - [ ] **Interleaved state mutations** - Test with data changes between migrations:
+    ```rust
+    pub async fn verify_migrations_with_mutations<M>(
+        db: &dyn Database,
+        migrations: Vec<Box<dyn Migration>>,
+        mutations: M
+    ) -> Result<(), MigrationError>
+    where M: MutationProvider
+    ```
+    - [ ] Support mutations via:
+      - [ ] Raw SQL strings
+      - [ ] `Box<dyn Executable>` (query builders)
+      - [ ] Arbitrary closures: `FnOnce(&dyn Database) -> Result<(), DatabaseError>`
+    - [ ] Execute mutations between specific migrations
+    - [ ] Verify migrations handle intermediate state changes
+    - [ ] Verify rollback works with mutated data
+    - [ ] Add unit tests for this functionality
+
+### 7.4 Mutation Provider Trait
+
+- [ ] `packages/switchy/schema/test_utils/src/mutations.rs` - Mutation handling ❌ **IMPORTANT**
+  - [ ] Define `MutationProvider` trait:
+    ```rust
+    pub trait MutationProvider {
+        async fn get_mutation(&self, after_migration_id: &str)
+            -> Option<Box<dyn Executable>>;
+    }
+    ```
+  - [ ] Implement for common patterns:
+    - [ ] `BTreeMap<String, Box<dyn Executable>>` - Map migration IDs to mutations (NOT HashMap!)
+    - [ ] `Vec<(String, Box<dyn Executable>)>` - Ordered list of mutations
+    - [ ] Builder pattern for constructing mutation sequences
+  - [ ] Add unit tests for each implementation
+
+### 7.5 Test Assertion Helpers
+
+- [ ] `packages/switchy/schema/test_utils/src/assertions.rs` - Test assertions ❌ **IMPORTANT**
+  - [ ] Table existence verification
+  - [ ] Column presence/type verification
+  - [ ] Row count assertions
+  - [ ] Data integrity checks
+  - [ ] Migration state verification (which migrations are applied)
+  - [ ] Schema comparison utilities
+  - [ ] All functions return `Result<(), DatabaseError>` or propagate existing errors
+  - [ ] Add unit tests for assertion helpers
+
+### 7.6 Documentation and Examples
+
+- [ ] Add comprehensive documentation ❌ **MINOR**
+  - [ ] Usage examples in module docs
+  - [ ] Example test cases showing all three verification methods
+  - [ ] Document feature flags and when to use them
+
+**Key Design Decisions:**
+- No custom error types - Propagate existing `MigrationError` and `DatabaseError`, with optional thin wrapper only if needed
+- User provides database - Test utilities accept `&dyn Database`, don't create databases themselves
+- Feature-gated SQLite helper - `create_empty_in_memory()` only available with `sqlite` feature
+- BTreeMap over HashMap - Always use `BTreeMap` for deterministic ordering
+- Tests alongside implementation - Each component gets unit tests as it's built, not separately
+
+**Out of Scope for Phase 7:**
+- Testing against different database types (PostgreSQL, MySQL) - user provides the database
+- Performance benchmarking utilities
+- Migration generation helpers
+- Schema diffing tools
+- Production database testing utilities
 
 ## Phase 8: moosicbox_schema Migration
 
@@ -623,6 +736,39 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
   - [ ] Get list of pending migrations
   - [ ] Get migration history
   - [ ] Separate from MigrationRunner for focused API
+
+### 11.6 Snapshot Testing Utilities
+
+- [ ] Snapshot testing infrastructure for migration verification ❌ **MINOR**
+  - [ ] **Schema Snapshots**
+    - [ ] Capture database schema state after each migration
+    - [ ] Normalize schema representation across database types
+    - [ ] Compare schema evolution over time
+    - [ ] Detect unintended schema changes
+  - [ ] **Migration Sequence Snapshots**
+    - [ ] Record the full sequence of migrations applied
+    - [ ] Track migration ordering and dependencies
+    - [ ] Useful for debugging migration issues
+  - [ ] **SQL Statement Snapshots** (optional)
+    - [ ] Capture actual SQL executed by migrations
+    - [ ] Review what changes migrations make
+    - [ ] Detect database-specific SQL differences
+  - [ ] **Data Snapshots** (complex - consider deferring)
+    - [ ] Capture data state at specific points
+    - [ ] Verify data transformations
+    - [ ] Handle non-deterministic data (timestamps, auto-increment IDs)
+  - [ ] **Implementation Considerations**
+    - [ ] Snapshot format (JSON, SQL, or custom format)
+    - [ ] Update mechanism via environment variable (e.g., `UPDATE_SNAPSHOTS=1`)
+    - [ ] Integration with existing test utilities
+    - [ ] Snapshot storage and versioning strategy
+    - [ ] Handling database-specific variations
+  - [ ] **Benefits**
+    - [ ] Regression detection for schema changes
+    - [ ] Documentation of schema evolution
+    - [ ] Review-friendly PR diffs for schema changes
+    - [ ] Debugging aid for migration issues
+    - [ ] Cross-database compatibility verification
 
 ## ~~Phase 12: Migration Dependency Resolution~~ ❌ **REMOVED**
 
