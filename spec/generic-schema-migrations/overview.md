@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** 🟡 **Implementation Phase** - Phase 1 complete, Phase 2 complete, Phase 3.3 (Embedded Discovery) complete
+**Current Status:** 🟡 **Implementation Phase** - Phase 1-5 complete, Phase 7.1-7.2.5 complete, ready for Phase 7.3
 
-**Completion Estimate:** ~15% complete - Core foundation, traits, and embedded discovery implemented. Directory and code discovery require significant rework.
+**Completion Estimate:** ~25% complete - Core foundation, traits, discovery methods, migration runner, rollback, and Arc migration completed. Test utilities in progress.
 
 ## Status Legend
 
@@ -342,7 +342,8 @@ These items need further investigation or decision during implementation:
     - [x] Store `Vec<CodeMigration<'a>>` for simpler ownership model
     - [x] Implement `add_migration()` with `CodeMigration` parameters
     - [x] Support both raw SQL strings and query builders
-  - [x] Implement `MigrationSource<'a>` for `CodeMigrationSource<'a>`
+  - [ ] Implement `MigrationSource<'a>` for `CodeMigrationSource<'a>` ❌ **INCOMPLETE**
+    - ✗ Currently returns empty Vec - needs proper implementation
 
 #### 3.6.5 Add Tests for Code Discovery
 - [x] Test with raw SQL strings ✅ **IMPORTANT**
@@ -545,13 +546,30 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 - [ ] `packages/switchy/schema/test_utils/src/lib.rs` - Core test functionality ❌ **CRITICAL**
 
+  - [ ] **VecMigrationSource helper** - Internal utility for test functions:
+    ```rust
+    struct VecMigrationSource<'a> {
+        migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
+    }
+
+    impl<'a> MigrationSource<'a> for VecMigrationSource<'a> {
+        async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>> {
+            Ok(self.migrations.clone()) // Cheap Arc cloning!
+        }
+    }
+    ```
+    - [ ] Used internally by test functions to wrap Vec into MigrationSource
+    - [ ] Leverages Arc for cheap cloning without RefCell or unsafe code
+    - [ ] Simple constructor: `VecMigrationSource::new(migrations)`
+
   - [ ] **Basic migration verification** - Test migrations from fresh state:
     ```rust
     pub async fn verify_migrations_full_cycle<'a>(
         db: &dyn Database,
-        migrations: Vec<Box<dyn Migration<'a> + 'a>>
+        migrations: Vec<Arc<dyn Migration<'a> + 'a>>
     ) -> Result<(), TestError>
     ```
+    - [ ] Create `VecMigrationSource` from provided migrations
     - [ ] Create `MigrationRunner` internally from switchy_schema
     - [ ] Run all migrations forward (up) on provided database
     - [ ] Verify no errors during forward migration
@@ -564,7 +582,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
     ```rust
     pub async fn verify_migrations_with_state<'a, F, Fut>(
         db: &dyn Database,
-        migrations: Vec<Box<dyn Migration<'a> + 'a>>,
+        migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
         setup: F
     ) -> Result<(), TestError>
     where
@@ -572,13 +590,13 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
         Fut: Future<Output = Result<(), DatabaseError>>
     ```
     - [ ] Execute setup closure to populate initial state
+    - [ ] Create `VecMigrationSource` from provided migrations
     - [ ] Create `MigrationRunner` internally from switchy_schema
     - [ ] Run all migrations forward
     - [ ] Verify migrations handle existing data correctly
     - [ ] Run all migrations backward using rollback functionality
     - [ ] Verify rollback preserves/restores initial state
     - [ ] Add unit tests for this functionality
-
 ### 7.4 Mutation Provider and Advanced Testing
 
 - [ ] `packages/switchy/schema/test_utils/src/mutations.rs` - Mutation handling ❌ **IMPORTANT**
@@ -642,14 +660,16 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 **Implementation Notes (Added 2025-01-14):**
 
-✅ **Phase 7.1 and 7.2 Completed Successfully:**
+✅ **Phase 7.1, 7.2, and 7.2.5 Completed Successfully:**
 - Package structure follows exact pattern from `hyperchad_test_utils`
 - `TestError` wrapper type implemented for clean error propagation
 - SQLite feature enables both `switchy_database_connection` dependency and `sqlite-sqlx` feature
 - `create_empty_in_memory()` uses `init_sqlite_sqlx(None)` for in-memory database creation
+- **Arc migration completed**: All migration types now use `Arc<dyn Migration>` instead of `Box<dyn Migration>`
 - Zero clippy warnings with full pedantic linting enabled
 - Comprehensive documentation with proper backticks and error sections
 - Workspace integration at correct locations (line 118 members, line 274 dependencies)
+- **Ready for Phase 7.3**: Test utilities can now easily clone migrations via Arc
 
 **Out of Scope for Phase 7:**
 - Testing against different database types (PostgreSQL, MySQL) - user provides the database
@@ -657,6 +677,38 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 - Migration generation helpers
 - Schema diffing tools
 - Production database testing utilities
+
+### 7.2.5 Migration Type Update to Arc ✅ **COMPLETED**
+
+- [x] Update core migration types from `Box<dyn Migration>` to `Arc<dyn Migration>` ✅ **CRITICAL**
+  - [x] Update `MigrationSource` trait return type:
+    ```rust
+    async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>>;
+    ```
+    - ✓ Changed from `Box<dyn Migration>` to `Arc<dyn Migration>`
+  - [x] Update all MigrationSource implementations:
+    - ✓ `EmbeddedMigrationSource` - uses `Arc::new()` instead of `Box::new()`
+    - ✓ `DirectoryMigrationSource` - uses `Arc::new()` instead of `Box::new()`
+    - ✓ `CodeMigrationSource` - updated return type signature
+  - [x] Update `MigrationRunner` to work with Arc:
+    - ✓ Internal BTreeMap uses `Arc<dyn Migration>`
+    - ✓ `apply_strategy` method signature updated
+    - ✓ All test cases updated to use `Arc::new()`
+  - [x] Update documentation examples:
+    - ✓ Added `std::sync::Arc` imports to all doc examples
+    - ✓ Updated all type signatures in documentation
+    - ✓ All doc tests pass
+  - [x] Verify compatibility:
+    - ✓ All 20 unit tests pass
+    - ✓ All 10 doc tests pass
+    - ✓ Zero clippy warnings
+    - ✓ No breaking changes to public API
+
+**Arc Migration Benefits:**
+- **Cheap cloning**: `Arc::clone()` just increments reference count
+- **Clean test utilities**: No RefCell, unsafe code, or complex ownership patterns
+- **Shared ownership**: Multiple test utilities can share the same migrations
+- **Zero compromises**: All existing functionality preserved
 
 ## Phase 8: moosicbox_schema Migration
 
@@ -794,6 +846,16 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
     - [ ] Review-friendly PR diffs for schema changes
     - [ ] Debugging aid for migration issues
     - [ ] Cross-database compatibility verification
+
+### 11.7 Complete CodeMigrationSource Implementation
+
+- [ ] Finish `CodeMigrationSource::migrations()` implementation ❌ **MINOR**
+  - [ ] Replace empty Vec return with proper migration retrieval
+  - [ ] Support dynamic addition of migrations via `add_migration()`
+  - [ ] Handle ownership correctly with Arc-based migrations
+  - [ ] Implement proper migration ordering (BTreeMap-based)
+  - [ ] Add comprehensive tests for code-based migration functionality
+  - [ ] Update documentation with working examples
 
 ## ~~Phase 12: Migration Dependency Resolution~~ ❌ **REMOVED**
 
