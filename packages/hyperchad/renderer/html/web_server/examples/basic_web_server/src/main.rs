@@ -4,7 +4,7 @@
 
 use hyperchad::{
     renderer::{Content, ToRenderRunner},
-    renderer_html::{router_to_web_server, DefaultHtmlTagRenderer},
+    renderer_html::{DefaultHtmlTagRenderer, router_to_web_server},
     router::{Container, RouteRequest, Router},
     template::{self as hyperchad_template, container},
 };
