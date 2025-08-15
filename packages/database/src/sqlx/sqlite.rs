@@ -902,9 +902,9 @@ fn format_identifier(identifier: &str) -> String {
         LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
 
     if NON_ALPHA_NUMERIC_REGEX.is_match(identifier) {
-        identifier.to_string()
-    } else {
         format!("\"{identifier}\"")
+    } else {
+        identifier.to_string()
     }
 }
 
