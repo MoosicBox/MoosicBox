@@ -1,7 +1,7 @@
 use std::{
     ops::Deref,
     pin::Pin,
-    sync::{Arc, LazyLock, atomic::AtomicU16},
+    sync::{Arc, atomic::AtomicU16},
 };
 
 use async_trait::async_trait;
@@ -898,14 +898,7 @@ fn build_values_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16)
 }
 
 fn format_identifier(identifier: &str) -> String {
-    static NON_ALPHA_NUMERIC_REGEX: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
-
-    if NON_ALPHA_NUMERIC_REGEX.is_match(identifier) {
-        format!("\"{identifier}\"")
-    } else {
-        identifier.to_string()
-    }
+    identifier.to_string()
 }
 
 fn bind_values<'a, 'b>(
