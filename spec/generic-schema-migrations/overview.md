@@ -815,33 +815,159 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 
 **Prerequisites:** ✅ All Phase 7 sub-phases complete with comprehensive test coverage and examples
 
-**Goal:** Update existing moosicbox_schema to use switchy_schema
+**Goal:** Transform `moosicbox_schema` from a custom migration implementation (~260 lines) to a thin wrapper around `switchy_schema` (~150 lines), while maintaining 100% backward compatibility and gaining new features like rollback support.
 
-### 8.1 Wrapper Implementation
+### 8.1 Enable Custom Table Names in switchy_schema
 
-- [ ] `packages/schema/src/lib.rs` - Update moosicbox_schema ❌ **CRITICAL**
-  - [ ] Replace direct migration logic with switchy_schema calls
-  - [ ] Maintain existing public API unchanged
-  - [ ] Use MigrationRunner with embedded sources
-  - [ ] Keep existing function signatures and behavior
+**Goal:** Remove the artificial limitation preventing custom migration table names
 
-### 8.2 Migration Compatibility
+- [ ] Update VersionTracker Methods ❌ **CRITICAL**
+  - [ ] Update `packages/switchy/schema/src/version.rs`:
+    - [ ] Remove limitation check from `ensure_table_exists()` - use `&self.table_name`
+    - [ ] Remove limitation check from `is_migration_applied()` - use `&self.table_name`
+    - [ ] Remove limitation check from `record_migration()` - use `&self.table_name`
+    - [ ] Remove limitation check from `get_applied_migrations()` - use `&self.table_name`
+    - [ ] Remove limitation check from `remove_migration()` - use `&self.table_name`
+    - [ ] Update all documentation to remove "Limitations" sections
+    - [ ] Remove TODO comments about switchy_database limitations
 
-- [ ] `packages/schema/src/lib.rs` - Ensure compatibility ❌ **CRITICAL**
-  - [ ] Verify all existing migrations continue to work
-  - [ ] Maintain migration table name compatibility
-  - [ ] Preserve migration ordering and checksums
-  - [ ] Test against existing databases
-  - [ ] Add unit tests using in-memory SQLite similar to existing tests
-  - [ ] Verify migrations run without clippy warnings
+- [ ] Add Convenience Method to MigrationRunner ❌ **CRITICAL**
+  - [ ] Update `packages/switchy/schema/src/runner.rs`:
+    - [ ] Add `with_table_name(impl Into<String>)` method for easy configuration
+    - [ ] Update documentation to show custom table name usage
 
-### 8.3 Feature Propagation
+- [ ] Test Custom Table Names ❌ **IMPORTANT**
+  - [ ] Add test case using custom table name
+  - [ ] Verify migrations work with non-default table names
+  - [ ] Ensure backward compatibility with default table name
 
-- [ ] `packages/schema/Cargo.toml` - Update dependencies ❌ **CRITICAL**
-  - [ ] Add switchy_schema dependency
-  - [ ] Propagate feature flags appropriately
-  - [ ] Maintain existing feature compatibility
-  - [ ] Update documentation
+### 8.2 Core moosicbox_schema Implementation
+
+**Goal:** Replace custom migration logic with switchy_schema while keeping the same API
+
+**Important Design Note**: The implementation intentionally runs both PostgreSQL and SQLite migrations when both features are enabled. This is not a bug - it's designed for development/testing scenarios. In production, only one database feature is ever enabled, so only one set of migrations runs. This behavior must be preserved for compatibility.
+
+- [ ] Implement Unified Migration Functions ❌ **CRITICAL**
+  - [ ] Rewrite `packages/schema/src/lib.rs` with unified functions:
+    - [ ] Add `switchy_schema` dependency with `embedded` feature to Cargo.toml
+    - [ ] Add `switchy_env` dependency for environment variable support
+    - [ ] Keep existing dependencies that are still needed (include_dir, log, thiserror)
+    - [ ] Define core types and constants (`MIGRATIONS_TABLE_NAME`)
+    - [ ] Implement single `migrate_config()` function with internal feature-gated blocks for both databases
+    - [ ] Implement single `migrate_library()` function with internal feature-gated blocks for both databases
+    - [ ] Implement single `migrate_library_until()` function with internal feature-gated blocks for both databases
+
+- [ ] Implement Database Migration Logic ❌ **CRITICAL**
+  - [ ] Within each unified function:
+    - [ ] Use `include_dir!` to embed migration directories for both databases
+    - [ ] Add `#[cfg(feature = "postgres")]` block using `MigrationRunner::new_embedded()` with PostgreSQL directories
+    - [ ] Add `#[cfg(feature = "sqlite")]` block using `MigrationRunner::new_embedded()` with SQLite directories
+    - [ ] Implement `ExecutionStrategy::UpTo` support for `migrate_library_until()`
+    - [ ] Implement `MOOSICBOX_SKIP_MIGRATION_EXECUTION` environment variable support
+    - [ ] Use custom table name: `__moosicbox_schema_migrations` for all migrations
+
+### 8.3 Backward Compatibility Layer
+
+**Goal:** Ensure existing code and tests work without modification
+
+- [ ] Implement Compatibility Types and Exports ❌ **CRITICAL**
+  - [ ] Keep `MigrateError` type for backward compatibility
+  - [ ] Implement `Migrations` struct for test compatibility:
+    - [ ] Add `run()` method that wraps `MigrationRunner` with custom table name
+    - [ ] Add `run_until()` method with migration name support
+  - [ ] Maintain feature-gated module structure for constants only:
+    - [ ] `#[cfg(feature = "sqlite")]` module with `SQLITE_CONFIG_MIGRATIONS` and `SQLITE_LIBRARY_MIGRATIONS` constants
+    - [ ] `#[cfg(feature = "postgres")]` module with `POSTGRES_CONFIG_MIGRATIONS` and `POSTGRES_LIBRARY_MIGRATIONS` constants
+    - [ ] Functions remain at root level (not in modules)
+
+### 8.4 Testing & Validation
+
+**Goal:** Ensure all existing functionality works correctly
+
+- [ ] Verify Existing Tests ❌ **CRITICAL**
+  - [ ] Run and ensure all existing tests pass without modification:
+    - [ ] `sqlx_config_migrations` test
+    - [ ] `sqlx_library_migrations` test
+    - [ ] `rusqlite_config_migrations` test
+    - [ ] `rusqlite_library_migrations` test
+    - [ ] `test_api_sources_table_migration` test (complex migration test)
+
+- [ ] Test New Features ❌ **IMPORTANT**
+  - [ ] Add test for rollback functionality (new capability!)
+  - [ ] Add test for dry-run mode
+  - [ ] Add test for migration hooks
+  - [ ] Verify environment variable support still works
+
+- [ ] Migration Order Verification ❌ **IMPORTANT**
+  - [ ] Ensure migrations run in same order as before (alphabetical by ID)
+  - [ ] Verify `run_until` stops at correct migration
+  - [ ] Test that already-applied migrations are skipped
+
+### 8.5 Documentation & Cleanup
+
+**Goal:** Document changes and remove obsolete code
+
+- [ ] Code Cleanup ❌ **MINOR**
+  - [ ] Remove old `walk_dir` implementation
+  - [ ] Remove old `as_btree` implementation
+  - [ ] Remove manual migration tracking logic
+  - [ ] Clean up unused imports
+  - [ ] Remove `moosicbox_assert` dependency if no longer needed
+
+- [ ] Documentation Updates ❌ **MINOR**
+  - [ ] Update package README with new architecture
+  - [ ] Document new features available (rollback, dry-run, hooks)
+  - [ ] Add examples showing how to use new rollback capability
+  - [ ] Document that no changes are needed to calling code
+
+### Success Criteria
+
+- [ ] All existing tests pass without modification
+- [ ] Migration table remains `__moosicbox_schema_migrations`
+- [ ] Migration order is preserved (alphabetical by ID)
+- [ ] `run_until` functionality works correctly
+- [ ] Environment variable support maintained
+- [ ] No changes required to calling code (server/src/lib.rs, events/profiles_event.rs)
+- [ ] **build.rs remains unchanged and continues to trigger recompilation on migration changes**
+- [ ] When both features are enabled, both migration sets run (maintaining current behavior)
+- [ ] Functions compile without warnings when all features are enabled
+- [ ] Single unified API regardless of feature combination
+
+### Benefits of This Migration
+
+1. **Code Reduction**: ~260 lines → ~150 lines (42% reduction)
+2. **New Features**:
+   - ✅ Rollback support
+   - ✅ Dry-run mode
+   - ✅ Migration hooks
+   - ✅ Better error handling
+   - ✅ Comprehensive test utilities
+3. **Improved Maintainability**: Single migration system to maintain
+4. **Zero Breaking Changes**: All existing code continues to work
+5. **Better Testing**: Can leverage switchy_schema_test_utils
+
+### Risk Mitigation
+
+1. **Risk**: Different migration ordering
+   - **Mitigation**: Both use BTreeMap with alphabetical sorting
+
+2. **Risk**: Table name incompatibility
+   - **Mitigation**: Phase 8.1 enables custom table names
+
+3. **Risk**: Test failures
+   - **Mitigation**: Compatibility layer maintains exact same API
+
+4. **Risk**: Missing environment variable support
+   - **Mitigation**: Explicitly handle in wrapper implementation
+
+5. **Risk**: Accidentally "fixing" the dual-migration behavior
+   - **Mitigation**: Document that running both migrations when both features are enabled is intentional for development/testing
+
+
+### Note on Callers
+No changes needed! The two places that use moosicbox_schema will continue to work exactly as before:
+- `packages/server/src/lib.rs` - calls `migrate_config()`
+- `packages/server/src/events/profiles_event.rs` - calls `migrate_library()`
 
 ## Phase 9: Migration Listing
 
