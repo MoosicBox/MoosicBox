@@ -1,0 +1,27 @@
+[package]
+authors     = { workspace = true }
+categories  = ["database", "development-tools"]
+description = "Example demonstrating mutation migration testing with verify_migrations_with_mutations"
+edition     = { workspace = true }
+keywords    = ["database", "example", "migration", "schema", "testing"]
+license     = { workspace = true }
+name        = "mutation_migration_test"
+publish     = false
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "mutation_migration_test"
+path = "src/main.rs"
+
+[dependencies]
+async-trait               = { workspace = true }
+switchy_database          = { workspace = true, features = ["schema"] }
+switchy_schema            = { workspace = true }
+switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
+tokio                     = { workspace = true, features = ["macros", "rt"] }
+
+[features]
+fail-on-warnings = []
+

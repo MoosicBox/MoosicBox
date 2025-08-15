@@ -2,11 +2,12 @@
 authors     = { workspace = true }
 categories  = ["database", "development-tools"]
 description = "Example demonstrating borrowed data migrations with switchy_schema"
-edition     = "2021"
+edition     = { workspace = true }
 keywords    = ["database", "example", "lifetime", "migration", "schema"]
 license     = { workspace = true }
 name        = "borrowed_migrations_example"
 publish     = false
+readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"
 

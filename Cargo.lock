@@ -1708,6 +1708,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "basic_migration_test"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "switchy_database",
+ "switchy_schema",
+ "switchy_schema_test_utils",
+ "tokio",
+]
+
+[[package]]
 name = "better_scoped_tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8951,6 +8962,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
+name = "mutation_migration_test"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "switchy_database",
+ "switchy_schema",
+ "switchy_schema_test_utils",
+ "tokio",
+]
+
+[[package]]
 name = "naga"
 version = "25.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13323,6 +13345,17 @@ dependencies = [
  "libc",
  "psm",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "state_migration_test"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "switchy_database",
+ "switchy_schema",
+ "switchy_schema_test_utils",
+ "tokio",
 ]
 
 [[package]]

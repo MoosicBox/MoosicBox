@@ -7,13 +7,13 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use switchy_database::{
-    schema::{create_table, Column, DataType},
     Database,
+    schema::{Column, DataType, create_table},
 };
 use switchy_schema::{
+    Result,
     discovery::code::{CodeMigration, CodeMigrationSource},
     migration::{Migration, MigrationSource},
-    Result,
 };
 
 /// Example of a custom migration with static lifetime
@@ -51,10 +51,10 @@ impl Migration<'static> for CustomMigration {
     }
 
     async fn down(&self, db: &dyn Database) -> Result<()> {
-        if let Some(down_sql) = &self.down_sql {
-            if !down_sql.trim().is_empty() {
-                db.exec_raw(down_sql).await?;
-            }
+        if let Some(down_sql) = &self.down_sql
+            && !down_sql.trim().is_empty()
+        {
+            db.exec_raw(down_sql).await?;
         }
         Ok(())
     }

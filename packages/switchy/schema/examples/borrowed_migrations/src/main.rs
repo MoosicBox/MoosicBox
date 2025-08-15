@@ -6,13 +6,13 @@
 use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
 use switchy_database::{
-    schema::{create_table, Column, DataType},
     Database,
+    schema::{Column, DataType, create_table},
 };
 use switchy_schema::{
+    Result,
     discovery::code::CodeMigration,
     migration::{Migration, MigrationSource},
-    Result,
 };
 
 /// Configuration structure that migrations can borrow from
