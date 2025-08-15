@@ -34,7 +34,9 @@ pub async fn fetch_moosicbox_servers() -> Result<Vec<MoosicBox>, TauriPlayerErro
     Ok(MOOSICBOX_SERVERS.read().await.clone())
 }
 
-pub fn spawn_mdns_scanner() -> (
+pub fn spawn_mdns_scanner(
+    runtime_handle: &switchy::unsync::runtime::Handle,
+) -> (
     switchy::mdns::scanner::service::Handle,
     switchy::unsync::task::JoinHandle<Result<(), switchy::mdns::scanner::service::Error>>,
 ) {
@@ -44,7 +46,6 @@ pub fn spawn_mdns_scanner() -> (
     let service = switchy::mdns::scanner::service::Service::new(context);
 
     let handle = service.handle();
-    let runtime_handle = switchy::unsync::runtime::Handle::current();
 
     runtime_handle.spawn_with_name("mdns_scanner", async move {
         while let Ok(server) = rx.recv().await {
@@ -56,5 +57,5 @@ pub fn spawn_mdns_scanner() -> (
         }
     });
 
-    (handle, service.start_on(&runtime_handle))
+    (handle, service.start_on(runtime_handle))
 }

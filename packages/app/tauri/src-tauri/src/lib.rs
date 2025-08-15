@@ -882,7 +882,9 @@ pub fn run() {
         .setup(move |app| {
             APP.get_or_init(|| app.handle().clone());
 
-            let runtime_handle = switchy::unsync::runtime::Handle::current();
+            let runtime_handle = tauri::async_runtime::block_on(async move {
+                switchy::unsync::runtime::Handle::current()
+            });
 
             moosicbox_config::set_root_dir(get_data_dir().unwrap());
 
@@ -1060,7 +1062,7 @@ pub fn run() {
                 .set(upnp_service_handle)
                 .unwrap_or_else(|_| panic!("Failed to set UPNP_LISTENER_HANDLE"));
 
-            let (mdns_handle, join_mdns_service) = mdns::spawn_mdns_scanner();
+            let (mdns_handle, join_mdns_service) = mdns::spawn_mdns_scanner(&runtime_handle);
             *MDNS_HANDLE.lock().unwrap() = Some(mdns_handle);
             *JOIN_MDNS_SERVICE.lock().unwrap() = Some(join_mdns_service);
 
