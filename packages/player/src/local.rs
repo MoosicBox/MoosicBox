@@ -183,7 +183,7 @@ impl Player for LocalPlayer {
             })
             .await??;
 
-        log::info!("Finished playback for track_id={}", track_id);
+        log::info!("Finished playback for track_id={track_id}");
 
         // Assert that track playback finished close to the expected duration
         // This helps catch cases where tracks are being truncated early
@@ -287,7 +287,7 @@ impl Player for LocalPlayer {
             .ok_or(PlayerError::NoPlayersPlaying)?
             .progress;
 
-        log::info!("Resuming playback from position: {:.2}s", progress);
+        log::info!("Resuming playback from position: {progress:.2}s");
 
         let mut playback_handler = { self.playback_handler.read().unwrap().clone().unwrap() };
         playback_handler.play_playback(Some(progress), None).await?;

@@ -450,6 +450,8 @@ impl MusicApi for LibraryMusicApi {
         track: TrackOrId,
         _quality: TrackAudioQuality,
     ) -> Result<Option<TrackSource>, moosicbox_music_api::Error> {
+        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
+
         let Some(track) = track.track(self).await? else {
             return Ok(None);
         };
@@ -458,8 +460,6 @@ impl MusicApi for LibraryMusicApi {
         } else {
             return Ok(None);
         };
-
-        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/mnt/(\w+)").unwrap());
 
         if std::env::consts::OS == "windows" {
             path = REGEX
