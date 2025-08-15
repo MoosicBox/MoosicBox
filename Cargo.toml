@@ -339,12 +339,12 @@ actix-ws = "0.3.0"
 anyhow = "1.0.99"
 arrayvec = "0.7.6"
 async-recursion = "1.1.1"
-async-trait = "0.1.88"
+async-trait = "0.1.89"
 atomic_float = "1.1.0"
 audiopus = "0.2.0"
 aws-config = "1.8.5"
-aws-sdk-apigatewaymanagement = "1.80.0"
-aws-sdk-ssm = "1.89.0"
+aws-sdk-apigatewaymanagement = "1.81.0"
+aws-sdk-ssm = "1.90.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.0"
@@ -368,9 +368,9 @@ convert_case = "0.8.0"
 cpal = "0.16.0"
 ctrlc = "3.4.7"
 debounce = "0.2.2"
-eframe = { version = "0.32.0", default-features = false }
-egui = { version = "0.32.0", default-features = false }
-egui_extras = { version = "0.32.0", default-features = false }
+eframe = { version = "0.32.1", default-features = false }
+egui = { version = "0.32.1", default-features = false }
+egui_extras = { version = "0.32.1", default-features = false }
 enum-as-inner = "0.6.1"
 env_logger = "0.11.8"
 fdk-aac = "0.7.0"
