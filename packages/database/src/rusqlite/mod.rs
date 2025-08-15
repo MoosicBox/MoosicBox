@@ -477,9 +477,8 @@ impl Database for RusqliteDatabase {
         for (source, target) in &statement.foreign_keys {
             query.push_str(", FOREIGN KEY (");
             query.push_str(source);
-            query.push_str(") REFERENCES (");
+            query.push_str(") REFERENCES ");
             query.push_str(target);
-            query.push(')');
         }
 
         query.push(')');
