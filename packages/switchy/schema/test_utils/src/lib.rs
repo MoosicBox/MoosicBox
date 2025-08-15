@@ -7,6 +7,81 @@
 //! This crate provides comprehensive testing infrastructure for verifying migration
 //! correctness and behavior. It supports testing migrations with fresh databases,
 //! pre-seeded state, and interleaved mutations between migrations.
+//!
+//! ## Migration Test Builder
+//!
+//! The [`MigrationTestBuilder`] provides an ergonomic way to test complex migration
+//! scenarios where you need to insert data at specific points in the migration sequence.
+//! This is particularly useful for testing data migration scenarios.
+//!
+//! ### Basic Usage
+//!
+//! ```rust,no_run
+//! use switchy_schema_test_utils::{MigrationTestBuilder, create_empty_in_memory};
+//! use std::sync::Arc;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let db = create_empty_in_memory().await?;
+//! let migrations = vec![/* your migrations */];
+//!
+//! MigrationTestBuilder::new(migrations)
+//!     .with_table_name("__test_migrations")
+//!     .run(&*db)
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Testing Data Migrations
+//!
+//! ```rust,no_run
+//! use switchy_schema_test_utils::MigrationTestBuilder;
+//!
+//! # async fn example(db: &dyn switchy_database::Database, migrations: Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>) -> Result<(), Box<dyn std::error::Error>> {
+//! // Test a data migration scenario
+//! MigrationTestBuilder::new(migrations)
+//!     .with_data_before(
+//!         "002_migrate_user_data",
+//!         |db| Box::pin(async move {
+//!             // Insert old format data that migration will transform
+//!             db.exec_raw("INSERT INTO old_users (name) VALUES ('test')").await
+//!         })
+//!     )
+//!     .run(db)
+//!     .await?;
+//!
+//! // Verify migration transformed data correctly
+//! // Note: In real usage, you would use the query builder
+//! // let users = query::select("new_users").columns(&["*"]).execute(db).await?;
+//! // assert!(!users.is_empty());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Multiple Breakpoints
+//!
+//! ```rust,no_run
+//! use switchy_schema_test_utils::MigrationTestBuilder;
+//!
+//! # async fn example(db: &dyn switchy_database::Database, migrations: Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>) -> Result<(), Box<dyn std::error::Error>> {
+//! MigrationTestBuilder::new(migrations)
+//!     .with_data_after(
+//!         "001_create_users",
+//!         |db| Box::pin(async move {
+//!             db.exec_raw("INSERT INTO users (name) VALUES ('test_user')").await
+//!         })
+//!     )
+//!     .with_data_before(
+//!         "003_migrate_posts",
+//!         |db| Box::pin(async move {
+//!             db.exec_raw("INSERT INTO old_posts (title, user_name) VALUES ('Test', 'test_user')").await
+//!         })
+//!     )
+//!     .run(db)
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
@@ -22,11 +97,17 @@ use switchy_schema::{
 pub use switchy_database;
 pub use switchy_schema;
 
+/// Re-export the migration test builder for convenience
+pub use builder::MigrationTestBuilder;
+
 /// Mutation handling for advanced migration testing
 pub mod mutations;
 
 /// Test assertion helpers for database schema and migration verification
 pub mod assertions;
+
+/// Migration test builder for complex testing scenarios
+pub mod builder;
 
 /// Test error type that wraps existing errors from `switchy_schema` and `switchy_database`
 #[derive(Debug, thiserror::Error)]
