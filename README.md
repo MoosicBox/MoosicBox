@@ -159,29 +159,6 @@ cargo fmt
 
 ---
 
-## 🤝 Contributing
-
-We welcome contributions! MoosicBox is open source and community-driven.
-
-### Ways to Contribute
-
-- 🐛 **Report bugs** via GitHub Issues
-- 💡 **Suggest features** and improvements
-- 🔧 **Submit pull requests** for bug fixes and enhancements
-- 📚 **Improve documentation** and help others get started
-- 🎨 **Design improvements** for UI/UX
-
-### Development Setup
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Submit a pull request
-
-See our [prioritized backlog](https://github.com/orgs/MoosicBox/projects/1/views/1) for current development priorities.
-
----
-
 ## 📄 License
 
 MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
@@ -190,10 +167,7 @@ MoosicBox is licensed under the [Mozilla Public License 2.0](LICENSE).
 
 - **🌐 Website**: [moosicbox.com](https://moosicbox.com)
 - **📱 Downloads**: [moosicbox.com/download](https://moosicbox.com/download)
-- **🎮 Try Online**: [moosicbox.com/try-now](https://moosicbox.com/try-now)
-- **📖 Documentation**: [GitHub Wiki](https://github.com/MoosicBox/MoosicBox/wiki)
 - **🐛 Issues**: [GitHub Issues](https://github.com/MoosicBox/MoosicBox/issues)
-- **💬 Discussions**: [GitHub Discussions](https://github.com/MoosicBox/MoosicBox/discussions)
 
 ---
 
