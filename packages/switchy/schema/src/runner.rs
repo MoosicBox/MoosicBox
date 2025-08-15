@@ -60,6 +60,21 @@
 //! # #[cfg(feature = "code")]
 //! # let runner = MigrationRunner::new_code();
 //! ```
+//!
+//! ## Custom Table Names
+//!
+//! ```rust,no_run
+//! use switchy_schema::runner::MigrationRunner;
+//!
+//! # #[cfg(feature = "embedded")]
+//! # {
+//! # use include_dir::include_dir;
+//! # static MIGRATIONS: include_dir::Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/test_migrations");
+//! // Use a custom table name for migration tracking
+//! let runner = MigrationRunner::new_embedded(&MIGRATIONS)
+//!     .with_table_name("my_custom_migrations");
+//! # }
+//! ```
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -133,6 +148,13 @@ impl<'a> MigrationRunner<'a> {
     #[must_use]
     pub fn with_version_tracker(mut self, version_tracker: VersionTracker) -> Self {
         self.version_tracker = version_tracker;
+        self
+    }
+
+    /// Set a custom migration table name
+    #[must_use]
+    pub fn with_table_name(mut self, table_name: impl Into<String>) -> Self {
+        self.version_tracker = VersionTracker::with_table_name(table_name.into());
         self
     }
 
@@ -457,6 +479,25 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn test_custom_table_name() {
+            let source = CodeMigrationSource::new();
+            let custom_table_name = "my_custom_migrations";
+
+            // Test with_table_name convenience method
+            let runner = MigrationRunner::new(Box::new(source)).with_table_name(custom_table_name);
+
+            assert_eq!(runner.version_tracker.table_name(), custom_table_name);
+
+            // Test with_version_tracker method
+            let source2 = CodeMigrationSource::new();
+            let version_tracker = VersionTracker::with_table_name(custom_table_name.to_string());
+            let runner2 =
+                MigrationRunner::new(Box::new(source2)).with_version_tracker(version_tracker);
+
+            assert_eq!(runner2.version_tracker.table_name(), custom_table_name);
+        }
+
+        #[tokio::test]
         async fn test_apply_strategy_all() {
             let source = CodeMigrationSource::new();
             let runner = MigrationRunner::new(Box::new(source));
@@ -670,6 +711,57 @@ mod tests {
             };
             // Should only rollback available migrations
             assert_eq!(steps_overflow, applied);
+        }
+
+        #[tokio::test]
+        async fn test_custom_table_name_integration() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create migration source with a simple migration
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test_custom_table".to_string(),
+                Box::new("CREATE TABLE test_table (id INTEGER PRIMARY KEY);".to_string())
+                    as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE test_table;".to_string()) as Box<dyn Executable>),
+            ));
+
+            let custom_table_name = "custom_migration_tracker";
+
+            // Create runner with custom table name
+            let runner = MigrationRunner::new(Box::new(source)).with_table_name(custom_table_name);
+
+            // Run migrations
+            runner.run(&*db).await.expect("Migration should succeed");
+
+            // Verify custom table was created and used
+            let results = db
+                .select(custom_table_name)
+                .columns(&["name"])
+                .execute(&*db)
+                .await
+                .expect("Should be able to query custom migration table");
+
+            assert_eq!(results.len(), 1);
+            assert_eq!(
+                results[0].get("name").unwrap().as_str().unwrap(),
+                "001_test_custom_table"
+            );
+
+            // Verify the actual test table was created
+            let test_results = db
+                .select("test_table")
+                .columns(&["id"])
+                .execute(&*db)
+                .await
+                .expect("Test table should exist");
+
+            assert_eq!(test_results.len(), 0); // Empty table is fine
         }
     }
 }

@@ -14211,6 +14211,7 @@ dependencies = [
  "include_dir",
  "switchy_async",
  "switchy_database",
+ "switchy_database_connection",
  "switchy_fs",
  "thiserror 2.0.14",
  "tokio",

@@ -27,9 +27,10 @@ switchy_fs = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-switchy_async = { workspace = true, features = ["macros", "tokio"] }
-switchy_fs    = { workspace = true, features = ["simulator-real-fs", "std"] }
-tokio         = { workspace = true, features = ["macros", "rt"] }
+switchy_async               = { workspace = true, features = ["macros", "tokio"] }
+switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
+switchy_fs                  = { workspace = true, features = ["simulator-real-fs", "std"] }
+tokio                       = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["all-discovery"]
