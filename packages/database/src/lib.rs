@@ -334,7 +334,7 @@ impl Row {
 
 #[async_trait]
 pub trait Database: Send + Sync + std::fmt::Debug {
-    fn select(&self, table_name: &'static str) -> SelectQuery<'static> {
+    fn select<'a>(&self, table_name: &'a str) -> SelectQuery<'a> {
         query::select(table_name)
     }
     fn update<'a>(&self, table_name: &'a str) -> UpdateStatement<'a> {
