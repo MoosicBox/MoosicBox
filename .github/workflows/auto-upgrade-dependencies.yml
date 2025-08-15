@@ -453,7 +453,7 @@ jobs:
         name: Commit compatible upgrades
         runs-on: ubuntu-latest
         needs: [upgrade-dependencies, validate-compatible, test-compatible]
-        if: ${{ always() && needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' }}
+        if: ${{ needs.upgrade-dependencies.outputs.compatible-upgraded == 'true' }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -687,7 +687,7 @@ jobs:
         name: Commit incompatible upgrades
         runs-on: ubuntu-latest
         needs: [upgrade-dependencies, validate-incompatible, test-incompatible]
-        if: ${{ always() && needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' }}
+        if: ${{ needs.upgrade-dependencies.outputs.incompatible-upgraded == 'true' }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
