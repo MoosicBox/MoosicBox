@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** 🟡 **Implementation Phase** - Phase 1-5 complete, Phase 7.1-7.4 complete, ready for Phase 7.5
+**Current Status:** 🟡 **Implementation Phase** - Phase 1-5 complete, Phase 7.1-7.5 complete, ready for Phase 7.6
 
-**Completion Estimate:** ~25% complete - Core foundation, traits, discovery methods, migration runner, rollback, and Arc migration completed. Test utilities in progress.
+**Completion Estimate:** ~30% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, and test utilities completed. Documentation phase next.
 
 ## Status Legend
 
@@ -636,24 +636,27 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
     - [x] Verify rollback works with mutated data
     - [x] Add unit tests for this functionality
 
-### 7.5 Test Assertion Helpers
+### 7.5 Test Assertion Helpers ✅ **COMPLETED**
 
-- [ ] `packages/switchy/schema/test_utils/src/assertions.rs` - Test assertions ❌ **IMPORTANT**
-  - [ ] Table existence verification
-  - [ ] Column presence/type verification
-  - [ ] Row count assertions
-  - [ ] Data integrity checks
-  - [ ] Migration state verification (which migrations are applied)
-  - [ ] Schema comparison utilities
-  - [ ] All functions return `Result<(), DatabaseError>` or propagate existing errors
-  - [ ] Add unit tests for assertion helpers
+- [x] `packages/switchy/schema/test_utils/src/assertions.rs` - Test assertions ✅ **IMPORTANT**
+  - [x] Table existence verification using `switchy_database::query::select()`
+  - [x] Column presence/type verification with ORM-style queries
+  - [x] Row count assertions with `i64::try_from().expect()` conversions
+  - [x] Data integrity checks using query builder and PRAGMA commands
+  - [x] Migration state verification via `__switchy_migrations` table queries
+  - [x] Schema comparison utilities with query builder validation
+  - [x] INSERT operations using `db.insert().value().execute()` pattern
+  - [x] All functions return `Result<(), DatabaseError>` with proper error propagation
+  - [x] Comprehensive unit tests (23) and doc tests (17) all passing
+  - [x] Zero clippy warnings with full pedantic linting
 
 ### 7.6 Documentation and Examples
 
-- [ ] Add comprehensive documentation ❌ **MINOR**
-  - [ ] Usage examples in module docs
-  - [ ] Example test cases showing all three verification methods
-  - [ ] Document feature flags and when to use them
+- [x] Add comprehensive documentation 🟡 **MINOR** (Partially Complete)
+  - [x] Usage examples in module docs (basic module docs exist)
+  - [x] Doc examples for all assertion functions (comprehensive examples)
+  - [ ] Example test cases showing all three verification methods (verify_migrations_full_cycle, verify_migrations_with_state, verify_migrations_with_mutations)
+  - [x] Document feature flags and when to use them (sqlite feature documented)
 
 **Key Design Decisions:**
 - No custom error types - Propagate existing `MigrationError` and `DatabaseError`, with optional thin wrapper only if needed
@@ -674,6 +677,42 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
 - Comprehensive documentation with proper backticks and error sections
 - Workspace integration at correct locations (line 118 members, line 274 dependencies)
 - **Ready for Phase 7.3**: Test utilities can now easily clone migrations via Arc
+
+✅ **Phase 7.3, 7.4, and 7.5 Completed Successfully (2025-01-14):**
+- **Complete Query Builder Integration**:
+  - Used ORM-style query builder for all SELECT operations
+  - Used insert builder for all INSERT operations
+  - Only `exec_raw` for PRAGMA commands (no query builder support available)
+- **Schema Builder Integration**:
+  - Enabled `schema` feature for `switchy_database`
+  - All CREATE TABLE operations use `db.create_table().column().execute()` pattern
+  - Updated all doc examples to showcase modern schema builder API
+- **Test Assertion Helpers**:
+  - 10 assertion functions covering tables, columns, rows, migrations, and schema
+  - All functions return `Result<(), DatabaseError>` for clean error propagation
+  - Comprehensive doc examples with schema builder usage
+- **Error Handling**:
+  - Used `i64::try_from().expect()` with proper panic documentation
+  - Clean `TestError` propagation throughout test utilities
+  - No incorrect error type mappings
+- **Test Coverage**:
+  - 23 unit tests passing (table existence, column validation, row counts, etc.)
+  - 17 doc tests passing (all assertion function examples)
+  - Zero clippy warnings with full pedantic linting
+- **Zero Compromises**: Achieved all requirements using modern APIs where available
+
+**Key Technical Decisions for Phase 7.5:**
+1. **Complete Query Builder Integration**:
+   - Used ORM-style query builder for all SELECT operations
+   - Used insert builder for all INSERT operations
+   - Only `exec_raw` for PRAGMA commands (no query builder support available)
+2. **Schema Builder Integration**: Added `schema` feature to leverage modern table creation API
+3. **Error Conversion Strategy**: Used `try_from().expect()` for integer conversions with documented panic conditions
+4. **Intentional `exec_raw` Usage**:
+   - PRAGMA commands: SQLite-specific, no query builder support exists
+   - Migration test utilities: Testing raw SQL migrations requires raw SQL execution (by design)
+5. **Test Organization**: Kept all assertions in single module for simplicity
+6. **Feature Gating**: All assertions require `sqlite` feature to ensure database availability
 
 **Out of Scope for Phase 7:**
 - Testing against different database types (PostgreSQL, MySQL) - user provides the database

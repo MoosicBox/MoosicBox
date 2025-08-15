@@ -14188,9 +14188,11 @@ name = "switchy_schema_test_utils"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "log 0.4.27",
  "switchy_database",
  "switchy_database_connection",
  "switchy_schema",
+ "test-log",
  "thiserror 2.0.14",
  "tokio",
 ]

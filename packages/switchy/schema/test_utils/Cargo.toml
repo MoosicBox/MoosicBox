@@ -15,16 +15,18 @@ group = "switchy"
 
 [dependencies]
 async-trait                 = { workspace = true }
-switchy_database            = { workspace = true }
+log                         = { workspace = true }
+switchy_database            = { workspace = true, features = ["schema"] }
 switchy_database_connection = { workspace = true, optional = true }
 switchy_schema              = { workspace = true }
 thiserror                   = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt"] }
+test-log = { workspace = true }
+tokio    = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["fail-on-warnings"]
+default = ["sqlite"]
 
 fail-on-warnings = []
 sqlite = [

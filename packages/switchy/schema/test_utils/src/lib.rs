@@ -25,6 +25,9 @@ pub use switchy_schema;
 /// Mutation handling for advanced migration testing
 pub mod mutations;
 
+/// Test assertion helpers for database schema and migration verification
+pub mod assertions;
+
 /// Test error type that wraps existing errors from `switchy_schema` and `switchy_database`
 #[derive(Debug, thiserror::Error)]
 pub enum TestError {
@@ -34,6 +37,10 @@ pub enum TestError {
     /// Database error
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    /// Database connection initialization error
+    #[cfg(feature = "sqlite")]
+    #[error(transparent)]
+    DatabaseInit(#[from] switchy_database_connection::InitSqliteSqlxDatabaseError),
 }
 
 /// Feature-gated helper to create an empty in-memory `SQLite` database
