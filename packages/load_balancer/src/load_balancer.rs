@@ -107,7 +107,7 @@ impl ProxyHttp for Router {
                 pingora_core::Error::new_str("Failed to select an upstream")
             })?;
 
-        log::info!("upstream_peer: upstream peer is: {:?}", upstream);
+        log::info!("upstream_peer: upstream peer is: {upstream:?}");
 
         Ok(Box::new(HttpPeer::new(upstream, false, SNI.to_string())))
     }
