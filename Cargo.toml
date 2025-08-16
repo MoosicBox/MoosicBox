@@ -505,7 +505,7 @@ swc_ecma_transforms_base = "24.0.0"
 swc_ecma_transforms_typescript = "26.0.0"
 swc_ecma_visit = "14.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
-syn = "2.0.105"
+syn = "2.0.106"
 syntect = "5.2.0"
 tantivy = "0.24.2"
 tauri = { version = "2.7.0", features = ["protocol-asset"] }
