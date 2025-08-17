@@ -11,7 +11,7 @@ repository  = { workspace = true }
 version     = "0.1.4"
 
 [package.metadata.cargo-machete]
-ignored = ["tokio"]
+ignored = ["switchy_schema_test_utils", "tokio"]
 
 [dependencies]
 moosicbox_assert = { workspace = true }
@@ -32,6 +32,7 @@ switchy_database_connection = { workspace = true, features = [
     "sqlite-rusqlite",
     "sqlite-sqlx",
 ] }
+switchy_schema_test_utils = { workspace = true, features = ["sqlite"] }
 test-log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 

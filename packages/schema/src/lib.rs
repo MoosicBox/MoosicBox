@@ -253,6 +253,8 @@ fn postgres_library_migrations() -> CodeMigrationSource<'static> {
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let migrations = get_sqlite_library_migrations().await?;
 ///
+/// let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
+///
 /// // Use with MigrationTestBuilder
 /// MigrationTestBuilder::new(migrations)
 ///     .with_table_name("__moosicbox_schema_migrations")

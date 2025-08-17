@@ -8479,6 +8479,7 @@ dependencies = [
  "switchy_database_connection",
  "switchy_env",
  "switchy_schema",
+ "switchy_schema_test_utils",
  "test-log",
  "thiserror 2.0.14",
  "tokio",
