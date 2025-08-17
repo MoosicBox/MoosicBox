@@ -39,7 +39,7 @@ impl VersionTracker {
         db.create_table(&self.table_name)
             .if_not_exists(true)
             .column(Column {
-                name: "name".to_string(),
+                name: "id".to_string(),
                 nullable: false,
                 auto_increment: false,
                 data_type: DataType::Text,
@@ -70,8 +70,8 @@ impl VersionTracker {
     ) -> Result<bool> {
         let results = db
             .select(&self.table_name)
-            .columns(&["name"])
-            .where_eq("name", migration_id)
+            .columns(&["id"])
+            .where_eq("id", migration_id)
             .execute(db)
             .await?;
 
@@ -85,7 +85,7 @@ impl VersionTracker {
     /// * If the database insert fails
     pub async fn record_migration(&self, db: &dyn Database, migration_id: &str) -> Result<()> {
         db.insert(&self.table_name)
-            .value("name", migration_id)
+            .value("id", migration_id)
             .execute(db)
             .await?;
 
@@ -100,7 +100,7 @@ impl VersionTracker {
     pub async fn get_applied_migrations(&self, db: &dyn Database) -> Result<Vec<String>> {
         let results = db
             .select(&self.table_name)
-            .columns(&["name"])
+            .columns(&["id"])
             .sort("run_on", switchy_database::query::SortDirection::Desc)
             .execute(db)
             .await?;
@@ -108,7 +108,7 @@ impl VersionTracker {
         let migration_ids = results
             .into_iter()
             .filter_map(|row| {
-                row.get("name")
+                row.get("id")
                     .and_then(|value| value.as_str().map(std::string::ToString::to_string))
             })
             .collect();
@@ -123,7 +123,7 @@ impl VersionTracker {
     /// * If the database delete fails
     pub async fn remove_migration(&self, db: &dyn Database, migration_id: &str) -> Result<()> {
         db.delete(&self.table_name)
-            .where_eq("name", migration_id)
+            .where_eq("id", migration_id)
             .execute(db)
             .await?;
 

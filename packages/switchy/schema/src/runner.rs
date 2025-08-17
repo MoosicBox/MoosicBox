@@ -742,14 +742,14 @@ mod tests {
             // Verify custom table was created and used
             let results = db
                 .select(custom_table_name)
-                .columns(&["name"])
+                .columns(&["id"])
                 .execute(&*db)
                 .await
                 .expect("Should be able to query custom migration table");
 
             assert_eq!(results.len(), 1);
             assert_eq!(
-                results[0].get("name").unwrap().as_str().unwrap(),
+                results[0].get("id").unwrap().as_str().unwrap(),
                 "001_test_custom_table"
             );
 

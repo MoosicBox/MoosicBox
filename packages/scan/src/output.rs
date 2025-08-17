@@ -912,7 +912,9 @@ mod test {
     use moosicbox_json_utils::ToValueType;
     use moosicbox_library::models::LibraryAlbumType;
     use moosicbox_music_models::{ApiSources, id::ApiId};
+    use moosicbox_schema::get_sqlite_library_migrations;
     use pretty_assertions::assert_eq;
+    use switchy_schema_test_utils::MigrationTestBuilder;
 
     use super::*;
 
@@ -929,37 +931,35 @@ mod test {
                         database: Arc::new(db),
                     };
 
-                    moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS.run_until(
-                        &*db,
-                        Some("2025-06-03-211603_cache_api_sources_on_tables"),
-                    )
-                    .await
-                    .unwrap();
-
-                    db.exec_raw(
-                        "
-                        INSERT INTO artists (id, title, cover) VALUES
-                            (1, 'title1', ''),
-                            (2, 'title2', ''),
-                            (3, 'title3', ''),
-                            (4, 'title4', '');
-                        INSERT INTO albums (id, artist_id, title, date_released, date_added, artwork, directory, blur) VALUES
-                            (1, 1, 'title1', '2022-01-01', '2022-01-01', '', '', 0),
-                            (2, 2, 'title2', '2022-01-01', '2022-01-01', '', '', 0),
-                            (3, 3, 'title3', '2022-01-01', '2022-01-01', '', '', 0),
-                            (4, 4, 'title4', '2022-01-01', '2022-01-01', '', '', 0);
-                        INSERT INTO tracks (id, album_id, number, title, duration, file, format, source) VALUES
-                            (1, 1, 1, 'title1', 10, 'file1', 'FLAC', 'LOCAL'),
-                            (2, 2, 2, 'title2', 13, 'file2', 'FLAC', 'LOCAL'),
-                            (3, 3, 3, 'title3', 19, 'file3', 'FLAC', 'LOCAL'),
-                            (4, 4, 4, 'title4', 15, 'file4', 'FLAC', 'LOCAL'),
-                            (6, 4, 4, 'title4', 15, NULL, 'SOURCE', 'LOCAL');
-                    ",
-                    )
-                    .await
-                    .unwrap();
-
-                    moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+                    MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+                        .with_table_name("__moosicbox_schema_migrations")
+                        .with_data_before("2025-06-03-211603_cache_api_sources_on_tables", |db| Box::pin(async move {
+                            db.exec_raw(
+                                "
+                                INSERT INTO artists (id, title, cover) VALUES
+                                    (1, 'title1', ''),
+                                    (2, 'title2', ''),
+                                    (3, 'title3', ''),
+                                    (4, 'title4', '');
+                                INSERT INTO albums (id, artist_id, title, date_released, date_added, artwork, directory, blur) VALUES
+                                    (1, 1, 'title1', '2022-01-01', '2022-01-01', '', '', 0),
+                                    (2, 2, 'title2', '2022-01-01', '2022-01-01', '', '', 0),
+                                    (3, 3, 'title3', '2022-01-01', '2022-01-01', '', '', 0),
+                                    (4, 4, 'title4', '2022-01-01', '2022-01-01', '', '', 0);
+                                INSERT INTO tracks (id, album_id, number, title, duration, file, format, source) VALUES
+                                    (1, 1, 1, 'title1', 10, 'file1', 'FLAC', 'LOCAL'),
+                                    (2, 2, 2, 'title2', 13, 'file2', 'FLAC', 'LOCAL'),
+                                    (3, 3, 3, 'title3', 19, 'file3', 'FLAC', 'LOCAL'),
+                                    (4, 4, 4, 'title4', 15, 'file4', 'FLAC', 'LOCAL'),
+                                    (6, 4, 4, 'title4', 15, NULL, 'SOURCE', 'LOCAL');
+                            ",
+                            )
+                            .await?;
+                            Ok(())
+                        }))
+                        .run(&*db)
+                        .await
+                        .unwrap();
 
                     db.exec_raw(
                         "
@@ -1193,7 +1193,8 @@ mod test {
             database: Arc::new(db),
         };
 
-        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
             .run(&*db)
             .await
             .unwrap();
@@ -1334,7 +1335,8 @@ mod test {
             database: Arc::new(db),
         };
 
-        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
             .run(&*db)
             .await
             .unwrap();
@@ -1532,7 +1534,8 @@ mod test {
             database: Arc::new(db),
         };
 
-        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
             .run(&*db)
             .await
             .unwrap();
@@ -1737,7 +1740,8 @@ mod test {
             database: Arc::new(db),
         };
 
-        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
             .run(&*db)
             .await
             .unwrap();
@@ -1923,7 +1927,8 @@ mod test {
             database: Arc::new(db),
         };
 
-        moosicbox_schema::sqlite::SQLITE_LIBRARY_MIGRATIONS
+        MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+            .with_table_name("__moosicbox_schema_migrations")
             .run(&*db)
             .await
             .unwrap();

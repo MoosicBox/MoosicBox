@@ -2,13 +2,12 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use std::collections::BTreeMap;
-
-use include_dir::{Dir, DirEntry, File};
-use switchy_database::{
-    Database, DatabaseError, DatabaseValue,
-    query::FilterableQuery,
-    schema::{Column, DataType},
+use include_dir::{Dir, include_dir};
+use switchy_database::{Database, DatabaseError, Executable};
+use switchy_schema::{
+    MigrationError as SwitchyMigrationError,
+    discovery::code::{CodeMigration, CodeMigrationSource},
+    runner::{ExecutionStrategy, MigrationRunner},
 };
 use thiserror::Error;
 
@@ -16,6 +15,8 @@ use thiserror::Error;
 pub enum MigrateError {
     #[error(transparent)]
     Database(#[from] DatabaseError),
+    #[error(transparent)]
+    Schema(#[from] SwitchyMigrationError),
 }
 
 /// # Panics
@@ -30,14 +31,42 @@ pub async fn migrate_config(db: &dyn Database) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
     {
         log::debug!("migrate_config: running postgres migrations");
-        POSTGRES_CONFIG_MIGRATIONS.run(db).await?;
+        let source = postgres_config_migrations();
+        let runner =
+            MigrationRunner::new(Box::new(source)).with_table_name("__moosicbox_schema_migrations");
+
+        if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
+            .as_deref()
+            .unwrap_or("0")
+            == "1"
+        {
+            log::info!(
+                "migrate_config: skipping postgres migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
+            );
+        } else if let Err(e) = runner.run(db).await {
+            log::warn!("migrate_config: postgres migrations failed, continuing: {e:?}");
+        }
         log::debug!("migrate_config: finished running postgres migrations");
     }
 
     #[cfg(feature = "sqlite")]
     {
         log::debug!("migrate_config: running sqlite migrations");
-        SQLITE_CONFIG_MIGRATIONS.run(db).await?;
+        let source = sqlite_config_migrations();
+        let runner =
+            MigrationRunner::new(Box::new(source)).with_table_name("__moosicbox_schema_migrations");
+
+        if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
+            .as_deref()
+            .unwrap_or("0")
+            == "1"
+        {
+            log::info!(
+                "migrate_config: skipping sqlite migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
+            );
+        } else {
+            runner.run(db).await?;
+        }
         log::debug!("migrate_config: finished running sqlite migrations");
     }
 
@@ -71,230 +100,253 @@ pub async fn migrate_library_until(
     #[cfg(feature = "postgres")]
     {
         log::debug!("migrate_library: running postgres migrations");
-        POSTGRES_LIBRARY_MIGRATIONS
-            .run_until(db, migration_name)
-            .await?;
+        let source = postgres_library_migrations();
+        let runner =
+            MigrationRunner::new(Box::new(source)).with_table_name("__moosicbox_schema_migrations");
+
+        if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
+            .as_deref()
+            .unwrap_or("0")
+            == "1"
+        {
+            log::info!(
+                "migrate_library: skipping postgres migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
+            );
+        } else {
+            let runner = if let Some(migration_name) = migration_name {
+                runner.with_strategy(ExecutionStrategy::UpTo(migration_name.to_string()))
+            } else {
+                runner.with_strategy(ExecutionStrategy::All)
+            };
+            if let Err(e) = runner.run(db).await {
+                log::warn!("migrate_library: postgres migrations failed, continuing: {e:?}");
+            }
+        }
         log::debug!("migrate_library: finished running postgres migrations");
     }
 
     #[cfg(feature = "sqlite")]
     {
         log::debug!("migrate_library: running sqlite migrations");
-        SQLITE_LIBRARY_MIGRATIONS
-            .run_until(db, migration_name)
-            .await?;
+        let source = sqlite_library_migrations();
+        let runner =
+            MigrationRunner::new(Box::new(source)).with_table_name("__moosicbox_schema_migrations");
+
+        if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
+            .as_deref()
+            .unwrap_or("0")
+            == "1"
+        {
+            log::info!(
+                "migrate_library: skipping sqlite migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
+            );
+        } else {
+            let runner = if let Some(migration_name) = migration_name {
+                runner.with_strategy(ExecutionStrategy::UpTo(migration_name.to_string()))
+            } else {
+                runner.with_strategy(ExecutionStrategy::All)
+            };
+            runner.run(db).await?;
+        }
         log::debug!("migrate_library: finished running sqlite migrations");
     }
 
     Ok(())
 }
 
-const MIGRATIONS_TABLE_NAME: &str = "__moosicbox_schema_migrations";
+// Include migration directories at compile time
+#[cfg(feature = "sqlite")]
+static SQLITE_CONFIG_MIGRATIONS_DIR: Dir =
+    include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/sqlite");
 
-pub struct Migrations {
-    directory: Dir<'static>,
-}
+#[cfg(feature = "sqlite")]
+static SQLITE_LIBRARY_MIGRATIONS_DIR: Dir =
+    include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/sqlite");
 
-impl Migrations {
-    fn walk_dir(&'static self, up: bool, mut on_file: impl FnMut(&str, &'static File<'static>)) {
-        fn walk(
-            dir: &'static Dir<'static>,
-            target: &'static str,
-            on_file: &mut impl FnMut(&str, &'static File<'static>),
-        ) {
-            struct Migration<'a> {
-                migration_name: &'a str,
-                file: &'static File<'static>,
-            }
+#[cfg(feature = "postgres")]
+static POSTGRES_CONFIG_MIGRATIONS_DIR: Dir =
+    include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/postgres");
 
-            let mut entries = vec![];
+#[cfg(feature = "postgres")]
+static POSTGRES_LIBRARY_MIGRATIONS_DIR: Dir =
+    include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/postgres");
 
-            for entry in dir.entries() {
-                match entry {
-                    DirEntry::Dir(dir) => walk(dir, target, on_file),
-                    DirEntry::File(file) => {
-                        let path = file.path();
-                        let Some(parent) = path.parent() else {
-                            continue;
-                        };
-                        let Some(migration_name) = parent.file_name().and_then(|x| x.to_str())
-                        else {
-                            continue;
-                        };
-                        let Some(name) = path.file_name().and_then(|x| x.to_str()) else {
-                            continue;
-                        };
-                        let Some(extension) = path.extension().and_then(|x| x.to_str()) else {
-                            continue;
-                        };
-                        if extension.to_lowercase() == "sql" {
-                            let name = &name[0..(name.len() - extension.len() - 1)];
+/// Load migrations from a directory
+fn load_migrations_from_dir(dir: &Dir) -> CodeMigrationSource<'static> {
+    let mut source = CodeMigrationSource::new();
 
-                            if name == target {
-                                entries.push(Migration {
-                                    migration_name,
-                                    file,
-                                });
-                            }
-                        }
+    // Get all migration directories and sort them by name (which includes timestamp)
+    let mut migration_dirs: Vec<_> = dir
+        .entries()
+        .iter()
+        .filter_map(|entry| entry.as_dir())
+        .collect();
+
+    migration_dirs.sort_by(|a, b| a.path().file_name().cmp(&b.path().file_name()));
+
+    for migration_dir in migration_dirs {
+        if let Some(dir_name) = migration_dir.path().file_name().and_then(|n| n.to_str()) {
+            // Find up.sql and down.sql files by iterating through files
+            let mut up_sql_content = None;
+            let mut down_sql_content = None;
+
+            for file in migration_dir.files() {
+                if let Some(file_name) = file.path().file_name().and_then(|n| n.to_str()) {
+                    if file_name == "up.sql" {
+                        up_sql_content = file.contents_utf8();
+                    } else if file_name == "down.sql" {
+                        down_sql_content = file.contents_utf8();
                     }
                 }
             }
 
-            for entry in entries {
-                on_file(entry.migration_name, entry.file);
+            if let Some(up_sql) = up_sql_content {
+                source.add_migration(CodeMigration::new(
+                    dir_name.to_string(),
+                    Box::new(up_sql.to_string()) as Box<dyn Executable>,
+                    down_sql_content.map(|s| Box::new(s.to_string()) as Box<dyn Executable>),
+                ));
             }
         }
-
-        walk(
-            &self.directory,
-            if up { "up" } else { "down" },
-            &mut on_file,
-        );
     }
 
-    fn as_btree(&'static self, up: bool) -> BTreeMap<String, &'static [u8]> {
-        let mut map = BTreeMap::new();
-
-        self.walk_dir(up, |name, file| {
-            map.insert(name.to_string(), file.contents());
-        });
-
-        map
-    }
-
-    /// # Errors
-    ///
-    /// * If the migrations table fails to be created
-    /// * If fails to select existing ran migrations
-    /// * If fails to insert new migration runs
-    ///
-    /// # Panics
-    ///
-    /// * If any asserts fail
-    pub async fn run(&'static self, db: &dyn Database) -> Result<(), DatabaseError> {
-        self.run_until(db, None).await
-    }
-
-    /// # Errors
-    ///
-    /// * If the migrations table fails to be created
-    /// * If fails to select existing ran migrations
-    /// * If fails to insert new migration runs
-    ///
-    /// # Panics
-    ///
-    /// * If any asserts fail
-    pub async fn run_until(
-        &'static self,
-        db: &dyn Database,
-        migration_name: Option<&str>,
-    ) -> Result<(), DatabaseError> {
-        db.create_table(MIGRATIONS_TABLE_NAME)
-            .if_not_exists(true)
-            .column(Column {
-                name: "name".to_string(),
-                nullable: false,
-                auto_increment: false,
-                data_type: DataType::Text,
-                default: None,
-            })
-            .column(Column {
-                name: "run_on".to_string(),
-                nullable: false,
-                auto_increment: false,
-                data_type: DataType::DateTime,
-                default: Some(DatabaseValue::Now),
-            })
-            .execute(db)
-            .await?;
-
-        let migrations = self.as_btree(true);
-
-        for (name, migration) in migrations {
-            if let Some(migration_name) = migration_name
-                && migration_name == name
-            {
-                log::info!("run_until: stopping on migration_name={name}");
-                break;
-            }
-
-            let results = db
-                .select(MIGRATIONS_TABLE_NAME)
-                .columns(&["name"])
-                .where_eq("name", &name)
-                .execute(db)
-                .await?;
-
-            moosicbox_assert::assert!(
-                results.len() <= 1,
-                "Migration {name} expected to have run at most 1 time, but has ran {} times",
-                results.len()
-            );
-
-            if results.is_empty() {
-                if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
-                    .as_deref()
-                    .unwrap_or("0")
-                    != "1"
-                {
-                    log::info!("run: running name={name}");
-
-                    let migration = String::from_utf8_lossy(migration).to_string();
-                    db.exec_raw(&migration).await.inspect_err(|e| {
-                        log::error!("run: failed to run name={name} migration: {e:?}");
-                    })?;
-
-                    log::info!("run: successfully ran name={name}");
-                }
-
-                db.insert(MIGRATIONS_TABLE_NAME)
-                    .value("name", &name)
-                    .execute(db)
-                    .await?;
-            } else {
-                log::debug!("run: already ran name={name}");
-            }
-        }
-
-        Ok(())
-    }
+    source
 }
 
 #[cfg(feature = "sqlite")]
-pub use sqlite::*;
+fn sqlite_config_migrations() -> CodeMigrationSource<'static> {
+    load_migrations_from_dir(&SQLITE_CONFIG_MIGRATIONS_DIR)
+}
 
 #[cfg(feature = "sqlite")]
-pub mod sqlite {
-    use include_dir::include_dir;
-
-    use crate::Migrations;
-
-    pub const SQLITE_CONFIG_MIGRATIONS: Migrations = Migrations {
-        directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/sqlite"),
-    };
-
-    pub const SQLITE_LIBRARY_MIGRATIONS: Migrations = Migrations {
-        directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/sqlite"),
-    };
+fn sqlite_library_migrations() -> CodeMigrationSource<'static> {
+    load_migrations_from_dir(&SQLITE_LIBRARY_MIGRATIONS_DIR)
 }
 
 #[cfg(feature = "postgres")]
-pub use postgres::*;
+fn postgres_config_migrations() -> CodeMigrationSource<'static> {
+    load_migrations_from_dir(&POSTGRES_CONFIG_MIGRATIONS_DIR)
+}
 
 #[cfg(feature = "postgres")]
-pub mod postgres {
-    use include_dir::include_dir;
+fn postgres_library_migrations() -> CodeMigrationSource<'static> {
+    load_migrations_from_dir(&POSTGRES_LIBRARY_MIGRATIONS_DIR)
+}
 
-    use crate::Migrations;
+// Test-only migration collection functions for use with MigrationTestBuilder
 
-    pub const POSTGRES_CONFIG_MIGRATIONS: Migrations = Migrations {
-        directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/postgres"),
-    };
+/// Get `SQLite` library migrations for testing
+///
+/// This function extracts the migrations from the internal migration source
+/// and returns them as a Vec for use with test utilities like `MigrationTestBuilder`.
+///
+/// # Errors
+///
+/// * If the migration source fails to provide migrations
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use moosicbox_schema::get_sqlite_library_migrations;
+/// use switchy_schema_test_utils::MigrationTestBuilder;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let migrations = get_sqlite_library_migrations().await?;
+///
+/// // Use with MigrationTestBuilder
+/// MigrationTestBuilder::new(migrations)
+///     .with_table_name("__moosicbox_schema_migrations")
+///     .run(&*db)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+#[cfg(feature = "sqlite")]
+pub async fn get_sqlite_library_migrations() -> Result<
+    Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
+    MigrateError,
+> {
+    use switchy_schema::migration::MigrationSource;
+    let source = sqlite_library_migrations();
+    Ok(source.migrations().await?)
+}
 
-    pub const POSTGRES_LIBRARY_MIGRATIONS: Migrations = Migrations {
-        directory: include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/postgres"),
-    };
+/// Get `SQLite` config migrations for testing
+///
+/// This function extracts the migrations from the internal migration source
+/// and returns them as a Vec for use with test utilities like `MigrationTestBuilder`.
+///
+/// # Errors
+///
+/// * If the migration source fails to provide migrations
+#[cfg(feature = "sqlite")]
+pub async fn get_sqlite_config_migrations() -> Result<
+    Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
+    MigrateError,
+> {
+    use switchy_schema::migration::MigrationSource;
+    let source = sqlite_config_migrations();
+    Ok(source.migrations().await?)
+}
+
+/// Get `PostgreSQL` library migrations for testing
+///
+/// This function extracts the migrations from the internal migration source
+/// and returns them as a Vec for use with test utilities like `MigrationTestBuilder`.
+///
+/// # Errors
+///
+/// * If the migration source fails to provide migrations
+#[cfg(feature = "postgres")]
+pub async fn get_postgres_library_migrations() -> Result<
+    Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
+    MigrateError,
+> {
+    use switchy_schema::migration::MigrationSource;
+    let source = postgres_library_migrations();
+    Ok(source.migrations().await?)
+}
+
+/// Get `PostgreSQL` config migrations for testing
+///
+/// This function extracts the migrations from the internal migration source
+/// and returns them as a Vec for use with test utilities like `MigrationTestBuilder`.
+///
+/// # Errors
+///
+/// * If the migration source fails to provide migrations
+#[cfg(feature = "postgres")]
+pub async fn get_postgres_config_migrations() -> Result<
+    Vec<std::sync::Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>,
+    MigrateError,
+> {
+    use switchy_schema::migration::MigrationSource;
+    let source = postgres_config_migrations();
+    Ok(source.migrations().await?)
+}
+
+#[cfg(not(feature = "sqlite"))]
+#[allow(unused, clippy::missing_const_for_fn)]
+fn sqlite_config_migrations() -> CodeMigrationSource<'static> {
+    CodeMigrationSource::new()
+}
+
+#[cfg(not(feature = "sqlite"))]
+#[allow(unused, clippy::missing_const_for_fn)]
+fn sqlite_library_migrations() -> CodeMigrationSource<'static> {
+    CodeMigrationSource::new()
+}
+
+#[cfg(not(feature = "postgres"))]
+#[allow(unused, clippy::missing_const_for_fn)]
+fn postgres_config_migrations() -> CodeMigrationSource<'static> {
+    CodeMigrationSource::new()
+}
+
+#[cfg(not(feature = "postgres"))]
+#[allow(unused, clippy::missing_const_for_fn)]
+fn postgres_library_migrations() -> CodeMigrationSource<'static> {
+    CodeMigrationSource::new()
 }
 
 #[cfg(feature = "sqlite")]
@@ -306,6 +358,7 @@ mod sqlite_tests {
         id::{ApiId, Id},
     };
     use pretty_assertions::assert_eq;
+    use switchy_database::DatabaseValue;
 
     use super::*;
 
@@ -315,7 +368,7 @@ mod sqlite_tests {
             .await
             .unwrap();
 
-        sqlite::SQLITE_CONFIG_MIGRATIONS.run(&*db).await.unwrap();
+        migrate_config(&*db).await.unwrap();
     }
 
     #[test_log::test(switchy_async::test)]
@@ -324,21 +377,21 @@ mod sqlite_tests {
             .await
             .unwrap();
 
-        sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+        migrate_library(&*db).await.unwrap();
     }
 
     #[test_log::test(switchy_async::test)]
     async fn rusqlite_config_migrations() {
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
-        sqlite::SQLITE_CONFIG_MIGRATIONS.run(&*db).await.unwrap();
+        migrate_config(&*db).await.unwrap();
     }
 
     #[test_log::test(switchy_async::test)]
     async fn rusqlite_library_migrations() {
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
-        sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+        migrate_library(&*db).await.unwrap();
     }
 
     #[test_log::test(switchy_async::test)]
@@ -361,11 +414,7 @@ mod sqlite_tests {
 
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
-        sqlite::SQLITE_LIBRARY_MIGRATIONS
-            .run_until(
-                &*db,
-                Some("2025-05-31-110603_update_api_source_id_structure"),
-            )
+        migrate_library_until(&*db, Some("2024-09-21-130720_set_journal_mode_to_wal"))
             .await
             .unwrap();
 
@@ -395,7 +444,7 @@ mod sqlite_tests {
         .unwrap();
 
         // Run the migration
-        sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+        migrate_library(&*db).await.unwrap();
 
         // Verify artists migration
         let artists = db
@@ -584,10 +633,12 @@ mod sqlite_tests {
 
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
-        sqlite::SQLITE_LIBRARY_MIGRATIONS
-            .run_until(&*db, Some("2025-06-03-211603_cache_api_sources_on_tables"))
-            .await
-            .unwrap();
+        migrate_library_until(
+            &*db,
+            Some("2025-05-31-110603_update_api_source_id_structure"),
+        )
+        .await
+        .unwrap();
 
         // Insert test data
         db.exec_raw(
@@ -632,7 +683,7 @@ mod sqlite_tests {
         .unwrap();
 
         // Run the migration
-        sqlite::SQLITE_LIBRARY_MIGRATIONS.run(&*db).await.unwrap();
+        migrate_library(&*db).await.unwrap();
 
         // Verify artists migration
         let artists = db

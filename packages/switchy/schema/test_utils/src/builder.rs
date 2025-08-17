@@ -8,6 +8,69 @@
 //! data insertion at specific points in the migration sequence. This is particularly
 //! useful for testing data migration scenarios where existing data needs to be
 //! transformed by subsequent migrations.
+//!
+//! ## Default Behavior
+//!
+//! Migrations persist after execution (no rollback) to allow tests to work with
+//! the migrated schema. Use `.with_rollback()` to explicitly enable rollback
+//! behavior for tests that need to verify migration reversibility.
+//!
+//! ## Common Usage Patterns
+//!
+//! ### Integration Testing (Default)
+//! ```rust,no_run
+//! use switchy_schema_test_utils::MigrationTestBuilder;
+//! use std::sync::Arc;
+//!
+//! # async fn example(migrations: Vec<Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>, db: &dyn switchy_database::Database) -> Result<(), Box<dyn std::error::Error>> {
+//! MigrationTestBuilder::new(migrations)
+//!     .with_table_name("__test_migrations")
+//!     .run(db)
+//!     .await?;
+//! // Schema persists for testing
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Migration Reversibility Testing
+//! ```rust,no_run
+//! use switchy_schema_test_utils::MigrationTestBuilder;
+//! use std::sync::Arc;
+//!
+//! # async fn example(migrations: Vec<Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>, db: &dyn switchy_database::Database) -> Result<(), Box<dyn std::error::Error>> {
+//! MigrationTestBuilder::new(migrations)
+//!     .with_rollback()  // Explicitly enable rollback
+//!     .run(db)
+//!     .await?;
+//! // Schema is rolled back after execution
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Data Migration Testing
+//! ```rust,no_run
+//! use switchy_schema_test_utils::MigrationTestBuilder;
+//! use std::sync::Arc;
+//!
+//! # async fn example(migrations: Vec<Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>, db: &dyn switchy_database::Database) -> Result<(), Box<dyn std::error::Error>> {
+//! MigrationTestBuilder::new(migrations)
+//!     .with_data_before("migration_id", |db| {
+//!         Box::pin(async move {
+//!             // Insert test data before migration
+//!             Ok(())
+//!         })
+//!     })
+//!     .with_data_after("migration_id", |db| {
+//!         Box::pin(async move {
+//!             // Verify data after migration
+//!             Ok(())
+//!         })
+//!     })
+//!     .run(db)
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
@@ -22,17 +85,16 @@ use crate::TestError;
 
 /// Builder for complex migration test scenarios with breakpoints
 ///
-/// This builder allows you to:
-/// * Run migrations up to specific points
-/// * Insert data before or after specific migrations
-/// * Set up initial database state
-/// * Skip rollback for debugging
-/// * Use custom migration table names
+/// Allows running migrations with data insertion at specific points,
+/// useful for testing data transformations during migrations.
+///
+/// By default, migrations persist after execution. Use `.with_rollback()`
+/// to enable cleanup after test completion.
 pub struct MigrationTestBuilder<'a> {
     migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
     breakpoints: Vec<Breakpoint<'a>>,
     initial_setup: Option<SetupFn<'a>>,
-    skip_rollback: bool,
+    with_rollback: bool,
     table_name: Option<String>,
 }
 
@@ -84,13 +146,15 @@ impl<'a> MigrationSource<'a> for VecMigrationSource<'a> {
 
 impl<'a> MigrationTestBuilder<'a> {
     /// Create a new test builder with the given migrations
+    ///
+    /// Migrations will persist by default (no rollback).
     #[must_use]
     pub fn new(migrations: Vec<Arc<dyn Migration<'a> + 'a>>) -> Self {
         Self {
             migrations,
             breakpoints: Vec::new(),
             initial_setup: None,
-            skip_rollback: false,
+            with_rollback: false,
             table_name: None,
         }
     }
@@ -148,10 +212,13 @@ impl<'a> MigrationTestBuilder<'a> {
         self
     }
 
-    /// Skip the rollback phase (useful for debugging)
+    /// Enable rollback after migrations complete
+    ///
+    /// By default, migrations persist to allow testing with the migrated schema.
+    /// Use this method to enable rollback for testing migration reversibility.
     #[must_use]
-    pub const fn skip_rollback(mut self) -> Self {
-        self.skip_rollback = true;
+    pub const fn with_rollback(mut self) -> Self {
+        self.with_rollback = true;
         self
     }
 
@@ -164,13 +231,17 @@ impl<'a> MigrationTestBuilder<'a> {
 
     /// Execute the test scenario
     ///
+    /// Runs migrations with any configured breakpoints and data insertions.
+    /// By default, the migrated schema persists. Use `.with_rollback()` to
+    /// enable cleanup after execution.
+    ///
     /// # Errors
     ///
     /// * If initial setup fails
     /// * If a migration ID in breakpoints is not found in the migration list
     /// * If any migration execution fails
     /// * If any breakpoint action fails
-    /// * If rollback fails (when not skipped)
+    /// * If rollback fails (when explicitly enabled)
     pub async fn run(self, db: &dyn Database) -> Result<(), TestError> {
         use std::collections::BTreeMap;
 
@@ -178,7 +249,7 @@ impl<'a> MigrationTestBuilder<'a> {
         let migrations = self.migrations;
         let breakpoints = self.breakpoints;
         let initial_setup = self.initial_setup;
-        let skip_rollback = self.skip_rollback;
+        let with_rollback = self.with_rollback;
         let table_name = self.table_name;
 
         // Step 1: Run initial setup if provided
@@ -280,7 +351,7 @@ impl<'a> MigrationTestBuilder<'a> {
         }
 
         // Step 5: Rollback all migrations unless skipped
-        if !skip_rollback {
+        if with_rollback {
             let source = VecMigrationSource::new(migrations);
             let mut runner = MigrationRunner::new(Box::new(source));
 
@@ -386,19 +457,20 @@ mod tests {
             .await
             .unwrap();
 
-        // After rollback, tables should not exist
+        // With default behavior, tables should persist
         let result = query::select("sqlite_master")
             .columns(&["name"])
             .where_eq("type", "table")
             .where_eq("name", "users")
             .execute(db.as_ref())
-            .await;
-        assert!(result.is_err() || result.unwrap().is_empty());
+            .await
+            .unwrap();
+        assert_eq!(result.len(), 1);
     }
 
     #[cfg(feature = "sqlite")]
     #[test_log::test(tokio::test)]
-    async fn test_migration_test_builder_skip_rollback() {
+    async fn test_migration_test_builder_default_persistence() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
         let migrations = vec![Arc::new(TestMigration::new(
@@ -408,12 +480,11 @@ mod tests {
         )) as Arc<dyn Migration<'static> + 'static>];
 
         MigrationTestBuilder::new(migrations)
-            .skip_rollback()
             .run(&*db)
             .await
             .unwrap();
 
-        // Table should still exist since we skipped rollback
+        // Table should still exist since migrations persist by default
         let result = query::select("sqlite_master")
             .columns(&["name"])
             .where_eq("type", "table")
@@ -437,7 +508,6 @@ mod tests {
 
         MigrationTestBuilder::new(migrations)
             .with_table_name("__custom_migrations")
-            .skip_rollback()
             .run(&*db)
             .await
             .unwrap();
@@ -480,7 +550,6 @@ mod tests {
                     Ok(())
                 })
             })
-            .skip_rollback()
             .run(&*db)
             .await
             .unwrap();
@@ -532,7 +601,6 @@ mod tests {
                     Ok(())
                 })
             })
-            .skip_rollback()
             .run(&*db)
             .await
             .unwrap();
@@ -601,7 +669,6 @@ mod tests {
                     Ok(())
                 })
             })
-            .skip_rollback()
             .run(&*db)
             .await
             .unwrap();
@@ -645,7 +712,6 @@ mod tests {
                     Ok(())
                 })
             })
-            .skip_rollback()
             .run(&*db)
             .await
             .unwrap();
@@ -723,7 +789,7 @@ mod tests {
                     Ok(())
                 })
             })
-            // Don't skip rollback - let it run
+            .with_rollback() // Explicitly enable rollback
             .run(&*db)
             .await
             .unwrap();
