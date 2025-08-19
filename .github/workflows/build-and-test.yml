@@ -1051,7 +1051,7 @@ jobs:
             - name: Generate Dockerfile
               shell: bash
               run: |
-                  ./generate-dockerfiles.sh ${{ matrix.name }}
+                  ./terraform/scripts/generate-dockerfiles.sh ${{ matrix.name }}
 
             - name: Build Docker image
               shell: bash
