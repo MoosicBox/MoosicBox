@@ -30,7 +30,7 @@ MoosicBox supports multiple deployment strategies ranging from simple self-hosti
 - **Volume Management**: Persistent storage for music library and database
 - **Network Configuration**: Service-to-service communication
 
-### Image Generation (@generate-dockerfiles.sh)
+### Image Generation (@terraform/scripts/generate-dockerfiles.sh)
 - **Automated Dockerfile Generation**: Create Dockerfiles for all packages
 - **Multi-Architecture Support**: ARM64 and AMD64 builds
 - **Optimization**: Layer caching and build optimization
