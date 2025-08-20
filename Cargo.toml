@@ -508,16 +508,16 @@ symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.106"
 syntect = "5.2.0"
 tantivy = "0.24.2"
-tauri = { version = "2.8.1", features = ["protocol-asset"] }
+tauri = { version = "2.8.2", features = ["protocol-asset"] }
 tauri-build = { version = "2.4.0", features = [] }
 tauri-plugin = { version = "2.4.0", features = ["build"] }
 tauri-plugin-dialog = "2.3.2"
 tauri-plugin-fs = "2.4.1"
 tauri-plugin-log = "2.6.0"
 tauri-plugin-notification = "2.3.0"
-tempfile = "3.20.0"
+tempfile = "3.21.0"
 test-log = "0.2.18"
-thiserror = "2.0.15"
+thiserror = "2.0.16"
 throttle = "0.1.0"
 tl = "0.7.8"
 tokio = { version = "1.47.1" }
