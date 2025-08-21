@@ -17,10 +17,6 @@ jobs:
 
             matrix:
                 project:
-                    - directory: .
-                      label: kubernetes-infra
-                      sst: true
-                      validate: true
                     - directory: app-website
                       sst: true
                       validate: true
