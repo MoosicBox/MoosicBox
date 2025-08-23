@@ -83,6 +83,8 @@ generate_dockerfile() {
             ;;
     esac
 
+    pushd ../..
+
     local dockerfile_path="packages/${package_name}/${dockerfile_name}"
 
     log_info "Generating Dockerfile and dockerignore for $package_name..."
@@ -94,7 +96,7 @@ generate_dockerfile() {
     fi
 
     # Build the command
-    local cmd="../../target/release/clippier generate-dockerfile . moosicbox_${package_name} --output $dockerfile_path --arg $port --build-args STATIC_TOKEN,WS_HOST,TUNNEL_ACCESS_TOKEN --env MAX_THREADS=64 --env ACTIX_WORKERS=32"
+    local cmd="./target/release/clippier generate-dockerfile . moosicbox_${package_name} --output $dockerfile_path --arg $port --build-args STATIC_TOKEN,WS_HOST,TUNNEL_ACCESS_TOKEN --env MAX_THREADS=64 --env ACTIX_WORKERS=32"
     if [[ -n "$features" ]]; then
         cmd="$cmd --features=$features"
     fi
@@ -105,8 +107,8 @@ generate_dockerfile() {
         log_success "Generated dockerignore: ${dockerfile_path%.*}.dockerignore"
 
         # Show package count reduction
-        local cmd_normal="../../target/release/clippier workspace-deps . moosicbox_${package_name}"
-        local cmd_all="../../target/release/clippier workspace-deps . moosicbox_${package_name} --all-potential-deps"
+        local cmd_normal="./target/release/clippier workspace-deps . moosicbox_${package_name}"
+        local cmd_all="./target/release/clippier workspace-deps . moosicbox_${package_name} --all-potential-deps"
 
         if [[ -n "$features" ]]; then
             cmd_normal="$cmd_normal --features=$features"
@@ -117,9 +119,12 @@ generate_dockerfile() {
         dep_count_normal=$(eval "$cmd_normal" | wc -l)
         dep_count_all=$(eval "$cmd_all" | wc -l)
         log_info "Dependencies: $dep_count_normal actual, $dep_count_all potential (+$((dep_count_all - dep_count_normal)) for Docker compatibility)"
+
+        popd
         return 0
     else
         log_error "Failed to generate Dockerfile for $package_name"
+        popd
         return 1
     fi
 }
