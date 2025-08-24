@@ -502,7 +502,7 @@ swc_ecma_loader = { version = "14.0.0", features = ["cache", "node"] }
 swc_ecma_minifier = "30.0.1"
 swc_ecma_parser = "23.0.0"
 swc_ecma_transforms_base = "25.0.0"
-swc_ecma_transforms_typescript = "27.0.0"
+swc_ecma_transforms_typescript = "28.0.0"
 swc_ecma_visit = "15.0.0"
 symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.106"

@@ -4699,7 +4699,7 @@ checksum = "54a1028dfc5f5df5da8a56a73e6c153c9a9708ec57232470703592a3f18e49f5"
 dependencies = [
  "aho-corasick",
  "bstr",
- "regex-automata 0.4.9",
+ "regex-automata 0.4.10",
  "regex-syntax 0.8.6",
 ]
 
@@ -11734,7 +11734,7 @@ checksum = "b544ef1b4eac5dc2db33ea63606ae9ffcfac26c1416a2806ae0bf5f56b201191"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.4.9",
+ "regex-automata 0.4.10",
  "regex-syntax 0.8.6",
 ]
 
@@ -11749,9 +11749,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "809e8dc61f6de73b46c85f4c96486310fe304c434cfa43669d7b40f711150908"
+checksum = "6b9458fa0bfeeac22b5ca447c63aaf45f28439a709ccd244698632f9aa6394d6"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -13876,9 +13876,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_react"
-version = "27.0.0"
+version = "28.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "861eda08f77f8e0553f3141b5ea25879636f9edf0237e8104db6fbd81fec6598"
+checksum = "fc9a3fe915e9b4e289edc78f060b8edda8633bc44234c5cf167e359befa18267"
 dependencies = [
  "base64 0.22.1",
  "bytes-str",
@@ -13900,9 +13900,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_transforms_typescript"
-version = "27.0.0"
+version = "28.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b07cbe8b998c19897c309245bff119beec0dda20183ed4106bb58544b3791f45"
+checksum = "2e62c7ec4f9667b9a85270125443fee6a7c2f357272d3d9eafc75a2f6fb0bca9"
 dependencies = [
  "bytes-str",
  "rustc-hash 2.1.1",
