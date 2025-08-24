@@ -84,7 +84,7 @@ jobs:
               uses: taiki-e/install-action@cargo-llvm-cov
 
             - name: Setup clippier
-              uses: ./cache-artifact
+              uses: BSteffaniak/cache-artifact@master
               with:
                   directory: ./packages/clippier
                   command: cargo build --package clippier --features git-diff --release
@@ -170,7 +170,7 @@ jobs:
             - uses: dtolnay/rust-toolchain@stable
 
             - name: Setup clippier
-              uses: ./cache-artifact
+              uses: BSteffaniak/cache-artifact@master
               with:
                   directory: ./packages/clippier
                   command: cargo build --package clippier --features git-diff --release
@@ -813,7 +813,7 @@ jobs:
             - uses: actions/checkout@v4
 
             - name: Setup cargo-machete
-              uses: ./cache-artifact
+              uses: BSteffaniak/cache-artifact@master
               with:
                   repo: https://github.com/BSteffaniak/cargo-machete
                   command: cargo install --git https://github.com/BSteffaniak/cargo-machete --branch ignored-dirs cargo-machete
