@@ -499,7 +499,7 @@ swc_common = { version = "14.0.3", features = ["tty-emitter"] }
 swc_ecma_ast = "15.0.0"
 swc_ecma_codegen = "17.0.0"
 swc_ecma_loader = { version = "14.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "30.0.0"
+swc_ecma_minifier = "30.0.1"
 swc_ecma_parser = "23.0.0"
 swc_ecma_transforms_base = "25.0.0"
 swc_ecma_transforms_typescript = "27.0.0"
