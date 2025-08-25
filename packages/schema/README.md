@@ -1,15 +1,16 @@
 # MoosicBox Schema
 
-Database migration system for the MoosicBox ecosystem, providing automated SQL migration management for PostgreSQL and SQLite databases with version tracking and rollback support.
+Database migration system for the MoosicBox ecosystem. This package provides a thin wrapper around [switchy_schema](../switchy/schema) for automated SQL migration management with PostgreSQL and SQLite databases, featuring version tracking and comprehensive testing utilities.
 
 ## Features
 
-- **Database Migrations**: Run SQL migration files automatically
-- **Version Tracking**: Track applied migrations in a dedicated table
-- **Multi-Database Support**: Support for both PostgreSQL and SQLite
-- **Migration Organization**: Organize migrations by library/config categories
-- **Partial Migration**: Run migrations up to a specific version
-- **Error Handling**: Basic error handling for migration failures
+- **Database Migrations**: Automated SQL migration execution with rollback support
+- **Version Tracking**: Track applied migrations in `__moosicbox_schema_migrations` table
+- **Multi-Database Support**: Both PostgreSQL and SQLite via switchy_database
+- **Environment Control**: Skip migrations via `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1`
+- **Partial Migrations**: Run migrations up to a specific version
+- **Comprehensive Testing**: Advanced test utilities for migration validation
+- **Built on switchy_schema**: Modern, generic migration engine
 
 ## Installation
 
@@ -17,10 +18,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-moosicbox_schema = "0.1.1"
+moosicbox_schema = { workspace = true }
 
-# Enable database-specific features
-moosicbox_schema = { version = "0.1.1", features = ["sqlite", "postgres"] }
+# Enable database-specific features as needed
+moosicbox_schema = { workspace = true, features = ["sqlite", "postgres"] }
 ```
 
 ## Usage
@@ -34,7 +35,7 @@ use switchy_database::Database;
 #[tokio::main]
 async fn main() -> Result<(), MigrateError> {
     // Initialize your database connection
-    let db: Box<dyn Database> = /* your database initialization */;
+    let db = switchy_database_connection::init_sqlite_sqlx(None).await?;
 
     // Run all library migrations
     migrate_library(&*db).await?;
@@ -59,53 +60,42 @@ migrate_config(&*db).await?;
 use moosicbox_schema::migrate_library_until;
 
 // Run migrations up to a specific version
-migrate_library_until(&*db, Some("20231201_add_indexes")).await?;
+migrate_library_until(&*db, Some("2023-10-14-031701_create_tracks")).await?;
 ```
 
-### Migration Structure
+### Environment Variables
 
-Migrations are organized in a specific directory structure:
+Skip migration execution entirely (useful for read-only deployments):
 
-```
-migrations/
-├── sqlite/
-│   ├── library/
-│   │   ├── 20231201_initial_schema/
-│   │   │   └── up.sql
-│   │   └── 20231202_add_indexes/
-│   │       └── up.sql
-│   └── config/
-│       └── 20231201_config_tables/
-│           └── up.sql
-└── postgres/
-    ├── library/
-    │   └── 20231201_initial_schema/
-    │       └── up.sql
-    └── config/
-        └── 20231201_config_tables/
-            └── up.sql
+```bash
+export MOOSICBOX_SKIP_MIGRATION_EXECUTION=1
 ```
 
-### Custom Migration Runner
+When this environment variable is set to "1", migration functions will succeed without executing any SQL, allowing applications to start without requiring migration privileges.
+
+### Migration Testing
+
+For testing migrations, use the provided test utilities:
 
 ```rust
-use moosicbox_schema::Migrations;
-use include_dir::{include_dir, Dir};
+use moosicbox_schema::{get_sqlite_library_migrations};
+use switchy_schema_test_utils::MigrationTestBuilder;
 
-// Include your migration directory at compile time
-static MY_MIGRATIONS: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
+#[tokio::test]
+async fn test_library_migrations() {
+    let db = switchy_database_connection::init_sqlite_sqlx(None).await.unwrap();
+    let migrations = get_sqlite_library_migrations().await.unwrap();
 
-// Create a migrations instance
-let migrations = Migrations {
-    directory: MY_MIGRATIONS,
-};
-
-// Run all migrations
-migrations.run(&*db).await?;
-
-// Or run up to a specific migration
-migrations.run_until(&*db, Some("20231201_initial")).await?;
+    // Run all migrations and verify they work
+    MigrationTestBuilder::new(migrations)
+        .with_table_name("__moosicbox_schema_migrations")
+        .run(&*db)
+        .await
+        .unwrap();
+}
 ```
+
+For more advanced migration testing patterns, see the [Migration Testing Guide](#migration-testing-guide) section below.
 
 ### Error Handling
 
@@ -117,18 +107,127 @@ match migrate_library(&*db).await {
     Err(MigrateError::Database(db_err)) => {
         eprintln!("Database error during migration: {}", db_err);
     }
+    Err(MigrateError::Schema(schema_err)) => {
+        eprintln!("Schema migration error: {}", schema_err);
+    }
 }
 ```
 
-## Migration Tracking
+## Architecture
 
-The system automatically creates a `__moosicbox_schema_migrations` table to track which migrations have been applied:
+This package is built on top of [switchy_schema](../switchy/schema), providing MoosicBox-specific migration management while leveraging the generic, reusable migration engine. The architecture includes:
 
-```sql
-CREATE TABLE __moosicbox_schema_migrations (
-    name TEXT NOT NULL PRIMARY KEY,
-    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+- **Embedded Migrations**: SQL files compiled into the binary at build time
+- **Automatic Discovery**: Migrations loaded from `/migrations/server/{library,config}/{sqlite,postgres}/` directories
+- **Version Tracking**: Uses `__moosicbox_schema_migrations` table (customized from default `__switchy_migrations`)
+- **Environment Integration**: Respects `MOOSICBOX_SKIP_MIGRATION_EXECUTION` environment variable
+
+## Migration Structure
+
+Migrations are organized in the following directory structure:
+
+```
+migrations/server/
+├── library/
+│   ├── sqlite/
+│   │   ├── 2023-10-13-195407_create_artists/
+│   │   │   ├── up.sql
+│   │   │   └── down.sql
+│   │   └── 2023-10-14-031701_create_tracks/
+│   │       ├── up.sql
+│   │       └── down.sql
+│   └── postgres/
+│       ├── 2023-10-13-195407_create_artists/
+│       │   ├── up.sql
+│       │   └── down.sql
+│       └── 2023-10-14-031701_create_tracks/
+│           ├── up.sql
+│           └── down.sql
+└── config/
+    ├── sqlite/
+    └── postgres/
+```
+
+## Migration Testing Guide
+
+### Basic Migration Testing
+
+Use `MigrationTestBuilder` for comprehensive migration validation:
+
+```rust
+use moosicbox_schema::get_sqlite_library_migrations;
+use switchy_schema_test_utils::MigrationTestBuilder;
+
+#[tokio::test]
+async fn test_all_migrations() {
+    let db = switchy_database_connection::init_sqlite_sqlx(None).await.unwrap();
+
+    MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+        .with_table_name("__moosicbox_schema_migrations")
+        .run(&*db)
+        .await
+        .unwrap();
+}
+```
+
+### Data Migration Testing
+
+Test migrations that transform existing data:
+
+```rust
+#[tokio::test]
+async fn test_data_migration() {
+    let db = switchy_database_connection::init_sqlite_sqlx(None).await.unwrap();
+
+    MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+        .with_table_name("__moosicbox_schema_migrations")
+        .with_data_before("2023-10-14-031701_create_tracks", |db| Box::pin(async move {
+            // Insert test data in old format
+            db.exec_raw("INSERT INTO artists (title) VALUES ('Test Artist')").await?;
+            Ok(())
+        }))
+        .with_data_after("2023-10-14-031701_create_tracks", |db| Box::pin(async move {
+            // Verify data is preserved and new structure works
+            let result = db.select("artists").columns(&["id", "title"]).execute(db).await?;
+            assert_eq!(result.len(), 1);
+            Ok(())
+        }))
+        .run(&*db)
+        .await
+        .unwrap();
+}
+```
+
+### Testing with Rollback
+
+Test migration rollback functionality:
+
+```rust
+#[tokio::test]
+async fn test_migration_rollback() {
+    let db = switchy_database_connection::init_sqlite_sqlx(None).await.unwrap();
+
+    MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+        .with_table_name("__moosicbox_schema_migrations")
+        .with_rollback() // Enable rollback testing
+        .run(&*db)
+        .await
+        .unwrap();
+
+    // Verify database is back to initial state
+}
+```
+
+### Available Test Collection Functions
+
+```rust
+// Get migrations for testing - all return Vec<Arc<dyn Migration>>
+use moosicbox_schema::{
+    get_sqlite_library_migrations,
+    get_sqlite_config_migrations,
+    get_postgres_library_migrations,
+    get_postgres_config_migrations,
+};
 ```
 
 ## Supported Databases
@@ -136,16 +235,36 @@ CREATE TABLE __moosicbox_schema_migrations (
 - **SQLite**: Via the `sqlite` feature flag
 - **PostgreSQL**: Via the `postgres` feature flag
 
-Each database type has its own set of migration files optimized for that specific database system.
+Both databases use the same migration table schema but have database-specific SQL in their migration files.
+
+## Migration Tracking
+
+The system automatically creates a `__moosicbox_schema_migrations` table to track applied migrations:
+
+```sql
+CREATE TABLE __moosicbox_schema_migrations (
+    id TEXT NOT NULL PRIMARY KEY,
+    run_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ## Dependencies
 
+- `switchy_schema`: Generic migration engine
 - `switchy_database`: Database abstraction layer
-- `include_dir`: Compile-time directory inclusion for migration files
+- `switchy_env`: Environment variable handling
+- `include_dir`: Compile-time directory inclusion
 - `thiserror`: Error handling utilities
 
 ## Error Types
 
-- `MigrateError`: Wraps database errors that occur during migration execution
+- `MigrateError`: Wraps both database and schema migration errors
+  - `MigrateError::Database(DatabaseError)`: Database connection/execution errors
+  - `MigrateError::Schema(SwitchyMigrationError)`: Migration logic errors
 
-The migration system ensures your database schema stays up-to-date and consistent across different environments.
+## Development Notes
+
+- Migrations are embedded at compile time for zero-config deployment
+- The `build.rs` script ensures recompilation when migration files change
+- Both PostgreSQL and SQLite migrations run when both features are enabled (intended for development/testing)
+- In production deployments, typically only one database feature is enabled
