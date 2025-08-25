@@ -442,6 +442,61 @@ impl<'a> MigrationRunner<'a> {
 
         Ok(())
     }
+
+    /// List available migrations with their applied status
+    ///
+    /// Returns a list of all available migrations from the source with information
+    /// about which ones have been applied to the database.
+    ///
+    /// # Errors
+    ///
+    /// * If migration discovery fails
+    /// * If database query for applied migrations fails
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use switchy_schema::runner::MigrationRunner;
+    /// use switchy_database::Database;
+    ///
+    /// # async fn example(runner: &MigrationRunner<'_>, db: &dyn Database) -> switchy_schema::Result<()> {
+    /// let migration_info = runner.list_migrations(db).await?;
+    ///
+    /// for info in migration_info {
+    ///     if info.applied {
+    ///         println!("✓ {} - {}", info.id, info.description.unwrap_or_default());
+    ///     } else {
+    ///         println!("○ {} - {}", info.id, info.description.unwrap_or_default());
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn list_migrations(
+        &self,
+        db: &dyn Database,
+    ) -> Result<Vec<crate::migration::MigrationInfo>> {
+        // Ensure migrations table exists to avoid errors when querying applied migrations
+        self.version_tracker.ensure_table_exists(db).await?;
+
+        // Get all available migrations from the source
+        let mut migrations = self.source.list().await?;
+
+        // Get applied migration IDs
+        let applied_migrations = self.version_tracker.get_applied_migrations(db).await?;
+        let applied_set: std::collections::HashSet<String> =
+            applied_migrations.into_iter().collect();
+
+        // Update applied status for each migration
+        for migration in &mut migrations {
+            migration.applied = applied_set.contains(&migration.id);
+        }
+
+        // Sort by migration ID for consistent ordering
+        migrations.sort_by(|a, b| a.id.cmp(&b.id));
+
+        Ok(migrations)
+    }
 }
 
 #[cfg(test)]
@@ -762,6 +817,121 @@ mod tests {
                 .expect("Test table should exist");
 
             assert_eq!(test_results.len(), 0); // Empty table is fine
+        }
+
+        #[tokio::test]
+        async fn test_list_migrations_empty_source() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create empty migration source
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // List migrations should return empty list
+            let migrations = runner
+                .list_migrations(&*db)
+                .await
+                .expect("List should succeed");
+            assert_eq!(migrations.len(), 0);
+        }
+
+        #[tokio::test]
+        async fn test_list_migrations_with_applied_status() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create migration source with test migrations
+            let mut source = CodeMigrationSource::new();
+
+            // Add migrations in non-alphabetical order to test sorting
+            source.add_migration(CodeMigration::new(
+                "002_second".to_string(),
+                Box::new("CREATE TABLE second (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            source.add_migration(CodeMigration::new(
+                "001_first".to_string(),
+                Box::new("CREATE TABLE first (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            source.add_migration(CodeMigration::new(
+                "003_third".to_string(),
+                Box::new("CREATE TABLE third (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Initially, no migrations should be applied
+            let initial_list = runner
+                .list_migrations(&*db)
+                .await
+                .expect("List should succeed");
+            assert_eq!(initial_list.len(), 3);
+
+            // Verify sorting by ID
+            assert_eq!(initial_list[0].id, "001_first");
+            assert_eq!(initial_list[1].id, "002_second");
+            assert_eq!(initial_list[2].id, "003_third");
+
+            // All should be unapplied initially
+            for info in &initial_list {
+                assert!(
+                    !info.applied,
+                    "Migration {} should not be applied initially",
+                    info.id
+                );
+            }
+
+            // Apply first two migrations
+            let partial_runner =
+                runner.with_strategy(ExecutionStrategy::UpTo("002_second".to_string()));
+            partial_runner
+                .run(&*db)
+                .await
+                .expect("Migrations should succeed");
+
+            // Create a new runner for listing (since the previous one was moved)
+            let mut source_for_listing = CodeMigrationSource::new();
+            source_for_listing.add_migration(CodeMigration::new(
+                "002_second".to_string(),
+                Box::new("CREATE TABLE second (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source_for_listing.add_migration(CodeMigration::new(
+                "001_first".to_string(),
+                Box::new("CREATE TABLE first (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source_for_listing.add_migration(CodeMigration::new(
+                "003_third".to_string(),
+                Box::new("CREATE TABLE third (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            let listing_runner = MigrationRunner::new(Box::new(source_for_listing));
+
+            // List again to check applied status
+            let updated_list = listing_runner
+                .list_migrations(&*db)
+                .await
+                .expect("List should succeed");
+            assert_eq!(updated_list.len(), 3);
+
+            // Check applied status
+            assert!(updated_list[0].applied, "001_first should be applied");
+            assert!(updated_list[1].applied, "002_second should be applied");
+            assert!(!updated_list[2].applied, "003_third should not be applied");
         }
     }
 }

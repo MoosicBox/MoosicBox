@@ -99,6 +99,17 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use switchy_database::Database;
 
+/// Information about a migration, including its current status
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MigrationInfo {
+    /// Migration ID
+    pub id: String,
+    /// Migration description if available
+    pub description: Option<String>,
+    /// Whether this migration has been applied
+    pub applied: bool,
+}
+
 #[async_trait]
 pub trait Migration<'a>: Send + Sync + 'a {
     fn id(&self) -> &str;
@@ -121,4 +132,110 @@ pub trait Migration<'a>: Send + Sync + 'a {
 #[async_trait]
 pub trait MigrationSource<'a>: Send + Sync {
     async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'a> + 'a>>>;
+
+    /// List available migrations with their metadata
+    ///
+    /// Returns a list of migration information including ID, description, and status.
+    /// The applied status is set to false by default - use `MigrationRunner::list()`
+    /// to get the actual applied status from the database.
+    ///
+    /// # Errors
+    ///
+    /// * If migration discovery fails
+    async fn list(&self) -> Result<Vec<MigrationInfo>> {
+        let migrations = self.migrations().await?;
+        Ok(migrations
+            .into_iter()
+            .map(|migration| MigrationInfo {
+                id: migration.id().to_string(),
+                description: migration.description().map(ToString::to_string),
+                applied: false, // Default - actual status determined by MigrationRunner
+            })
+            .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use switchy_database::Database;
+
+    // Mock migration for testing
+    struct MockMigration {
+        id: String,
+        description: Option<String>,
+    }
+
+    #[async_trait]
+    impl Migration<'static> for MockMigration {
+        fn id(&self) -> &str {
+            &self.id
+        }
+
+        async fn up(&self, _db: &dyn Database) -> Result<()> {
+            Ok(())
+        }
+
+        fn description(&self) -> Option<&str> {
+            self.description.as_deref()
+        }
+    }
+
+    // Mock migration source for testing default list() implementation
+    struct MockMigrationSource {
+        migrations: Vec<Arc<dyn Migration<'static> + 'static>>,
+    }
+
+    #[async_trait]
+    impl MigrationSource<'static> for MockMigrationSource {
+        async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
+            Ok(self.migrations.clone())
+        }
+    }
+
+    #[test]
+    fn test_migration_info_creation() {
+        let info = MigrationInfo {
+            id: "001_test_migration".to_string(),
+            description: Some("Test migration".to_string()),
+            applied: false,
+        };
+
+        assert_eq!(info.id, "001_test_migration");
+        assert_eq!(info.description, Some("Test migration".to_string()));
+        assert!(!info.applied);
+    }
+
+    #[tokio::test]
+    async fn test_default_list_implementation() {
+        let migrations = vec![
+            Arc::new(MockMigration {
+                id: "001_first".to_string(),
+                description: Some("First migration".to_string()),
+            }) as Arc<dyn Migration<'static> + 'static>,
+            Arc::new(MockMigration {
+                id: "002_second".to_string(),
+                description: None,
+            }) as Arc<dyn Migration<'static> + 'static>,
+        ];
+
+        let source = MockMigrationSource {
+            migrations: migrations.clone(),
+        };
+
+        let list = source.list().await.unwrap();
+
+        assert_eq!(list.len(), 2);
+
+        // First migration
+        assert_eq!(list[0].id, "001_first");
+        assert_eq!(list[0].description, Some("First migration".to_string()));
+        assert!(!list[0].applied); // Default should be false
+
+        // Second migration
+        assert_eq!(list[1].id, "002_second");
+        assert_eq!(list[1].description, None);
+        assert!(!list[1].applied); // Default should be false
+    }
 }

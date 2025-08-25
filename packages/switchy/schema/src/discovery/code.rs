@@ -286,4 +286,38 @@ mod tests {
         assert_eq!(migrations[1].id(), "002_second");
         assert_eq!(migrations[2].id(), "003_third");
     }
+
+    #[tokio::test]
+    async fn test_code_migration_source_list() {
+        let mut source = CodeMigrationSource::new();
+
+        // Add migrations with descriptions
+        source.add_migration(CodeMigration::new(
+            "001_users".to_string(),
+            Box::new("CREATE TABLE users (id INTEGER);".to_string()),
+            None,
+        ));
+
+        source.add_migration(CodeMigration::new(
+            "002_posts".to_string(),
+            Box::new("CREATE TABLE posts (id INTEGER);".to_string()),
+            None,
+        ));
+
+        // Test list() method
+        let list = source.list().await.unwrap();
+        assert_eq!(list.len(), 2);
+
+        // Should be sorted by ID
+        assert_eq!(list[0].id, "001_users");
+        assert_eq!(list[1].id, "002_posts");
+
+        // Applied status should default to false
+        assert!(!list[0].applied);
+        assert!(!list[1].applied);
+
+        // Description should be None for code migrations (no description implemented)
+        assert_eq!(list[0].description, None);
+        assert_eq!(list[1].description, None);
+    }
 }

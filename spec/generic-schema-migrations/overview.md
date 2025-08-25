@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** ✅ **Phase 8.6 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6 complete. Ready for Phase 9.1 (Migration Listing) or production use.
+**Current Status:** ✅ **Phase 9.1 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, and 9.1 complete. Migration listing functionality now available. Ready for Phase 10.1 (API Documentation) or production use with enhanced developer experience.
 
-**Completion Estimate:** ~85% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, and complete documentation all finished. Production-ready for HyperChad integration. Only optional enhancements remain (Phases 9-13).
+**Completion Estimate:** ~87% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, and migration listing all finished. Production-ready for HyperChad integration with full migration visibility. Only optional enhancements remain (Phases 10-13).
 
 ## Status Legend
 
@@ -1430,13 +1430,71 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 
 **Goal:** Provide ability to list available migrations
 
-### 9.1 List Implementation
+### 9.1 List Implementation ✅ **COMPLETED**
 
-- [ ] Add `list()` method to migration sources ❌ **MINOR**
-  - [ ] Returns list of available migrations
-  - [ ] Include migration ID, description if available
-  - [ ] Indicate which migrations have been applied
-  - [ ] Sort by migration order
+- [x] Add `list()` method to migration sources ✅ **MINOR**
+  - `packages/switchy/schema/src/migration.rs:145-155` - Default `list()` method implementation in `MigrationSource` trait
+  - [x] Returns list of available migrations
+    - `packages/switchy/schema/src/migration.rs:146` - `let migrations = self.migrations().await?;`
+  - [x] Include migration ID, description if available
+    - `packages/switchy/schema/src/migration.rs:149-152` - Maps `migration.id()` and `migration.description()` to `MigrationInfo` fields
+  - [x] Indicate which migrations have been applied
+    - `packages/switchy/schema/src/runner.rs:489-493` - `MigrationRunner::list_migrations()` updates `applied` field using `VersionTracker::get_applied_migrations()`
+  - [x] Sort by migration order
+    - `packages/switchy/schema/src/runner.rs:496` - `migrations.sort_by(|a, b| a.id.cmp(&b.id));`
+
+### Phase 9.1 Implementation Notes (Completed)
+
+**Key Implementation Details:**
+- ✅ **MigrationInfo Struct**: Added `MigrationInfo` struct to `migration.rs` with `id`, `description`, and `applied` fields
+  - `packages/switchy/schema/src/migration.rs:103-111` - `MigrationInfo` struct definition with all required fields
+- ✅ **Default list() Implementation**: Added default `list()` method to `MigrationSource` trait that calls `migrations()` and extracts metadata
+  - `packages/switchy/schema/src/migration.rs:145-155` - Default `list()` implementation in `MigrationSource` trait
+- ✅ **MigrationRunner Integration**: Added `list_migrations()` method to `MigrationRunner` that combines source list with database applied status
+  - `packages/switchy/schema/src/runner.rs:476-499` - `list_migrations()` method implementation
+- ✅ **Applied Status Detection**: Uses `VersionTracker::get_applied_migrations()` to determine which migrations have been applied
+  - `packages/switchy/schema/src/runner.rs:486` - `let applied_migrations = self.version_tracker.get_applied_migrations(db).await?;`
+- ✅ **Consistent Sorting**: All migrations sorted by ID for deterministic ordering across all sources
+  - `packages/switchy/schema/src/runner.rs:496` - `migrations.sort_by(|a, b| a.id.cmp(&b.id));`
+- ✅ **All Sources Supported**: Default implementation works for all existing sources (embedded, directory, code)
+  - Default trait implementation automatically applies to all sources without requiring individual implementations
+
+**Technical Architecture:**
+- **Two-Level API**: `MigrationSource::list()` provides base listing, `MigrationRunner::list_migrations()` adds database status
+- **Zero Breaking Changes**: All existing code continues to work, new functionality is purely additive
+- **Efficient Implementation**: Queries database once and uses HashSet for O(1) applied status lookup
+- **Consistent Behavior**: Same sorting and metadata extraction across all migration sources
+
+**Test Coverage:**
+- ✅ Unit tests for `MigrationInfo` struct creation and manipulation
+  - `packages/switchy/schema/src/migration.rs:185-194` - `test_migration_info_creation()` test function
+- ✅ Tests for default `list()` implementation with mock migration source
+  - `packages/switchy/schema/src/migration.rs:196-224` - `test_default_list_implementation()` test function
+- ✅ Integration tests for `MigrationRunner::list_migrations()` with actual database
+  - `packages/switchy/schema/src/runner.rs:830-842` - `test_list_migrations_empty_source()` test
+  - `packages/switchy/schema/src/runner.rs:844-902` - `test_list_migrations_with_applied_status()` test
+- ✅ Tests for applied/unapplied status detection with partial migration runs
+  - `packages/switchy/schema/src/runner.rs:884-901` - Applied status validation in `test_list_migrations_with_applied_status()`
+- ✅ Tests for migration ordering and sorting behavior
+  - `packages/switchy/schema/src/runner.rs:862-871` - Non-alphabetical insertion with alphabetical verification
+- ✅ Tests for CodeMigrationSource list() method
+  - `packages/switchy/schema/src/discovery/code.rs:291-318` - `test_code_migration_source_list()` test function
+- ✅ All existing tests continue to pass (28 unit tests + 12 doc tests)
+  - Command `cargo test -p switchy_schema` output shows "28 passed; 0 failed" and "12 passed; 0 failed"
+
+**Design Decisions:**
+1. **Applied Status Default**: `MigrationSource::list()` defaults `applied` to `false` since it doesn't have database access
+2. **Database Required for Status**: Real applied status requires database connection through `MigrationRunner::list_migrations()`
+3. **Reuse Existing APIs**: Leverages existing `migrations()` method for consistency and maintenance
+4. **Sort by ID**: Uses migration ID for sorting to match existing behavior in the runner
+5. **Description Support**: Properly handles optional descriptions from `Migration::description()` method
+
+**Benefits Achieved:**
+- ✅ **Developer Visibility**: Developers can now list and inspect available migrations
+- ✅ **Status Awareness**: Clear indication of which migrations have been applied
+- ✅ **Tooling Foundation**: Provides foundation for CLI tools and migration status commands
+- ✅ **Debugging Support**: Helps with migration debugging and troubleshooting
+- ✅ **Zero Overhead**: No performance impact on existing migration execution
 
 ## Phase 10: Documentation & Examples
 
