@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** ✅ **Phase 10.1 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, and 10.1 complete. Migration listing functionality and comprehensive API documentation now available. Ready for Phase 10.2 (Usage Examples) or production use with excellent developer documentation.
+**Current Status:** ✅ **Phase 10.1 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, and 10.1 complete. Migration listing functionality and comprehensive API documentation now available. Ready for Phase 10.2 (Usage Examples with Schema Builder Extensions).
 
-**Completion Estimate:** ~89% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, and full API documentation all finished. Production-ready for HyperChad integration with excellent developer experience. Only optional enhancements remain (Phases 10.2, 11-13).
+**Completion Estimate:** ~89% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, and full API documentation all finished. Phase 10.2 will extend schema builders and create clean examples without raw SQL. Production-ready for HyperChad integration with excellent developer experience.
 
 ## Status Legend
 
@@ -1564,8 +1564,162 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 
 ### 10.2 Usage Examples
 
-- [ ] `packages/switchy/schema/examples/` - Example applications ❌ **MINOR**
-  - [ ] `basic_usage.rs` - Simple migration example showing real-world usage patterns
+**Goal:** Create clean examples that demonstrate schema migrations using type-safe query builders rather than raw SQL
+
+#### 10.2.1 Extend Schema Builder Functionality ❌ **IMPORTANT**
+
+**Background:** Current `switchy_database::schema` module only supports `CreateTableStatement`. For clean migration examples, we need all DDL operations available through type-safe builders.
+
+##### 10.2.1.1 Add DropTableStatement
+
+- [ ] Create `DropTableStatement` struct in `packages/database/src/schema.rs`
+  - [ ] Add fields: `table_name: &'a str`, `if_exists: bool`, `cascade: bool`
+  - [ ] Add builder methods: `if_exists()`, `cascade()`
+  - [ ] Implement `execute()` method calling `db.exec_drop_table()`
+- [ ] Add to `packages/database/src/lib.rs` Database trait:
+  - [ ] Add `fn drop_table<'a>(&self, table_name: &'a str) -> schema::DropTableStatement<'a>`
+  - [ ] Add `async fn exec_drop_table(&self, statement: &DropTableStatement<'_>) -> Result<(), DatabaseError>`
+- [ ] Implement `exec_drop_table` for each backend:
+  - [ ] SQLite in `packages/database/src/rusqlite/mod.rs`
+  - [ ] SQLite in `packages/database/src/sqlx/sqlite.rs`
+  - [ ] PostgreSQL in `packages/database/src/postgres/postgres.rs`
+  - [ ] PostgreSQL in `packages/database/src/sqlx/postgres.rs`
+  - [ ] MySQL in `packages/database/src/sqlx/mysql.rs`
+- [ ] Implement `Executable` trait for `DropTableStatement` in `packages/database/src/executable.rs`
+- [ ] Add unit tests for DropTableStatement builder
+- [ ] Add integration tests for each database backend
+
+##### 10.2.1.2 Add CreateIndexStatement
+
+- [ ] Create `CreateIndexStatement` struct in `packages/database/src/schema.rs`
+  - [ ] Add fields: `index_name: &'a str`, `table_name: &'a str`, `columns: Vec<&'a str>`, `unique: bool`, `if_not_exists: bool`
+  - [ ] Add builder methods: `table()`, `column()`, `columns()`, `unique()`, `if_not_exists()`
+  - [ ] Implement `execute()` method calling `db.exec_create_index()`
+- [ ] Add to Database trait:
+  - [ ] Add `fn create_index<'a>(&self, index_name: &'a str) -> schema::CreateIndexStatement<'a>`
+  - [ ] Add `async fn exec_create_index(&self, statement: &CreateIndexStatement<'_>) -> Result<(), DatabaseError>`
+- [ ] Implement `exec_create_index` for each backend:
+  - [ ] SQLite (rusqlite)
+  - [ ] SQLite (sqlx)
+  - [ ] PostgreSQL (postgres)
+  - [ ] PostgreSQL (sqlx)
+  - [ ] MySQL (sqlx)
+- [ ] Implement `Executable` trait for `CreateIndexStatement`
+- [ ] Add unit tests for CreateIndexStatement builder
+- [ ] Add integration tests for each database backend
+
+##### 10.2.1.3 Add DropIndexStatement
+
+- [ ] Create `DropIndexStatement` struct in `packages/database/src/schema.rs`
+  - [ ] Add fields: `index_name: &'a str`, `if_exists: bool`
+  - [ ] Add builder method: `if_exists()`
+  - [ ] Implement `execute()` method calling `db.exec_drop_index()`
+- [ ] Add to Database trait:
+  - [ ] Add `fn drop_index<'a>(&self, index_name: &'a str) -> schema::DropIndexStatement<'a>`
+  - [ ] Add `async fn exec_drop_index(&self, statement: &DropIndexStatement<'_>) -> Result<(), DatabaseError>`
+- [ ] Implement `exec_drop_index` for each backend:
+  - [ ] SQLite (rusqlite)
+  - [ ] SQLite (sqlx)
+  - [ ] PostgreSQL (postgres)
+  - [ ] PostgreSQL (sqlx)
+  - [ ] MySQL (sqlx)
+- [ ] Implement `Executable` trait for `DropIndexStatement`
+- [ ] Add unit tests for DropIndexStatement builder
+- [ ] Add integration tests for each database backend
+
+##### 10.2.1.4 Add AlterTableStatement with SQLite Workarounds
+
+**SQLite Limitation Handling:** SQLite has limited ALTER TABLE support. We implement transparent workarounds using table recreation for unsupported operations.
+
+- [ ] Create `AlterTableStatement` struct in `packages/database/src/schema.rs`
+  - [ ] Add field: `table_name: &'a str`, `operations: Vec<AlterOperation>`
+  - [ ] Create `AlterOperation` enum with variants:
+    - [ ] `AddColumn(Column)`
+    - [ ] `DropColumn(String)`
+    - [ ] `RenameColumn { old: String, new: String }`
+    - [ ] `ModifyColumn(Column)`
+  - [ ] Add builder methods: `add_column()`, `drop_column()`, `rename_column()`, `modify_column()`
+  - [ ] Implement `execute()` method with database type detection
+- [ ] Add to Database trait:
+  - [ ] Add `fn alter_table<'a>(&self, table_name: &'a str) -> schema::AlterTableStatement<'a>`
+  - [ ] Add `async fn exec_alter_table(&self, statement: &AlterTableStatement<'_>) -> Result<(), DatabaseError>`
+  - [ ] Add `fn database_type(&self) -> DatabaseType` for detection
+- [ ] Implement SQLite-specific workarounds:
+  - [ ] Add `execute_sqlite()` method to AlterTableStatement
+  - [ ] Implement `sqlite_recreate_table_without_column()` helper:
+    - [ ] Begin transaction
+    - [ ] Get table schema from sqlite_master
+    - [ ] Create temporary table without column
+    - [ ] Copy data excluding dropped column
+    - [ ] Drop original table
+    - [ ] Rename temporary table
+    - [ ] Recreate indexes
+    - [ ] Commit transaction
+  - [ ] Implement `sqlite_recreate_table_with_renamed_column()` helper
+  - [ ] Implement `sqlite_recreate_table_with_modified_column()` helper
+  - [ ] Add SQLite version detection helper `get_sqlite_version()`
+  - [ ] Add schema parsing helpers:
+    - [ ] `get_table_create_sql()`
+    - [ ] `get_table_indexes()`
+    - [ ] `get_columns_except()`
+    - [ ] `remove_column_from_create_sql()`
+- [ ] Implement `exec_alter_table` for each backend:
+  - [ ] SQLite (rusqlite) - with workarounds
+  - [ ] SQLite (sqlx) - with workarounds
+  - [ ] PostgreSQL (postgres) - standard ALTER TABLE
+  - [ ] PostgreSQL (sqlx) - standard ALTER TABLE
+  - [ ] MySQL (sqlx) - standard ALTER TABLE
+- [ ] Implement `Executable` trait for `AlterTableStatement`
+- [ ] Add unit tests for AlterTableStatement builder
+- [ ] Add SQLite-specific tests for workarounds:
+  - [ ] Test DROP COLUMN with table recreation
+  - [ ] Test RENAME COLUMN with version detection
+  - [ ] Test MODIFY COLUMN with table recreation
+  - [ ] Test index preservation during recreation
+  - [ ] Test data integrity during recreation
+- [ ] Add integration tests for each database backend
+
+##### 10.2.1.5 Update Database Simulator
+
+- [ ] Add mock implementations in `packages/database/src/simulator/mod.rs`:
+  - [ ] `exec_drop_table()`
+  - [ ] `exec_create_index()`
+  - [ ] `exec_drop_index()`
+  - [ ] `exec_alter_table()`
+
+#### 10.2.2 Create Basic Usage Example ❌ **MINOR**
+
+**Prerequisites:** 10.2.1 must be complete before this step
+
+- [ ] Create `packages/switchy/schema/examples/basic_usage.rs`:
+  - [ ] Import necessary types (no test_utils)
+  - [ ] Create `CreateUsersTable` migration using `db.create_table()`
+  - [ ] Create `AddEmailIndex` migration using `db.create_index()`
+  - [ ] Create `AddCreatedAtColumn` migration using `db.alter_table().add_column()`
+  - [ ] Implement proper `down()` methods using:
+    - [ ] `db.drop_table()` for cleanup
+    - [ ] `db.drop_index()` for index removal
+    - [ ] `db.alter_table().drop_column()` for column removal
+  - [ ] Add main() function demonstrating:
+    - [ ] Database connection setup
+    - [ ] EmbeddedMigrationSource creation
+    - [ ] MigrationRunner initialization
+    - [ ] Migration status checking with `list_migrations()`
+    - [ ] Running migrations
+    - [ ] Verifying schema with test data
+    - [ ] Optional rollback demonstration (commented)
+- [ ] Test the example:
+  - [ ] Verify it compiles without warnings
+  - [ ] Run with SQLite to test workarounds
+  - [ ] Verify no `exec_raw` calls in the code
+  - [ ] Ensure clean, readable migration code
+
+**Success Criteria for Phase 10.2:**
+- All schema operations available through type-safe builders
+- SQLite workarounds transparent to users
+- Example uses zero `exec_raw` calls
+- Same migration code works on all databases
+- All tests passing
 
 ## Phase 11: Future Enhancements
 
