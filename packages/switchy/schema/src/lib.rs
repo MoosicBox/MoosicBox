@@ -98,9 +98,12 @@
 //! Load migrations from filesystem at runtime:
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "directory")]
+//! # {
 //! use switchy_schema::runner::MigrationRunner;
 //!
 //! let runner = MigrationRunner::new_directory("./migrations");
+//! # }
 //! ```
 //!
 //! ### Code Migrations
@@ -108,6 +111,8 @@
 //! Define migrations programmatically in Rust:
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "code")]
+//! # {
 //! use switchy_schema::{
 //!     runner::MigrationRunner,
 //!     discovery::code::{CodeMigration, CodeMigrationSource}
@@ -121,30 +126,20 @@
 //! ));
 //!
 //! let runner = MigrationRunner::new(Box::new(source));
+//! # }
 //! ```
 //!
 //! ## Testing Support
 //!
-//! The library provides comprehensive testing utilities for migration validation:
+//! The library provides testing utilities for migration validation:
 //!
 //! ```rust,no_run
-//! #[cfg(feature = "test-utils")]
-//! use switchy_schema_test_utils::MigrationTestBuilder;
-//!
 //! # #[cfg(feature = "test-utils")]
-//! # async fn test_migration(db: &dyn switchy_database::Database) -> Result<(), Box<dyn std::error::Error>> {
-//! // Test complex migration scenarios
-//! MigrationTestBuilder::new(migrations)
-//!     .with_data_after("001_create_users", |db| {
-//!         // Insert test data after specific migration
-//!         Box::pin(async move {
-//!             db.insert("users").value("name", "test").execute(db).await?;
-//!             Ok(())
-//!         })
-//!     })
-//!     .run(db)
-//!     .await?;
-//! # Ok(())
+//! # {
+//! use switchy_schema::test_utils::TestMigrationBuilder;
+//!
+//! // Create a test migration builder
+//! let builder = TestMigrationBuilder::new();
 //! # }
 //! ```
 
