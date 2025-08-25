@@ -458,7 +458,7 @@ rangemap = "1.6.0"
 ratatui = "0.29.0"
 rb = "0.4.1"
 rcgen = "0.14.3"
-regex = "1.11.1"
+regex = "1.11.2"
 reqwest = { version = "0.12.23", default-features = false, features = [
     "rustls-tls",
     "stream",
@@ -508,7 +508,7 @@ symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.106"
 syntect = "5.2.0"
 tantivy = "0.25.0"
-tauri = { version = "2.8.2", features = ["protocol-asset"] }
+tauri = { version = "2.8.3", features = ["protocol-asset"] }
 tauri-build = { version = "2.4.0", features = [] }
 tauri-plugin = { version = "2.4.0", features = ["build"] }
 tauri-plugin-dialog = "2.3.3"
