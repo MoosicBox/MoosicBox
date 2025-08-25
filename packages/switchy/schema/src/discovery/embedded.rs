@@ -1,3 +1,66 @@
+//! # Embedded Migrations
+//!
+//! This module provides support for embedded migrations using the `include_dir!` macro.
+//! Embedded migrations are compiled directly into your binary, making deployment simpler
+//! and ensuring migrations are always available at runtime.
+//!
+//! ## Features
+//!
+//! * **Compile-time inclusion**: Migrations are embedded during build
+//! * **No filesystem dependencies**: Works without file system access
+//! * **Deterministic ordering**: Migrations sorted alphabetically by directory name
+//! * **Optional up/down SQL**: Both up.sql and down.sql are optional
+//! * **Empty file handling**: Empty SQL files are treated as no-ops
+//!
+//! ## Directory Structure
+//!
+//! Embedded migrations expect a specific directory structure:
+//!
+//! ```text
+//! migrations/
+//! ├── 001_create_users/
+//! │   ├── up.sql      # Optional migration SQL
+//! │   └── down.sql    # Optional rollback SQL
+//! ├── 002_add_posts/
+//! │   └── up.sql      # down.sql is optional
+//! └── 003_indexes/
+//!     ├── up.sql
+//!     └── down.sql
+//! ```
+//!
+//! ## Usage
+//!
+//! ```rust,ignore
+//! use switchy_schema::runner::MigrationRunner;
+//! use include_dir::{Dir, include_dir};
+//!
+//! // Include the migrations directory at compile time
+//! static MIGRATIONS: Dir<'static> = include_dir!("migrations");
+//!
+//! # async fn example(db: &dyn switchy_database::Database) -> switchy_schema::Result<()> {
+//! // Create and run embedded migrations (recommended approach)
+//! let runner = MigrationRunner::new_embedded(&MIGRATIONS);
+//! runner.run(db).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Migration Content
+//!
+//! * **up.sql**: Forward migration SQL executed when applying the migration
+//! * **down.sql**: Reverse migration SQL executed when rolling back the migration
+//! * Both files are optional and can be empty
+//! * Empty or missing files result in no-op operations
+//!
+//! ## Error Handling
+//!
+//! The embedded migration system handles several edge cases gracefully:
+//!
+//! * Missing SQL files are treated as no-ops
+//! * Empty SQL files are treated as no-ops  
+//! * Invalid UTF-8 content is converted using lossy conversion
+//! * Directory entries without SQL files are skipped
+
 use crate::{Result, migration::Migration, migration::MigrationSource};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -6,7 +69,17 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use include_dir::{Dir, DirEntry};
 
-/// Migration implementation for embedded migrations using `include_dir`
+/// A single embedded migration with optional up and down SQL content
+///
+/// Embedded migrations are loaded from directories included at compile-time
+/// using the `include_dir!` macro. Each migration consists of:
+///
+/// * **ID**: The directory name (used for ordering)
+/// * **Up content**: Optional SQL for applying the migration
+/// * **Down content**: Optional SQL for rolling back the migration
+///
+/// Both up and down content are optional. Missing or empty SQL files
+/// are treated as no-op operations.
 pub struct EmbeddedMigration {
     id: String,
     up_content: Option<Bytes>,
@@ -58,6 +131,38 @@ impl Migration<'static> for EmbeddedMigration {
 }
 
 /// Migration source for embedded migrations using `include_dir`
+///
+/// This source loads migrations from a directory structure that was embedded
+/// at compile-time using the `include_dir!` macro. It provides the most reliable
+/// way to distribute migrations with your application binary.
+///
+/// ## Features
+///
+/// * **Deterministic loading**: Migrations are sorted alphabetically by directory name
+/// * **No runtime dependencies**: All content is embedded at compile time
+/// * **Graceful handling**: Missing or empty SQL files are treated as no-ops
+/// * **Memory efficient**: Uses `Bytes` for zero-copy string operations
+///
+/// ## Example
+///
+/// ```rust,ignore
+/// use switchy_schema::{
+///     runner::MigrationRunner,
+///     discovery::embedded::EmbeddedMigrationSource
+/// };
+/// use include_dir::{Dir, include_dir};
+///
+/// static MIGRATIONS: Dir<'static> = include_dir!("migrations");
+///
+/// // Create source directly (advanced usage)
+/// let source = EmbeddedMigrationSource::new(&MIGRATIONS);
+///
+/// // Or use the convenience constructor (recommended)
+/// let runner = MigrationRunner::new_embedded(&MIGRATIONS);
+/// ```
+///
+/// The migration source will automatically scan the embedded directory structure
+/// and create migration objects for each subdirectory containing SQL files.
 pub struct EmbeddedMigrationSource {
     migrations_dir: &'static Dir<'static>,
 }

@@ -1,10 +1,79 @@
+//! # Directory-Based Migrations
+//!
+//! This module provides support for directory-based migrations that are loaded
+//! from the filesystem at runtime. This is useful for development environments
+//! where you want to modify migrations without recompiling.
+//!
+//! ## Features
+//!
+//! * **Runtime loading**: Migrations loaded from disk when needed
+//! * **Development friendly**: Modify migrations without rebuilding
+//! * **Same structure**: Uses identical directory structure to embedded migrations
+//! * **Hot reload**: Changes are picked up on next migration run
+//! * **Optional files**: Both up.sql and down.sql are optional
+//!
+//! ## Directory Structure
+//!
+//! Directory-based migrations use the same structure as embedded migrations:
+//!
+//! ```text
+//! migrations/
+//! ├── 001_create_users/
+//! │   ├── up.sql      # Optional migration SQL
+//! │   └── down.sql    # Optional rollback SQL
+//! ├── 002_add_posts/
+//! │   └── up.sql      # down.sql is optional
+//! └── 003_indexes/
+//!     ├── up.sql
+//!     └── down.sql
+//! ```
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use switchy_schema::runner::MigrationRunner;
+//!
+//! # async fn example(db: &dyn switchy_database::Database) -> switchy_schema::Result<()> {
+//! // Create migration runner for directory-based migrations
+//! let runner = MigrationRunner::new_directory("./migrations");
+//!
+//! // Run migrations
+//! runner.run(db).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Advantages vs Embedded
+//!
+//! * **Development speed**: No rebuild required to change migrations
+//! * **Debugging**: Easier to inspect and modify SQL during development
+//! * **Flexibility**: Can load migrations from different paths
+//!
+//! ## Disadvantages vs Embedded
+//!
+//! * **Runtime dependency**: Requires filesystem access
+//! * **Deployment complexity**: Must ensure migration files are available
+//! * **Potential inconsistency**: Files can be modified or missing at runtime
+
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 
 use crate::{Result, migration::Migration, migration::MigrationSource};
 
-/// Migration implementation for file-based migrations
+/// A single file-based migration with optional up and down SQL content
+///
+/// File-based migrations are loaded from the filesystem at runtime,
+/// providing flexibility for development and debugging. Each migration
+/// consists of:
+///
+/// * **ID**: The directory name (used for ordering)
+/// * **Path**: The filesystem path to the migration directory  
+/// * **Up SQL**: Optional SQL for applying the migration
+/// * **Down SQL**: Optional SQL for rolling back the migration
+///
+/// Both up and down SQL are optional. Missing or empty SQL files
+/// are treated as no-op operations.
 pub struct FileMigration {
     id: String,
     path: PathBuf,
@@ -58,7 +127,47 @@ impl Migration<'static> for FileMigration {
     }
 }
 
-/// Migration source for directory-based migrations
+/// Migration source for directory-based migrations loaded from the filesystem
+///
+/// This source loads migrations from a directory on the filesystem at runtime.
+/// It's particularly useful during development when you want to modify migrations
+/// without recompiling your application.
+///
+/// ## Features
+///
+/// * **Runtime loading**: Scans filesystem when migrations are requested
+/// * **Development friendly**: Changes are picked up without rebuilds
+/// * **Error handling**: Gracefully handles missing or unreadable files
+/// * **Consistent ordering**: Migrations sorted alphabetically by directory name
+///
+/// ## Example
+///
+/// ```rust,no_run
+/// use switchy_schema::{
+///     runner::MigrationRunner,
+///     discovery::directory::DirectoryMigrationSource
+/// };
+/// use std::path::PathBuf;
+///
+/// // Create source directly (advanced usage)
+/// let source = DirectoryMigrationSource::from_path(PathBuf::from("./migrations"));
+///
+/// // Or use the convenience constructor (recommended)
+/// let runner = MigrationRunner::new_directory("./migrations");
+/// ```
+///
+/// The source will scan the specified directory for subdirectories containing
+/// `up.sql` and/or `down.sql` files. Each subdirectory becomes a migration
+/// with its name as the migration ID.
+///
+/// ## Error Handling
+///
+/// The directory source handles several filesystem-related scenarios:
+///
+/// * **Missing directory**: Returns empty migration list
+/// * **Unreadable files**: Skips files that cannot be read
+/// * **Empty files**: Treats as no-op migrations
+/// * **Missing SQL files**: Creates migration with no-op for missing files
 pub struct DirectoryMigrationSource {
     migrations_path: PathBuf,
 }
