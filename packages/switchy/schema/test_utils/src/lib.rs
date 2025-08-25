@@ -109,6 +109,9 @@ pub mod assertions;
 /// Migration test builder for complex testing scenarios
 pub mod builder;
 
+/// Integration tests demonstrating new migration capabilities
+pub mod integration_tests;
+
 /// Test error type that wraps existing errors from `switchy_schema` and `switchy_database`
 #[derive(Debug, thiserror::Error)]
 pub enum TestError {

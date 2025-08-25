@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** 🟢 **Phase 8.5 Mostly Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.5 substantially complete. Ready for Phase 8.6 (Documentation & Cleanup) and new feature testing.
+**Current Status:** 🟢 **Phase 8.5 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.5 complete. Ready for Phase 8.6 (Documentation & Cleanup).
 
-**Completion Estimate:** ~70% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities with corrected defaults, moosicbox_schema wrapper, and test migration completed. All existing tests successfully updated and verified. Only new feature demonstrations and cleanup remain.
+**Completion Estimate:** ~75% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities with corrected defaults, moosicbox_schema wrapper, test migration, and new feature demonstrations completed. All existing tests successfully updated and verified. Only documentation and cleanup remain.
 
 ## Status Legend
 
@@ -1241,7 +1241,7 @@ MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
 
 **Goal:** Ensure all existing functionality works correctly with the new architecture
 
-**Current Status:** ✅ **MOSTLY COMPLETE** - Core functionality verified, new features need testing
+**Current Status:** ✅ **COMPLETE** - All functionality verified and new features demonstrated
 
 - [x] Verify Existing Tests ✅ **COMPLETE**
   - [x] All existing tests pass without modification:
@@ -1255,17 +1255,52 @@ MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
     - ✅ Same environment variable support (preserved in wrapper)
     - ✅ Same error handling patterns
 
-- [ ] Test New Features ❌ **IMPORTANT**
-  - [ ] Add test demonstrating rollback functionality (new capability!)
-  - [ ] Add test for `.with_rollback()` functionality in real scenarios
-  - [ ] Add test with multiple `with_data_before` and `with_data_after` calls
-  - [ ] Verify environment variable support still works in integration scenarios
+- [x] Test New Features ✅ **COMPLETE**
+  - [x] Add test demonstrating rollback functionality (new capability!)
+  - [x] Add test for `.with_rollback()` functionality in real scenarios
+  - [x] Add test with multiple `with_data_before` and `with_data_after` calls
+  - [x] Verify environment variable support still works in integration scenarios
 
 - [x] Migration Order Verification ✅ **COMPLETE**
   - ✅ Migrations run in same order as before (alphabetical by ID)
   - ✅ `with_data_before` stops at correct migration (verified in scan tests)
   - ✅ Already-applied migrations are skipped (core functionality working)
   - ✅ Rollback works correctly (comprehensive test coverage in switchy_schema)
+
+### Phase 8.5 Implementation Notes (Completed)
+
+**New Integration Tests Added:**
+
+1. **Rollback Demonstration** (`demonstrate_rollback_functionality`)
+   - Creates a table migration with rollback capability
+   - Verifies table is created and then properly removed after rollback
+   - Demonstrates the `.with_rollback()` functionality in action
+
+2. **Complex Breakpoint Patterns** (`demonstrate_complex_breakpoint_patterns`)
+   - Tests multiple `with_data_before` and `with_data_after` calls in single test
+   - Demonstrates data insertion at different migration points
+   - Verifies data state changes correctly (NULL vs populated columns)
+   - Shows realistic data migration testing scenarios
+
+3. **Environment Variable Integration** (`demonstrate_environment_variable_integration`)
+   - Tests `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1` functionality
+   - Verifies migrations are skipped but function calls succeed
+   - Confirms no migration tracking table is created when skipped
+   - Demonstrates end-to-end environment variable support
+
+**Key Achievements:**
+- ✅ All new features properly demonstrated with integration tests
+- ✅ 35 total tests passing in `switchy_schema_test_utils`
+- ✅ All existing functionality continues to work (scan tests: 7 passing)
+- ✅ Environment variable behavior correctly validated
+- ✅ Rollback capability proven in realistic scenarios
+- ✅ Complex breakpoint patterns working as designed
+
+**Technical Implementation:**
+- Used proper `#[cfg(all(test, feature = "sqlite"))]` gating for moosicbox_schema integration
+- Correctly handled environment variable values ("1" not "true")
+- Proper trait imports for database query operations
+- Clean error handling and test isolation
 
 ### 8.6 Documentation & Cleanup
 

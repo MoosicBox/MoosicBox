@@ -22,8 +22,9 @@ switchy_schema              = { workspace = true }
 thiserror                   = { workspace = true }
 
 [dev-dependencies]
-test-log = { workspace = true }
-tokio    = { workspace = true, features = ["macros", "rt"] }
+moosicbox_schema = { workspace = true, features = ["sqlite"] }
+test-log         = { workspace = true }
+tokio            = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["sqlite"]

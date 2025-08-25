@@ -14252,6 +14252,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "log 0.4.27",
+ "moosicbox_schema",
  "switchy_database",
  "switchy_database_connection",
  "switchy_schema",
