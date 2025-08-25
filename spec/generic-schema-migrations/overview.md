@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** ✅ **Phase 10.1 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, and 10.1 complete. Migration listing functionality and comprehensive API documentation now available. Ready for Phase 10.2 (Usage Examples with Schema Builder Extensions).
+**Current Status:** ✅ **Phase 10.1 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, and 10.1 complete. Migration listing functionality and comprehensive API documentation now available. Ready for Phase 10.2 (Transaction Support + Schema Builder Extensions + Usage Examples).
 
-**Completion Estimate:** ~89% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, and full API documentation all finished. Phase 10.2 will extend schema builders and create clean examples without raw SQL. Production-ready for HyperChad integration with excellent developer experience.
+**Completion Estimate:** ~89% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, and full API documentation all finished. Phase 10.2 will add transaction support, extend schema builders, and create clean examples. Production-ready for HyperChad integration with excellent developer experience.
 
 ## Status Legend
 
@@ -403,7 +403,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
    - Default table name works for 99% of use cases
    - Documented limitation with error messages
 
-3. **Transaction Support** → Moved to Phase 13
+3. **Transaction Support** → Moved to Phase 10.2.1
    - Requires switchy_database enhancement
    - Current implementation is still safe (fails fast on errors)
 
@@ -424,7 +424,7 @@ Phase 4.1 and 4.2 have been successfully implemented with the following decision
   - [x] SQL execution via migration.up() using Executable trait
   - [x] Empty/missing migrations are recorded as successful
   - [x] Add migration hooks (before/after/error callbacks)
-  - [~] Transaction management - DEFERRED to Phase 13
+  - [~] Transaction management - MOVED to Phase 10.2.1
   - [x] NOTE: Verified switchy_database lacks transaction support
 
 ### 4.2 Version Tracking ✅ **COMPLETED**
@@ -1566,11 +1566,93 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 
 **Goal:** Create clean examples that demonstrate schema migrations using type-safe query builders rather than raw SQL
 
-#### 10.2.1 Extend Schema Builder Functionality ❌ **IMPORTANT**
+#### 10.2.1 Database Transaction Support ❌ **CRITICAL**
+
+**Goal:** Add transaction support to switchy_database to enable safe schema operations, particularly for SQLite workarounds
+
+**Background:** Transaction support is fundamental for safe database operations. The schema builder extensions (10.2.2) require proper transaction handling, especially for SQLite table recreation workarounds.
+
+##### 10.2.1.1 Add Transaction Types and Traits
+
+- [ ] Create `DatabaseTransaction` trait in `packages/database/src/lib.rs`
+  - [ ] Add methods: `async fn commit(self) -> Result<(), DatabaseError>`
+  - [ ] Add methods: `async fn rollback(self) -> Result<(), DatabaseError>`
+  - [ ] Implement auto-rollback on drop if not committed (using Drop trait)
+- [ ] Add transaction methods to Database trait:
+  - [ ] Add `async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError>`
+  - [ ] Add `async fn exec_in_transaction<F, Fut, R>(&self, f: F) -> Result<R, DatabaseError>` (convenience method)
+    where F: FnOnce(&dyn Database) -> Fut, Fut: Future<Output = Result<R, DatabaseError>>
+
+##### 10.2.1.2 Implement for SQLite (rusqlite)
+
+- [ ] Create `RusqliteTransaction` struct in `packages/database/src/rusqlite/mod.rs`
+- [ ] Implement `DatabaseTransaction` trait for RusqliteTransaction
+- [ ] Handle BEGIN/COMMIT/ROLLBACK using rusqlite's transaction support
+- [ ] Add Drop implementation for auto-rollback
+- [ ] Implement `begin_transaction()` in RusqliteDatabase
+- [ ] Add unit tests for transaction behavior
+
+##### 10.2.1.3 Implement for SQLite (sqlx)
+
+- [ ] Create `SqliteSqlxTransaction` struct in `packages/database/src/sqlx/sqlite.rs`
+- [ ] Use sqlx's built-in transaction support (`sqlx::Transaction`)
+- [ ] Implement `DatabaseTransaction` trait wrapper around sqlx transaction
+- [ ] Add Drop implementation for auto-rollback
+- [ ] Implement `begin_transaction()` in SqliteSqlxDatabase
+- [ ] Add unit tests for transaction behavior
+
+##### 10.2.1.4 Implement for PostgreSQL (postgres)
+
+- [ ] Create `PostgresTransaction` struct in `packages/database/src/postgres/postgres.rs`
+- [ ] Use tokio-postgres transaction support (`tokio_postgres::Transaction`)
+- [ ] Implement `DatabaseTransaction` trait wrapper
+- [ ] Add Drop implementation for auto-rollback
+- [ ] Implement `begin_transaction()` in PostgresDatabase
+- [ ] Add unit tests for transaction behavior
+
+##### 10.2.1.5 Implement for PostgreSQL (sqlx)
+
+- [ ] Create `PostgresSqlxTransaction` struct in `packages/database/src/sqlx/postgres.rs`
+- [ ] Use sqlx's built-in transaction support for PostgreSQL
+- [ ] Implement `DatabaseTransaction` trait wrapper
+- [ ] Add Drop implementation for auto-rollback
+- [ ] Implement `begin_transaction()` in PostgresSqlxDatabase
+- [ ] Add unit tests for transaction behavior
+
+##### 10.2.1.6 Implement for MySQL (sqlx)
+
+- [ ] Create `MysqlSqlxTransaction` struct in `packages/database/src/sqlx/mysql.rs`
+- [ ] Use sqlx's built-in transaction support for MySQL
+- [ ] Implement `DatabaseTransaction` trait wrapper
+- [ ] Add Drop implementation for auto-rollback
+- [ ] Implement `begin_transaction()` in MysqlSqlxDatabase
+- [ ] Add unit tests for transaction behavior
+
+##### 10.2.1.7 Implement for Database Simulator
+
+- [ ] Create `SimulatorTransaction` struct in `packages/database/src/simulator/mod.rs`
+- [ ] Create mock transaction support for testing
+- [ ] Track transaction state (active, committed, rolled back)
+- [ ] Verify commit/rollback behavior in tests
+- [ ] Implement `begin_transaction()` in SimulatorDatabase
+
+##### 10.2.1.8 Add Comprehensive Transaction Tests
+
+- [ ] Test commit flow for all database backends
+- [ ] Test rollback flow for all database backends
+- [ ] Test auto-rollback on drop for all database backends
+- [ ] Test nested transactions (where supported)
+- [ ] Test error handling during commit/rollback
+- [ ] Test concurrent transaction handling
+- [ ] Integration tests with actual schema operations
+
+#### 10.2.2 Extend Schema Builder Functionality ❌ **IMPORTANT**
+
+**Prerequisites:** 10.2.1 (Database Transaction Support) must be complete before this step
 
 **Background:** Current `switchy_database::schema` module only supports `CreateTableStatement`. For clean migration examples, we need all DDL operations available through type-safe builders.
 
-##### 10.2.1.1 Add DropTableStatement
+##### 10.2.2.1 Add DropTableStatement
 
 - [ ] Create `DropTableStatement` struct in `packages/database/src/schema.rs`
   - [ ] Add fields: `table_name: &'a str`, `if_exists: bool`, `cascade: bool`
@@ -1589,7 +1671,7 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 - [ ] Add unit tests for DropTableStatement builder
 - [ ] Add integration tests for each database backend
 
-##### 10.2.1.2 Add CreateIndexStatement
+##### 10.2.2.2 Add CreateIndexStatement
 
 - [ ] Create `CreateIndexStatement` struct in `packages/database/src/schema.rs`
   - [ ] Add fields: `index_name: &'a str`, `table_name: &'a str`, `columns: Vec<&'a str>`, `unique: bool`, `if_not_exists: bool`
@@ -1608,7 +1690,7 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 - [ ] Add unit tests for CreateIndexStatement builder
 - [ ] Add integration tests for each database backend
 
-##### 10.2.1.3 Add DropIndexStatement
+##### 10.2.2.3 Add DropIndexStatement
 
 - [ ] Create `DropIndexStatement` struct in `packages/database/src/schema.rs`
   - [ ] Add fields: `index_name: &'a str`, `if_exists: bool`
@@ -1627,9 +1709,9 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 - [ ] Add unit tests for DropIndexStatement builder
 - [ ] Add integration tests for each database backend
 
-##### 10.2.1.4 Add AlterTableStatement with SQLite Workarounds
+##### 10.2.2.4 Add AlterTableStatement with SQLite Workarounds
 
-**SQLite Limitation Handling:** SQLite has limited ALTER TABLE support. We implement transparent workarounds using table recreation for unsupported operations.
+**SQLite Limitation Handling:** SQLite has limited ALTER TABLE support. We implement transparent workarounds using table recreation for unsupported operations, now using proper transaction support from 10.2.1.
 
 - [ ] Create `AlterTableStatement` struct in `packages/database/src/schema.rs`
   - [ ] Add field: `table_name: &'a str`, `operations: Vec<AlterOperation>`
@@ -1644,17 +1726,17 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
   - [ ] Add `fn alter_table<'a>(&self, table_name: &'a str) -> schema::AlterTableStatement<'a>`
   - [ ] Add `async fn exec_alter_table(&self, statement: &AlterTableStatement<'_>) -> Result<(), DatabaseError>`
   - [ ] Add `fn database_type(&self) -> DatabaseType` for detection
-- [ ] Implement SQLite-specific workarounds:
+- [ ] Implement SQLite-specific workarounds using proper transactions:
   - [ ] Add `execute_sqlite()` method to AlterTableStatement
   - [ ] Implement `sqlite_recreate_table_without_column()` helper:
-    - [ ] Begin transaction
+    - [ ] Use `db.begin_transaction()` instead of exec_raw("BEGIN")
     - [ ] Get table schema from sqlite_master
     - [ ] Create temporary table without column
     - [ ] Copy data excluding dropped column
     - [ ] Drop original table
     - [ ] Rename temporary table
     - [ ] Recreate indexes
-    - [ ] Commit transaction
+    - [ ] Use `tx.commit()` instead of exec_raw("COMMIT")
   - [ ] Implement `sqlite_recreate_table_with_renamed_column()` helper
   - [ ] Implement `sqlite_recreate_table_with_modified_column()` helper
   - [ ] Add SQLite version detection helper `get_sqlite_version()`
@@ -1664,22 +1746,23 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
     - [ ] `get_columns_except()`
     - [ ] `remove_column_from_create_sql()`
 - [ ] Implement `exec_alter_table` for each backend:
-  - [ ] SQLite (rusqlite) - with workarounds
-  - [ ] SQLite (sqlx) - with workarounds
+  - [ ] SQLite (rusqlite) - with transaction-safe workarounds
+  - [ ] SQLite (sqlx) - with transaction-safe workarounds
   - [ ] PostgreSQL (postgres) - standard ALTER TABLE
   - [ ] PostgreSQL (sqlx) - standard ALTER TABLE
   - [ ] MySQL (sqlx) - standard ALTER TABLE
 - [ ] Implement `Executable` trait for `AlterTableStatement`
 - [ ] Add unit tests for AlterTableStatement builder
 - [ ] Add SQLite-specific tests for workarounds:
-  - [ ] Test DROP COLUMN with table recreation
-  - [ ] Test RENAME COLUMN with version detection
-  - [ ] Test MODIFY COLUMN with table recreation
+  - [ ] Test DROP COLUMN with table recreation and transactions
+  - [ ] Test RENAME COLUMN with version detection and transactions
+  - [ ] Test MODIFY COLUMN with table recreation and transactions
   - [ ] Test index preservation during recreation
   - [ ] Test data integrity during recreation
+  - [ ] Test rollback behavior on failure
 - [ ] Add integration tests for each database backend
 
-##### 10.2.1.5 Update Database Simulator
+##### 10.2.2.5 Update Database Simulator
 
 - [ ] Add mock implementations in `packages/database/src/simulator/mod.rs`:
   - [ ] `exec_drop_table()`
@@ -1687,9 +1770,9 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
   - [ ] `exec_drop_index()`
   - [ ] `exec_alter_table()`
 
-#### 10.2.2 Create Basic Usage Example ❌ **MINOR**
+#### 10.2.3 Create Basic Usage Example ❌ **MINOR**
 
-**Prerequisites:** 10.2.1 must be complete before this step
+**Prerequisites:** 10.2.1 and 10.2.2 must be complete before this step
 
 - [ ] Create `packages/switchy/schema/examples/basic_usage.rs`:
   - [ ] Import necessary types (no test_utils)
@@ -1710,15 +1793,16 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
     - [ ] Optional rollback demonstration (commented)
 - [ ] Test the example:
   - [ ] Verify it compiles without warnings
-  - [ ] Run with SQLite to test workarounds
+  - [ ] Run with SQLite to test workarounds and transactions
   - [ ] Verify no `exec_raw` calls in the code
   - [ ] Ensure clean, readable migration code
 
 **Success Criteria for Phase 10.2:**
+- Full transaction support across all database backends
 - All schema operations available through type-safe builders
-- SQLite workarounds transparent to users
+- SQLite workarounds use proper transactions (not exec_raw)
 - Example uses zero `exec_raw` calls
-- Same migration code works on all databases
+- Same migration code works on all databases with automatic transaction handling
 - All tests passing
 
 ## Phase 11: Future Enhancements
@@ -1876,30 +1960,6 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
   - [ ] Full support for custom table names
   - [ ] Update all database operations to use dynamic names
 
-## Phase 13: Transaction Support
-
-**Goal:** Add transaction isolation for migration execution
-
-**Status:** Not started
-
-**Blocker:** Requires transaction support in switchy_database
-
-### 13.1 Database Transaction Support
-
-- [ ] Add transaction support to switchy_database ❌ **CRITICAL**
-  - [ ] begin_transaction() method
-  - [ ] commit() method
-  - [ ] rollback() method
-  - [ ] Nested transaction support (savepoints)
-
-### 13.2 Runner Transaction Integration
-
-- [ ] Update MigrationRunner to use transactions ❌ **IMPORTANT**
-  - [ ] Per-migration transactions (default)
-  - [ ] Batch transaction mode
-  - [ ] Configurable transaction strategies
-  - [ ] Proper error handling and rollback on failure
-
 ## Success Metrics
 
 - **Zero Breaking Changes**: moosicbox_schema continues to work unchanged
@@ -2011,7 +2071,7 @@ test-utils = []
 10. **Phase 10** (Documentation) - Can proceed now (optional)
 11. **Phase 11** (Future Enhancements) - After core phases (optional)
 12. **Phase 12** (Dynamic Table Names) - Requires switchy_database enhancement
-13. **Phase 13** (Transaction Support) - Requires switchy_database enhancement
+13. **Phase 10.2.1** (Transaction Support) - Now prioritized for clean schema builder examples
 
 ### Parallel Work Opportunities
 - Core types and discovery can be developed simultaneously
