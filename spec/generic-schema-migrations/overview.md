@@ -1565,8 +1565,7 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 ### 10.2 Usage Examples
 
 - [ ] `packages/switchy/schema/examples/` - Example applications ❌ **MINOR**
-  - [ ] `basic_usage.rs` - Simple migration example
-  - [ ] `hyperchad_integration.rs` - HyperChad-specific example
+  - [ ] `basic_usage.rs` - Simple migration example showing real-world usage patterns
 
 ## Phase 11: Future Enhancements
 
