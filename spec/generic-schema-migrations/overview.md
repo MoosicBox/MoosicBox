@@ -4,7 +4,7 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** ✅ **Phase 10.1 Complete + 10.2.1.1 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, and 10.2.1.1 complete. Migration listing, comprehensive API documentation, and database transaction trait architecture now available. Ready for Phase 10.2.1.2 (SQLite transaction implementation).
+**Current Status:** ✅ **Phase 10.1 Complete + 10.2.1.1 + 10.2.1.3 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1, and 10.2.1.3 complete. Migration listing, comprehensive API documentation, database transaction trait architecture, and SQLite transaction serialization now available. Ready for Phase 10.2.1.4 (SQLite sqlx implementation).
 
 **Completion Estimate:** ~90% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, full API documentation, and database transaction trait architecture all finished. Phase 10.2 backend implementations will add actual transaction support and schema builder extensions. Production-ready for HyperChad integration with excellent developer experience.
 
@@ -1618,167 +1618,393 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
   - [x] Add `TransactionCommitted` variant if operations attempted after commit
   - [x] Add `TransactionRolledBack` variant if operations attempted after rollback
 
-**Actual Implementation (Phase 10.2.1.1):**
+**Actual Implementation (Phase 10.2.2):**
 - [x] All 6 database backends have stub `begin_transaction()` implementations
 - [x] Each returns appropriate error indicating transaction support not yet implemented
-- [x] Ready for actual implementation in phases 10.2.1.2-10.2.1.7
+- [x] Ready for actual implementation in phases 10.2.1.3-10.2.1.11
 - [x] Test databases in other packages updated with stub implementations
 - [x] Database trait remains dyn-compatible - no breaking changes
 - [x] All existing code continues to compile and work
 
-##### 10.2.1.2 Implement for SQLite (rusqlite) ❌ **READY TO START**
+##### 10.2.1.2 Transaction Isolation Architecture ❌ **CRITICAL DESIGN PHASE**
 
-**Prerequisites:** ✅ Phase 10.2.1.1 complete - DatabaseTransaction trait and stub implementations ready
+**Problem Identified:** The naive approach of sharing connections between Database and DatabaseTransaction instances causes transaction poisoning - operations on the original database during a transaction execute within that transaction, breaking isolation guarantees.
 
-- [ ] Create `RusqliteTransaction` struct in `packages/database/src/rusqlite/mod.rs`
-  - [ ] Store `connection: Arc<Mutex<Connection>>` (reuse existing connection)
-  - [ ] Store `committed: AtomicBool` for state tracking
-  - [ ] Use rusqlite's manual BEGIN/COMMIT/ROLLBACK approach
-- [ ] Implement `DatabaseTransaction` trait for RusqliteTransaction
-  - [ ] Implement all Database trait methods using shared connection
-  - [ ] Implement `commit()` using rusqlite transaction API
-  - [ ] Implement `rollback()` using rusqlite transaction API
-  - [ ] Track committed state to prevent double-commit
-- [ ] Implement `begin_transaction()` in RusqliteDatabase
-  - [ ] Execute "BEGIN TRANSACTION" on connection
-  - [ ] Return boxed RusqliteTransaction
-- [ ] Implement proper dereferencing for execute() compatibility:
-  - [ ] Ensure transaction can be used as `&dyn Database` via deref
-  - [ ] Test pattern: `stmt.execute(&*tx)` works correctly
-  - [ ] Verify transaction remains valid for multiple operations
-- [ ] Add comprehensive unit tests for transaction behavior
-  - [ ] Test commit flow
-  - [ ] Test rollback flow
-  - [ ] Test all Database operations within transaction
-  - [ ] Test error handling and state tracking
+**Solution:** Hybrid connection management approach that provides true transaction isolation while maintaining backward compatibility with the Database trait.
 
-##### 10.2.1.3 Implement for SQLite (sqlx)
+**Core Requirements:**
+- **No Breaking Changes**: Existing Database trait and usage patterns must work unchanged
+- **True Isolation**: Transactions must use separate connections to prevent poisoning
+- **Resource Efficiency**: Lazy secondary connection creation to minimize overhead
+- **Thread Safety**: Proper atomic state management for concurrent access
 
-**Challenge:** sqlx::Transaction has lifetime that prevents direct storage. Use pool connection approach.
+**Architecture Decision: Hybrid Connection Management**
 
-- [ ] Create `SqliteSqlxTransaction` struct in `packages/database/src/sqlx/sqlite.rs`
-  - [ ] Store `connection: Arc<Mutex<PoolConnection<Sqlite>>>` (hold pool connection)
-  - [ ] Store `committed: AtomicBool` for state tracking
-  - [ ] Use manual transaction commands ("BEGIN", "COMMIT", "ROLLBACK")
-- [ ] Implement `DatabaseTransaction` trait for SqliteSqlxTransaction
-  - [ ] Implement all Database trait methods using pooled connection
-  - [ ] Implement `commit()` using sqlx query execution
-  - [ ] Implement `rollback()` using sqlx query execution
+Each database backend will implement:
+1. **Primary Connection**: Used for normal Database operations when no transaction is active
+2. **Separate Transaction Connections**: Each transaction gets its own dedicated connection
+3. **Secondary Connection**: Created lazily for non-transactional operations during active transactions
+4. **Atomic State Tracking**: `transaction_active` flag prevents connection conflicts
+
+**Backend-Specific Strategies:**
+- **SQLite (file-based)**: Create new Connection per transaction from file path
+- **PostgreSQL**: Use Client cloning or connection pool checkout
+- **MySQL**: Use connection pool checkout
+- **SqlX (all)**: Use PoolConnection checkout for transactions
+
+**Backward Compatibility Guarantee:**
+- All existing code using `&dyn Database` continues to work unchanged
+- Transaction API remains identical: `tx.commit()`, `tx.rollback()`
+- Query execution patterns unchanged: `stmt.execute(&*tx)`
+- Same error types and handling
+
+**Performance Considerations:**
+- Connection creation overhead acceptable for transaction correctness
+- Lazy secondary connection creation minimizes resource usage
+- Prepared statement caching per connection maintains query performance
+- Connection pooling strategies per backend for optimal resource utilization
+
+## Implementation Trade-offs
+
+### Rusqlite Transaction Serialization
+**Decision**: Use serialized locking for all rusqlite transactions
+**Rationale**:
+- SQLite in-memory databases cannot share data between connections
+- Creating separate connections would result in empty databases for transactions
+- Serialization ensures consistency between in-memory and file-based databases
+
+**Trade-off**:
+- Non-transactional operations block during active transactions
+- Acceptable because SQLite already serializes write operations internally
+- Read concurrency optimization deferred to Phase 14
+
+**Impact**: Correct isolation semantics at cost of some read concurrency
+
+##### 10.2.1.3 Implement for SQLite (rusqlite) ✅ **COMPLETED**
+
+**Prerequisites:**
+- ✅ Phase 10.2.1.1 complete - DatabaseTransaction trait and stub implementations ready
+
+**Status**: ✅ **COMPLETE** - Semaphore-based serialization successfully implemented
+
+**Implementation Notes**:
+- ✅ Full Database trait implementation for RusqliteTransaction
+- ✅ **FIXED**: Removed separate connection logic, uses same connection for all databases
+- ✅ **IMPLEMENTED**: Serialized locking via Arc<tokio::sync::Semaphore> with 1 permit
+- ✅ **CONSISTENT**: File-based and in-memory databases have identical isolation semantics
+- ✅ 5 comprehensive tests including concurrency and isolation verification
+
+**Architecture Decision: Serialized Locking Approach**
+
+After analysis, we chose serialized access over separate connections:
+
+**Problem**: SQLite in-memory databases are connection-scoped
+- Each connection has its own separate in-memory database
+- Creating separate connections would result in empty databases for transactions
+- File-based and in-memory databases would behave inconsistently
+
+**Solution**: Serialize all database access during transactions using Semaphore
+- Use `transaction_lock: Arc<tokio::sync::Semaphore>` with 1 permit for exclusive access
+- Acquire `OwnedSemaphorePermit` in transaction - automatically released on drop
+- Both file-based and in-memory databases get identical isolation semantics
+- Clean ownership model without lifetime complications
+
+**Technical Implementation with Semaphore:**
+```rust
+// In RusqliteDatabase struct:
+transaction_lock: Arc<tokio::sync::Semaphore>, // Initialized with Semaphore::new(1)
+
+// In begin_transaction():
+let permit = self.transaction_lock.acquire_owned().await
+    .map_err(|_| DatabaseError::LockAcquisitionFailed)?;
+
+// In RusqliteTransaction struct:
+_permit: tokio::sync::OwnedSemaphorePermit, // Automatically released on drop
+```
+
+**Why Semaphore over Mutex<()>:**
+- `OwnedSemaphorePermit` can be stored in the transaction struct (no lifetime issues)
+- Automatic release on drop ensures cleanup even on panic
+- Clean ownership model - the transaction "owns" exclusive access
+
+**Implementation Requirements:**
+- **NO separate connections** - Both in-memory and file-based databases MUST use the same connection
+- **Semaphore-based serialization** - Use `Arc<tokio::sync::Semaphore>` with 1 permit
+- **Owned permit storage** - Transaction holds `OwnedSemaphorePermit` for its lifetime
+- **Automatic cleanup** - Permit automatically released when transaction is dropped
+- **Defer optimizations** - File-based optimization belongs in Phase 14, NOT here
+- **Test concurrency** - Must have tests that verify transactions are serialized, not parallel
+
+**Implementation Status:**
+
+- [x] **Database Struct Updates**: Added `transaction_lock: Arc<tokio::sync::Semaphore>` (1 permit) to RusqliteDatabase
+- [x] **Permit Acquisition**: `begin_transaction()` acquires `OwnedSemaphorePermit` before BEGIN
+- [x] **Removed Separate Connections**: Fixed lines 562-563, now uses same connection for all databases
+- [x] **Transaction Struct**: RusqliteTransaction stores `_permit: OwnedSemaphorePermit`
+- [x] **Serialized Access**: Second transaction waits for first to complete (permit release)
+- [x] **Full Database Trait**: All methods implemented in RusqliteTransaction with proper semaphore usage
+- [x] **State Management**: Proper commit/rollback with atomic flags
+- [x] **Concurrent Transaction Tests**: Tests verify serialization behavior and isolation
+
+**Trade-offs Accepted**:
+- ✅ **Correctness Over Performance**: Serialized access ensures perfect isolation
+- ✅ **Consistent Behavior**: All database types work identically
+- ⚠️ **Reduced Concurrency**: Non-transactional operations block during transactions
+- ✅ **Acceptable Impact**: SQLite already serializes writes internally
+
+**Testing Status**:
+- [x] Transaction commit/rollback functionality
+- [x] Multiple operations within single transaction
+- [x] State tracking prevents double commit/rollback
+- [x] Nested transaction rejection (unsupported)
+- [x] All CRUD operations within transactions
+- [x] **Transaction isolation test**: Perfect isolation achieved through semaphore blocking
+- [x] Resource cleanup and error handling
+- [x] Backward compatibility verification
+- [x] **Concurrent transaction serialization**: Verified only one transaction can be active at a time
+- [x] **SimulationDatabase integration**: Fixed delegation to inner RusqliteDatabase transactions
+- [x] **Cross-feature compatibility**: Tests work with switchy_async and any feature combination
+
+**Phase Relationship:**
+- **Phase 10.2.1.3** (this phase): Implements correctness through serialization for ALL database types
+- **Phase 14**: Will optimize performance through parallelization for file-based databases only
+- Current implementation must use identical serialized locking for all databases
+- Performance optimizations intentionally deferred to maintain code clarity and correctness
+
+##### 10.2.1.4 Implement for SQLite (sqlx)
+
+**Prerequisites:** ✅ Phase 10.2.1.3 complete - Semaphore-based serialization proven with rusqlite
+
+**Challenge:** sqlx::Transaction has lifetime limitations. Apply hybrid connection architecture with sqlx Pool.
+
+**Hybrid Connection Architecture for SqlX:**
+
+- [ ] Update `SqliteSqlxDatabase` struct for isolation:
+  - [ ] Keep existing `pool: Arc<Pool<Sqlite>>` for backward compatibility
+  - [ ] Add `transaction_active: Arc<AtomicBool>` for atomic state tracking
+  - [ ] Add `secondary_conn: Arc<Mutex<Option<PoolConnection<Sqlite>>>>` for operations during transactions
+
+- [ ] Create `SqliteSqlxTransaction` struct with owned connection:
+  - [ ] Store `connection: Option<PoolConnection<Sqlite>>` (OWNED pool connection)
+  - [ ] Store `parent_flag: Arc<AtomicBool>` reference to parent's transaction_active flag
+  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
+  - [ ] Implement `Drop` trait to return connection to pool and clear parent flag
+
+- [ ] Update `begin_transaction()` in SqliteSqlxDatabase:
+  - [ ] Atomically check and set `transaction_active` flag
+  - [ ] Acquire dedicated connection from pool for transaction
+  - [ ] Execute "BEGIN IMMEDIATE" command on acquired connection
+  - [ ] Return `SqliteSqlxTransaction` with owned pool connection
+
+- [ ] Update Database trait implementation in SqliteSqlxDatabase:
+  - [ ] Modify write operations to check transaction state
+  - [ ] Use secondary pool connection when transaction is active (lazy acquisition)
+  - [ ] Ensure proper connection return to pool
+
+- [ ] Implement `DatabaseTransaction` trait for SqliteSqlxTransaction:
+  - [ ] Implement all Database trait methods using owned pool connection
+  - [ ] Implement `commit()` and `rollback()` using sqlx query execution
   - [ ] Ensure connection returns to pool on drop
-- [ ] Implement `begin_transaction()` in SqliteSqlxDatabase
-  - [ ] Acquire connection from pool
-  - [ ] Execute "BEGIN TRANSACTION" command
-  - [ ] Return boxed SqliteSqlxTransaction
-- [ ] Implement proper dereferencing for execute() compatibility:
-  - [ ] Ensure transaction can be used as `&dyn Database` via deref
-  - [ ] Test pattern: `stmt.execute(&*tx)` works correctly
-  - [ ] Verify transaction remains valid for multiple operations
-- [ ] Add comprehensive unit tests including pool behavior
 
-##### 10.2.1.4 Implement for PostgreSQL (postgres)
+- [ ] Add comprehensive tests including pool behavior and isolation guarantees
 
-**Challenge:** tokio-postgres::Transaction has lifetime issues. Use client-based approach.
+##### 10.2.1.5 Implement for PostgreSQL (postgres)
 
-- [ ] Create `PostgresTransaction` struct in `packages/database/src/postgres/postgres.rs`
-  - [ ] Store `client: Client` (tokio-postgres client supports transactions)
-  - [ ] Store `committed: AtomicBool` for state tracking
-  - [ ] Use client.execute() for transaction commands
-- [ ] Implement `DatabaseTransaction` trait for PostgresTransaction
-  - [ ] Implement all Database trait methods using client
-  - [ ] Implement `commit()` using client transaction commands
-  - [ ] Implement `rollback()` using client transaction commands
-- [ ] Implement `begin_transaction()` in PostgresDatabase
-  - [ ] Clone client for transaction
-  - [ ] Execute "BEGIN" command
-  - [ ] Return boxed PostgresTransaction
-- [ ] Implement proper dereferencing for execute() compatibility:
-  - [ ] Ensure transaction can be used as `&dyn Database` via deref
-  - [ ] Test pattern: `stmt.execute(&*tx)` works correctly
+**Prerequisites:** ✅ Phase 10.2.1.4 complete - Hybrid connection approach proven with pool-based backends
+
+**Challenge:** tokio-postgres::Transaction has lifetime limitations. Apply hybrid connection architecture with Client cloning.
+
+**Hybrid Connection Architecture for tokio-postgres:**
+
+- [ ] Update `PostgresDatabase` struct for isolation:
+  - [ ] Keep existing `client: Arc<Mutex<Client>>` for backward compatibility
+  - [ ] Add `transaction_active: Arc<AtomicBool>` for atomic state tracking
+  - [ ] Add `secondary_client: Arc<Mutex<Option<Client>>>` for operations during transactions
+  - [ ] Store connection parameters for creating new clients
+
+- [ ] Create `PostgresTransaction` struct with owned client:
+  - [ ] Store `client: Option<Client>` (OWNED client, not shared)
+  - [ ] Store `parent_flag: Arc<AtomicBool>` reference to parent's transaction_active flag
+  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
+  - [ ] Implement `Drop` trait to clear parent flag and auto-rollback if needed
+
+- [ ] Update `begin_transaction()` in PostgresDatabase:
+  - [ ] Atomically check and set `transaction_active` flag
+  - [ ] Create new Client connection for transaction (clone connection params)
+  - [ ] Execute "BEGIN" command on new client
+  - [ ] Return `PostgresTransaction` with owned client
+
+- [ ] Update Database trait implementation in PostgresDatabase:
+  - [ ] Modify write operations to check transaction state
+  - [ ] Use secondary client when transaction is active (lazy creation)
+  - [ ] PostgreSQL supports concurrent reads and writes better than SQLite
+
+- [ ] Implement `DatabaseTransaction` trait for PostgresTransaction:
+  - [ ] Implement all Database trait methods using owned client
+  - [ ] Implement `commit()` and `rollback()` using client transaction commands
+  - [ ] Proper state validation and cleanup
+
+- [ ] Add comprehensive tests including client management and isolation guarantees
+
+##### 10.2.1.6 Implement for PostgreSQL (sqlx)
+
+**Prerequisites:** ✅ Phase 10.2.1.5 complete - PostgreSQL-specific isolation patterns established
+
+**Hybrid Connection Architecture for PostgreSQL sqlx:**
+
+- [ ] Update `PostgresSqlxDatabase` struct following established pattern:
+  - [ ] Keep existing `pool: Arc<Pool<Postgres>>` for backward compatibility
+  - [ ] Add `transaction_active: Arc<AtomicBool>` for atomic state tracking
+  - [ ] Add `secondary_conn: Arc<Mutex<Option<PoolConnection<Postgres>>>>` for operations during transactions
+
+- [ ] Create `PostgresSqlxTransaction` struct with owned connection:
+  - [ ] Store `connection: Option<PoolConnection<Postgres>>` (OWNED pool connection)
+  - [ ] Store `parent_flag: Arc<AtomicBool>` reference to parent's transaction_active flag
+  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
+  - [ ] Implement `Drop` trait for proper resource cleanup
+
+- [ ] Apply hybrid connection management pattern established in previous phases
+- [ ] Implement transaction isolation using dedicated pool connections
+- [ ] Add comprehensive tests including PostgreSQL-specific concurrency scenarios
+
+##### 10.2.1.7 Implement for MySQL (sqlx)
+
+**Prerequisites:** ✅ Phase 10.2.1.6 complete - All major database patterns established
+
+**Hybrid Connection Architecture for MySQL sqlx:**
+
+- [ ] Update `MysqlSqlxDatabase` struct following established sqlx pattern:
+  - [ ] Keep existing `pool: Arc<Pool<MySql>>` for backward compatibility
+  - [ ] Add `transaction_active: Arc<AtomicBool>` for atomic state tracking
+  - [ ] Add `secondary_conn: Arc<Mutex<Option<PoolConnection<MySql>>>>` for operations during transactions
+
+- [ ] Create `MysqlSqlxTransaction` struct with owned connection:
+  - [ ] Store `connection: Option<PoolConnection<MySql>>` (OWNED pool connection)
+  - [ ] Store `parent_flag: Arc<AtomicBool>` reference to parent's transaction_active flag
+  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
+  - [ ] Implement `Drop` trait for proper resource cleanup
+
+- [ ] Apply hybrid connection management pattern consistent with other sqlx backends
+- [ ] Implement transaction isolation using dedicated pool connections
+- [ ] Add comprehensive tests including MySQL-specific isolation behavior
   - [ ] Verify transaction remains valid for multiple operations
 - [ ] Add comprehensive unit tests
 
-##### 10.2.1.5 Implement for PostgreSQL (sqlx)
+##### 10.2.1.8 Implement for Database Simulator
 
-- [ ] Create `PostgresSqlxTransaction` struct in `packages/database/src/sqlx/postgres.rs`
-  - [ ] Store `connection: Arc<Mutex<PoolConnection<Postgres>>>`
-  - [ ] Store `committed: AtomicBool` for state tracking
-  - [ ] Use manual transaction commands like SQLite implementation
-- [ ] Implement `DatabaseTransaction` trait for PostgresSqlxTransaction
-  - [ ] Implement all Database trait methods using pooled connection
-  - [ ] Implement `commit()` and `rollback()` using sqlx queries
-  - [ ] Ensure connection returns to pool on drop
-- [ ] Implement `begin_transaction()` in PostgresSqlxDatabase
-- [ ] Implement proper dereferencing for execute() compatibility:
-  - [ ] Ensure transaction can be used as `&dyn Database` via deref
-  - [ ] Test pattern: `stmt.execute(&*tx)` works correctly
-  - [ ] Verify transaction remains valid for multiple operations
-- [ ] Add comprehensive unit tests
+**Prerequisites:** ✅ Phase 10.2.1.7 complete - All production database backends support isolation
 
-##### 10.2.1.6 Implement for MySQL (sqlx)
+**Hybrid Architecture for Simulator (Test Environment):**
 
-- [ ] Create `MysqlSqlxTransaction` struct in `packages/database/src/sqlx/mysql.rs`
-  - [ ] Store `connection: Arc<Mutex<PoolConnection<MySql>>>`
-  - [ ] Store `committed: AtomicBool` for state tracking
-  - [ ] Use manual transaction commands consistent with other sqlx implementations
-- [ ] Implement `DatabaseTransaction` trait for MysqlSqlxTransaction
-  - [ ] Implement all Database trait methods using pooled connection
-  - [ ] Implement `commit()` and `rollback()` using sqlx queries
-  - [ ] Ensure connection returns to pool on drop
-- [ ] Implement `begin_transaction()` in MysqlSqlxDatabase
-- [ ] Implement proper dereferencing for execute() compatibility:
-  - [ ] Ensure transaction can be used as `&dyn Database` via deref
-  - [ ] Test pattern: `stmt.execute(&*tx)` works correctly
-  - [ ] Verify transaction remains valid for multiple operations
-- [ ] Add comprehensive unit tests
+- [ ] Update `SimulatorDatabase` struct for isolation testing:
+  - [ ] Add `transaction_active: Arc<AtomicBool>` consistent with other backends
+  - [ ] Add state tracking for operations during transactions
+  - [ ] Support testing isolation scenarios
 
-##### 10.2.1.7 Implement for Database Simulator
+- [ ] Create `SimulatorTransaction` struct following established pattern:
+  - [ ] Store `parent_flag: Arc<AtomicBool>` reference for consistency
+  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
+  - [ ] Track all operations performed within transaction for test verification
+  - [ ] Support operation rollback by reverting stored operations
 
-- [ ] Create `SimulatorTransaction` struct in `packages/database/src/simulator/mod.rs`
-  - [ ] Create mock transaction support for comprehensive testing
-  - [ ] Track transaction state (active, committed, rolled back)
-  - [ ] Store all operations performed within transaction
-  - [ ] Support rollback by reverting stored operations
-- [ ] Implement `DatabaseTransaction` trait for SimulatorTransaction
-  - [ ] Mock all Database trait methods
-  - [ ] Track operations for verification in tests
-  - [ ] Verify commit/rollback behavior
-- [ ] Implement `begin_transaction()` in SimulatorDatabase
-- [ ] Implement proper dereferencing for execute() compatibility:
-  - [ ] Ensure transaction can be used as `&dyn Database` via deref
-  - [ ] Test pattern: `stmt.execute(&*tx)` works correctly
-  - [ ] Verify transaction remains valid for multiple operations
-- [ ] Add extensive testing capabilities for migration tests
+- [ ] Implement mock transaction isolation:
+  - [ ] Separate transaction operations from main database operations
+  - [ ] Support testing transaction poisoning prevention
+  - [ ] Enable verification of isolation guarantees in tests
 
-##### 10.2.1.8 Add Comprehensive Transaction Tests
+- [ ] Add extensive testing capabilities for migration and isolation verification
 
-- [ ] **Backend-specific tests** for each database implementation:
+##### 10.2.1.9 Add Comprehensive Transaction and Isolation Tests
+
+- [ ] **Backend-specific functionality tests** for each database implementation:
   - [ ] Test commit flow for all backends (rusqlite, sqlx sqlite/postgres/mysql, simulator)
   - [ ] Test rollback flow for all backends
   - [ ] Test manual rollback requirement (no auto-rollback on drop)
   - [ ] Test state tracking (prevent double-commit/rollback)
   - [ ] Test error handling during commit/rollback operations
-- [ ] **Connection handling tests**:
-  - [ ] Test pool connection behavior (sqlx backends)
-  - [ ] Test connection sharing (rusqlite backend)
-  - [ ] Test timeout scenarios with long-running transactions
+
+- [ ] **CRITICAL: Transaction Isolation Tests** (NEW REQUIREMENT):
+  - [ ] **Poison Prevention Tests**: Verify operations on original database during transaction don't affect transaction
+  - [ ] **Isolation Verification**: Verify transaction operations don't affect original database until commit
+  - [ ] **Concurrent Access Tests**: Test multiple threads accessing database during active transaction
+  - [ ] **State Synchronization**: Test `transaction_active` flag prevents conflicts
+  - [ ] **Resource Management**: Verify connections are properly isolated and cleaned up
+
+- [ ] **Connection management tests** (UPDATED):
+  - [ ] Test hybrid connection architecture for all backends
+  - [ ] Test secondary connection creation (lazy initialization)
+  - [ ] Test pool connection behavior (sqlx backends) with dedicated transaction connections
+  - [ ] Test connection cleanup on transaction completion
+  - [ ] Test proper connection ownership (transactions own their connections)
+
 - [ ] **Integration tests with Database operations**:
-  - [ ] Test all CRUD operations within transactions
-  - [ ] Test schema operations (CREATE TABLE, etc.) within transactions
-  - [ ] Test transaction rollback preserves pre-transaction state
-  - [ ] Test concurrent transaction handling where applicable
-- [ ] **Transaction ergonomics tests:**
+  - [ ] Test all CRUD operations within transactions (unchanged)
+  - [ ] Test schema operations (CREATE TABLE, etc.) within transactions (unchanged)
+  - [ ] Test transaction rollback preserves pre-transaction state (unchanged)
+  - [ ] **NEW**: Test operations on database continue working during active transactions
+  - [ ] **NEW**: Test concurrent read operations during active transactions
+
+- [ ] **Transaction ergonomics tests** (unchanged):
   - [ ] Test `&*tx` dereference pattern with all statement types
   - [ ] Test multiple operations on single transaction
   - [ ] Test error in middle of transaction doesn't prevent further operations
   - [ ] Verify begin_transaction() on transaction returns appropriate error
   - [ ] Test transaction consumption on commit/rollback (compile-time safety)
 
-**Connection Pool Solutions Implemented:**
-- **sqlx pools**: Transaction holds PoolConnection until dropped, automatically returned to pool
-- **rusqlite**: Uses existing Arc<Mutex<Connection>> pattern
-- **Pool timeouts**: Configurable via pool settings, not transaction-specific initially
+**UPDATED: Hybrid Connection Architecture Summary**
 
-##### 10.2.1.9 Document Transaction Usage Patterns
+Each backend implements the following isolation pattern:
+
+**SQLite (rusqlite)**:
+- Primary: `Arc<Mutex<Connection>>` for normal operations
+- Transaction: `Option<Connection>` (owned) created from database path
+- Secondary: `Arc<Mutex<Option<Connection>>>` for operations during transactions
+
+**SqlX Backends (sqlite, postgres, mysql)**:
+- Primary: `Arc<Pool<DatabaseType>>` for normal operations
+- Transaction: `Option<PoolConnection<DatabaseType>>` (owned) acquired from pool
+- Secondary: `Arc<Mutex<Option<PoolConnection<DatabaseType>>>>` for operations during transactions
+
+**PostgreSQL (tokio-postgres)**:
+- Primary: `Arc<Mutex<Client>>` for normal operations
+- Transaction: `Option<Client>` (owned) created with connection parameters
+- Secondary: `Arc<Mutex<Option<Client>>>` for operations during transactions
+
+**All Backends Share:**
+- `transaction_active: Arc<AtomicBool>` for atomic state tracking
+- `parent_flag` reference in transactions to clear parent state
+- Lazy secondary connection creation to minimize resource usage
+- `Drop` trait implementation for proper cleanup
+
+##### 10.2.1.10 Validate Backward Compatibility and Performance
+
+**CRITICAL VALIDATION PHASE**: Ensure hybrid architecture maintains all promises
+
+- [ ] **Zero Breaking Changes Verification**:
+  - [ ] Verify all existing Database trait usage patterns continue working unchanged
+  - [ ] Test existing migration code works without modification
+  - [ ] Confirm query execution patterns (`stmt.execute(&dyn Database)`) unchanged
+  - [ ] Validate error types and handling remain consistent
+
+- [ ] **Performance Impact Assessment**:
+  - [ ] Measure connection creation overhead for transactions
+  - [ ] Compare performance with/without secondary connections
+  - [ ] Evaluate lazy secondary connection creation benefits
+  - [ ] Test connection pool resource utilization
+
+- [ ] **Resource Management Verification**:
+  - [ ] Verify no connection leaks under normal operation
+  - [ ] Test proper cleanup on transaction Drop
+  - [ ] Validate secondary connections are cleaned up when not needed
+  - [ ] Ensure transaction_active flag is always properly cleared
+
+- [ ] **Stress Testing**:
+  - [ ] High-frequency transaction creation/completion cycles
+  - [ ] Concurrent operations on database during active transactions
+  - [ ] Connection pool exhaustion scenarios (sqlx backends)
+  - [ ] Memory usage patterns with long-running transactions
+
+##### 10.2.1.11 Document Transaction Architecture and Usage Patterns
 
 - [ ] Create transaction usage documentation in `packages/database/src/lib.rs`:
   - [ ] Document the execute pattern: `stmt.execute(&*tx).await?`
@@ -1874,7 +2100,7 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 
 ##### 10.2.2.4 Add AlterTableStatement with SQLite Workarounds
 
-**SQLite Limitation Handling:** SQLite has limited ALTER TABLE support. We implement transparent workarounds using table recreation for unsupported operations, now using proper transaction support from 10.2.1.
+**SQLite Limitation Handling:** SQLite has limited ALTER TABLE support. We implement transparent workarounds using table recreation for unsupported operations, now using proper transaction support from 10.2.
 
 - [ ] Create `AlterTableStatement` struct in `packages/database/src/schema.rs`
   - [ ] Add field: `table_name: &'a str`, `operations: Vec<AlterOperation>`
@@ -1956,14 +2182,37 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 - [x] Transaction consumption on commit/rollback design prevents use-after-finish bugs
 - [x] Clear documentation and examples for transaction usage patterns
 - [x] All existing tests continue passing
-- [x] Backend-specific transaction implementations ready for 10.2.1.2-10.2.1.7
+- [x] Backend-specific transaction implementations ready for 10.2.1.3-10.2.1.11
 
-**Remaining for Phase 10.2:**
-- [ ] Full transaction support across all database backends (10.2.1.2-10.2.1.7)
+**Phase 10.2.1 Completed (NEW REQUIREMENT):**
+- [ ] Hybrid connection architecture documented and understood
+- [ ] Transaction isolation requirements clearly defined
+- [ ] Backward compatibility guarantees established
+- [ ] Performance implications of separate connections understood
+
+**Updated Requirements for Phase 10.2 (Transaction Isolation):**
+- [ ] **Full transaction isolation** across all database backends (10.2.1.3-10.2.1.8):
+  - [ ] **Zero transaction poisoning** - operations on database during transactions don't affect transactions
+  - [ ] **True isolation** - transaction operations don't affect database until commit
+  - [ ] **Consistent isolation semantics** - in-memory and file-based databases must behave identically
+  - [ ] **Acceptable serialization** - may use serialized access to achieve consistency if parallel isolation not feasible
+  - [ ] **Resource management** - proper connection cleanup and transaction lifecycle management
+- [ ] **Backward compatibility maintained** - no breaking changes to Database trait or usage
+- [ ] **Comprehensive isolation testing** - verify poisoning prevention and concurrent access
+  - [ ] **Isolation consistency test**: Verify identical behavior between in-memory and file-based databases
+  - [ ] **Serialization verification**: Test that uncommitted changes are not visible to other operations
+  - [ ] **Concurrent operation blocking**: Confirm operations wait during active transactions (serialized implementations)
+  - [ ] **Resource cleanup**: Verify proper transaction and connection lifecycle management
 - [ ] All schema operations available through type-safe builders (10.2.2)
 - [ ] SQLite workarounds use proper transactions (not exec_raw) (10.2.2)
 - [ ] Example uses zero `exec_raw` calls (10.2.3)
 - [ ] Same migration code works on all databases with automatic transaction handling (10.2.3)
+
+**CRITICAL SUCCESS CRITERIA (NEW):**
+- [ ] **No Transaction Poisoning**: Database operations during active transactions remain isolated
+- [ ] **Performance Acceptable**: Connection creation overhead doesn't significantly impact performance
+- [ ] **Resource Efficient**: Secondary connections created only when needed, properly cleaned up
+- [ ] **Production Ready**: All backends handle concurrent access and edge cases correctly
 
 ## Phase 11: Future Enhancements
 
@@ -2339,9 +2588,79 @@ test-utils = []
 7. ✅ Add comprehensive testing with robust test utilities (Phase 7)
 8. ✅ Migrate all existing tests to use new utilities (Phase 8.4)
 
+## Phase 14: Concurrent Transaction Optimization
+
+### Overview
+Optimize transaction implementations for maximum concurrency while maintaining correctness. This phase addresses performance optimizations that were intentionally deferred during initial implementation to prioritize correctness and consistency.
+
+### Phase 14.1: Rusqlite Concurrent Transactions
+
+**Goal**: Enable parallel read operations during transactions for file-based SQLite databases while maintaining serialized access for in-memory databases
+
+**Current State** (from Phase 10.2.1.3):
+- All rusqlite transactions will use serialized locking via `Arc<Mutex<()>>`
+- Both in-memory and file-based databases will use same connection with serialization
+- Correct but suboptimal for file-based database read concurrency
+- Ready for optimization without breaking existing functionality
+
+**Implementation Strategy**:
+```rust
+enum IsolationStrategy {
+    Serialized,    // Required for in-memory databases
+    Concurrent,    // Optimization for file-based databases
+}
+
+impl RusqliteDatabase {
+    fn get_isolation_strategy(&self) -> IsolationStrategy {
+        match self.path {
+            Some(ref p) if !p.to_string_lossy().is_empty()
+                && !p.to_string_lossy().contains(":memory:") => {
+                IsolationStrategy::Concurrent
+            }
+            _ => IsolationStrategy::Serialized
+        }
+    }
+}
+```
+
+**Adaptive Approach**:
+1. Runtime detection of database type (check path for ":memory:" or empty)
+2. Strategy selection:
+   - **In-memory databases**: Maintain serialized locking (required for correctness)
+   - **File-based databases**: Create separate connections for true parallelism
+3. Zero changes to public Database/DatabaseTransaction traits
+4. Maintain identical transaction isolation semantics
+
+**Expected Benefits**:
+- **File-based databases**: Concurrent read operations during transactions
+- **In-memory databases**: Unchanged behavior (correctness preserved)
+- **Performance improvement**: 2-10x throughput for read-heavy workloads with active transactions
+- **Write operations**: Remain serialized (SQLite internal limitation)
+
+### Phase 14.2: Additional Optimizations
+
+**Potential Areas**:
+- Connection pool tuning and adaptive sizing
+- Prepared statement caching across transactions
+- Batch operation optimization
+- Query plan caching for repeated operations
+
+**Implementation Priority**:
+- Phase 14.1 is high priority for production file-based database workloads
+- Phase 14.2 optimizations are lower priority, measurable performance improvements required
+
+**Success Criteria for Phase 14:**
+- File-based databases support concurrent reads during transactions
+- In-memory databases maintain serialized correctness and identical behavior
+- No API breaking changes or interface modifications
+- Performance benchmarks show measurable improvements for target workloads
+- All existing tests continue passing without modification
+- Zero regression in correctness or isolation guarantees
+
 **Remaining Work:**
 1. **Phase 9**: Implement migration listing functionality (optional, nice-to-have)
 2. **Phase 10**: Complete additional documentation and usage examples (optional)
 3. **Phase 11+**: Future enhancements (CLI, checksum validation, etc.) (optional)
+4. **Phase 14**: Concurrent transaction optimization (performance enhancement)
 
 **Production Readiness:** ✅ The migration system is fully functional and production-ready for HyperChad and other projects. All core functionality complete.

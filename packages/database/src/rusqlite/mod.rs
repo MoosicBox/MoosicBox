@@ -1,13 +1,19 @@
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::Deref,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use async_trait::async_trait;
 use rusqlite::{Connection, Row, Rows, Statement, types::Value};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 
 use crate::{
-    Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
-    UpdateStatement, UpsertMultiStatement, UpsertStatement,
+    Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
+    SelectQuery, UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
 };
 
@@ -15,11 +21,37 @@ use crate::{
 #[derive(Debug)]
 pub struct RusqliteDatabase {
     connection: Arc<Mutex<Connection>>,
+    transaction_active: Arc<AtomicBool>,
+    transaction_lock: Arc<Semaphore>,
 }
 
 impl RusqliteDatabase {
-    pub const fn new(connection: Arc<Mutex<Connection>>) -> Self {
-        Self { connection }
+    pub fn new(connection: Arc<Mutex<Connection>>) -> Self {
+        Self {
+            connection,
+            transaction_active: Arc::new(AtomicBool::new(false)),
+            transaction_lock: Arc::new(Semaphore::new(1)),
+        }
+    }
+}
+
+#[allow(clippy::module_name_repetitions)]
+#[derive(Debug)]
+pub struct RusqliteTransaction {
+    connection: Arc<Mutex<Connection>>,
+    committed: AtomicBool,
+    rolled_back: AtomicBool,
+    _permit: OwnedSemaphorePermit,
+}
+
+impl RusqliteTransaction {
+    pub const fn new(connection: Arc<Mutex<Connection>>, permit: OwnedSemaphorePermit) -> Self {
+        Self {
+            connection,
+            committed: AtomicBool::new(false),
+            rolled_back: AtomicBool::new(false),
+            _permit: permit,
+        }
     }
 }
 
@@ -219,6 +251,11 @@ impl From<RusqliteDatabaseError> for DatabaseError {
 #[async_trait]
 impl Database for RusqliteDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(select(
             &*self.connection.lock().await,
             query.table_name,
@@ -235,6 +272,11 @@ impl Database for RusqliteDatabase {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(find_row(
             &*self.connection.lock().await,
             query.table_name,
@@ -250,6 +292,11 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(delete(
             &*self.connection.lock().await,
             statement.table_name,
@@ -262,6 +309,11 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(delete(
             &*self.connection.lock().await,
             statement.table_name,
@@ -276,6 +328,11 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(insert_and_get_row(
             &*self.connection.lock().await,
             statement.table_name,
@@ -287,6 +344,11 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(update_and_get_rows(
             &*self.connection.lock().await,
             statement.table_name,
@@ -300,6 +362,11 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(update_and_get_row(
             &*self.connection.lock().await,
             statement.table_name,
@@ -313,6 +380,11 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(upsert(
             &*self.connection.lock().await,
             statement.table_name,
@@ -326,6 +398,11 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(upsert_and_get_row(
             &*self.connection.lock().await,
             statement.table_name,
@@ -339,6 +416,11 @@ impl Database for RusqliteDatabase {
         &self,
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         Ok(upsert_multi(
             &*self.connection.lock().await,
             statement.table_name,
@@ -351,6 +433,11 @@ impl Database for RusqliteDatabase {
     }
 
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        let _permit = self
+            .transaction_lock
+            .acquire()
+            .await
+            .expect("semaphore should never be closed");
         log::trace!("exec_raw: query:\n{statement}");
 
         self.connection
@@ -491,8 +578,297 @@ impl Database for RusqliteDatabase {
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
-        // TODO: Implement in 10.2.1.2
-        unimplemented!("Transaction support not yet implemented for rusqlite")
+        // Acquire exclusive access permit for serialized transaction behavior
+        let permit = self
+            .transaction_lock
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore should never be closed");
+
+        // Execute BEGIN TRANSACTION on the shared connection (same for all database types)
+        self.connection
+            .lock()
+            .await
+            .execute("BEGIN TRANSACTION", [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Set transaction active flag
+        self.transaction_active.store(true, Ordering::SeqCst);
+
+        // Create and return the transaction with the permit
+        Ok(Box::new(RusqliteTransaction::new(
+            self.connection.clone(),
+            permit,
+        )))
+    }
+}
+
+#[async_trait]
+impl Database for RusqliteTransaction {
+    async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        Ok(select(
+            &*self.connection.lock().await,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+            query.limit,
+        )?)
+    }
+
+    async fn query_first(
+        &self,
+        query: &SelectQuery<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        Ok(find_row(
+            &*self.connection.lock().await,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+        )?)
+    }
+
+    async fn exec_delete(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        Ok(delete(
+            &*self.connection.lock().await,
+            statement.table_name,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        Ok(delete(
+            &*self.connection.lock().await,
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )?
+        .into_iter()
+        .next())
+    }
+
+    async fn exec_insert(
+        &self,
+        statement: &InsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        Ok(insert_and_get_row(
+            &*self.connection.lock().await,
+            statement.table_name,
+            &statement.values,
+        )?)
+    }
+
+    async fn exec_update(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        Ok(update_and_get_rows(
+            &*self.connection.lock().await,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+
+    async fn exec_update_first(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        Ok(update_and_get_row(
+            &*self.connection.lock().await,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+
+    async fn exec_upsert(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        Ok(upsert(
+            &*self.connection.lock().await,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?)
+    }
+
+    async fn exec_upsert_first(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        Ok(upsert(
+            &*self.connection.lock().await,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )?
+        .into_iter()
+        .next()
+        .ok_or(DatabaseError::NoRow)?)
+    }
+
+    async fn exec_upsert_multi(
+        &self,
+        statement: &UpsertMultiStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut results = Vec::new();
+
+        for values in &statement.values {
+            results.extend(upsert(
+                &*self.connection.lock().await,
+                statement.table_name,
+                values,
+                None,
+                None,
+            )?);
+        }
+
+        Ok(results)
+    }
+
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        self.connection
+            .lock()
+            .await
+            .execute_batch(statement)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_create_table(
+        &self,
+        statement: &crate::schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        use std::fmt::Write;
+
+        let mut query = format!("CREATE TABLE {} (", statement.table_name);
+
+        let mut first_column = true;
+        for column in &statement.columns {
+            if first_column {
+                first_column = false;
+            } else {
+                query.push_str(", ");
+            }
+
+            query.push_str(&column.name);
+            query.push(' ');
+
+            // Convert DataType to SQL type string
+            match column.data_type {
+                crate::schema::DataType::VarChar(len) => write!(query, "VARCHAR({len})").unwrap(),
+                crate::schema::DataType::Text => query.push_str("TEXT"),
+                crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
+                crate::schema::DataType::SmallInt => query.push_str("SMALLINT"),
+                crate::schema::DataType::Int => query.push_str("INTEGER"),
+                crate::schema::DataType::BigInt => query.push_str("BIGINT"),
+                crate::schema::DataType::Real => query.push_str("REAL"),
+                crate::schema::DataType::Double => query.push_str("DOUBLE"),
+                crate::schema::DataType::Decimal(precision, scale) => {
+                    write!(query, "DECIMAL({precision},{scale})").unwrap();
+                }
+                crate::schema::DataType::DateTime => query.push_str("DATETIME"),
+            }
+
+            if !column.nullable {
+                query.push_str(" NOT NULL");
+            }
+
+            if let Some(default) = &column.default {
+                query.push_str(" DEFAULT ");
+                query.push_str(&default.to_sql());
+            }
+
+            if column.auto_increment {
+                query.push_str(" AUTOINCREMENT");
+            }
+        }
+
+        if let Some(primary_key) = &statement.primary_key {
+            query.push_str(", PRIMARY KEY (");
+            query.push_str(primary_key);
+            query.push(')');
+        }
+
+        for (source, target) in &statement.foreign_keys {
+            query.push_str(", FOREIGN KEY (");
+            query.push_str(source);
+            query.push_str(") REFERENCES ");
+            query.push_str(target);
+        }
+
+        query.push(')');
+
+        self.exec_raw(&query).await?;
+        Ok(())
+    }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        // Transactions cannot be nested
+        Err(DatabaseError::AlreadyInTransaction)
+    }
+}
+
+#[async_trait]
+impl DatabaseTransaction for RusqliteTransaction {
+    async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
+        if self.committed.load(Ordering::SeqCst) {
+            return Err(DatabaseError::TransactionCommitted);
+        }
+
+        if self.rolled_back.load(Ordering::SeqCst) {
+            return Err(DatabaseError::TransactionRolledBack);
+        }
+
+        self.connection
+            .lock()
+            .await
+            .execute("COMMIT", [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        self.committed.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn rollback(self: Box<Self>) -> Result<(), DatabaseError> {
+        if self.committed.load(Ordering::SeqCst) {
+            return Err(DatabaseError::TransactionCommitted);
+        }
+
+        if self.rolled_back.load(Ordering::SeqCst) {
+            return Err(DatabaseError::TransactionRolledBack);
+        }
+
+        self.connection
+            .lock()
+            .await
+            .execute("ROLLBACK", [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        self.rolled_back.store(true, Ordering::SeqCst);
+        Ok(())
     }
 }
 
@@ -1440,5 +1816,263 @@ impl Expression for RusqliteDatabaseValue {
 
     fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::DatabaseValue(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::query::{FilterableQuery, where_eq};
+    use rusqlite::Connection;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::Mutex;
+
+    fn create_test_db() -> RusqliteDatabase {
+        let conn = Connection::open_in_memory().expect("Failed to create in-memory database");
+
+        // Create a test table
+        conn.execute(
+            "CREATE TABLE test_table (id INTEGER PRIMARY KEY, name TEXT, value INTEGER)",
+            [],
+        )
+        .expect("Failed to create test table");
+
+        RusqliteDatabase::new(Arc::new(Mutex::new(conn)))
+    }
+
+    #[switchy_async::test]
+    async fn test_basic_transaction_commit() {
+        let db = create_test_db();
+
+        // Begin a transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Insert data within transaction
+        let insert_stmt = crate::query::insert("test_table")
+            .value("name", DatabaseValue::String("test_name".to_string()))
+            .value("value", DatabaseValue::Number(42));
+
+        insert_stmt
+            .execute(&*tx)
+            .await
+            .expect("Failed to insert in transaction");
+
+        // Commit the transaction
+        tx.commit().await.expect("Failed to commit transaction");
+
+        // Verify data was committed
+        let select_stmt = crate::query::select("test_table")
+            .columns(&["name", "value"])
+            .filter(Box::new(where_eq(
+                "name",
+                DatabaseValue::String("test_name".to_string()),
+            )));
+
+        let rows = select_stmt
+            .execute(&db)
+            .await
+            .expect("Failed to select after commit");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].get("name"),
+            Some(DatabaseValue::String("test_name".to_string()))
+        );
+        assert_eq!(rows[0].get("value"), Some(DatabaseValue::Number(42)));
+    }
+
+    #[switchy_async::test(real_time)]
+    async fn test_transaction_isolation_with_serialization() {
+        let db = create_test_db();
+
+        // Begin a transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Insert data within the transaction
+        let insert_stmt = crate::query::insert("test_table")
+            .value("name", DatabaseValue::String("tx_data".to_string()))
+            .value("value", DatabaseValue::Number(100));
+        insert_stmt
+            .execute(&*tx)
+            .await
+            .expect("Failed to insert in transaction");
+
+        // This is the key test: operations on the main database during a transaction
+        // should be blocked by the semaphore, ensuring perfect isolation
+        let select_stmt = crate::query::select("test_table").filter(Box::new(where_eq(
+            "name",
+            DatabaseValue::String("tx_data".to_string()),
+        )));
+
+        // This operation should block until the transaction is complete
+        // We can't test the blocking directly, but we can verify the isolation
+        let rows =
+            switchy_async::time::timeout(Duration::from_millis(100), select_stmt.execute(&db))
+                .await;
+
+        // The query should timeout because it's blocked by the transaction semaphore
+        assert!(
+            rows.is_err(),
+            "Main database operation should be blocked during transaction"
+        );
+
+        // Commit the transaction to release the semaphore
+        tx.commit().await.expect("Failed to commit transaction");
+
+        // Now the main database should be able to see the data
+        let select_stmt2 = crate::query::select("test_table").filter(Box::new(where_eq(
+            "name",
+            DatabaseValue::String("tx_data".to_string()),
+        )));
+        let rows = select_stmt2
+            .execute(&db)
+            .await
+            .expect("Failed to query after commit");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("value"), Some(DatabaseValue::Number(100)));
+    }
+
+    #[switchy_async::test(real_time)]
+    async fn test_concurrent_transactions_are_serialized() {
+        let db = Arc::new(create_test_db());
+
+        let db1 = Arc::clone(&db);
+        let db2 = Arc::clone(&db);
+
+        let start_time = std::time::Instant::now();
+
+        // Start two transactions concurrently
+        let tx1_task = switchy_async::task::spawn(async move {
+            let tx = db1
+                .begin_transaction()
+                .await
+                .expect("Failed to begin transaction 1");
+
+            // Insert data in first transaction
+            let insert_stmt = crate::query::insert("test_table")
+                .value("name", DatabaseValue::String("tx1_data".to_string()))
+                .value("value", DatabaseValue::Number(1));
+            insert_stmt
+                .execute(&*tx)
+                .await
+                .expect("Failed to insert in transaction 1");
+
+            // Simulate some work
+            switchy_async::time::sleep(Duration::from_millis(100)).await;
+
+            tx.commit().await.expect("Failed to commit transaction 1");
+            std::time::Instant::now()
+        });
+
+        let tx2_task = switchy_async::task::spawn(async move {
+            // Small delay to ensure tx1 starts first
+            switchy_async::time::sleep(Duration::from_millis(10)).await;
+
+            let tx = db2
+                .begin_transaction()
+                .await
+                .expect("Failed to begin transaction 2");
+
+            // Insert data in second transaction
+            let insert_stmt = crate::query::insert("test_table")
+                .value("name", DatabaseValue::String("tx2_data".to_string()))
+                .value("value", DatabaseValue::Number(2));
+            insert_stmt
+                .execute(&*tx)
+                .await
+                .expect("Failed to insert in transaction 2");
+
+            tx.commit().await.expect("Failed to commit transaction 2");
+            std::time::Instant::now()
+        });
+
+        let (tx1_end, tx2_end) = tokio::join!(tx1_task, tx2_task);
+        let tx1_end = tx1_end.expect("Transaction 1 task failed");
+        let tx2_end = tx2_end.expect("Transaction 2 task failed");
+
+        let tx1_total_time = tx1_end.duration_since(start_time);
+        let tx2_total_time = tx2_end.duration_since(start_time);
+
+        // The first transaction should have taken at least 100ms (the sleep time)
+        assert!(
+            tx1_total_time >= Duration::from_millis(100),
+            "Transactions should be serialized, total time was {tx1_total_time:?}"
+        );
+
+        // The second transaction should have waited for the first to complete
+        // Total time should be at least 100ms (the sleep time) proving serialization
+        assert!(
+            tx2_total_time >= Duration::from_millis(100),
+            "Transactions should be serialized, total time was {tx2_total_time:?}"
+        );
+
+        // Verify both transactions completed successfully
+        let select_stmt = crate::query::select("test_table");
+        let rows = select_stmt
+            .execute(db.as_ref())
+            .await
+            .expect("Failed to query after both transactions");
+        assert_eq!(
+            rows.len(),
+            2,
+            "Both transactions should have committed their data"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_transaction_rollback() {
+        let db = create_test_db();
+
+        // Begin a transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Insert data within transaction
+        let insert_stmt = crate::query::insert("test_table")
+            .value("name", DatabaseValue::String("rollback_test".to_string()))
+            .value("value", DatabaseValue::Number(100));
+
+        insert_stmt
+            .execute(&*tx)
+            .await
+            .expect("Failed to insert in transaction");
+
+        // Rollback the transaction
+        tx.rollback().await.expect("Failed to rollback transaction");
+
+        // Verify data was not committed
+        let select_stmt = crate::query::select("test_table").filter(Box::new(where_eq(
+            "name",
+            DatabaseValue::String("rollback_test".to_string()),
+        )));
+
+        let rows = select_stmt
+            .execute(&db)
+            .await
+            .expect("Failed to select after rollback");
+        assert_eq!(rows.len(), 0);
+    }
+
+    #[switchy_async::test]
+    async fn test_nested_transaction_rejection() {
+        let db = create_test_db();
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Try to begin nested transaction - should fail
+        let result = tx.begin_transaction().await;
+        assert!(matches!(result, Err(DatabaseError::AlreadyInTransaction)));
+
+        tx.rollback().await.expect("Failed to rollback");
     }
 }
