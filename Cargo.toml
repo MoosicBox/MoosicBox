@@ -545,7 +545,7 @@ uuid = { version = "1.18.0", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.0"
 whoami = "1.6.1"
-xml = "0.8.20"
+xml = "1.0.0"
 
 [patch.crates-io]
 # actix-files             = { git = "https://github.com/actix/actix-web" }
