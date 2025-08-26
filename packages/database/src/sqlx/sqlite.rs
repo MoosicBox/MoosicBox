@@ -591,6 +591,13 @@ impl Database for SqliteSqlxDatabase {
 
         Ok(())
     }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        // TODO: Implement in 10.2.1.3
+        unimplemented!("Transaction support not yet implemented for sqlite sqlx")
+    }
 }
 
 /// # Errors

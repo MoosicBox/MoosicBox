@@ -525,6 +525,13 @@ impl Database for MySqlSqlxDatabase {
 
         Ok(())
     }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        // TODO: Implement in 10.2.1.6
+        unimplemented!("Transaction support not yet implemented for mysql sqlx")
+    }
 }
 
 fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {

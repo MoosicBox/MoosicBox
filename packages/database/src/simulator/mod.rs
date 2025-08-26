@@ -106,4 +106,11 @@ impl Database for SimulationDatabase {
     ) -> Result<(), DatabaseError> {
         self.inner.exec_create_table(statement).await
     }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        // TODO: Implement in 10.2.1.7
+        unimplemented!("Transaction support not yet implemented for simulator")
+    }
 }

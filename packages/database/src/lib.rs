@@ -280,6 +280,12 @@ pub enum DatabaseError {
     #[cfg(feature = "schema")]
     #[error("Invalid schema: {0}")]
     InvalidSchema(String),
+    #[error("Already in transaction - nested transactions not supported")]
+    AlreadyInTransaction,
+    #[error("Transaction already committed")]
+    TransactionCommitted,
+    #[error("Transaction already rolled back")]
+    TransactionRolledBack,
 }
 
 impl DatabaseError {
@@ -405,6 +411,60 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         &self,
         statement: &schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError>;
+
+    /// Begin a database transaction
+    ///
+    /// # Errors
+    ///
+    /// * If transaction creation fails
+    /// * If called on a `DatabaseTransaction` (nested transactions not supported)
+    async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError>;
+}
+
+/// Database transaction trait that extends Database functionality
+///
+/// Transactions provide ACID properties for database operations. All Database trait
+/// methods are available within transactions, plus commit/rollback operations.
+///
+/// # Usage Pattern
+///
+/// ```rust,ignore
+/// let tx = db.begin_transaction().await?;
+///
+/// // Multiple operations on same transaction
+/// tx.insert("users").values(...).execute(&*tx).await?;
+/// tx.update("posts").set(...).execute(&*tx).await?;
+///
+/// // Commit consumes the transaction
+/// tx.commit().await?;
+/// ```
+///
+/// # Error Handling
+///
+/// Transactions do not have "poisoned" state - they remain usable after errors.
+/// Users decide whether to continue operations or rollback after failures.
+///
+/// # Manual Rollback Required
+///
+/// Transactions do NOT auto-rollback on drop. Users must explicitly call
+/// `commit()` or `rollback()` to avoid leaking database connections.
+#[async_trait]
+pub trait DatabaseTransaction: Database + Send + Sync {
+    /// Commit the transaction, consuming it
+    ///
+    /// # Errors
+    ///
+    /// * If the commit operation fails
+    /// * If the transaction was already committed or rolled back
+    async fn commit(self: Box<Self>) -> Result<(), DatabaseError>;
+
+    /// Rollback the transaction, consuming it
+    ///
+    /// # Errors
+    ///
+    /// * If the rollback operation fails
+    /// * If the transaction was already committed or rolled back
+    async fn rollback(self: Box<Self>) -> Result<(), DatabaseError>;
 }
 
 #[async_trait]

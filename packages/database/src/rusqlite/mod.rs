@@ -487,6 +487,13 @@ impl Database for RusqliteDatabase {
 
         Ok(())
     }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        // TODO: Implement in 10.2.1.2
+        unimplemented!("Transaction support not yet implemented for rusqlite")
+    }
 }
 
 impl From<Value> for DatabaseValue {

@@ -598,6 +598,13 @@ impl Database for PostgresDatabase {
 
         Ok(())
     }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        // TODO: Implement in 10.2.1.4
+        unimplemented!("Transaction support not yet implemented for postgres")
+    }
 }
 
 fn column_value(row: &Row, index: &str) -> Result<DatabaseValue, PostgresDatabaseError> {

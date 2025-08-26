@@ -695,6 +695,12 @@ mod tests {
         async fn exec_raw(&self, _statement: &str) -> Result<(), DatabaseError> {
             Ok(())
         }
+
+        async fn begin_transaction(
+            &self,
+        ) -> Result<Box<dyn switchy_database::DatabaseTransaction>, DatabaseError> {
+            unimplemented!("Transaction support not implemented for test database")
+        }
     }
 
     fn new_queue() -> DownloadQueue {

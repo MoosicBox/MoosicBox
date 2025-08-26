@@ -602,6 +602,13 @@ impl Database for PostgresSqlxDatabase {
 
         Ok(())
     }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        // TODO: Implement in 10.2.1.5
+        unimplemented!("Transaction support not yet implemented for postgres sqlx")
+    }
 }
 
 fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
