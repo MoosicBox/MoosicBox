@@ -177,9 +177,9 @@ dependencies = [
 
 [[package]]
 name = "actix-http"
-version = "3.11.0"
+version = "3.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44dfe5c9e0004c623edc65391dfd51daa201e7e30ebd9c9bedf873048ec32bc2"
+checksum = "44cceded2fb55f3c4b67068fa64962e2ca59614edc5b03167de9ff82ae803da0"
 dependencies = [
  "actix-codec",
  "actix-rt",
@@ -824,9 +824,9 @@ dependencies = [
 
 [[package]]
 name = "async-executor"
-version = "1.13.2"
+version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb812ffb58524bdd10860d7d974e2f01cc0950c2438a74ee5ec2e2280c6c4ffa"
+checksum = "497c00e0fd83a72a79a39fcbd8e3e2f055d6f6c7e025f3b3d91f4f8e76527fb8"
 dependencies = [
  "async-task",
  "concurrent-queue",
@@ -1284,9 +1284,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "1.90.0"
+version = "1.91.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "617c6a5f6c2509144cd1c6dc76db9623d50c7eefdac8a12289a0b493bb44fa72"
+checksum = "89bc79e5f3e170480a5c873e317444988a5a0f36f5e2eeab6798a7a8b7e6aaa2"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1328,9 +1328,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssooidc"
-version = "1.82.0"
+version = "1.83.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43326f724ba2cc957e6f3deac0ca1621a3e5d4146f5970c24c8a108dac33070f"
+checksum = "0b49e8fe57ff100a2f717abfa65bdd94e39702fa5ab3f60cddc6ac7784010c68"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1777,9 +1777,9 @@ checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
 
 [[package]]
 name = "bit_field"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc827186963e592360843fb5ba4b973e145841266c1357f7180c43526f2e5b61"
+checksum = "1e4b40c7323adcfc0a41c4b88143ed58346ff65a288fc144329c5c45e05d70c6"
 
 [[package]]
 name = "bitflags"
@@ -1839,7 +1839,7 @@ dependencies = [
  "anyhow",
  "bytesize",
  "cargo_metadata 0.22.0",
- "clap 4.5.45",
+ "clap 4.5.46",
  "glob",
  "log 0.4.27",
  "pretty_env_logger",
@@ -2193,9 +2193,9 @@ dependencies = [
 
 [[package]]
 name = "camino"
-version = "1.1.11"
+version = "1.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d07aa9a93b00c76f71bc35d598bed923f6d4f3a9ca5c24b7737ae1a292841c0"
+checksum = "dd0b03af37dad7a14518b7691d81acb0f8222604ad3d1b02f6b4bed5188c0cd5"
 dependencies = [
  "serde",
 ]
@@ -2445,9 +2445,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.45"
+version = "4.5.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fc0e74a703892159f5ae7d3aac52c8e6c392f5ae5f359c70b5881d60aaac318"
+checksum = "2c5e4fcf9c21d2e544ca1ee9d8552de13019a42aa7dbf32747fa7aaf1df76e57"
 dependencies = [
  "clap_builder",
  "clap_derive 4.5.45",
@@ -2455,9 +2455,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.44"
+version = "4.5.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3e7f4214277f3c7aa526a59dd3fbe306a370daee1f8b7b8c987069cd8e888a8"
+checksum = "fecb53a0e6fcfb055f686001bc2e2592fa527efaf38dbe81a6a9563562e57d41"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2518,7 +2518,7 @@ dependencies = [
 name = "clippier"
 version = "0.1.1"
 dependencies = [
- "clap 4.5.45",
+ "clap 4.5.46",
  "clippier_test_utilities",
  "git2",
  "insta",
@@ -5455,7 +5455,7 @@ name = "hyperchad_app"
 version = "0.1.4"
 dependencies = [
  "async-trait",
- "clap 4.5.45",
+ "clap 4.5.46",
  "flume",
  "hyperchad_actions",
  "hyperchad_renderer",
@@ -6106,9 +6106,9 @@ dependencies = [
 
 [[package]]
 name = "image-webp"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6970fe7a5300b4b42e62c52efa0187540a5bef546c60edaf554ef595d2e6f0b"
+checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
 dependencies = [
  "byteorder-lite",
  "quick-error",
@@ -7397,7 +7397,7 @@ dependencies = [
 name = "moosicbox_aconverter"
 version = "0.1.4"
 dependencies = [
- "clap 4.5.45",
+ "clap 4.5.46",
  "futures",
  "log 0.4.27",
  "moosicbox_assert",
@@ -7489,7 +7489,7 @@ dependencies = [
 name = "moosicbox_app_create_config"
 version = "0.1.4"
 dependencies = [
- "clap 4.5.45",
+ "clap 4.5.46",
  "log 0.4.27",
  "moosicbox_assert",
  "moosicbox_logging",
@@ -7951,7 +7951,7 @@ name = "moosicbox_image"
 version = "0.1.4"
 dependencies = [
  "bytes",
- "clap 4.5.45",
+ "clap 4.5.46",
  "image",
  "libvips",
  "log 0.4.27",
@@ -14093,7 +14093,7 @@ dependencies = [
 name = "switchy_async_cargo"
 version = "0.1.4"
 dependencies = [
- "clap 4.5.45",
+ "clap 4.5.46",
  "log 0.4.27",
  "pretty_env_logger",
  "syn 2.0.106",

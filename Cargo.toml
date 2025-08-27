@@ -325,7 +325,7 @@ actix = "0.13.5"
 actix-cors = "0.7.1"
 actix-files = "0.6.6"
 actix-htmx = "0.3.2"
-actix-http = "3.11.0"
+actix-http = "3.11.1"
 actix-rt = "2.10.0"
 actix-service = "2.0.3"
 actix-test = "0.1.5"
@@ -344,7 +344,7 @@ atomic_float = "1.1.0"
 audiopus = "0.2.0"
 aws-config = "1.8.5"
 aws-sdk-apigatewaymanagement = "1.82.0"
-aws-sdk-ssm = "1.90.0"
+aws-sdk-ssm = "1.91.0"
 base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.0"
@@ -355,7 +355,7 @@ chrono = { version = "0.4.41", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.45", features = ["derive"] }
+clap = { version = "4.5.46", features = ["derive"] }
 color-backtrace = { version = "0.7.0", default-features = false, features = [
     "use-btparse-crate",
 ] }
