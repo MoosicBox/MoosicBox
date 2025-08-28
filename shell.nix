@@ -59,13 +59,6 @@ let
 
   # macOS-specific packages
   darwinPackages = with pkgs; [
-    darwin.apple_sdk.frameworks.CoreAudio
-    darwin.apple_sdk.frameworks.AudioUnit
-    darwin.apple_sdk.frameworks.AudioToolbox
-    darwin.apple_sdk.frameworks.CoreFoundation
-    darwin.apple_sdk.frameworks.CoreServices
-    darwin.apple_sdk.frameworks.Security
-    darwin.apple_sdk.frameworks.SystemConfiguration
     portaudio
   ];
 
