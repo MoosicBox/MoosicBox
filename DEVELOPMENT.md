@@ -40,6 +40,9 @@ nix develop .#fltk-hyperchad       # Hyperchad FLTK interface
 # Egui-based applications
 nix develop .#egui-native          # Native app with Vulkan/WGPU
 nix develop .#egui-player          # Egui music player
+
+# Android development
+nix develop .#android              # Android SDK, NDK, Java, Gradle
 ```
 
 ### List All Available Environments
@@ -70,6 +73,15 @@ nix flake show
 - **Display**: X11, Wayland (Linux), Metal (macOS)
 - **Audio**: ALSA, PortAudio, PipeWire
 - **Use cases**: Modern GPU-accelerated interfaces, immediate mode GUIs
+
+### Android Development (`android`)
+
+- **SDK**: Android SDK with API levels 33, 34
+- **NDK**: Android NDK for native development
+- **Tools**: ADB, Gradle, platform tools
+- **Java**: OpenJDK 17 for Android builds
+- **Rust targets**: Automatically installs Android Rust targets
+- **Use cases**: Building Android apps with Tauri v2
 
 ## What's Included
 
@@ -106,6 +118,9 @@ nix develop .#tauri-solidjs --command cargo tauri dev
 
 # Work on Tauri app with HyperChad
 nix develop .#tauri-hyperchad-fltk --command cargo run --features moosicbox-app-native
+
+# Work on Android development
+nix develop .#android --command bash -c 'cargo tauri android init && cargo tauri android build'
 ```
 
 ### Using direnv (Automatic Loading)

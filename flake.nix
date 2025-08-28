@@ -23,7 +23,10 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
           inherit system overlays;
-          config = { };
+          config = {
+            android_sdk.accept_license = true;
+            allowUnfree = true;
+          };
         };
 
         # Rust toolchain from rust-overlay
@@ -66,6 +69,36 @@
             pipewire
             jack2
           ];
+
+        # Android SDK packages (for mobile development)
+        androidPackages = pkgs.androidenv.composeAndroidPackages {
+          cmdLineToolsVersion = "13.0";
+          toolsVersion = "26.1.1";
+          platformToolsVersion = "35.0.2";
+          buildToolsVersions = [
+            "30.0.3"
+            "34.0.0"
+          ];
+          platformVersions = [
+            "33"
+            "34"
+          ];
+          includeEmulator = false;
+          includeSystemImages = false;
+          systemImageTypes = [ "default" ];
+          abiVersions = [
+            "arm64-v8a"
+            "armeabi-v7a"
+            "x86"
+            "x86_64"
+          ];
+          includeSources = false;
+          includeNDK = true;
+          useGoogleAPIs = false;
+          useGoogleTVAddOns = false;
+          includeExtras = [ ];
+          extraLicenses = [ ];
+        };
 
         # ===== GUI BACKEND-SPECIFIC PACKAGES =====
 
@@ -328,6 +361,7 @@
               echo "  Tauri: .#tauri-solidjs, .#tauri-hyperchad-fltk, .#tauri-hyperchad-egui"
               echo "  Tauri Bundled: .#tauri-solidjs-bundled, .#tauri-hyperchad-fltk-bundled, .#tauri-hyperchad-egui-bundled"
               echo "  GUI: .#fltk-*, .#egui-*, .#gtk-*"
+              echo "  Android: .#android (compose with Tauri shells)"
               echo "  Full: .#tauri-full (all Tauri variants)"
 
               ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
@@ -467,6 +501,42 @@
           egui-player = mkEguiShell {
             name = "Egui Player";
             extraPackages = [ ];
+          };
+
+          # ===== ANDROID DEVELOPMENT =====
+
+          android = pkgs.mkShell {
+            buildInputs = [
+              androidPackages.androidsdk
+              pkgs.jdk17
+              pkgs.gradle
+            ];
+
+            shellHook = ''
+              echo "📱 Android SDK Environment"
+              echo "Java: $(java --version | head -1)"
+
+              export ANDROID_HOME="${androidPackages.androidsdk}/libexec/android-sdk"
+              export ANDROID_SDK_ROOT="$ANDROID_HOME"
+              export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk-bundle"
+              export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$PATH"
+
+              # Install Android targets for Rust if rustup is available
+              if command -v rustup &> /dev/null; then
+                echo "Installing Rust Android targets..."
+                rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android 2>/dev/null || true
+              fi
+
+              echo ""
+              echo "Android SDK: $ANDROID_HOME"
+              echo "Available: adb, gradle, fastboot"
+              echo ""
+              echo "For Android development, first enter this shell:"
+              echo "  nix develop .#android"
+              echo "Then in a separate terminal for Tauri:"
+              echo "  nix develop .#tauri-solidjs"
+              echo "Or create a combined shell for your specific use case."
+            '';
           };
 
         };
