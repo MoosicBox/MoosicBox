@@ -60,6 +60,7 @@ let
   # macOS-specific packages
   darwinPackages = with pkgs; [
     portaudio
+    clang
   ];
 
   # Platform-specific shell hooks
@@ -106,6 +107,8 @@ let
   '';
 
   darwinShellHook = ''
+    export CC="clang"
+    export CXX="clang++"
     export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.openssl ]}"
     export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-rpath,${pkgs.lib.makeLibraryPath [ pkgs.openssl ]}"
   '';
