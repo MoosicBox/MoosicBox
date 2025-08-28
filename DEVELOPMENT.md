@@ -1,108 +1,184 @@
 # MoosicBox Development Environment
 
-This project now uses **Nix Flakes** for reproducible development environments across Linux and macOS.
+This project uses **Nix Flakes** for reproducible development environments across Linux and macOS, with specialized shells for different GUI backends and components.
 
 ## Quick Start
 
-### Using Nix Flakes (Recommended)
+### Main Development Environment
 
 ```bash
-# Enter the development environment
+# Full development environment (all GUI backends)
 nix develop
 
-# Run a command in the dev environment
-nix develop --command cargo build
-
-# Enter the minimal CI environment
+# Minimal CI environment
 nix develop .#ci
 ```
 
-### Using direnv (Automatic)
-
-If you have direnv installed:
+### Component-Specific Environments
 
 ```bash
-# Allow the project to use direnv
-direnv allow
+# Server components
+nix develop .#server           # Main server with SQLite, libclang
+nix develop .#tunnel-server    # Tunnel server (minimal)
 
-# The environment will now load automatically when you cd into the project
-cd /path/to/MoosicBox  # Environment loads automatically
+# GTK-based applications
+nix develop .#gtk-marketing-site    # Marketing site
+
+# Tauri applications (all use GTK/WebKit base)
+nix develop .#tauri-solidjs              # Tauri with SolidJS/Astro frontend
+nix develop .#tauri-hyperchad-fltk       # Tauri with HyperChad FLTK backend
+nix develop .#tauri-hyperchad-egui       # Tauri with HyperChad Egui backend
+nix develop .#tauri-solidjs-bundled      # Tauri SolidJS with embedded server
+nix develop .#tauri-hyperchad-fltk-bundled  # Tauri HyperChad FLTK with embedded server
+nix develop .#tauri-hyperchad-egui-bundled  # Tauri HyperChad Egui with embedded server
+nix develop .#tauri-full                 # Full Tauri development (all backends)
+
+# FLTK-based applications
+nix develop .#fltk-renderer        # FLTK renderer
+nix develop .#fltk-hyperchad       # Hyperchad FLTK interface
+
+# Egui-based applications
+nix develop .#egui-native          # Native app with Vulkan/WGPU
+nix develop .#egui-player          # Egui music player
 ```
 
-### Using legacy nix-shell (Backwards compatible)
+### List All Available Environments
 
 ```bash
-nix-shell  # Still works via flake-compat wrapper
+nix flake show
 ```
+
+## GUI Backend-Specific Dependencies
+
+### GTK Backend (`gtk-*`)
+
+- **Graphics**: GTK3, WebKit, GStreamer, Cairo, Pango
+- **Display**: X11, Wayland support
+- **Audio**: ALSA, PulseAudio, GStreamer plugins
+- **Use cases**: Web-based UIs, traditional Linux desktop apps
+
+### FLTK Backend (`fltk-*`)
+
+- **Graphics**: FLTK, OpenGL, Mesa, Cairo
+- **Display**: X11 (primarily)
+- **Audio**: ALSA, PortAudio
+- **Use cases**: Lightweight native GUIs, cross-platform compatibility
+
+### Egui Backend (`egui-*`)
+
+- **Graphics**: Vulkan, WGPU, OpenGL
+- **Display**: X11, Wayland (Linux), Metal (macOS)
+- **Audio**: ALSA, PortAudio, PipeWire
+- **Use cases**: Modern GPU-accelerated interfaces, immediate mode GUIs
 
 ## What's Included
 
-The development environment provides:
-
-### Core Tools
+### Core Tools (All Environments)
 
 - **Rust toolchain** (stable, with rust-analyzer, clippy, rustfmt)
 - **Build tools** (cmake, ninja, pkg-config, gcc)
 - **Development tools** (cargo-watch, cargo-edit, cargo-audit)
 
-### Platform-specific Dependencies
+### Backend-Specific Tools
 
-#### Linux
+- **GTK environments**: WebKit, GStreamer, desktop integration
+- **FLTK environments**: FLTK toolkit, OpenGL, minimal dependencies
+- **Egui environments**: Vulkan validation layers, GPU drivers, WGPU
 
-- Audio: ALSA, PulseAudio, GStreamer
-- GUI: GTK3, WebKit, X11, Wayland
-- Graphics: OpenGL, Vulkan
-- System: udev, systemd
+### Platform Support
 
-#### macOS
+- **Linux**: Full support for all backends
+- **macOS**: Automatic clang setup, Metal framework for Egui
 
-- Audio: PortAudio, Core Audio
-- Compiler: Clang (Nix-provided for compatibility)
-- System: Security framework, SystemConfiguration
+## Development Workflow
+
+### Working on Specific Components
+
+```bash
+# Work on server code
+nix develop .#server --command cargo build -p moosicbox_server
+
+# Work on FLTK interface
+nix develop .#fltk-renderer --command cargo run --bin fltk_renderer
+
+# Work on Tauri app with SolidJS
+nix develop .#tauri-solidjs --command cargo tauri dev
+
+# Work on Tauri app with HyperChad
+nix develop .#tauri-hyperchad-fltk --command cargo run --features moosicbox-app-native
+```
+
+### Using direnv (Automatic Loading)
+
+Create `.envrc` files in specific packages:
+
+```bash
+# packages/server/.envrc
+use flake ../..#server
+
+# packages/app/tauri/.envrc
+use flake ../../..#tauri-solidjs
+```
+
+Then:
+
+```bash
+direnv allow
+cd packages/server  # Environment loads automatically
+```
 
 ## Environment Details
 
-- **Rust version**: Managed by rust-overlay (stable channel)
-- **Platform detection**: Automatic Linux/macOS dependency selection
-- **Library paths**: Automatically configured for GUI applications
-- **Compiler**: GCC on Linux, Clang on macOS
+### Rust Toolchain
 
-## Building the Project
+- **Version**: Latest stable via rust-overlay
+- **Extensions**: rust-src, rust-analyzer, clippy, rustfmt
+- **Consistency**: Same version across all environments
+
+### Platform Detection
+
+- **Linux**: Automatic GUI backend library configuration
+- **macOS**: Clang compiler, Metal/OpenGL framework setup
+- **Library paths**: Automatically configured per backend
+
+### Environment Variables
+
+- **GTK**: `GDK_BACKEND=x11,wayland`
+- **Egui**: `VK_ICD_FILENAMES` for Vulkan
+- **macOS**: `CC`, `CXX` set to Nix clang
+
+## Building and Testing
 
 ```bash
-# Using the flake environment
-nix develop --command cargo build
+# Build specific components
+nix develop .#server --command cargo build -p moosicbox_server
+nix develop .#fltk-renderer --command cargo build -p hyperchad
 
-# Or enter the shell first
-nix develop
-cargo build
+# Run tests with appropriate environment
+nix develop .#tauri-solidjs --command cargo test -p moosicbox_app
 
-# Build specific packages
-cargo build -p moosicbox_server
+# Format code (any environment)
+nix develop .#ci --command cargo fmt
 
-# Run tests
-cargo test
-
-# Format code
-cargo fmt
-
-# Lint code
-cargo clippy
+# Lint code (any environment)
+nix develop .#ci --command cargo clippy
 ```
 
 ## Package Building
 
-You can also build MoosicBox as a Nix package:
+Build MoosicBox as a Nix package:
 
 ```bash
-# Build the package
+# Build the complete package
 nix build
 
-# Run the package
+# Run the built package
 nix run
 ```
 
-## Updating Dependencies
+## Maintenance
+
+### Updating Dependencies
 
 ```bash
 # Update all flake inputs
@@ -112,39 +188,59 @@ nix flake update
 nix flake update rust-overlay
 ```
 
+### Cache Management
+
+```bash
+# Clean Nix store
+nix store gc
+
+# Clean build outputs
+cargo clean
+```
+
 ## Troubleshooting
+
+### GUI Backend Issues
+
+- **GTK not loading**: Check `GDK_BACKEND` environment variable
+- **FLTK compilation errors**: Ensure OpenGL libraries are available
+- **Egui/Vulkan errors**: Verify GPU drivers and Vulkan support
+
+### Audio Issues
+
+- **Linux**: Check ALSA/PulseAudio configuration
+- **macOS**: Verify PortAudio/CoreAudio access
 
 ### Missing Dependencies
 
-If you encounter missing system dependencies, they should be added to the appropriate platform section in `flake.nix`.
+Add missing packages to the appropriate backend section in `flake.nix`:
 
-### Rust Version Issues
+- `gtkPackages` for GTK backend dependencies
+- `fltkPackages` for FLTK backend dependencies
+- `eguiPackages` for Egui backend dependencies
 
-The rust-overlay ensures you get the latest stable Rust. If you need a specific version:
+## Architecture
 
-```bash
-# Check current version
-nix develop --command rustc --version
+The development environment is organized around GUI backends to avoid dependency conflicts:
+
+```
+MoosicBox Project
+├── Server Components (headless)
+│   ├── server (SQLite, libclang, bindgen)
+│   └── tunnel-server (minimal)
+├── GTK Backend Apps
+│   └── marketing-site (WebKit)
+├── Tauri Apps (GTK/WebKit base + specific backends)
+│   ├── tauri-solidjs (SolidJS/Astro frontend)
+│   ├── tauri-hyperchad-fltk (FLTK native backend)
+│   ├── tauri-hyperchad-egui (Egui native backend)
+│   └── tauri-*-bundled (with embedded server)
+├── FLTK Backend Apps
+│   ├── renderer (OpenGL)
+│   └── hyperchad (FLTK toolkit)
+└── Egui Backend Apps
+    ├── native (Vulkan/WGPU)
+    └── player (GPU-accelerated)
 ```
 
-### Cache Issues
-
-```bash
-# Clean Nix cache if needed
-nix store gc
-```
-
-## Migration Notes
-
-- **Old shell.nix**: Still works as a compatibility wrapper
-- **Environment variables**: Now set automatically per platform
-- **Library paths**: Automatically configured in the flake
-
-## Development Workflow
-
-1. Clone the repository
-2. Run `nix develop` or set up direnv
-3. Use standard Cargo commands
-4. All dependencies are automatically available
-
-The flake ensures consistent, reproducible development environments across all platforms and team members.
+This separation ensures each backend gets exactly the dependencies it needs without conflicts or bloat.

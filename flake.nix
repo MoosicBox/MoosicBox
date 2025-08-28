@@ -10,8 +10,15 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      rust-overlay,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
@@ -19,8 +26,20 @@
           config = { };
         };
 
-        # Common packages for all platforms
-        commonPackages = with pkgs; [
+        # Rust toolchain from rust-overlay
+        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          extensions = [
+            "rust-src"
+            "rust-analyzer"
+            "clippy"
+            "rustfmt"
+          ];
+        };
+
+        # ===== BASE PACKAGE SETS =====
+
+        # Minimal build tools (base for all shells)
+        baseBuildTools = with pkgs; [
           pkg-config
           gnumake
           gcc
@@ -29,146 +48,437 @@
           automake
           libtool
           cmake
-          ninja  # Add ninja for build systems that need it
+          ninja
           openssl
-          postgresql
-          vips
         ];
 
-        # Linux-specific packages
-        linuxPackages = pkgs.lib.optionals pkgs.stdenv.isLinux (with pkgs; [
-          alsa-lib
-          alsa-lib.dev
-          alsa-utils
-          udev.dev
-          wayland
-          wayland-protocols
-          libxkbcommon
-          webkitgtk_4_1
-          libsoup_3
-          gtk3
-          gst_all_1.gstreamer
-          gst_all_1.gst-plugins-base
-          gst_all_1.gst-plugins-good
-          gst_all_1.gst-plugins-bad
-          xorg.libX11
-          xorg.libXcursor
-          xorg.libXfixes
-          xorg.libXinerama
-          xorg.libxcb
-          xorg.xcbutil
-          xorg.xcbutilimage
-          xorg.xcbutilkeysyms
-          xorg.xcbutilwm # contains xcb-ewmh among others
-          vulkan-loader
-          pango
-          cairo
-          gdk-pixbuf
-          glib
-          at-spi2-atk # for one example (file dialog)
-          gtkd
-          gtk3.dev
-          gtk3-x11
-          gtk3-x11.dev
-          gsettings-desktop-schemas
-          pulseaudio
-          libGL
-          libGLU
-          mesa
-        ]);
+        # Audio packages (common to many apps)
+        audioPackages =
+          with pkgs;
+          [
+            portaudio # Cross-platform audio (wraps CoreAudio on macOS, ALSA on Linux)
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            alsa-lib
+            alsa-lib.dev
+            alsa-utils
+            pulseaudio
+            pipewire
+            jack2
+          ];
 
-        # macOS-specific packages
-        darwinPackages = pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs; [
-          portaudio
-          libiconv
-          # Use Nix-provided clang for better compatibility
-          clang
-        ]);
+        # ===== GUI BACKEND-SPECIFIC PACKAGES =====
 
-        # Rust toolchain from rust-overlay
-        rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [ "rust-src" "rust-analyzer" "clippy" "rustfmt" ];
-        };
+        # GTK/WebKit packages (for GTK-based apps and Tauri)
+        gtkPackages =
+          with pkgs;
+          [
+            # Cross-platform GTK packages
+            gtk3
+            gtk3.dev
+            glib
+            cairo
+            pango
+            gdk-pixbuf
+            at-spi2-atk
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            # Linux-specific GTK packages
+            gtk3-x11
+            gtk3-x11.dev
+            gtkd
+            webkitgtk_4_1
+            libsoup_3
+            gst_all_1.gstreamer
+            gst_all_1.gst-plugins-base
+            gst_all_1.gst-plugins-good
+            gst_all_1.gst-plugins-bad
+            gsettings-desktop-schemas
+          ];
+
+        # FLTK-specific packages
+        fltkPackages =
+          with pkgs;
+          [
+            fltk
+            fontconfig
+            freetype
+            cairo
+            pango
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            # X11 and OpenGL packages (Linux-specific)
+            xorg.libX11
+            xorg.libXcursor
+            xorg.libXfixes
+            xorg.libXinerama
+            xorg.libXft
+            xorg.libXext
+            xorg.libXrender
+            libGL
+            libGLU
+            mesa
+          ];
+
+        # Egui/wgpu packages (for egui-based apps)
+        eguiPackages =
+          with pkgs;
+          [
+            # Cross-platform graphics packages
+            vulkan-loader
+            vulkan-headers
+            vulkan-validation-layers
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            # Linux-specific display and graphics packages
+            xorg.libX11
+            xorg.libXcursor
+            xorg.libXrandr
+            xorg.libXi
+            libGL
+            mesa
+            wayland
+            wayland-protocols
+            libxkbcommon
+          ];
+
+        # Wayland/X11 base packages (Linux-only display servers)
+        displayServerPackages = pkgs.lib.optionals pkgs.stdenv.isLinux (
+          with pkgs;
+          [
+            xorg.libX11
+            xorg.libxcb
+            xorg.xcbutil
+            xorg.xcbutilimage
+            xorg.xcbutilkeysyms
+            xorg.xcbutilwm
+            xorg.libXinerama
+            wayland
+            wayland-protocols
+            libxkbcommon
+          ]
+        );
+
+        # ===== SHELL BUILDERS =====
+
+        # Basic shell for non-GUI components
+        mkBasicShell =
+          {
+            name,
+            packages ? [ ],
+          }:
+          pkgs.mkShell {
+            buildInputs = [ rustToolchain ] ++ baseBuildTools ++ packages;
+            shellHook = ''
+              echo "🎵 MoosicBox ${name} Environment"
+              echo "Rust: $(rustc --version)"
+            '';
+          };
+
+        # GTK-based GUI shell
+        mkGtkShell =
+          {
+            name,
+            extraPackages ? [ ],
+          }:
+          pkgs.mkShell {
+            buildInputs =
+              [ rustToolchain ]
+              ++ baseBuildTools
+              ++ audioPackages
+              ++ displayServerPackages
+              ++ gtkPackages
+              ++ extraPackages
+              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ];
+
+            shellHook = ''
+              echo "🎵 MoosicBox ${name} Environment (GTK Backend)"
+              echo "Rust: $(rustc --version)"
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+                export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
+                  pkgs.lib.makeLibraryPath (gtkPackages ++ displayServerPackages)
+                }"
+                export GDK_BACKEND=x11,wayland
+              ''}
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                export CC="${pkgs.clang}/bin/clang"
+                export CXX="${pkgs.clang}/bin/clang++"
+              ''}
+            '';
+          };
+
+        # FLTK-based GUI shell
+        mkFltkShell =
+          {
+            name,
+            extraPackages ? [ ],
+          }:
+          pkgs.mkShell {
+            buildInputs =
+              [ rustToolchain ]
+              ++ baseBuildTools
+              ++ audioPackages
+              ++ fltkPackages
+              ++ extraPackages
+              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ];
+
+            shellHook = ''
+              echo "🎵 MoosicBox ${name} Environment (FLTK Backend)"
+              echo "Rust: $(rustc --version)"
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+                export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath fltkPackages}"
+              ''}
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                export CC="${pkgs.clang}/bin/clang"
+                export CXX="${pkgs.clang}/bin/clang++"
+              ''}
+            '';
+          };
+
+        # Egui-based GUI shell
+        mkEguiShell =
+          {
+            name,
+            extraPackages ? [ ],
+          }:
+          pkgs.mkShell {
+            buildInputs =
+              [ rustToolchain ]
+              ++ baseBuildTools
+              ++ audioPackages
+              ++ eguiPackages
+              ++ extraPackages
+              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+                pkgs.clang
+                pkgs.darwin.apple_sdk.frameworks.Metal
+                pkgs.darwin.apple_sdk.frameworks.MetalKit
+              ];
+
+            shellHook = ''
+              echo "🎵 MoosicBox ${name} Environment (Egui/WGPU Backend)"
+              echo "Rust: $(rustc --version)"
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+                export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath eguiPackages}"
+                export VK_ICD_FILENAMES="${pkgs.vulkan-loader}/share/vulkan/icd.d/lvp_icd.x86_64.json"
+              ''}
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                export CC="${pkgs.clang}/bin/clang"
+                export CXX="${pkgs.clang}/bin/clang++"
+              ''}
+            '';
+          };
+
+        # Tauri-based app shell (extends GTK shell with Tauri needs)
+        mkTauriShell =
+          {
+            name,
+            extraPackages ? [ ],
+          }:
+          mkGtkShell {
+            name = "Tauri ${name}";
+            extraPackages =
+              with pkgs;
+              [
+                # Node.js ecosystem for Tauri development
+                nodejs
+                nodePackages.pnpm
+                # Tauri CLI will be installed via package.json
+              ]
+              ++ extraPackages;
+          };
 
       in
       {
         devShells = {
+          # ===== MAIN SHELLS =====
           default = pkgs.mkShell {
-            buildInputs = with pkgs; [ fontconfig ]
-              ++ [ rustToolchain ]
-              ++ commonPackages
-              ++ linuxPackages
-              ++ darwinPackages;
+            # Kitchen sink environment with everything
+            buildInputs =
+              [ rustToolchain ]
+              ++ baseBuildTools
+              ++ audioPackages
+              ++ displayServerPackages
+              ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
+              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+                pkgs.clang
+                pkgs.portaudio
+              ];
 
             packages = with pkgs; [
-              # Development tools
               cargo-watch
               cargo-edit
               cargo-audit
+              postgresql
+              vips
             ];
 
             shellHook = ''
-              echo "🎵 MoosicBox Development Environment"
+              echo "🎵 MoosicBox Full Development Environment"
               echo "Platform: ${system}"
               echo "Rust: $(rustc --version)"
-              echo "Cargo: $(cargo --version)"
               echo ""
+              echo "Available environments:"
+              echo "  Server: .#server, .#tunnel-server"
+              echo "  Tauri: .#tauri-solidjs, .#tauri-hyperchad-fltk, .#tauri-hyperchad-egui"
+              echo "  Tauri Bundled: .#tauri-solidjs-bundled, .#tauri-hyperchad-fltk-bundled, .#tauri-hyperchad-egui-bundled"
+              echo "  GUI: .#fltk-*, .#egui-*, .#gtk-*"
+              echo "  Full: .#tauri-full (all Tauri variants)"
 
               ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
-                # Linux-specific environment setup
-                export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath (with pkgs; [
-                  wayland libxkbcommon webkitgtk_4_1
-                  xorg.libX11 xorg.libXcursor xorg.libXfixes
-                  xorg.libXinerama xorg.libxcb xorg.xcbutil
-                  xorg.xcbutilimage xorg.xcbutilkeysyms xorg.xcbutilwm
-                  fontconfig at-spi2-atk gdk-pixbuf gtkd
-                  gtk3.dev gtk3-x11 gtk3-x11.dev openssl
-                ])}"
-
-                export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-rpath,:${pkgs.lib.makeLibraryPath (with pkgs; [
-                  wayland libxkbcommon webkitgtk_4_1 gtk3
-                  vulkan-loader pango cairo gdk-pixbuf
-                  libsoup_3 glib alsa-lib
-                ])}"
-
-                echo "LD_LIBRARY_PATH configured for Linux GUI libraries"
+                export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
+                  pkgs.lib.makeLibraryPath (gtkPackages ++ fltkPackages ++ eguiPackages ++ displayServerPackages)
+                }"
+                export GDK_BACKEND=x11,wayland
               ''}
 
               ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-                # macOS-specific environment setup
                 export CC="${pkgs.clang}/bin/clang"
                 export CXX="${pkgs.clang}/bin/clang++"
-                export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:${pkgs.lib.makeLibraryPath [ pkgs.openssl ]}"
-                export RUSTFLAGS="$RUSTFLAGS -C link-arg=-Wl,-rpath,${pkgs.lib.makeLibraryPath [ pkgs.openssl ]}"
-
-                echo "Using Nix-provided clang for macOS compilation"
               ''}
-
-              echo "Ready for development! Try: cargo build"
             '';
           };
 
-          # Minimal shell for CI/testing environments
-          ci = pkgs.mkShell {
-            buildInputs = [ rustToolchain ] ++ commonPackages;
-
-            shellHook = ''
-              echo "MoosicBox CI Environment"
-              echo "Rust: $(rustc --version)"
-            '';
+          ci = mkBasicShell {
+            name = "CI";
+            packages = [ ];
           };
+
+          # ===== SERVER COMPONENTS =====
+
+          server = mkBasicShell {
+            name = "Server";
+            packages = with pkgs; [
+              postgresql
+              sqlite
+              llvmPackages.libclang
+              glibc.dev
+            ];
+          };
+
+          tunnel-server = mkBasicShell {
+            name = "Tunnel Server";
+            packages = [ ];
+          };
+
+          # ===== GTK-BASED APPLICATIONS =====
+
+          gtk-marketing-site = mkGtkShell {
+            name = "Marketing Site";
+            extraPackages = with pkgs; [ vips ];
+          };
+
+          # ===== TAURI-BASED APPLICATIONS =====
+
+          # Base Tauri variants (external server)
+          tauri-solidjs = mkTauriShell {
+            name = "SolidJS";
+            extraPackages = [ ];
+          };
+
+          tauri-hyperchad-fltk = mkTauriShell {
+            name = "HyperChad FLTK";
+            extraPackages = fltkPackages;
+          };
+
+          tauri-hyperchad-egui = mkTauriShell {
+            name = "HyperChad Egui";
+            extraPackages = eguiPackages;
+          };
+
+          # Bundled variants (with embedded server)
+          tauri-solidjs-bundled = mkTauriShell {
+            name = "SolidJS Bundled";
+            extraPackages = with pkgs; [
+              postgresql
+              sqlite
+              vips
+            ];
+          };
+
+          tauri-hyperchad-fltk-bundled = mkTauriShell {
+            name = "HyperChad FLTK Bundled";
+            extraPackages =
+              fltkPackages
+              ++ (with pkgs; [
+                postgresql
+                sqlite
+                vips
+              ]);
+          };
+
+          tauri-hyperchad-egui-bundled = mkTauriShell {
+            name = "HyperChad Egui Bundled";
+            extraPackages =
+              eguiPackages
+              ++ (with pkgs; [
+                postgresql
+                sqlite
+                vips
+              ]);
+          };
+
+          # Full Tauri development (everything)
+          tauri-full = mkTauriShell {
+            name = "Full Development";
+            extraPackages =
+              fltkPackages
+              ++ eguiPackages
+              ++ (with pkgs; [
+                postgresql
+                sqlite
+                vips
+                # Additional dev tools
+                cargo-watch
+                cargo-edit
+                cargo-audit
+              ]);
+          };
+
+          # ===== FLTK-BASED APPLICATIONS =====
+
+          fltk-renderer = mkFltkShell {
+            name = "FLTK Renderer";
+            extraPackages = with pkgs; [ udev.dev ];
+          };
+
+          fltk-hyperchad = mkFltkShell {
+            name = "Hyperchad FLTK";
+            extraPackages = [ ];
+          };
+
+          # ===== EGUI-BASED APPLICATIONS =====
+
+          egui-native = mkEguiShell {
+            name = "Native App";
+            extraPackages =
+              with pkgs;
+              [
+                vulkan-loader
+              ]
+              ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ amdvlk ];
+          };
+
+          egui-player = mkEguiShell {
+            name = "Egui Player";
+            extraPackages = [ ];
+          };
+
         };
 
-        # Optional: Package definition for building MoosicBox
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "moosicbox";
           version = "0.1.0";
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
-          buildInputs = commonPackages ++ linuxPackages ++ darwinPackages;
-
-          # Skip tests during package build (they may require additional setup)
+          buildInputs = baseBuildTools ++ audioPackages;
           doCheck = false;
         };
-      });
+      }
+    );
 }
