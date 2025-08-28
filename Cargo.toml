@@ -400,7 +400,7 @@ insta = "1.43.1"
 itertools = "0.14.0"
 itoa = "1.0.15"
 kanal = "0.1.1"
-lambda_http = "0.16.0"
+lambda_http = "0.17.0"
 lambda_runtime = "0.14.4"
 libvips = { version = "1.7.1" }
 local-ip-address = "0.6.5"
