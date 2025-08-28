@@ -401,7 +401,7 @@ itertools = "0.14.0"
 itoa = "1.0.15"
 kanal = "0.1.1"
 lambda_http = "0.16.0"
-lambda_runtime = "0.14.3"
+lambda_runtime = "0.14.4"
 libvips = { version = "1.7.1" }
 local-ip-address = "0.6.5"
 log = { version = "0.4.27", features = ["release_max_level_trace"] }
