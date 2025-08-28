@@ -89,7 +89,7 @@ These items need further investigation or decision during implementation:
 
 - [x] Verify package builds ✅ **CRITICAL**
   - [x] Run `cargo build -p switchy_schema`
-    - ✓ Builds successfully with nix-shell
+    - ✓ Builds successfully with nix develop
   - [x] Ensure no compilation errors
     - ✓ Only 1 warning for unused field
   - [x] Verify workspace recognizes the new package

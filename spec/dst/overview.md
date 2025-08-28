@@ -963,7 +963,7 @@ cargo test --no-run -p moosicbox_web_server
 
 Before starting ANY task:
 
-1. If on nixos (which you likely are), run everything in a nix-shell via `nix-shell --run "..."` with the shell.nix in the repo root.
+1. If on nixos (which you likely are), run everything in a nix development shell via `nix develop --command <command>` using the flake.nix in the repo root.
 2. Ensure clean baseline: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows zero warnings
 3. Create a branch for your changes
 4. Make incremental changes, checking compilation after each
@@ -3232,7 +3232,7 @@ mod simulator_tests {
     - Thread-safe with Arc<RwLock<>> wrapper for concurrent access
 - [x] Update `SimulatorWebServer::new()` to initialize empty routes and state collections ✅ COMPLETED
     - Lines 189-193: build_simulator() initializes both collections with BTreeMap::new()
-    - Validation: Clean compilation with nix-shell cargo check
+    - Validation: Clean compilation with nix develop --command cargo check
 - [x] Add `register_route(&mut self, method: Method, path: &str, handler: RouteHandler)` method ✅ COMPLETED
     - Lines 166-168: Method implemented with `#[allow(unused)]` (TODO: remove in 5.1.7)
     - Pattern: Direct insertion into BTreeMap with (Method, String) key

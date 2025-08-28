@@ -31,7 +31,7 @@ cd packages/web_server/examples/openapi
 cargo run --features "actix,openapi-all"
 
 # With NixOS
-nix-shell --run "cargo run --example openapi --features 'actix,openapi-all'"
+nix develop .#server --command cargo run --example openapi --features 'actix,openapi-all'
 ```
 
 ### With Simulator (Testing Backend)
@@ -44,7 +44,7 @@ cd packages/web_server/examples/openapi
 cargo run --features "simulator,openapi-all"
 
 # With NixOS
-nix-shell --run "cargo run --example openapi --features 'simulator,openapi-all'"
+nix develop .#server --command cargo run --example openapi --features 'simulator,openapi-all'
 ```
 
 **Note**: The `openapi-all` feature enables all OpenAPI documentation formats (Swagger UI, ReDoc, RapiDoc, Scalar).

@@ -28,7 +28,7 @@ cd packages/web_server/examples/nested_get
 cargo run --features actix
 
 # With NixOS
-nix-shell --run "cargo run --example nested_get --features actix"
+nix develop .#server --command cargo run --example nested_get --features actix
 ```
 
 ### With Simulator (Testing Backend)
@@ -41,7 +41,7 @@ cd packages/web_server/examples/nested_get
 cargo run --features simulator
 
 # With NixOS
-nix-shell --run "cargo run --example nested_get --features simulator"
+nix develop .#server --command cargo run --example nested_get --features simulator
 ```
 
 ## Expected Output

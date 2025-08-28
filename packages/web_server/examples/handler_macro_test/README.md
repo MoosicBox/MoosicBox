@@ -34,7 +34,7 @@ cd packages/web_server/examples/handler_macro_test
 cargo run --bin test_actix --features actix
 
 # With NixOS
-nix-shell --run "cargo run --bin test_actix --example handler_macro_test --features actix"
+nix develop .#server --command cargo run --bin test_actix --example handler_macro_test --features actix
 ```
 
 ### Simulator Backend Tests
@@ -47,7 +47,7 @@ cd packages/web_server/examples/handler_macro_test
 cargo run --bin test_simulator --features simulator
 
 # With NixOS
-nix-shell --run "cargo run --bin test_simulator --example handler_macro_test --features simulator"
+nix develop .#server --command cargo run --bin test_simulator --example handler_macro_test --features simulator
 ```
 
 ### Debug Mode

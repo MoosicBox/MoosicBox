@@ -72,8 +72,8 @@ cargo run --bin basic_web_server
 # With simulator support
 cargo run --bin basic_web_server --features simulator
 
-# Using nix-shell (NixOS)
-nix-shell --run "cargo run --bin basic_web_server"
+# Using Nix development shell (NixOS)
+nix develop .#fltk-hyperchad --command cargo run --bin basic_web_server
 ```
 
 ### Environment Variables

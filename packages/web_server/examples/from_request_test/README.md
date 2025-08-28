@@ -34,7 +34,7 @@ cd packages/web_server/examples/from_request_test
 cargo run --bin test_sync_extraction --features actix
 
 # With NixOS
-nix-shell --run "cargo run --bin test_sync_extraction --example from_request_test --features actix"
+nix develop .#server --command cargo run --bin test_sync_extraction --example from_request_test --features actix
 ```
 
 ### Asynchronous Extraction Tests
@@ -47,7 +47,7 @@ cd packages/web_server/examples/from_request_test
 cargo run --bin test_async_extraction --features actix
 
 # With NixOS
-nix-shell --run "cargo run --bin test_async_extraction --example from_request_test --features actix"
+nix develop .#server --command cargo run --bin test_async_extraction --example from_request_test --features actix
 ```
 
 ### Build All Tests

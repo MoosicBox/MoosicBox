@@ -34,10 +34,10 @@ From the MoosicBox root directory:
 
 ```bash
 # Build and run
-nix-shell --run "cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server && cargo run"
+nix develop .#fltk-hyperchad --command bash -c "cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server && cargo run"
 
 # Or just build
-nix-shell --run "cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server && cargo build"
+nix develop .#fltk-hyperchad --command bash -c "cd packages/hyperchad/renderer/html/web_server/examples/basic_web_server && cargo build"
 ```
 
 The server will start on `http://localhost:8343` by default.

@@ -2,9 +2,10 @@
 
 ## NixOS Environment
 
-- **Always use shell.nix**: Run commands with `nix-shell --run "command"` on NixOS systems
-- **Example**: `nix-shell --run "cargo build"` or `nix-shell --run "pnpm lint"`
-- **Shell provides**: Rust toolchain, Node.js, audio libraries, databases, system dependencies
+- **Always use flake.nix**: Run commands with `nix develop --command <command>` on NixOS systems
+- **Example**: `nix develop --command cargo build` or `nix develop --command pnpm lint`
+- **Environment provides**: Rust toolchain, Node.js, audio libraries, databases, system dependencies
+- **Component-specific shells**: Use `nix develop .#server` for server-specific dependencies
 
 ## Git Usage Restrictions
 

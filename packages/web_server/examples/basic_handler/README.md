@@ -28,7 +28,7 @@ cd packages/web_server/examples/basic_handler
 cargo run --features actix
 
 # With NixOS
-nix-shell --run "cargo run --example basic_handler --features actix"
+nix develop .#server --command cargo run --example basic_handler --features actix
 ```
 
 ### With Simulator (Testing Backend)
@@ -41,7 +41,7 @@ cd packages/web_server/examples/basic_handler
 cargo run --features simulator
 
 # With NixOS
-nix-shell --run "cargo run --example basic_handler --features simulator"
+nix develop .#server --command cargo run --example basic_handler --features simulator
 ```
 
 ## Expected Output
