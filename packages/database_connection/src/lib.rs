@@ -360,6 +360,8 @@ pub async fn init_sqlite_sqlx(
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use switchy_database::sqlx::sqlite::SqliteSqlxDatabase;
 
+    const CONNECTION_POOL_SIZE: u8 = 5;
+
     #[cfg(feature = "simulator")]
     {
         return Ok(Box::new(
@@ -373,11 +375,19 @@ pub async fn init_sqlite_sqlx(
             .filename(db_location)
             .create_if_missing(true)
     } else {
-        connect_options.in_memory(true)
+        let test_id = std::thread::current().id();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let filename =
+            format!("file:memdb_{test_id:?}_{timestamp}:?mode=memory&cache=shared&uri=true");
+
+        connect_options.filename(filename)
     };
 
     let pool = SqlitePoolOptions::new()
-        .max_connections(5)
+        .max_connections(CONNECTION_POOL_SIZE.into())
         .connect_with(connect_options)
         .await?;
 
