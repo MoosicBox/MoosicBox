@@ -39,6 +39,10 @@
           ];
         };
 
+        rustToolchainNightly = pkgs.rust-bin.nightly.latest.default.override {
+          extensions = [ "llvm-tools-preview" ];
+        };
+
         # ===== BASE PACKAGE SETS =====
 
         # Minimal build tools (base for all shells)
@@ -358,6 +362,7 @@
               echo ""
               echo "Available environments:"
               echo "  Server: .#server, .#tunnel-server"
+              echo "  Coverage: .#coverage (nightly with llvm-tools-preview)"
               echo "  Tauri: .#tauri-solidjs, .#tauri-hyperchad-fltk, .#tauri-hyperchad-egui"
               echo "  Tauri Bundled: .#tauri-solidjs-bundled, .#tauri-hyperchad-fltk-bundled, .#tauri-hyperchad-egui-bundled"
               echo "  GUI: .#fltk-*, .#egui-*, .#gtk-*"
@@ -381,6 +386,53 @@
           ci = mkBasicShell {
             name = "CI";
             packages = [ ];
+          };
+
+          coverage = pkgs.mkShell {
+            name = "Coverage Testing";
+            buildInputs =
+              [
+                rustToolchainNightly # Nightly for llvm-tools-preview
+              ]
+              ++ baseBuildTools
+              ++ audioPackages
+              ++ displayServerPackages
+              ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
+              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+                pkgs.clang
+                pkgs.portaudio
+              ];
+
+            packages = with pkgs; [
+              cargo-watch
+              cargo-edit
+              cargo-audit
+              postgresql
+              vips
+            ];
+
+            shellHook = ''
+              echo "🎵 MoosicBox Coverage Environment (Nightly)"
+              echo "Rust: $(rustc --version)"
+              echo ""
+              echo "This shell uses nightly Rust with llvm-tools-preview for coverage."
+              echo "All dependencies from the default shell are included."
+              echo ""
+              echo "Run coverage with: cargo llvm-cov"
+              echo "Generate HTML report: cargo llvm-cov --html"
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+                export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${
+                  pkgs.lib.makeLibraryPath (gtkPackages ++ fltkPackages ++ eguiPackages ++ displayServerPackages)
+                }"
+                export GDK_BACKEND=x11,wayland
+              ''}
+
+              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                export CC="${pkgs.clang}/bin/clang"
+                export CXX="${pkgs.clang}/bin/clang++"
+              ''}
+            '';
           };
 
           # ===== SERVER COMPONENTS =====
