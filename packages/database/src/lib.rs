@@ -286,6 +286,10 @@ pub enum DatabaseError {
     TransactionCommitted,
     #[error("Transaction already rolled back")]
     TransactionRolledBack,
+    #[error("Transaction failed to start")]
+    TransactionFailed,
+    #[error("Unexpected result from operation")]
+    UnexpectedResult,
 }
 
 impl DatabaseError {

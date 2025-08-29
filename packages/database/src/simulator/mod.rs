@@ -20,14 +20,17 @@ impl SimulationDatabase {
     ///
     /// * If the database connection fails to open in memory
     pub fn new() -> Result<Self, DatabaseError> {
-        let library = ::rusqlite::Connection::open_in_memory()
-            .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
-        library
-            .busy_timeout(std::time::Duration::from_millis(10))
-            .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
-        let library = std::sync::Arc::new(tokio::sync::Mutex::new(library));
+        let db_url = "file::memory:?cache=shared".to_string();
+        let mut connections = Vec::new();
+        for _ in 0..5 {
+            let conn = ::rusqlite::Connection::open(&db_url)
+                .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
+            conn.busy_timeout(std::time::Duration::from_millis(10))
+                .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
+            connections.push(std::sync::Arc::new(tokio::sync::Mutex::new(conn)));
+        }
         Ok(Self {
-            inner: RusqliteDatabase::new(library),
+            inner: RusqliteDatabase::new(connections),
         })
     }
 }

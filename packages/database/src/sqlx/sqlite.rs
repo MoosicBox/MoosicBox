@@ -7,8 +7,8 @@ use std::{
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use sqlx::{
-    Column, Executor, Row, Sqlite, SqliteConnection, SqlitePool, Statement, TypeInfo, Value,
-    ValueRef,
+    Column, Executor, Row, Sqlite, SqliteConnection, SqlitePool, Statement, Transaction, TypeInfo,
+    Value, ValueRef,
     pool::PoolConnection,
     query::Query,
     sqlite::{SqliteArguments, SqliteRow, SqliteValueRef},
@@ -17,10 +17,25 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::{
-    Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
-    UpdateStatement, UpsertMultiStatement, UpsertStatement,
+    Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
+    SelectQuery, UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
 };
+
+#[allow(clippy::module_name_repetitions)]
+#[derive(Debug)]
+pub struct SqliteSqlxTransaction {
+    transaction: Arc<Mutex<Option<Transaction<'static, Sqlite>>>>,
+}
+
+impl SqliteSqlxTransaction {
+    #[must_use]
+    pub fn new(transaction: Transaction<'static, Sqlite>) -> Self {
+        Self {
+            transaction: Arc::new(Mutex::new(Some(transaction))),
+        }
+    }
+}
 
 trait ToSql {
     fn to_sql(&self, index: &AtomicU16) -> String;
@@ -595,8 +610,13 @@ impl Database for SqliteSqlxDatabase {
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
-        // TODO: Implement in 10.2.1.3
-        unimplemented!("Transaction support not yet implemented for sqlite sqlx")
+        // Get connection from pool and begin transaction
+        let tx = {
+            let pool = self.pool.lock().await;
+            pool.begin().await.map_err(SqlxDatabaseError::Sqlx)?
+        };
+
+        Ok(Box::new(SqliteSqlxTransaction::new(tx)))
     }
 }
 
@@ -1564,5 +1584,314 @@ impl Expression for SqliteDatabaseValue {
 
     fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::DatabaseValue(self)
+    }
+}
+
+#[async_trait]
+impl Database for SqliteSqlxTransaction {
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(select(
+            &mut *tx,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+            query.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_first(
+        &self,
+        query: &SelectQuery<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(find_row(
+            &mut *tx,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_delete(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(delete(
+            &mut *tx,
+            statement.table_name,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(delete(
+            &mut *tx,
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )
+        .await?
+        .into_iter()
+        .next())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_insert(
+        &self,
+        statement: &InsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(insert_and_get_row(&mut *tx, statement.table_name, &statement.values).await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_update(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(update_and_get_rows(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_update_first(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(update_and_get_row(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(upsert(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert_first(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(upsert_and_get_row(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert_multi(
+        &self,
+        statement: &UpsertMultiStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(upsert_multi(
+            &mut *tx,
+            statement.table_name,
+            statement.unique.as_ref().ok_or(DatabaseError::NoRow)?,
+            &statement.values,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.execute(sqlx::raw_sql(sql))
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "schema")]
+    async fn exec_create_table(
+        &self,
+        statement: &crate::schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        let mut query = "CREATE TABLE ".to_string();
+
+        if statement.if_not_exists {
+            query.push_str("IF NOT EXISTS ");
+        }
+
+        query.push_str(statement.table_name);
+        query.push('(');
+
+        for (i, column) in statement.columns.iter().enumerate() {
+            if i > 0 {
+                query.push_str(", ");
+            }
+
+            query.push_str(&column.name);
+            query.push(' ');
+            match column.data_type {
+                crate::schema::DataType::VarChar(size) => {
+                    query.push_str("VARCHAR(");
+                    query.push_str(&size.to_string());
+                    query.push(')');
+                }
+                crate::schema::DataType::Text => query.push_str("TEXT"),
+                crate::schema::DataType::Bool
+                | crate::schema::DataType::SmallInt
+                | crate::schema::DataType::Int
+                | crate::schema::DataType::BigInt => {
+                    query.push_str("INTEGER");
+                }
+                crate::schema::DataType::Double
+                | crate::schema::DataType::Decimal(..)
+                | crate::schema::DataType::Real => query.push_str("REAL"),
+                crate::schema::DataType::DateTime => query.push_str("DATETIME"),
+            }
+
+            if !column.nullable {
+                query.push_str(" NOT NULL");
+            }
+
+            if let Some(ref default) = column.default {
+                query.push_str(" DEFAULT ");
+                query.push_str(&default.to_sql(&AtomicU16::new(1)));
+            }
+        }
+
+        query.push(')');
+
+        tx.execute(sqlx::raw_sql(&query))
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        Err(DatabaseError::AlreadyInTransaction)
+    }
+}
+
+#[async_trait]
+impl DatabaseTransaction for SqliteSqlxTransaction {
+    #[allow(clippy::significant_drop_tightening)]
+    async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .take()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.commit().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn rollback(self: Box<Self>) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .take()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.rollback().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
     }
 }

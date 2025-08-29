@@ -291,15 +291,29 @@ pub fn init_sqlite_rusqlite(
         ));
     }
 
-    let library = db_location.map_or_else(
-        ::rusqlite::Connection::open_in_memory,
-        ::rusqlite::Connection::open,
-    )?;
-    library.busy_timeout(std::time::Duration::from_millis(10))?;
-    let library = std::sync::Arc::new(tokio::sync::Mutex::new(library));
+    let db_url = db_location.map_or_else(
+        || {
+            // Generate unique in-memory database name to avoid test conflicts
+            let test_id = std::thread::current().id();
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            format!("file:memdb_{test_id:?}_{timestamp}:?mode=memory&cache=shared&uri=true")
+        },
+        |p| p.to_string_lossy().into_owned(),
+    );
+
+    let mut connections = Vec::new();
+    for _ in 0..5 {
+        let conn = ::rusqlite::Connection::open(&db_url)?;
+        conn.busy_timeout(std::time::Duration::from_millis(10))?;
+
+        connections.push(std::sync::Arc::new(tokio::sync::Mutex::new(conn)));
+    }
 
     Ok(Box::new(switchy_database::rusqlite::RusqliteDatabase::new(
-        library,
+        connections,
     )))
 }
 
