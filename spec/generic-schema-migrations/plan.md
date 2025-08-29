@@ -1626,31 +1626,26 @@ No changes needed! The two places that use moosicbox_schema will continue to wor
 - [x] Database trait remains dyn-compatible - no breaking changes
 - [x] All existing code continues to compile and work
 
-##### 10.2.1.2 Transaction Isolation Architecture ❌ **CRITICAL DESIGN PHASE**
+##### 10.2.1.2 Transaction Isolation Architecture ✅ **COMPLETED**
 
 **Problem Identified:** The naive approach of sharing connections between Database and DatabaseTransaction instances causes transaction poisoning - operations on the original database during a transaction execute within that transaction, breaking isolation guarantees.
 
-**Solution:** Hybrid connection management approach that provides true transaction isolation while maintaining backward compatibility with the Database trait.
+**Solution Chosen:** Connection pooling approach that provides true transaction isolation with mature, battle-tested libraries.
 
-**Core Requirements:**
-- **No Breaking Changes**: Existing Database trait and usage patterns must work unchanged
-- **True Isolation**: Transactions must use separate connections to prevent poisoning
-- **Resource Efficiency**: Lazy secondary connection creation to minimize overhead
-- **Thread Safety**: Proper atomic state management for concurrent access
+**Architecture Decision: Connection Pool-Based Isolation**
 
-**Architecture Decision: Hybrid Connection Management**
+**Final Implementation Strategy:**
+- **SQLite (rusqlite)**: Connection pool with shared in-memory databases using SQLite URI syntax
+- **PostgreSQL (tokio-postgres)**: Use `deadpool-postgres` connection pool
+- **SqlX Backends**: Use native sqlx connection pools with `pool.begin()` API
+- **Database Simulator**: Simple snapshot-based transaction simulation
 
-Each database backend will implement:
-1. **Primary Connection**: Used for normal Database operations when no transaction is active
-2. **Separate Transaction Connections**: Each transaction gets its own dedicated connection
-3. **Secondary Connection**: Created lazily for non-transactional operations during active transactions
-4. **Atomic State Tracking**: `transaction_active` flag prevents connection conflicts
-
-**Backend-Specific Strategies:**
-- **SQLite (file-based)**: Create new Connection per transaction from file path
-- **PostgreSQL**: Use Client cloning or connection pool checkout
-- **MySQL**: Use connection pool checkout
-- **SqlX (all)**: Use PoolConnection checkout for transactions
+**Benefits of Pool-Based Approach:**
+- **No Manual Locking**: Pools handle all concurrency internally
+- **No Deadlock Risk**: Eliminates complex mutex/semaphore scenarios
+- **Production Ready**: Uses mature, widely-adopted connection pooling libraries
+- **Natural Isolation**: Each transaction gets dedicated connection from pool
+- **Better Performance**: Connection reuse and concurrent transaction support
 
 **Backward Compatibility Guarantee:**
 - All existing code using `&dyn Database` continues to work unchanged
@@ -1658,27 +1653,25 @@ Each database backend will implement:
 - Query execution patterns unchanged: `stmt.execute(&*tx)`
 - Same error types and handling
 
-**Performance Considerations:**
-- Connection creation overhead acceptable for transaction correctness
-- Lazy secondary connection creation minimizes resource usage
-- Prepared statement caching per connection maintains query performance
-- Connection pooling strategies per backend for optimal resource utilization
+**Implementation Notes:**
+This architecture was chosen over the complex "hybrid connection management" approach after successful implementation experience with SQLite connection pools. The pool-based approach is simpler, more reliable, and uses proven patterns from the Rust ecosystem.
 
 ## Implementation Trade-offs
 
-### Rusqlite Transaction Serialization
-**Decision**: Use serialized locking for all rusqlite transactions
+### SQLite Shared Memory Architecture
+**Decision**: Use connection pool with shared in-memory databases via SQLite URI syntax
 **Rationale**:
-- SQLite in-memory databases cannot share data between connections
-- Creating separate connections would result in empty databases for transactions
-- Serialization ensures consistency between in-memory and file-based databases
+- SQLite supports shared in-memory databases across connections using `file:name:?mode=memory&cache=shared&uri=true`
+- Eliminates the need for complex locking while maintaining data consistency
+- Connection pool provides natural isolation and concurrency
 
-**Trade-off**:
-- Non-transactional operations block during active transactions
-- Acceptable because SQLite already serializes write operations internally
-- Read concurrency optimization deferred to Phase 14
+**Benefits**:
+- True concurrent transaction support without deadlocks
+- Better performance through connection pooling
+- Eliminates complex locking logic (~150 lines of code removed)
+- Uses SQLite's native concurrent capabilities
 
-**Impact**: Correct isolation semantics at cost of some read concurrency
+**Impact**: Superior isolation and concurrency with simpler implementation
 
 ##### 10.2.1.3 Implement for SQLite (rusqlite) ✅ **COMPLETED**
 
@@ -1815,175 +1808,199 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 
 ##### 10.2.1.5 Implement for PostgreSQL (postgres)
 
-**Prerequisites:** ✅ Phase 10.2.1.4 complete - Pool-based isolation proven with sqlx, unified testing established
+**Prerequisites:** ✅ Phase 10.2.1.4 complete - Pool-based isolation proven with sqlx
 
-**Challenge:** tokio-postgres::Transaction has lifetime limitations. Apply hybrid connection architecture with Client cloning.
+**Status**: 🟡 **IN PROGRESS**
 
-**Hybrid Connection Architecture for tokio-postgres:**
+**Architecture: Connection Pool with deadpool-postgres**
 
-- [ ] Update `PostgresDatabase` struct for isolation:
-  - [ ] Keep existing `client: Arc<Mutex<Client>>` for backward compatibility
-  - [ ] Add `transaction_active: Arc<AtomicBool>` for atomic state tracking
-  - [ ] Add `secondary_client: Arc<Mutex<Option<Client>>>` for operations during transactions
-  - [ ] Store connection parameters for creating new clients
+**Key Decision:** Use `deadpool-postgres` for connection pooling to avoid manual locking and prevent deadlocks (learned from SQLite implementation experience).
 
-- [ ] Create `PostgresTransaction` struct with owned client:
-  - [ ] Store `client: Option<Client>` (OWNED client, not shared)
-  - [ ] Store `parent_flag: Arc<AtomicBool>` reference to parent's transaction_active flag
+**Implementation Steps:**
+
+- [ ] Add `deadpool-postgres` dependency:
+  - [ ] Add to root `Cargo.toml` workspace dependencies: `deadpool-postgres = "0.14.1"`
+  - [ ] Add to `packages/database/Cargo.toml` with `workspace = true`
+  - [ ] Ensure `tokio-postgres` version compatibility (deadpool-postgres 0.14.1 uses tokio-postgres 0.7)
+
+- [ ] Refactor `PostgresDatabase` to use connection pool:
+  - [ ] Change field from `client: Client` to `pool: deadpool_postgres::Pool`
+  - [ ] Remove `handle: JoinHandle` field (pool manages connections)
+  - [ ] Update constructor to accept `Pool` instead of `Client` and `Connection`
+  - [ ] Update all database operations to acquire connections from pool using `pool.get().await?`
+
+- [ ] Create `PostgresTransaction` struct:
+  - [ ] Store `client: deadpool_postgres::Object` (pooled connection wrapper)
+  - [ ] Store `txn: tokio_postgres::Transaction<'static>` for the actual transaction
   - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
-  - [ ] Implement `Drop` trait to clear parent flag and auto-rollback if needed
+  - [ ] No mutex or locking needed - pool provides isolation
 
-- [ ] Update `begin_transaction()` in PostgresDatabase:
-  - [ ] Atomically check and set `transaction_active` flag
-  - [ ] Create new Client connection for transaction (clone connection params)
-  - [ ] Execute "BEGIN" command on new client
-  - [ ] Return `PostgresTransaction` with owned client
+- [ ] Implement `Database` trait for `PostgresTransaction`:
+  - [ ] All operations delegate to the transaction
+  - [ ] Use transaction's connection for all queries
+  - [ ] Proper error handling for transaction state
 
-- [ ] Update Database trait implementation in PostgresDatabase:
-  - [ ] Modify write operations to check transaction state
-  - [ ] Use secondary client when transaction is active (lazy creation)
-  - [ ] PostgreSQL supports concurrent reads and writes better than SQLite
+- [ ] Implement `DatabaseTransaction` trait for `PostgresTransaction`:
+  - [ ] `commit()`: Use native tokio-postgres transaction commit
+  - [ ] `rollback()`: Use native tokio-postgres transaction rollback
+  - [ ] State validation to prevent double commit/rollback
 
-- [ ] Implement `DatabaseTransaction` trait for PostgresTransaction:
-  - [ ] Implement all Database trait methods using owned client
-  - [ ] Implement `commit()` and `rollback()` using client transaction commands
-  - [ ] Proper state validation and cleanup
+- [ ] Update `begin_transaction()` in `PostgresDatabase`:
+  - [ ] Get client from pool: `let client = self.pool.get().await?`
+  - [ ] Start transaction: `let txn = client.transaction().await?`
+  - [ ] Return wrapped transaction: `Box::new(PostgresTransaction::new(client, txn))`
 
-- [ ] Add comprehensive tests including client management and isolation guarantees
+- [ ] Update database initialization in `database_connection`:
+  - [ ] Create `deadpool_postgres::Config` from connection parameters
+  - [ ] Build pool with appropriate size (e.g., max_size = 5 like SQLite pool)
+  - [ ] Configure pool settings (timeouts, recycling method, etc.)
+  - [ ] Pass pool to `PostgresDatabase::new(pool)`
+
+- [ ] Add comprehensive tests:
+  - [ ] Transaction commit and rollback
+  - [ ] Isolation verification (no transaction poisoning)
+  - [ ] Concurrent transaction support
+  - [ ] Connection pool behavior
+  - [ ] Test pool exhaustion handling
+
+**Benefits of this approach:**
+- ✅ **No manual locking** - Pool handles all concurrency
+- ✅ **No deadlock risk** - No mutexes or semaphores
+- ✅ **Consistent pattern** - Matches sqlx pool-based implementations
+- ✅ **Production ready** - deadpool-postgres is mature and widely used (7M+ downloads)
+- ✅ **Better performance** - Connection pooling for concurrent operations
+
+**Implementation Notes:**
+- Follow the pattern established by `SqliteSqlxDatabase` and `SqliteSqlxTransaction`
+- Use native tokio-postgres transaction API, not raw SQL commands
+- Pool provides natural isolation - each transaction gets its own connection
+- No need for complex hybrid architecture or secondary connections
+- `deadpool_postgres::Object` is the pooled connection wrapper (similar to sqlx's `PoolConnection`)
 
 ##### 10.2.1.6 Implement for PostgreSQL (sqlx)
 
-**Prerequisites:** ✅ Phase 10.2.1.5 complete - PostgreSQL-specific isolation patterns established
+**Prerequisites:** ✅ Phase 10.2.1.5 complete - PostgreSQL pooling pattern established
 
-**Hybrid Connection Architecture for PostgreSQL sqlx:**
+**Architecture: Native sqlx Pool Transaction Support**
 
-- [ ] Update `PostgresSqlxDatabase` struct following established pattern:
-  - [ ] Keep existing `pool: Arc<Pool<Postgres>>` for backward compatibility
-  - [ ] Add `transaction_active: Arc<AtomicBool>` for atomic state tracking
-  - [ ] Add `secondary_conn: Arc<Mutex<Option<PoolConnection<Postgres>>>>` for operations during transactions
+**Implementation Steps:**
 
-- [ ] Create `PostgresSqlxTransaction` struct with owned connection:
-  - [ ] Store `connection: Option<PoolConnection<Postgres>>` (OWNED pool connection)
-  - [ ] Store `parent_flag: Arc<AtomicBool>` reference to parent's transaction_active flag
-  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
-  - [ ] Implement `Drop` trait for proper resource cleanup
+- [ ] Create `PostgresSqlxTransaction` struct:
+  - [ ] Store `transaction: Arc<Mutex<Option<Transaction<'static, Postgres>>>>` (sqlx native transaction)
+  - [ ] No additional fields needed - sqlx handles everything
 
-- [ ] Apply hybrid connection management pattern established in previous phases
-- [ ] Implement transaction isolation using dedicated pool connections
-- [ ] Add comprehensive tests including PostgreSQL-specific concurrency scenarios
+- [ ] Implement `begin_transaction()` in `PostgresSqlxDatabase`:
+  - [ ] Simply use: `let tx = self.pool.lock().await.begin().await?`
+  - [ ] Return: `Box::new(PostgresSqlxTransaction::new(tx))`
+
+- [ ] Follow exact pattern from `SqliteSqlxTransaction` implementation
+- [ ] No hybrid architecture, no secondary connections, no transaction_active flags
+- [ ] sqlx pool handles all isolation automatically
+
+**Note:** This is trivial - just copy SQLite sqlx pattern with Postgres types
 
 ##### 10.2.1.7 Implement for MySQL (sqlx)
 
-**Prerequisites:** ✅ Phase 10.2.1.6 complete - All major database patterns established
+**Prerequisites:** ✅ Phase 10.2.1.6 complete - sqlx pattern established for all databases
 
-**Hybrid Connection Architecture for MySQL sqlx:**
+**Architecture: Native sqlx Pool Transaction Support**
 
-- [ ] Update `MysqlSqlxDatabase` struct following established sqlx pattern:
-  - [ ] Keep existing `pool: Arc<Pool<MySql>>` for backward compatibility
-  - [ ] Add `transaction_active: Arc<AtomicBool>` for atomic state tracking
-  - [ ] Add `secondary_conn: Arc<Mutex<Option<PoolConnection<MySql>>>>` for operations during transactions
+**Implementation Steps:**
 
-- [ ] Create `MysqlSqlxTransaction` struct with owned connection:
-  - [ ] Store `connection: Option<PoolConnection<MySql>>` (OWNED pool connection)
-  - [ ] Store `parent_flag: Arc<AtomicBool>` reference to parent's transaction_active flag
-  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
-  - [ ] Implement `Drop` trait for proper resource cleanup
+- [ ] Create `MysqlSqlxTransaction` struct:
+  - [ ] Store `transaction: Arc<Mutex<Option<Transaction<'static, MySql>>>>` (sqlx native transaction)
+  - [ ] No additional fields needed - sqlx handles everything
 
-- [ ] Apply hybrid connection management pattern consistent with other sqlx backends
-- [ ] Implement transaction isolation using dedicated pool connections
-- [ ] Add comprehensive tests including MySQL-specific isolation behavior
-  - [ ] Verify transaction remains valid for multiple operations
-- [ ] Add comprehensive unit tests
+- [ ] Implement `begin_transaction()` in `MysqlSqlxDatabase`:
+  - [ ] Simply use: `let tx = self.pool.lock().await.begin().await?`
+  - [ ] Return: `Box::new(MysqlSqlxTransaction::new(tx))`
+
+- [ ] Follow exact pattern from `SqliteSqlxTransaction` implementation
+- [ ] No hybrid architecture, no secondary connections, no transaction_active flags
+- [ ] sqlx pool handles all isolation automatically
+
+**Note:** Identical to PostgreSQL sqlx - just different type parameters
 
 ##### 10.2.1.8 Implement for Database Simulator
 
-**Prerequisites:** ✅ Phase 10.2.1.7 complete - All production database backends support isolation
+**Prerequisites:** ✅ Phase 10.2.1.7 complete - All production backends complete
 
-**Hybrid Architecture for Simulator (Test Environment):**
+**Architecture: Simple In-Memory Transaction Simulation**
 
-- [ ] Update `SimulatorDatabase` struct for isolation testing:
-  - [ ] Add `transaction_active: Arc<AtomicBool>` consistent with other backends
-  - [ ] Add state tracking for operations during transactions
-  - [ ] Support testing isolation scenarios
+**Implementation Steps:**
 
-- [ ] Create `SimulatorTransaction` struct following established pattern:
-  - [ ] Store `parent_flag: Arc<AtomicBool>` reference for consistency
-  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool` for state tracking
-  - [ ] Track all operations performed within transaction for test verification
-  - [ ] Support operation rollback by reverting stored operations
+- [ ] Create `SimulatorTransaction` struct:
+  - [ ] Store snapshot of current state when transaction begins
+  - [ ] Store list of operations performed within transaction
+  - [ ] Store `committed: AtomicBool` and `rolled_back: AtomicBool`
 
-- [ ] Implement mock transaction isolation:
-  - [ ] Separate transaction operations from main database operations
-  - [ ] Support testing transaction poisoning prevention
-  - [ ] Enable verification of isolation guarantees in tests
+- [ ] Implement transaction isolation:
+  - [ ] Operations within transaction work on snapshot copy
+  - [ ] Commit applies all operations to main database
+  - [ ] Rollback discards snapshot and operations
 
-- [ ] Add extensive testing capabilities for migration and isolation verification
+- [ ] No complex locking or secondary connections needed
+- [ ] Simple snapshot-based isolation for testing
+
+**Note:** Keep it simple - this is just for testing
 
 ##### 10.2.1.9 Add Comprehensive Transaction and Isolation Tests
 
-- [ ] **Backend-specific functionality tests** for each database implementation:
-  - [ ] Test commit flow for all backends (rusqlite, sqlx sqlite/postgres/mysql, simulator)
+- [ ] **Backend-specific functionality tests**:
+  - [ ] Test commit flow for all backends (rusqlite, deadpool-postgres, sqlx sqlite/postgres/mysql, simulator)
   - [ ] Test rollback flow for all backends
   - [ ] Test manual rollback requirement (no auto-rollback on drop)
   - [ ] Test state tracking (prevent double-commit/rollback)
   - [ ] Test error handling during commit/rollback operations
 
-- [ ] **CRITICAL: Transaction Isolation Tests** (NEW REQUIREMENT):
-  - [ ] **Poison Prevention Tests**: Verify operations on original database during transaction don't affect transaction
-  - [ ] **Isolation Verification**: Verify transaction operations don't affect original database until commit
-  - [ ] **Concurrent Access Tests**: Test multiple threads accessing database during active transaction
-  - [ ] **State Synchronization**: Test `transaction_active` flag prevents conflicts
-  - [ ] **Resource Management**: Verify connections are properly isolated and cleaned up
+- [ ] **Transaction Isolation Tests**:
+  - [ ] Verify uncommitted changes not visible outside transaction
+  - [ ] Verify concurrent transactions don't interfere
+  - [ ] Test transaction rollback preserves pre-transaction state
+  - [ ] Test all CRUD operations within transactions
+  - [ ] Test schema operations (CREATE TABLE, etc.) within transactions
 
-- [ ] **Connection management tests** (UPDATED):
-  - [ ] Test hybrid connection architecture for all backends
-  - [ ] Test secondary connection creation (lazy initialization)
-  - [ ] Test pool connection behavior (sqlx backends) with dedicated transaction connections
-  - [ ] Test connection cleanup on transaction completion
-  - [ ] Test proper connection ownership (transactions own their connections)
+- [ ] **Connection Pool Tests** (for pooled backends):
+  - [ ] Test pool exhaustion handling (deadpool-postgres, sqlx backends)
+  - [ ] Test connection recycling after transaction completion
+  - [ ] Test concurrent transaction creation from same pool
+  - [ ] Test proper connection cleanup on transaction drop
 
-- [ ] **Integration tests with Database operations**:
-  - [ ] Test all CRUD operations within transactions (unchanged)
-  - [ ] Test schema operations (CREATE TABLE, etc.) within transactions (unchanged)
-  - [ ] Test transaction rollback preserves pre-transaction state (unchanged)
-  - [ ] **NEW**: Test operations on database continue working during active transactions
-  - [ ] **NEW**: Test concurrent read operations during active transactions
-
-- [ ] **Transaction ergonomics tests** (unchanged):
+- [ ] **Transaction Ergonomics Tests**:
   - [ ] Test `&*tx` dereference pattern with all statement types
   - [ ] Test multiple operations on single transaction
   - [ ] Test error in middle of transaction doesn't prevent further operations
   - [ ] Verify begin_transaction() on transaction returns appropriate error
   - [ ] Test transaction consumption on commit/rollback (compile-time safety)
 
-**UPDATED: Hybrid Connection Architecture Summary**
+**Transaction Architecture Summary**
 
-Each backend implements the following isolation pattern:
+Each backend implements transaction support using connection pooling for isolation:
 
 **SQLite (rusqlite)**:
-- Primary: `Arc<Mutex<Connection>>` for normal operations
-- Transaction: `Option<Connection>` (owned) created from database path
-- Secondary: `Arc<Mutex<Option<Connection>>>` for operations during transactions
-
-**SqlX Backends (sqlite, postgres, mysql)**:
-- Primary: `Arc<Pool<DatabaseType>>` for normal operations
-- Transaction: `Option<PoolConnection<DatabaseType>>` (owned) acquired from pool
-- Secondary: `Arc<Mutex<Option<PoolConnection<DatabaseType>>>>` for operations during transactions
+- Uses connection pool with shared in-memory databases
+- Each transaction gets dedicated connection from pool
 
 **PostgreSQL (tokio-postgres)**:
-- Primary: `Arc<Mutex<Client>>` for normal operations
-- Transaction: `Option<Client>` (owned) created with connection parameters
-- Secondary: `Arc<Mutex<Option<Client>>>` for operations during transactions
+- Uses `deadpool-postgres` connection pool
+- Native tokio-postgres transaction API with pooled connections
 
-**All Backends Share:**
-- `transaction_active: Arc<AtomicBool>` for atomic state tracking
-- `parent_flag` reference in transactions to clear parent state
-- Lazy secondary connection creation to minimize resource usage
-- `Drop` trait implementation for proper cleanup
+**SqlX Backends (sqlite, postgres, mysql)**:
+- Uses native sqlx connection pools
+- Native sqlx transaction API (`pool.begin()`)
+
+**Database Simulator**:
+- Simple snapshot-based transaction simulation
+- No connection pooling needed - in-memory operations only
+
+**Common Benefits:**
+- No manual locking or deadlock risk
+- Natural isolation through connection pooling
+- Production-ready implementations with mature libraries
 
 ##### 10.2.1.10 Validate Backward Compatibility and Performance
 
-**CRITICAL VALIDATION PHASE**: Ensure hybrid architecture maintains all promises
+**CRITICAL VALIDATION PHASE**: Ensure pool-based transaction architecture maintains all promises
 
 - [ ] **Zero Breaking Changes Verification**:
   - [ ] Verify all existing Database trait usage patterns continue working unchanged
@@ -1992,22 +2009,22 @@ Each backend implements the following isolation pattern:
   - [ ] Validate error types and handling remain consistent
 
 - [ ] **Performance Impact Assessment**:
-  - [ ] Measure connection creation overhead for transactions
-  - [ ] Compare performance with/without secondary connections
-  - [ ] Evaluate lazy secondary connection creation benefits
-  - [ ] Test connection pool resource utilization
+  - [ ] Measure connection pool overhead vs single connections
+  - [ ] Test transaction throughput with connection pooling
+  - [ ] Evaluate pool configuration impact (pool size, timeouts)
+  - [ ] Compare performance across different backends
 
 - [ ] **Resource Management Verification**:
   - [ ] Verify no connection leaks under normal operation
   - [ ] Test proper cleanup on transaction Drop
-  - [ ] Validate secondary connections are cleaned up when not needed
-  - [ ] Ensure transaction_active flag is always properly cleared
+  - [ ] Validate pool connections are returned properly
+  - [ ] Ensure pool size limits are respected
 
 - [ ] **Stress Testing**:
   - [ ] High-frequency transaction creation/completion cycles
-  - [ ] Concurrent operations on database during active transactions
-  - [ ] Connection pool exhaustion scenarios (sqlx backends)
-  - [ ] Memory usage patterns with long-running transactions
+  - [ ] Concurrent transaction usage patterns
+  - [ ] Connection pool exhaustion scenarios (all pooled backends)
+  - [ ] Memory usage patterns with connection pools
 
 ##### 10.2.1.11 Document Transaction Architecture and Usage Patterns
 
@@ -2016,6 +2033,7 @@ Each backend implements the following isolation pattern:
   - [ ] Show complete transaction lifecycle example
   - [ ] Explain commit consumes transaction (prevents use-after-commit)
   - [ ] Document error handling best practices within transactions
+  - [ ] Document connection pool benefits and behavior
 - [ ] Add usage examples showing:
   ```rust
   // Example pattern to document
@@ -2025,7 +2043,7 @@ Each backend implements the following isolation pattern:
   tx.insert("users").values(...).execute(&*tx).await?;
   tx.update("posts").set(...).execute(&*tx).await?;
 
-  // Handle errors without poisoning
+  // Handle errors gracefully
   if let Err(e) = tx.delete("temp").execute(&*tx).await {
       // User chooses: continue or rollback
       return tx.rollback().await;
@@ -2036,9 +2054,10 @@ Each backend implements the following isolation pattern:
   // tx no longer usable here - compile error!
   ```
 - [ ] Document common pitfalls:
-  - [ ] Forgetting to commit or rollback (leaks connection)
+  - [ ] Forgetting to commit or rollback (leaks pooled connection)
   - [ ] Trying to use transaction after commit
   - [ ] Nested begin_transaction() calls
+  - [ ] Pool exhaustion scenarios and handling
 
 #### 10.2.2 Extend Schema Builder Functionality ❌ **IMPORTANT**
 
