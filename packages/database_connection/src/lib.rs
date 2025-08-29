@@ -293,13 +293,17 @@ pub fn init_sqlite_rusqlite(
 
     let db_url = db_location.map_or_else(
         || {
-            // Generate unique in-memory database name to avoid test conflicts
-            let test_id = std::thread::current().id();
+            use std::sync::atomic::AtomicU64;
+
+            static ID: AtomicU64 = AtomicU64::new(0);
+
+            let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let timestamp = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
-            format!("file:memdb_{test_id:?}_{timestamp}:?mode=memory&cache=shared&uri=true")
+
+            format!("file:rusqlite_memdb_{id}_{timestamp}:?mode=memory&cache=shared&uri=true")
         },
         |p| p.to_string_lossy().into_owned(),
     );
@@ -375,15 +379,18 @@ pub async fn init_sqlite_sqlx(
             .filename(db_location)
             .create_if_missing(true)
     } else {
-        let test_id = std::thread::current().id();
+        use std::sync::atomic::AtomicU64;
+
+        static ID: AtomicU64 = AtomicU64::new(0);
+
+        let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let filename =
-            format!("file:memdb_{test_id:?}_{timestamp}:?mode=memory&cache=shared&uri=true");
+        let db_url = format!("file:sqlx_memdb_{id}_{timestamp}:?mode=memory&cache=shared&uri=true");
 
-        connect_options.filename(filename)
+        connect_options.filename(db_url)
     };
 
     let pool = SqlitePoolOptions::new()

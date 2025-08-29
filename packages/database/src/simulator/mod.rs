@@ -19,8 +19,22 @@ impl SimulationDatabase {
     /// # Errors
     ///
     /// * If the database connection fails to open in memory
+    ///
+    /// # Panics
+    ///
+    /// * If time goes backwards
     pub fn new() -> Result<Self, DatabaseError> {
-        let db_url = "file::memory:?cache=shared".to_string();
+        use std::sync::atomic::AtomicU64;
+
+        static ID: AtomicU64 = AtomicU64::new(0);
+
+        let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let db_url = format!("file:sqlx_memdb_{id}_{timestamp}:?mode=memory&cache=shared&uri=true");
+
         let mut connections = Vec::new();
         for _ in 0..5 {
             let conn = ::rusqlite::Connection::open(&db_url)
@@ -29,6 +43,7 @@ impl SimulationDatabase {
                 .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
             connections.push(std::sync::Arc::new(tokio::sync::Mutex::new(conn)));
         }
+
         Ok(Self {
             inner: RusqliteDatabase::new(connections),
         })
