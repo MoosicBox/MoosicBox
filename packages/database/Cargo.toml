@@ -28,6 +28,7 @@ sqlx          = { workspace = true, optional = true, features = ["runtime-tokio"
 sqlx-postgres = { workspace = true, optional = true }
 
 # tokio-postgres dependencies
+deadpool-postgres = { workspace = true, optional = true }
 postgres-protocol = { workspace = true, optional = true, features = [] }
 tokio-postgres    = { workspace = true, optional = true, features = [] }
 
@@ -75,7 +76,7 @@ api = ["dep:actix-web", "dep:futures"]
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = ["dep:futures", "dep:sqlx", "sqlx", "sqlx/mysql"]
 postgres = ["dep:futures", "dep:regex", "dep:tokio-util", "postgres-raw"]
-postgres-raw = ["dep:postgres-protocol", "dep:tokio-postgres", "postgres"]
+postgres-raw = ["dep:deadpool-postgres", "dep:postgres-protocol", "dep:tokio-postgres", "postgres"]
 postgres-sqlx = [
     "dep:sqlx",
     "dep:sqlx-postgres",

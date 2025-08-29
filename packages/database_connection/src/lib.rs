@@ -418,6 +418,9 @@ pub enum InitDatabaseError {
     #[cfg(feature = "postgres-sqlx")]
     #[error(transparent)]
     PostgresSqlx(#[from] sqlx::Error),
+    #[cfg(feature = "postgres-raw")]
+    #[error(transparent)]
+    DeadpoolBuildError(#[from] deadpool_postgres::BuildError),
     #[error("Invalid Connection Options")]
     InvalidConnectionOptions,
 }
@@ -459,21 +462,22 @@ pub async fn init_postgres_sqlx(
 ///
 /// * If fails to initialize the raw Postgres connection over native TLS
 #[cfg(all(feature = "postgres-native-tls", feature = "postgres-raw"))]
-#[allow(unused)]
+#[allow(unused, clippy::unused_async)]
 pub async fn init_postgres_raw_native_tls(
     creds: Credentials,
 ) -> Result<Box<dyn Database>, InitDatabaseError> {
+    use deadpool_postgres::{ManagerConfig, RecyclingMethod};
     use postgres_native_tls::MakeTlsConnector;
     use switchy_database::postgres::postgres::PostgresDatabase;
 
     let mut config = tokio_postgres::Config::new();
-    let mut config = config
+    config
         .host(&creds.host)
         .dbname(&creds.name)
         .user(&creds.user);
 
     if let Some(db_password) = &creds.password {
-        config = config.password(db_password);
+        config.password(db_password);
     }
 
     let mut builder = native_tls::TlsConnector::builder();
@@ -487,31 +491,38 @@ pub async fn init_postgres_raw_native_tls(
 
     let connector = MakeTlsConnector::new(builder.build()?);
 
-    let (client, connection) = config.connect(connector).await?;
+    let manager_config = ManagerConfig {
+        recycling_method: RecyclingMethod::Fast,
+    };
+    let manager = deadpool_postgres::Manager::from_config(config, connector, manager_config);
+    let pool = deadpool_postgres::Pool::builder(manager)
+        .max_size(5)
+        .build()?;
 
-    Ok(Box::new(PostgresDatabase::new(client, connection)))
+    Ok(Box::new(PostgresDatabase::new(pool)))
 }
 
 /// # Errors
 ///
 /// * If fails to initialize the raw Postgres connection over OpenSSL
 #[cfg(all(feature = "postgres-openssl", feature = "postgres-raw"))]
-#[allow(unused)]
+#[allow(unused, clippy::unused_async)]
 pub async fn init_postgres_raw_openssl(
     creds: Credentials,
 ) -> Result<Box<dyn Database>, InitDatabaseError> {
+    use deadpool_postgres::{ManagerConfig, RecyclingMethod};
     use openssl::ssl::{SslConnector, SslMethod, SslVerifyMode};
     use postgres_openssl::MakeTlsConnector;
     use switchy_database::postgres::postgres::PostgresDatabase;
 
     let mut config = tokio_postgres::Config::new();
-    let mut config = config
+    config
         .host(&creds.host)
         .dbname(&creds.name)
         .user(&creds.user);
 
     if let Some(db_password) = &creds.password {
-        config = config.password(db_password);
+        config.password(db_password);
     }
 
     let mut builder = SslConnector::builder(SslMethod::tls())?;
@@ -525,34 +536,47 @@ pub async fn init_postgres_raw_openssl(
 
     let connector = MakeTlsConnector::new(builder.build());
 
-    let (client, connection) = config.connect(connector).await?;
+    let manager_config = ManagerConfig {
+        recycling_method: RecyclingMethod::Fast,
+    };
+    let manager = deadpool_postgres::Manager::from_config(config, connector, manager_config);
+    let pool = deadpool_postgres::Pool::builder(manager)
+        .max_size(5)
+        .build()?;
 
-    Ok(Box::new(PostgresDatabase::new(client, connection)))
+    Ok(Box::new(PostgresDatabase::new(pool)))
 }
 
 /// # Errors
 ///
 /// * If fails to initialize the raw Postgres connection
 #[cfg(feature = "postgres-raw")]
-#[allow(unused)]
+#[allow(unused, clippy::unused_async)]
 pub async fn init_postgres_raw_no_tls(
     creds: Credentials,
 ) -> Result<Box<dyn Database>, InitDatabaseError> {
+    use deadpool_postgres::{ManagerConfig, RecyclingMethod};
     use switchy_database::postgres::postgres::PostgresDatabase;
 
     let mut config = tokio_postgres::Config::new();
-    let mut config = config
+    config
         .host(&creds.host)
         .dbname(&creds.name)
         .user(&creds.user);
 
     if let Some(db_password) = &creds.password {
-        config = config.password(db_password);
+        config.password(db_password);
     }
 
     let connector = tokio_postgres::NoTls;
 
-    let (client, connection) = config.connect(connector).await?;
+    let manager_config = ManagerConfig {
+        recycling_method: RecyclingMethod::Fast,
+    };
+    let manager = deadpool_postgres::Manager::from_config(config, connector, manager_config);
+    let pool = deadpool_postgres::Pool::builder(manager)
+        .max_size(5)
+        .build()?;
 
-    Ok(Box::new(PostgresDatabase::new(client, connection)))
+    Ok(Box::new(PostgresDatabase::new(pool)))
 }

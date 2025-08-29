@@ -367,6 +367,7 @@ const_format = "0.2.34"
 convert_case = "0.8.0"
 cpal = "0.16.0"
 ctrlc = "3.4.7"
+deadpool-postgres = "0.14.1"
 debounce = "0.2.2"
 eframe = { version = "0.32.1", default-features = false }
 egui = { version = "0.32.1", default-features = false }

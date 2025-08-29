@@ -1,18 +1,15 @@
 use std::{
     ops::Deref,
-    sync::{LazyLock, atomic::AtomicU16},
+    sync::{Arc, LazyLock, atomic::AtomicU16},
 };
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
+use deadpool_postgres::{Pool, PoolError};
 use futures::StreamExt;
 use postgres_protocol::types::{bool_from_sql, float8_from_sql, int8_from_sql, text_from_sql};
-use switchy_async::task::JoinHandle;
 use thiserror::Error;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    pin,
-};
+use tokio::{pin, sync::Mutex};
 use tokio_postgres::{Client, Row, RowStream, types::IsNull};
 
 use crate::{
@@ -246,35 +243,60 @@ impl<T: Expression + ?Sized> ToSql for T {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct PostgresDatabase {
-    client: Client,
-    handle: JoinHandle<std::result::Result<(), tokio_postgres::Error>>,
+    pool: Pool,
 }
 
 impl PostgresDatabase {
     #[must_use]
-    pub fn new<T: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
-        client: Client,
-        connection: tokio_postgres::Connection<tokio_postgres::Socket, T>,
-    ) -> Self {
-        let handle = switchy_async::runtime::Handle::current()
-            .spawn_with_name("Postgres database connection", connection);
-
-        Self { client, handle }
+    pub const fn new(pool: Pool) -> Self {
+        Self { pool }
     }
-}
 
-impl Drop for PostgresDatabase {
-    fn drop(&mut self) {
-        if let Err(e) = self.trigger_close() {
-            log::error!("Failed to drop postgres database connection: {e:?}");
-        }
+    async fn get_client(&self) -> Result<deadpool_postgres::Object, DatabaseError> {
+        self.pool
+            .get()
+            .await
+            .map_err(|e| DatabaseError::Postgres(PostgresDatabaseError::Pool(e)))
     }
 }
 
 impl std::fmt::Debug for PostgresDatabase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PostgresDatabase")
-            .field("client", &self.client)
+            .field("pool", &self.pool)
+            .finish_non_exhaustive()
+    }
+}
+
+pub struct PostgresTransaction {
+    client: deadpool_postgres::Object,
+    committed: Arc<Mutex<bool>>,
+    rolled_back: Arc<Mutex<bool>>,
+}
+
+impl PostgresTransaction {
+    /// # Errors
+    ///
+    /// * If the transaction could not be started via `BEGIN`
+    pub async fn new(client: deadpool_postgres::Object) -> Result<Self, PostgresDatabaseError> {
+        // Start the transaction with raw SQL
+        client
+            .execute("BEGIN", &[])
+            .await
+            .map_err(PostgresDatabaseError::Postgres)?;
+
+        Ok(Self {
+            client,
+            committed: Arc::new(Mutex::new(false)),
+            rolled_back: Arc::new(Mutex::new(false)),
+        })
+    }
+}
+
+impl std::fmt::Debug for PostgresTransaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PostgresTransaction")
+            .field("transaction", &"<transaction>")
             .finish_non_exhaustive()
     }
 }
@@ -284,6 +306,8 @@ impl std::fmt::Debug for PostgresDatabase {
 pub enum PostgresDatabaseError {
     #[error(transparent)]
     Postgres(#[from] tokio_postgres::Error),
+    #[error(transparent)]
+    Pool(#[from] PoolError),
     #[error("No ID")]
     NoId,
     #[error("No row")]
@@ -304,6 +328,188 @@ impl From<PostgresDatabaseError> for DatabaseError {
 
 #[async_trait]
 impl Database for PostgresDatabase {
+    async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(select(
+            &client,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+            query.limit,
+        )
+        .await?)
+    }
+
+    async fn query_first(
+        &self,
+        query: &SelectQuery<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(find_row(
+            &client,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+        )
+        .await?)
+    }
+
+    async fn exec_delete(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(delete(
+            &client,
+            statement.table_name,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(delete(
+            &client,
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )
+        .await?
+        .into_iter()
+        .next())
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_create_table(
+        &self,
+        statement: &crate::schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let client = self.get_client().await?;
+        postgres_exec_create_table(&client, statement)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn exec_insert(
+        &self,
+        statement: &InsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(insert_and_get_row(&client, statement.table_name, &statement.values).await?)
+    }
+
+    async fn exec_update(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(update_and_get_rows(
+            &client,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    async fn exec_update_first(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(update_and_get_row(
+            &client,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    async fn exec_upsert(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(upsert(
+            &client,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    async fn exec_upsert_first(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        let client = self.get_client().await?;
+        Ok(upsert_and_get_row(
+            &client,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    async fn exec_upsert_multi(
+        &self,
+        statement: &UpsertMultiStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+        let rows = {
+            upsert_multi(
+                &client,
+                statement.table_name,
+                statement
+                    .unique
+                    .as_ref()
+                    .ok_or(PostgresDatabaseError::MissingUnique)?,
+                &statement.values,
+            )
+            .await?
+        };
+
+        Ok(rows)
+    }
+
+    async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
+        let client = self.get_client().await?;
+        client
+            .execute_raw(sql, &[] as &[&str])
+            .await
+            .map_err(PostgresDatabaseError::Postgres)?;
+        Ok(())
+    }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        let client = self.get_client().await?;
+        let transaction = PostgresTransaction::new(client).await?;
+        Ok(Box::new(transaction))
+    }
+}
+
+#[async_trait]
+impl Database for PostgresTransaction {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
         Ok(select(
             &self.client,
@@ -441,169 +647,77 @@ impl Database for PostgresDatabase {
             )
             .await?
         };
+
         Ok(rows)
     }
 
-    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
-        log::trace!("exec_raw: query:\n{statement}");
-
-        self.client
-            .execute_raw(statement, &[] as &[&str])
-            .await
-            .map_err(PostgresDatabaseError::Postgres)?;
-        Ok(())
-    }
-
-    fn trigger_close(&self) -> Result<(), DatabaseError> {
-        self.handle.abort();
-        Ok(())
-    }
-
     #[cfg(feature = "schema")]
-    #[allow(clippy::too_many_lines)]
     async fn exec_create_table(
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        let mut query = "CREATE TABLE ".to_string();
+        postgres_exec_create_table(&self.client, statement)
+            .await
+            .map_err(Into::into)
+    }
 
-        if statement.if_not_exists {
-            query.push_str("IF NOT EXISTS ");
-        }
-
-        query.push_str(statement.table_name);
-        query.push('(');
-
-        let mut first = true;
-
-        for column in &statement.columns {
-            if first {
-                first = false;
-            } else {
-                query.push(',');
-            }
-
-            query.push_str(&column.name);
-            query.push(' ');
-
-            match column.data_type {
-                crate::schema::DataType::VarChar(size) => {
-                    query.push_str("VARCHAR(");
-                    query.push_str(&size.to_string());
-                    query.push(')');
-                }
-                crate::schema::DataType::Text => query.push_str("TEXT"),
-                crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
-                crate::schema::DataType::SmallInt => {
-                    if column.auto_increment {
-                        query.push_str("SMALLSERIAL");
-                    } else {
-                        query.push_str("SMALLINT");
-                    }
-                }
-                crate::schema::DataType::Int => {
-                    if column.auto_increment {
-                        query.push_str("SERIAL");
-                    } else {
-                        query.push_str("INTEGER");
-                    }
-                }
-                crate::schema::DataType::BigInt => {
-                    if column.auto_increment {
-                        query.push_str("BIGSERIAL");
-                    } else {
-                        query.push_str("BIGINT");
-                    }
-                }
-                crate::schema::DataType::Real => query.push_str("REAL"),
-                crate::schema::DataType::Double => query.push_str("DOUBLE PRECISION"),
-                crate::schema::DataType::Decimal(precision, scale) => {
-                    query.push_str("DECIMAL(");
-                    query.push_str(&precision.to_string());
-                    query.push(',');
-                    query.push_str(&scale.to_string());
-                    query.push(')');
-                }
-                crate::schema::DataType::DateTime => query.push_str("TIMESTAMP"),
-            }
-
-            if !column.nullable {
-                query.push_str(" NOT NULL");
-            }
-
-            if let Some(default) = &column.default {
-                query.push_str(" DEFAULT ");
-
-                match default {
-                    DatabaseValue::Null
-                    | DatabaseValue::StringOpt(None)
-                    | DatabaseValue::BoolOpt(None)
-                    | DatabaseValue::NumberOpt(None)
-                    | DatabaseValue::UNumberOpt(None)
-                    | DatabaseValue::RealOpt(None) => {
-                        query.push_str("NULL");
-                    }
-                    DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
-                        query.push('\'');
-                        query.push_str(x);
-                        query.push('\'');
-                    }
-                    DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
-                        query.push_str(if *x { "1" } else { "0" });
-                    }
-                    DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::NowAdd(x) => {
-                        query.push_str("NOW() + ");
-                        query.push_str(x);
-                    }
-                    DatabaseValue::Now => {
-                        query.push_str("NOW()");
-                    }
-                    DatabaseValue::DateTime(x) => {
-                        query.push_str("timestamp '");
-                        query.push_str(&x.and_utc().to_rfc3339());
-                        query.push('\'');
-                    }
-                }
-            }
-        }
-
-        moosicbox_assert::assert!(!first);
-
-        if let Some(primary_key) = &statement.primary_key {
-            query.push_str(", PRIMARY KEY (");
-            query.push_str(primary_key);
-            query.push(')');
-        }
-
-        for (source, target) in &statement.foreign_keys {
-            query.push_str(", FOREIGN KEY (");
-            query.push_str(source);
-            query.push_str(") REFERENCES (");
-            query.push_str(target);
-            query.push(')');
-        }
-
-        query.push(')');
-
-        self.exec_raw(&query).await?;
-
+    async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
+        self.client
+            .execute(sql, &[])
+            .await
+            .map_err(PostgresDatabaseError::Postgres)?;
         Ok(())
     }
 
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
-        // TODO: Implement in 10.2.1.4
-        unimplemented!("Transaction support not yet implemented for postgres")
+        Err(DatabaseError::Postgres(
+            PostgresDatabaseError::InvalidRequest,
+        ))
+    }
+}
+
+#[async_trait]
+impl crate::DatabaseTransaction for PostgresTransaction {
+    async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
+        let mut committed = self.committed.lock().await;
+        let rolled_back = self.rolled_back.lock().await;
+
+        if *committed || *rolled_back {
+            return Err(DatabaseError::Postgres(
+                PostgresDatabaseError::InvalidRequest,
+            ));
+        }
+        drop(rolled_back);
+
+        self.client
+            .execute("COMMIT", &[])
+            .await
+            .map_err(PostgresDatabaseError::Postgres)?;
+        *committed = true;
+        drop(committed);
+        Ok(())
+    }
+
+    async fn rollback(self: Box<Self>) -> Result<(), DatabaseError> {
+        let committed = self.committed.lock().await;
+        let mut rolled_back = self.rolled_back.lock().await;
+
+        if *committed || *rolled_back {
+            return Err(DatabaseError::Postgres(
+                PostgresDatabaseError::InvalidRequest,
+            ));
+        }
+        drop(committed);
+
+        self.client
+            .execute("ROLLBACK", &[])
+            .await
+            .map_err(PostgresDatabaseError::Postgres)?;
+        *rolled_back = true;
+        drop(rolled_back);
+        Ok(())
     }
 }
 
@@ -630,6 +744,149 @@ fn from_row(column_names: &[String], row: &Row) -> Result<crate::Row, PostgresDa
     }
 
     Ok(crate::Row { columns })
+}
+
+#[allow(clippy::too_many_lines)]
+#[cfg(feature = "schema")]
+async fn postgres_exec_create_table(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::CreateTableStatement<'_>,
+) -> Result<(), PostgresDatabaseError> {
+    let mut query = "CREATE TABLE ".to_string();
+
+    if statement.if_not_exists {
+        query.push_str("IF NOT EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
+    query.push('(');
+
+    let mut first = true;
+
+    for column in &statement.columns {
+        if first {
+            first = false;
+        } else {
+            query.push(',');
+        }
+
+        query.push_str(&column.name);
+        query.push(' ');
+
+        match column.data_type {
+            crate::schema::DataType::VarChar(size) => {
+                query.push_str("VARCHAR(");
+                query.push_str(&size.to_string());
+                query.push(')');
+            }
+            crate::schema::DataType::Text => query.push_str("TEXT"),
+            crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
+            crate::schema::DataType::SmallInt => {
+                if column.auto_increment {
+                    query.push_str("SMALLSERIAL");
+                } else {
+                    query.push_str("SMALLINT");
+                }
+            }
+            crate::schema::DataType::Int => {
+                if column.auto_increment {
+                    query.push_str("SERIAL");
+                } else {
+                    query.push_str("INTEGER");
+                }
+            }
+            crate::schema::DataType::BigInt => {
+                if column.auto_increment {
+                    query.push_str("BIGSERIAL");
+                } else {
+                    query.push_str("BIGINT");
+                }
+            }
+            crate::schema::DataType::Real => query.push_str("REAL"),
+            crate::schema::DataType::Double => query.push_str("DOUBLE PRECISION"),
+            crate::schema::DataType::Decimal(precision, scale) => {
+                query.push_str("DECIMAL(");
+                query.push_str(&precision.to_string());
+                query.push(',');
+                query.push_str(&scale.to_string());
+                query.push(')');
+            }
+            crate::schema::DataType::DateTime => query.push_str("TIMESTAMP"),
+        }
+
+        if !column.nullable {
+            query.push_str(" NOT NULL");
+        }
+
+        if let Some(default) = &column.default {
+            query.push_str(" DEFAULT ");
+
+            match default {
+                DatabaseValue::Null
+                | DatabaseValue::StringOpt(None)
+                | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::RealOpt(None) => {
+                    query.push_str("NULL");
+                }
+                DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
+                    query.push('\'');
+                    query.push_str(x);
+                    query.push('\'');
+                }
+                DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
+                    query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::NowAdd(x) => {
+                    query.push_str("NOW() + ");
+                    query.push_str(x);
+                }
+                DatabaseValue::Now => {
+                    query.push_str("NOW()");
+                }
+                DatabaseValue::DateTime(x) => {
+                    query.push_str("timestamp '");
+                    query.push_str(&x.and_utc().to_rfc3339());
+                    query.push('\'');
+                }
+            }
+        }
+    }
+
+    moosicbox_assert::assert!(!first);
+
+    if let Some(primary_key) = &statement.primary_key {
+        query.push_str(", PRIMARY KEY (");
+        query.push_str(primary_key);
+        query.push(')');
+    }
+
+    for (source, target) in &statement.foreign_keys {
+        query.push_str(", FOREIGN KEY (");
+        query.push_str(source);
+        query.push_str(") REFERENCES (");
+        query.push_str(target);
+        query.push(')');
+    }
+
+    query.push(')');
+
+    client
+        .execute_raw(&query, &[] as &[&str])
+        .await
+        .map_err(PostgresDatabaseError::Postgres)?;
+
+    Ok(())
 }
 
 async fn update_and_get_row(
