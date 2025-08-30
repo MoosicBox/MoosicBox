@@ -1913,37 +1913,60 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 
 **✅ Result:** Native sqlx PostgreSQL transactions with zero code duplication - ~135 lines of duplicate `exec_create_table` eliminated via `postgres_sqlx_exec_create_table()` helper function
 
-##### 10.2.1.7 Implement for MySQL (sqlx)
+##### 10.2.1.7 Implement for MySQL (sqlx) ✅ **COMPLETED**
 
 **Prerequisites:** ✅ Phase 10.2.1.6 complete - PostgreSQL sqlx pattern established
 
 **Architecture: Native sqlx Pool Transaction Support**
 
+**⚠️ CRITICAL DISCOVERY:** MySQL helper functions currently take `&MySqlPool` instead of connections, making them incompatible with transactions. Must refactor first!
+
 **Implementation Steps:**
 
-- [ ] **Pre-check for `exec_create_table` duplication**:
-  - [ ] Check if `MysqlSqlxDatabase` has `exec_create_table` method
-  - [ ] If yes, extract to `mysql_sqlx_exec_create_table()` helper function FIRST
-  - [ ] Follow pattern: helper takes `&mut MySqlConnection`, both Database and Transaction use it
+- [x] **Refactor MySQL helper functions from pool to connection**:
+  - [x] Change all 12 helper functions from `&MySqlPool` to `&mut MySqlConnection`:
+    - [x] `select()` (line 902)
+    - [x] `find_row()` (line 970)
+    - [x] `delete()` (line 940)
+    - [x] `insert_and_get_row()` (line 1013)
+    - [x] `update_and_get_row()` (line 572)
+    - [x] `update_and_get_rows()` (line 631)
+    - [x] `update_multi()` (line 1060)
+    - [x] `update_chunk()` (line 1108)
+    - [x] `upsert_multi()` (line 1200)
+    - [x] `upsert_chunk()` (line 1219)
+    - [x] `upsert()` (line 1307)
+    - [x] `upsert_and_get_row()` (line 1324)
+  - [x] Update `MySqlSqlxDatabase` impl to acquire connections from pool
+  - [x] Pass `connection.acquire().await?` to helpers instead of `&*self.connection.lock().await`
 
-- [ ] Create `MysqlSqlxTransaction` struct:
-  - [ ] Store `transaction: Arc<Mutex<Option<Transaction<'static, MySql>>>>` (sqlx native transaction)
-  - [ ] No additional fields needed - sqlx handles everything
+- [x] **Extract `exec_create_table` duplication**:
+  - [x] ✅ Confirmed: `MysqlSqlxDatabase` has `exec_create_table` method (lines 400-527, ~125 lines)
+  - [x] Extract to `mysql_sqlx_exec_create_table()` helper function
+  - [x] Helper takes `&mut MySqlConnection`, both Database and Transaction use it
 
-- [ ] Implement Database trait for `MysqlSqlxTransaction`:
-  - [ ] All methods delegate to existing helper functions
-  - [ ] ⚠️ **If `exec_create_table` exists**: Use the extracted helper function
-  - [ ] Follow exact pattern from `SqliteSqlxTransaction` and `PostgresSqlxTransaction`
+- [x] Create `MysqlSqlxTransaction` struct:
+  - [x] Store `transaction: Arc<Mutex<Option<Transaction<'static, MySql>>>>` (sqlx native transaction)
+  - [x] Import `sqlx::Transaction` type
+  - [x] No additional fields needed - sqlx handles everything
 
-- [ ] Implement DatabaseTransaction trait:
-  - [ ] `commit()`: Use native sqlx transaction commit
-  - [ ] `rollback()`: Use native sqlx transaction rollback
+- [x] Implement Database trait for `MysqlSqlxTransaction`:
+  - [x] All methods delegate to refactored helper functions
+  - [x] Pass `&mut *tx` to helpers (same as PostgreSQL pattern)
+  - [x] Use extracted `mysql_sqlx_exec_create_table()` for `exec_create_table`
+  - [x] Follow exact pattern from `PostgresSqlxTransaction` implementation
 
-- [ ] Implement `begin_transaction()` in `MysqlSqlxDatabase`:
-  - [ ] Simply use: `let tx = self.pool.lock().await.begin().await?`
-  - [ ] Return: `Box::new(MysqlSqlxTransaction::new(tx))`
+- [x] Implement DatabaseTransaction trait:
+  - [x] `commit()`: Use native sqlx transaction commit
+  - [x] `rollback()`: Use native sqlx transaction rollback
+  - [x] Use `DatabaseError::AlreadyInTransaction` for nested transaction attempts
 
-**Note:** Identical to PostgreSQL sqlx pattern - just different type parameters, zero duplication
+- [x] Implement `begin_transaction()` in `MysqlSqlxDatabase`:
+  - [x] Use: `let tx = self.pool.lock().await.begin().await?`
+  - [x] Return: `Box::new(MysqlSqlxTransaction::new(tx))`
+  - [x] Update TODO comment from "10.2.1.6" to remove confusion
+
+**✅ Result:** MySQL sqlx transactions implemented with critical connection refactoring - ~125 lines of duplicate `exec_create_table` eliminated and transaction isolation bug fixed by refactoring 12 helper functions from pool to connection usage
 
 ##### 10.2.1.8 Implement for Database Simulator
 
@@ -1984,9 +2007,9 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 - ✅ **PostgreSQL (postgres-raw)**: `postgres_exec_create_table()` helper function
 - ✅ **SQLite (rusqlite)**: `rusqlite_exec_create_table()` helper function
 - ✅ **SQLite (sqlx)**: `sqlite_sqlx_exec_create_table()` helper function
-- [ ] **PostgreSQL (sqlx)**: `postgres_sqlx_exec_create_table()` helper function (if needed)
-- [ ] **MySQL (sqlx)**: `mysql_sqlx_exec_create_table()` helper function (if needed)
-- [ ] **Database Simulator**: `simulator_exec_create_table()` helper function (if needed)
+- ✅ **PostgreSQL (sqlx)**: `postgres_sqlx_exec_create_table()` helper function (~135 lines deduplicated)
+- ✅ **MySQL (sqlx)**: `mysql_sqlx_exec_create_table()` helper function (~125 lines deduplicated)
+- [ ] **Database Simulator**: Delegates to rusqlite (no duplication - already optimal)
 
 **Standard Pattern:**
 1. Helper function takes connection/client as first parameter
@@ -1995,7 +2018,7 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
 4. Results in ~50-75% code reduction for this method
 
 **Benefits Achieved:**
-- **~400+ lines** already saved across PostgreSQL and SQLite implementations
+- **~525+ lines** already saved across PostgreSQL, SQLite, and MySQL implementations
 - **Single source of truth** for CREATE TABLE logic per backend
 - **Consistent maintenance** - changes only needed in one place
 - **Pattern established** for future database backends
@@ -2021,6 +2044,13 @@ Connection pool with shared in-memory databases using SQLite's `file:` URI synta
   - [ ] Test connection recycling after transaction completion
   - [ ] Test concurrent transaction creation from same pool
   - [ ] Test proper connection cleanup on transaction drop
+
+- [ ] **MySQL Connection Refactoring Validation**:
+  - [ ] Verify all operations within transaction use same connection (critical after pool→connection refactor)
+  - [ ] Test that rolled back MySQL transactions don't affect database state
+  - [ ] Test concurrent MySQL transactions maintain proper isolation
+  - [ ] Verify helper function refactoring didn't break non-transaction operations
+  - [ ] Test MySQL transaction commit/rollback work correctly after connection changes
 
 - [ ] **Transaction Ergonomics Tests**:
   - [ ] Test `&*tx` dereference pattern with all statement types
@@ -2053,6 +2083,23 @@ Each backend implements transaction support using connection pooling for isolati
 - No manual locking or deadlock risk
 - Natural isolation through connection pooling
 - Production-ready implementations with mature libraries
+
+#### Implementation Lessons Learned
+
+**Critical Discovery During Implementation:**
+
+**MySQL Helper Function Bug**: During Phase 10.2.1.7 implementation, discovered that MySQL helper functions incorrectly took `&MySqlPool` instead of connection types. This created a **silent transaction isolation failure** where:
+- Each operation within a "transaction" would acquire a different connection from the pool
+- BEGIN might execute on connection A, UPDATE on connection B, COMMIT on connection C
+- Result: **No actual transaction isolation** despite appearing to work
+
+**Fix Applied**: All 12 MySQL helper functions refactored from `&MySqlPool` to `&mut MySqlConnection`:
+- `select()`, `find_row()`, `delete()`, `insert_and_get_row()`, `update_and_get_row()`, `update_and_get_rows()`
+- `update_multi()`, `update_chunk()`, `upsert_multi()`, `upsert_chunk()`, `upsert()`, `upsert_and_get_row()`
+
+**Key Lesson**: Helper functions MUST take connection types, never pools, to ensure transaction isolation. This pattern is critical for any database backend implementing transactions.
+
+**Prevention**: All future database backends should be reviewed for this pattern before implementing transaction support.
 
 ##### 10.2.1.10 Validate Backward Compatibility and Performance
 

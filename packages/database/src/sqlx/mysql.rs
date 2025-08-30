@@ -3,7 +3,8 @@ use std::{ops::Deref, pin::Pin, sync::Arc};
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use sqlx::{
-    Column, Executor, MySql, MySqlPool, Row, Statement, TypeInfo, Value, ValueRef,
+    Column, Executor, MySql, MySqlConnection, MySqlPool, Row, Statement, Transaction, TypeInfo,
+    Value, ValueRef,
     mysql::{MySqlArguments, MySqlRow, MySqlValueRef},
     query::Query,
 };
@@ -196,6 +197,21 @@ impl<T: Expression + ?Sized> ToParam for T {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
+#[derive(Debug)]
+pub struct MysqlSqlxTransaction {
+    transaction: Arc<Mutex<Option<Transaction<'static, MySql>>>>,
+}
+
+impl MysqlSqlxTransaction {
+    #[must_use]
+    pub fn new(transaction: Transaction<'static, MySql>) -> Self {
+        Self {
+            transaction: Arc::new(Mutex::new(Some(transaction))),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MySqlSqlxDatabase {
     connection: Arc<Mutex<MySqlPool>>,
@@ -228,10 +244,14 @@ impl From<SqlxDatabaseError> for DatabaseError {
 }
 
 #[async_trait]
+#[allow(clippy::significant_drop_tightening)]
 impl Database for MySqlSqlxDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         Ok(select(
-            &*self.connection.lock().await,
+            &mut connection,
             query.table_name,
             query.distinct,
             query.columns,
@@ -247,8 +267,11 @@ impl Database for MySqlSqlxDatabase {
         &self,
         query: &SelectQuery<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         Ok(find_row(
-            &*self.connection.lock().await,
+            &mut connection,
             query.table_name,
             query.distinct,
             query.columns,
@@ -263,8 +286,11 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         Ok(delete(
-            &*self.connection.lock().await,
+            &mut connection,
             statement.table_name,
             statement.filters.as_deref(),
             statement.limit,
@@ -276,8 +302,11 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &DeleteStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         Ok(delete(
-            &*self.connection.lock().await,
+            &mut connection,
             statement.table_name,
             statement.filters.as_deref(),
             Some(1),
@@ -291,20 +320,21 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &InsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
-        Ok(insert_and_get_row(
-            &*self.connection.lock().await,
-            statement.table_name,
-            &statement.values,
-        )
-        .await?)
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(insert_and_get_row(&mut connection, statement.table_name, &statement.values).await?)
     }
 
     async fn exec_update(
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         Ok(update_and_get_rows(
-            &*self.connection.lock().await,
+            &mut connection,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -317,8 +347,11 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &UpdateStatement<'_>,
     ) -> Result<Option<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         Ok(update_and_get_row(
-            &*self.connection.lock().await,
+            &mut connection,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -331,8 +364,11 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         Ok(upsert(
-            &*self.connection.lock().await,
+            &mut connection,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -345,8 +381,11 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &UpsertStatement<'_>,
     ) -> Result<crate::Row, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         Ok(upsert_and_get_row(
-            &*self.connection.lock().await,
+            &mut connection,
             statement.table_name,
             &statement.values,
             statement.filters.as_deref(),
@@ -359,9 +398,12 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &UpsertMultiStatement<'_>,
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
         let rows = {
             upsert_multi(
-                &*self.connection.lock().await,
+                &mut connection,
                 statement.table_name,
                 statement
                     .unique
@@ -377,19 +419,13 @@ impl Database for MySqlSqlxDatabase {
     async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
         log::trace!("exec_raw: query:\n{statement}");
 
-        let connection = self.connection.lock().await;
-        let statement = connection
-            .prepare(statement)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
-        let query = statement.query();
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
 
         connection
-            .execute(query)
+            .execute(statement)
             .await
             .map_err(SqlxDatabaseError::Sqlx)?;
-
-        drop(connection);
 
         Ok(())
     }
@@ -400,128 +436,10 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        let mut query = "CREATE TABLE ".to_string();
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
 
-        if statement.if_not_exists {
-            query.push_str("IF NOT EXISTS ");
-        }
-
-        query.push_str(statement.table_name);
-        query.push('(');
-
-        let mut first = true;
-
-        for column in &statement.columns {
-            if first {
-                first = false;
-            } else {
-                query.push(',');
-            }
-
-            query.push_str(&column.name);
-            query.push(' ');
-
-            match column.data_type {
-                crate::schema::DataType::VarChar(size) => {
-                    query.push_str("VARCHAR(");
-                    query.push_str(&size.to_string());
-                    query.push(')');
-                }
-                crate::schema::DataType::Text => query.push_str("TEXT"),
-                crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
-                crate::schema::DataType::SmallInt => {
-                    query.push_str("SMALLINT");
-                }
-                crate::schema::DataType::Int => {
-                    query.push_str("INT");
-                }
-                crate::schema::DataType::BigInt => {
-                    query.push_str("BIGINT");
-                }
-                crate::schema::DataType::Real => query.push_str("FLOAT"),
-                crate::schema::DataType::Double => query.push_str("DOUBLE"),
-                crate::schema::DataType::Decimal(precision, scale) => {
-                    query.push_str("DECIMAL(");
-                    query.push_str(&precision.to_string());
-                    query.push(',');
-                    query.push_str(&scale.to_string());
-                    query.push(')');
-                }
-                crate::schema::DataType::DateTime => query.push_str("DATETIME"),
-            }
-
-            if column.auto_increment {
-                query.push_str(" AUTO_INCREMENT");
-            }
-
-            if !column.nullable {
-                query.push_str(" NOT NULL");
-            }
-
-            if let Some(default) = &column.default {
-                query.push_str(" DEFAULT ");
-
-                match default {
-                    DatabaseValue::Null
-                    | DatabaseValue::StringOpt(None)
-                    | DatabaseValue::BoolOpt(None)
-                    | DatabaseValue::NumberOpt(None)
-                    | DatabaseValue::UNumberOpt(None)
-                    | DatabaseValue::RealOpt(None) => {
-                        query.push_str("NULL");
-                    }
-                    DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
-                        query.push('\'');
-                        query.push_str(x);
-                        query.push('\'');
-                    }
-                    DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
-                        query.push_str(if *x { "1" } else { "0" });
-                    }
-                    DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::NowAdd(x) => {
-                        query.push_str("NOW() + ");
-                        query.push_str(x);
-                    }
-                    DatabaseValue::Now => {
-                        query.push_str("NOW()");
-                    }
-                    DatabaseValue::DateTime(x) => {
-                        query.push('\'');
-                        query.push_str(&x.and_utc().to_rfc3339());
-                        query.push('\'');
-                    }
-                }
-            }
-        }
-
-        moosicbox_assert::assert!(!first);
-
-        if let Some(primary_key) = &statement.primary_key {
-            query.push_str(", PRIMARY KEY (");
-            query.push_str(primary_key);
-            query.push(')');
-        }
-
-        for (source, target) in &statement.foreign_keys {
-            query.push_str(", FOREIGN KEY (");
-            query.push_str(source);
-            query.push_str(") REFERENCES (");
-            query.push_str(target);
-            query.push(')');
-        }
-
-        query.push(')');
-
-        self.exec_raw(&query).await?;
+        mysql_sqlx_exec_create_table(&mut connection, statement).await?;
 
         Ok(())
     }
@@ -529,9 +447,419 @@ impl Database for MySqlSqlxDatabase {
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
-        // TODO: Implement in 10.2.1.6
-        unimplemented!("Transaction support not yet implemented for mysql sqlx")
+        let tx = {
+            let pool = self.connection.lock().await;
+            pool.begin().await.map_err(SqlxDatabaseError::Sqlx)?
+        };
+
+        Ok(Box::new(MysqlSqlxTransaction::new(tx)))
     }
+}
+
+#[async_trait]
+impl Database for MysqlSqlxTransaction {
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(select(
+            &mut *tx,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+            query.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_first(
+        &self,
+        query: &SelectQuery<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(find_row(
+            &mut *tx,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_delete(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(delete(
+            &mut *tx,
+            statement.table_name,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(delete(
+            &mut *tx,
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )
+        .await?
+        .into_iter()
+        .next())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_insert(
+        &self,
+        statement: &InsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(insert_and_get_row(&mut *tx, statement.table_name, &statement.values).await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_update(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(update_and_get_rows(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_update_first(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(update_and_get_row(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(upsert(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert_first(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(upsert_and_get_row(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert_multi(
+        &self,
+        statement: &UpsertMultiStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        let rows = {
+            upsert_multi(
+                &mut *tx,
+                statement.table_name,
+                statement
+                    .unique
+                    .as_ref()
+                    .ok_or(SqlxDatabaseError::MissingUnique)?,
+                &statement.values,
+            )
+            .await?
+        };
+        Ok(rows)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.execute(statement)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_create_table(
+        &self,
+        statement: &crate::schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        mysql_sqlx_exec_create_table(&mut *tx, statement).await?;
+
+        Ok(())
+    }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        Err(DatabaseError::AlreadyInTransaction)
+    }
+}
+
+#[async_trait]
+impl crate::DatabaseTransaction for MysqlSqlxTransaction {
+    #[allow(clippy::significant_drop_tightening)]
+    async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .take()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.commit().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn rollback(self: Box<Self>) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .take()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.rollback().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+async fn mysql_sqlx_exec_create_table(
+    connection: &mut MySqlConnection,
+    statement: &crate::schema::CreateTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let mut query = "CREATE TABLE ".to_string();
+
+    if statement.if_not_exists {
+        query.push_str("IF NOT EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
+    query.push('(');
+
+    let mut first = true;
+
+    for column in &statement.columns {
+        if first {
+            first = false;
+        } else {
+            query.push(',');
+        }
+
+        query.push_str(&column.name);
+        query.push(' ');
+
+        match column.data_type {
+            crate::schema::DataType::VarChar(size) => {
+                query.push_str("VARCHAR(");
+                query.push_str(&size.to_string());
+                query.push(')');
+            }
+            crate::schema::DataType::Text => query.push_str("TEXT"),
+            crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
+            crate::schema::DataType::SmallInt => {
+                query.push_str("SMALLINT");
+            }
+            crate::schema::DataType::Int => {
+                query.push_str("INT");
+            }
+            crate::schema::DataType::BigInt => {
+                query.push_str("BIGINT");
+            }
+            crate::schema::DataType::Real => query.push_str("FLOAT"),
+            crate::schema::DataType::Double => query.push_str("DOUBLE"),
+            crate::schema::DataType::Decimal(precision, scale) => {
+                query.push_str("DECIMAL(");
+                query.push_str(&precision.to_string());
+                query.push(',');
+                query.push_str(&scale.to_string());
+                query.push(')');
+            }
+            crate::schema::DataType::DateTime => query.push_str("DATETIME"),
+        }
+
+        if column.auto_increment {
+            query.push_str(" AUTO_INCREMENT");
+        }
+
+        if !column.nullable {
+            query.push_str(" NOT NULL");
+        }
+
+        if let Some(default) = &column.default {
+            query.push_str(" DEFAULT ");
+
+            match default {
+                DatabaseValue::Null
+                | DatabaseValue::StringOpt(None)
+                | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::RealOpt(None) => {
+                    query.push_str("NULL");
+                }
+                DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
+                    query.push('\'');
+                    query.push_str(x);
+                    query.push('\'');
+                }
+                DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
+                    query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::NowAdd(x) => {
+                    query.push_str("NOW() + ");
+                    query.push_str(x);
+                }
+                DatabaseValue::Now => {
+                    query.push_str("NOW()");
+                }
+                DatabaseValue::DateTime(x) => {
+                    query.push('\'');
+                    query.push_str(&x.and_utc().to_rfc3339());
+                    query.push('\'');
+                }
+            }
+        }
+    }
+
+    moosicbox_assert::assert!(!first);
+
+    if let Some(primary_key) = &statement.primary_key {
+        query.push_str(", PRIMARY KEY (");
+        query.push_str(primary_key);
+        query.push(')');
+    }
+
+    for (source, target) in &statement.foreign_keys {
+        query.push_str(", FOREIGN KEY (");
+        query.push_str(source);
+        query.push_str(") REFERENCES (");
+        query.push_str(target);
+        query.push(')');
+    }
+
+    query.push(')');
+
+    log::trace!("exec_create_table: query:\n{query}");
+
+    connection
+        .execute(query.as_str())
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
 }
 
 fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
@@ -570,7 +898,7 @@ fn from_row(column_names: &[String], row: &MySqlRow) -> Result<crate::Row, SqlxD
 }
 
 async fn update_and_get_row(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -629,7 +957,7 @@ async fn update_and_get_row(
 }
 
 async fn update_and_get_rows(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -900,7 +1228,7 @@ fn bexprs_to_values_opt(
 
 #[allow(clippy::too_many_arguments)]
 async fn select(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -938,7 +1266,7 @@ async fn select(
 }
 
 async fn delete(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
@@ -968,7 +1296,7 @@ async fn delete(
 }
 
 async fn find_row(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     distinct: bool,
     columns: &[&str],
@@ -1011,7 +1339,7 @@ async fn find_row(
 }
 
 async fn insert_and_get_row(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
 ) -> Result<crate::Row, SqlxDatabaseError> {
@@ -1058,7 +1386,7 @@ async fn insert_and_get_row(
 ///
 /// Will return `Err` if the update multi execution failed.
 pub async fn update_multi(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -1106,7 +1434,7 @@ pub async fn update_multi(
 }
 
 async fn update_chunk(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     values: &[Vec<(&str, Box<dyn Expression>)>],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -1198,7 +1526,7 @@ async fn update_chunk(
 ///
 /// Will return `Err` if the upsert multi execution failed.
 pub async fn upsert_multi(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
@@ -1234,7 +1562,7 @@ pub async fn upsert_multi(
 }
 
 async fn upsert_chunk(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     unique: &[Box<dyn Expression>],
     values: &[Vec<(&str, Box<dyn Expression>)>],
@@ -1305,7 +1633,7 @@ async fn upsert_chunk(
 }
 
 async fn upsert(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
@@ -1322,7 +1650,7 @@ async fn upsert(
 
 #[allow(unused)]
 async fn upsert_and_get_row(
-    connection: &MySqlPool,
+    connection: &mut MySqlConnection,
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
     filters: Option<&[Box<dyn BooleanExpression>]>,
