@@ -131,3 +131,118 @@ impl Database for SimulationDatabase {
         self.inner.begin_transaction().await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Database, query::FilterableQuery};
+
+    #[switchy_async::test]
+    async fn test_simulator_transaction_delegation() {
+        // Create SimulationDatabase
+        let db = SimulationDatabase::new().unwrap();
+
+        // Create a test table
+        db.exec_raw("CREATE TABLE test_users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+            .await
+            .unwrap();
+
+        // Begin a transaction - this should delegate to RusqliteDatabase
+        let transaction = db.begin_transaction().await.unwrap();
+
+        // Insert data within the transaction using the query builder
+        transaction
+            .insert("test_users")
+            .value("name", "TestUser")
+            .execute(&*transaction)
+            .await
+            .unwrap();
+
+        // Query within the transaction to verify isolation
+        let rows = transaction
+            .select("test_users")
+            .where_eq("name", "TestUser")
+            .execute(&*transaction)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows,
+            vec![Row {
+                columns: vec![("id".into(), 1.into()), ("name".into(), "TestUser".into())]
+            }]
+        );
+
+        // Commit the transaction
+        transaction.commit().await.unwrap();
+
+        // Verify data persists after commit
+        let rows_after_commit = db
+            .select("test_users")
+            .where_eq("name", "TestUser")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        assert_eq!(rows_after_commit.len(), 1);
+        assert_eq!(
+            rows_after_commit,
+            vec![Row {
+                columns: vec![("id".into(), 1.into()), ("name".into(), "TestUser".into())]
+            }]
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_simulator_transaction_rollback() {
+        // Create SimulationDatabase
+        let db = SimulationDatabase::new().unwrap();
+
+        // Create a test table
+        db.exec_raw("CREATE TABLE test_rollback (id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+            .await
+            .unwrap();
+
+        // Insert initial data
+        db.insert("test_rollback")
+            .value("value", "initial")
+            .execute(&db)
+            .await
+            .unwrap();
+
+        // Begin a transaction
+        let transaction = db.begin_transaction().await.unwrap();
+
+        // Insert data within the transaction
+        transaction
+            .insert("test_rollback")
+            .value("value", "transactional")
+            .execute(&*transaction)
+            .await
+            .unwrap();
+
+        // Verify data is visible within transaction
+        let rows_in_tx = transaction
+            .select("test_rollback")
+            .execute(&*transaction)
+            .await
+            .unwrap();
+
+        assert_eq!(rows_in_tx.len(), 2); // initial + transactional
+
+        // Rollback the transaction
+        transaction.rollback().await.unwrap();
+
+        // Verify transactional data was rolled back
+        let rows_after_rollback = db.select("test_rollback").execute(&db).await.unwrap();
+
+        assert_eq!(rows_after_rollback.len(), 1); // Only initial data remains
+        assert_eq!(
+            rows_after_rollback,
+            vec![Row {
+                columns: vec![("id".into(), 1.into()), ("value".into(), "initial".into())]
+            }]
+        );
+    }
+}
