@@ -7,7 +7,7 @@ use std::{
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use sqlx::{
-    Column, Executor, PgPool, Postgres, Row, Statement, TypeInfo, Value, ValueRef,
+    Column, Executor, PgPool, Postgres, Row, Statement, Transaction, TypeInfo, Value, ValueRef,
     pool::PoolConnection,
     postgres::{PgArguments, PgRow, PgValueRef},
     query::Query,
@@ -246,6 +246,21 @@ impl<T: Expression + ?Sized> ToSql for T {
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
+pub struct PostgresSqlxTransaction {
+    transaction: Arc<Mutex<Option<Transaction<'static, Postgres>>>>,
+}
+
+impl PostgresSqlxTransaction {
+    #[must_use]
+    pub fn new(transaction: Transaction<'static, Postgres>) -> Self {
+        Self {
+            transaction: Arc::new(Mutex::new(Some(transaction))),
+        }
+    }
+}
+
+#[allow(clippy::module_name_repetitions)]
+#[derive(Debug)]
 pub struct PostgresSqlxDatabase {
     pool: Arc<Mutex<PgPool>>,
     #[allow(clippy::type_complexity)]
@@ -469,136 +484,11 @@ impl Database for PostgresSqlxDatabase {
         &self,
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        let mut query = "CREATE TABLE ".to_string();
-
-        if statement.if_not_exists {
-            query.push_str("IF NOT EXISTS ");
-        }
-
-        query.push_str(statement.table_name);
-        query.push('(');
-
-        let mut first = true;
-
-        for column in &statement.columns {
-            if first {
-                first = false;
-            } else {
-                query.push(',');
-            }
-
-            query.push_str(&column.name);
-            query.push(' ');
-
-            match column.data_type {
-                crate::schema::DataType::VarChar(size) => {
-                    query.push_str("VARCHAR(");
-                    query.push_str(&size.to_string());
-                    query.push(')');
-                }
-                crate::schema::DataType::Text => query.push_str("TEXT"),
-                crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
-                crate::schema::DataType::SmallInt => {
-                    if column.auto_increment {
-                        query.push_str("SMALLSERIAL");
-                    } else {
-                        query.push_str("SMALLINT");
-                    }
-                }
-                crate::schema::DataType::Int => {
-                    if column.auto_increment {
-                        query.push_str("SERIAL");
-                    } else {
-                        query.push_str("INTEGER");
-                    }
-                }
-                crate::schema::DataType::BigInt => {
-                    if column.auto_increment {
-                        query.push_str("BIGSERIAL");
-                    } else {
-                        query.push_str("BIGINT");
-                    }
-                }
-                crate::schema::DataType::Real => query.push_str("REAL"),
-                crate::schema::DataType::Double => query.push_str("DOUBLE PRECISION"),
-                crate::schema::DataType::Decimal(precision, scale) => {
-                    query.push_str("DECIMAL(");
-                    query.push_str(&precision.to_string());
-                    query.push(',');
-                    query.push_str(&scale.to_string());
-                    query.push(')');
-                }
-                crate::schema::DataType::DateTime => query.push_str("TIMESTAMP"),
-            }
-
-            if !column.nullable {
-                query.push_str(" NOT NULL");
-            }
-
-            if let Some(default) = &column.default {
-                query.push_str(" DEFAULT ");
-
-                match default {
-                    DatabaseValue::Null
-                    | DatabaseValue::StringOpt(None)
-                    | DatabaseValue::BoolOpt(None)
-                    | DatabaseValue::NumberOpt(None)
-                    | DatabaseValue::UNumberOpt(None)
-                    | DatabaseValue::RealOpt(None) => {
-                        query.push_str("NULL");
-                    }
-                    DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
-                        query.push('\'');
-                        query.push_str(x);
-                        query.push('\'');
-                    }
-                    DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
-                        query.push_str(if *x { "1" } else { "0" });
-                    }
-                    DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
-                        query.push_str(&x.to_string());
-                    }
-                    DatabaseValue::NowAdd(x) => {
-                        query.push_str("NOW() + ");
-                        query.push_str(x);
-                    }
-                    DatabaseValue::Now => {
-                        query.push_str("NOW()");
-                    }
-                    DatabaseValue::DateTime(x) => {
-                        query.push_str("timestamp '");
-                        query.push_str(&x.and_utc().to_rfc3339());
-                        query.push('\'');
-                    }
-                }
-            }
-        }
-
-        moosicbox_assert::assert!(!first);
-
-        if let Some(primary_key) = &statement.primary_key {
-            query.push_str(", PRIMARY KEY (");
-            query.push_str(primary_key);
-            query.push(')');
-        }
-
-        for (source, target) in &statement.foreign_keys {
-            query.push_str(", FOREIGN KEY (");
-            query.push_str(source);
-            query.push_str(") REFERENCES (");
-            query.push_str(target);
-            query.push(')');
-        }
-
-        query.push(')');
-
-        self.exec_raw(&query).await?;
+        postgres_sqlx_exec_create_table(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement,
+        )
+        .await?;
 
         Ok(())
     }
@@ -606,9 +496,427 @@ impl Database for PostgresSqlxDatabase {
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
-        // TODO: Implement in 10.2.1.5
-        unimplemented!("Transaction support not yet implemented for postgres sqlx")
+        let tx = {
+            let pool = self.pool.lock().await;
+            pool.begin().await.map_err(SqlxDatabaseError::Sqlx)?
+        };
+
+        Ok(Box::new(PostgresSqlxTransaction::new(tx)))
     }
+}
+
+#[async_trait]
+impl Database for PostgresSqlxTransaction {
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(select(
+            &mut *tx,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+            query.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_first(
+        &self,
+        query: &SelectQuery<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(find_row(
+            &mut *tx,
+            query.table_name,
+            query.distinct,
+            query.columns,
+            query.filters.as_deref(),
+            query.joins.as_deref(),
+            query.sorts.as_deref(),
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_delete(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(delete(
+            &mut *tx,
+            statement.table_name,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_delete_first(
+        &self,
+        statement: &DeleteStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(delete(
+            &mut *tx,
+            statement.table_name,
+            statement.filters.as_deref(),
+            Some(1),
+        )
+        .await?
+        .into_iter()
+        .next())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_insert(
+        &self,
+        statement: &InsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(insert_and_get_row(&mut *tx, statement.table_name, &statement.values).await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_update(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(update_and_get_rows(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_update_first(
+        &self,
+        statement: &UpdateStatement<'_>,
+    ) -> Result<Option<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(update_and_get_row(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(upsert(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert_first(
+        &self,
+        statement: &UpsertStatement<'_>,
+    ) -> Result<crate::Row, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        Ok(upsert_and_get_row(
+            &mut *tx,
+            statement.table_name,
+            &statement.values,
+            statement.filters.as_deref(),
+            statement.limit,
+        )
+        .await?)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_upsert_multi(
+        &self,
+        statement: &UpsertMultiStatement<'_>,
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        let rows = {
+            upsert_multi(
+                &mut *tx,
+                statement.table_name,
+                statement
+                    .unique
+                    .as_ref()
+                    .ok_or(SqlxDatabaseError::MissingUnique)?,
+                &statement.values,
+            )
+            .await?
+        };
+        Ok(rows)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+        log::trace!("exec_raw: query:\n{statement}");
+
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.execute(statement)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_create_table(
+        &self,
+        statement: &crate::schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        postgres_sqlx_exec_create_table(&mut *tx, statement).await?;
+
+        Ok(())
+    }
+
+    async fn begin_transaction(
+        &self,
+    ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
+        Err(DatabaseError::AlreadyInTransaction)
+    }
+}
+
+#[async_trait]
+impl crate::DatabaseTransaction for PostgresSqlxTransaction {
+    #[allow(clippy::significant_drop_tightening)]
+    async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .take()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.commit().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn rollback(self: Box<Self>) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .take()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        tx.rollback().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+async fn postgres_sqlx_exec_create_table(
+    connection: &mut PgConnection,
+    statement: &crate::schema::CreateTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let mut query = "CREATE TABLE ".to_string();
+
+    if statement.if_not_exists {
+        query.push_str("IF NOT EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
+    query.push('(');
+
+    let mut first = true;
+
+    for column in &statement.columns {
+        if first {
+            first = false;
+        } else {
+            query.push(',');
+        }
+
+        query.push_str(&column.name);
+        query.push(' ');
+
+        match column.data_type {
+            crate::schema::DataType::VarChar(size) => {
+                query.push_str("VARCHAR(");
+                query.push_str(&size.to_string());
+                query.push(')');
+            }
+            crate::schema::DataType::Text => query.push_str("TEXT"),
+            crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
+            crate::schema::DataType::SmallInt => {
+                if column.auto_increment {
+                    query.push_str("SMALLSERIAL");
+                } else {
+                    query.push_str("SMALLINT");
+                }
+            }
+            crate::schema::DataType::Int => {
+                if column.auto_increment {
+                    query.push_str("SERIAL");
+                } else {
+                    query.push_str("INTEGER");
+                }
+            }
+            crate::schema::DataType::BigInt => {
+                if column.auto_increment {
+                    query.push_str("BIGSERIAL");
+                } else {
+                    query.push_str("BIGINT");
+                }
+            }
+            crate::schema::DataType::Real => query.push_str("REAL"),
+            crate::schema::DataType::Double => query.push_str("DOUBLE PRECISION"),
+            crate::schema::DataType::Decimal(precision, scale) => {
+                query.push_str("DECIMAL(");
+                query.push_str(&precision.to_string());
+                query.push(',');
+                query.push_str(&scale.to_string());
+                query.push(')');
+            }
+            crate::schema::DataType::DateTime => query.push_str("TIMESTAMP"),
+        }
+
+        if !column.nullable {
+            query.push_str(" NOT NULL");
+        }
+
+        if let Some(default) = &column.default {
+            query.push_str(" DEFAULT ");
+
+            match default {
+                DatabaseValue::Null
+                | DatabaseValue::StringOpt(None)
+                | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::NumberOpt(None)
+                | DatabaseValue::UNumberOpt(None)
+                | DatabaseValue::RealOpt(None) => {
+                    query.push_str("NULL");
+                }
+                DatabaseValue::StringOpt(Some(x)) | DatabaseValue::String(x) => {
+                    query.push('\'');
+                    query.push_str(x);
+                    query.push('\'');
+                }
+                DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
+                    query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::UNumberOpt(Some(x)) | DatabaseValue::UNumber(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
+                    query.push_str(&x.to_string());
+                }
+                DatabaseValue::NowAdd(x) => {
+                    query.push_str("NOW() + ");
+                    query.push_str(x);
+                }
+                DatabaseValue::Now => {
+                    query.push_str("NOW()");
+                }
+                DatabaseValue::DateTime(x) => {
+                    query.push_str("timestamp '");
+                    query.push_str(&x.and_utc().to_rfc3339());
+                    query.push('\'');
+                }
+            }
+        }
+    }
+
+    moosicbox_assert::assert!(!first);
+
+    if let Some(primary_key) = &statement.primary_key {
+        query.push_str(", PRIMARY KEY (");
+        query.push_str(primary_key);
+        query.push(')');
+    }
+
+    for (source, target) in &statement.foreign_keys {
+        query.push_str(", FOREIGN KEY (");
+        query.push_str(source);
+        query.push_str(") REFERENCES (");
+        query.push_str(target);
+        query.push(')');
+    }
+
+    query.push(')');
+
+    log::trace!("exec_create_table: query:\n{query}");
+
+    connection
+        .execute(query.as_str())
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
 }
 
 fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
