@@ -558,7 +558,11 @@ mod tests {
     use moosicbox_music_api::models::TrackAudioQuality;
     use moosicbox_music_models::{Album, ApiSource, Artist, Track, id::Id};
     use pretty_assertions::assert_eq;
-    use switchy_database::{Database, Row, query::*, schema::CreateTableStatement};
+    use switchy_database::{
+        Database, Row,
+        query::*,
+        schema::{CreateTableStatement, DropTableStatement},
+    };
 
     use crate::{
         DownloadApiSource,
@@ -688,6 +692,13 @@ mod tests {
         async fn exec_create_table(
             &self,
             _statement: &CreateTableStatement<'_>,
+        ) -> Result<(), DatabaseError> {
+            Ok(())
+        }
+
+        async fn exec_drop_table(
+            &self,
+            _statement: &DropTableStatement<'_>,
         ) -> Result<(), DatabaseError> {
             Ok(())
         }

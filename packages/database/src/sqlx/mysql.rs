@@ -444,6 +444,19 @@ impl Database for MySqlSqlxDatabase {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        mysql_sqlx_exec_drop_table(&mut connection, statement).await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -691,6 +704,22 @@ impl Database for MysqlSqlxTransaction {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        mysql_sqlx_exec_drop_table(&mut *tx, statement).await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -853,6 +882,29 @@ async fn mysql_sqlx_exec_create_table(
     query.push(')');
 
     log::trace!("exec_create_table: query:\n{query}");
+
+    connection
+        .execute(query.as_str())
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn mysql_sqlx_exec_drop_table(
+    connection: &mut MySqlConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let mut query = "DROP TABLE ".to_string();
+
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
+
+    log::trace!("exec_drop_table: query:\n{query}");
 
     connection
         .execute(query.as_str())

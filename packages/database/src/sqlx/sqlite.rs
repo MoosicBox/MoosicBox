@@ -493,6 +493,19 @@ impl Database for SqliteSqlxDatabase {
         .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        sqlite_sqlx_exec_drop_table(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -993,6 +1006,27 @@ async fn sqlite_sqlx_exec_create_table(
     }
 
     query.push(')');
+
+    connection
+        .execute(sqlx::raw_sql(&query))
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn sqlite_sqlx_exec_drop_table(
+    connection: &mut SqliteConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let mut query = "DROP TABLE ".to_string();
+
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
 
     connection
         .execute(sqlx::raw_sql(&query))
@@ -1820,6 +1854,22 @@ impl Database for SqliteSqlxTransaction {
             .ok_or(DatabaseError::TransactionCommitted)?;
 
         sqlite_sqlx_exec_create_table(&mut *tx, statement)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        sqlite_sqlx_exec_drop_table(&mut *tx, statement)
             .await
             .map_err(Into::into)
     }

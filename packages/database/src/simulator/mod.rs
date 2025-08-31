@@ -125,6 +125,14 @@ impl Database for SimulationDatabase {
         self.inner.exec_create_table(statement).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        self.inner.exec_drop_table(statement).await
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {

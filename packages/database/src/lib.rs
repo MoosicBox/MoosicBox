@@ -371,6 +371,11 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         schema::create_table(table_name)
     }
 
+    #[cfg(feature = "schema")]
+    fn drop_table<'a>(&self, table_name: &'a str) -> schema::DropTableStatement<'a> {
+        schema::drop_table(table_name)
+    }
+
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError>;
     async fn query_first(&self, query: &SelectQuery<'_>) -> Result<Option<Row>, DatabaseError>;
     async fn exec_update(&self, statement: &UpdateStatement<'_>)
@@ -414,6 +419,12 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     async fn exec_create_table(
         &self,
         statement: &schema::CreateTableStatement<'_>,
+    ) -> Result<(), DatabaseError>;
+
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError>;
 
     /// Begin a database transaction

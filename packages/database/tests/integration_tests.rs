@@ -604,4 +604,42 @@ mod simulator {
             .unwrap();
         assert_eq!(rows.len(), 0);
     }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    #[test_log::test]
+    async fn test_drop_table_operations() {
+        let db = setup_db().await;
+        let db = &**db;
+
+        // Test creating a temporary table
+        db.exec_raw("CREATE TABLE temp_table (id INTEGER PRIMARY KEY, data TEXT)")
+            .await
+            .unwrap();
+
+        // Insert some data to verify table exists
+        db.insert("temp_table")
+            .value("data", "test_data")
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test drop table without IF EXISTS
+        db.drop_table("temp_table").execute(db).await.unwrap();
+
+        // Verify table is dropped by attempting to insert (should fail)
+        let insert_result = db
+            .insert("temp_table")
+            .value("data", "test_data2")
+            .execute(db)
+            .await;
+        assert!(insert_result.is_err());
+
+        // Test drop table with IF EXISTS (should not fail even if table doesn't exist)
+        db.drop_table("nonexistent_table")
+            .if_exists(true)
+            .execute(db)
+            .await
+            .unwrap();
+    }
 }

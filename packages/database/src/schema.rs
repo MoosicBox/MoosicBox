@@ -86,3 +86,66 @@ impl<'a> CreateTableStatement<'a> {
         db.exec_create_table(&self).await
     }
 }
+
+pub struct DropTableStatement<'a> {
+    pub table_name: &'a str,
+    pub if_exists: bool,
+}
+
+#[must_use]
+pub const fn drop_table(table_name: &str) -> DropTableStatement<'_> {
+    DropTableStatement {
+        table_name,
+        if_exists: false,
+    }
+}
+
+impl DropTableStatement<'_> {
+    #[must_use]
+    pub const fn if_exists(mut self, if_exists: bool) -> Self {
+        self.if_exists = if_exists;
+        self
+    }
+
+    /// # Errors
+    ///
+    /// Will return `Err` if the `exec_drop_table` execution failed.
+    pub async fn execute(self, db: &dyn Database) -> Result<(), DatabaseError> {
+        db.exec_drop_table(&self).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_drop_table_builder_default() {
+        let statement = drop_table("test_table");
+        assert_eq!(statement.table_name, "test_table");
+        assert!(!statement.if_exists);
+    }
+
+    #[test]
+    fn test_drop_table_builder_with_if_exists() {
+        let statement = drop_table("test_table").if_exists(true);
+        assert_eq!(statement.table_name, "test_table");
+        assert!(statement.if_exists);
+    }
+
+    #[test]
+    fn test_drop_table_builder_chain() {
+        let statement = drop_table("users").if_exists(true);
+
+        assert_eq!(statement.table_name, "users");
+        assert!(statement.if_exists);
+    }
+
+    #[test]
+    fn test_drop_table_builder_if_exists_false() {
+        let statement = drop_table("test_table").if_exists(true).if_exists(false);
+
+        assert_eq!(statement.table_name, "test_table");
+        assert!(!statement.if_exists);
+    }
+}

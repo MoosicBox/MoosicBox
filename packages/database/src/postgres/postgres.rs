@@ -401,6 +401,17 @@ impl Database for PostgresDatabase {
             .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let client = self.get_client().await?;
+        postgres_exec_drop_table(&client, statement)
+            .await
+            .map_err(Into::into)
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,
@@ -661,6 +672,16 @@ impl Database for PostgresTransaction {
             .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        postgres_exec_drop_table(&self.client, statement)
+            .await
+            .map_err(Into::into)
+    }
+
     async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
         self.client
             .execute(sql, &[])
@@ -880,6 +901,27 @@ async fn postgres_exec_create_table(
     }
 
     query.push(')');
+
+    client
+        .execute_raw(&query, &[] as &[&str])
+        .await
+        .map_err(PostgresDatabaseError::Postgres)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn postgres_exec_drop_table(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), PostgresDatabaseError> {
+    let mut query = "DROP TABLE ".to_string();
+
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
 
     client
         .execute_raw(&query, &[] as &[&str])

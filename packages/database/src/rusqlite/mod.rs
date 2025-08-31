@@ -416,6 +416,15 @@ impl Database for RusqliteDatabase {
         rusqlite_exec_create_table(&*connection.lock().await, statement)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let connection = self.get_connection();
+        rusqlite_exec_drop_table(&*connection.lock().await, statement)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -590,6 +599,14 @@ impl Database for RusqliteTransaction {
         statement: &crate::schema::CreateTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
         rusqlite_exec_create_table(&*self.connection.lock().await, statement)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        rusqlite_exec_drop_table(&*self.connection.lock().await, statement)
     }
 
     async fn begin_transaction(
@@ -785,6 +802,26 @@ fn rusqlite_exec_create_table(
     }
 
     query.push(')');
+
+    connection
+        .execute(&query, [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_exec_drop_table(
+    connection: &Connection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    let mut query = "DROP TABLE ".to_string();
+
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
 
     connection
         .execute(&query, [])
