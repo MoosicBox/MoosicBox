@@ -356,7 +356,7 @@ chrono = { version = "0.4.41", default-features = false, features = [
     "serde",
 ] }
 clap = { version = "4.5.46", features = ["derive"] }
-color-backtrace = { version = "0.7.0", default-features = false, features = [
+color-backtrace = { version = "0.7.1", default-features = false, features = [
     "use-btparse-crate",
 ] }
 color-hex = "0.2.0"
