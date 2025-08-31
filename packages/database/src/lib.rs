@@ -430,28 +430,222 @@ pub trait Database: Send + Sync + std::fmt::Debug {
 /// Transactions provide ACID properties for database operations. All Database trait
 /// methods are available within transactions, plus commit/rollback operations.
 ///
-/// # Usage Pattern
+/// # Transaction Architecture
+///
+/// Each database backend implements transactions using connection pooling for isolation:
+/// - **SQLite**: Connection pool with shared in-memory databases for true concurrency
+/// - **PostgreSQL**: deadpool-postgres or native sqlx pools with dedicated connections
+/// - **MySQL**: Native sqlx pools with transaction-per-connection isolation
+/// - **Database Simulator**: Simple delegation to underlying backend
+///
+/// This architecture provides:
+/// - **Natural isolation** - Each transaction gets dedicated connection from pool
+/// - **No deadlocks** - No manual locking or complex synchronization required
+/// - **Concurrent transactions** - Multiple transactions can run simultaneously
+/// - **Production ready** - Uses mature, battle-tested connection pooling libraries
+///
+/// # Usage Pattern - The Execute Pattern
+///
+/// The key pattern is using `execute(&*tx)` to run operations within a transaction:
 ///
 /// ```rust,ignore
 /// let tx = db.begin_transaction().await?;
 ///
-/// // Multiple operations on same transaction
-/// tx.insert("users").values(...).execute(&*tx).await?;
-/// tx.update("posts").set(...).execute(&*tx).await?;
+/// // The execute pattern: stmt.execute(&*tx).await?
+/// tx.insert("users")
+///     .value("name", "Alice")
+///     .value("email", "alice@example.com")
+///     .execute(&*tx)  // Execute on transaction, not original database
+///     .await?;
 ///
-/// // Commit consumes the transaction
+/// tx.update("posts")
+///     .set("author_id", user_id)
+///     .where_eq("status", "draft")
+///     .execute(&*tx)  // Same transaction ensures consistency
+///     .await?;
+///
+/// // Commit consumes the transaction - prevents further use
 /// tx.commit().await?;
+/// // tx is no longer usable here - compile error if attempted!
 /// ```
 ///
-/// # Error Handling
+/// # Complete Transaction Lifecycle Example
+///
+/// ```rust,ignore
+/// use switchy_database::{Database, DatabaseError};
+///
+/// async fn transfer_funds(
+///     db: &dyn Database,
+///     from_account: u64,
+///     to_account: u64,
+///     amount: i64
+/// ) -> Result<(), DatabaseError> {
+///     // Begin transaction for atomic transfer
+///     let tx = db.begin_transaction().await?;
+///
+///     // Check source account balance
+///     let balance_rows = tx.select("accounts")
+///         .columns(&["balance"])
+///         .where_eq("id", from_account)
+///         .execute(&*tx)
+///         .await?;
+///
+///     if balance_rows.is_empty() {
+///         return tx.rollback().await;
+///     }
+///
+///     let current_balance: i64 = balance_rows[0].get("balance")?.try_into()?;
+///     if current_balance < amount {
+///         // Insufficient funds - rollback transaction
+///         return tx.rollback().await;
+///     }
+///
+///     // Debit source account
+///     tx.update("accounts")
+///         .set("balance", current_balance - amount)
+///         .where_eq("id", from_account)
+///         .execute(&*tx)
+///         .await?;
+///
+///     // Credit destination account
+///     tx.update("accounts")
+///         .set("balance", tx.select("accounts")
+///             .columns(&["balance"])
+///             .where_eq("id", to_account)
+///             .execute(&*tx)
+///             .await?[0]
+///             .get("balance")?
+///             .try_into::<i64>()? + amount)
+///         .where_eq("id", to_account)
+///         .execute(&*tx)
+///         .await?;
+///
+///     // All operations succeeded - commit atomically
+///     tx.commit().await?;
+///     Ok(())
+/// }
+/// ```
+///
+/// # Error Handling Best Practices
 ///
 /// Transactions do not have "poisoned" state - they remain usable after errors.
-/// Users decide whether to continue operations or rollback after failures.
+/// Users decide whether to continue operations or rollback after failures:
+///
+/// ```rust,ignore
+/// let tx = db.begin_transaction().await?;
+///
+/// // Attempt risky operation
+/// let result = tx.insert("users")
+///     .value("email", potentially_duplicate_email)
+///     .execute(&*tx)
+///     .await;
+///
+/// match result {
+///     Ok(_) => {
+///         // Success - continue with more operations
+///         tx.update("user_stats")
+///             .set("total_users", "total_users + 1")
+///             .execute(&*tx)
+///             .await?;
+///
+///         tx.commit().await?;
+///     }
+///     Err(DatabaseError::Constraint(_)) => {
+///         // Expected error - rollback gracefully
+///         tx.rollback().await?;
+///     }
+///     Err(e) => {
+///         // Unexpected error - rollback and propagate
+///         tx.rollback().await.ok(); // Don't mask original error
+///         return Err(e);
+///     }
+/// }
+/// ```
+///
+/// # Connection Pool Benefits and Behavior
+///
+/// The connection pool architecture provides several benefits:
+///
+/// - **Efficient Resource Usage**: Connections are reused across transactions
+/// - **Concurrent Transactions**: Multiple transactions can run simultaneously without blocking
+/// - **Automatic Cleanup**: Connections return to pool when transactions complete
+/// - **Isolation Guarantees**: Each transaction gets dedicated connection ensuring isolation
+/// - **Scalability**: Pool size can be tuned for optimal performance under load
+///
+/// Pool behavior varies by backend:
+/// - **SQLite**: 5-connection pool with shared in-memory databases using URI syntax
+/// - **PostgreSQL**: deadpool-postgres with configurable pool size and timeouts
+/// - **MySQL**: Native sqlx pools with connection lifecycle management
+/// - **`SqlX` backends**: Use native `pool.begin()` API for optimal transaction handling
 ///
 /// # Manual Rollback Required
 ///
 /// Transactions do NOT auto-rollback on drop. Users must explicitly call
 /// `commit()` or `rollback()` to avoid leaking database connections.
+///
+/// ```rust,ignore
+/// let tx = db.begin_transaction().await?;
+///
+/// // Do work...
+/// tx.insert("data").value("key", "value").execute(&*tx).await?;
+///
+/// // MUST explicitly commit or rollback - no auto-cleanup!
+/// if success_condition {
+///     tx.commit().await?;
+/// } else {
+///     tx.rollback().await?;
+/// }
+/// // Connection properly returned to pool
+/// ```
+///
+/// # Common Pitfalls
+///
+/// ## Forgetting to Commit or Rollback
+/// ```rust,ignore
+/// let tx = db.begin_transaction().await?;
+/// tx.insert("users").value("name", "Alice").execute(&*tx).await?;
+/// // BUG: Transaction never committed or rolled back!
+/// // This leaks a pooled connection until the function returns
+/// ```
+///
+/// ## Using Database Instead of Transaction
+/// ```rust,ignore
+/// let tx = db.begin_transaction().await?;
+///
+/// // BUG: This executes outside the transaction!
+/// db.insert("users").value("name", "Alice").execute(db).await?;
+/// //  ^^                                        ^^
+/// // Should be tx                            Should be &*tx
+///
+/// tx.commit().await?; // Commits empty transaction
+/// ```
+///
+/// ## Attempting to Use Transaction After Commit
+/// ```rust,ignore
+/// let tx = db.begin_transaction().await?;
+/// tx.insert("users").value("name", "Alice").execute(&*tx).await?;
+/// tx.commit().await?;
+///
+/// // COMPILE ERROR: tx was consumed by commit()
+/// tx.insert("posts").value("title", "Hello").execute(&*tx).await?;
+/// ```
+///
+/// ## Nested Transaction Attempts
+/// ```rust,ignore
+/// let tx = db.begin_transaction().await?;
+///
+/// // ERROR: DatabaseError::AlreadyInTransaction
+/// let nested_tx = tx.begin_transaction().await?;
+/// ```
+///
+/// ## Pool Exhaustion Scenarios
+/// ```rust,ignore
+/// // Creating many transactions without committing/rolling back
+/// for i in 0..100 {
+///     let tx = db.begin_transaction().await?; // Eventually fails when pool exhausted
+///     // BUG: Never commit or rollback - connections accumulate
+/// }
+/// ```
 #[async_trait]
 pub trait DatabaseTransaction: Database + Send + Sync {
     /// Commit the transaction, consuming it
