@@ -521,6 +521,20 @@ impl Database for PostgresSqlxDatabase {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_index(
+        &self,
+        statement: &crate::schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        postgres_sqlx_exec_drop_index(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement,
+        )
+        .await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -800,6 +814,22 @@ impl Database for PostgresSqlxTransaction {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_drop_index(
+        &self,
+        statement: &crate::schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        postgres_sqlx_exec_drop_index(&mut *tx, statement).await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -1027,6 +1057,29 @@ pub(crate) async fn postgres_sqlx_exec_create_index(
     );
 
     log::trace!("exec_create_index: query:\n{sql}");
+
+    connection
+        .execute(sql.as_str())
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+pub(crate) async fn postgres_sqlx_exec_drop_index(
+    connection: &mut PgConnection,
+    statement: &crate::schema::DropIndexStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let if_exists_str = if statement.if_exists {
+        "IF EXISTS "
+    } else {
+        ""
+    };
+
+    let sql = format!("DROP INDEX {}{}", if_exists_str, statement.index_name);
+
+    log::trace!("exec_drop_index: query:\n{sql}");
 
     connection
         .execute(sql.as_str())

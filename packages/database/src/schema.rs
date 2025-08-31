@@ -190,6 +190,38 @@ impl<'a> CreateIndexStatement<'a> {
     }
 }
 
+pub struct DropIndexStatement<'a> {
+    pub index_name: &'a str,
+    pub table_name: &'a str,
+    pub if_exists: bool,
+}
+
+#[must_use]
+pub const fn drop_index<'a>(index_name: &'a str, table_name: &'a str) -> DropIndexStatement<'a> {
+    DropIndexStatement {
+        index_name,
+        table_name,
+        if_exists: false,
+    }
+}
+
+impl DropIndexStatement<'_> {
+    #[must_use]
+    pub const fn if_exists(mut self) -> Self {
+        self.if_exists = true;
+        self
+    }
+
+    /// Execute the drop index statement against the provided database.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if the `exec_drop_index` execution failed.
+    pub async fn execute(self, db: &dyn Database) -> Result<(), DatabaseError> {
+        db.exec_drop_index(&self).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,5 +348,31 @@ mod tests {
         assert_eq!(statement.columns, vec!["col3", "col4"]);
         assert!(!statement.unique);
         assert!(!statement.if_not_exists);
+    }
+
+    // DropIndexStatement tests
+    #[test]
+    fn test_drop_index_builder_default() {
+        let statement = drop_index("test_index", "test_table");
+        assert_eq!(statement.index_name, "test_index");
+        assert_eq!(statement.table_name, "test_table");
+        assert!(!statement.if_exists);
+    }
+
+    #[test]
+    fn test_drop_index_builder_with_if_exists() {
+        let statement = drop_index("idx_email", "users").if_exists();
+        assert_eq!(statement.index_name, "idx_email");
+        assert_eq!(statement.table_name, "users");
+        assert!(statement.if_exists);
+    }
+
+    #[test]
+    fn test_drop_index_builder_if_exists_chaining() {
+        let statement = drop_index("idx_complex", "products").if_exists();
+
+        assert_eq!(statement.index_name, "idx_complex");
+        assert_eq!(statement.table_name, "products");
+        assert!(statement.if_exists);
     }
 }

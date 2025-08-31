@@ -434,6 +434,15 @@ impl Database for RusqliteDatabase {
         rusqlite_exec_create_index(&*connection.lock().await, statement)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_index(
+        &self,
+        statement: &crate::schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let connection = self.get_connection();
+        rusqlite_exec_drop_index(&*connection.lock().await, statement)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -624,6 +633,14 @@ impl Database for RusqliteTransaction {
         statement: &crate::schema::CreateIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
         rusqlite_exec_create_index(&*self.connection.lock().await, statement)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_drop_index(
+        &self,
+        statement: &crate::schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        rusqlite_exec_drop_index(&*self.connection.lock().await, statement)
     }
 
     async fn begin_transaction(
@@ -870,6 +887,26 @@ pub(crate) fn rusqlite_exec_create_index(
         "CREATE {}INDEX {}{} ON {} ({})",
         unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
     );
+
+    connection
+        .execute(&sql, [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+pub(crate) fn rusqlite_exec_drop_index(
+    connection: &Connection,
+    statement: &crate::schema::DropIndexStatement<'_>,
+) -> Result<(), DatabaseError> {
+    let if_exists_str = if statement.if_exists {
+        "IF EXISTS "
+    } else {
+        ""
+    };
+
+    let sql = format!("DROP INDEX {}{}", if_exists_str, statement.index_name);
 
     connection
         .execute(&sql, [])

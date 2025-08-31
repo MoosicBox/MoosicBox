@@ -470,6 +470,19 @@ impl Database for MySqlSqlxDatabase {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_index(
+        &self,
+        statement: &crate::schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        mysql_sqlx_exec_drop_index(&mut connection, statement).await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -749,6 +762,22 @@ impl Database for MysqlSqlxTransaction {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_drop_index(
+        &self,
+        statement: &crate::schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        mysql_sqlx_exec_drop_index(&mut *tx, statement).await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -972,6 +1001,36 @@ pub(crate) async fn mysql_sqlx_exec_create_index(
     );
 
     log::trace!("exec_create_index: query:\n{sql}");
+
+    connection
+        .execute(sql.as_str())
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+/// Execute DROP INDEX statement for `MySQL`
+///
+/// Note: IF EXISTS support requires `MySQL` 8.0.29 or later.
+/// Using `if_exists` on older `MySQL` versions will result in a syntax error.
+#[cfg(feature = "schema")]
+pub(crate) async fn mysql_sqlx_exec_drop_index(
+    connection: &mut MySqlConnection,
+    statement: &crate::schema::DropIndexStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let if_exists_str = if statement.if_exists {
+        "IF EXISTS "
+    } else {
+        ""
+    };
+
+    let sql = format!(
+        "DROP INDEX {}{}ON {}",
+        if_exists_str, statement.index_name, statement.table_name
+    );
+
+    log::trace!("exec_drop_index: query:\n{sql}");
 
     connection
         .execute(sql.as_str())

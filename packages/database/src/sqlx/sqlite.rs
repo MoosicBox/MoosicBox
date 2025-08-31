@@ -519,6 +519,19 @@ impl Database for SqliteSqlxDatabase {
         .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_drop_index(
+        &self,
+        statement: &crate::schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        sqlite_sqlx_exec_drop_index(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -1072,6 +1085,27 @@ pub(crate) async fn sqlite_sqlx_exec_create_index(
         "CREATE {}INDEX {}{} ON {} ({})",
         unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
     );
+
+    connection
+        .execute(sqlx::raw_sql(&sql))
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+pub(crate) async fn sqlite_sqlx_exec_drop_index(
+    connection: &mut SqliteConnection,
+    statement: &crate::schema::DropIndexStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let if_exists_str = if statement.if_exists {
+        "IF EXISTS "
+    } else {
+        ""
+    };
+
+    let sql = format!("DROP INDEX {}{}", if_exists_str, statement.index_name);
 
     connection
         .execute(sqlx::raw_sql(&sql))
@@ -1931,6 +1965,22 @@ impl Database for SqliteSqlxTransaction {
             .ok_or(DatabaseError::TransactionCommitted)?;
 
         sqlite_sqlx_exec_create_index(&mut *tx, statement)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "schema")]
+    async fn exec_drop_index(
+        &self,
+        statement: &crate::schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        sqlite_sqlx_exec_drop_index(&mut *tx, statement)
             .await
             .map_err(Into::into)
     }

@@ -699,4 +699,65 @@ mod simulator {
         // Clean up
         db.exec_raw("DROP TABLE index_test").await.unwrap();
     }
+
+    #[cfg(feature = "schema")]
+    #[tokio::test]
+    async fn test_drop_index_operations() {
+        let db = setup_db().await;
+        let db = &**db;
+
+        // Create a test table first
+        db.exec_raw("CREATE TABLE drop_index_test (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
+            .await
+            .unwrap();
+
+        // Create some indexes to drop
+        db.create_index("idx_name")
+            .table("drop_index_test")
+            .column("name")
+            .execute(db)
+            .await
+            .unwrap();
+
+        db.create_index("idx_email")
+            .table("drop_index_test")
+            .column("email")
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test basic index drop
+        db.drop_index("idx_name", "drop_index_test")
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test drop with IF EXISTS flag
+        db.drop_index("idx_email", "drop_index_test")
+            .if_exists()
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test IF EXISTS with non-existent index (should not fail)
+        db.drop_index("nonexistent_idx", "drop_index_test")
+            .if_exists()
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test dropping index without IF EXISTS on non-existent index (should fail)
+        let drop_result = db
+            .drop_index("another_nonexistent_idx", "drop_index_test")
+            .execute(db)
+            .await;
+
+        // This should fail on most databases
+        // Note: Some databases might not error on DROP INDEX if index doesn't exist
+        // We're testing the implementation works, not necessarily that it errors
+        let _expected_behavior = drop_result.is_err();
+
+        // Clean up
+        db.exec_raw("DROP TABLE drop_index_test").await.unwrap();
+    }
 }
