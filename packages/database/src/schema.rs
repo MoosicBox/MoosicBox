@@ -159,6 +159,23 @@ impl<'a> CreateIndexStatement<'a> {
         self
     }
 
+    /// Set whether to use IF NOT EXISTS clause
+    ///
+    /// # Database Compatibility
+    ///
+    /// * **`SQLite`**: Full support
+    /// * **`PostgreSQL`**: Full support
+    /// * **`MySQL`**: Requires `MySQL` 8.0.29 or later. Will produce a syntax error on older versions.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use switchy_database::schema::create_index;
+    /// let stmt = create_index("idx_name")
+    ///     .table("users")
+    ///     .column("email")
+    ///     .if_not_exists(true);  // MySQL 8.0.29+ required for this
+    /// ```
     #[must_use]
     pub const fn if_not_exists(mut self, if_not_exists: bool) -> Self {
         self.if_not_exists = if_not_exists;

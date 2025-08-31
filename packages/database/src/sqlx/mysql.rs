@@ -943,52 +943,18 @@ async fn mysql_sqlx_exec_drop_table(
     Ok(())
 }
 
+/// Execute CREATE INDEX statement for `MySQL`
+///
+/// Note: IF NOT EXISTS support requires `MySQL` 8.0.29 or later.
+/// Using `if_not_exists` on older `MySQL` versions will result in a syntax error.
 #[cfg(feature = "schema")]
 pub(crate) async fn mysql_sqlx_exec_create_index(
     connection: &mut MySqlConnection,
     statement: &crate::schema::CreateIndexStatement<'_>,
 ) -> Result<(), SqlxDatabaseError> {
-    // Handle IF NOT EXISTS for older MySQL versions
-    if statement.if_not_exists {
-        let version_row: (String,) = sqlx::query_as("SELECT VERSION()")
-            .fetch_one(&mut *connection)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
-
-        let supports_if_not_exists = parse_mysql_version(&version_row.0) >= (8, 0, 29);
-
-        if !supports_if_not_exists {
-            // Check if index already exists using information_schema
-            let exists: Option<(i32,)> = sqlx::query_as(
-                "SELECT 1 FROM information_schema.statistics 
-                 WHERE table_schema = DATABASE() 
-                 AND table_name = ? AND index_name = ?",
-            )
-            .bind(statement.table_name)
-            .bind(statement.index_name)
-            .fetch_optional(&mut *connection)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
-
-            if exists.is_some() {
-                return Ok(()); // Index exists, silently succeed (idempotent behavior)
-            }
-        }
-    }
-
-    // Generate CREATE INDEX SQL
     let unique_str = if statement.unique { "UNIQUE " } else { "" };
     let if_not_exists_str = if statement.if_not_exists {
-        let version_row: (String,) = sqlx::query_as("SELECT VERSION()")
-            .fetch_one(&mut *connection)
-            .await
-            .map_err(SqlxDatabaseError::Sqlx)?;
-        let supports_if_not_exists = parse_mysql_version(&version_row.0) >= (8, 0, 29);
-        if supports_if_not_exists {
-            "IF NOT EXISTS "
-        } else {
-            ""
-        }
+        "IF NOT EXISTS "
     } else {
         ""
     };
@@ -996,7 +962,7 @@ pub(crate) async fn mysql_sqlx_exec_create_index(
     let columns_str = statement
         .columns
         .iter()
-        .map(|col| format!("`{col}`")) // MySQL uses backticks
+        .map(|col| format!("`{col}`"))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -1013,22 +979,6 @@ pub(crate) async fn mysql_sqlx_exec_create_index(
         .map_err(SqlxDatabaseError::Sqlx)?;
 
     Ok(())
-}
-
-// Helper function for version parsing
-fn parse_mysql_version(version: &str) -> (u8, u8, u8) {
-    // Parse "8.0.29-ubuntu" -> (8, 0, 29)
-    let parts: Vec<&str> = version
-        .split('-')
-        .next()
-        .unwrap_or("0.0.0")
-        .split('.')
-        .collect();
-    (
-        parts.first().and_then(|s| s.parse().ok()).unwrap_or(0),
-        parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0),
-        parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0),
-    )
 }
 
 fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {

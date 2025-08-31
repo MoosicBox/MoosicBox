@@ -4,7 +4,7 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** ✅ **Phase 10.2.2.2 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1-10.2.1.10, 10.2.2.1-10.2.2.2 complete. All database transaction support fully implemented and documented. DropTableStatement and CreateIndexStatement implemented with consistent cross-database behavior and backend-specific SQL generation. CreateIndexStatement includes MySQL version detection for IF NOT EXISTS compatibility.
+**Current Status:** ✅ **Phase 10.2.2.2 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1-10.2.1.10, 10.2.2.1-10.2.2.2 complete. All database transaction support fully implemented and documented. DropTableStatement and CreateIndexStatement implemented with consistent cross-database behavior and backend-specific SQL generation. CreateIndexStatement requires MySQL 8.0.29+ for IF NOT EXISTS support.
 
 **Completion Estimate:** ~94% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, full API documentation, complete database transaction support with comprehensive documentation, DropTableStatement and CreateIndexStatement with backend-specific SQL generation all finished. All 6 database backends have working transactions with connection pooling. Schema builder extensions in progress (Phase 10.2.2).
 
@@ -2263,7 +2263,7 @@ Each backend implements transaction support using connection pooling for isolati
 | SQLite (sqlx) | Backticks `` `col` `` | ✅ Full support | `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON table (cols)` | `sqlite_sqlx_exec_create_index()` |
 | PostgreSQL (postgres) | Double quotes `"col"` | ✅ Full support | `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON table (cols)` | `postgres_exec_create_index()` |
 | PostgreSQL (sqlx) | Double quotes `"col"` | ✅ Full support | `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON table (cols)` | `postgres_sqlx_exec_create_index()` |
-| MySQL (sqlx) | Backticks `` `col` `` | ⚠️ MySQL 8.0.29+ only | `CREATE [UNIQUE] INDEX name ON table (cols)` | `mysql_sqlx_exec_create_index()` |
+| MySQL (sqlx) | Backticks `` `col` `` | ✅ Full support (MySQL 8.0.29+ required) | `CREATE [UNIQUE] INDEX [IF NOT EXISTS] name ON table (cols)` | `mysql_sqlx_exec_create_index()` |
 
 **Column Quoting Implementation Patterns:**
 
@@ -2354,6 +2354,7 @@ fn parse_mysql_version(version: &str) -> (u8, u8, u8) {
     )
 }
 ```
+**Note**: Implementation was simplified to remove version detection complexity. MySQL 8.0.29+ is assumed for IF NOT EXISTS support. Using `if_not_exists = true` on older MySQL versions will result in a SQL syntax error.
 
 **Standard Backend Implementation Pattern:**
 
@@ -2447,9 +2448,8 @@ The `DropIndexStatement` in Phase 10.2.2.3 will need to account for these differ
   - [x] **MySQL (sqlx)**: Use `mysql_sqlx_exec_create_index()` helper with version detection and information_schema fallback
 - [x] Backend-specific implementation requirements:
   - [x] **Column Quoting**: SQLite/MySQL use backticks, PostgreSQL uses double quotes
-  - [x] **IF NOT EXISTS**: SQLite/PostgreSQL support directly, MySQL needs version check (8.0.29+)
+  - [x] **IF NOT EXISTS**: SQLite/PostgreSQL support directly, MySQL requires 8.0.29+
   - [x] **Error Handling**: Idempotent behavior when `if_not_exists = true`
-  - [x] **MySQL Fallback**: Query `information_schema.statistics` for older MySQL versions
 - [x] Implement `Executable` trait for `CreateIndexStatement` in `packages/database/src/executable.rs`
 - [x] Add comprehensive unit tests for CreateIndexStatement builder:
   - [x] Basic index creation (single column)
@@ -2459,7 +2459,7 @@ The `DropIndexStatement` in Phase 10.2.2.3 will need to account for these differ
   - [x] Builder method chaining
 - [x] Add integration tests for each database backend:
   - [x] Test column quoting with reserved keywords
-  - [~] Test MySQL version detection (mock different versions) - **Note**: Actual version detection implemented, mock test deferred
+  - [x] ~~Test MySQL version detection~~ - Removed, assumes MySQL 8.0.29+
   - [x] Test idempotent behavior (create same index twice)
   - [x] Test unique constraint enforcement
   - [x] Test transaction support (create index within transaction)
@@ -2472,7 +2472,7 @@ CreateIndexStatement successfully implemented with:
 - **Backend-Specific SQL Generation**:
   - SQLite/MySQL: Backtick column quoting implemented
   - PostgreSQL: Double-quote column quoting implemented
-  - MySQL: Complex version detection with information_schema fallback for pre-8.0.29 versions
+  - MySQL: Direct IF NOT EXISTS support (requires MySQL 8.0.29+)
 - **Helper Functions**: Each backend has dedicated helper function:
   - `rusqlite_exec_create_index()` - packages/database/src/rusqlite/mod.rs:850-876
   - `sqlite_sqlx_exec_create_index()` - packages/database/src/sqlx/sqlite.rs:1052-1079
@@ -2485,13 +2485,11 @@ CreateIndexStatement successfully implemented with:
 - **Code Quality**: Zero clippy warnings, proper error handling
 
 **Key Technical Achievements:**
-- ✅ MySQL version detection with `parse_mysql_version()` helper function
+- ✅ Consistent IF NOT EXISTS behavior across all backends
 - ✅ Idempotent behavior for IF NOT EXISTS across all backends
 - ✅ Proper column quoting to handle reserved keywords
 - ✅ Transaction-safe index creation support
-
-**Minor Optimization Opportunity Noted:**
-- MySQL version detection currently runs twice when `if_not_exists = true` (functional but could be optimized)
+- ✅ Clear MySQL 8.0.29+ requirement documented in code
 
 ##### 10.2.2.3 Add DropIndexStatement
 
