@@ -2425,10 +2425,10 @@ Each backend must handle these scenarios:
 **Important Note for Phase 10.2.2.3 - DROP INDEX:**
 
 DROP INDEX has different syntax requirements across databases:
-- **SQLite/PostgreSQL**: `DROP INDEX [IF EXISTS] index_name` (simple, no table name needed)
+- **SQLite/PostgreSQL**: `DROP INDEX [IF EXISTS] index_name` (simple syntax)
 - **MySQL**: `DROP INDEX index_name ON table_name` (requires table name, no IF EXISTS support)
 
-The `DropIndexStatement` in Phase 10.2.2.3 will need to account for these differences, likely requiring a `table_name` field for MySQL compatibility.
+**Design Decision**: The `DropIndexStatement` will require `table_name` as a non-optional field for API consistency and guaranteed portability. PostgreSQL/SQLite backends will receive but ignore the table_name parameter, while MySQL will use it in the generated SQL.
 
 ##### 10.2.2.2 Add CreateIndexStatement ✅ **COMPLETED**
 
@@ -2493,22 +2493,44 @@ CreateIndexStatement successfully implemented with:
 
 ##### 10.2.2.3 Add DropIndexStatement
 
+**Design Decision:** Make `table_name` required for API consistency and portability. While PostgreSQL/SQLite don't need it in their SQL syntax, requiring it ensures MySQL compatibility and provides clearer intent.
+
 - [ ] Create `DropIndexStatement` struct in `packages/database/src/schema.rs`
-  - [ ] Add fields: `index_name: &'a str`, `if_exists: bool`
+  - [ ] Add fields: `index_name: &'a str`, `table_name: &'a str`, `if_exists: bool`
+  - [ ] Note: `table_name` is REQUIRED (not Option) for consistency with CreateIndexStatement
   - [ ] Add builder method: `if_exists()`
   - [ ] Implement `execute()` method calling `db.exec_drop_index()`
 - [ ] Add to Database trait:
-  - [ ] Add `fn drop_index<'a>(&self, index_name: &'a str) -> schema::DropIndexStatement<'a>`
+  - [ ] Add `fn drop_index<'a>(&self, index_name: &'a str, table_name: &'a str) -> schema::DropIndexStatement<'a>`
+    - Note: Both parameters required for API consistency
   - [ ] Add `async fn exec_drop_index(&self, statement: &DropIndexStatement<'_>) -> Result<(), DatabaseError>`
 - [ ] Implement `exec_drop_index` for each backend:
-  - [ ] SQLite (rusqlite)
-  - [ ] SQLite (sqlx)
-  - [ ] PostgreSQL (postgres)
-  - [ ] PostgreSQL (sqlx)
-  - [ ] MySQL (sqlx)
+  - [ ] SQLite (rusqlite) - ignores table_name in SQL generation
+  - [ ] SQLite (sqlx) - ignores table_name in SQL generation
+  - [ ] PostgreSQL (postgres) - ignores table_name in SQL generation
+  - [ ] PostgreSQL (sqlx) - ignores table_name in SQL generation
+  - [ ] MySQL (sqlx) - uses table_name in SQL: `DROP INDEX index_name ON table_name`
+- [ ] Backend-specific SQL generation:
+  - [ ] SQLite/PostgreSQL: `DROP INDEX [IF EXISTS] index_name` (table_name ignored but available)
+  - [ ] MySQL: `DROP INDEX index_name ON table_name` (no native IF EXISTS support)
+  - [ ] MySQL IF EXISTS emulation via information_schema query when flag is set
 - [ ] Implement `Executable` trait for `DropIndexStatement`
-- [ ] Add unit tests for DropIndexStatement builder
-- [ ] Add integration tests for each database backend
+- [ ] Add unit tests for DropIndexStatement builder:
+  - [ ] Test required parameters (index_name and table_name)
+  - [ ] Test if_exists flag
+  - [ ] Test builder method chaining
+- [ ] Add integration tests for each database backend:
+  - [ ] Test dropping existing index
+  - [ ] Test dropping non-existent index (should error without if_exists)
+  - [ ] Test if_exists behavior (idempotent)
+  - [ ] Test within transactions
+  - [ ] Verify MySQL uses table_name while others ignore it
+
+**API Design Rationale:**
+- **Required table_name**: Ensures portability across all backends and API consistency with CreateIndexStatement
+- **Symmetrical API**: create_index and drop_index have matching signatures
+- **Clear intent**: Code explicitly states which table's index is being dropped
+- **No runtime surprises**: MySQL won't fail due to missing table_name
 
 ##### 10.2.2.4 Add AlterTableStatement with SQLite Workarounds
 
