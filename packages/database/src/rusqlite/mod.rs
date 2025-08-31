@@ -425,6 +425,15 @@ impl Database for RusqliteDatabase {
         rusqlite_exec_drop_table(&*connection.lock().await, statement)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let connection = self.get_connection();
+        rusqlite_exec_create_index(&*connection.lock().await, statement)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -607,6 +616,14 @@ impl Database for RusqliteTransaction {
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
         rusqlite_exec_drop_table(&*self.connection.lock().await, statement)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        rusqlite_exec_create_index(&*self.connection.lock().await, statement)
     }
 
     async fn begin_transaction(
@@ -825,6 +842,37 @@ fn rusqlite_exec_drop_table(
 
     connection
         .execute(&query, [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+pub(crate) fn rusqlite_exec_create_index(
+    connection: &Connection,
+    statement: &crate::schema::CreateIndexStatement<'_>,
+) -> Result<(), DatabaseError> {
+    let unique_str = if statement.unique { "UNIQUE " } else { "" };
+    let if_not_exists_str = if statement.if_not_exists {
+        "IF NOT EXISTS "
+    } else {
+        ""
+    };
+
+    let columns_str = statement
+        .columns
+        .iter()
+        .map(|col| format!("`{col}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let sql = format!(
+        "CREATE {}INDEX {}{} ON {} ({})",
+        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+    );
+
+    connection
+        .execute(&sql, [])
         .map_err(RusqliteDatabaseError::Rusqlite)?;
 
     Ok(())

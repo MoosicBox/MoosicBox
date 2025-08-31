@@ -642,4 +642,61 @@ mod simulator {
             .await
             .unwrap();
     }
+
+    #[cfg(feature = "schema")]
+    #[tokio::test]
+    async fn test_create_index_operations() {
+        let db = setup_db().await;
+        let db = &**db;
+
+        // Create a test table first
+        db.exec_raw("CREATE TABLE index_test (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
+            .await
+            .unwrap();
+
+        // Test basic index creation
+        db.create_index("idx_name")
+            .table("index_test")
+            .column("name")
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test multi-column index
+        db.create_index("idx_multi")
+            .table("index_test")
+            .columns(vec!["name", "email"])
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test unique index
+        db.create_index("idx_email")
+            .table("index_test")
+            .column("email")
+            .unique(true)
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test IF NOT EXISTS (should not fail even if index exists)
+        db.create_index("idx_name")
+            .table("index_test")
+            .column("name")
+            .if_not_exists(true)
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test creating index with column names that might need quoting
+        db.create_index("idx_quoted")
+            .table("index_test")
+            .column("name") // This should be properly quoted in backend
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Clean up
+        db.exec_raw("DROP TABLE index_test").await.unwrap();
+    }
 }

@@ -133,6 +133,14 @@ impl Database for SimulationDatabase {
         self.inner.exec_drop_table(statement).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        self.inner.exec_create_index(statement).await
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {

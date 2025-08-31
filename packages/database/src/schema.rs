@@ -115,6 +115,64 @@ impl DropTableStatement<'_> {
     }
 }
 
+pub struct CreateIndexStatement<'a> {
+    pub index_name: &'a str,
+    pub table_name: &'a str,
+    pub columns: Vec<&'a str>,
+    pub unique: bool,
+    pub if_not_exists: bool,
+}
+
+#[must_use]
+pub const fn create_index(index_name: &str) -> CreateIndexStatement<'_> {
+    CreateIndexStatement {
+        index_name,
+        table_name: "",
+        columns: vec![],
+        unique: false,
+        if_not_exists: false,
+    }
+}
+
+impl<'a> CreateIndexStatement<'a> {
+    #[must_use]
+    pub const fn table(mut self, table_name: &'a str) -> Self {
+        self.table_name = table_name;
+        self
+    }
+
+    #[must_use]
+    pub fn column(mut self, column: &'a str) -> Self {
+        self.columns.push(column);
+        self
+    }
+
+    #[must_use]
+    pub fn columns(mut self, columns: Vec<&'a str>) -> Self {
+        self.columns = columns;
+        self
+    }
+
+    #[must_use]
+    pub const fn unique(mut self, unique: bool) -> Self {
+        self.unique = unique;
+        self
+    }
+
+    #[must_use]
+    pub const fn if_not_exists(mut self, if_not_exists: bool) -> Self {
+        self.if_not_exists = if_not_exists;
+        self
+    }
+
+    /// # Errors
+    ///
+    /// Will return `Err` if the `exec_create_index` execution failed.
+    pub async fn execute(self, db: &dyn Database) -> Result<(), DatabaseError> {
+        db.exec_create_index(&self).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,5 +205,99 @@ mod tests {
 
         assert_eq!(statement.table_name, "test_table");
         assert!(!statement.if_exists);
+    }
+
+    // CreateIndexStatement tests
+    #[test]
+    fn test_create_index_builder_default() {
+        let statement = create_index("test_index");
+        assert_eq!(statement.index_name, "test_index");
+        assert_eq!(statement.table_name, "");
+        assert!(statement.columns.is_empty());
+        assert!(!statement.unique);
+        assert!(!statement.if_not_exists);
+    }
+
+    #[test]
+    fn test_create_index_builder_single_column() {
+        let statement = create_index("idx_name").table("users").column("name");
+
+        assert_eq!(statement.index_name, "idx_name");
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.columns, vec!["name"]);
+        assert!(!statement.unique);
+        assert!(!statement.if_not_exists);
+    }
+
+    #[test]
+    fn test_create_index_builder_multi_column() {
+        let statement = create_index("idx_multi")
+            .table("users")
+            .columns(vec!["first_name", "last_name"]);
+
+        assert_eq!(statement.index_name, "idx_multi");
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.columns, vec!["first_name", "last_name"]);
+        assert!(!statement.unique);
+        assert!(!statement.if_not_exists);
+    }
+
+    #[test]
+    fn test_create_index_builder_unique() {
+        let statement = create_index("idx_email")
+            .table("users")
+            .column("email")
+            .unique(true);
+
+        assert_eq!(statement.index_name, "idx_email");
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.columns, vec!["email"]);
+        assert!(statement.unique);
+        assert!(!statement.if_not_exists);
+    }
+
+    #[test]
+    fn test_create_index_builder_if_not_exists() {
+        let statement = create_index("idx_test")
+            .table("test")
+            .column("col")
+            .if_not_exists(true);
+
+        assert_eq!(statement.index_name, "idx_test");
+        assert_eq!(statement.table_name, "test");
+        assert_eq!(statement.columns, vec!["col"]);
+        assert!(!statement.unique);
+        assert!(statement.if_not_exists);
+    }
+
+    #[test]
+    fn test_create_index_builder_method_chaining() {
+        let statement = create_index("idx_complex")
+            .table("products")
+            .column("category_id")
+            .column("price")
+            .unique(true)
+            .if_not_exists(true);
+
+        assert_eq!(statement.index_name, "idx_complex");
+        assert_eq!(statement.table_name, "products");
+        assert_eq!(statement.columns, vec!["category_id", "price"]);
+        assert!(statement.unique);
+        assert!(statement.if_not_exists);
+    }
+
+    #[test]
+    fn test_create_index_builder_columns_overwrite() {
+        let statement = create_index("idx_test")
+            .table("test")
+            .column("col1")
+            .column("col2")
+            .columns(vec!["col3", "col4"]); // This should overwrite
+
+        assert_eq!(statement.index_name, "idx_test");
+        assert_eq!(statement.table_name, "test");
+        assert_eq!(statement.columns, vec!["col3", "col4"]);
+        assert!(!statement.unique);
+        assert!(!statement.if_not_exists);
     }
 }

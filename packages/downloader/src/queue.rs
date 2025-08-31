@@ -561,7 +561,7 @@ mod tests {
     use switchy_database::{
         Database, Row,
         query::*,
-        schema::{CreateTableStatement, DropTableStatement},
+        schema::{CreateIndexStatement, CreateTableStatement, DropTableStatement},
     };
 
     use crate::{
@@ -699,6 +699,13 @@ mod tests {
         async fn exec_drop_table(
             &self,
             _statement: &DropTableStatement<'_>,
+        ) -> Result<(), DatabaseError> {
+            Ok(())
+        }
+
+        async fn exec_create_index(
+            &self,
+            _statement: &CreateIndexStatement<'_>,
         ) -> Result<(), DatabaseError> {
             Ok(())
         }

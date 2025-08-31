@@ -506,6 +506,19 @@ impl Database for SqliteSqlxDatabase {
         .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        sqlite_sqlx_exec_create_index(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -1030,6 +1043,38 @@ async fn sqlite_sqlx_exec_drop_table(
 
     connection
         .execute(sqlx::raw_sql(&query))
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+pub(crate) async fn sqlite_sqlx_exec_create_index(
+    connection: &mut SqliteConnection,
+    statement: &crate::schema::CreateIndexStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let unique_str = if statement.unique { "UNIQUE " } else { "" };
+    let if_not_exists_str = if statement.if_not_exists {
+        "IF NOT EXISTS "
+    } else {
+        ""
+    };
+
+    let columns_str = statement
+        .columns
+        .iter()
+        .map(|col| format!("`{col}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let sql = format!(
+        "CREATE {}INDEX {}{} ON {} ({})",
+        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+    );
+
+    connection
+        .execute(sqlx::raw_sql(&sql))
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1870,6 +1915,22 @@ impl Database for SqliteSqlxTransaction {
             .ok_or(DatabaseError::TransactionCommitted)?;
 
         sqlite_sqlx_exec_drop_table(&mut *tx, statement)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "schema")]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        sqlite_sqlx_exec_create_index(&mut *tx, statement)
             .await
             .map_err(Into::into)
     }

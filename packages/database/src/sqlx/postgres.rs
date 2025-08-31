@@ -507,6 +507,20 @@ impl Database for PostgresSqlxDatabase {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        postgres_sqlx_exec_create_index(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement,
+        )
+        .await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -770,6 +784,22 @@ impl Database for PostgresSqlxTransaction {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        postgres_sqlx_exec_create_index(&mut *tx, statement).await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -966,6 +996,40 @@ async fn postgres_sqlx_exec_drop_table(
 
     connection
         .execute(query.as_str())
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+pub(crate) async fn postgres_sqlx_exec_create_index(
+    connection: &mut PgConnection,
+    statement: &crate::schema::CreateIndexStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    let unique_str = if statement.unique { "UNIQUE " } else { "" };
+    let if_not_exists_str = if statement.if_not_exists {
+        "IF NOT EXISTS "
+    } else {
+        ""
+    };
+
+    let columns_str = statement
+        .columns
+        .iter()
+        .map(|col| format!("\"{col}\"")) // PostgreSQL uses double quotes
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let sql = format!(
+        "CREATE {}INDEX {}{} ON {} ({})",
+        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+    );
+
+    log::trace!("exec_create_index: query:\n{sql}");
+
+    connection
+        .execute(sql.as_str())
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 

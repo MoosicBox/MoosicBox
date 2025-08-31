@@ -412,6 +412,17 @@ impl Database for PostgresDatabase {
             .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let client = self.get_client().await?;
+        postgres_exec_create_index(&client, statement)
+            .await
+            .map_err(Into::into)
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,
@@ -682,6 +693,16 @@ impl Database for PostgresTransaction {
             .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_create_index(
+        &self,
+        statement: &crate::schema::CreateIndexStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        postgres_exec_create_index(&self.client, statement)
+            .await
+            .map_err(Into::into)
+    }
+
     async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
         self.client
             .execute(sql, &[])
@@ -925,6 +946,38 @@ async fn postgres_exec_drop_table(
 
     client
         .execute_raw(&query, &[] as &[&str])
+        .await
+        .map_err(PostgresDatabaseError::Postgres)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+pub(crate) async fn postgres_exec_create_index(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::CreateIndexStatement<'_>,
+) -> Result<(), PostgresDatabaseError> {
+    let unique_str = if statement.unique { "UNIQUE " } else { "" };
+    let if_not_exists_str = if statement.if_not_exists {
+        "IF NOT EXISTS "
+    } else {
+        ""
+    };
+
+    let columns_str = statement
+        .columns
+        .iter()
+        .map(|col| format!("\"{col}\"")) // PostgreSQL uses double quotes
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let sql = format!(
+        "CREATE {}INDEX {}{} ON {} ({})",
+        unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
+    );
+
+    client
+        .execute_raw(&sql, &[] as &[&str])
         .await
         .map_err(PostgresDatabaseError::Postgres)?;
 

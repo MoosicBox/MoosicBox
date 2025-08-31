@@ -49,6 +49,15 @@ impl Executable for crate::schema::DropTableStatement<'_> {
     }
 }
 
+/// Implement `Executable` for `CreateIndexStatement`
+#[cfg(feature = "schema")]
+#[async_trait]
+impl Executable for crate::schema::CreateIndexStatement<'_> {
+    async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError> {
+        db.exec_create_index(self).await
+    }
+}
+
 /// Implement `Executable` for `InsertStatement`
 #[async_trait]
 impl Executable for crate::query::InsertStatement<'_> {
