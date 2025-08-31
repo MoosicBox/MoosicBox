@@ -2206,9 +2206,11 @@ Each backend implements transaction support using connection pooling for isolati
 
 ##### 10.2.2.1 Add DropTableStatement
 
+**Design Decision:** CASCADE support deferred to Phase 15 to ensure consistent behavior across all database backends. SQLite doesn't support CASCADE syntax, requiring complex workarounds that are out of scope for Phase 10.2.
+
 - [ ] Create `DropTableStatement` struct in `packages/database/src/schema.rs`
-  - [ ] Add fields: `table_name: &'a str`, `if_exists: bool`, `cascade: bool`
-  - [ ] Add builder methods: `if_exists()`, `cascade()`
+  - [ ] Add fields: `table_name: &'a str`, `if_exists: bool`
+  - [ ] Add builder method: `if_exists()`
   - [ ] Implement `execute()` method calling `db.exec_drop_table()`
 - [ ] Add to `packages/database/src/lib.rs` Database trait:
   - [ ] Add `fn drop_table<'a>(&self, table_name: &'a str) -> schema::DropTableStatement<'a>`
@@ -2426,6 +2428,8 @@ Each backend implements transaction support using connection pooling for isolati
 ### 11.6 Snapshot Testing Utilities
 
 - [ ] Snapshot testing infrastructure for migration verification ❌ **MINOR**
+
+
   - [ ] **Schema Snapshots**
     - [ ] Capture database schema state after each migration
     - [ ] Normalize schema representation across database types
@@ -2818,5 +2822,48 @@ impl RusqliteDatabase {
 2. **Phase 10**: Complete additional documentation and usage examples (optional)
 3. **Phase 11+**: Future enhancements (CLI, checksum validation, etc.) (optional)
 4. **Phase 14**: Concurrent transaction optimization (performance enhancement)
+
+## Phase 15: Enhanced Schema Operations - CASCADE Support
+
+**Goal:** Add CASCADE and RESTRICT support to schema operations, ensuring consistent behavior across all database backends.
+
+**Background:** During Phase 10.2.2.1 implementation, CASCADE support was deferred because SQLite doesn't support CASCADE syntax natively, requiring complex workarounds that would break consistency across backends.
+
+**Prerequisites:** Phase 10.2.2 (Schema Builder Extensions) must be complete
+
+### 15.1 CASCADE Support for DropTableStatement
+
+- [ ] Add CASCADE support to DropTableStatement ❌ **MINOR**
+  - [ ] Add `cascade: bool` field to `DropTableStatement`
+  - [ ] Add `cascade()` builder method
+  - [ ] PostgreSQL/MySQL: Use native CASCADE keyword in SQL generation
+  - [ ] SQLite: Implement manual CASCADE using transactions:
+    1. Query foreign key dependencies with `PRAGMA foreign_key_list`
+    2. Recursively identify and drop dependent tables
+    3. Drop main table last
+    4. Wrap entire operation in transaction for atomicity
+  - [ ] Add comprehensive tests for CASCADE behavior across all backends
+  - [ ] Document CASCADE limitations and workarounds for SQLite
+
+### 15.2 RESTRICT Support
+
+- [ ] Add RESTRICT support for explicit fail-on-dependencies ❌ **MINOR**
+  - [ ] Add `restrict: bool` field (mutually exclusive with cascade)
+  - [ ] PostgreSQL/MySQL: Use RESTRICT keyword
+  - [ ] SQLite: Query dependencies and return error if any exist
+
+### 15.3 Extended CASCADE Support
+
+- [ ] Extend CASCADE to other schema operations ❌ **MINOR**
+  - [ ] Add CASCADE to DropIndexStatement
+  - [ ] Add CASCADE to AlterTableStatement column drops
+  - [ ] Consistent behavior across all schema modification operations
+
+**Implementation Complexity:** HIGH - SQLite manual CASCADE requires significant transaction logic and dependency graph traversal.
+
+**Benefits:**
+- Consistent CASCADE behavior across all database backends
+- Production-ready foreign key constraint handling
+- Enhanced migration safety for complex schema changes
 
 **Production Readiness:** ✅ The migration system is fully functional and production-ready for HyperChad and other projects. All core functionality complete.
