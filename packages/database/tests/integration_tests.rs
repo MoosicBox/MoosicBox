@@ -378,6 +378,109 @@ macro_rules! generate_tests {
             // For SQLite file databases, it's expected that only one transaction succeeds due to locking
             // This demonstrates proper isolation and consistency as specified
         }
+
+        #[switchy_async::test]
+        #[test_log::test]
+        async fn test_transaction_crud_operations() {
+            let db = setup_db().await;
+            let db = &**db;
+
+            // Insert initial data outside transaction for UPDATE/DELETE tests
+            db.insert("users")
+                .value("name", "InitialUser")
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Begin transaction
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test INSERT within transaction
+            let insert_result = tx
+                .insert("users")
+                .value("name", "TxInsertUser")
+                .execute(&*tx)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                insert_result.get("name").unwrap().as_str().unwrap(),
+                "TxInsertUser"
+            );
+
+            // Test UPDATE within transaction
+            let update_result = tx
+                .update("users")
+                .value("name", "UpdatedInitialUser")
+                .where_eq("name", "InitialUser")
+                .execute(&*tx)
+                .await
+                .unwrap();
+
+            assert_eq!(update_result.len(), 1);
+            assert_eq!(
+                update_result[0].get("name").unwrap().as_str().unwrap(),
+                "UpdatedInitialUser"
+            );
+
+            // Test UPSERT within transaction
+            let upsert_result = tx
+                .upsert("users")
+                .value("name", "UpsertUser")
+                .where_eq("name", "UpdatedInitialUser")
+                .execute(&*tx)
+                .await
+                .unwrap();
+
+            assert_eq!(upsert_result.len(), 1);
+            assert_eq!(
+                upsert_result[0].get("name").unwrap().as_str().unwrap(),
+                "UpsertUser"
+            );
+
+            // Test DELETE within transaction
+            let delete_result = tx
+                .delete("users")
+                .where_eq("name", "TxInsertUser")
+                .execute(&*tx)
+                .await
+                .unwrap();
+
+            assert_eq!(delete_result.len(), 1);
+            assert_eq!(
+                delete_result[0].get("name").unwrap().as_str().unwrap(),
+                "TxInsertUser"
+            );
+
+            // Verify data changes are visible within transaction
+            let tx_rows = tx.select("users").execute(&*tx).await.unwrap();
+
+            let tx_names: Vec<String> = tx_rows
+                .iter()
+                .map(|r| r.get("name").unwrap().as_str().unwrap().to_string())
+                .collect();
+
+            assert!(tx_names.contains(&"UpsertUser".to_string()));
+            assert!(!tx_names.contains(&"UpdatedInitialUser".to_string()));
+            assert!(!tx_names.contains(&"TxInsertUser".to_string())); // Deleted
+            assert!(!tx_names.contains(&"InitialUser".to_string())); // Updated
+
+            // Commit transaction
+            tx.commit().await.unwrap();
+
+            // Verify changes persist after commit
+            let final_rows = db.select("users").execute(db).await.unwrap();
+
+            let final_names: Vec<String> = final_rows
+                .iter()
+                .map(|r| r.get("name").unwrap().as_str().unwrap().to_string())
+                .collect();
+
+            assert!(final_names.contains(&"UpsertUser".to_string()));
+            assert!(!final_names.contains(&"UpdatedInitialUser".to_string()));
+            assert!(!final_names.contains(&"TxInsertUser".to_string()));
+            assert!(!final_names.contains(&"InitialUser".to_string()));
+        }
     };
 }
 
@@ -434,4 +537,71 @@ mod rusqlite {
     }
 
     generate_tests!();
+}
+
+#[cfg(feature = "simulator")]
+mod simulator {
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    async fn setup_db() -> Arc<Box<dyn Database>> {
+        let db = switchy_database::simulator::SimulationDatabase::new().unwrap();
+        let db = Arc::new(Box::new(db) as Box<dyn Database>);
+
+        // Create a sample table
+        db.exec_raw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+            .await
+            .unwrap();
+        db
+    }
+
+    generate_tests!();
+
+    // Additional tests specific to simulator state tracking
+    #[switchy_async::test]
+    #[test_log::test]
+    async fn test_operation_after_commit_verification() {
+        let db = setup_db().await;
+        let db = &**db;
+
+        let tx = db.begin_transaction().await.unwrap();
+        tx.insert("users")
+            .value("name", "CommittedUser")
+            .execute(&*tx)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let rows = db
+            .select("users")
+            .where_eq("name", "CommittedUser")
+            .execute(db)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[switchy_async::test]
+    #[test_log::test]
+    async fn test_operation_after_rollback_verification() {
+        let db = setup_db().await;
+        let db = &**db;
+
+        let tx = db.begin_transaction().await.unwrap();
+        tx.insert("users")
+            .value("name", "RolledBackUser")
+            .execute(&*tx)
+            .await
+            .unwrap();
+        tx.rollback().await.unwrap();
+
+        let rows = db
+            .select("users")
+            .where_eq("name", "RolledBackUser")
+            .execute(db)
+            .await
+            .unwrap();
+        assert_eq!(rows.len(), 0);
+    }
 }
