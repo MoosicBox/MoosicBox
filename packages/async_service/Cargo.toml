@@ -13,12 +13,17 @@ version     = "0.1.4"
 [dependencies]
 
 
-async-trait  = { workspace = true }
-flume        = { workspace = true }
-futures      = { workspace = true }
-log          = { workspace = true }
-switchy_async = { workspace = true, features = ["macros", "sync", "tokio", "util"] }
-thiserror    = { workspace = true }
+async-trait = { workspace = true }
+flume = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "tokio",
+    "util",
+] }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

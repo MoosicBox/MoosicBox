@@ -22,8 +22,8 @@ moosicbox_profiles      = { workspace = true, features = ["events"] }
 moosicbox_scan          = { workspace = true }
 moosicbox_server        = { workspace = true, features = ["app-apis", "sqlite-sqlx"] }
 
-switchy_async           = { workspace = true, features = ["sync", "tokio"] }
-switchy_database        = { workspace = true }
+switchy_async    = { workspace = true, features = ["sync", "tokio"] }
+switchy_database = { workspace = true }
 
 log          = { workspace = true }
 strum        = { workspace = true }

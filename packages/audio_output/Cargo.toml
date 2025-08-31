@@ -18,8 +18,8 @@ moosicbox_env_utils     = { workspace = true }
 moosicbox_resampler     = { workspace = true }
 moosicbox_stream_utils  = { workspace = true }
 
-switchy_async           = { workspace = true, features = ["tokio"] }
-switchy_time            = { workspace = true, features = ["std"] }
+switchy_async = { workspace = true, features = ["tokio"] }
+switchy_time  = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web        = { workspace = true, optional = true }

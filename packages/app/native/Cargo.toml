@@ -67,8 +67,6 @@ moosicbox_scan_models = { workspace = true, features = ["api"] }
 moosicbox_session_models = { workspace = true }
 
 moosicbox_ws = { workspace = true }
-switchy_async = { workspace = true, features = ["tokio"] }
-switchy_env = { workspace = true, features = ["std"] }
 switchy = { workspace = true, features = [
     "async-macros",
     "async-net",
@@ -82,6 +80,8 @@ switchy = { workspace = true, features = [
     "http-reqwest",
     "time-std",
 ] }
+switchy_async = { workspace = true, features = ["tokio"] }
+switchy_env = { workspace = true, features = ["std"] }
 
 # Bundled dependencies
 moosicbox_app_native_bundled = { workspace = true, optional = true }

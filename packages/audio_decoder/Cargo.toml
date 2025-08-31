@@ -17,8 +17,8 @@ moosicbox_stream_utils = { workspace = true, features = [
 ] }
 
 switchy_async = { workspace = true, features = ["tokio"] }
-switchy_http = { workspace = true, features = ["reqwest"] }
-switchy_time = { workspace = true, features = ["std"] }
+switchy_http  = { workspace = true, features = ["reqwest"] }
+switchy_time  = { workspace = true, features = ["std"] }
 
 bytes     = { workspace = true }
 flume     = { workspace = true }

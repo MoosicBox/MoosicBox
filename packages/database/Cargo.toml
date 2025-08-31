@@ -76,7 +76,12 @@ api = ["dep:actix-web", "dep:futures"]
 mysql = ["mysql-sqlx", "sqlx"]
 mysql-sqlx = ["dep:futures", "dep:sqlx", "sqlx", "sqlx/mysql"]
 postgres = ["dep:futures", "dep:regex", "dep:tokio-util", "postgres-raw"]
-postgres-raw = ["dep:deadpool-postgres", "dep:postgres-protocol", "dep:tokio-postgres", "postgres"]
+postgres-raw = [
+    "dep:deadpool-postgres",
+    "dep:postgres-protocol",
+    "dep:tokio-postgres",
+    "postgres",
+]
 postgres-sqlx = [
     "dep:sqlx",
     "dep:sqlx-postgres",

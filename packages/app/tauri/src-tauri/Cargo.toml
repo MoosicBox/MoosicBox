@@ -35,12 +35,12 @@ moosicbox_music_models = { workspace = true }
 moosicbox_player = { workspace = true, features = ["local"] }
 moosicbox_session = { workspace = true }
 moosicbox_ws = { workspace = true }
-switchy_env = { workspace = true, features = ["std"] }
 switchy = { workspace = true, features = [
     "async-tokio",
     "mdns-scanner",
     "upnp-player",
 ] }
+switchy_env = { workspace = true, features = ["std"] }
 
 # Bundled Dependencies
 moosicbox_app_tauri_bundled = { workspace = true, optional = true }

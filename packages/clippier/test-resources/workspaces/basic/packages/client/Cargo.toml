@@ -1,8 +1,8 @@
 [package]
-name = "client"
-version = "0.1.0"
 edition = "2021"
+name    = "client"
+version = "0.1.0"
 
 [dependencies]
-models = { path = "../models" }
+models  = { path = "../models" }
 reqwest = { workspace = true }

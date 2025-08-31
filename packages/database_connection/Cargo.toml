@@ -25,7 +25,7 @@ sqlx = { workspace = true, optional = true, features = ["runtime-tokio"] }
 
 # tokio-postgres dependencies
 deadpool-postgres = { workspace = true, optional = true }
-tokio-postgres = { workspace = true, optional = true, features = [] }
+tokio-postgres    = { workspace = true, optional = true, features = [] }
 
 # Postgres dependencies
 native-tls          = { workspace = true, optional = true }
