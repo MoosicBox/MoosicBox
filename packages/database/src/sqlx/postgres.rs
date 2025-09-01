@@ -535,6 +535,20 @@ impl Database for PostgresSqlxDatabase {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        postgres_sqlx_exec_alter_table(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement,
+        )
+        .await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -830,6 +844,22 @@ impl Database for PostgresSqlxTransaction {
         Ok(())
     }
 
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        postgres_sqlx_exec_alter_table(&mut *tx, statement).await?;
+
+        Ok(())
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -1085,6 +1115,195 @@ pub(crate) async fn postgres_sqlx_exec_drop_index(
         .execute(sql.as_str())
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+pub(crate) async fn postgres_sqlx_exec_alter_table(
+    connection: &mut PgConnection,
+    statement: &crate::schema::AlterTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    use crate::schema::AlterOperation;
+
+    for operation in &statement.operations {
+        match operation {
+            AlterOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                default,
+            } => {
+                let type_str = match data_type {
+                    crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+                    crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Bool => "BOOLEAN".to_string(),
+                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::Int => "INTEGER".to_string(),
+                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::Real => "REAL".to_string(),
+                    crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
+                    crate::schema::DataType::Decimal(precision, scale) => {
+                        format!("DECIMAL({precision}, {scale})")
+                    }
+                    crate::schema::DataType::DateTime => "TIMESTAMP".to_string(),
+                };
+
+                let nullable_str = if *nullable { "" } else { " NOT NULL" };
+                let default_str = match default {
+                    Some(val) => {
+                        let val_str = match val {
+                            crate::DatabaseValue::String(s) => format!("'{s}'"),
+                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::UNumber(n) => n.to_string(),
+                            crate::DatabaseValue::Bool(b) => b.to_string(),
+                            crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Null => "NULL".to_string(),
+                            crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            _ => {
+                                return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
+                                    type_name:
+                                        "Unsupported default value type for ALTER TABLE ADD COLUMN"
+                                            .to_string(),
+                                }));
+                            }
+                        };
+                        format!(" DEFAULT {val_str}")
+                    }
+                    None => String::new(),
+                };
+
+                let sql = format!(
+                    "ALTER TABLE {} ADD COLUMN \"{}\" {}{}{}",
+                    statement.table_name, name, type_str, nullable_str, default_str
+                );
+
+                log::trace!("exec_alter_table ADD COLUMN: query:\n{sql}");
+
+                connection
+                    .execute(sql.as_str())
+                    .await
+                    .map_err(SqlxDatabaseError::Sqlx)?;
+            }
+            AlterOperation::DropColumn { name } => {
+                let sql = format!(
+                    "ALTER TABLE {} DROP COLUMN \"{}\"",
+                    statement.table_name, name
+                );
+
+                log::trace!("exec_alter_table DROP COLUMN: query:\n{sql}");
+
+                connection
+                    .execute(sql.as_str())
+                    .await
+                    .map_err(SqlxDatabaseError::Sqlx)?;
+            }
+            AlterOperation::RenameColumn { old_name, new_name } => {
+                let sql = format!(
+                    "ALTER TABLE {} RENAME COLUMN \"{}\" TO \"{}\"",
+                    statement.table_name, old_name, new_name
+                );
+
+                log::trace!("exec_alter_table RENAME COLUMN: query:\n{sql}");
+
+                connection
+                    .execute(sql.as_str())
+                    .await
+                    .map_err(SqlxDatabaseError::Sqlx)?;
+            }
+            AlterOperation::ModifyColumn {
+                name,
+                new_data_type,
+                new_nullable,
+                new_default,
+            } => {
+                // PostgreSQL supports native ALTER COLUMN for type changes
+                let type_str = match new_data_type {
+                    crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+                    crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Bool => "BOOLEAN".to_string(),
+                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::Int => "INTEGER".to_string(),
+                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::Real => "REAL".to_string(),
+                    crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
+                    crate::schema::DataType::Decimal(precision, scale) => {
+                        format!("DECIMAL({precision}, {scale})")
+                    }
+                    crate::schema::DataType::DateTime => "TIMESTAMP".to_string(),
+                };
+
+                // Change data type
+                let alter_type_sql = format!(
+                    "ALTER TABLE {} ALTER COLUMN \"{}\" TYPE {} USING \"{}\"::{}",
+                    statement.table_name, name, type_str, name, type_str
+                );
+
+                log::trace!("exec_alter_table MODIFY COLUMN (type): query:\n{alter_type_sql}");
+
+                connection
+                    .execute(alter_type_sql.as_str())
+                    .await
+                    .map_err(SqlxDatabaseError::Sqlx)?;
+
+                // Change nullable constraint if specified
+                if let Some(nullable) = new_nullable {
+                    let nullable_sql = if *nullable {
+                        format!(
+                            "ALTER TABLE {} ALTER COLUMN \"{}\" DROP NOT NULL",
+                            statement.table_name, name
+                        )
+                    } else {
+                        format!(
+                            "ALTER TABLE {} ALTER COLUMN \"{}\" SET NOT NULL",
+                            statement.table_name, name
+                        )
+                    };
+
+                    log::trace!(
+                        "exec_alter_table MODIFY COLUMN (nullable): query:\n{nullable_sql}"
+                    );
+
+                    connection
+                        .execute(nullable_sql.as_str())
+                        .await
+                        .map_err(SqlxDatabaseError::Sqlx)?;
+                }
+
+                // Change default value if specified
+                if let Some(default) = new_default {
+                    let default_str = match default {
+                        crate::DatabaseValue::String(s) => format!("'{s}'"),
+                        crate::DatabaseValue::Number(n) => n.to_string(),
+                        crate::DatabaseValue::UNumber(n) => n.to_string(),
+                        crate::DatabaseValue::Bool(b) => b.to_string(),
+                        crate::DatabaseValue::Real(r) => r.to_string(),
+                        crate::DatabaseValue::Null => "NULL".to_string(),
+                        crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                        _ => {
+                            return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
+                                type_name: "Unsupported default value type for MODIFY COLUMN"
+                                    .to_string(),
+                            }));
+                        }
+                    };
+
+                    let default_sql = format!(
+                        "ALTER TABLE {} ALTER COLUMN \"{}\" SET DEFAULT {}",
+                        statement.table_name, name, default_str
+                    );
+
+                    log::trace!("exec_alter_table MODIFY COLUMN (default): query:\n{default_sql}");
+
+                    connection
+                        .execute(default_sql.as_str())
+                        .await
+                        .map_err(SqlxDatabaseError::Sqlx)?;
+                }
+            }
+        }
+    }
 
     Ok(())
 }

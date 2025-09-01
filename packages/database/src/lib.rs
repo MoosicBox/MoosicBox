@@ -390,6 +390,11 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         schema::drop_index(index_name, table_name)
     }
 
+    #[cfg(feature = "schema")]
+    fn alter_table<'a>(&self, table_name: &'a str) -> schema::AlterTableStatement<'a> {
+        schema::alter_table(table_name)
+    }
+
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError>;
     async fn query_first(&self, query: &SelectQuery<'_>) -> Result<Option<Row>, DatabaseError>;
     async fn exec_update(&self, statement: &UpdateStatement<'_>)
@@ -451,6 +456,12 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     async fn exec_drop_index(
         &self,
         statement: &schema::DropIndexStatement<'_>,
+    ) -> Result<(), DatabaseError>;
+
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError>;
 
     /// Begin a database transaction

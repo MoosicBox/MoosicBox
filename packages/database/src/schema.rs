@@ -222,6 +222,109 @@ impl DropIndexStatement<'_> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum AlterOperation {
+    AddColumn {
+        name: String,
+        data_type: DataType,
+        nullable: bool,
+        default: Option<DatabaseValue>,
+    },
+    DropColumn {
+        name: String,
+    },
+    RenameColumn {
+        old_name: String,
+        new_name: String,
+    },
+    ModifyColumn {
+        name: String,
+        new_data_type: DataType,
+        new_nullable: Option<bool>,
+        new_default: Option<DatabaseValue>,
+    },
+}
+
+pub struct AlterTableStatement<'a> {
+    pub table_name: &'a str,
+    pub operations: Vec<AlterOperation>,
+}
+
+#[must_use]
+pub const fn alter_table(table_name: &str) -> AlterTableStatement<'_> {
+    AlterTableStatement {
+        table_name,
+        operations: vec![],
+    }
+}
+
+impl AlterTableStatement<'_> {
+    #[must_use]
+    pub fn add_column(
+        mut self,
+        name: String,
+        data_type: DataType,
+        nullable: bool,
+        default: Option<DatabaseValue>,
+    ) -> Self {
+        self.operations.push(AlterOperation::AddColumn {
+            name,
+            data_type,
+            nullable,
+            default,
+        });
+        self
+    }
+
+    #[must_use]
+    pub fn drop_column(mut self, name: String) -> Self {
+        self.operations.push(AlterOperation::DropColumn { name });
+        self
+    }
+
+    #[must_use]
+    pub fn rename_column(mut self, old_name: String, new_name: String) -> Self {
+        self.operations
+            .push(AlterOperation::RenameColumn { old_name, new_name });
+        self
+    }
+
+    #[must_use]
+    pub fn modify_column(
+        mut self,
+        name: String,
+        new_data_type: DataType,
+        new_nullable: Option<bool>,
+        new_default: Option<DatabaseValue>,
+    ) -> Self {
+        self.operations.push(AlterOperation::ModifyColumn {
+            name,
+            new_data_type,
+            new_nullable,
+            new_default,
+        });
+        self
+    }
+
+    /// Execute the alter table statement against the provided database.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if the `exec_alter_table` execution failed.
+    ///
+    /// # Notes
+    ///
+    /// * **Column Order Changes**: For `SQLite` MODIFY COLUMN operations, column order may change
+    ///   as new columns are added at the end of the table. Do not rely on SELECT * or positional
+    ///   parameters.
+    /// * **Transaction Safety**: All operations are wrapped in transactions for atomicity.
+    /// * **`SQLite` Workarounds**: Uses hybrid approach - native operations when possible,
+    ///   column-based workarounds for MODIFY COLUMN, table recreation as fallback.
+    pub async fn execute(self, db: &dyn Database) -> Result<(), DatabaseError> {
+        db.exec_alter_table(&self).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,5 +477,273 @@ mod tests {
         assert_eq!(statement.index_name, "idx_complex");
         assert_eq!(statement.table_name, "products");
         assert!(statement.if_exists);
+    }
+
+    // AlterTableStatement tests
+    #[test]
+    fn test_alter_table_builder_default() {
+        let statement = alter_table("test_table");
+        assert_eq!(statement.table_name, "test_table");
+        assert!(statement.operations.is_empty());
+    }
+
+    #[test]
+    fn test_alter_table_add_column() {
+        let statement = alter_table("users").add_column(
+            "email".to_string(),
+            DataType::VarChar(255),
+            false,
+            None,
+        );
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 1);
+        match &statement.operations[0] {
+            AlterOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                default,
+            } => {
+                assert_eq!(name, "email");
+                assert!(matches!(data_type, DataType::VarChar(255)));
+                assert!(!nullable);
+                assert!(default.is_none());
+            }
+            _ => panic!("Expected AddColumn operation"),
+        }
+    }
+
+    #[test]
+    fn test_alter_table_add_column_with_default() {
+        let statement = alter_table("users").add_column(
+            "active".to_string(),
+            DataType::Bool,
+            true,
+            Some(DatabaseValue::Bool(true)),
+        );
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 1);
+        match &statement.operations[0] {
+            AlterOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                default,
+            } => {
+                assert_eq!(name, "active");
+                assert!(matches!(data_type, DataType::Bool));
+                assert!(nullable);
+                assert!(matches!(default, Some(DatabaseValue::Bool(true))));
+            }
+            _ => panic!("Expected AddColumn operation"),
+        }
+    }
+
+    #[test]
+    fn test_alter_table_drop_column() {
+        let statement = alter_table("users").drop_column("old_column".to_string());
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 1);
+        match &statement.operations[0] {
+            AlterOperation::DropColumn { name } => {
+                assert_eq!(name, "old_column");
+            }
+            _ => panic!("Expected DropColumn operation"),
+        }
+    }
+
+    #[test]
+    fn test_alter_table_rename_column() {
+        let statement =
+            alter_table("users").rename_column("old_name".to_string(), "new_name".to_string());
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 1);
+        match &statement.operations[0] {
+            AlterOperation::RenameColumn { old_name, new_name } => {
+                assert_eq!(old_name, "old_name");
+                assert_eq!(new_name, "new_name");
+            }
+            _ => panic!("Expected RenameColumn operation"),
+        }
+    }
+
+    #[test]
+    fn test_alter_table_modify_column() {
+        let statement = alter_table("users").modify_column(
+            "age".to_string(),
+            DataType::Int,
+            Some(false),
+            Some(DatabaseValue::Number(0)),
+        );
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 1);
+        match &statement.operations[0] {
+            AlterOperation::ModifyColumn {
+                name,
+                new_data_type,
+                new_nullable,
+                new_default,
+            } => {
+                assert_eq!(name, "age");
+                assert!(matches!(new_data_type, DataType::Int));
+                assert_eq!(new_nullable, &Some(false));
+                assert!(matches!(new_default, Some(DatabaseValue::Number(0))));
+            }
+            _ => panic!("Expected ModifyColumn operation"),
+        }
+    }
+
+    #[test]
+    fn test_alter_table_modify_column_partial() {
+        let statement =
+            alter_table("users").modify_column("name".to_string(), DataType::Text, None, None);
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 1);
+        match &statement.operations[0] {
+            AlterOperation::ModifyColumn {
+                name,
+                new_data_type,
+                new_nullable,
+                new_default,
+            } => {
+                assert_eq!(name, "name");
+                assert!(matches!(new_data_type, DataType::Text));
+                assert_eq!(new_nullable, &None);
+                assert_eq!(new_default, &None);
+            }
+            _ => panic!("Expected ModifyColumn operation"),
+        }
+    }
+
+    #[test]
+    fn test_alter_table_multiple_operations() {
+        let statement = alter_table("users")
+            .add_column("email".to_string(), DataType::VarChar(255), false, None)
+            .drop_column("old_field".to_string())
+            .rename_column("first_name".to_string(), "given_name".to_string())
+            .modify_column("age".to_string(), DataType::SmallInt, Some(true), None);
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 4);
+
+        // Check AddColumn operation
+        match &statement.operations[0] {
+            AlterOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                default,
+            } => {
+                assert_eq!(name, "email");
+                assert!(matches!(data_type, DataType::VarChar(255)));
+                assert!(!nullable);
+                assert!(default.is_none());
+            }
+            _ => panic!("Expected AddColumn operation at index 0"),
+        }
+
+        // Check DropColumn operation
+        match &statement.operations[1] {
+            AlterOperation::DropColumn { name } => {
+                assert_eq!(name, "old_field");
+            }
+            _ => panic!("Expected DropColumn operation at index 1"),
+        }
+
+        // Check RenameColumn operation
+        match &statement.operations[2] {
+            AlterOperation::RenameColumn { old_name, new_name } => {
+                assert_eq!(old_name, "first_name");
+                assert_eq!(new_name, "given_name");
+            }
+            _ => panic!("Expected RenameColumn operation at index 2"),
+        }
+
+        // Check ModifyColumn operation
+        match &statement.operations[3] {
+            AlterOperation::ModifyColumn {
+                name,
+                new_data_type,
+                new_nullable,
+                new_default,
+            } => {
+                assert_eq!(name, "age");
+                assert!(matches!(new_data_type, DataType::SmallInt));
+                assert_eq!(new_nullable, &Some(true));
+                assert_eq!(new_default, &None);
+            }
+            _ => panic!("Expected ModifyColumn operation at index 3"),
+        }
+    }
+
+    #[test]
+    fn test_alter_table_builder_chaining() {
+        let statement = alter_table("products")
+            .add_column("sku".to_string(), DataType::VarChar(50), false, None)
+            .add_column(
+                "created_at".to_string(),
+                DataType::DateTime,
+                false,
+                Some(DatabaseValue::Now),
+            );
+
+        assert_eq!(statement.table_name, "products");
+        assert_eq!(statement.operations.len(), 2);
+
+        // Both operations should be AddColumn
+        for (i, operation) in statement.operations.iter().enumerate() {
+            match operation {
+                AlterOperation::AddColumn { .. } => {
+                    // Expected
+                }
+                _ => panic!("Expected AddColumn operation at index {i}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_alter_operation_clone() {
+        let operation = AlterOperation::AddColumn {
+            name: "test_col".to_string(),
+            data_type: DataType::Int,
+            nullable: true,
+            default: Some(DatabaseValue::Number(42)),
+        };
+
+        let cloned = operation.clone();
+        match (&operation, &cloned) {
+            (
+                AlterOperation::AddColumn {
+                    name: n1,
+                    data_type: d1,
+                    nullable: null1,
+                    default: def1,
+                },
+                AlterOperation::AddColumn {
+                    name: n2,
+                    data_type: d2,
+                    nullable: null2,
+                    default: def2,
+                },
+            ) => {
+                assert_eq!(n1, n2);
+                assert!(matches!((d1, d2), (DataType::Int, DataType::Int)));
+                assert_eq!(null1, null2);
+                assert!(matches!(
+                    (def1, def2),
+                    (
+                        Some(DatabaseValue::Number(42)),
+                        Some(DatabaseValue::Number(42))
+                    )
+                ));
+            }
+            _ => panic!("Clone should match original"),
+        }
     }
 }

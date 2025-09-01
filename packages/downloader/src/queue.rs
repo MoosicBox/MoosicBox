@@ -562,7 +562,8 @@ mod tests {
         Database, Row,
         query::*,
         schema::{
-            CreateIndexStatement, CreateTableStatement, DropIndexStatement, DropTableStatement,
+            AlterTableStatement, CreateIndexStatement, CreateTableStatement, DropIndexStatement,
+            DropTableStatement,
         },
     };
 
@@ -715,6 +716,13 @@ mod tests {
         async fn exec_drop_index(
             &self,
             _statement: &DropIndexStatement<'_>,
+        ) -> Result<(), DatabaseError> {
+            Ok(())
+        }
+
+        async fn exec_alter_table(
+            &self,
+            _statement: &AlterTableStatement<'_>,
         ) -> Result<(), DatabaseError> {
             Ok(())
         }

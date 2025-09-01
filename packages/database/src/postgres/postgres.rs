@@ -434,6 +434,17 @@ impl Database for PostgresDatabase {
             .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let client = self.get_client().await?;
+        postgres_exec_alter_table(&client, statement)
+            .await
+            .map_err(Into::into)
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,
@@ -720,6 +731,16 @@ impl Database for PostgresTransaction {
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
         postgres_exec_drop_index(&self.client, statement)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        postgres_exec_alter_table(&self.client, statement)
             .await
             .map_err(Into::into)
     }
@@ -1022,6 +1043,180 @@ pub(crate) async fn postgres_exec_drop_index(
         .execute_raw(&sql, &[] as &[&str])
         .await
         .map_err(PostgresDatabaseError::Postgres)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+pub(crate) async fn postgres_exec_alter_table(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::AlterTableStatement<'_>,
+) -> Result<(), PostgresDatabaseError> {
+    use crate::schema::AlterOperation;
+
+    for operation in &statement.operations {
+        match operation {
+            AlterOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                default,
+            } => {
+                let type_str = match data_type {
+                    crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+                    crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Bool => "BOOLEAN".to_string(),
+                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::Int => "INTEGER".to_string(),
+                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::Real => "REAL".to_string(),
+                    crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
+                    crate::schema::DataType::Decimal(precision, scale) => {
+                        format!("DECIMAL({precision}, {scale})")
+                    }
+                    crate::schema::DataType::DateTime => "TIMESTAMP".to_string(),
+                };
+
+                let nullable_str = if *nullable { "" } else { " NOT NULL" };
+                let default_str = match default {
+                    Some(val) => {
+                        let val_str = match val {
+                            crate::DatabaseValue::String(s) => format!("'{s}'"),
+                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::UNumber(n) => n.to_string(),
+                            crate::DatabaseValue::Bool(b) => b.to_string(),
+                            crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Null => "NULL".to_string(),
+                            crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            _ => {
+                                log::error!(
+                                    "Unsupported default value type for ALTER TABLE ADD COLUMN: {val:?}"
+                                );
+                                return Err(PostgresDatabaseError::InvalidRequest);
+                            }
+                        };
+                        format!(" DEFAULT {val_str}")
+                    }
+                    None => String::new(),
+                };
+
+                let sql = format!(
+                    "ALTER TABLE {} ADD COLUMN \"{}\" {}{}{}",
+                    statement.table_name, name, type_str, nullable_str, default_str
+                );
+
+                client
+                    .execute_raw(&sql, &[] as &[&str])
+                    .await
+                    .map_err(PostgresDatabaseError::Postgres)?;
+            }
+            AlterOperation::DropColumn { name } => {
+                let sql = format!(
+                    "ALTER TABLE {} DROP COLUMN \"{}\"",
+                    statement.table_name, name
+                );
+
+                client
+                    .execute_raw(&sql, &[] as &[&str])
+                    .await
+                    .map_err(PostgresDatabaseError::Postgres)?;
+            }
+            AlterOperation::RenameColumn { old_name, new_name } => {
+                let sql = format!(
+                    "ALTER TABLE {} RENAME COLUMN \"{}\" TO \"{}\"",
+                    statement.table_name, old_name, new_name
+                );
+
+                client
+                    .execute_raw(&sql, &[] as &[&str])
+                    .await
+                    .map_err(PostgresDatabaseError::Postgres)?;
+            }
+            AlterOperation::ModifyColumn {
+                name,
+                new_data_type,
+                new_nullable,
+                new_default,
+            } => {
+                // PostgreSQL supports native ALTER COLUMN for type changes
+                let type_str = match new_data_type {
+                    crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+                    crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Bool => "BOOLEAN".to_string(),
+                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::Int => "INTEGER".to_string(),
+                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::Real => "REAL".to_string(),
+                    crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
+                    crate::schema::DataType::Decimal(precision, scale) => {
+                        format!("DECIMAL({precision}, {scale})")
+                    }
+                    crate::schema::DataType::DateTime => "TIMESTAMP".to_string(),
+                };
+
+                // Change data type
+                let alter_type_sql = format!(
+                    "ALTER TABLE {} ALTER COLUMN \"{}\" TYPE {} USING \"{}\"::{}",
+                    statement.table_name, name, type_str, name, type_str
+                );
+
+                client
+                    .execute_raw(&alter_type_sql, &[] as &[&str])
+                    .await
+                    .map_err(PostgresDatabaseError::Postgres)?;
+
+                // Change nullable constraint if specified
+                if let Some(nullable) = new_nullable {
+                    let nullable_sql = if *nullable {
+                        format!(
+                            "ALTER TABLE {} ALTER COLUMN \"{}\" DROP NOT NULL",
+                            statement.table_name, name
+                        )
+                    } else {
+                        format!(
+                            "ALTER TABLE {} ALTER COLUMN \"{}\" SET NOT NULL",
+                            statement.table_name, name
+                        )
+                    };
+
+                    client
+                        .execute_raw(&nullable_sql, &[] as &[&str])
+                        .await
+                        .map_err(PostgresDatabaseError::Postgres)?;
+                }
+
+                // Change default value if specified
+                if let Some(default) = new_default {
+                    let default_str = match default {
+                        crate::DatabaseValue::String(s) => format!("'{s}'"),
+                        crate::DatabaseValue::Number(n) => n.to_string(),
+                        crate::DatabaseValue::UNumber(n) => n.to_string(),
+                        crate::DatabaseValue::Bool(b) => b.to_string(),
+                        crate::DatabaseValue::Real(r) => r.to_string(),
+                        crate::DatabaseValue::Null => "NULL".to_string(),
+                        crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                        _ => {
+                            log::error!(
+                                "Unsupported default value type for MODIFY COLUMN: {default:?}"
+                            );
+                            return Err(PostgresDatabaseError::InvalidRequest);
+                        }
+                    };
+
+                    let default_sql = format!(
+                        "ALTER TABLE {} ALTER COLUMN \"{}\" SET DEFAULT {}",
+                        statement.table_name, name, default_str
+                    );
+
+                    client
+                        .execute_raw(&default_sql, &[] as &[&str])
+                        .await
+                        .map_err(PostgresDatabaseError::Postgres)?;
+                }
+            }
+        }
+    }
 
     Ok(())
 }
