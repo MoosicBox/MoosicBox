@@ -2571,42 +2571,172 @@ DropIndexStatement successfully implemented with:
 - packages/database/src/simulator/mod.rs - Simulator delegation
 - packages/database/tests/integration_tests.rs - Integration tests
 
-##### 10.2.2.4 Add AlterTableStatement with SQLite Workarounds
+##### 10.2.2.4 Add AlterTableStatement ❌ **MAJOR**
 
-**SQLite Limitation Handling:** SQLite has limited ALTER TABLE support. We implement transparent workarounds using table recreation for unsupported operations, now using proper transaction support from 10.2.
+**Design Philosophy:** Use native ALTER TABLE operations when possible (ADD/DROP/RENAME COLUMN), with a hybrid workaround approach for MODIFY COLUMN that prefers column-based operations over table recreation.
 
-- [ ] Create `AlterTableStatement` struct in `packages/database/src/schema.rs`
-  - [ ] Add field: `table_name: &'a str`, `operations: Vec<AlterOperation>`
-  - [ ] Create `AlterOperation` enum with variants:
-    - [ ] `AddColumn(Column)`
-    - [ ] `DropColumn(String)`
-    - [ ] `RenameColumn { old: String, new: String }`
-    - [ ] `ModifyColumn(Column)`
-  - [ ] Add builder methods: `add_column()`, `drop_column()`, `rename_column()`, `modify_column()`
+**Prerequisites:** SQLite 3.35.0+ required for native DROP COLUMN support (released 2021-03-12)
+
+- [ ] Create `AlterTableStatement` struct in `packages/database/src/schema.rs`:
+  - [ ] Add fields: `table_name: &'a str`, `operations: Vec<AlterOperation>`
+  - [ ] Define `AlterOperation` enum:
+    ```rust
+    pub enum AlterOperation {
+        AddColumn {
+            name: String,
+            data_type: DataType,
+            nullable: bool,
+            default: Option<Value>,
+        },
+        DropColumn {
+            name: String,
+        },
+        RenameColumn {
+            old_name: String,
+            new_name: String,
+        },
+        ModifyColumn {
+            name: String,
+            new_data_type: DataType,
+            new_nullable: Option<bool>,
+            new_default: Option<Value>,
+        },
+    }
+    ```
+  - [ ] Add builder methods:
+    - [ ] `add_column(name, data_type) -> Self`
+    - [ ] `drop_column(name) -> Self`
+    - [ ] `rename_column(old, new) -> Self`
+    - [ ] `modify_column(name, new_type) -> Self`
   - [ ] Implement `execute()` method calling `db.exec_alter_table()`
-- [ ] Add to Database trait:
+
+- [ ] Add to `packages/database/src/lib.rs` Database trait:
   - [ ] Add `fn alter_table<'a>(&self, table_name: &'a str) -> schema::AlterTableStatement<'a>`
   - [ ] Add `async fn exec_alter_table(&self, statement: &AlterTableStatement<'_>) -> Result<(), DatabaseError>`
 
-- [ ] **Note:** SQLite workarounds are implemented in each backend's `exec_alter_table()` method:
-  - [ ] SQLite backends detect their own limitations and use table recreation internally
-  - [ ] PostgreSQL/MySQL backends use standard ALTER TABLE SQL directly
-  - [ ] No database type detection needed - each backend knows its own capabilities
-- [ ] Implement `exec_alter_table` for each backend:
-  - [ ] SQLite (rusqlite) - with transaction-safe workarounds
-  - [ ] SQLite (sqlx) - with transaction-safe workarounds
-  - [ ] PostgreSQL (postgres) - standard ALTER TABLE
-  - [ ] PostgreSQL (sqlx) - standard ALTER TABLE
-  - [ ] MySQL (sqlx) - standard ALTER TABLE
+- [ ] Implement `exec_alter_table` for each backend with operation-specific logic:
+
+  **PostgreSQL/MySQL Implementation (Standard):**
+  - [ ] Use native ALTER TABLE for all operations
+  - [ ] Generate SQL: `ALTER TABLE table_name ADD COLUMN ...`, `DROP COLUMN ...`, etc.
+  - [ ] Multiple operations in single ALTER TABLE statement where supported
+
+  **SQLite Implementation (Hybrid Approach):**
+  - [ ] For ADD COLUMN: Use native `ALTER TABLE ADD COLUMN`
+  - [ ] For DROP COLUMN: Use native `ALTER TABLE DROP COLUMN` (SQLite 3.35.0+)
+  - [ ] For RENAME COLUMN: Use native `ALTER TABLE RENAME COLUMN` (SQLite 3.25.0+)
+  - [ ] For MODIFY COLUMN: Implement column-based workaround:
+    ```sql
+    BEGIN TRANSACTION;
+    -- Step 1: Add temporary column with new type
+    ALTER TABLE table_name ADD COLUMN column_temp NEW_TYPE;
+    -- Step 2: Copy and convert data
+    UPDATE table_name SET column_temp = CAST(column AS NEW_TYPE);
+    -- Step 3: Drop original column
+    ALTER TABLE table_name DROP COLUMN column;
+    -- Step 4: Add column with original name and new type
+    ALTER TABLE table_name ADD COLUMN column NEW_TYPE;
+    -- Step 5: Copy data from temp to final column
+    UPDATE table_name SET column = column_temp;
+    -- Step 6: Drop temporary column
+    ALTER TABLE table_name DROP COLUMN column_temp;
+    COMMIT;
+    ```
+
+**MODIFY COLUMN Workaround Decision Tree:**
+
+```
+Is it a MODIFY COLUMN operation?
+├─ No → Use native ALTER TABLE
+└─ Yes → Check constraints
+    ├─ Is column PRIMARY KEY? → Use table recreation
+    ├─ Is column part of UNIQUE constraint? → Use table recreation
+    ├─ Is column in CHECK constraint? → Use table recreation
+    ├─ Is column GENERATED? → Use table recreation
+    └─ None of above → Use column-based workaround
+```
+
+**Table Recreation Fallback (when required):**
+When column-based workaround isn't suitable, use the official SQLite approach:
+```sql
+BEGIN TRANSACTION;
+-- Step 1: Disable foreign keys if needed
+PRAGMA foreign_keys=OFF;
+-- Step 2: Save existing indexes, triggers, views
+SELECT sql FROM sqlite_schema WHERE tbl_name='table_name' AND type IN ('index','trigger','view');
+-- Step 3: Create new table with modified schema
+CREATE TABLE table_name_new (...);
+-- Step 4: Copy data with type conversion
+INSERT INTO table_name_new SELECT ... FROM table_name;
+-- Step 5: Drop old table
+DROP TABLE table_name;
+-- Step 6: Rename new table
+ALTER TABLE table_name_new RENAME TO table_name;
+-- Step 7: Recreate indexes, triggers, views
+-- Step 8: Re-enable and check foreign keys
+PRAGMA foreign_keys=ON;
+PRAGMA foreign_key_check;
+COMMIT;
+```
+
+**Implementation Notes:**
+
+1. **Column Order Change Warning:**
+   - Document that MODIFY COLUMN may change column order (moves to end)
+   - This is acceptable as column order dependency is an anti-pattern
+   - Add clear documentation: "Column order may change. Do not rely on SELECT * or positional parameters."
+
+2. **Transaction Safety:**
+   - All operations wrapped in transactions for atomicity
+   - Automatic rollback on any error
+   - No partial schema changes possible
+
+3. **Performance Considerations:**
+   - Column-based: 2 UPDATE operations (slower but simpler)
+   - Table recreation: 1 INSERT...SELECT (faster but complex)
+   - Choose based on constraints, not performance
+
+4. **Error Handling:**
+   - Check for column existence before operations
+   - Validate type conversions are possible
+   - Clear error messages for unsupported operations
+
+5. **Testing Requirements:**
+   - Test each operation type individually
+   - Test batch operations (multiple alterations)
+   - Test MODIFY COLUMN with both workaround paths
+   - Test transaction rollback on errors
+   - Test foreign key preservation
+   - Test index/trigger preservation (table recreation path)
+   - Test data type conversions
+   - Verify column order changes are handled
+
+**Backend Implementation Files:**
+- [ ] `packages/database/src/rusqlite/mod.rs` - Add `rusqlite_exec_alter_table()`
+- [ ] `packages/database/src/sqlx/sqlite.rs` - Add `sqlite_sqlx_exec_alter_table()`
+- [ ] `packages/database/src/postgres/postgres.rs` - Add `postgres_exec_alter_table()`
+- [ ] `packages/database/src/sqlx/postgres.rs` - Add `postgres_sqlx_exec_alter_table()`
+- [ ] `packages/database/src/sqlx/mysql.rs` - Add `mysql_sqlx_exec_alter_table()`
+- [ ] `packages/database/src/simulator/mod.rs` - Delegate to inner database
+
+**Key Design Decisions:**
+1. **Hybrid Approach**: Use simplest method that works for each operation
+2. **Column Order**: Explicitly document as changeable, not a breaking change
+3. **Minimum SQLite**: Require 3.35.0+ for DROP COLUMN support
+4. **Transaction Wrapper**: All operations atomic via transactions
+5. **Fallback Strategy**: Clear rules for when table recreation is needed
+
 - [ ] Implement `Executable` trait for `AlterTableStatement`
 - [ ] Add unit tests for AlterTableStatement builder
-- [ ] Add SQLite-specific tests for workarounds:
-  - [ ] Test DROP COLUMN with table recreation and transactions
-  - [ ] Test RENAME COLUMN with version detection and transactions
-  - [ ] Test MODIFY COLUMN with table recreation and transactions
-  - [ ] Test index preservation during recreation
-  - [ ] Test data integrity during recreation
-  - [ ] Test rollback behavior on failure
+- [ ] Add comprehensive tests for ALTER TABLE operations:
+  - [ ] Test each operation type individually
+  - [ ] Test batch operations (multiple alterations)
+  - [ ] Test MODIFY COLUMN with both workaround paths
+  - [ ] Test transaction rollback on errors
+  - [ ] Test foreign key preservation
+  - [ ] Test index/trigger preservation (table recreation path)
+  - [ ] Test data type conversions
+  - [ ] Verify column order changes are handled
 - [ ] Add integration tests for each database backend
 
 ##### 10.2.2.5 Update Database Simulator
