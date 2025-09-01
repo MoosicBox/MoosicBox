@@ -149,6 +149,14 @@ impl Database for SimulationDatabase {
         self.inner.exec_drop_index(statement).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        self.inner.exec_alter_table(statement).await
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {

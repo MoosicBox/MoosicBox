@@ -443,6 +443,15 @@ impl Database for RusqliteDatabase {
         rusqlite_exec_drop_index(&*connection.lock().await, statement)
     }
 
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let connection = self.get_connection();
+        rusqlite_exec_alter_table(&*connection.lock().await, statement)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -641,6 +650,14 @@ impl Database for RusqliteTransaction {
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
         rusqlite_exec_drop_index(&*self.connection.lock().await, statement)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        rusqlite_exec_alter_table(&*self.connection.lock().await, statement)
     }
 
     async fn begin_transaction(
@@ -913,6 +930,669 @@ pub(crate) fn rusqlite_exec_drop_index(
         .map_err(RusqliteDatabaseError::Rusqlite)?;
 
     Ok(())
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+pub(crate) fn rusqlite_exec_alter_table(
+    connection: &Connection,
+    statement: &crate::schema::AlterTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    use crate::schema::AlterOperation;
+
+    for operation in &statement.operations {
+        match operation {
+            AlterOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                default,
+            } => {
+                let type_str = match data_type {
+                    crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+                    crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Bool => "BOOLEAN".to_string(),
+                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::Int => "INTEGER".to_string(),
+                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::Real => "REAL".to_string(),
+                    crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
+                    crate::schema::DataType::Decimal(precision, scale) => {
+                        format!("DECIMAL({precision}, {scale})")
+                    }
+                    crate::schema::DataType::DateTime => "DATETIME".to_string(),
+                };
+
+                let nullable_str = if *nullable { "" } else { " NOT NULL" };
+                let default_str = match default {
+                    Some(val) => {
+                        let val_str = match val {
+                            crate::DatabaseValue::String(s) => format!("'{s}'"),
+                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::UNumber(n) => n.to_string(),
+                            crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
+                            crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Null => "NULL".to_string(),
+                            crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            _ => {
+                                return Err(DatabaseError::InvalidSchema(
+                                    "Unsupported default value type for ALTER TABLE ADD COLUMN"
+                                        .to_string(),
+                                ));
+                            }
+                        };
+                        format!(" DEFAULT {val_str}")
+                    }
+                    None => String::new(),
+                };
+
+                let sql = format!(
+                    "ALTER TABLE {} ADD COLUMN `{}` {}{}{}",
+                    statement.table_name, name, type_str, nullable_str, default_str
+                );
+
+                connection
+                    .execute(&sql, [])
+                    .map_err(RusqliteDatabaseError::Rusqlite)?;
+            }
+            AlterOperation::DropColumn { name } => {
+                let sql = format!(
+                    "ALTER TABLE {} DROP COLUMN `{}`",
+                    statement.table_name, name
+                );
+
+                connection
+                    .execute(&sql, [])
+                    .map_err(RusqliteDatabaseError::Rusqlite)?;
+            }
+            AlterOperation::RenameColumn { old_name, new_name } => {
+                let sql = format!(
+                    "ALTER TABLE {} RENAME COLUMN `{}` TO `{}`",
+                    statement.table_name, old_name, new_name
+                );
+
+                connection
+                    .execute(&sql, [])
+                    .map_err(RusqliteDatabaseError::Rusqlite)?;
+            }
+            AlterOperation::ModifyColumn {
+                name,
+                new_data_type,
+                new_nullable,
+                new_default,
+            } => {
+                // Use decision tree to determine correct workaround approach
+                if column_requires_table_recreation(connection, statement.table_name, name)
+                    .map_err(DatabaseError::Rusqlite)?
+                {
+                    // Use table recreation for complex columns (PRIMARY KEY, UNIQUE, CHECK, GENERATED)
+                    rusqlite_exec_table_recreation_workaround(
+                        connection,
+                        statement.table_name,
+                        name,
+                        *new_data_type,
+                        *new_nullable,
+                        new_default.as_ref(),
+                    )?;
+                } else {
+                    // Use column-based workaround for simple columns
+                    rusqlite_exec_modify_column_workaround(
+                        connection,
+                        statement.table_name,
+                        name,
+                        *new_data_type,
+                        *new_nullable,
+                        new_default.as_ref(),
+                    )?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+fn rusqlite_exec_modify_column_workaround(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+    new_data_type: crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<(), DatabaseError> {
+    // Implementation of the column-based workaround for MODIFY COLUMN
+    // This is a simplified version - the full implementation would check for constraints
+
+    let type_str = match new_data_type {
+        crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+        crate::schema::DataType::Text => "TEXT".to_string(),
+        crate::schema::DataType::Bool => "BOOLEAN".to_string(),
+        crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+        crate::schema::DataType::Int => "INTEGER".to_string(),
+        crate::schema::DataType::BigInt => "BIGINT".to_string(),
+        crate::schema::DataType::Real => "REAL".to_string(),
+        crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
+        crate::schema::DataType::Decimal(precision, scale) => {
+            format!("DECIMAL({precision}, {scale})")
+        }
+        crate::schema::DataType::DateTime => "DATETIME".to_string(),
+    };
+
+    let temp_column = format!(
+        "{}_temp_{}",
+        column_name,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    );
+
+    // Execute the column-based workaround in a transaction
+    connection
+        .execute("BEGIN TRANSACTION", [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    // Step 1: Add temporary column with new type
+    let nullable_str = match new_nullable {
+        Some(true) | None => "",
+        Some(false) => " NOT NULL",
+    };
+
+    let default_str = match new_default {
+        Some(val) => {
+            let val_str = match val {
+                crate::DatabaseValue::String(s) => format!("'{s}'"),
+                crate::DatabaseValue::Number(n) => n.to_string(),
+                crate::DatabaseValue::UNumber(n) => n.to_string(),
+                crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
+                crate::DatabaseValue::Real(r) => r.to_string(),
+                crate::DatabaseValue::Null => "NULL".to_string(),
+                crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                _ => {
+                    return Err(DatabaseError::InvalidSchema(
+                        "Unsupported default value type for MODIFY COLUMN".to_string(),
+                    ));
+                }
+            };
+            format!(" DEFAULT {val_str}")
+        }
+        None => String::new(),
+    };
+
+    let result = (|| -> Result<(), RusqliteDatabaseError> {
+        connection
+            .execute(
+                &format!(
+                    "ALTER TABLE {table_name} ADD COLUMN `{temp_column}` {type_str}{nullable_str}{default_str}"
+                ),
+                [],
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 2: Copy and convert data
+        connection
+            .execute(
+                &format!(
+                    "UPDATE {table_name} SET `{temp_column}` = CAST(`{column_name}` AS {type_str})"
+                ),
+                [],
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 3: Drop original column
+        connection
+            .execute(
+                &format!("ALTER TABLE {table_name} DROP COLUMN `{column_name}`"),
+                [],
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 4: Add column with original name and new type
+        connection
+            .execute(
+                &format!(
+                    "ALTER TABLE {table_name} ADD COLUMN `{column_name}` {type_str}{nullable_str}{default_str}"
+                ),
+                [],
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 5: Copy data from temp to final column
+        connection
+            .execute(
+                &format!("UPDATE {table_name} SET `{column_name}` = `{temp_column}`"),
+                [],
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 6: Drop temporary column
+        connection
+            .execute(
+                &format!("ALTER TABLE {table_name} DROP COLUMN `{temp_column}`"),
+                [],
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            connection
+                .execute("COMMIT", [])
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+        }
+        Err(e) => {
+            let _ = connection.execute("ROLLBACK", []);
+            return Err(DatabaseError::Rusqlite(e));
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+fn column_requires_table_recreation(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<bool, RusqliteDatabaseError> {
+    // Check if column is PRIMARY KEY
+    let mut stmt = connection
+        .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let table_sql: String = stmt
+        .query_row([table_name], |row| row.get(0))
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    // Parse CREATE TABLE SQL to check for constraints
+    let table_sql_upper = table_sql.to_uppercase();
+    let column_name_upper = column_name.to_uppercase();
+
+    // Check for PRIMARY KEY - look for the pattern: column_name ... PRIMARY KEY
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("PRIMARY KEY")
+    {
+        let column_pos = table_sql_upper.find(&column_name_upper);
+        let pk_pos = table_sql_upper.find("PRIMARY KEY");
+        if let (Some(col_pos), Some(pk_pos)) = (column_pos, pk_pos) {
+            // If PRIMARY KEY appears within 200 characters after column name, likely the same column
+            if pk_pos > col_pos && (pk_pos - col_pos) < 200 {
+                return Ok(true);
+            }
+        }
+    }
+
+    // Check for UNIQUE constraint on this column
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("UNIQUE")
+    {
+        let column_pos = table_sql_upper.find(&column_name_upper);
+        let unique_pos = table_sql_upper.find("UNIQUE");
+        if let (Some(col_pos), Some(unique_pos)) = (column_pos, unique_pos) {
+            // If UNIQUE appears within 100 characters after column name
+            if unique_pos > col_pos && (unique_pos - col_pos) < 100 {
+                return Ok(true);
+            }
+        }
+    }
+
+    // Check for CHECK constraint mentioning this column
+    if table_sql_upper.contains("CHECK") && table_sql_upper.contains(&column_name_upper) {
+        return Ok(true);
+    }
+
+    // Check for GENERATED column
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("GENERATED")
+    {
+        return Ok(true);
+    }
+
+    // Check for UNIQUE indexes on this column
+    let mut index_stmt = connection
+        .prepare(
+            "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+        )
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let index_rows: Vec<String> = index_stmt
+        .query_map([table_name], |row| row.get::<_, String>(0))
+        .map_err(RusqliteDatabaseError::Rusqlite)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    for index_sql in index_rows {
+        let index_sql_upper = index_sql.to_uppercase();
+        if index_sql_upper.contains("UNIQUE") && index_sql_upper.contains(&column_name_upper) {
+            return Ok(true);
+        }
+    }
+
+    // If none of the above conditions are met, we can use the simple column-based approach
+    Ok(false)
+}
+
+#[cfg(feature = "schema")]
+fn modify_create_table_sql(
+    original_sql: &str,
+    original_table_name: &str,
+    new_table_name: &str,
+    column_name: &str,
+    new_data_type: crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<String, RusqliteDatabaseError> {
+    // Simple regex-based approach to modify column definition
+    // This handles most common cases but could be enhanced with a proper SQL parser
+
+    let data_type_str = match new_data_type {
+        crate::schema::DataType::Text | crate::schema::DataType::VarChar(_) => "TEXT",
+        crate::schema::DataType::Bool => "BOOLEAN",
+        crate::schema::DataType::SmallInt
+        | crate::schema::DataType::Int
+        | crate::schema::DataType::BigInt => "INTEGER",
+        crate::schema::DataType::Real
+        | crate::schema::DataType::Double
+        | crate::schema::DataType::Decimal(_, _) => "REAL",
+        crate::schema::DataType::DateTime => "TIMESTAMP",
+    };
+
+    // Build the new column definition
+    let mut new_column_def = format!("`{column_name}` {data_type_str}");
+
+    if let Some(nullable) = new_nullable
+        && !nullable
+    {
+        new_column_def.push_str(" NOT NULL");
+    }
+
+    if let Some(default_value) = new_default {
+        use std::fmt::Write;
+
+        let default_str = match default_value {
+            crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
+                format!("'{}'", s.replace('\'', "''"))
+            }
+            crate::DatabaseValue::StringOpt(None) | crate::DatabaseValue::Null => {
+                "NULL".to_string()
+            }
+            crate::DatabaseValue::Number(i) | crate::DatabaseValue::NumberOpt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::NumberOpt(None)
+            | crate::DatabaseValue::UNumberOpt(None)
+            | crate::DatabaseValue::RealOpt(None)
+            | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
+            crate::DatabaseValue::UNumber(i) | crate::DatabaseValue::UNumberOpt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::Real(f) | crate::DatabaseValue::RealOpt(Some(f)) => f.to_string(),
+            crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
+                if *b { "1" } else { "0" }.to_string()
+            }
+            crate::DatabaseValue::DateTime(dt) => format!("'{}'", dt.format("%Y-%m-%d %H:%M:%S")),
+            crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+            crate::DatabaseValue::NowAdd(_) => return Err(RusqliteDatabaseError::InvalidRequest),
+        };
+
+        write!(new_column_def, " DEFAULT {default_str}").unwrap();
+    }
+
+    // Find and replace the column definition using regex
+    // Pattern matches: column_name followed by type and optional constraints
+    let column_pattern = format!(
+        r"`?{}`?\s+\w+(\s+(NOT\s+NULL|PRIMARY\s+KEY|UNIQUE|CHECK\s*\([^)]+\)|DEFAULT\s+[^,\s)]+|GENERATED\s+[^,)]+))*",
+        regex::escape(column_name)
+    );
+
+    let re =
+        regex::Regex::new(&column_pattern).map_err(|_| RusqliteDatabaseError::InvalidRequest)?;
+
+    let modified_sql = re.replace(original_sql, new_column_def.as_str());
+
+    // Replace table name
+    let final_sql = modified_sql.replace(original_table_name, new_table_name);
+
+    Ok(final_sql)
+}
+
+#[cfg(all(test, feature = "schema"))]
+mod sql_parsing_tests {
+    use super::*;
+
+    #[test]
+    fn test_modify_create_table_sql_simple_column() {
+        let original_sql =
+            "CREATE TABLE test_table (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)";
+        let result = modify_create_table_sql(
+            original_sql,
+            "test_table",
+            "temp_table",
+            "age",
+            crate::schema::DataType::BigInt,
+            Some(false),
+            Some(&crate::DatabaseValue::Number(18)),
+        )
+        .unwrap();
+
+        // Should replace table name and modify the age column
+        assert!(result.contains("temp_table"));
+        assert!(result.contains("`age` INTEGER NOT NULL DEFAULT 18"));
+        // Other columns should remain unchanged
+        assert!(result.contains("id INTEGER PRIMARY KEY"));
+        assert!(result.contains("name TEXT"));
+    }
+
+    #[test]
+    fn test_modify_create_table_sql_change_data_type() {
+        let original_sql =
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, active BOOLEAN)";
+        let result = modify_create_table_sql(
+            original_sql,
+            "users",
+            "users_temp",
+            "active",
+            crate::schema::DataType::SmallInt,
+            Some(true),
+            None,
+        )
+        .unwrap();
+
+        // Should change BOOLEAN to INTEGER (SmallInt maps to INTEGER in SQLite)
+        assert!(result.contains("users_temp"));
+        assert!(result.contains("`active` INTEGER"));
+        // Should not add NOT NULL since nullable=true
+        assert!(!result.contains("`active` INTEGER NOT NULL"));
+        // Should not add DEFAULT since none provided
+        assert!(!result.contains("DEFAULT"));
+    }
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+fn rusqlite_exec_table_recreation_workaround(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+    new_data_type: crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<(), DatabaseError> {
+    // Begin transaction
+    connection
+        .execute("BEGIN TRANSACTION", [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let result = (|| -> Result<(), RusqliteDatabaseError> {
+        // Step 1: Check and disable foreign keys if enabled
+        let foreign_keys_enabled: i32 = connection
+            .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        if foreign_keys_enabled == 1 {
+            connection
+                .execute("PRAGMA foreign_keys=OFF", [])
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+        }
+
+        // Step 2: Save existing schema objects (indexes, triggers, views)
+        let mut schema_stmt = connection
+            .prepare("SELECT sql FROM sqlite_master WHERE tbl_name=? AND type IN ('index','trigger','view') AND sql IS NOT NULL")
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let schema_objects: Vec<String> = schema_stmt
+            .query_map([table_name], |row| row.get::<_, String>(0))
+            .map_err(RusqliteDatabaseError::Rusqlite)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 3: Get original table schema and column info
+        let original_sql: String = connection
+            .query_row(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                [table_name],
+                |row| row.get(0),
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 4: Create temporary table name
+        let temp_table = format!(
+            "{}_temp_{}",
+            table_name,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+
+        // Step 5: Parse and modify the CREATE TABLE SQL to update the column definition
+        let new_table_sql = modify_create_table_sql(
+            &original_sql,
+            table_name,
+            &temp_table,
+            column_name,
+            new_data_type,
+            new_nullable,
+            new_default,
+        )?;
+
+        connection
+            .execute(&new_table_sql, [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 6: Get column list for INSERT SELECT
+        let mut columns_stmt = connection
+            .prepare(&format!("PRAGMA table_info({table_name})"))
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let columns: Vec<String> = columns_stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .map_err(RusqliteDatabaseError::Rusqlite)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 7: Copy data with potential type conversion for the modified column
+        let column_list = columns
+            .iter()
+            .map(|col| {
+                if col == column_name {
+                    // Apply CAST for the modified column to ensure proper type conversion
+                    let cast_type = match new_data_type {
+                        crate::schema::DataType::Text | crate::schema::DataType::VarChar(_) => {
+                            "TEXT"
+                        }
+                        crate::schema::DataType::Bool => "BOOLEAN",
+                        crate::schema::DataType::SmallInt
+                        | crate::schema::DataType::Int
+                        | crate::schema::DataType::BigInt => "INTEGER",
+                        crate::schema::DataType::Real
+                        | crate::schema::DataType::Double
+                        | crate::schema::DataType::Decimal(_, _) => "REAL",
+                        crate::schema::DataType::DateTime => "TIMESTAMP",
+                    };
+                    format!("CAST(`{col}` AS {cast_type}) AS `{col}`")
+                } else {
+                    format!("`{col}`")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        connection
+            .execute(
+                &format!("INSERT INTO {temp_table} SELECT {column_list} FROM {table_name}"),
+                [],
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 8: Drop old table
+        connection
+            .execute(&format!("DROP TABLE {table_name}"), [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 9: Rename temp table to original name
+        connection
+            .execute(
+                &format!("ALTER TABLE {temp_table} RENAME TO {table_name}"),
+                [],
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Step 10: Recreate schema objects
+        for schema_sql in schema_objects {
+            // Skip auto-indexes and internal indexes
+            if !schema_sql.to_uppercase().contains("AUTOINDEX") {
+                connection
+                    .execute(&schema_sql, [])
+                    .map_err(RusqliteDatabaseError::Rusqlite)?;
+            }
+        }
+
+        // Step 11: Re-enable foreign keys if they were enabled
+        if foreign_keys_enabled == 1 {
+            connection
+                .execute("PRAGMA foreign_keys=ON", [])
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+            // Step 12: Check foreign key integrity
+            let mut fk_stmt = connection
+                .prepare("PRAGMA foreign_key_check")
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+            let fk_violations: Vec<String> = fk_stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(RusqliteDatabaseError::Rusqlite)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+            if !fk_violations.is_empty() {
+                return Err(RusqliteDatabaseError::Rusqlite(
+                    rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT_FOREIGNKEY),
+                        Some("Foreign key violations detected after table recreation".to_string()),
+                    ),
+                ));
+            }
+        }
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            connection
+                .execute("COMMIT", [])
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = connection.execute("ROLLBACK", []);
+            Err(DatabaseError::Rusqlite(e))
+        }
+    }
 }
 
 fn update_and_get_row(

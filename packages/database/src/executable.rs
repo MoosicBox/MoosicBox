@@ -67,6 +67,15 @@ impl Executable for crate::schema::DropIndexStatement<'_> {
     }
 }
 
+/// Implement `Executable` for `AlterTableStatement`
+#[cfg(feature = "schema")]
+#[async_trait]
+impl Executable for crate::schema::AlterTableStatement<'_> {
+    async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError> {
+        db.exec_alter_table(self).await
+    }
+}
+
 /// Implement `Executable` for `InsertStatement`
 #[async_trait]
 impl Executable for crate::query::InsertStatement<'_> {

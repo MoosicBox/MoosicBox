@@ -7,8 +7,8 @@ use std::{
 use async_trait::async_trait;
 use futures::{Stream, StreamExt};
 use sqlx::{
-    Column, Executor, Row, Sqlite, SqliteConnection, SqlitePool, Statement, Transaction, TypeInfo,
-    Value, ValueRef,
+    Column, Connection, Executor, Row, Sqlite, SqliteConnection, SqlitePool, Statement,
+    Transaction, TypeInfo, Value, ValueRef,
     pool::PoolConnection,
     query::Query,
     sqlite::{SqliteArguments, SqliteRow, SqliteValueRef},
@@ -525,6 +525,19 @@ impl Database for SqliteSqlxDatabase {
         statement: &crate::schema::DropIndexStatement<'_>,
     ) -> Result<(), DatabaseError> {
         sqlite_sqlx_exec_drop_index(
+            self.get_connection().await?.lock().await.as_mut(),
+            statement,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        sqlite_sqlx_exec_alter_table(
             self.get_connection().await?.lock().await.as_mut(),
             statement,
         )
@@ -1113,6 +1126,567 @@ pub(crate) async fn sqlite_sqlx_exec_drop_index(
         .map_err(SqlxDatabaseError::Sqlx)?;
 
     Ok(())
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+pub(crate) async fn sqlite_sqlx_exec_alter_table(
+    connection: &mut SqliteConnection,
+    statement: &crate::schema::AlterTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    use crate::schema::AlterOperation;
+
+    for operation in &statement.operations {
+        match operation {
+            AlterOperation::AddColumn {
+                name,
+                data_type,
+                nullable,
+                default,
+            } => {
+                let type_str = match data_type {
+                    crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+                    crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Bool => "BOOLEAN".to_string(),
+                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+                    crate::schema::DataType::Int => "INTEGER".to_string(),
+                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::Real => "REAL".to_string(),
+                    crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
+                    crate::schema::DataType::Decimal(precision, scale) => {
+                        format!("DECIMAL({precision}, {scale})")
+                    }
+                    crate::schema::DataType::DateTime => "DATETIME".to_string(),
+                };
+
+                let nullable_str = if *nullable { "" } else { " NOT NULL" };
+                let default_str = match default {
+                    Some(val) => {
+                        let val_str = match val {
+                            crate::DatabaseValue::String(s) => format!("'{s}'"),
+                            crate::DatabaseValue::Number(n) => n.to_string(),
+                            crate::DatabaseValue::UNumber(n) => n.to_string(),
+                            crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
+                            crate::DatabaseValue::Real(r) => r.to_string(),
+                            crate::DatabaseValue::Null => "NULL".to_string(),
+                            crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                            _ => {
+                                return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
+                                    type_name:
+                                        "Unsupported default value type for ALTER TABLE ADD COLUMN"
+                                            .to_string(),
+                                }));
+                            }
+                        };
+                        format!(" DEFAULT {val_str}")
+                    }
+                    None => String::new(),
+                };
+
+                let sql = format!(
+                    "ALTER TABLE {} ADD COLUMN `{}` {}{}{}",
+                    statement.table_name, name, type_str, nullable_str, default_str
+                );
+
+                connection
+                    .execute(sqlx::raw_sql(&sql))
+                    .await
+                    .map_err(SqlxDatabaseError::Sqlx)?;
+            }
+            AlterOperation::DropColumn { name } => {
+                let sql = format!(
+                    "ALTER TABLE {} DROP COLUMN `{}`",
+                    statement.table_name, name
+                );
+
+                connection
+                    .execute(sqlx::raw_sql(&sql))
+                    .await
+                    .map_err(SqlxDatabaseError::Sqlx)?;
+            }
+            AlterOperation::RenameColumn { old_name, new_name } => {
+                let sql = format!(
+                    "ALTER TABLE {} RENAME COLUMN `{}` TO `{}`",
+                    statement.table_name, old_name, new_name
+                );
+
+                connection
+                    .execute(sqlx::raw_sql(&sql))
+                    .await
+                    .map_err(SqlxDatabaseError::Sqlx)?;
+            }
+            AlterOperation::ModifyColumn {
+                name,
+                new_data_type,
+                new_nullable,
+                new_default,
+            } => {
+                // Use decision tree to determine correct workaround approach
+                if column_requires_table_recreation(connection, statement.table_name, name).await? {
+                    // Use table recreation for complex columns (PRIMARY KEY, UNIQUE, CHECK, GENERATED)
+                    sqlite_sqlx_exec_table_recreation_workaround(
+                        connection,
+                        statement.table_name,
+                        name,
+                        *new_data_type,
+                        *new_nullable,
+                        new_default.as_ref(),
+                    )
+                    .await?;
+                } else {
+                    // Use column-based workaround for simple columns
+                    sqlite_sqlx_exec_modify_column_workaround(
+                        connection,
+                        statement.table_name,
+                        name,
+                        *new_data_type,
+                        *new_nullable,
+                        new_default.as_ref(),
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn sqlite_sqlx_exec_modify_column_workaround(
+    connection: &mut SqliteConnection,
+    table_name: &str,
+    column_name: &str,
+    new_data_type: crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<(), SqlxDatabaseError> {
+    // Implementation of the column-based workaround for MODIFY COLUMN
+
+    let type_str = match new_data_type {
+        crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
+        crate::schema::DataType::Text => "TEXT".to_string(),
+        crate::schema::DataType::Bool => "BOOLEAN".to_string(),
+        crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
+        crate::schema::DataType::Int => "INTEGER".to_string(),
+        crate::schema::DataType::BigInt => "BIGINT".to_string(),
+        crate::schema::DataType::Real => "REAL".to_string(),
+        crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
+        crate::schema::DataType::Decimal(precision, scale) => {
+            format!("DECIMAL({precision}, {scale})")
+        }
+        crate::schema::DataType::DateTime => "DATETIME".to_string(),
+    };
+
+    let temp_column = format!(
+        "{}_temp_{}",
+        column_name,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    );
+
+    // Execute the column-based workaround in a transaction
+    let mut tx = connection.begin().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+    // Step 1: Add temporary column with new type
+    let nullable_str = match new_nullable {
+        Some(true) | None => "",
+        Some(false) => " NOT NULL",
+    };
+
+    let default_str = match new_default {
+        Some(val) => {
+            let val_str = match val {
+                crate::DatabaseValue::String(s) => format!("'{s}'"),
+                crate::DatabaseValue::Number(n) => n.to_string(),
+                crate::DatabaseValue::UNumber(n) => n.to_string(),
+                crate::DatabaseValue::Bool(b) => if *b { "1" } else { "0" }.to_string(),
+                crate::DatabaseValue::Real(r) => r.to_string(),
+                crate::DatabaseValue::Null => "NULL".to_string(),
+                crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+                _ => {
+                    return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
+                        type_name: "Unsupported default value type for MODIFY COLUMN".to_string(),
+                    }));
+                }
+            };
+            format!(" DEFAULT {val_str}")
+        }
+        None => String::new(),
+    };
+
+    tx.execute(sqlx::raw_sql(&format!(
+        "ALTER TABLE {table_name} ADD COLUMN `{temp_column}` {type_str}{nullable_str}{default_str}"
+    )))
+    .await
+    .map_err(SqlxDatabaseError::Sqlx)?;
+
+    // Step 2: Copy and convert data
+    tx.execute(sqlx::raw_sql(&format!(
+        "UPDATE {table_name} SET `{temp_column}` = CAST(`{column_name}` AS {type_str})"
+    )))
+    .await
+    .map_err(SqlxDatabaseError::Sqlx)?;
+
+    // Step 3: Drop original column
+    tx.execute(sqlx::raw_sql(&format!(
+        "ALTER TABLE {table_name} DROP COLUMN `{column_name}`"
+    )))
+    .await
+    .map_err(SqlxDatabaseError::Sqlx)?;
+
+    // Step 4: Add column with original name and new type
+    tx.execute(sqlx::raw_sql(&format!(
+        "ALTER TABLE {table_name} ADD COLUMN `{column_name}` {type_str}{nullable_str}{default_str}"
+    )))
+    .await
+    .map_err(SqlxDatabaseError::Sqlx)?;
+
+    // Step 5: Copy data from temp to final column
+    tx.execute(sqlx::raw_sql(&format!(
+        "UPDATE {table_name} SET `{column_name}` = `{temp_column}`"
+    )))
+    .await
+    .map_err(SqlxDatabaseError::Sqlx)?;
+
+    // Step 6: Drop temporary column
+    tx.execute(sqlx::raw_sql(&format!(
+        "ALTER TABLE {table_name} DROP COLUMN `{temp_column}`"
+    )))
+    .await
+    .map_err(SqlxDatabaseError::Sqlx)?;
+
+    tx.commit().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn column_requires_table_recreation(
+    connection: &mut SqliteConnection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<bool, SqlxDatabaseError> {
+    // Check if column is PRIMARY KEY
+    let table_sql: String =
+        sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+            .bind(table_name)
+            .fetch_one(&mut *connection)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+    // Parse CREATE TABLE SQL to check for constraints
+    let table_sql_upper = table_sql.to_uppercase();
+    let column_name_upper = column_name.to_uppercase();
+
+    // Check for PRIMARY KEY - look for the pattern: column_name ... PRIMARY KEY
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("PRIMARY KEY")
+    {
+        let column_pos = table_sql_upper.find(&column_name_upper);
+        let pk_pos = table_sql_upper.find("PRIMARY KEY");
+        if let (Some(col_pos), Some(pk_pos)) = (column_pos, pk_pos) {
+            // If PRIMARY KEY appears within 200 characters after column name, likely the same column
+            if pk_pos > col_pos && (pk_pos - col_pos) < 200 {
+                return Ok(true);
+            }
+        }
+    }
+
+    // Check for UNIQUE constraint on this column
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("UNIQUE")
+    {
+        let column_pos = table_sql_upper.find(&column_name_upper);
+        let unique_pos = table_sql_upper.find("UNIQUE");
+        if let (Some(col_pos), Some(unique_pos)) = (column_pos, unique_pos) {
+            // If UNIQUE appears within 100 characters after column name
+            if unique_pos > col_pos && (unique_pos - col_pos) < 100 {
+                return Ok(true);
+            }
+        }
+    }
+
+    // Check for CHECK constraint mentioning this column
+    if table_sql_upper.contains("CHECK") && table_sql_upper.contains(&column_name_upper) {
+        return Ok(true);
+    }
+
+    // Check for GENERATED column
+    if table_sql_upper.contains(&format!("{column_name_upper} "))
+        && table_sql_upper.contains("GENERATED")
+    {
+        return Ok(true);
+    }
+
+    // Check for UNIQUE indexes on this column
+    let index_sqls: Vec<String> = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+    )
+    .bind(table_name)
+    .fetch_all(&mut *connection)
+    .await
+    .map_err(SqlxDatabaseError::Sqlx)?;
+
+    for index_sql in index_sqls {
+        let index_sql_upper = index_sql.to_uppercase();
+        if index_sql_upper.contains("UNIQUE") && index_sql_upper.contains(&column_name_upper) {
+            return Ok(true);
+        }
+    }
+
+    // If none of the above conditions are met, we can use the simple column-based approach
+    Ok(false)
+}
+
+#[cfg(feature = "schema")]
+fn sqlite_modify_create_table_sql(
+    original_sql: &str,
+    original_table_name: &str,
+    new_table_name: &str,
+    column_name: &str,
+    new_data_type: crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<String, SqlxDatabaseError> {
+    // Simple regex-based approach to modify column definition
+    // This handles most common cases but could be enhanced with a proper SQL parser
+
+    let data_type_str = match new_data_type {
+        crate::schema::DataType::Text | crate::schema::DataType::VarChar(_) => "TEXT",
+        crate::schema::DataType::Bool => "BOOLEAN",
+        crate::schema::DataType::SmallInt
+        | crate::schema::DataType::Int
+        | crate::schema::DataType::BigInt => "INTEGER",
+        crate::schema::DataType::Real
+        | crate::schema::DataType::Double
+        | crate::schema::DataType::Decimal(_, _) => "REAL",
+        crate::schema::DataType::DateTime => "TIMESTAMP",
+    };
+
+    // Build the new column definition
+    let mut new_column_def = format!("`{column_name}` {data_type_str}");
+
+    if let Some(nullable) = new_nullable
+        && !nullable
+    {
+        new_column_def.push_str(" NOT NULL");
+    }
+
+    if let Some(default_value) = new_default {
+        use std::fmt::Write;
+
+        let default_str = match default_value {
+            crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
+                format!("'{}'", s.replace('\'', "''"))
+            }
+            crate::DatabaseValue::StringOpt(None) | crate::DatabaseValue::Null => {
+                "NULL".to_string()
+            }
+            crate::DatabaseValue::Number(i) | crate::DatabaseValue::NumberOpt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::NumberOpt(None)
+            | crate::DatabaseValue::UNumberOpt(None)
+            | crate::DatabaseValue::RealOpt(None)
+            | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
+            crate::DatabaseValue::UNumber(i) | crate::DatabaseValue::UNumberOpt(Some(i)) => {
+                i.to_string()
+            }
+            crate::DatabaseValue::Real(f) | crate::DatabaseValue::RealOpt(Some(f)) => f.to_string(),
+            crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
+                if *b { "1" } else { "0" }.to_string()
+            }
+            crate::DatabaseValue::DateTime(dt) => format!("'{}'", dt.format("%Y-%m-%d %H:%M:%S")),
+            crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
+            crate::DatabaseValue::NowAdd(_) => return Err(SqlxDatabaseError::InvalidRequest),
+        };
+
+        write!(new_column_def, " DEFAULT {default_str}").unwrap();
+    }
+
+    // Find and replace the column definition using regex
+    // Pattern matches: column_name followed by type and optional constraints
+    let column_pattern = format!(
+        r"`?{}`?\s+\w+(\s+(NOT\s+NULL|PRIMARY\s+KEY|UNIQUE|CHECK\s*\([^)]+\)|DEFAULT\s+[^,\s)]+|GENERATED\s+[^,)]+))*",
+        regex::escape(column_name)
+    );
+
+    let re = regex::Regex::new(&column_pattern).map_err(|_| SqlxDatabaseError::InvalidRequest)?;
+
+    let modified_sql = re.replace(original_sql, new_column_def.as_str());
+
+    // Replace table name
+    let final_sql = modified_sql.replace(original_table_name, new_table_name);
+
+    Ok(final_sql)
+}
+
+#[cfg(feature = "schema")]
+#[allow(clippy::too_many_lines)]
+async fn sqlite_sqlx_exec_table_recreation_workaround(
+    connection: &mut SqliteConnection,
+    table_name: &str,
+    column_name: &str,
+    new_data_type: crate::schema::DataType,
+    new_nullable: Option<bool>,
+    new_default: Option<&crate::DatabaseValue>,
+) -> Result<(), SqlxDatabaseError> {
+    // Execute the table recreation workaround in a transaction
+    let mut tx = connection.begin().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+    let result = async {
+        // Step 1: Check and disable foreign keys if enabled
+        let foreign_keys_enabled: i32 = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        if foreign_keys_enabled == 1 {
+            sqlx::query("PRAGMA foreign_keys=OFF")
+                .execute(&mut *tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+        }
+
+        // Step 2: Save existing schema objects (indexes, triggers, views)
+        let schema_objects: Vec<String> = sqlx::query_scalar(
+            "SELECT sql FROM sqlite_master WHERE tbl_name=? AND type IN ('index','trigger','view') AND sql IS NOT NULL"
+        )
+        .bind(table_name)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+        // Step 3: Get original table schema
+        let original_sql: String = sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+            .bind(table_name)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        // Step 4: Create temporary table name
+        let temp_table = format!("{}_temp_{}", table_name,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+
+        // Step 5: Parse and modify the CREATE TABLE SQL to update the column definition
+        let new_table_sql = sqlite_modify_create_table_sql(
+            &original_sql,
+            table_name,
+            &temp_table,
+            column_name,
+            new_data_type,
+            new_nullable,
+            new_default,
+        )?;
+
+        sqlx::query(&new_table_sql)
+            .execute(&mut *tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        // Step 6: Get column list for INSERT SELECT
+        let columns: Vec<String> = sqlx::query(&format!("PRAGMA table_info({table_name})"))
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?
+            .into_iter()
+            .map(|row| row.get::<String, _>(1)) // Column 1 is the name
+            .collect();
+
+        // Step 7: Copy data with potential type conversion for the modified column
+        let column_list = columns
+            .iter()
+            .map(|col| {
+                if col == column_name {
+                    // Apply CAST for the modified column to ensure proper type conversion
+                    let cast_type = match new_data_type {
+                        crate::schema::DataType::Text |
+                        crate::schema::DataType::VarChar(_) => "TEXT",
+                        crate::schema::DataType::Bool => "BOOLEAN",
+                        crate::schema::DataType::SmallInt |
+                        crate::schema::DataType::Int |
+                        crate::schema::DataType::BigInt => "INTEGER",
+                        crate::schema::DataType::Real |
+                        crate::schema::DataType::Double |
+                        crate::schema::DataType::Decimal(_, _) => "REAL",
+                        crate::schema::DataType::DateTime => "TIMESTAMP",
+                    };
+                    format!("CAST(`{col}` AS {cast_type}) AS `{col}`")
+                } else {
+                    format!("`{col}`")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        sqlx::query(&format!("INSERT INTO {temp_table} SELECT {column_list} FROM {table_name}"))
+            .execute(&mut *tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        // Step 8: Drop old table
+        sqlx::query(&format!("DROP TABLE {table_name}"))
+            .execute(&mut *tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        // Step 9: Rename temp table to original name
+        sqlx::query(&format!("ALTER TABLE {temp_table} RENAME TO {table_name}"))
+            .execute(&mut *tx)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        // Step 10: Recreate schema objects
+        for schema_sql in schema_objects {
+            // Skip auto-indexes and internal indexes
+            if !schema_sql.to_uppercase().contains("AUTOINDEX") {
+                sqlx::query(&schema_sql)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(SqlxDatabaseError::Sqlx)?;
+            }
+        }
+
+        // Step 11: Re-enable foreign keys if they were enabled
+        if foreign_keys_enabled == 1 {
+            sqlx::query("PRAGMA foreign_keys=ON")
+                .execute(&mut *tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+
+            // Step 12: Check foreign key integrity
+            let fk_violations: Vec<String> = sqlx::query_scalar("PRAGMA foreign_key_check")
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+
+            if !fk_violations.is_empty() {
+                return Err(SqlxDatabaseError::Sqlx(sqlx::Error::TypeNotFound {
+                    type_name: "Foreign key violations detected after table recreation".to_string(),
+                }));
+            }
+        }
+
+        Ok::<(), SqlxDatabaseError>(())
+    }.await;
+
+    match result {
+        Ok(()) => {
+            tx.commit().await.map_err(SqlxDatabaseError::Sqlx)?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            Err(e)
+        }
+    }
 }
 
 fn to_values(values: &[(&str, DatabaseValue)]) -> Vec<SqliteDatabaseValue> {
@@ -1981,6 +2555,22 @@ impl Database for SqliteSqlxTransaction {
             .ok_or(DatabaseError::TransactionCommitted)?;
 
         sqlite_sqlx_exec_drop_index(&mut *tx, statement)
+            .await
+            .map_err(Into::into)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    #[cfg(feature = "schema")]
+    async fn exec_alter_table(
+        &self,
+        statement: &crate::schema::AlterTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        sqlite_sqlx_exec_alter_table(&mut *tx, statement)
             .await
             .map_err(Into::into)
     }
