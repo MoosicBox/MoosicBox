@@ -1,0 +1,27 @@
+[package]
+authors     = { workspace = true }
+categories  = ["database", "development-tools"]
+description = "Example demonstrating basic switchy_schema usage with type-safe schema builders"
+edition     = { workspace = true }
+keywords    = ["database", "example", "migration", "schema"]
+license     = { workspace = true }
+name        = "basic_usage"
+publish     = false
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "basic_usage"
+path = "src/main.rs"
+
+[dependencies]
+async-trait                 = { workspace = true }
+env_logger                  = { workspace = true }
+switchy_database            = { workspace = true, features = ["schema"] }
+switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
+switchy_schema              = { workspace = true }
+tokio                       = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+
+[features]
+fail-on-warnings = []

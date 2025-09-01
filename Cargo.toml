@@ -114,6 +114,7 @@ members = [
     "packages/switchy",
     "packages/switchy/schema",
     "packages/switchy/schema/examples/basic_migration_test",
+    "packages/switchy/schema/examples/basic_usage",
     "packages/switchy/schema/examples/borrowed_migrations",
     "packages/switchy/schema/examples/mutation_migration_test",
     "packages/switchy/schema/examples/state_migration_test",
