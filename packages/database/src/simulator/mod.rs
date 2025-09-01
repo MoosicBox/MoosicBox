@@ -1,4 +1,8 @@
 use async_trait::async_trait;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     Database, DatabaseError, Row,
@@ -9,13 +13,51 @@ use crate::{
     rusqlite::RusqliteDatabase,
 };
 
+/// Global mapping of database paths to simulation database instances
+/// Using `BTreeMap` for deterministic iteration order
+static DATABASE_REGISTRY: std::sync::LazyLock<Mutex<BTreeMap<String, Arc<RusqliteDatabase>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(BTreeMap::new()));
+
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct SimulationDatabase {
-    inner: RusqliteDatabase,
+    inner: Arc<RusqliteDatabase>,
 }
 
 impl SimulationDatabase {
+    /// Create a new simulation database for the given path
+    /// If path is None, creates an in-memory database
+    /// If path already exists in registry, returns the existing database
+    /// Otherwise creates a new database and registers it
+    ///
+    /// # Errors
+    ///
+    /// * If the database connection fails to open in memory
+    ///
+    /// # Panics
+    ///
+    /// * If time goes backwards
+    pub fn new_for_path(path: Option<&str>) -> Result<Self, DatabaseError> {
+        let path_key = path.unwrap_or(":memory:").to_string();
+
+        // Check if we already have a database for this path
+        let registry = &DATABASE_REGISTRY;
+        let mut registry_guard = registry.lock().unwrap();
+
+        if let Some(existing_db) = registry_guard.get(&path_key) {
+            return Ok(Self {
+                inner: Arc::clone(existing_db),
+            });
+        }
+
+        // Create a new database for this path
+        let db = Self::create_new_database()?;
+        registry_guard.insert(path_key, Arc::clone(&db.inner));
+        drop(registry_guard);
+
+        Ok(db)
+    }
+
     /// # Errors
     ///
     /// * If the database connection fails to open in memory
@@ -24,6 +66,12 @@ impl SimulationDatabase {
     ///
     /// * If time goes backwards
     pub fn new() -> Result<Self, DatabaseError> {
+        // For backwards compatibility, create a unique database each time
+        // when no path is specified
+        Self::create_new_database()
+    }
+
+    fn create_new_database() -> Result<Self, DatabaseError> {
         use std::sync::atomic::AtomicU64;
 
         static ID: AtomicU64 = AtomicU64::new(0);
@@ -41,11 +89,11 @@ impl SimulationDatabase {
                 .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
             conn.busy_timeout(std::time::Duration::from_millis(10))
                 .map_err(|e| DatabaseError::Rusqlite(e.into()))?;
-            connections.push(std::sync::Arc::new(tokio::sync::Mutex::new(conn)));
+            connections.push(Arc::new(tokio::sync::Mutex::new(conn)));
         }
 
         Ok(Self {
-            inner: RusqliteDatabase::new(connections),
+            inner: Arc::new(RusqliteDatabase::new(connections)),
         })
     }
 }
@@ -168,6 +216,65 @@ impl Database for SimulationDatabase {
 mod tests {
     use super::*;
     use crate::{Database, query::FilterableQuery};
+
+    #[switchy_async::test]
+    async fn test_path_based_database_isolation() {
+        // Create two databases with different paths
+        let db1 = SimulationDatabase::new_for_path(Some("path1.db")).unwrap();
+        let db2 = SimulationDatabase::new_for_path(Some("path2.db")).unwrap();
+
+        // Create tables in both
+        db1.exec_raw("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
+            .await
+            .unwrap();
+        db2.exec_raw("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
+            .await
+            .unwrap();
+
+        // Insert different data in each
+        db1.insert("test")
+            .value("value", "db1_data")
+            .execute(&db1)
+            .await
+            .unwrap();
+        db2.insert("test")
+            .value("value", "db2_data")
+            .execute(&db2)
+            .await
+            .unwrap();
+
+        // Verify isolation - each database should only see its own data
+        let rows1 = db1.select("test").execute(&db1).await.unwrap();
+        let rows2 = db2.select("test").execute(&db2).await.unwrap();
+
+        assert_eq!(rows1.len(), 1);
+        assert_eq!(rows2.len(), 1);
+        assert_eq!(rows1[0].columns[1].1, "db1_data".into());
+        assert_eq!(rows2[0].columns[1].1, "db2_data".into());
+    }
+
+    #[switchy_async::test]
+    async fn test_same_path_returns_same_database() {
+        // Create two database instances with the same path
+        let db1 = SimulationDatabase::new_for_path(Some("same_path.db")).unwrap();
+        let db2 = SimulationDatabase::new_for_path(Some("same_path.db")).unwrap();
+
+        // Create table and insert data via first instance
+        db1.exec_raw("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)")
+            .await
+            .unwrap();
+        db1.insert("test")
+            .value("value", "shared_data")
+            .execute(&db1)
+            .await
+            .unwrap();
+
+        // Second instance should see the same data
+        let rows = db2.select("test").execute(&db2).await.unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].columns[1].1, "shared_data".into());
+    }
 
     #[switchy_async::test]
     async fn test_simulator_transaction_delegation() {
