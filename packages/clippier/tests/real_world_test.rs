@@ -53,11 +53,7 @@ fn test_real_world_cargo_lock_changes() {
     let workspace_root = Path::new(".").canonicalize().unwrap(); // Absolute path to workspace root
     let mut workspace_root = workspace_root.clone();
 
-    while workspace_root
-        .file_name()
-        .map(|s| s.to_string_lossy())
-        .is_none_or(|x| x != "MoosicBox")
-    {
+    while !workspace_root.join(".git").exists() {
         workspace_root = workspace_root.parent().unwrap().to_path_buf();
     }
 
@@ -114,11 +110,7 @@ fn test_debug_cargo_lock_parsing() {
     let workspace_root = Path::new(".").canonicalize().unwrap(); // Absolute path to workspace root
     let mut workspace_root = workspace_root.clone();
 
-    while workspace_root
-        .file_name()
-        .map(|s| s.to_string_lossy())
-        .is_none_or(|x| x != "MoosicBox")
-    {
+    while !workspace_root.join(".git").exists() {
         workspace_root = workspace_root.parent().unwrap().to_path_buf();
     }
 
@@ -173,11 +165,7 @@ fn test_debug_raw_diff_lines() {
     let workspace_root = Path::new(".").canonicalize().unwrap(); // Absolute path to workspace root
     let mut workspace_root = workspace_root.clone();
 
-    while workspace_root
-        .file_name()
-        .map(|s| s.to_string_lossy())
-        .is_none_or(|x| x != "MoosicBox")
-    {
+    while !workspace_root.join(".git").exists() {
         workspace_root = workspace_root.parent().unwrap().to_path_buf();
     }
 
