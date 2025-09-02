@@ -1024,6 +1024,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use serial_test::serial;
     use static_init::dynamic;
+    use switchy_fs::with_real_fs;
     use tantivy::schema::OwnedValue;
 
     use crate::*;
@@ -1046,25 +1047,29 @@ mod tests {
 
     impl Drop for TestSetup {
         fn drop(&mut self) {
-            for path in TEMP_DIRS.read().unwrap().iter() {
-                log::debug!("Cleaning up temp directory {:?}", path.as_path());
-                switchy_fs::sync::remove_dir_all(path.as_path())
-                    .expect("Failed to clean up temp directory");
-            }
-            log::debug!("Cleaning up temp directory {:?}", TESTS_DIR_PATH.as_path());
-            if TESTS_DIR_PATH.exists() {
-                switchy_fs::sync::remove_dir_all(TESTS_DIR_PATH.as_path())
-                    .expect("Failed to clean up temp directory");
-            }
+            with_real_fs(|| {
+                for path in TEMP_DIRS.read().unwrap().iter() {
+                    log::debug!("Cleaning up temp directory {:?}", path.as_path());
+                    switchy_fs::sync::remove_dir_all(path.as_path())
+                        .expect("Failed to clean up temp directory");
+                }
+                log::debug!("Cleaning up temp directory {:?}", TESTS_DIR_PATH.as_path());
+                if TESTS_DIR_PATH.exists() {
+                    switchy_fs::sync::remove_dir_all(TESTS_DIR_PATH.as_path())
+                        .expect("Failed to clean up temp directory");
+                }
+            });
         }
     }
 
     fn temp_index_path() -> PathBuf {
-        let path = moosicbox_config::get_tests_dir_path();
+        with_real_fs(|| {
+            let path = moosicbox_config::get_tests_dir_path();
 
-        TEMP_DIRS.write().unwrap().push(path.clone());
+            TEMP_DIRS.write().unwrap().push(path.clone());
 
-        path.join("search_indices").join("global_search_index")
+            path.join("search_indices").join("global_search_index")
+        })
     }
 
     fn before_each() {
@@ -1235,9 +1240,9 @@ mod tests {
         entry_cache_key(a).cmp(&entry_cache_key(b))
     }
 
-    #[test_log::test]
+    #[test_log::test(switchy_async::test(real_fs))]
     #[serial]
-    fn test_global_search() {
+    async fn test_global_search() {
         before_each();
 
         crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
@@ -1255,9 +1260,9 @@ mod tests {
         );
     }
 
-    #[test_log::test]
+    #[test_log::test(switchy_async::test(real_fs))]
     #[serial]
-    fn test_global_search_with_offset() {
+    async fn test_global_search_with_offset() {
         before_each();
 
         crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
@@ -1274,9 +1279,9 @@ mod tests {
         );
     }
 
-    #[test_log::test]
+    #[test_log::test(switchy_async::test(real_fs))]
     #[serial]
-    fn test_global_search_with_limit() {
+    async fn test_global_search_with_limit() {
         before_each();
 
         crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
@@ -1289,9 +1294,9 @@ mod tests {
         );
     }
 
-    #[test_log::test]
+    #[test_log::test(switchy_async::test(real_fs))]
     #[serial]
-    fn test_global_search_with_limit_and_offset() {
+    async fn test_global_search_with_limit_and_offset() {
         before_each();
 
         crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();
@@ -1304,9 +1309,9 @@ mod tests {
         );
     }
 
-    #[test_log::test]
+    #[test_log::test(switchy_async::test(real_fs))]
     #[serial]
-    fn test_global_search_reindex() {
+    async fn test_global_search_reindex() {
         before_each();
 
         crate::populate_global_search_index_sync(&TEST_DATA, true).unwrap();

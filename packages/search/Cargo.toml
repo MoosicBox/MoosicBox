@@ -16,8 +16,8 @@ moosicbox_json_utils       = { workspace = true, features = ["tantivy"] }
 moosicbox_music_api_models = { workspace = true, features = ["api-search"] }
 moosicbox_music_models     = { workspace = true, features = ["tantivy"] }
 
-switchy_async              = { workspace = true, features = ["tokio"] }
-switchy_fs                 = { workspace = true, features = ["std"] }
+switchy_async = { workspace = true, features = ["tokio"] }
+switchy_fs    = { workspace = true, features = ["std"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -32,6 +32,8 @@ tokio     = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 moosicbox_config = { workspace = true, features = ["test"] }
+switchy_async    = { workspace = true, features = ["macros"] }
+switchy_fs       = { workspace = true, features = ["simulator-real-fs"] }
 
 pretty_assertions = { workspace = true }
 serial_test       = { workspace = true }
