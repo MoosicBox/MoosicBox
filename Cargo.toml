@@ -510,8 +510,8 @@ symphonia = { version = "0.5.4", features = ["all"] }
 syn = "2.0.106"
 syntect = "5.2.0"
 tantivy = "0.25.0"
-tauri = { version = "2.8.4", features = ["protocol-asset"] }
-tauri-build = { version = "2.4.0", features = [] }
+tauri = { version = "2.8.5", features = ["protocol-asset"] }
+tauri-build = { version = "2.4.1", features = [] }
 tauri-plugin = { version = "2.4.0", features = ["build"] }
 tauri-plugin-dialog = "2.3.3"
 tauri-plugin-fs = "2.4.2"
@@ -543,7 +543,7 @@ utoipa-rapidoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-redoc = { version = "6.0.0", features = ["actix-web"] }
 utoipa-scalar = { version = "0.3.0", features = ["actix-web"] }
 utoipa-swagger-ui = { version = "9.0.2", features = ["actix-web"] }
-uuid = { version = "1.18.0", features = ["v4"] }
+uuid = { version = "1.18.1", features = ["v4"] }
 walkdir = "2.5.0"
 webp = "0.3.1"
 whoami = "1.6.1"
