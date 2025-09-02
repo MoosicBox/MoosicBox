@@ -164,6 +164,14 @@ pub use temp_dir::{TempDir, tempdir, tempdir_in};
 #[cfg(all(feature = "std", not(feature = "simulator")))]
 pub use temp_dir::Builder;
 
+#[cfg(all(feature = "simulator-real-fs", feature = "simulator"))]
+pub use simulator::with_real_fs;
+
+#[cfg(all(feature = "simulator-real-fs", not(feature = "simulator")))]
+pub fn with_real_fs<T>(f: impl FnOnce() -> T) -> T {
+    f()
+}
+
 #[cfg(any(feature = "simulator", feature = "std"))]
 #[cfg(test)]
 mod temp_dir_tests {
