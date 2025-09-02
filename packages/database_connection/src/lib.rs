@@ -368,8 +368,13 @@ pub async fn init_sqlite_sqlx(
 
     #[cfg(feature = "simulator")]
     {
+        // Convert Path to string for the simulator
+        let path_str = db_location
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string());
         return Ok(Box::new(
-            switchy_database::simulator::SimulationDatabase::new().unwrap(),
+            switchy_database::simulator::SimulationDatabase::new_for_path(path_str.as_deref())
+                .unwrap(),
         ));
     }
 
