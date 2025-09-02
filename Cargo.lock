@@ -14217,6 +14217,7 @@ dependencies = [
  "pretty_assertions",
  "scoped-tls",
  "switchy_async",
+ "tempfile",
  "tokio",
 ]
 

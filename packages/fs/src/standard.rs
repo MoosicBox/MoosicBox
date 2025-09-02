@@ -100,3 +100,184 @@ pub mod sync {
         }
     }
 }
+
+/// Temporary directory functionality for standard filesystem operations
+#[cfg(feature = "std")]
+pub mod temp_dir {
+    use std::{
+        ffi::OsStr,
+        path::{Path, PathBuf},
+    };
+
+    /// A directory in the filesystem that is automatically deleted when it goes out of scope
+    pub struct TempDir {
+        inner: Option<tempfile::TempDir>,
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        /// Attempts to make a temporary directory inside of the system temp directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created
+        pub fn new() -> std::io::Result<Self> {
+            let td = tempfile::TempDir::new()?;
+            let path = td.path().to_path_buf();
+            Ok(Self {
+                inner: Some(td),
+                path,
+            })
+        }
+
+        /// Attempts to make a temporary directory inside the specified directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created
+        pub fn new_in<P: AsRef<Path>>(dir: P) -> std::io::Result<Self> {
+            let td = tempfile::TempDir::new_in(dir)?;
+            let path = td.path().to_path_buf();
+            Ok(Self {
+                inner: Some(td),
+                path,
+            })
+        }
+
+        /// Attempts to make a temporary directory with the specified prefix
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created
+        pub fn with_prefix<S: AsRef<OsStr>>(prefix: S) -> std::io::Result<Self> {
+            let td = tempfile::TempDir::with_prefix(prefix)?;
+            let path = td.path().to_path_buf();
+            Ok(Self {
+                inner: Some(td),
+                path,
+            })
+        }
+
+        /// Attempts to make a temporary directory with the specified suffix
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created
+        pub fn with_suffix<S: AsRef<OsStr>>(suffix: S) -> std::io::Result<Self> {
+            let td = tempfile::TempDir::with_suffix(suffix)?;
+            let path = td.path().to_path_buf();
+            Ok(Self {
+                inner: Some(td),
+                path,
+            })
+        }
+
+        /// Attempts to make a temporary directory with the specified prefix in the specified directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created
+        pub fn with_prefix_in<S: AsRef<OsStr>, P: AsRef<Path>>(
+            prefix: S,
+            dir: P,
+        ) -> std::io::Result<Self> {
+            let td = tempfile::TempDir::with_prefix_in(prefix, dir)?;
+            let path = td.path().to_path_buf();
+            Ok(Self {
+                inner: Some(td),
+                path,
+            })
+        }
+
+        /// Attempts to make a temporary directory with the specified suffix in the specified directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created
+        pub fn with_suffix_in<S: AsRef<OsStr>, P: AsRef<Path>>(
+            suffix: S,
+            dir: P,
+        ) -> std::io::Result<Self> {
+            let td = tempfile::TempDir::with_suffix_in(suffix, dir)?;
+            let path = td.path().to_path_buf();
+            Ok(Self {
+                inner: Some(td),
+                path,
+            })
+        }
+
+        /// Accesses the Path to the temporary directory
+        #[must_use]
+        pub fn path(&self) -> &Path {
+            &self.path
+        }
+
+        /// Persist the temporary directory to disk, returning the `PathBuf` where it is located
+        #[must_use]
+        pub fn keep(mut self) -> PathBuf {
+            if let Some(td) = self.inner.take() {
+                td.keep()
+            } else {
+                self.path.clone()
+            }
+        }
+
+        /// Deprecated alias for `keep()`
+        #[deprecated = "use TempDir::keep()"]
+        #[must_use]
+        pub fn into_path(self) -> PathBuf {
+            self.keep()
+        }
+
+        /// Disable cleanup of the temporary directory
+        pub fn disable_cleanup(&mut self, disable_cleanup: bool) {
+            if let Some(ref mut td) = self.inner {
+                td.disable_cleanup(disable_cleanup);
+            }
+        }
+
+        /// Closes and removes the temporary directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be removed
+        pub fn close(self) -> std::io::Result<()> {
+            self.inner.map_or(Ok(()), tempfile::TempDir::close)
+        }
+    }
+
+    impl AsRef<Path> for TempDir {
+        fn as_ref(&self) -> &Path {
+            self.path()
+        }
+    }
+
+    impl std::fmt::Debug for TempDir {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("TempDir")
+                .field("path", &self.path)
+                .finish_non_exhaustive()
+        }
+    }
+
+    /// Re-export Builder from tempfile for full API compatibility
+    pub use tempfile::Builder;
+
+    /// Convenience function to create a temporary directory
+    ///
+    /// # Errors
+    ///
+    /// * If the directory cannot be created
+    pub fn tempdir() -> std::io::Result<TempDir> {
+        TempDir::new()
+    }
+
+    /// Convenience function to create a temporary directory in the specified location
+    ///
+    /// # Errors
+    ///
+    /// * If the directory cannot be created
+    pub fn tempdir_in<P: AsRef<Path>>(dir: P) -> std::io::Result<TempDir> {
+        TempDir::new_in(dir)
+    }
+}

@@ -917,3 +917,600 @@ mod real_fs_tests {
         assert!(!std::path::Path::new(path).exists());
     }
 }
+
+/// Temporary directory functionality for the simulator
+pub mod temp_dir {
+    use std::{
+        cell::RefCell,
+        collections::BTreeMap,
+        ffi::{OsStr, OsString},
+        path::{Path, PathBuf},
+        sync::RwLock,
+    };
+
+    /// Tracking state for temp directories in simulator
+    struct TempDirState {
+        cleanup_enabled: bool,
+    }
+
+    thread_local! {
+        static TEMP_DIRS: RefCell<RwLock<BTreeMap<PathBuf, TempDirState>>> =
+            const { RefCell::new(RwLock::new(BTreeMap::new())) };
+    }
+
+    /// Reset temp directory state (useful for testing)
+    ///
+    /// # Panics
+    ///
+    /// * If the `TEMP_DIRS` `RwLock` fails to write to
+    pub fn reset_temp_dirs() {
+        TEMP_DIRS.with_borrow_mut(|x| x.write().unwrap().clear());
+    }
+
+    /// A directory in the filesystem that is automatically deleted when it goes out of scope
+    pub struct TempDir {
+        path: PathBuf,
+        cleanup_enabled: bool,
+    }
+
+    impl TempDir {
+        /// Attempts to make a temporary directory inside of the system temp directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created in the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn new() -> std::io::Result<Self> {
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                let real_temp = tempfile::TempDir::new()?;
+                let path = real_temp.path().to_path_buf();
+                std::mem::forget(real_temp); // Let our Drop handle cleanup
+                return Ok(Self {
+                    path,
+                    cleanup_enabled: true,
+                });
+            }
+
+            let dir_name = generate_temp_name(None, None, 6);
+            let path = PathBuf::from("/tmp").join(dir_name);
+
+            // Create in simulated filesystem
+            super::sync::create_dir_all(&path)?;
+
+            // Register in temp directory tracking
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().insert(
+                    path.clone(),
+                    TempDirState {
+                        cleanup_enabled: true,
+                    },
+                );
+            });
+
+            Ok(Self {
+                path,
+                cleanup_enabled: true,
+            })
+        }
+
+        /// Attempts to make a temporary directory inside the specified directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created in the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn new_in<P: AsRef<Path>>(dir: P) -> std::io::Result<Self> {
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                let real_temp = tempfile::TempDir::new_in(dir)?;
+                let path = real_temp.path().to_path_buf();
+                std::mem::forget(real_temp);
+                return Ok(Self {
+                    path,
+                    cleanup_enabled: true,
+                });
+            }
+
+            let dir_name = generate_temp_name(None, None, 6);
+            let path = dir.as_ref().join(dir_name);
+
+            super::sync::create_dir_all(&path)?;
+
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().insert(
+                    path.clone(),
+                    TempDirState {
+                        cleanup_enabled: true,
+                    },
+                );
+            });
+
+            Ok(Self {
+                path,
+                cleanup_enabled: true,
+            })
+        }
+
+        /// Attempts to make a temporary directory with the specified prefix
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created in the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn with_prefix<S: AsRef<OsStr>>(prefix: S) -> std::io::Result<Self> {
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                let real_temp = tempfile::TempDir::with_prefix(prefix)?;
+                let path = real_temp.path().to_path_buf();
+                std::mem::forget(real_temp);
+                return Ok(Self {
+                    path,
+                    cleanup_enabled: true,
+                });
+            }
+
+            let dir_name = generate_temp_name(Some(prefix.as_ref()), None, 6);
+            let path = PathBuf::from("/tmp").join(dir_name);
+
+            super::sync::create_dir_all(&path)?;
+
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().insert(
+                    path.clone(),
+                    TempDirState {
+                        cleanup_enabled: true,
+                    },
+                );
+            });
+
+            Ok(Self {
+                path,
+                cleanup_enabled: true,
+            })
+        }
+
+        /// Attempts to make a temporary directory with the specified suffix
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created in the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn with_suffix<S: AsRef<OsStr>>(suffix: S) -> std::io::Result<Self> {
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                let real_temp = tempfile::TempDir::with_suffix(suffix)?;
+                let path = real_temp.path().to_path_buf();
+                std::mem::forget(real_temp);
+                return Ok(Self {
+                    path,
+                    cleanup_enabled: true,
+                });
+            }
+
+            let dir_name = generate_temp_name(None, Some(suffix.as_ref()), 6);
+            let path = PathBuf::from("/tmp").join(dir_name);
+
+            super::sync::create_dir_all(&path)?;
+
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().insert(
+                    path.clone(),
+                    TempDirState {
+                        cleanup_enabled: true,
+                    },
+                );
+            });
+
+            Ok(Self {
+                path,
+                cleanup_enabled: true,
+            })
+        }
+
+        /// Attempts to make a temporary directory with the specified prefix in the specified directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created in the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn with_prefix_in<S: AsRef<OsStr>, P: AsRef<Path>>(
+            prefix: S,
+            dir: P,
+        ) -> std::io::Result<Self> {
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                let real_temp = tempfile::TempDir::with_prefix_in(prefix, dir)?;
+                let path = real_temp.path().to_path_buf();
+                std::mem::forget(real_temp);
+                return Ok(Self {
+                    path,
+                    cleanup_enabled: true,
+                });
+            }
+
+            let dir_name = generate_temp_name(Some(prefix.as_ref()), None, 6);
+            let path = dir.as_ref().join(dir_name);
+
+            super::sync::create_dir_all(&path)?;
+
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().insert(
+                    path.clone(),
+                    TempDirState {
+                        cleanup_enabled: true,
+                    },
+                );
+            });
+
+            Ok(Self {
+                path,
+                cleanup_enabled: true,
+            })
+        }
+
+        /// Attempts to make a temporary directory with the specified suffix in the specified directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created in the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn with_suffix_in<S: AsRef<OsStr>, P: AsRef<Path>>(
+            suffix: S,
+            dir: P,
+        ) -> std::io::Result<Self> {
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                let real_temp = tempfile::TempDir::with_suffix_in(suffix, dir)?;
+                let path = real_temp.path().to_path_buf();
+                std::mem::forget(real_temp);
+                return Ok(Self {
+                    path,
+                    cleanup_enabled: true,
+                });
+            }
+
+            let dir_name = generate_temp_name(None, Some(suffix.as_ref()), 6);
+            let path = dir.as_ref().join(dir_name);
+
+            super::sync::create_dir_all(&path)?;
+
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().insert(
+                    path.clone(),
+                    TempDirState {
+                        cleanup_enabled: true,
+                    },
+                );
+            });
+
+            Ok(Self {
+                path,
+                cleanup_enabled: true,
+            })
+        }
+
+        /// Accesses the Path to the temporary directory
+        #[must_use]
+        pub fn path(&self) -> &Path {
+            &self.path
+        }
+
+        /// Persist the temporary directory to disk, returning the `PathBuf` where it is located
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        #[must_use]
+        pub fn keep(mut self) -> PathBuf {
+            self.cleanup_enabled = false;
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                if let Some(state) = dirs.write().unwrap().get_mut(&self.path) {
+                    state.cleanup_enabled = false;
+                }
+            });
+            self.path.clone()
+        }
+
+        /// Deprecated alias for `keep()`
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        #[deprecated = "use TempDir::keep()"]
+        #[must_use]
+        pub fn into_path(self) -> PathBuf {
+            self.keep()
+        }
+
+        /// Disable cleanup of the temporary directory
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn disable_cleanup(&mut self, disable_cleanup: bool) {
+            self.cleanup_enabled = !disable_cleanup;
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                if let Some(state) = dirs.write().unwrap().get_mut(&self.path) {
+                    state.cleanup_enabled = !disable_cleanup;
+                }
+            });
+        }
+
+        /// Closes and removes the temporary directory
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be removed from the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn close(mut self) -> std::io::Result<()> {
+            if !self.cleanup_enabled {
+                return Ok(());
+            }
+
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                return std::fs::remove_dir_all(&self.path);
+            }
+
+            // Remove from tracking
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().remove(&self.path);
+            });
+
+            // Remove from simulated filesystem
+            super::sync::remove_dir_all(&self.path)?;
+
+            // Prevent double cleanup in Drop
+            self.cleanup_enabled = false;
+            Ok(())
+        }
+    }
+
+    impl AsRef<Path> for TempDir {
+        fn as_ref(&self) -> &Path {
+            self.path()
+        }
+    }
+
+    impl std::fmt::Debug for TempDir {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("TempDir")
+                .field("path", &self.path)
+                .field("cleanup_enabled", &self.cleanup_enabled)
+                .finish()
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            if self.cleanup_enabled {
+                #[cfg(feature = "simulator-real-fs")]
+                if super::real_fs_support::is_real_fs() {
+                    let _ = std::fs::remove_dir_all(&self.path);
+                    return;
+                }
+
+                TEMP_DIRS.with_borrow_mut(|dirs| {
+                    dirs.write().unwrap().remove(&self.path);
+                });
+
+                let _ = super::sync::remove_dir_all(&self.path);
+            }
+        }
+    }
+
+    /// Builder for configuring temporary directory creation
+    pub struct Builder {
+        prefix: Option<OsString>,
+        suffix: Option<OsString>,
+        rand_bytes: usize,
+    }
+
+    impl Default for Builder {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl Builder {
+        /// Create a new Builder with default settings
+        #[must_use]
+        pub const fn new() -> Self {
+            Self {
+                prefix: None,
+                suffix: None,
+                rand_bytes: 6,
+            }
+        }
+
+        /// Set the prefix for the temporary directory name
+        pub fn prefix<S: AsRef<OsStr>>(&mut self, prefix: S) -> &mut Self {
+            self.prefix = Some(prefix.as_ref().to_os_string());
+            self
+        }
+
+        /// Set the suffix for the temporary directory name
+        pub fn suffix<S: AsRef<OsStr>>(&mut self, suffix: S) -> &mut Self {
+            self.suffix = Some(suffix.as_ref().to_os_string());
+            self
+        }
+
+        /// Set the number of random bytes to use for the directory name
+        pub const fn rand_bytes(&mut self, rand: usize) -> &mut Self {
+            self.rand_bytes = rand;
+            self
+        }
+
+        /// Create a temporary directory in the default location
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created in the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn tempdir(&self) -> std::io::Result<TempDir> {
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                let mut builder = tempfile::Builder::new();
+                if let Some(ref prefix) = self.prefix {
+                    builder.prefix(prefix);
+                }
+                if let Some(ref suffix) = self.suffix {
+                    builder.suffix(suffix);
+                }
+                builder.rand_bytes(self.rand_bytes);
+                let real_temp = builder.tempdir()?;
+                let path = real_temp.path().to_path_buf();
+                std::mem::forget(real_temp);
+                return Ok(TempDir {
+                    path,
+                    cleanup_enabled: true,
+                });
+            }
+
+            let dir_name = generate_temp_name(
+                self.prefix.as_deref(),
+                self.suffix.as_deref(),
+                self.rand_bytes,
+            );
+            let path = PathBuf::from("/tmp").join(dir_name);
+
+            super::sync::create_dir_all(&path)?;
+
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().insert(
+                    path.clone(),
+                    TempDirState {
+                        cleanup_enabled: true,
+                    },
+                );
+            });
+
+            Ok(TempDir {
+                path,
+                cleanup_enabled: true,
+            })
+        }
+
+        /// Create a temporary directory in the specified location
+        ///
+        /// # Errors
+        ///
+        /// * If the directory cannot be created in the simulated filesystem
+        ///
+        /// # Panics
+        ///
+        /// * If the `TEMP_DIRS` `RwLock` fails to write to
+        pub fn tempdir_in<P: AsRef<Path>>(&self, dir: P) -> std::io::Result<TempDir> {
+            #[cfg(feature = "simulator-real-fs")]
+            if super::real_fs_support::is_real_fs() {
+                let mut builder = tempfile::Builder::new();
+                if let Some(ref prefix) = self.prefix {
+                    builder.prefix(prefix);
+                }
+                if let Some(ref suffix) = self.suffix {
+                    builder.suffix(suffix);
+                }
+                builder.rand_bytes(self.rand_bytes);
+                let real_temp = builder.tempdir_in(dir)?;
+                let path = real_temp.path().to_path_buf();
+                std::mem::forget(real_temp);
+                return Ok(TempDir {
+                    path,
+                    cleanup_enabled: true,
+                });
+            }
+
+            let dir_name = generate_temp_name(
+                self.prefix.as_deref(),
+                self.suffix.as_deref(),
+                self.rand_bytes,
+            );
+            let path = dir.as_ref().join(dir_name);
+
+            super::sync::create_dir_all(&path)?;
+
+            TEMP_DIRS.with_borrow_mut(|dirs| {
+                dirs.write().unwrap().insert(
+                    path.clone(),
+                    TempDirState {
+                        cleanup_enabled: true,
+                    },
+                );
+            });
+
+            Ok(TempDir {
+                path,
+                cleanup_enabled: true,
+            })
+        }
+    }
+
+    /// Convenience function to create a temporary directory
+    ///
+    /// # Errors
+    ///
+    /// * If the directory cannot be created
+    pub fn tempdir() -> std::io::Result<TempDir> {
+        TempDir::new()
+    }
+
+    /// Convenience function to create a temporary directory in the specified location
+    ///
+    /// # Errors
+    ///
+    /// * If the directory cannot be created
+    pub fn tempdir_in<P: AsRef<Path>>(dir: P) -> std::io::Result<TempDir> {
+        TempDir::new_in(dir)
+    }
+
+    /// Generate deterministic temp directory name
+    fn generate_temp_name(
+        prefix: Option<&OsStr>,
+        suffix: Option<&OsStr>,
+        rand_bytes: usize,
+    ) -> OsString {
+        let mut name = OsString::new();
+
+        if let Some(p) = prefix {
+            name.push(p);
+        }
+
+        // Generate deterministic random part
+        for i in 0..rand_bytes {
+            #[allow(clippy::cast_possible_truncation)]
+            let c = char::from(b'a' + (i % 26) as u8);
+            name.push(c.to_string());
+        }
+
+        if let Some(s) = suffix {
+            name.push(s);
+        }
+
+        name
+    }
+}

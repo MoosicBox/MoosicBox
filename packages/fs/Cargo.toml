@@ -23,6 +23,7 @@ switchy_async = { workspace = true, optional = true, features = [
 bytes      = { workspace = true, optional = true }
 log        = { workspace = true }
 scoped-tls = { workspace = true, optional = true }
+tempfile   = { workspace = true, optional = true }
 tokio      = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -41,7 +42,7 @@ simulator-real-fs = [
     "dep:switchy_async",
     "switchy_async/rt-multi-thread",
 ]
-std = ["sync"]
+std = ["dep:tempfile", "sync"]
 tokio = ["async", "dep:tokio", "switchy_async/fs", "switchy_async/tokio"]
 
 async = ["dep:switchy_async", "switchy_async/io"]
