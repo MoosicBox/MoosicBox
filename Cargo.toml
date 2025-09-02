@@ -40,6 +40,7 @@ members = [
     "packages/env_utils",
     "packages/files",
     "packages/fs",
+    "packages/fs/examples/temp_dir",
     "packages/http",
     "packages/http/examples/simple_get",
     "packages/http/models",

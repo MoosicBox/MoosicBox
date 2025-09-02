@@ -15213,6 +15213,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "temp_dir_example"
+version = "0.1.0"
+dependencies = [
+ "switchy_fs",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

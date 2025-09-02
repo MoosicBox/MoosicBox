@@ -164,6 +164,7 @@ pub use temp_dir::{TempDir, tempdir, tempdir_in};
 #[cfg(all(feature = "std", not(feature = "simulator")))]
 pub use temp_dir::Builder;
 
+#[cfg(any(feature = "simulator", feature = "std"))]
 #[cfg(test)]
 mod temp_dir_tests {
     use super::*;

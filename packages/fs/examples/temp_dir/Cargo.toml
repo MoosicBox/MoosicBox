@@ -1,0 +1,25 @@
+[package]
+authors    = { workspace = true }
+edition    = { workspace = true }
+license    = { workspace = true }
+name       = "temp_dir_example"
+publish    = false
+repository = { workspace = true }
+version    = "0.1.0"
+
+[dependencies]
+switchy_fs = { workspace = true, features = ["std"] }
+
+[[bin]]
+name = "temp_dir_example"
+path = "src/main.rs"
+
+[features]
+default = ["std"]
+
+fail-on-warnings = []
+
+async             = ["switchy_fs/async", "switchy_fs/tokio"]
+simulator         = ["switchy_fs/simulator", "switchy_fs/sync"]
+simulator-real-fs = ["switchy_fs/simulator-real-fs", "switchy_fs/sync"]
+std               = ["switchy_fs/sync"]

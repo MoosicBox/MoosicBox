@@ -13,8 +13,13 @@ fn main() -> std::io::Result<()> {
         // Create a file in the temp directory (in real mode)
         #[cfg(all(feature = "std", not(feature = "simulator")))]
         {
+            use std::io::Write;
+
             let file_path = path.join("example.txt");
-            let mut file = File::create(&file_path)?;
+            let mut file = switchy_fs::sync::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&file_path)?;
             writeln!(file, "Hello from switchy_fs temp directory!")?;
             println!("Created file: {}", file_path.display());
         }
@@ -58,7 +63,7 @@ fn main() -> std::io::Result<()> {
         {
             println!("Directory still exists: {}", kept_path.exists());
             // Manual cleanup since we kept it
-            std::fs::remove_dir_all(kept_path)?;
+            switchy_fs::sync::remove_dir_all(kept_path)?;
             println!("Manually cleaned up kept directory");
         }
 
