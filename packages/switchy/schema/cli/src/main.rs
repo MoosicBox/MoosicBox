@@ -760,8 +760,8 @@ mod tests {
         }
     }
 
-    #[switchy_async::test(no_simulator)]
-    async fn test_create_migration_file() {
+    #[test]
+    fn test_create_migration_file() {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let migrations_dir = temp_dir.path().to_path_buf();
 
@@ -805,8 +805,8 @@ mod tests {
         let up_sql = migration_dir_path.join("up.sql");
         let down_sql = migration_dir_path.join("down.sql");
 
-        assert!(up_sql.exists(), "up.sql should exist");
-        assert!(down_sql.exists(), "down.sql should exist");
+        assert!(switchy_fs::exists(&up_sql), "up.sql should exist");
+        assert!(switchy_fs::exists(&down_sql), "down.sql should exist");
 
         // Check file contents
         let up_content = switchy_fs::sync::read_to_string(&up_sql).expect("Failed to read up.sql");
