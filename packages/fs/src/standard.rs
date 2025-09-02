@@ -101,6 +101,10 @@ pub mod sync {
     }
 }
 
+pub fn exists<P: AsRef<std::path::Path>>(path: P) -> bool {
+    path.as_ref().exists()
+}
+
 /// Temporary directory functionality for standard filesystem operations
 #[cfg(feature = "std")]
 pub mod temp_dir {

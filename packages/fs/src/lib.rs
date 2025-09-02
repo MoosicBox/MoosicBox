@@ -100,6 +100,8 @@ macro_rules! impl_sync_fs {
 
             impl_open_options!();
         }
+
+        pub use $crate::$module::exists;
     };
 }
 

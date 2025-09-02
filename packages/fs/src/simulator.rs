@@ -139,9 +139,18 @@ fn get_parent_directories(path: &str) -> Vec<String> {
     parents
 }
 
-/// Check if a directory exists in the simulated filesystem
-fn directory_exists(path: &str) -> bool {
+/// Check if a path exists
+///
+/// # Panics
+///
+/// * If the `DIRECTORIES` `RwLock` is poisoned
+/// * If the `FILES` `RwLock` is poisoned
+pub fn exists<P: AsRef<std::path::Path>>(path: P) -> bool {
+    let Some(path) = path.as_ref().to_str() else {
+        return false;
+    };
     DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path))
+        || FILES.with_borrow(|files| files.read().unwrap().contains_key(path))
 }
 
 /// Get immediate children (files and directories) of a directory
@@ -455,7 +464,7 @@ pub mod sync {
                     };
 
                     // Allow current directory "." to exist by default, otherwise check DIRECTORIES
-                    if parent_normalized != "." && !super::directory_exists(&parent_normalized) {
+                    if parent_normalized != "." && !super::exists(&parent_normalized) {
                         return Err(std::io::Error::new(
                             std::io::ErrorKind::NotFound,
                             format!("Parent directory not found: {parent_normalized}"),
@@ -581,7 +590,7 @@ pub mod sync {
         };
 
         // Check if directory exists
-        if !super::directory_exists(&normalized) {
+        if !super::exists(&normalized) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("Directory not found: {normalized}"),
@@ -639,7 +648,7 @@ pub mod sync {
         };
 
         // Check if directory exists
-        if !super::directory_exists(&normalized) {
+        if !super::exists(&normalized) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("Directory not found: {normalized}"),
@@ -740,7 +749,7 @@ pub mod sync {
         };
 
         // Check if directory exists
-        if !super::directory_exists(&normalized) {
+        if !super::exists(&normalized) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("Directory not found: {normalized}"),
