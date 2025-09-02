@@ -3696,3 +3696,218 @@ impl RusqliteDatabase {
 - Enhanced migration safety for complex schema changes
 
 **Production Readiness:** ✅ The migration system is fully functional and production-ready for HyperChad and other projects. All core functionality complete.
+
+## Phase 16: Table Introspection API
+
+**Goal:** Add generic table introspection functionality to the Database trait for querying table metadata across all backends
+
+**Prerequisites:**
+- Phase 10.2.2 (Schema Builder Extensions) must be complete
+- Required for Phase 11.2.1 (Error Recovery Investigation - schema migration detection)
+
+**Background:** During Phase 11.2.1 analysis, we discovered that checking for column existence in existing tables is not possible with the current Database trait API. We need a generic way to query table structure that works across SQLite, PostgreSQL, and MySQL.
+
+### 16.1 Define Core Types for Table Metadata
+
+- [ ] Create types in `packages/database/src/schema.rs` ⚠️ **CRITICAL**
+  - [ ] Create `ColumnInfo` struct:
+    ```rust
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct ColumnInfo {
+        pub name: String,
+        pub data_type: DataType,
+        pub nullable: bool,
+        pub default_value: Option<DatabaseValue>,
+        pub is_primary_key: bool,
+        pub is_auto_increment: bool,
+    }
+    ```
+  - [ ] Create `TableInfo` struct:
+    ```rust
+    #[derive(Debug, Clone)]
+    pub struct TableInfo {
+        pub name: String,
+        pub columns: Vec<ColumnInfo>,
+        pub primary_key: Vec<String>,  // Column names in primary key
+        pub indexes: Vec<IndexInfo>,
+        pub foreign_keys: Vec<ForeignKeyInfo>,
+    }
+    ```
+  - [ ] Create `IndexInfo` struct:
+    ```rust
+    #[derive(Debug, Clone)]
+    pub struct IndexInfo {
+        pub name: String,
+        pub columns: Vec<String>,
+        pub is_unique: bool,
+    }
+    ```
+  - [ ] Create `ForeignKeyInfo` struct:
+    ```rust
+    #[derive(Debug, Clone)]
+    pub struct ForeignKeyInfo {
+        pub column: String,
+        pub referenced_table: String,
+        pub referenced_column: String,
+        pub on_delete: Option<String>,  // CASCADE, RESTRICT, etc.
+        pub on_update: Option<String>,
+    }
+    ```
+
+### 16.2 Add Table Introspection Methods to Database Trait
+
+- [ ] Update `packages/database/src/lib.rs` Database trait ⚠️ **CRITICAL**
+  - [ ] Add method signatures:
+    ```rust
+    #[cfg(feature = "schema")]
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError>;
+
+    #[cfg(feature = "schema")]
+    async fn get_table_info(&self, table_name: &str) -> Result<Option<TableInfo>, DatabaseError>;
+
+    #[cfg(feature = "schema")]
+    async fn get_table_columns(&self, table_name: &str) -> Result<Vec<ColumnInfo>, DatabaseError>;
+
+    #[cfg(feature = "schema")]
+    async fn column_exists(&self, table_name: &str, column_name: &str) -> Result<bool, DatabaseError>;
+    ```
+  - [ ] These methods should be feature-gated with `#[cfg(feature = "schema")]`
+  - [ ] Document that `get_table_info` returns `None` if table doesn't exist
+  - [ ] Document that `get_table_columns` returns empty Vec if table doesn't exist
+
+### 16.3 Implement for SQLite (rusqlite)
+
+- [ ] Implement in `packages/database/src/rusqlite/mod.rs` ⚠️ **CRITICAL**
+  - [ ] `table_exists()`:
+    ```sql
+    SELECT name FROM sqlite_master WHERE type='table' AND name=?
+    ```
+  - [ ] `get_table_columns()`:
+    ```sql
+    PRAGMA table_info(table_name)
+    ```
+    - [ ] Map SQLite types to DataType enum
+    - [ ] Parse `notnull` flag for nullable
+    - [ ] Parse `dflt_value` for default values
+    - [ ] Parse `pk` flag for primary key
+  - [ ] `column_exists()`:
+    - [ ] Use PRAGMA table_info and search for column name
+  - [ ] `get_table_info()`:
+    - [ ] Combine PRAGMA table_info with:
+    - [ ] `PRAGMA index_list(table_name)` for indexes
+    - [ ] `PRAGMA foreign_key_list(table_name)` for foreign keys
+  - [ ] Handle in transaction context (use helper functions pattern)
+
+### 16.4 Implement for SQLite (sqlx)
+
+- [ ] Implement in `packages/database/src/sqlx/sqlite.rs` 🟡 **IMPORTANT**
+  - [ ] Follow same pattern as rusqlite but using sqlx queries
+  - [ ] Use `sqlx::query()` with PRAGMA commands
+  - [ ] Ensure transaction support using connection references
+
+### 16.5 Implement for PostgreSQL (postgres and sqlx)
+
+- [ ] Implement in `packages/database/src/postgres/postgres.rs` 🟡 **IMPORTANT**
+  - [ ] `table_exists()`:
+    ```sql
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = $1
+    )
+    ```
+  - [ ] `get_table_columns()`:
+    ```sql
+    SELECT
+        column_name,
+        data_type,
+        is_nullable,
+        column_default,
+        is_identity
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = $1
+    ORDER BY ordinal_position
+    ```
+  - [ ] Map PostgreSQL types to DataType enum
+  - [ ] Parse is_nullable for nullable flag
+  - [ ] Parse column_default for default values
+  - [ ] Query constraints for primary key information
+- [ ] Implement in `packages/database/src/sqlx/postgres.rs` using same queries
+
+### 16.6 Implement for MySQL (sqlx)
+
+- [ ] Implement in `packages/database/src/sqlx/mysql.rs` 🟡 **IMPORTANT**
+  - [ ] `table_exists()`:
+    ```sql
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = ?
+    )
+    ```
+  - [ ] `get_table_columns()`:
+    ```sql
+    SELECT
+        COLUMN_NAME,
+        DATA_TYPE,
+        IS_NULLABLE,
+        COLUMN_DEFAULT,
+        COLUMN_KEY,
+        EXTRA
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE() AND table_name = ?
+    ORDER BY ORDINAL_POSITION
+    ```
+  - [ ] Map MySQL types to DataType enum
+  - [ ] Parse IS_NULLABLE for nullable flag
+  - [ ] Parse COLUMN_DEFAULT for default values
+  - [ ] Parse COLUMN_KEY for primary key detection
+  - [ ] Parse EXTRA for auto_increment detection
+
+### 16.7 Implement for Database Simulator
+
+- [ ] Implement in `packages/database/src/simulator/mod.rs` 🟢 **MINOR**
+  - [ ] Delegate all methods to inner database (rusqlite)
+  - [ ] No custom logic needed
+
+### 16.8 Add Helper Function for Type Mapping
+
+- [ ] Create helper functions in each backend 🟡 **IMPORTANT**
+  - [ ] `map_native_type_to_datatype()` for each backend
+  - [ ] Handle all common SQL types
+  - [ ] Default to DataType::Text for unknown types (with logging)
+  - [ ] Document type mapping for each backend
+
+### 16.9 Add Comprehensive Tests
+
+- [ ] Create tests in `packages/database/tests/schema_introspection.rs` 🟡 **IMPORTANT**
+  - [ ] Test table existence checking
+  - [ ] Test column information retrieval
+  - [ ] Test with various data types
+  - [ ] Test with nullable/non-nullable columns
+  - [ ] Test with default values
+  - [ ] Test with primary keys
+  - [ ] Test with auto-increment columns
+  - [ ] Test non-existent table returns None/empty
+  - [ ] Test within transaction context
+
+### 16.10 Update Documentation
+
+- [ ] Document in `packages/database/src/lib.rs` 🟢 **MINOR**
+  - [ ] Add module-level documentation for schema introspection
+  - [ ] Document backend-specific type mappings
+  - [ ] Document limitations (e.g., computed columns, complex defaults)
+  - [ ] Add usage examples
+
+**Verification Checklist:**
+- [ ] `cargo fmt --check -p switchy_database` - All code formatted
+- [ ] `cargo clippy -p switchy_database --all-targets --all-features` - Zero warnings
+- [ ] `cargo test -p switchy_database --features schema` - All tests pass
+- [ ] Test all methods across all 6 database backends
+- [ ] Verify transaction context support
+- [ ] Documentation complete with examples
+- [ ] Type mapping documented for each backend
+
+**Benefits:**
+- Enables Phase 11.2.1 implementation (schema migration detection)
+- Generic API for table introspection across all backends
+- Foundation for schema diff and validation tools
+- Useful for debugging and tooling
