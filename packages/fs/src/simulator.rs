@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -95,6 +95,8 @@ pub use real_fs_support::with_real_fs;
 thread_local! {
     static FILES: RefCell<RwLock<BTreeMap<String, Arc<Mutex<BytesMut>>>>> =
         const { RefCell::new(RwLock::new(BTreeMap::new())) };
+    static DIRECTORIES: RefCell<RwLock<BTreeSet<String>>> =
+        const { RefCell::new(RwLock::new(BTreeSet::new())) };
 }
 
 /// # Panics
@@ -102,6 +104,164 @@ thread_local! {
 /// * If the `FILES` `RwLock` fails to write to
 pub fn reset_fs() {
     FILES.with_borrow_mut(|x| x.write().unwrap().clear());
+    reset_directories();
+}
+
+/// # Panics
+///
+/// * If the `DIRECTORIES` `RwLock` fails to write to
+pub fn reset_directories() {
+    DIRECTORIES.with_borrow_mut(|x| x.write().unwrap().clear());
+}
+
+/// Get all parent directories of a path
+fn get_parent_directories(path: &str) -> Vec<String> {
+    let mut parents = Vec::new();
+    let path_buf = std::path::Path::new(path);
+
+    let mut current = path_buf.parent();
+    while let Some(parent) = current {
+        if let Some(parent_str) = parent.to_str()
+            && !parent_str.is_empty()
+            && parent_str != "/"
+        {
+            parents.push(parent_str.to_string());
+        }
+        current = parent.parent();
+    }
+
+    // Always include root
+    if path != "/" {
+        parents.push("/".to_string());
+    }
+
+    parents.reverse();
+    parents
+}
+
+/// Check if a directory exists in the simulated filesystem
+fn directory_exists(path: &str) -> bool {
+    DIRECTORIES.with_borrow(|dirs| dirs.read().unwrap().contains(path))
+}
+
+/// Get immediate children (files and directories) of a directory
+fn get_directory_children(dir_path: &str) -> (Vec<String>, Vec<String>) {
+    let normalized_dir = if dir_path == "/" {
+        "/"
+    } else {
+        &format!("{dir_path}/")
+    };
+
+    // Get files in this directory
+    let files = FILES.with_borrow(|files| {
+        files
+            .read()
+            .unwrap()
+            .keys()
+            .filter_map(|file_path| {
+                file_path.strip_prefix(normalized_dir).and_then(|stripped| {
+                    if !stripped.contains('/') && !stripped.is_empty() {
+                        Some(stripped.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>()
+    });
+
+    // Get subdirectories in this directory
+    let subdirs = DIRECTORIES.with_borrow(|dirs| {
+        dirs.read()
+            .unwrap()
+            .iter()
+            .filter_map(|subdir_path| {
+                subdir_path
+                    .strip_prefix(normalized_dir)
+                    .and_then(|stripped| {
+                        if !stripped.contains('/') && !stripped.is_empty() {
+                            Some(stripped.to_string())
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect::<Vec<_>>()
+    });
+
+    (files, subdirs)
+}
+
+/// Initialize minimal filesystem structure (just essentials)
+///
+/// # Errors
+///
+/// * If any directory creation fails
+pub fn init_minimal_fs() -> std::io::Result<()> {
+    #[cfg(feature = "sync")]
+    {
+        sync::create_dir_all("/")?;
+        sync::create_dir_all("/tmp")?;
+        sync::create_dir_all("/home")?;
+    }
+    Ok(())
+}
+
+/// Initialize standard FHS-like filesystem structure
+///
+/// # Errors
+///
+/// * If any directory creation fails
+pub fn init_standard_fs() -> std::io::Result<()> {
+    #[cfg(feature = "sync")]
+    {
+        // Root directories
+        sync::create_dir_all("/")?;
+        sync::create_dir_all("/bin")?;
+        sync::create_dir_all("/etc")?;
+        sync::create_dir_all("/home")?;
+        sync::create_dir_all("/lib")?;
+        sync::create_dir_all("/opt")?;
+        sync::create_dir_all("/root")?;
+        sync::create_dir_all("/sbin")?;
+        sync::create_dir_all("/tmp")?;
+        sync::create_dir_all("/usr")?;
+        sync::create_dir_all("/var")?;
+
+        // Common /usr subdirectories
+        sync::create_dir_all("/usr/bin")?;
+        sync::create_dir_all("/usr/lib")?;
+        sync::create_dir_all("/usr/local")?;
+        sync::create_dir_all("/usr/local/bin")?;
+        sync::create_dir_all("/usr/share")?;
+
+        // Common /var subdirectories
+        sync::create_dir_all("/var/log")?;
+        sync::create_dir_all("/var/tmp")?;
+        sync::create_dir_all("/var/cache")?;
+    }
+    Ok(())
+}
+
+/// Initialize a user's home directory with standard subdirectories
+///
+/// # Errors
+///
+/// * If any directory creation fails
+pub fn init_user_home(username: &str) -> std::io::Result<()> {
+    let home = format!("/home/{username}");
+
+    #[cfg(feature = "sync")]
+    {
+        sync::create_dir_all(&home)?;
+        sync::create_dir_all(format!("{home}/.config"))?;
+        sync::create_dir_all(format!("{home}/.local"))?;
+        sync::create_dir_all(format!("{home}/.local/share"))?;
+        sync::create_dir_all(format!("{home}/.cache"))?;
+        sync::create_dir_all(format!("{home}/Documents"))?;
+        sync::create_dir_all(format!("{home}/Downloads"))?;
+    }
+    Ok(())
 }
 
 macro_rules! path_to_str {
@@ -225,7 +385,7 @@ pub mod sync {
 
     use crate::sync::OpenOptions;
 
-    use super::FILES;
+    use super::{DIRECTORIES, FILES};
 
     pub struct File {
         pub(crate) path: PathBuf,
@@ -282,6 +442,27 @@ pub mod sync {
             {
                 data
             } else if self.create {
+                // Check if parent directory exists when creating a file
+                if let Some(parent) = std::path::Path::new(location).parent()
+                    && let Some(parent_str) = parent.to_str()
+                {
+                    let parent_normalized = if parent_str.is_empty() || parent_str == "." {
+                        ".".to_string()
+                    } else if parent_str == "/" {
+                        "/".to_string()
+                    } else {
+                        parent_str.trim_end_matches('/').to_string()
+                    };
+
+                    // Allow current directory "." to exist by default, otherwise check DIRECTORIES
+                    if parent_normalized != "." && !super::directory_exists(&parent_normalized) {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::NotFound,
+                            format!("Parent directory not found: {parent_normalized}"),
+                        ));
+                    }
+                }
+
                 let data = Arc::new(Mutex::new(BytesMut::new()));
                 FILES.with_borrow_mut(|x| {
                     x.write()
@@ -340,36 +521,104 @@ pub mod sync {
     /// # Errors
     ///
     /// * If underlying `std::fs::create_dir_all` fails (when using real filesystem)
-    #[allow(unused_variables)]
+    /// * If the path cannot be converted to a string
+    ///
+    /// # Panics
+    ///
+    /// * If the `DIRECTORIES` `RwLock` fails to write to
     pub fn create_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::create_dir_all(path);
         }
+
+        let path_str = path_to_str!(path)?;
+
+        // Normalize path - remove trailing slashes except for root
+        let normalized = if path_str == "/" {
+            "/".to_string()
+        } else {
+            path_str.trim_end_matches('/').to_string()
+        };
+
+        // Get all directories that need to be created (including parents)
+        let mut dirs_to_create = super::get_parent_directories(&normalized);
+        dirs_to_create.push(normalized);
+
+        // Create all directories
+        DIRECTORIES.with_borrow_mut(|dirs| {
+            let mut dirs_write = dirs.write().unwrap();
+            for dir in dirs_to_create {
+                dirs_write.insert(dir);
+            }
+        });
+
         Ok(())
     }
 
     /// # Errors
     ///
     /// * If underlying `std::fs::remove_dir_all` fails (when using real filesystem)
-    #[allow(unused_variables)]
+    /// * If the path cannot be converted to a string
+    /// * If the directory doesn't exist
+    ///
+    /// # Panics
+    ///
+    /// * If the `DIRECTORIES` or `FILES` `RwLock` fails to write to
     pub fn remove_dir_all<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             return crate::standard::sync::remove_dir_all(path);
         }
+
+        let path_str = path_to_str!(path)?;
+
+        // Normalize path - remove trailing slashes except for root
+        let normalized = if path_str == "/" {
+            "/".to_string()
+        } else {
+            path_str.trim_end_matches('/').to_string()
+        };
+
+        // Check if directory exists
+        if !super::directory_exists(&normalized) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Directory not found: {normalized}"),
+            ));
+        }
+
+        // Find all subdirectories and files to remove
+        let prefix = if normalized == "/" {
+            "/"
+        } else {
+            &format!("{normalized}/")
+        };
+
+        // Remove all files in this directory and subdirectories
+        FILES.with_borrow_mut(|files| {
+            let mut files_write = files.write().unwrap();
+            files_write
+                .retain(|file_path, _| !file_path.starts_with(prefix) && file_path != &normalized);
+        });
+
+        // Remove all subdirectories
+        DIRECTORIES.with_borrow_mut(|dirs| {
+            let mut dirs_write = dirs.write().unwrap();
+            dirs_write.retain(|dir_path| !dir_path.starts_with(prefix) && dir_path != &normalized);
+        });
+
         Ok(())
     }
 
     /// Read directory entries and return them sorted by filename for deterministic iteration
     ///
-    /// Note: In simulator mode, this returns an empty list as the simulator only tracks individual files
-    ///
     /// # Errors
     ///
     /// * If underlying `std::fs::read_dir` fails (when using real filesystem)
     /// * If any directory entry cannot be read (when using real filesystem)
-    #[allow(unused_variables)]
+    /// * If the path cannot be converted to a string
+    /// * If the directory doesn't exist
     pub fn read_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
@@ -379,19 +628,99 @@ pub mod sync {
                 .map(|x| DirEntry::from_std(&x))
                 .collect::<std::io::Result<Vec<_>>>();
         }
-        Ok(Vec::new())
+
+        let path_str = path_to_str!(path)?;
+
+        // Normalize path
+        let normalized = if path_str == "/" {
+            "/".to_string()
+        } else {
+            path_str.trim_end_matches('/').to_string()
+        };
+
+        // Check if directory exists
+        if !super::directory_exists(&normalized) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Directory not found: {normalized}"),
+            ));
+        }
+
+        // Get children
+        let (files, subdirs) = super::get_directory_children(&normalized);
+
+        let mut entries = Vec::new();
+
+        // Add file entries
+        for filename in files {
+            let full_path = if normalized == "/" {
+                format!("/{filename}")
+            } else {
+                format!("{normalized}/{filename}")
+            };
+            entries.push(DirEntry::new_file(full_path, filename)?);
+        }
+
+        // Add directory entries
+        for dirname in subdirs {
+            let full_path = if normalized == "/" {
+                format!("/{dirname}")
+            } else {
+                format!("{normalized}/{dirname}")
+            };
+            entries.push(DirEntry::new_dir(full_path, dirname)?);
+        }
+
+        // Sort by filename for deterministic ordering
+        entries.sort_by_key(DirEntry::file_name);
+
+        Ok(entries)
     }
 
     /// Recursively walk directory tree and return all entries sorted by path for deterministic iteration
-    ///
-    /// Note: In simulator mode, this returns an empty list as the simulator only tracks individual files
     ///
     /// # Errors
     ///
     /// * If any directory cannot be read (when using real filesystem)
     /// * If any directory entry cannot be accessed (when using real filesystem)
-    #[allow(unused_variables)]
+    /// * If the path cannot be converted to a string
+    /// * If the directory doesn't exist
     pub fn walk_dir_sorted<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<DirEntry>> {
+        fn walk_recursive(dir_path: &str) -> std::io::Result<Vec<DirEntry>> {
+            let mut all_entries = Vec::new();
+
+            // Get immediate children
+            let (files, subdirs) = super::get_directory_children(dir_path);
+
+            // Add all files in current directory
+            for filename in files {
+                let full_path = if dir_path == "/" {
+                    format!("/{filename}")
+                } else {
+                    format!("{dir_path}/{filename}")
+                };
+                all_entries.push(DirEntry::new_file(full_path, filename)?);
+            }
+
+            // Add all subdirectories and recursively walk them
+            for dirname in subdirs {
+                let full_path = if dir_path == "/" {
+                    format!("/{dirname}")
+                } else {
+                    format!("{dir_path}/{dirname}")
+                };
+
+                // Add the directory itself
+                all_entries.push(DirEntry::new_dir(full_path.clone(), dirname)?);
+
+                // Recursively walk the subdirectory
+                let sub_entries = walk_recursive(&full_path)?;
+                all_entries.extend(sub_entries);
+            }
+
+            Ok(all_entries)
+        }
+
         #[cfg(all(feature = "simulator-real-fs", feature = "std"))]
         if super::real_fs_support::is_real_fs() {
             let std_entries = crate::standard::sync::walk_dir_sorted(path)?;
@@ -400,7 +729,30 @@ pub mod sync {
                 .map(|x| DirEntry::from_std(&x))
                 .collect::<std::io::Result<Vec<_>>>();
         }
-        Ok(Vec::new())
+
+        let path_str = path_to_str!(path)?;
+
+        // Normalize path
+        let normalized = if path_str == "/" {
+            "/".to_string()
+        } else {
+            path_str.trim_end_matches('/').to_string()
+        };
+
+        // Check if directory exists
+        if !super::directory_exists(&normalized) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Directory not found: {normalized}"),
+            ));
+        }
+
+        let mut all_entries = walk_recursive(&normalized)?;
+
+        // Sort by full path for deterministic ordering
+        all_entries.sort_by_key(DirEntry::path);
+
+        Ok(all_entries)
     }
 
     /// Directory entry for synchronous filesystem operations
@@ -425,6 +777,40 @@ pub mod sync {
                     is_dir: file_type.is_dir(),
                     is_file: file_type.is_file(),
                     is_symlink: file_type.is_symlink(),
+                },
+            })
+        }
+
+        /// Create a new `DirEntry` for a file in the simulator
+        ///
+        /// # Errors
+        ///
+        /// * Infallible in current implementation
+        pub fn new_file(full_path: String, file_name: String) -> std::io::Result<Self> {
+            Ok(Self {
+                path: PathBuf::from(full_path),
+                file_name: std::ffi::OsString::from(file_name),
+                file_type_info: super::FileType {
+                    is_dir: false,
+                    is_file: true,
+                    is_symlink: false,
+                },
+            })
+        }
+
+        /// Create a new `DirEntry` for a directory in the simulator
+        ///
+        /// # Errors
+        ///
+        /// * Infallible in current implementation
+        pub fn new_dir(full_path: String, dir_name: String) -> std::io::Result<Self> {
+            Ok(Self {
+                path: PathBuf::from(full_path),
+                file_name: std::ffi::OsString::from(dir_name),
+                file_type_info: super::FileType {
+                    is_dir: true,
+                    is_file: false,
+                    is_symlink: false,
                 },
             })
         }
@@ -732,6 +1118,40 @@ pub mod unsync {
             })
         }
 
+        /// Create a new `DirEntry` for a file in the simulator
+        ///
+        /// # Errors
+        ///
+        /// * Infallible in current implementation
+        pub fn new_file(full_path: String, file_name: String) -> std::io::Result<Self> {
+            Ok(Self {
+                path: PathBuf::from(full_path),
+                file_name: std::ffi::OsString::from(file_name),
+                file_type_info: super::FileType {
+                    is_dir: false,
+                    is_file: true,
+                    is_symlink: false,
+                },
+            })
+        }
+
+        /// Create a new `DirEntry` for a directory in the simulator
+        ///
+        /// # Errors
+        ///
+        /// * Infallible in current implementation
+        pub fn new_dir(full_path: String, dir_name: String) -> std::io::Result<Self> {
+            Ok(Self {
+                path: PathBuf::from(full_path),
+                file_name: std::ffi::OsString::from(dir_name),
+                file_type_info: super::FileType {
+                    is_dir: true,
+                    is_file: false,
+                    is_symlink: false,
+                },
+            })
+        }
+
         /// Returns the full path to this entry
         #[must_use]
         pub fn path(&self) -> PathBuf {
@@ -900,6 +1320,9 @@ mod real_fs_tests {
         // This test should use simulated filesystem
         let content = "test content";
         let path = "/simulated/path/file.txt";
+
+        // Create parent directory first (required by new implementation)
+        super::sync::create_dir_all("/simulated/path").unwrap();
 
         // Write to simulated filesystem
         let mut file = crate::sync::OpenOptions::new()
