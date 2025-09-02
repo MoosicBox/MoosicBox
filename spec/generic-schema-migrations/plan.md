@@ -3022,7 +3022,7 @@ With Phase 10.2 complete, the **core generic schema migration system is fully fu
 
 **Implementation Notes:**
 - CLI correctly located at `packages/switchy/schema/cli/` as specified
-- MySQL support removed (not available in switchy_database_connection)  
+- MySQL support removed (not available in switchy_database_connection)
 - Binary named `switchy-migrate` for clarity
 - All commands fully functional with proper error handling
 - Confirmation prompts added for destructive operations
@@ -3030,17 +3030,167 @@ With Phase 10.2 complete, the **core generic schema migration system is fully fu
 
 ### 11.2 Error Recovery Investigation
 
-- [ ] Research error recovery patterns ❌ **MINOR**
-  - [ ] Investigate partial migration recovery strategies
-  - [ ] Design "dirty" state detection
-  - [ ] Document recovery best practices
+**Goal:** Research and implement error recovery patterns for failed migrations with enhanced state tracking
+
+**Design Decisions:**
+- **Migration Granularity**: Migration-level only (no statement-level tracking since we exec_raw entire files)
+- **State Tracking**: Enhanced migration table with status columns
+- **Concurrency**: No locking mechanism (user responsibility to ensure single process)
+- **Recovery**: Manual inspection and recovery only (no auto-rollback on failure)
+
+#### 11.2.1 Enhance Migration Tracking Table Schema
+
+- [ ] Update `VersionTracker` in `packages/switchy/schema/src/version.rs` ⚠️ **CRITICAL**
+  - [ ] Modify `ensure_table_exists()` to create table with new schema:
+    ```sql
+    CREATE TABLE IF NOT EXISTS {table_name} (
+        id TEXT PRIMARY KEY,
+        run_on DATETIME NOT NULL,
+        finished_on DATETIME,
+        status TEXT NOT NULL DEFAULT 'in_progress',
+        failure_reason TEXT
+    )
+    ```
+  - [ ] Add migration logic to upgrade existing tables:
+    - [ ] Check if `status` column exists using PRAGMA/information_schema
+    - [ ] If not, ALTER TABLE to add new columns with appropriate defaults
+    - [ ] Set `status = 'completed'` and `finished_on = run_on` for existing rows
+  - [ ] Update `record_migration()` to:
+    - [ ] Insert with `status = 'in_progress'` and `finished_on = NULL`
+    - [ ] Return a migration record ID or handle for status updates
+  - [ ] Add `update_migration_status()` method:
+    - [ ] Parameters: `id: &str, status: MigrationStatus, failure_reason: Option<String>`
+    - [ ] Update `finished_on = CURRENT_TIMESTAMP` when status changes to completed/failed
+  - [ ] Add `get_migration_status()` method:
+    - [ ] Return status, run_on, finished_on, failure_reason for a given migration ID
+  - [ ] Add `get_dirty_migrations()` method:
+    - [ ] Return migrations where `status != 'completed'` OR `finished_on IS NULL`
+
+#### 11.2.2 Update Migration Runner for Status Tracking
+
+- [ ] Update `MigrationRunner` in `packages/switchy/schema/src/runner.rs` ⚠️ **CRITICAL**
+  - [ ] Modify `apply_migration()` to track status:
+    - [ ] Call `version_tracker.record_migration()` before executing migration
+    - [ ] Execute migration with proper error handling
+    - [ ] On success: call `version_tracker.update_migration_status(id, MigrationStatus::Completed, None)`
+    - [ ] On failure: call `version_tracker.update_migration_status(id, MigrationStatus::Failed, Some(error.to_string()))`
+  - [ ] Add `check_dirty_state()` method:
+    - [ ] Query for migrations with `status = 'in_progress'`
+    - [ ] Return error if dirty migrations exist (prevent running with dirty state)
+    - [ ] Add `--force` flag support to bypass dirty state check (dangerous)
+  - [ ] Add recovery helper methods:
+    - [ ] `list_failed_migrations()` - return all migrations with `status = 'failed'`
+    - [ ] `retry_migration(id: &str)` - retry a specific failed migration
+    - [ ] `mark_migration_completed(id: &str)` - manually mark as completed (dangerous)
+
+#### 11.2.3 Create MigrationStatus Enum and Types
+
+- [ ] Add to `packages/switchy/schema/src/migration.rs` 🟡 **IMPORTANT**
+  - [ ] Create `MigrationStatus` enum:
+    ```rust
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum MigrationStatus {
+        InProgress,
+        Completed,
+        Failed,
+    }
+    ```
+  - [ ] Create `MigrationRecord` struct:
+    ```rust
+    pub struct MigrationRecord {
+        pub id: String,
+        pub run_on: DateTime<Utc>,
+        pub finished_on: Option<DateTime<Utc>>,
+        pub status: MigrationStatus,
+        pub failure_reason: Option<String>,
+    }
+    ```
+  - [ ] Implement Display and database serialization for MigrationStatus
+
+#### 11.2.4 Implement CLI Commands for Recovery
+
+- [ ] Update CLI in `packages/switchy/schema/cli/src/main.rs` 🟡 **IMPORTANT**
+  - [ ] Add `status --show-failed` subcommand:
+    - [ ] List all migrations with their status
+    - [ ] Highlight failed migrations in red
+    - [ ] Show failure reasons
+    - [ ] Display dirty migrations (in_progress) with warning
+  - [ ] Add `retry` subcommand:
+    - [ ] Accept migration ID as argument
+    - [ ] Check if migration is in failed state
+    - [ ] Attempt to re-run the migration
+    - [ ] Update status accordingly
+  - [ ] Add `mark-completed` subcommand (with --force flag):
+    - [ ] Accept migration ID as argument
+    - [ ] Require --force flag with warning about dangers
+    - [ ] Manually update migration status to completed
+    - [ ] Log this dangerous operation
+  - [ ] Update `migrate` command:
+    - [ ] Check for dirty state before running
+    - [ ] Show error if dirty migrations exist
+    - [ ] Add --force flag to proceed despite dirty state
+
+#### 11.2.5 Document Recovery Best Practices
+
+- [ ] Create `RECOVERY.md` in `packages/switchy/schema/` 🟢 **MINOR**
+  - [ ] Document common failure scenarios:
+    - [ ] Network interruption during migration
+    - [ ] Process killed during migration
+    - [ ] SQL syntax errors in migration files
+    - [ ] Constraint violations during data migration
+  - [ ] Recovery procedures for each scenario:
+    - [ ] How to identify the failure (check status table)
+    - [ ] How to assess damage (check schema state)
+    - [ ] When to retry vs manual fix vs rollback
+    - [ ] How to clean up partial changes
+  - [ ] Best practices:
+    - [ ] Always backup before migrations
+    - [ ] Test migrations in staging first
+    - [ ] Monitor migration execution
+    - [ ] Use transactions where possible
+    - [ ] Keep migrations idempotent when feasible
+  - [ ] CLI usage examples for recovery:
+    ```bash
+    # Check migration status
+    switchy-migrate status --show-failed
+
+    # Retry a failed migration
+    switchy-migrate retry 2024-01-15-123456_add_user_table
+
+    # Force mark as completed (dangerous!)
+    switchy-migrate mark-completed --force 2024-01-15-123456_add_user_table
+
+    # Run migrations with dirty state (dangerous!)
+    switchy-migrate up --force
+    ```
+
+#### 11.2.6 Add Integration Tests for Recovery Scenarios
+
+- [ ] Create tests in `packages/switchy/schema/tests/recovery.rs` 🟡 **IMPORTANT**
+  - [ ] Test migration failure tracking:
+    - [ ] Simulate migration that fails midway
+    - [ ] Verify status = 'failed' and failure_reason captured
+    - [ ] Verify finished_on is set
+  - [ ] Test dirty state detection:
+    - [ ] Simulate process interruption (status = 'in_progress')
+    - [ ] Verify runner detects dirty state
+    - [ ] Verify --force flag bypasses check
+  - [ ] Test recovery commands:
+    - [ ] Test retry of failed migration
+    - [ ] Test mark-completed command
+    - [ ] Test status listing with various states
+  - [ ] Test schema upgrade:
+    - [ ] Test migration of old table schema to new schema
+    - [ ] Verify backward compatibility
 
 **Verification Checklist:**
-- [ ] `cargo fmt --all` - All code formatted
-- [ ] `cargo clippy --all-targets --all-features` - Zero warnings
-- [ ] `cargo test` - All tests pass
-- [ ] Documentation updated for new features
-- [ ] Examples added if applicable
+- [ ] `cargo fmt --check -p switchy_schema` - All code formatted
+- [ ] `cargo clippy -p switchy_schema --all-targets` - Zero warnings
+- [ ] `cargo test -p switchy_schema` - All tests pass including new recovery tests
+- [ ] `cargo build -p switchy_schema_cli` - CLI builds with new commands
+- [ ] Manual testing of recovery scenarios
+- [ ] RECOVERY.md documentation complete with examples
+- [ ] Integration tests cover all failure scenarios
 
 ### 11.3 Checksum Implementation
 
