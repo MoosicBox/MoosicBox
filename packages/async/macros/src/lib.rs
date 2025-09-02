@@ -21,6 +21,7 @@ struct TestWithPathInput {
     crate_path: syn::Path,
     use_real_time: bool,
     use_real_fs: bool,
+    no_simulator: bool,
     function: syn::ItemFn,
 }
 
@@ -36,9 +37,10 @@ impl syn::parse::Parse for TestWithPathInput {
         let crate_path: syn::Path = input.parse()?;
         let _: Token![;] = input.parse()?;
 
-        // Check for optional real_time and real_fs parameters
+        // Check for optional real_time, real_fs, and no_simulator parameters
         let mut use_real_time = false;
         let mut use_real_fs = false;
+        let mut no_simulator = false;
 
         while input.peek(syn::Ident) {
             let ident: syn::Ident = input.parse()?;
@@ -46,10 +48,12 @@ impl syn::parse::Parse for TestWithPathInput {
                 use_real_time = true;
             } else if ident == "real_fs" {
                 use_real_fs = true;
+            } else if ident == "no_simulator" {
+                no_simulator = true;
             } else {
                 return Err(syn::Error::new_spanned(
                     ident,
-                    "Expected 'real_time' or 'real_fs'",
+                    "Expected 'real_time', 'real_fs', or 'no_simulator'",
                 ));
             }
             let _: Token![;] = input.parse()?;
@@ -61,9 +65,84 @@ impl syn::parse::Parse for TestWithPathInput {
             crate_path,
             use_real_time,
             use_real_fs,
+            no_simulator,
             function,
         })
     }
+}
+
+/// Represents the parsed arguments for test attributes
+#[cfg(feature = "simulator")]
+struct TestArgs {
+    real_time: bool,
+    real_fs: bool,
+    no_simulator: bool,
+}
+
+#[cfg(feature = "simulator")]
+impl syn::parse::Parse for TestArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut real_time = false;
+        let mut real_fs = false;
+        let mut no_simulator = false;
+
+        // Parse comma-separated identifiers
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            match ident.to_string().as_str() {
+                "real_time" => real_time = true,
+                "real_fs" => real_fs = true,
+                "no_simulator" => no_simulator = true,
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        &ident,
+                        format!(
+                            "Unknown test attribute: '{ident}'. Valid attributes are: 'real_time', 'real_fs', 'no_simulator'"
+                        ),
+                    ));
+                }
+            }
+
+            // Check for comma (optional for last argument)
+            if !input.is_empty() {
+                let _: syn::Token![,] = input.parse()?;
+            }
+        }
+
+        Ok(Self {
+            real_time,
+            real_fs,
+            no_simulator,
+        })
+    }
+}
+
+/// Helper function to convert `TestArgs` to the internal token format
+#[cfg(feature = "simulator")]
+fn build_test_tokens(
+    crate_path: &str,
+    args: &TestArgs,
+    item_tokens: &TokenStream2,
+) -> TokenStream2 {
+    let mut tokens = if crate_path == "crate" {
+        quote! { @path = crate; }
+    } else {
+        let path: syn::Path = syn::parse_str(crate_path).expect("Invalid crate path");
+        quote! { @path = #path; }
+    };
+
+    if args.real_time {
+        tokens.extend(quote! { real_time; });
+    }
+    if args.real_fs {
+        tokens.extend(quote! { real_fs; });
+    }
+    if args.no_simulator {
+        tokens.extend(quote! { no_simulator; });
+    }
+
+    tokens.extend(quote! { #item_tokens });
+    tokens
 }
 
 /// Internal select! macro that accepts a crate path parameter
@@ -136,6 +215,7 @@ pub fn inject_yields(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Internal test attribute macro that accepts a crate path parameter
 /// This provides test runtime setup for the simulator runtime
+#[allow(clippy::too_many_lines)]
 #[cfg(feature = "simulator")]
 #[proc_macro]
 pub fn test_internal(input: TokenStream) -> TokenStream {
@@ -143,6 +223,7 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
     let crate_path = input.crate_path;
     let use_real_time = input.use_real_time;
     let use_real_fs = input.use_real_fs;
+    let no_simulator = input.no_simulator;
     let input_fn = input.function;
 
     let fn_name = &input_fn.sig.ident;
@@ -157,6 +238,36 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
         .iter()
         .filter(|attr| !attr.path().is_ident("test"))
         .collect();
+
+    // If no_simulator is set and the macro was compiled with simulator enabled,
+    // generate a function without the test attribute to skip it
+    if no_simulator {
+        // This cfg! check happens when the MACRO is compiled, not when it's used
+        const SIMULATOR_ENABLED: bool = cfg!(feature = "simulator");
+
+        if SIMULATOR_ENABLED {
+            // Skip the test by generating a non-test function
+            let result = quote! {
+                #(#filtered_attrs)*
+                #[allow(dead_code)]
+                #fn_vis fn #fn_name(#fn_inputs) #fn_output #fn_block
+            };
+            return result.into();
+        }
+
+        // Generate a normal test function
+        let result = quote! {
+            #(#filtered_attrs)*
+            #[::core::prelude::v1::test]
+            #fn_vis fn #fn_name(#fn_inputs) #fn_output {
+                let rt = #crate_path::Builder::new().build().unwrap();
+                rt.block_on(async move #fn_block)
+                // Don't call rt.wait() as it can hang in tests
+            }
+        };
+
+        return result.into();
+    }
 
     // Determine the correct paths for fs and time modules based on crate_path
     let (fs_path, time_path) = if crate_path == syn::parse_quote!(switchy_async)
@@ -242,44 +353,21 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    // Convert attribute macro call to function-like macro call
-    let args_str = if args.is_empty() {
-        String::new()
+    let test_args = if args.is_empty() {
+        TestArgs {
+            real_time: false,
+            real_fs: false,
+            no_simulator: false,
+        }
     } else {
-        args.to_string()
+        match syn::parse::<TestArgs>(args) {
+            Ok(args) => args,
+            Err(e) => return e.to_compile_error().into(),
+        }
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = match args_str.trim() {
-        "real_time" => {
-            quote! {
-                @path = crate;
-                real_time;
-                #item_tokens
-            }
-        }
-        "real_fs" => {
-            quote! {
-                @path = crate;
-                real_fs;
-                #item_tokens
-            }
-        }
-        "real_time, real_fs" | "real_fs, real_time" => {
-            quote! {
-                @path = crate;
-                real_time;
-                real_fs;
-                #item_tokens
-            }
-        }
-        _ => {
-            quote! {
-                @path = crate;
-                #item_tokens
-            }
-        }
-    };
+    let input_tokens = build_test_tokens("crate", &test_args, &item_tokens);
 
     test_internal(input_tokens.into())
 }
@@ -288,44 +376,21 @@ pub fn internal_test(args: TokenStream, item: TokenStream) -> TokenStream {
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
-    // Convert attribute macro call to function-like macro call
-    let args_str = if args.is_empty() {
-        String::new()
+    let test_args = if args.is_empty() {
+        TestArgs {
+            real_time: false,
+            real_fs: false,
+            no_simulator: false,
+        }
     } else {
-        args.to_string()
+        match syn::parse::<TestArgs>(args) {
+            Ok(args) => args,
+            Err(e) => return e.to_compile_error().into(),
+        }
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = match args_str.trim() {
-        "real_time" => {
-            quote! {
-                @path = switchy_async;
-                real_time;
-                #item_tokens
-            }
-        }
-        "real_fs" => {
-            quote! {
-                @path = switchy_async;
-                real_fs;
-                #item_tokens
-            }
-        }
-        "real_time, real_fs" | "real_fs, real_time" => {
-            quote! {
-                @path = switchy_async;
-                real_time;
-                real_fs;
-                #item_tokens
-            }
-        }
-        _ => {
-            quote! {
-                @path = switchy_async;
-                #item_tokens
-            }
-        }
-    };
+    let input_tokens = build_test_tokens("switchy_async", &test_args, &item_tokens);
 
     test_internal(input_tokens.into())
 }
@@ -334,44 +399,21 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
 #[cfg(feature = "simulator")]
 #[proc_macro_attribute]
 pub fn unsync_test(args: TokenStream, item: TokenStream) -> TokenStream {
-    // Convert attribute macro call to function-like macro call
-    let args_str = if args.is_empty() {
-        String::new()
+    let test_args = if args.is_empty() {
+        TestArgs {
+            real_time: false,
+            real_fs: false,
+            no_simulator: false,
+        }
     } else {
-        args.to_string()
+        match syn::parse::<TestArgs>(args) {
+            Ok(args) => args,
+            Err(e) => return e.to_compile_error().into(),
+        }
     };
 
     let item_tokens: TokenStream2 = item.into();
-    let input_tokens = match args_str.trim() {
-        "real_time" => {
-            quote! {
-                @path = switchy::unsync;
-                real_time;
-                #item_tokens
-            }
-        }
-        "real_fs" => {
-            quote! {
-                @path = switchy::unsync;
-                real_fs;
-                #item_tokens
-            }
-        }
-        "real_time, real_fs" | "real_fs, real_time" => {
-            quote! {
-                @path = switchy::unsync;
-                real_time;
-                real_fs;
-                #item_tokens
-            }
-        }
-        _ => {
-            quote! {
-                @path = switchy::unsync;
-                #item_tokens
-            }
-        }
-    };
+    let input_tokens = build_test_tokens("switchy::unsync", &test_args, &item_tokens);
 
     test_internal(input_tokens.into())
 }
