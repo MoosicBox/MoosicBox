@@ -1,0 +1,41 @@
+[package]
+authors     = { workspace = true }
+categories  = ["command-line-utilities", "database", "development-tools"]
+description = "Command-line interface for switchy_schema migrations"
+edition     = { workspace = true }
+keywords    = ["cli", "database", "migration", "schema", "switchy"]
+license     = { workspace = true }
+name        = "switchy_schema_cli"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[[bin]]
+name = "switchy-migrate"
+path = "src/main.rs"
+
+[package.metadata.workspaces]
+group = "switchy"
+
+[dependencies]
+chrono = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+switchy_database = { workspace = true, features = ["schema"] }
+switchy_database_connection = { workspace = true, features = [
+    "postgres-sqlx",
+    "sqlite-sqlx",
+] }
+switchy_fs = { workspace = true, features = ["std"] }
+switchy_schema = { workspace = true, features = ["all-discovery"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[dev-dependencies]
+assert_cmd    = { workspace = true }
+predicates    = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
+
+[features]
+default = ["fail-on-warnings"]
+
+fail-on-warnings = []
