@@ -115,6 +115,7 @@ fn create_global_search_index(
     path: &Path,
     recreate_if_exists: bool,
 ) -> Result<Index, CreateIndexError> {
+    log::trace!("Creating global search index at {}", path.display());
     switchy_fs::sync::create_dir_all(path).unwrap_or_else(|_| {
         panic!(
             "Failed to create global search index directory at {}",
@@ -1049,13 +1050,15 @@ mod tests {
         fn drop(&mut self) {
             with_real_fs(|| {
                 for path in TEMP_DIRS.read().unwrap().iter() {
-                    log::debug!("Cleaning up temp directory {:?}", path.as_path());
-                    switchy_fs::sync::remove_dir_all(path.as_path())
-                        .expect("Failed to clean up temp directory");
+                    if switchy_fs::exists(path) {
+                        log::debug!("Cleaning up temp directory {path:?}");
+                        switchy_fs::sync::remove_dir_all(path)
+                            .expect("Failed to clean up temp directory");
+                    }
                 }
-                log::debug!("Cleaning up temp directory {:?}", TESTS_DIR_PATH.as_path());
-                if TESTS_DIR_PATH.exists() {
-                    switchy_fs::sync::remove_dir_all(TESTS_DIR_PATH.as_path())
+                log::debug!("Cleaning up temp directory {TESTS_DIR_PATH:?}");
+                if switchy_fs::exists(&*TESTS_DIR_PATH) {
+                    switchy_fs::sync::remove_dir_all(&*TESTS_DIR_PATH)
                         .expect("Failed to clean up temp directory");
                 }
             });
@@ -1063,13 +1066,11 @@ mod tests {
     }
 
     fn temp_index_path() -> PathBuf {
-        with_real_fs(|| {
-            let path = moosicbox_config::get_tests_dir_path();
+        let path = moosicbox_config::get_tests_dir_path();
 
-            TEMP_DIRS.write().unwrap().push(path.clone());
+        TEMP_DIRS.write().unwrap().push(path.clone());
 
-            path.join("search_indices").join("global_search_index")
-        })
+        path.join("search_indices").join("global_search_index")
     }
 
     fn before_each() {
