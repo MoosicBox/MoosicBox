@@ -9,7 +9,8 @@ use clap::{Parser, Subcommand};
 use clippier::{
     OutputType, handle_affected_packages_command, handle_ci_steps_command,
     handle_dependencies_command, handle_environment_command, handle_features_command,
-    handle_generate_dockerfile_command, handle_workspace_deps_command,
+    handle_generate_dockerfile_command, handle_validate_feature_propagation_command,
+    handle_workspace_deps_command, print_human_output,
 };
 
 #[derive(Parser)]
@@ -201,6 +202,28 @@ enum Commands {
         #[arg(long, value_enum, default_value_t=OutputType::Json)]
         output: OutputType,
     },
+    ValidateFeaturePropagation {
+        /// Features to validate (comma-separated, e.g., "fail-on-warnings,cpal")
+        /// If not specified, validates all matching features
+        #[arg(long, value_delimiter = ',')]
+        features: Option<Vec<String>>,
+
+        /// Path to package or workspace (defaults to current directory)
+        #[arg(long)]
+        path: Option<PathBuf>,
+
+        /// Only validate workspace packages (ignore external dependencies)
+        #[arg(long, default_value_t = true)]
+        workspace_only: bool,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputType::Raw)]
+        output: OutputType,
+
+        /// Exit with error code if validation fails (for CI)
+        #[arg(long, default_value_t = true)]
+        fail_on_error: bool,
+    },
 }
 
 #[allow(clippy::too_many_lines)]
@@ -334,6 +357,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             include_reasoning,
             output,
         )?,
+        Commands::ValidateFeaturePropagation {
+            features,
+            path,
+            workspace_only,
+            output,
+            fail_on_error,
+        } => {
+            let result = handle_validate_feature_propagation_command(
+                features,
+                path,
+                workspace_only,
+                output,
+            )?;
+
+            match output {
+                OutputType::Raw => print_human_output(&result),
+                OutputType::Json => println!("{}", serde_json::to_string_pretty(&result)?),
+            }
+
+            if fail_on_error && !result.errors.is_empty() {
+                std::process::exit(1);
+            }
+
+            return Ok(()); // Early return since we handle output ourselves
+        }
     };
 
     if !result.is_empty() {

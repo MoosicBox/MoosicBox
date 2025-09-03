@@ -15,11 +15,17 @@ use toml::Value;
 #[cfg(feature = "git-diff")]
 pub mod git_diff;
 
+pub mod feature_validator;
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub use test_utils::*;
+
+pub use feature_validator::{
+    FeatureValidator, ValidationResult, ValidatorConfig, print_github_output, print_human_output,
+};
 
 // Core types for tests and CLI
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -3164,6 +3170,29 @@ pub fn process_workspace_configs(
             Ok(all_packages)
         },
     )
+}
+
+/// Handles the validate feature propagation command
+///
+/// # Errors
+///
+/// * If validation fails
+pub fn handle_validate_feature_propagation_command(
+    features: Option<Vec<String>>,
+    path: Option<std::path::PathBuf>,
+    workspace_only: bool,
+    output: OutputType,
+) -> Result<ValidationResult, Box<dyn std::error::Error>> {
+    use crate::feature_validator::{FeatureValidator, ValidatorConfig};
+
+    let config = ValidatorConfig {
+        features,
+        workspace_only,
+        output_format: output,
+    };
+
+    let validator = FeatureValidator::new(path, config)?;
+    Ok(validator.validate()?)
 }
 
 #[cfg(test)]

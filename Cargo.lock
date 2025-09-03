@@ -2547,6 +2547,7 @@ dependencies = [
 name = "clippier"
 version = "0.1.1"
 dependencies = [
+ "anyhow",
  "clap 4.5.46",
  "clippier_test_utilities",
  "git2",

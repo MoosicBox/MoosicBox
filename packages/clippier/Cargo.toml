@@ -25,6 +25,7 @@ required-features = []
 moosicbox_logging = { workspace = true, features = ["free_log"] }
 switchy_random    = { workspace = true, features = ["rand"] }
 
+anyhow     = { workspace = true }
 clap       = { workspace = true }
 itertools  = { workspace = true }
 log        = { workspace = true }
@@ -63,3 +64,7 @@ required-features = ["git-diff", "test-utils"]
 [[test]]
 name              = "real_world_test"
 required-features = ["git-diff", "test-utils"]
+
+[[test]]
+name              = "feature_validator_integration"
+required-features = ["test-utils"]
