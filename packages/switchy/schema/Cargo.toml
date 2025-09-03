@@ -15,6 +15,7 @@ group = "switchy"
 
 [dependencies]
 async-trait      = { workspace = true }
+chrono           = { workspace = true }
 switchy_database = { workspace = true, features = ["schema"] }
 thiserror        = { workspace = true }
 
