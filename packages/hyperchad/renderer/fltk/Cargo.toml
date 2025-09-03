@@ -25,8 +25,8 @@ moosicbox_assert = { workspace = true }
 moosicbox_logging = { workspace = true }
 
 switchy_async = { workspace = true, features = ["tokio"] }
-switchy_env = { workspace = true, features = ["std"] }
-switchy_http = { workspace = true, features = ["reqwest"] }
+switchy_env   = { workspace = true, features = ["std"] }
+switchy_http  = { workspace = true, features = ["reqwest"] }
 
 async-trait = { workspace = true }
 bytes       = { workspace = true }
@@ -40,7 +40,17 @@ tokio       = { workspace = true, features = ["sync"] }
 [features]
 default = ["debug", "format", "unsafe"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "moosicbox_app_native_image/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+]
 
 debug  = []
 format = ["hyperchad_transformer/format"]

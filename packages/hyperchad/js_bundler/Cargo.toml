@@ -35,7 +35,7 @@ swc_ecma_visit                 = { workspace = true, optional = true }
 [features]
 default = ["all-web-toolchains", "esbuild", "swc"]
 
-fail-on-warnings = []
+fail-on-warnings = ["switchy_env/fail-on-warnings"]
 
 node = []
 

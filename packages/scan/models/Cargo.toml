@@ -22,7 +22,9 @@ serde = { workspace = true, features = ["derive"] }
 [features]
 default = ["api", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+]
 
 api     = []
 openapi = ["dep:utoipa"]

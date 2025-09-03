@@ -10,6 +10,7 @@ reqwest      = { workspace = true }
 shared-utils = { path = "../shared-utils" }
 
 [features]
-default  = ["frontend"]
-frontend = []
-ssr      = ["api/database"]
+default          = ["frontend"]
+fail-on-warnings = []
+frontend         = []
+ssr              = ["api/database"]

@@ -34,7 +34,21 @@ regex       = { workspace = true }
 [features]
 default = ["all-encoders", "api"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_audio_output?/fail-on-warnings",
+    "moosicbox_files/fail-on-warnings",
+    "moosicbox_library/fail-on-warnings",
+    "moosicbox_menu_models/fail-on-warnings",
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "moosicbox_paging/fail-on-warnings",
+    "moosicbox_profiles/fail-on-warnings",
+    "moosicbox_scan/fail-on-warnings",
+    "moosicbox_stream_utils?/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
 
 api = ["dep:actix-web", "moosicbox_profiles/api", "switchy_database/api"]
 

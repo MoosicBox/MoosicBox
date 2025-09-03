@@ -16,4 +16,4 @@ moosicbox_env_utils = { workspace = true }
 colored = { workspace = true }
 
 [features]
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_env_utils/fail-on-warnings"]

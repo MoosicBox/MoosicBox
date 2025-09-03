@@ -43,7 +43,19 @@ strum               = { workspace = true }
 [features]
 default = ["all-formats"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad/fail-on-warnings",
+    "moosicbox_app_models/fail-on-warnings",
+    "moosicbox_audio_zone_models/fail-on-warnings",
+    "moosicbox_date_utils/fail-on-warnings",
+    "moosicbox_downloader/fail-on-warnings",
+    "moosicbox_menu_models/fail-on-warnings",
+    "moosicbox_music_api_models/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "moosicbox_paging/fail-on-warnings",
+    "moosicbox_session_models/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+]
 
 all-formats    = ["all-os-formats", "mp3"]
 all-os-formats = ["aac", "flac", "opus"]

@@ -34,4 +34,9 @@ hyperchad_template = { workspace = true }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_color/fail-on-warnings",
+    "hyperchad_template_actions_dsl/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "hyperchad_transformer_models/fail-on-warnings",
+]

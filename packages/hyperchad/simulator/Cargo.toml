@@ -31,7 +31,12 @@ tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 [features]
 default = ["fail-on-warnings"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_test_utils?/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "simvar/fail-on-warnings",
+    "web_server_simulator/fail-on-warnings",
+]
 
 # Renderer simulation features
 renderer-egui       = []

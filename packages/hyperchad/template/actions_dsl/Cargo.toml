@@ -27,5 +27,7 @@ syn         = { workspace = true, features = ["extra-traits", "full"] }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+]
 

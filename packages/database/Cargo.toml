@@ -67,7 +67,12 @@ default = [
     "sqlite-sqlx",
 ]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_profiles/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
 
 tls = ["sqlx/tls-rustls"]
 

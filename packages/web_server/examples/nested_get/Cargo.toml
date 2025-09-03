@@ -17,4 +17,6 @@ tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_web_server/fail-on-warnings",
+]

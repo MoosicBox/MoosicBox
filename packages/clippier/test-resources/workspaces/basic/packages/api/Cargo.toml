@@ -8,3 +8,6 @@ models  = { path = "../models" }
 reqwest = { workspace = true }
 serde   = { workspace = true }
 tokio   = { workspace = true }
+
+[features]
+fail-on-warnings = []

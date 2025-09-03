@@ -30,7 +30,12 @@ strum_macros = { workspace = true }
 [features]
 default = ["api", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_audio_zone_models/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
 
 api = ["switchy_database/api"]
 openapi = [

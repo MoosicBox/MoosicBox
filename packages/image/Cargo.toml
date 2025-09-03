@@ -45,7 +45,10 @@ libvips = { workspace = true, optional = true }
 [features]
 default = ["image", "libvips"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_fs/fail-on-warnings",
+]
 
 build-binary = ["dep:clap", "dep:tokio", "image"]
 image        = ["dep:image", "dep:tokio", "dep:webp"]

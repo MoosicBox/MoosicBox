@@ -55,7 +55,21 @@ tokio             = { workspace = true, features = ["macros", "rt", "tracing"] }
 [features]
 default = ["all-formats", "api", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_auth?/fail-on-warnings",
+    "moosicbox_config/fail-on-warnings",
+    "moosicbox_files/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "moosicbox_paging/fail-on-warnings",
+    "moosicbox_remote_library/fail-on-warnings",
+    "moosicbox_scan/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+    "switchy_fs/fail-on-warnings",
+]
 
 api = [
     "dep:actix-web",

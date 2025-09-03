@@ -65,7 +65,16 @@ default = [
     "vanilla-js",
 ]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_env_utils/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_marketing_site_ui/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+]
 
 console-subscriber = ["dep:console-subscriber"]
 

@@ -26,7 +26,13 @@ urlencoding = { workspace = true }
 [features]
 default = ["aac", "flac", "mp3", "opus"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_menu_models/fail-on-warnings",
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "moosicbox_paging/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+]
 
 aac  = ["moosicbox_music_models/aac"]
 flac = ["moosicbox_music_models/flac"]

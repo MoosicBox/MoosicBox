@@ -43,7 +43,12 @@ utoipa-swagger-ui = { workspace = true, optional = true }
 [features]
 default = ["actix", "compress", "cors", "htmx", "openapi-all", "serde", "tls"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_web_server_core/fail-on-warnings",
+    "moosicbox_web_server_cors?/fail-on-warnings",
+    "switchy_http_models/fail-on-warnings",
+]
 
 actix = [
     "dep:actix-http",

@@ -25,7 +25,7 @@ thiserror = { workspace = true }
 [features]
 default = ["actix", "reqwest", "serde"]
 
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
 
 serde = ["dep:serde"]
 

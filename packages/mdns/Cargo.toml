@@ -32,7 +32,11 @@ thiserror   = { workspace = true }
 [features]
 default = ["scanner", "simulator"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_async_service?/fail-on-warnings",
+    "switchy_async?/fail-on-warnings",
+]
 
 scanner = ["dep:kanal", "dep:moosicbox_async_service", "dep:strum_macros", "dep:switchy_async"]
 

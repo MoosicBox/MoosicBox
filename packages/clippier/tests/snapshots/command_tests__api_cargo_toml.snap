@@ -15,6 +15,7 @@ shared-utils = { path = "../shared-utils" }
 tokio        = { workspace = true }
 
 [features]
-database = ["core/database", "models/database"]
-default  = ["server"]
-server   = ["axum"]
+database         = ["core/database", "models/database"]
+default          = ["server"]
+fail-on-warnings = []
+server           = ["axum"]

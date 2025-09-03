@@ -18,6 +18,10 @@ pretty_env_logger = { workspace = true }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_async/fail-on-warnings",
+    "switchy_random/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
 
 simulator = ["switchy_async/simulator"]

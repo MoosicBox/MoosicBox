@@ -26,12 +26,12 @@ hyperchad_renderer_vanilla_js = { workspace = true, optional = true, features = 
 hyperchad_router = { workspace = true }
 moosicbox_assert = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-switchy_env = { workspace = true }
 switchy = { workspace = true, features = [
     "async-rt-multi-thread",
     "async-tokio",
     "http-models",
 ] }
+switchy_env = { workspace = true }
 
 async-trait = { workspace = true }
 clap        = { workspace = true }
@@ -55,7 +55,19 @@ default = [
     "vanilla-js",
 ]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_renderer_egui?/fail-on-warnings",
+    "hyperchad_renderer_fltk?/fail-on-warnings",
+    "hyperchad_renderer_html?/fail-on-warnings",
+    "hyperchad_renderer_vanilla_js?/fail-on-warnings",
+    "hyperchad_router/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_env_utils/fail-on-warnings",
+    "switchy/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+]
 
 egui = ["dep:hyperchad_renderer_egui", "logic"]
 egui-glow = ["egui", "hyperchad_renderer_egui/glow"]

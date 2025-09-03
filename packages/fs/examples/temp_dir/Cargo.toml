@@ -17,7 +17,7 @@ path = "src/main.rs"
 [features]
 default = ["std"]
 
-fail-on-warnings = []
+fail-on-warnings = ["switchy_fs/fail-on-warnings"]
 
 async             = ["switchy_fs/async", "switchy_fs/tokio"]
 simulator         = ["switchy_fs/simulator", "switchy_fs/sync"]

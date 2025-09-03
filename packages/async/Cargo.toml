@@ -52,7 +52,11 @@ default = [
     "util",
 ]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_async_macros?/fail-on-warnings",
+    "switchy_random?/fail-on-warnings",
+    "switchy_time?/fail-on-warnings",
+]
 
 _any_backend = []
 simulator = [

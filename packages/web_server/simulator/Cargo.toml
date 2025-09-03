@@ -32,4 +32,9 @@ tokio         = { workspace = true, features = ["macros"] }
 [features]
 default = ["fail-on-warnings"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_web_server_core/fail-on-warnings",
+    "switchy/fail-on-warnings",
+    "switchy_http_models/fail-on-warnings",
+]

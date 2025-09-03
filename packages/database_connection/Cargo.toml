@@ -50,7 +50,10 @@ default = [
     "sqlite-sqlx",
 ]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_database/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+]
 
 tls = ["sqlx/tls-rustls", "switchy_database/tls"]
 

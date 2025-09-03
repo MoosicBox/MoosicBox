@@ -8,6 +8,7 @@ core  = { path = "../core", features = ["json"] }
 serde = { workspace = true }
 
 [features]
-database   = ["core/database"]
-default    = []
-validation = []
+database         = ["core/database"]
+default          = []
+fail-on-warnings = []
+validation       = []

@@ -23,7 +23,10 @@ serde = { workspace = true, features = ["derive"] }
 [features]
 default = ["api", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+]
 
 api     = ["moosicbox_music_models/api"]
 openapi = ["dep:utoipa", "moosicbox_music_models/openapi"]

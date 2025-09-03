@@ -40,7 +40,19 @@ uaparser    = { workspace = true }
 [features]
 default = ["actix", "assets", "debug", "extend", "json", "lambda"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_renderer_html_actix?/fail-on-warnings",
+    "hyperchad_renderer_html_lambda?/fail-on-warnings",
+    "hyperchad_renderer_html_web_server?/fail-on-warnings",
+    "hyperchad_router/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_env_utils/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "switchy/fail-on-warnings",
+    "switchy_http_models/fail-on-warnings",
+]
 
 debug = []
 

@@ -13,6 +13,8 @@ database = ["sqlx"]
 default  = ["json"]
 json     = ["serde/derive"]
 
+fail-on-warnings = []
+
 [dependencies.sqlx]
 optional  = true
 workspace = true

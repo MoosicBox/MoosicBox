@@ -33,7 +33,12 @@ tracing-subscriber      = { workspace = true, optional = true }
 [features]
 default = ["actix", "simulator"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_env_utils/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+]
 
 actix = ["dep:actix-web", "dep:actix-web-opentelemetry", "dep:futures-util"]
 

@@ -18,5 +18,6 @@ tempfile   = { workspace = true }
 toml       = { workspace = true }
 
 [features]
-default  = []
-git-diff = ["clippier/git-diff"]
+default          = []
+fail-on-warnings = ["clippier/fail-on-warnings"]
+git-diff         = ["clippier/git-diff"]

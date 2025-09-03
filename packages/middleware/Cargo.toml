@@ -23,6 +23,9 @@ tracing      = { workspace = true }
 [features]
 default = ["tunnel"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
 
 tunnel = []

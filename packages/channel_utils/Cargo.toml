@@ -22,6 +22,6 @@ log = { workspace = true }
 [features]
 default = ["futures-channel"]
 
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
 
 futures-channel = ["dep:futures-channel", "dep:futures-core"]

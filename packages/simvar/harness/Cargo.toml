@@ -45,7 +45,11 @@ pretty_env_logger = { workspace = true, optional = true }
 [features]
 default = ["pretty_env_logger", "tui"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_web_server?/fail-on-warnings",
+    "simvar_utils/fail-on-warnings",
+    "switchy/fail-on-warnings",
+]
 
 async      = []
 database   = ["switchy/database", "switchy/database-connection"]

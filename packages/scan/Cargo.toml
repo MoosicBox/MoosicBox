@@ -67,7 +67,24 @@ test-log = { workspace = true }
 [features]
 default = ["all-formats", "api", "local", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_auth?/fail-on-warnings",
+    "moosicbox_config/fail-on-warnings",
+    "moosicbox_date_utils/fail-on-warnings",
+    "moosicbox_files/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_library/fail-on-warnings",
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "moosicbox_paging/fail-on-warnings",
+    "moosicbox_scan_models/fail-on-warnings",
+    "moosicbox_search/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
 
 api = [
     "dep:actix-web",

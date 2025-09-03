@@ -17,3 +17,9 @@ switchy_database = { workspace = true }
 switchy_schema   = { workspace = true, features = ["code"] }
 tokio            = { workspace = true, features = ["full"] }
 
+
+[features]
+fail-on-warnings = [
+    "switchy_database/fail-on-warnings",
+    "switchy_schema/fail-on-warnings",
+]

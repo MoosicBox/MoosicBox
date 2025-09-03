@@ -50,7 +50,17 @@ default = ["api", "default-windows", "openapi"]
 
 default-windows = ["aac", "cpal", "flac", "mp3", "oboe-shared-stdcxx", "opus"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_audio_decoder/fail-on-warnings",
+    "moosicbox_audio_encoder?/fail-on-warnings",
+    "moosicbox_env_utils/fail-on-warnings",
+    "moosicbox_paging?/fail-on-warnings",
+    "moosicbox_resampler/fail-on-warnings",
+    "moosicbox_stream_utils/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
 
 api     = ["dep:actix-web", "dep:moosicbox_paging", "dep:serde"]
 openapi = ["dep:utoipa", "moosicbox_paging/openapi"]

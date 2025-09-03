@@ -14,6 +14,7 @@ models       = { path = "../models" }
 shared-utils = { path = "../shared-utils" }
 
 [features]
-batch       = ["api/database"]
-default     = ["interactive"]
-interactive = []
+batch            = ["api/database"]
+default          = ["interactive"]
+fail-on-warnings = []
+interactive      = []

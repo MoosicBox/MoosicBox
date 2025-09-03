@@ -3,7 +3,7 @@ source: packages/clippier/tests/business_logic_tests.rs
 expression: parsed
 ---
 - "API_PORT=\"3000\"\nDATABASE_URL=\"sqlite://test.db\""
-- "FRONTEND_BUILD=\"production\"\nWEB_PORT=\"8080\""
 - "WEB_PORT=\"8080\""
-- "FRONTEND_BUILD=\"production\"\nSSR_ENABLED=\"true\"\nWEB_PORT=\"8080\""
+- "FRONTEND_BUILD=\"production\"\nWEB_PORT=\"8080\""
 - "SSR_ENABLED=\"true\"\nWEB_PORT=\"8080\""
+- "FRONTEND_BUILD=\"production\"\nSSR_ENABLED=\"true\"\nWEB_PORT=\"8080\""

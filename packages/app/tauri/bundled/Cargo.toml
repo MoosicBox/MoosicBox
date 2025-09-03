@@ -34,7 +34,17 @@ thiserror    = { workspace = true }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_async_service/fail-on-warnings",
+    "moosicbox_config/fail-on-warnings",
+    "moosicbox_downloader/fail-on-warnings",
+    "moosicbox_profiles/fail-on-warnings",
+    "moosicbox_scan/fail-on-warnings",
+    "moosicbox_server/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
 
 tunnel = ["moosicbox_server/tunnel"]
 

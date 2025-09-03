@@ -25,7 +25,12 @@ serde = { workspace = true, features = ["derive"] }
 [features]
 default = ["api", "db", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_music_models?/fail-on-warnings",
+    "moosicbox_paging/fail-on-warnings",
+    "moosicbox_profiles/fail-on-warnings",
+]
 
 openapi = [
     "auth-poll",

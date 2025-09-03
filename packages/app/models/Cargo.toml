@@ -19,7 +19,7 @@ moosicbox_music_api_api = { workspace = true, optional = true }
 [features]
 default = ["auth-poll", "auth-username-password", "music-api-api"]
 
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_music_api_api?/fail-on-warnings"]
 
 music-api-api = ["dep:moosicbox_music_api_api"]
 

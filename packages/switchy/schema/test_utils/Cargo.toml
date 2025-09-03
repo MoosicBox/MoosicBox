@@ -29,7 +29,11 @@ tokio            = { workspace = true, features = ["macros", "rt"] }
 [features]
 default = ["sqlite"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_database/fail-on-warnings",
+    "switchy_database_connection?/fail-on-warnings",
+    "switchy_schema/fail-on-warnings",
+]
 sqlite = [
     "dep:switchy_database_connection",
     "switchy_database_connection/sqlite-sqlx",

@@ -44,7 +44,13 @@ serde_urlencoded = { workspace = true, optional = true }
 [features]
 default = ["form", "format", "json", "serde", "static-routes"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "switchy/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+]
 
 simd = ["hyperchad_transformer/simd"]
 

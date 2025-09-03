@@ -30,7 +30,7 @@ test-log          = { workspace = true }
 [features]
 default = ["arb", "egui"]
 
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
 
 egui = ["dep:egui"]
 
