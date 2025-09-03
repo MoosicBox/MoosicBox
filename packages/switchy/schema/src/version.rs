@@ -94,8 +94,10 @@ impl VersionTracker {
 
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
-    pub fn with_table_name(table_name: String) -> Self {
-        Self { table_name }
+    pub fn with_table_name(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+        }
     }
 
     #[must_use]
