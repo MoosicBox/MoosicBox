@@ -17,16 +17,16 @@ group = "hyperchad"
 proc-macro = true
 
 [dependencies]
-hyperchad_color = { workspace = true }
+hyperchad_color                = { workspace = true }
 hyperchad_template_actions_dsl = { workspace = true }
-hyperchad_transformer = { workspace = true }
-hyperchad_transformer_models = { workspace = true }
-proc-macro2 = { workspace = true }
-proc-macro2-diagnostics = { workspace = true }
-quote = { workspace = true }
-syn = { workspace = true, features = ["full", "extra-traits"] }
+hyperchad_transformer          = { workspace = true }
+hyperchad_transformer_models   = { workspace = true }
+proc-macro2                    = { workspace = true }
+proc-macro2-diagnostics        = { workspace = true }
+quote                          = { workspace = true }
+syn                            = { workspace = true, features = ["extra-traits", "full"] }
 
-log                     = { workspace = true }
+log = { workspace = true }
 
 [dev-dependencies]
 hyperchad_template = { workspace = true }
@@ -34,4 +34,9 @@ hyperchad_template = { workspace = true }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_color/fail-on-warnings",
+    "hyperchad_template_actions_dsl/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "hyperchad_transformer_models/fail-on-warnings",
+]

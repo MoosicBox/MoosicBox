@@ -3,7 +3,7 @@ authors     = { workspace = true }
 categories  = ["development-tools", "network-programming"]
 description = "Basic handler example demonstrating HttpRequest API across backends"
 edition     = { workspace = true }
-keywords    = ["async", "http", "network", "web", "example"]
+keywords    = ["async", "example", "http", "network", "web"]
 license     = { workspace = true }
 name        = "basic_handler_example"
 readme      = "README.md"
@@ -16,7 +16,7 @@ moosicbox_web_server = { workspace = true, default-features = false }
 [features]
 default = ["simulator"]
 
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_web_server/fail-on-warnings"]
 
-actix = ["moosicbox_web_server/actix"]
+actix     = ["moosicbox_web_server/actix"]
 simulator = ["moosicbox_web_server/simulator"]

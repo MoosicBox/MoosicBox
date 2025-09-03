@@ -41,7 +41,11 @@ tokio    = { workspace = true, features = ["macros", "rt", "time"] }
 [features]
 default = ["remote-bytestream", "stalled-monitor"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_http?/fail-on-warnings",
+]
 
 remote-bytestream = ["dep:switchy_http", "switchy_async/util"]
 stalled-monitor   = ["dep:thiserror", "switchy_async/sync", "switchy_async/time"]

@@ -39,7 +39,12 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 [features]
 default = ["postgres", "sqlite"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_schema/fail-on-warnings",
+]
 
 postgres = ["switchy_database/postgres"]
 sqlite   = ["switchy_database/sqlite"]

@@ -21,7 +21,7 @@ switchy_random = { workspace = true, features = ["rand"], optional = true }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = ["switchy_random?/fail-on-warnings"]
 
 # Add `pick_random_unused_port` pub fn that allows finding a random port
 # within the range 15000..25000

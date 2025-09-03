@@ -3,7 +3,7 @@ authors     = { workspace = true }
 categories  = ["development-tools"]
 description = "Switchy UUID package"
 edition     = { workspace = true }
-keywords    = ["uuid", "identifier"]
+keywords    = ["identifier", "uuid"]
 license     = { workspace = true }
 name        = "switchy_uuid"
 readme      = "README.md"
@@ -14,15 +14,18 @@ version     = "0.1.0"
 group = "switchy"
 
 [dependencies]
-log = { workspace = true }
-uuid = { workspace = true, features = ["v4"] }
+log            = { workspace = true }
+switchy_env    = { workspace = true, optional = true, features = ["simulator"] }
 switchy_random = { workspace = true, optional = true, features = ["simulator"] }
-switchy_env = { workspace = true, optional = true, features = ["simulator"] }
+uuid           = { workspace = true, features = ["v4"] }
 
 [features]
-default = ["uuid", "simulator"]
+default = ["simulator", "uuid"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_env?/fail-on-warnings",
+    "switchy_random?/fail-on-warnings",
+]
 
+simulator = ["dep:switchy_env", "dep:switchy_random"]
 uuid      = []
-simulator = ["dep:switchy_random", "dep:switchy_env"]

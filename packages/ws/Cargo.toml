@@ -33,7 +33,14 @@ strum_macros = { workspace = true }
 [features]
 default = ["aac", "flac", "mp3", "opus", "ws"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_audio_zone/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_session/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
 
 ws = ["dep:async-trait", "dep:log", "dep:thiserror"]
 

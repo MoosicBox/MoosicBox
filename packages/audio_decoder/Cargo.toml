@@ -33,7 +33,12 @@ tokio     = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_stream_utils/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
 
 profiling = ["dep:profiling"]
 

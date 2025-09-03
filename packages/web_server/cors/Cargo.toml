@@ -18,4 +18,7 @@ switchy_http_models = { workspace = true }
 [features]
 default = []
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "switchy_http_models/fail-on-warnings",
+]

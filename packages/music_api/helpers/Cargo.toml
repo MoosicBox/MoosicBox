@@ -20,6 +20,10 @@ log = { workspace = true }
 [features]
 default = ["scan"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_scan?/fail-on-warnings",
+    "switchy/fail-on-warnings",
+]
 
 scan = ["dep:moosicbox_scan"]

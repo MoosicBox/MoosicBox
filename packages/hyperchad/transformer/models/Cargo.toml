@@ -30,7 +30,10 @@ moosicbox_arb = { workspace = true, features = ["serde", "xml"] }
 [features]
 default = ["arb", "layout", "serde"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_arb?/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+]
 
 arb    = ["dep:moosicbox_arb", "dep:quickcheck"]
 layout = []

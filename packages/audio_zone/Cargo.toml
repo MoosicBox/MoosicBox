@@ -32,7 +32,14 @@ tokio = { workspace = true, features = ["rt-multi-thread", "tracing"] }
 [features]
 default = ["api", "events", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_audio_zone_models/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_paging?/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
 
 api = [
     "dep:actix-web",

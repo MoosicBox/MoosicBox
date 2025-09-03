@@ -38,7 +38,13 @@ thiserror = { workspace = true }
 [features]
 default = ["api", "db", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_json_utils?/fail-on-warnings",
+    "moosicbox_profiles?/fail-on-warnings",
+    "switchy_database?/fail-on-warnings",
+    "switchy_random?/fail-on-warnings",
+]
 
 test = ["dep:switchy_random"]
 

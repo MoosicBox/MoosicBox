@@ -35,7 +35,14 @@ url        = { workspace = true }
 [features]
 default = ["api", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_middleware/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+    "switchy_uuid/fail-on-warnings",
+]
 
 api     = ["switchy_database/api"]
 openapi = ["dep:utoipa"]

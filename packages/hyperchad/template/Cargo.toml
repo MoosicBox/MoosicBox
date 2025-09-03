@@ -36,4 +36,11 @@ trybuild              = { workspace = true, features = ["diff"] }
 default = ["logic"]
 logic   = ["hyperchad_actions/logic", "hyperchad_transformer/logic"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+    "hyperchad_color/fail-on-warnings",
+    "hyperchad_template_actions_dsl/fail-on-warnings",
+    "hyperchad_template_macros/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "hyperchad_transformer_models/fail-on-warnings",
+]

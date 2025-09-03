@@ -18,10 +18,14 @@ moosicbox_assert = { workspace = true }
 
 
 # Scanner dependencies
-kanal                   = { workspace = true, optional = true }
+kanal = { workspace = true, optional = true }
 moosicbox_async_service = { workspace = true, optional = true }
-strum_macros            = { workspace = true, optional = true }
-switchy_async           = { workspace = true, optional = true, features = ["macros", "sync", "tokio"] }
+strum_macros = { workspace = true, optional = true }
+switchy_async = { workspace = true, optional = true, features = [
+    "macros",
+    "sync",
+    "tokio",
+] }
 
 async-trait = { workspace = true }
 hostname    = { workspace = true }
@@ -32,8 +36,17 @@ thiserror   = { workspace = true }
 [features]
 default = ["scanner", "simulator"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_async_service?/fail-on-warnings",
+    "switchy_async?/fail-on-warnings",
+]
 
-scanner = ["dep:kanal", "dep:moosicbox_async_service", "dep:strum_macros", "dep:switchy_async"]
+scanner = [
+    "dep:kanal",
+    "dep:moosicbox_async_service",
+    "dep:strum_macros",
+    "dep:switchy_async",
+]
 
 simulator = []

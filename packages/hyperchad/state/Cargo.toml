@@ -38,7 +38,10 @@ tokio         = { workspace = true, features = ["macros"] }
 [features]
 default = ["persistence-ios", "persistence-sqlite"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "switchy?/fail-on-warnings",
+]
 
 persistence-ios    = []
 persistence-sqlite = ["dep:switchy"]

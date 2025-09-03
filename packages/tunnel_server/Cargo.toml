@@ -32,8 +32,8 @@ switchy_time            = { workspace = true, features = ["std"] }
 moosicbox_tunnel            = { workspace = true }
 switchy_async               = { workspace = true, features = ["tokio"] }
 switchy_database            = { workspace = true, features = ["api"] }
-switchy_env                 = { workspace = true, features = ["std"] }
 switchy_database_connection = { workspace = true }
+switchy_env                 = { workspace = true, features = ["std"] }
 switchy_http                = { workspace = true, features = ["serde"] }
 switchy_random              = { workspace = true, features = ["rand"] }
 switchy_telemetry           = { workspace = true, features = ["actix"], optional = true }
@@ -72,7 +72,25 @@ default = [
     "telemetry",
 ]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_async_service/fail-on-warnings",
+    "moosicbox_env_utils/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_middleware/fail-on-warnings",
+    "moosicbox_profiles/fail-on-warnings",
+    "moosicbox_tunnel/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+    "switchy_database_connection/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+    "switchy_random/fail-on-warnings",
+    "switchy_telemetry?/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+    "switchy_uuid/fail-on-warnings",
+]
 
 base64 = ["moosicbox_tunnel/base64"]
 

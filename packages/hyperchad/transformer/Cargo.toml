@@ -59,7 +59,15 @@ default = [
     "syntax-highlighting",
 ]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+    "hyperchad_color/fail-on-warnings",
+    "hyperchad_transformer_models/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_time/fail-on-warnings",
+]
 
 canvas = []
 

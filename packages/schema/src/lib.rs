@@ -2,7 +2,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use include_dir::{Dir, include_dir};
+use include_dir::Dir;
 use switchy_database::{Database, DatabaseError, Executable};
 use switchy_schema::{
     MigrationError as SwitchyMigrationError,

@@ -27,7 +27,7 @@ utoipa           = { workspace = true, optional = true }
 
 # Events Dependencies
 
-tokio          = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 log        = { workspace = true }
 serde      = { workspace = true, features = ["derive"] }
@@ -37,7 +37,17 @@ thiserror  = { workspace = true }
 [features]
 default = ["all-formats", "api", "events", "openapi"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_audio_zone/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_library/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "moosicbox_paging?/fail-on-warnings",
+    "moosicbox_session_models/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
 
 api = [
     "dep:actix-web",

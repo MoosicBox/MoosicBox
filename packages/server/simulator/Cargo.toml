@@ -11,13 +11,13 @@ repository  = { workspace = true }
 version     = "0.1.4"
 
 [dependencies]
-moosicbox_assert = { workspace = true }
-moosicbox_config = { workspace = true }
+moosicbox_assert    = { workspace = true }
+moosicbox_config    = { workspace = true }
 moosicbox_env_utils = { workspace = true }
-moosicbox_logging = { workspace = true }
-moosicbox_server = { workspace = true, features = ["simulator"] }
-switchy_async = { workspace = true, features = ["tokio"] }
-switchy_env = { workspace = true, features = ["std"] }
+moosicbox_logging   = { workspace = true }
+moosicbox_server    = { workspace = true, features = ["simulator"] }
+switchy_async       = { workspace = true, features = ["tokio"] }
+switchy_env         = { workspace = true, features = ["std"] }
 
 openport = { workspace = true }
 simvar = { workspace = true, features = [
@@ -45,7 +45,18 @@ tokio      = { workspace = true }
 [features]
 default = ["player", "sqlite", "telemetry", "upnp"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_config/fail-on-warnings",
+    "moosicbox_env_utils/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "moosicbox_server/fail-on-warnings",
+    "openport/fail-on-warnings",
+    "simvar/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_telemetry/fail-on-warnings",
+]
 
 player    = ["moosicbox_server/player"]
 telemetry = ["moosicbox_server/telemetry"]

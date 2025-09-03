@@ -22,7 +22,7 @@ version = "0.1.0"
 [features]
 actix            = ["moosicbox_web_server/actix"]
 default          = ["serde", "simulator"]
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_web_server/fail-on-warnings"]
 serde            = ["moosicbox_web_server/serde"]
 simulator        = ["moosicbox_web_server/simulator"]
 
@@ -30,4 +30,3 @@ simulator        = ["moosicbox_web_server/simulator"]
 moosicbox_web_server = { workspace = true, features = ["serde", "simulator"] }
 serde                = { workspace = true }
 serde_json           = { workspace = true }
-

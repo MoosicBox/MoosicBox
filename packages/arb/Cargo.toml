@@ -22,7 +22,7 @@ serde_json = { workspace = true, optional = true }
 [features]
 default = ["css", "serde", "xml"]
 
-fail-on-warnings = []
+fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]
 
 css   = []
 serde = ["dep:serde_json", "xml"]

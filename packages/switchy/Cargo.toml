@@ -31,7 +31,21 @@ switchy_upnp                = { workspace = true, optional = true }
 [features]
 default = ["all"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_async?/fail-on-warnings",
+    "switchy_async_macros?/fail-on-warnings",
+    "switchy_database?/fail-on-warnings",
+    "switchy_database_connection?/fail-on-warnings",
+    "switchy_fs?/fail-on-warnings",
+    "switchy_http?/fail-on-warnings",
+    "switchy_http_models?/fail-on-warnings",
+    "switchy_mdns?/fail-on-warnings",
+    "switchy_random?/fail-on-warnings",
+    "switchy_tcp?/fail-on-warnings",
+    "switchy_telemetry?/fail-on-warnings",
+    "switchy_time?/fail-on-warnings",
+    "switchy_upnp?/fail-on-warnings",
+]
 
 all = [
     "async",
@@ -94,18 +108,23 @@ simulator = [
     "switchy_upnp?/simulator",
 ]
 
-async = ["dep:switchy_async"]
-async-fs = ["async", "switchy_async?/fs"]
-async-io = ["async", "switchy_async?/io"]
-async-net = ["async", "switchy_async?/net"]
+async                 = ["dep:switchy_async"]
+async-fs              = ["async", "switchy_async?/fs"]
+async-io              = ["async", "switchy_async?/io"]
+async-net             = ["async", "switchy_async?/net"]
 async-rt-multi-thread = ["async", "switchy_async?/rt-multi-thread"]
 
-async-sync = ["async", "switchy_async?/sync"]
-async-time = ["async", "switchy_async?/time"]
+async-sync  = ["async", "switchy_async?/sync"]
+async-time  = ["async", "switchy_async?/time"]
 async-tokio = ["async", "switchy_async?/tokio"]
-async-util = ["async", "switchy_async?/util"]
+async-util  = ["async", "switchy_async?/util"]
 
-async-macros = ["async", "dep:switchy_async_macros", "switchy_async?/macros", "switchy_async_macros?/simulator"]
+async-macros = [
+    "async",
+    "dep:switchy_async_macros",
+    "switchy_async?/macros",
+    "switchy_async_macros?/simulator",
+]
 
 database                 = ["dep:switchy_database"]
 database-api             = ["database", "switchy_database?/api"]

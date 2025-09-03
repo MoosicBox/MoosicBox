@@ -21,9 +21,9 @@ moosicbox_assert       = { workspace = true }
 moosicbox_audio_output = { workspace = true, optional = true }
 moosicbox_logging      = { workspace = true, optional = true, features = ["macros"] }
 
-switchy_async          = { workspace = true, features = ["tokio"] }
-switchy_env            = { workspace = true, features = ["std"] }
-switchy_http           = { workspace = true, optional = true, features = ["reqwest"] }
+switchy_async = { workspace = true, features = ["tokio"] }
+switchy_env   = { workspace = true, features = ["std"] }
+switchy_http  = { workspace = true, optional = true, features = ["reqwest"] }
 
 # API Dependencies
 actix-web = { workspace = true, optional = true }
@@ -59,7 +59,19 @@ xml             = { workspace = true }
 [features]
 default = ["api", "listener", "openapi", "player", "simulator"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_async_service?/fail-on-warnings",
+    "moosicbox_audio_output?/fail-on-warnings",
+    "moosicbox_logging?/fail-on-warnings",
+    "moosicbox_music_api?/fail-on-warnings",
+    "moosicbox_player?/fail-on-warnings",
+    "moosicbox_session?/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_http?/fail-on-warnings",
+    "switchy_random?/fail-on-warnings",
+]
 
 api = ["dep:actix-web"]
 listener = [

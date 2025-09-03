@@ -31,7 +31,7 @@ thiserror   = { workspace = true }
 [features]
 default = ["database", "rusqlite", "serde_json", "tantivy"]
 
-fail-on-warnings = []
+fail-on-warnings = ["switchy_database?/fail-on-warnings"]
 
 database   = ["dep:async-trait", "dep:switchy_database"]
 rusqlite   = ["dep:rusqlite"]

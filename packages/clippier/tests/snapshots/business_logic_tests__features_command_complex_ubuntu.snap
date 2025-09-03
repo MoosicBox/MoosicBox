@@ -2,12 +2,12 @@
 source: packages/clippier/tests/business_logic_tests.rs
 expression: features
 ---
-["database","default","server"]
-["batch","default","interactive"]
-["async","database","default","json"]
-["database","default","validation"]
-["default","json","logging"]
-["default","frontend"]
-["ssr"]
-["default","frontend"]
-["ssr"]
+["database","default","fail-on-warnings","server"]
+["batch","default","fail-on-warnings","interactive"]
+["async","database","default","fail-on-warnings","json"]
+["database","default","fail-on-warnings","validation"]
+["default","fail-on-warnings","json","logging"]
+["default","fail-on-warnings"]
+["frontend","ssr"]
+["default","fail-on-warnings"]
+["frontend","ssr"]

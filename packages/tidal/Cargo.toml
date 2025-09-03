@@ -54,7 +54,18 @@ url             = { workspace = true }
 [features]
 default = ["api", "db", "openapi", "scan"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_date_utils/fail-on-warnings",
+    "moosicbox_files/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_menu_models/fail-on-warnings",
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_music_api_helpers/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "moosicbox_paging/fail-on-warnings",
+    "switchy/fail-on-warnings",
+]
 
 api     = ["dep:actix-web", "switchy/database-api"]
 db      = []

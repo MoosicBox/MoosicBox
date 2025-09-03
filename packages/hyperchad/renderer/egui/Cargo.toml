@@ -59,7 +59,19 @@ wgpu = { version = "=25.0.2", optional = true }
 [features]
 default = ["debug", "v1", "v2", "wgpu"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "hyperchad_actions/fail-on-warnings",
+    "hyperchad_color/fail-on-warnings",
+    "hyperchad_renderer/fail-on-warnings",
+    "hyperchad_router/fail-on-warnings",
+    "hyperchad_transformer/fail-on-warnings",
+    "moosicbox_app_native_image/fail-on-warnings",
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_logging/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_env/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+]
 
 glow = ["eframe/glow"]
 wgpu = ["dep:wgpu", "eframe/wgpu"]

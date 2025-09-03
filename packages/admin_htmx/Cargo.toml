@@ -38,7 +38,17 @@ whoami      = { workspace = true }
 [features]
 default = ["api", "qobuz", "scan", "tidal"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_config/fail-on-warnings",
+    "moosicbox_json_utils/fail-on-warnings",
+    "moosicbox_music_api?/fail-on-warnings",
+    "moosicbox_profiles/fail-on-warnings",
+    "moosicbox_qobuz?/fail-on-warnings",
+    "moosicbox_scan?/fail-on-warnings",
+    "moosicbox_tidal?/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+]
 
 qobuz = ["dep:moosicbox_music_api", "dep:moosicbox_qobuz"]
 tidal = ["base64", "dep:moosicbox_music_api", "dep:moosicbox_tidal"]

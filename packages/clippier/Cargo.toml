@@ -43,7 +43,10 @@ test-log                = { workspace = true }
 [features]
 default = ["git-diff"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_logging/fail-on-warnings",
+    "switchy_random/fail-on-warnings",
+]
 
 git-diff   = ["dep:git2"]
 test-utils = []

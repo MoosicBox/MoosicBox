@@ -36,7 +36,10 @@ tokio                       = { workspace = true, features = ["macros", "rt"] }
 [features]
 default = ["all-discovery"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "switchy_database/fail-on-warnings",
+    "switchy_fs?/fail-on-warnings",
+]
 
 all-discovery = ["code", "directory", "embedded"]
 code          = []

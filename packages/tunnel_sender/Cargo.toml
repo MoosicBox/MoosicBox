@@ -30,11 +30,11 @@ moosicbox_player = { workspace = true }
 moosicbox_stream_utils = { workspace = true }
 
 moosicbox_tunnel = { workspace = true }
-moosicbox_ws = { workspace = true, features = ["ws"] }
-switchy_async = { workspace = true, features = ["tokio"] }
+moosicbox_ws     = { workspace = true, features = ["ws"] }
+switchy_async    = { workspace = true, features = ["tokio"] }
 switchy_database = { workspace = true }
-switchy_http = { workspace = true, features = ["json", "reqwest"] }
-switchy_random = { workspace = true, features = ["rand"] }
+switchy_http     = { workspace = true, features = ["json", "reqwest"] }
+switchy_random   = { workspace = true, features = ["rand"] }
 
 # Base64 dependencies
 base64 = { workspace = true, optional = true }
@@ -56,7 +56,26 @@ tokio-tungstenite = { workspace = true }
 [features]
 default = ["all-encoders", "base64"]
 
-fail-on-warnings = []
+fail-on-warnings = [
+    "moosicbox_assert/fail-on-warnings",
+    "moosicbox_audio_decoder/fail-on-warnings",
+    "moosicbox_audio_output/fail-on-warnings",
+    "moosicbox_auth/fail-on-warnings",
+    "moosicbox_channel_utils/fail-on-warnings",
+    "moosicbox_env_utils/fail-on-warnings",
+    "moosicbox_files/fail-on-warnings",
+    "moosicbox_image/fail-on-warnings",
+    "moosicbox_music_api/fail-on-warnings",
+    "moosicbox_music_models/fail-on-warnings",
+    "moosicbox_player/fail-on-warnings",
+    "moosicbox_stream_utils/fail-on-warnings",
+    "moosicbox_tunnel/fail-on-warnings",
+    "moosicbox_ws/fail-on-warnings",
+    "switchy_async/fail-on-warnings",
+    "switchy_database/fail-on-warnings",
+    "switchy_http/fail-on-warnings",
+    "switchy_random/fail-on-warnings",
+]
 
 base64 = ["dep:base64", "moosicbox_tunnel/base64"]
 
