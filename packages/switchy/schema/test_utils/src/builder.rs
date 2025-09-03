@@ -79,6 +79,7 @@ use switchy_database::{Database, DatabaseError};
 use switchy_schema::{
     migration::{Migration, MigrationSource},
     runner::MigrationRunner,
+    version::VersionTracker,
 };
 
 use crate::TestError;
@@ -373,22 +374,10 @@ impl<'a> MigrationTestBuilder<'a> {
         table_name: &str,
         migration_id: &str,
     ) -> Result<(), TestError> {
-        use switchy_database::query;
-
         // Create the migration table if it doesn't exist
-        let create_table_sql = format!(
-            "CREATE TABLE IF NOT EXISTS {table_name} (
-                id TEXT PRIMARY KEY,
-                applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )"
-        );
-        db.exec_raw(&create_table_sql).await?;
-
-        // Insert the migration record
-        query::insert(table_name)
-            .value("id", migration_id)
-            .execute(db)
-            .await?;
+        let version_tracker = VersionTracker::with_table_name(table_name);
+        version_tracker.ensure_table_exists(db).await?;
+        version_tracker.record_migration(db, migration_id).await?;
 
         Ok(())
     }
