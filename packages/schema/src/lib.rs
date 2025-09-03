@@ -2,12 +2,9 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
-use include_dir::Dir;
-use switchy_database::{Database, DatabaseError, Executable};
+use switchy_database::DatabaseError;
 use switchy_schema::{
-    MigrationError as SwitchyMigrationError,
-    discovery::code::{CodeMigration, CodeMigrationSource},
-    runner::{ExecutionStrategy, MigrationRunner},
+    MigrationError as SwitchyMigrationError, discovery::code::CodeMigrationSource,
 };
 use thiserror::Error;
 
@@ -27,13 +24,13 @@ pub enum MigrateError {
 ///
 /// * If the migrations fail to run
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
-pub async fn migrate_config(db: &dyn Database) -> Result<(), MigrateError> {
+pub async fn migrate_config(db: &dyn switchy_database::Database) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
     {
         log::debug!("migrate_config: running postgres migrations");
         let source = postgres_config_migrations();
-        let runner =
-            MigrationRunner::new(Box::new(source)).with_table_name("__moosicbox_schema_migrations");
+        let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
+            .with_table_name("__moosicbox_schema_migrations");
 
         if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
             .as_deref()
@@ -53,8 +50,8 @@ pub async fn migrate_config(db: &dyn Database) -> Result<(), MigrateError> {
     {
         log::debug!("migrate_config: running sqlite migrations");
         let source = sqlite_config_migrations();
-        let runner =
-            MigrationRunner::new(Box::new(source)).with_table_name("__moosicbox_schema_migrations");
+        let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
+            .with_table_name("__moosicbox_schema_migrations");
 
         if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
             .as_deref()
@@ -81,7 +78,7 @@ pub async fn migrate_config(db: &dyn Database) -> Result<(), MigrateError> {
 ///
 /// * If the migrations fail to run
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
-pub async fn migrate_library(db: &dyn Database) -> Result<(), MigrateError> {
+pub async fn migrate_library(db: &dyn switchy_database::Database) -> Result<(), MigrateError> {
     migrate_library_until(db, None).await
 }
 
@@ -94,15 +91,15 @@ pub async fn migrate_library(db: &dyn Database) -> Result<(), MigrateError> {
 /// * If the migrations fail to run
 #[cfg(any(feature = "postgres", feature = "sqlite"))]
 pub async fn migrate_library_until(
-    db: &dyn Database,
+    db: &dyn switchy_database::Database,
     migration_name: Option<&str>,
 ) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
     {
         log::debug!("migrate_library: running postgres migrations");
         let source = postgres_library_migrations();
-        let runner =
-            MigrationRunner::new(Box::new(source)).with_table_name("__moosicbox_schema_migrations");
+        let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
+            .with_table_name("__moosicbox_schema_migrations");
 
         if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
             .as_deref()
@@ -114,9 +111,11 @@ pub async fn migrate_library_until(
             );
         } else {
             let runner = if let Some(migration_name) = migration_name {
-                runner.with_strategy(ExecutionStrategy::UpTo(migration_name.to_string()))
+                runner.with_strategy(switchy_schema::runner::ExecutionStrategy::UpTo(
+                    migration_name.to_string(),
+                ))
             } else {
-                runner.with_strategy(ExecutionStrategy::All)
+                runner.with_strategy(switchy_schema::runner::ExecutionStrategy::All)
             };
             if let Err(e) = runner.run(db).await {
                 log::warn!("migrate_library: postgres migrations failed, continuing: {e:?}");
@@ -129,8 +128,8 @@ pub async fn migrate_library_until(
     {
         log::debug!("migrate_library: running sqlite migrations");
         let source = sqlite_library_migrations();
-        let runner =
-            MigrationRunner::new(Box::new(source)).with_table_name("__moosicbox_schema_migrations");
+        let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
+            .with_table_name("__moosicbox_schema_migrations");
 
         if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
             .as_deref()
@@ -142,9 +141,11 @@ pub async fn migrate_library_until(
             );
         } else {
             let runner = if let Some(migration_name) = migration_name {
-                runner.with_strategy(ExecutionStrategy::UpTo(migration_name.to_string()))
+                runner.with_strategy(switchy_schema::runner::ExecutionStrategy::UpTo(
+                    migration_name.to_string(),
+                ))
             } else {
-                runner.with_strategy(ExecutionStrategy::All)
+                runner.with_strategy(switchy_schema::runner::ExecutionStrategy::All)
             };
             runner.run(db).await?;
         }
@@ -156,23 +157,24 @@ pub async fn migrate_library_until(
 
 // Include migration directories at compile time
 #[cfg(feature = "sqlite")]
-static SQLITE_CONFIG_MIGRATIONS_DIR: Dir =
-    include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/sqlite");
+static SQLITE_CONFIG_MIGRATIONS_DIR: include_dir::Dir =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/sqlite");
 
 #[cfg(feature = "sqlite")]
-static SQLITE_LIBRARY_MIGRATIONS_DIR: Dir =
-    include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/sqlite");
+static SQLITE_LIBRARY_MIGRATIONS_DIR: include_dir::Dir =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/sqlite");
 
 #[cfg(feature = "postgres")]
-static POSTGRES_CONFIG_MIGRATIONS_DIR: Dir =
-    include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/postgres");
+static POSTGRES_CONFIG_MIGRATIONS_DIR: include_dir::Dir =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/migrations/server/config/postgres");
 
 #[cfg(feature = "postgres")]
-static POSTGRES_LIBRARY_MIGRATIONS_DIR: Dir =
-    include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/postgres");
+static POSTGRES_LIBRARY_MIGRATIONS_DIR: include_dir::Dir =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/migrations/server/library/postgres");
 
 /// Load migrations from a directory
-fn load_migrations_from_dir(dir: &Dir) -> CodeMigrationSource<'static> {
+#[cfg(any(feature = "sqlite", feature = "postgres"))]
+fn load_migrations_from_dir(dir: &include_dir::Dir) -> CodeMigrationSource<'static> {
     let mut source = CodeMigrationSource::new();
 
     // Get all migration directories and sort them by name (which includes timestamp)
@@ -201,10 +203,11 @@ fn load_migrations_from_dir(dir: &Dir) -> CodeMigrationSource<'static> {
             }
 
             if let Some(up_sql) = up_sql_content {
-                source.add_migration(CodeMigration::new(
+                source.add_migration(switchy_schema::discovery::code::CodeMigration::new(
                     dir_name.to_string(),
-                    Box::new(up_sql.to_string()) as Box<dyn Executable>,
-                    down_sql_content.map(|s| Box::new(s.to_string()) as Box<dyn Executable>),
+                    Box::new(up_sql.to_string()) as Box<dyn switchy_database::Executable>,
+                    down_sql_content
+                        .map(|s| Box::new(s.to_string()) as Box<dyn switchy_database::Executable>),
                 ));
             }
         }

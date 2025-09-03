@@ -523,7 +523,7 @@ pub fn generate_expression_code(
         }
         Expression::ElementRef(element_ref) => match &**element_ref {
             Expression::Literal(Literal::String(selector)) => {
-                let selector = selector.to_string();
+                let selector = selector.clone();
                 Ok(quote! {
                     hyperchad_actions::dsl::Expression::ElementRef(
                         Box::new(hyperchad_actions::dsl::Expression::Literal(
@@ -557,7 +557,7 @@ pub fn generate_expression_code(
                 match &**element_ref {
                     Expression::Literal(Literal::String(selector)) => {
                         let reference = hyperchad_actions::dsl::ElementReference {
-                            selector: selector.to_string(),
+                            selector: selector.clone(),
                         };
                         match reference.parse_selector() {
                             hyperchad_actions::dsl::ParsedSelector::Id(id) => {
