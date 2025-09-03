@@ -2,10 +2,8 @@
 chunked = 10
 
 [[ci-steps]]
-command = '''
-./free_disk_space.sh
-mkdir packages/app/tauri/dist
-'''
+command   = 'mkdir packages/app/tauri/dist'
+toolchain = "free_disk_space"
 
 [[config]]
 os = "ubuntu"

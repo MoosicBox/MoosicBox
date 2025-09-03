@@ -8,7 +8,6 @@ on:
             - packages/**
             - '**/*.toml'
             - '**/Cargo.lock'
-            - free_disk_space.sh
             - '!packages/marketing_site/*.ts'
             - '!packages/marketing_site/*.json'
             - '!packages/marketing_site/pnpm-lock.yaml'
@@ -74,6 +73,13 @@ jobs:
             - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+
+            - name: Free disk space
+              uses: jlumbroso/free-disk-space@main
+              with:
+                # this might remove tools that are actually needed,
+                # if set to "true" but frees about 6 GB
+                tool-cache: false
 
             - uses: dtolnay/rust-toolchain@stable
               with:
@@ -867,6 +873,14 @@ jobs:
                   git config user.email "MoosicBoxBot@gmail.com"
                   git checkout edge
                   git rebase master
+
+            - name: Free disk space
+              if: ${{ matrix.package.os == 'ubuntu-latest' && (contains(matrix.package.toolchains, 'free_disk_space') || contains(matrix.package.ciToolchains, 'free_disk_space')) }}
+              uses: jlumbroso/free-disk-space@main
+              with:
+                # this might remove tools that are actually needed,
+                # if set to "true" but frees about 6 GB
+                tool-cache: false
 
             - uses: dtolnay/rust-toolchain@stable
               with:
