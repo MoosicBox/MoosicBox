@@ -9,6 +9,7 @@ Clippier is a command-line utility designed to analyze Rust workspaces and autom
 - **CI/CD Pipeline Generation**: Generate feature matrices for testing
 - **Dependency Analysis**: Analyze workspace dependencies and relationships
 - **Feature Management**: Generate feature combinations for comprehensive testing
+- **Feature Propagation Validation**: Ensure features are correctly propagated across workspace dependencies
 - **Docker Integration**: Generate optimized Dockerfiles for workspace packages
 - **Change Impact Analysis**: Determine which packages are affected by file changes
 - **External Dependency Tracking**: Detect changes in external dependencies via git diff analysis
@@ -189,6 +190,91 @@ This enhanced mode:
 - Maps external dependency changes to affected workspace packages
 - Provides comprehensive impact analysis for both internal and external changes
 
+### Feature Propagation Validation
+
+Validate that features are correctly propagated across workspace dependencies to ensure consistent builds and prevent feature-related compilation failures:
+
+```bash
+# Quick validation of fail-on-warnings feature
+clippier validate-feature-propagation . --features "fail-on-warnings"
+
+# Auto-detect and validate all matching features
+clippier validate-feature-propagation . --output json
+
+# Validate specific packages only
+clippier validate-feature-propagation . --workspace-only --features "fail-on-warnings"
+```
+
+The feature validator ensures that when a package depends on another workspace package that has a specific feature, that feature is correctly propagated. This prevents build failures where features are inconsistently enabled across the dependency graph.
+
+#### Common Use Cases
+
+**Validate fail-on-warnings propagation:**
+```bash
+clippier validate-feature-propagation . --features "fail-on-warnings"
+```
+
+**Auto-detect features that need propagation:**
+```bash
+# Automatically finds features that exist in multiple packages
+clippier validate-feature-propagation . --workspace-only
+```
+
+**CI/CD Integration with GitHub Actions format:**
+```bash
+clippier validate-feature-propagation . \
+  --features "fail-on-warnings" \
+  --output github-actions
+```
+
+**Get detailed JSON report:**
+```bash
+clippier validate-feature-propagation . \
+  --features "fail-on-warnings,std,async" \
+  --workspace-only \
+  --output json > validation-report.json
+```
+
+#### Understanding Validation Results
+
+The validator provides clear feedback about feature propagation issues:
+
+**Successful validation:**
+```
+✅ All packages correctly propagate features!
+Total packages checked: 147
+Valid packages: 147
+```
+
+**Validation with errors:**
+```
+❌ Found 2 packages with incorrect feature propagation:
+
+📦 Package: moosicbox_server
+  Feature: fail-on-warnings
+    Missing propagations:
+      - moosicbox_tcp/fail-on-warnings (Dependency 'moosicbox_tcp' has feature but it's not propagated)
+```
+
+#### Error Types and Meanings
+
+The validator detects two types of issues:
+
+**Missing Propagations:**
+- A dependency has a feature but it's not propagated
+- Example: `pkg_a` depends on `pkg_b` which has `fail-on-warnings`, but `pkg_a` doesn't propagate it
+- Fix: Add `"pkg_b/fail-on-warnings"` to the feature definition in `pkg_a`
+
+**Incorrect Propagations:**
+- A feature is propagated to a non-existent dependency or feature
+- Example: `pkg_a` propagates `pkg_b/feature` but `pkg_b` doesn't have `feature`
+- Fix: Remove the incorrect propagation or add the missing feature to the dependency
+
+**Optional Dependencies:**
+The validator correctly handles optional dependencies using the `?` syntax:
+- `dep?/feature` - Propagates feature only when the optional dependency is activated
+- Required for dependencies marked with `optional = true` in Cargo.toml
+
 ### Docker Deployment
 
 Generate production-ready Dockerfiles with comprehensive dependency analysis:
@@ -282,6 +368,15 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--git-base` | Git base commit for external dep analysis | - |
 | `--git-head` | Git head commit for external dep analysis | - |
 | `--output` | Output format: `json`, `raw` | `json` |
+
+### Feature Validation Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--features` | Comma-separated list of features to validate | Auto-detect |
+| `--workspace-only` | Only validate workspace packages | true |
+| `--output` | Output format: `json`, `raw`, `github-actions` | `raw` |
+| `--path` | Workspace root path | Current directory |
 
 ## Configuration
 
@@ -393,6 +488,7 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 ## Core Functionality
 
 - **Feature Combination Generation**: Creates combinations of Cargo features for testing
+- **Feature Propagation Validation**: Ensures features are correctly propagated across workspace dependencies
 - **Workspace Dependency Analysis**: Maps dependencies between workspace packages
 - **CI Configuration Generation**: Produces CI/CD pipeline configurations
 - **Docker File Generation**: Creates optimized multi-stage Dockerfiles
@@ -457,6 +553,33 @@ For affected packages analysis:
 }
 ```
 
+For feature validation results:
+```json
+{
+  "total_packages": 147,
+  "valid_packages": 145,
+  "errors": [
+    {
+      "package": "moosicbox_server",
+      "errors": [
+        {
+          "feature": "fail-on-warnings",
+          "missing_propagations": [
+            {
+              "dependency": "moosicbox_tcp",
+              "expected": "moosicbox_tcp/fail-on-warnings",
+              "reason": "Dependency 'moosicbox_tcp' has feature 'fail-on-warnings' but it's not propagated"
+            }
+          ],
+          "incorrect_propagations": []
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}
+```
+
 ### Raw/Text Output
 Human-readable text format for direct use in scripts:
 ```
@@ -484,10 +607,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build clippier
-        run: cargo build --release --package clippier
+       - name: Build clippier
+         run: cargo build --release --package clippier
 
-      - name: Analyze changes and generate matrix
+       - name: Validate feature propagation
+         run: |
+           ./target/release/clippier validate-feature-propagation . \
+             --features "fail-on-warnings" \
+             --output github-actions
+
+       - name: Analyze changes and generate matrix
         id: analysis
         run: |
           # Get changed files
@@ -580,6 +709,13 @@ fi
 
 echo "📦 Affected packages: $AFFECTED"
 
+# Validate feature propagation before testing
+echo "🔧 Validating feature propagation for affected packages..."
+if ! ./clippier validate-feature-propagation . --features "fail-on-warnings" --workspace-only; then
+    echo "❌ Feature propagation validation failed - fix before continuing"
+    exit 1
+fi
+
 # Generate test matrix for affected packages only
 echo "🎯 Generating targeted test matrix..."
 MATRIX=$(./clippier features Cargo.toml \
@@ -591,6 +727,129 @@ MATRIX=$(./clippier features Cargo.toml \
 
 echo "🧪 Test matrix: $MATRIX"
 ```
+
+### Feature Validation in CI Pipeline
+
+```bash
+#!/bin/bash
+# Comprehensive feature validation script for CI/CD
+
+echo "🔧 Validating feature propagation..."
+
+# First, validate that fail-on-warnings is properly propagated
+echo "  Checking fail-on-warnings propagation..."
+if ! ./clippier validate-feature-propagation . --features "fail-on-warnings" --output github-actions; then
+    echo "❌ fail-on-warnings validation failed"
+    exit 1
+fi
+
+# Auto-detect and validate all features that might need propagation
+echo "  Auto-detecting features for validation..."
+VALIDATION_RESULT=$(./clippier validate-feature-propagation . --workspace-only --output json)
+ERRORS=$(echo "$VALIDATION_RESULT" | jq '.errors | length')
+
+if [ "$ERRORS" -gt 0 ]; then
+    echo "❌ Found $ERRORS feature propagation errors"
+    echo "$VALIDATION_RESULT" | jq -r '.errors[] | "Package: \(.package) - \(.errors | length) error(s)"'
+    exit 1
+else
+    VALID_PACKAGES=$(echo "$VALIDATION_RESULT" | jq '.valid_packages')
+    echo "✅ All $VALID_PACKAGES packages have correct feature propagation"
+fi
+
+echo "🎯 Feature validation completed successfully!"
+```
+
+## Best Practices
+
+### Feature Propagation Validation
+
+1. **Run in CI/CD pipelines**: Catch propagation issues early before they cause build failures
+   ```bash
+   # In your CI pipeline
+   clippier validate-feature-propagation . --features "fail-on-warnings" --output github-actions
+   ```
+
+2. **Use auto-detection mode**: Finds all features that might need propagation across your workspace
+   ```bash
+   # Discovers features that exist in multiple packages
+   clippier validate-feature-propagation . --workspace-only
+   ```
+
+3. **Validate after adding dependencies**: Ensure new workspace dependencies don't break feature propagation
+   ```bash
+   # Quick check after adding a new workspace dependency
+   clippier validate-feature-propagation . --features "fail-on-warnings,your-feature"
+   ```
+
+4. **Use workspace-only mode**: Focus validation on packages you control, excluding external dependencies
+   ```bash
+   # Avoids false positives from external dependencies
+   clippier validate-feature-propagation . --workspace-only
+   ```
+
+5. **Document required features**: Make feature propagation requirements explicit in your workspace
+   ```toml
+   # In Cargo.toml, document why features are propagated
+   [features]
+   fail-on-warnings = [
+       "dep_a/fail-on-warnings",  # Required for consistent builds
+       "dep_b?/fail-on-warnings", # Optional dep - only when enabled
+   ]
+   ```
+
+### General Workspace Management
+
+1. **Regular dependency analysis**: Run `workspace-deps` to understand your dependency graph
+2. **Impact-driven testing**: Use `affected-packages` to optimize CI runs
+3. **Feature matrix optimization**: Use `--changed-files` to test only what matters
+4. **Docker build optimization**: Use `--all-potential-deps` for complete build contexts
+
+## Troubleshooting
+
+### Feature Validation Issues
+
+**"Feature not found" errors:**
+- Ensure the feature exists in at least one workspace package
+- Check spelling and case sensitivity in feature names
+- Use auto-detection mode to see which features are available
+
+**Too many false positives:**
+- Use `--workspace-only` to exclude external dependencies
+- Specify exact features with `--features` instead of auto-detection
+- Check that external dependencies actually need the features
+
+**Missing optional dependency syntax:**
+- Use `dep?/feature` syntax for optional dependencies
+- Ensure the dependency is marked as `optional = true` in Cargo.toml
+- Verify the optional dependency actually has the feature you're propagating
+
+**GitHub Actions integration issues:**
+- Use `--output github-actions` for proper CI integration
+- Check that the action has sufficient permissions to comment on PRs
+- Verify the clippier binary is built and available in the workflow
+
+**Performance issues with large workspaces:**
+- Use `--features` to validate specific features instead of auto-detection
+- Consider `--workspace-only` to reduce scope
+- Run validation in parallel with other CI steps
+
+### General Troubleshooting
+
+**Command not found errors:**
+- Ensure clippier is built: `cargo build --release --package clippier`
+- Check the binary path: `./target/release/clippier`
+- Verify you're in the workspace root directory
+
+**Git-related errors (external dependency analysis):**
+- Ensure git history is available (use `fetch-depth: 0` in GitHub Actions)
+- Check that base and head commits exist
+- Verify you have the `git-diff` feature enabled (default)
+
+**JSON parsing errors:**
+- Verify JSON output with `jq` or similar tools
+- Check for proper shell escaping in CI environments
+- Ensure output is captured correctly in scripts
 
 ## See Also
 
