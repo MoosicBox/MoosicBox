@@ -77,9 +77,9 @@ jobs:
             - name: Free disk space
               uses: jlumbroso/free-disk-space@main
               with:
-                # this might remove tools that are actually needed,
-                # if set to "true" but frees about 6 GB
-                tool-cache: true
+                  # this might remove tools that are actually needed,
+                  # if set to "true" but frees about 6 GB
+                  tool-cache: true
 
             - uses: dtolnay/rust-toolchain@stable
               with:
@@ -145,7 +145,28 @@ jobs:
               run: ${{ steps.dependencies.outputs.dependencies }}
 
             - name: cargo llvm-cov
-              run: ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov --locked --workspace --lcov --output-path lcov.info
+              run: |
+                  # Clean workspace
+                  cargo +nightly llvm-cov clean --workspace
+
+                  # Process in batches, cleaning between each
+                  PACKAGES=($(cargo metadata --no-deps --format-version=1 | jq -r '.packages[].name'))
+                  BATCH_SIZE=20
+
+                  for ((i=0; i<${#PACKAGES[@]}; i+=BATCH_SIZE)); do
+                    BATCH="${PACKAGES[@]:i:BATCH_SIZE}"
+                    echo "Processing batch: $BATCH"
+
+                    for pkg in $BATCH; do
+                      ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov test --no-report -p "$pkg" || true
+                    done
+
+                    # Critical: Remove profraw files after each batch
+                    find target -name "*.profraw" -delete
+                  done
+
+                  # Generate final report
+                  ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov report --lcov --output-path lcov.info
 
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v5
@@ -878,9 +899,9 @@ jobs:
               if: ${{ matrix.package.os == 'ubuntu-latest' && (contains(matrix.package.toolchains, 'free_disk_space') || contains(matrix.package.ciToolchains, 'free_disk_space')) }}
               uses: jlumbroso/free-disk-space@main
               with:
-                # this might remove tools that are actually needed,
-                # if set to "true" but frees about 6 GB
-                tool-cache: false
+                  # this might remove tools that are actually needed,
+                  # if set to "true" but frees about 6 GB
+                  tool-cache: false
 
             - uses: dtolnay/rust-toolchain@stable
               with:
