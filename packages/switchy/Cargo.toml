@@ -28,6 +28,8 @@ switchy_telemetry           = { workspace = true, optional = true }
 switchy_time                = { workspace = true, optional = true }
 switchy_upnp                = { workspace = true, optional = true }
 
+tokio = { workspace = true, optional = true, features = ["macros"] }
+
 [features]
 default = ["all"]
 
@@ -48,49 +50,17 @@ fail-on-warnings = [
 ]
 
 all = [
-    "async",
-    "async-fs",
-    "async-io",
-    "async-net",
-    "async-rt-multi-thread",
-    "async-sync",
-    "async-tokio",
-    "async-util",
-    "database",
-    "database-api",
-    "database-mysql",
-    "database-mysql-sqlx",
-    "database-postgres",
-    "database-postgres-raw",
-    "database-postgres-sqlx",
-    "database-schema",
-    "database-simulator",
-    "database-sqlite",
-    "database-sqlite-rusqlite",
-    "database-sqlite-sqlx",
-    "database-sqlx",
-    "database-tls",
-    "fs-async",
-    "fs-simulator",
-    "fs-std",
-    "fs-sync",
-    "fs-tokio",
-    "http-json",
-    "http-models-actix",
-    "http-models-reqwest",
-    "http-models-serde",
-    "http-reqwest",
-    "http-serde",
-    "http-simulator",
-    "http-stream",
-    "mdns-scanner",
-    "mdns-simulator",
-    "random-rand",
-    "random-simulator",
-    "tcp-simulator",
-    "tcp-tokio",
-    "telemetry-actix",
-    "telemetry-simulator",
+    "all-async",
+    "all-database",
+    "all-database-connection",
+    "all-fs",
+    "all-http",
+    "all-mdns",
+    "all-random",
+    "all-tcp",
+    "all-telemetry",
+    "all-time",
+    "all-upnp",
 ]
 
 simulator = [
@@ -108,6 +78,18 @@ simulator = [
     "switchy_upnp?/simulator",
 ]
 
+all-async = [
+    "async",
+    "async-fs",
+    "async-io",
+    "async-net",
+    "async-rt-multi-thread",
+    "async-sync",
+    "async-time",
+    "async-tokio",
+    "async-util",
+]
+
 async                 = ["dep:switchy_async"]
 async-fs              = ["async", "switchy_async?/fs"]
 async-io              = ["async", "switchy_async?/io"]
@@ -116,14 +98,33 @@ async-rt-multi-thread = ["async", "switchy_async?/rt-multi-thread"]
 
 async-sync  = ["async", "switchy_async?/sync"]
 async-time  = ["async", "switchy_async?/time"]
-async-tokio = ["async", "switchy_async?/tokio"]
+async-tokio = ["async", "dep:tokio", "switchy_async?/tokio"]
 async-util  = ["async", "switchy_async?/util"]
+
+all-async-macros = ["async-macros"]
 
 async-macros = [
     "async",
     "dep:switchy_async_macros",
     "switchy_async?/macros",
     "switchy_async_macros?/simulator",
+]
+
+all-database = [
+    "database",
+    "database-api",
+    "database-mysql",
+    "database-mysql-sqlx",
+    "database-postgres",
+    "database-postgres-raw",
+    "database-postgres-sqlx",
+    "database-schema",
+    "database-simulator",
+    "database-sqlite",
+    "database-sqlite-rusqlite",
+    "database-sqlite-sqlx",
+    "database-sqlx",
+    "database-tls",
 ]
 
 database                 = ["dep:switchy_database"]
@@ -140,6 +141,24 @@ database-sqlite-rusqlite = ["database", "switchy_database?/sqlite-rusqlite"]
 database-sqlite-sqlx     = ["database", "switchy_database?/sqlite-sqlx"]
 database-sqlx            = ["database", "switchy_database?/sqlx"]
 database-tls             = ["database", "switchy_database?/tls"]
+
+all-database-connection = [
+    "database-connection",
+    "database-connection-creds",
+    "database-connection-mysql",
+    "database-connection-mysql-sqlx",
+    "database-connection-postgres",
+    "database-connection-postgres-native-tls",
+    "database-connection-postgres-openssl",
+    "database-connection-postgres-raw",
+    "database-connection-postgres-sqlx",
+    "database-connection-simulator",
+    "database-connection-sqlite",
+    "database-connection-sqlite-rusqlite",
+    "database-connection-sqlite-sqlx",
+    "database-connection-sqlx",
+    "database-connection-tls",
+]
 
 database-connection = ["dep:switchy_database_connection"]
 database-connection-creds = [
@@ -199,6 +218,16 @@ database-connection-tls = [
     "switchy_database_connection?/tls",
 ]
 
+all-fs = [
+    "fs",
+    "fs-async",
+    "fs-simulator",
+    "fs-simulator-real-fs",
+    "fs-std",
+    "fs-sync",
+    "fs-tokio",
+]
+
 fs                   = ["dep:switchy_fs"]
 fs-async             = ["fs", "switchy_fs?/async"]
 fs-simulator         = ["fs", "switchy_fs?/simulator"]
@@ -207,6 +236,15 @@ fs-std               = ["fs", "switchy_fs?/std"]
 fs-sync              = ["fs", "switchy_fs?/sync"]
 fs-tokio             = ["fs", "switchy_fs?/tokio"]
 
+all-http = [
+    "http",
+    "http-json",
+    "http-reqwest",
+    "http-serde",
+    "http-simulator",
+    "http-stream",
+]
+
 http           = ["dep:switchy_http"]
 http-json      = ["http", "switchy_http?/json"]
 http-reqwest   = ["http", "switchy_http?/reqwest"]
@@ -214,30 +252,56 @@ http-serde     = ["http", "switchy_http?/serde"]
 http-simulator = ["http", "switchy_http?/simulator"]
 http-stream    = ["http", "switchy_http?/stream"]
 
+all-http-models = [
+    "http-models",
+    "http-models-actix",
+    "http-models-reqwest",
+    "http-models-serde",
+]
+
 http-models         = ["dep:switchy_http_models"]
 http-models-actix   = ["http-models", "switchy_http_models?/actix"]
 http-models-reqwest = ["http-models", "switchy_http_models?/reqwest"]
 http-models-serde   = ["http-models", "switchy_http_models?/serde"]
 
+all-mdns = ["mdns", "mdns-scanner", "mdns-simulator"]
+
 mdns           = ["dep:switchy_mdns"]
 mdns-scanner   = ["mdns", "switchy_mdns?/scanner"]
 mdns-simulator = ["mdns", "switchy_mdns?/simulator"]
+
+all-random = ["random", "random-rand", "random-simulator"]
 
 random           = ["dep:switchy_random"]
 random-rand      = ["random", "switchy_random?/rand"]
 random-simulator = ["random", "switchy_random?/simulator"]
 
+all-tcp = ["tcp", "tcp-simulator", "tcp-tokio"]
+
 tcp           = ["dep:switchy_tcp"]
 tcp-simulator = ["switchy_tcp?/simulator", "tcp"]
 tcp-tokio     = ["switchy_tcp?/tokio", "tcp"]
+
+all-telemetry = ["telemetry", "telemetry-actix", "telemetry-simulator"]
 
 telemetry           = ["dep:switchy_telemetry"]
 telemetry-actix     = ["switchy_telemetry?/actix", "telemetry"]
 telemetry-simulator = ["switchy_telemetry?/simulator", "telemetry"]
 
+all-time = ["time", "time-simulator", "time-std"]
+
 time           = ["dep:switchy_time"]
 time-simulator = ["switchy_time?/simulator", "time"]
 time-std       = ["switchy_time?/std", "time"]
+
+all-upnp = [
+    "upnp",
+    "upnp-api",
+    "upnp-listener",
+    "upnp-openapi",
+    "upnp-player",
+    "upnp-simulator",
+]
 
 upnp           = ["dep:switchy_upnp"]
 upnp-api       = ["switchy_upnp?/api", "upnp"]

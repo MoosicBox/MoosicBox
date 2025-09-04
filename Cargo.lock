@@ -14239,6 +14239,7 @@ dependencies = [
  "switchy_telemetry",
  "switchy_time",
  "switchy_upnp",
+ "tokio",
 ]
 
 [[package]]
