@@ -166,7 +166,7 @@ jobs:
                     done
 
                     # Run all packages in this batch together
-                    ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov test --no-report $PACKAGE_ARGS || true
+                    ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov test --no-report $PACKAGE_ARGS
                   done
 
                   # Generate final report
