@@ -149,25 +149,7 @@ jobs:
                   # Clean workspace
                   cargo +nightly llvm-cov clean --workspace
 
-                  # Get all package names
-                  PACKAGES=($(cargo metadata --no-deps --format-version=1 | jq -r '.packages[].name'))
-                  BATCH_SIZE=20
-
-                  for ((i=0; i<${#PACKAGES[@]}; i+=BATCH_SIZE)); do
-                    rm -rf target
-
-                    BATCH=("${PACKAGES[@]:i:BATCH_SIZE}")
-                    echo "Processing batch $((i/BATCH_SIZE + 1)): ${BATCH[*]}"
-
-                    # Build the -p arguments string
-                    PACKAGE_ARGS=""
-                    for pkg in "${BATCH[@]}"; do
-                      PACKAGE_ARGS="$PACKAGE_ARGS -p $pkg"
-                    done
-
-                    # Run all packages in this batch together
-                    ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov test --no-report $PACKAGE_ARGS
-                  done
+                  ${{ steps.environment.outputs.environment }} .github/coverage.sh
 
                   # Generate final report
                   ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov report --lcov --output-path lcov.info
