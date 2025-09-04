@@ -38,13 +38,13 @@ impl SimulationDatabase {
     ///
     /// * If time goes backwards
     pub fn new_for_path(path: Option<&str>) -> Result<Self, DatabaseError> {
-        let path_key = path.unwrap_or(":memory:").to_string();
-
         // Check if we already have a database for this path
         let registry = &DATABASE_REGISTRY;
         let mut registry_guard = registry.lock().unwrap();
 
-        if let Some(existing_db) = registry_guard.get(&path_key) {
+        if let Some(path) = path
+            && let Some(existing_db) = registry_guard.get(path)
+        {
             return Ok(Self {
                 inner: Arc::clone(existing_db),
             });
@@ -52,7 +52,9 @@ impl SimulationDatabase {
 
         // Create a new database for this path
         let db = Self::create_new_database()?;
-        registry_guard.insert(path_key, Arc::clone(&db.inner));
+        if let Some(path) = path {
+            registry_guard.insert(path.to_string(), Arc::clone(&db.inner));
+        }
         drop(registry_guard);
 
         Ok(db)
@@ -77,11 +79,7 @@ impl SimulationDatabase {
         static ID: AtomicU64 = AtomicU64::new(0);
 
         let id = ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let db_url = format!("file:sqlx_memdb_{id}_{timestamp}:?mode=memory&cache=shared&uri=true");
+        let db_url = format!("file:sqlx_memdb_{id}:?mode=memory&cache=shared&uri=true");
 
         let mut connections = Vec::new();
         for _ in 0..5 {

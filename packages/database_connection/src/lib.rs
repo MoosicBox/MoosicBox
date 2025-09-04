@@ -165,8 +165,17 @@ pub async fn init(
 ) -> Result<Box<dyn Database>, InitDbError> {
     #[cfg(feature = "simulator")]
     {
+        // Convert Path to string for the simulator
+        #[cfg(feature = "sqlite")]
+        let path_str = path.as_ref().map(|p| p.to_string_lossy().to_string());
         Ok(Box::new(
-            switchy_database::simulator::SimulationDatabase::new()?,
+            switchy_database::simulator::SimulationDatabase::new_for_path(
+                #[cfg(feature = "sqlite")]
+                path_str.as_deref(),
+                #[cfg(not(feature = "sqlite"))]
+                None,
+            )
+            .unwrap(),
         ))
     }
 
@@ -286,8 +295,13 @@ pub fn init_sqlite_rusqlite(
 ) -> Result<Box<dyn Database>, InitSqliteRusqliteError> {
     #[cfg(feature = "simulator")]
     {
+        // Convert Path to string for the simulator
+        let path_str = db_location
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string());
         return Ok(Box::new(
-            switchy_database::simulator::SimulationDatabase::new().unwrap(),
+            switchy_database::simulator::SimulationDatabase::new_for_path(path_str.as_deref())
+                .unwrap(),
         ));
     }
 
