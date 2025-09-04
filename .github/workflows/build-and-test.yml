@@ -149,20 +149,24 @@ jobs:
                   # Clean workspace
                   cargo +nightly llvm-cov clean --workspace
 
-                  # Process in batches, cleaning between each
+                  # Get all package names
                   PACKAGES=($(cargo metadata --no-deps --format-version=1 | jq -r '.packages[].name'))
                   BATCH_SIZE=20
 
                   for ((i=0; i<${#PACKAGES[@]}; i+=BATCH_SIZE)); do
-                    BATCH="${PACKAGES[@]:i:BATCH_SIZE}"
-                    echo "Processing batch: $BATCH"
+                    rm -rf target
 
-                    for pkg in $BATCH; do
-                      ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov test --no-report -p "$pkg" || true
+                    BATCH=("${PACKAGES[@]:i:BATCH_SIZE}")
+                    echo "Processing batch $((i/BATCH_SIZE + 1)): ${BATCH[*]}"
+
+                    # Build the -p arguments string
+                    PACKAGE_ARGS=""
+                    for pkg in "${BATCH[@]}"; do
+                      PACKAGE_ARGS="$PACKAGE_ARGS -p $pkg"
                     done
 
-                    # Critical: Remove profraw files after each batch
-                    find target -name "*.profraw" -delete
+                    # Run all packages in this batch together
+                    ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov test --no-report $PACKAGE_ARGS || true
                   done
 
                   # Generate final report
