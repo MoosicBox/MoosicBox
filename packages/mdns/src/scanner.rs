@@ -85,7 +85,11 @@ impl service::Processor for service::Service {
                                 info.get_fullname()
                             );
 
-                            for addr in info.get_addresses().iter().filter(|x| x.is_ipv4()).copied()
+                            for addr in info
+                                .get_addresses()
+                                .iter()
+                                .filter(|x| x.is_ipv4())
+                                .map(mdns_sd::ScopedIp::to_ip_addr)
                             {
                                 let socket_addr = SocketAddr::new(addr, info.get_port());
                                 log::debug!("mdns scanner: Server address: {addr}");
