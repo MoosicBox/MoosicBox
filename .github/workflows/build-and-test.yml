@@ -152,13 +152,16 @@ jobs:
                   cargo llvm-cov clean --workspace
 
                   post_batch() {
-                      echo "🧹 Cleaning target directory"
-                      ls target
-                      rm -rf target/debug || true
-                      rm -rf target/release || true
-                      # Critical: Remove profraw files after each batch
-                      echo "🧹 Cleaning profraw files"
-                      find target -name "*.profraw" -delete || true
+                      ls target -lah
+                      echo "🧹 Cleaning build artifacts (keeping coverage data)"
+                      # Remove large compilation artifacts (safe to delete)
+                      find target/llvm-cov-target -type f -name "*.rlib" -delete
+                      find target/llvm-cov-target -type f -name "*.rmeta" -delete
+                      rm -rf target/llvm-cov-target/*/incremental
+                      rm -rf target/llvm-cov-target/*/build
+                      # Keep .profdata and executables for final report generation
+                      echo "📊 Kept coverage data and test executables"
+                      du -sh target/llvm-cov-target 2>/dev/null || true
                   }
                   export -f post_batch
 
