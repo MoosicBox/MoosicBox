@@ -37,6 +37,8 @@ pingora = { workspace = true, features = ["openssl"] }
 pingora = { workspace = true }
 
 [features]
+default = []
+
 fail-on-warnings = [
     "moosicbox_env_utils/fail-on-warnings",
     "moosicbox_logging/fail-on-warnings",

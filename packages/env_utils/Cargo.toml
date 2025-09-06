@@ -16,4 +16,6 @@ pretty_assertions = { workspace = true }
 test-log          = { workspace = true }
 
 [features]
+default = []
+
 fail-on-warnings = []

@@ -31,4 +31,6 @@ test-log          = { workspace = true }
 tokio             = { workspace = true, features = ["macros", "rt"] }
 
 [features]
+default = []
+
 fail-on-warnings = ["switchy_async/fail-on-warnings"]
