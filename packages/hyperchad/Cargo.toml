@@ -68,6 +68,7 @@ all = [
     "app",
     "color",
     "js-bundler",
+    "json",
     "renderer",
     "renderer-egui",
     "renderer-fltk",
@@ -188,7 +189,8 @@ renderer-html-extend = ["hyperchad_renderer_html?/extend"]
 renderer-html-json = ["hyperchad_app?/json", "hyperchad_renderer_html?/json"]
 renderer-html-sse = ["hyperchad_app?/sse", "hyperchad_renderer_html?/sse"]
 
-renderer-html-http = ["dep:hyperchad_renderer_html_http", "renderer-html"]
+renderer-html-http      = ["dep:hyperchad_renderer_html_http", "renderer-html"]
+renderer-html-http-json = ["hyperchad_renderer_html_http?/json"]
 
 renderer-html-actix = [
     "dep:hyperchad_renderer_html_actix",
@@ -332,6 +334,7 @@ debug = ["hyperchad_app/debug", "renderer-egui-debug", "renderer-fltk-debug"]
 format = ["hyperchad_app/format", "router-format"]
 json = [
     "hyperchad_app?/json",
+    "renderer-html-http-json",
     "renderer-html-json",
     "renderer-json",
     "router-json",
