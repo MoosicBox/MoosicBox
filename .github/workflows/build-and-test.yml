@@ -145,14 +145,25 @@ jobs:
               run: ${{ steps.dependencies.outputs.dependencies }}
 
             - name: cargo llvm-cov
+              env:
+                  COVERAGE_BATCH_SIZE: '20'
               run: |
                   # Clean workspace
-                  cargo +nightly llvm-cov clean --workspace
+                  cargo llvm-cov clean --workspace
+
+                  post_batch() {
+                      echo "🧹 Cleaning target directory"
+                      rm -rf target || true
+                      # Critical: Remove profraw files after each batch
+                      echo "🧹 Cleaning profraw files"
+                      find target -name "*.profraw" -delete || true
+                  }
+                  export -f post_batch
 
                   ${{ steps.environment.outputs.environment }} .github/coverage.sh
 
                   # Generate final report
-                  ${{ steps.environment.outputs.environment }} cargo +nightly llvm-cov report --lcov --output-path lcov.info
+                  ${{ steps.environment.outputs.environment }} cargo llvm-cov report --lcov --output-path lcov.info
 
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v5
