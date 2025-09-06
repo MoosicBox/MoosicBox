@@ -36,7 +36,7 @@ predicates    = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 
 [features]
-default = ["fail-on-warnings"]
+default = []
 
 fail-on-warnings = [
     "switchy_database/fail-on-warnings",

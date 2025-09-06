@@ -29,7 +29,7 @@ env_logger = { workspace = true }
 tokio      = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [features]
-default = ["fail-on-warnings"]
+default = []
 
 fail-on-warnings = [
     "hyperchad_test_utils?/fail-on-warnings",

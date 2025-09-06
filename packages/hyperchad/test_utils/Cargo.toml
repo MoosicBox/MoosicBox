@@ -22,6 +22,6 @@ thiserror  = { workspace = true }
 url        = { workspace = true }
 
 [features]
-default = ["fail-on-warnings"]
+default = []
 
 fail-on-warnings = ["moosicbox_assert/fail-on-warnings"]

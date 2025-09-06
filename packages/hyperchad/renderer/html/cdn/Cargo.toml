@@ -20,7 +20,8 @@ hyperchad_router   = { workspace = true }
 log = { workspace = true }
 
 [features]
-default = ["fail-on-warnings"]
+default = []
+
 fail-on-warnings = [
     "hyperchad_renderer/fail-on-warnings",
     "hyperchad_router/fail-on-warnings",
