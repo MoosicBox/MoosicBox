@@ -153,7 +153,9 @@ jobs:
 
                   post_batch() {
                       echo "🧹 Cleaning target directory"
-                      rm -rf target || true
+                      ls target
+                      rm -rf target/debug || true
+                      rm -rf target/release || true
                       # Critical: Remove profraw files after each batch
                       echo "🧹 Cleaning profraw files"
                       find target -name "*.profraw" -delete || true
