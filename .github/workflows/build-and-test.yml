@@ -876,8 +876,8 @@ jobs:
                               >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
                               return 1
                           fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')"
-                      cargo llvm-cov report --lcov --output-path lcov.info)
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+                  cargo llvm-cov report --lcov --output-path lcov.info
 
             - name: Check for coverage files
               id: coverage_check
