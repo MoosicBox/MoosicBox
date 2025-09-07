@@ -910,6 +910,7 @@ jobs:
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   slug: MoosicBox/MoosicBox
+                  flags: ${{ matrix.package.name }}
                   fail_ci_if_error: true
 
             - name: Format ${{ matrix.package.name }}

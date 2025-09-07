@@ -1,2 +1,15 @@
 ignore:
     - 'packages/arb'
+
+flag_management:
+    default_rules:
+        carryforward: true # carries forward last known coverage
+        carryforward_mode: 'labels' # Use the last coverage for this flag
+
+coverage:
+    status:
+        project:
+            default:
+                # Only measure coverage changes on files that were actually tested
+                # only_pulls: true
+                informational: true # Don't fail PR if coverage drops
