@@ -1,3 +1,6 @@
+[[ci-steps]]
+toolchain = "free_disk_space"
+
 [[config]]
 os = "ubuntu"
 
