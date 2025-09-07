@@ -853,6 +853,10 @@ jobs:
             - name: cargo install cargo-llvm-cov
               uses: taiki-e/install-action@cargo-llvm-cov
 
+            - name: Clear target directory
+              shell: bash
+              run: rm -rf target
+
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
               run: |
