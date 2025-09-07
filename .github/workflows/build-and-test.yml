@@ -788,9 +788,7 @@ jobs:
               if: ${{ matrix.package.os == 'ubuntu-latest' && (contains(matrix.package.toolchains, 'free_disk_space') || contains(matrix.package.ciToolchains, 'free_disk_space')) }}
               uses: jlumbroso/free-disk-space@main
               with:
-                  # this might remove tools that are actually needed,
-                  # if set to "true" but frees about 6 GB
-                  tool-cache: false
+                  tool-cache: true
 
             - uses: dtolnay/rust-toolchain@stable
               with:
