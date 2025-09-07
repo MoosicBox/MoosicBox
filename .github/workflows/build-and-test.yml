@@ -900,6 +900,10 @@ jobs:
                       exit $exit_code
                   fi
 
+            - name: Clear target directory
+              shell: bash
+              run: rm -rf target
+
             - name: Upload coverage reports to Codecov
               if: steps.create_coverage_report.outputs.has_coverage == 'true'
               uses: codecov/codecov-action@v5
