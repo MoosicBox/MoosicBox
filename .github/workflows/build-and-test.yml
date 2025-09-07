@@ -64,119 +64,6 @@ jobs:
                   command: check ${{ matrix.checks }}
                   arguments: --all-features
 
-    coverage:
-        continue-on-error: true
-        runs-on: ubuntu-latest
-        needs: [determine-affected-packages]
-        if: ${{ needs.determine-affected-packages.outputs.has-changes == 'true' }}
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-
-            - name: Free disk space
-              uses: jlumbroso/free-disk-space@main
-              with:
-                  # this might remove tools that are actually needed,
-                  # if set to "true" but frees about 6 GB
-                  tool-cache: true
-
-            - uses: dtolnay/rust-toolchain@stable
-              with:
-                  toolchain: stable
-                  components: rustfmt,llvm-tools-preview
-
-            - name: cargo install cargo-llvm-cov
-              uses: taiki-e/install-action@cargo-llvm-cov
-
-            - name: Setup clippier
-              uses: BSteffaniak/cache-artifact@master
-              with:
-                  directory: ./packages/clippier
-                  command: cargo build --package clippier --features git-diff --release
-                  output-path: ./target/release/clippier
-                  artifact-name: clippier-binary
-                  cache-key-prefix: moosicbox-clippier
-                  make-executable: true
-                  verify-command: --version
-
-            - name: Get dependencies
-              id: dependencies
-              run: |
-                  DEPENDENCIES="$(./target/release/clippier dependencies . --os ubuntu)"
-                  echo "Using dependencies:"
-                  echo "$DEPENDENCIES"
-                  echo 'dependencies<<EOF' >> $GITHUB_OUTPUT
-                  echo "$DEPENDENCIES" >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
-
-            - name: Get environment
-              id: environment
-              run: |
-                  ENVIRONMENT="$(./target/release/clippier environment . --os ubuntu -o json | jq -cr 'join(" ")')"
-                  echo "Using environment:"
-                  echo "$ENVIRONMENT"
-                  echo 'environment<<EOF' >> $GITHUB_OUTPUT
-                  echo "$ENVIRONMENT" >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
-
-            - name: Get ci_steps
-              id: ci_steps
-              run: |
-                  CI_STEPS="$(./target/release/clippier ci-steps . --os ubuntu -o json | jq -cr 'join(" ")')"
-                  echo "Using ci_steps:"
-                  echo "$CI_STEPS"
-                  echo 'ci_steps<<EOF' >> $GITHUB_OUTPUT
-                  echo "$CI_STEPS" >> $GITHUB_OUTPUT
-                  echo 'EOF' >> $GITHUB_OUTPUT
-
-            - name: Setup cmake
-              uses: jwlawson/actions-setup-cmake@v2
-              with:
-                  cmake-version: '3.x'
-
-            - name: Setup CI
-              if: ${{ steps.ci_steps.outputs.ci_steps }}
-              run: ${{ steps.ci_steps.outputs.ci_steps }}
-
-            - name: Install dependencies
-              if: ${{ steps.dependencies.outputs.dependencies }}
-              shell: bash
-              run: ${{ steps.dependencies.outputs.dependencies }}
-
-            - name: cargo llvm-cov
-              env:
-                  COVERAGE_BATCH_SIZE: '20'
-              run: |
-                  # Clean workspace
-                  cargo llvm-cov clean --workspace
-
-                  post_batch() {
-                      ls target -lah
-                      echo "🧹 Cleaning build artifacts (keeping coverage data)"
-                      # Remove large compilation artifacts (safe to delete)
-                      find target/llvm-cov-target -type f -name "*.rlib" -delete
-                      find target/llvm-cov-target -type f -name "*.rmeta" -delete
-                      rm -rf target/llvm-cov-target/*/incremental
-                      rm -rf target/llvm-cov-target/*/build
-                      # Keep .profdata and executables for final report generation
-                      echo "📊 Kept coverage data and test executables"
-                      du -sh target/llvm-cov-target 2>/dev/null || true
-                  }
-                  export -f post_batch
-
-                  ${{ steps.environment.outputs.environment }} .github/coverage.sh
-
-                  # Generate final report
-                  ${{ steps.environment.outputs.environment }} cargo llvm-cov report --lcov --output-path lcov.info
-
-            - name: Upload coverage reports to Codecov
-              uses: codecov/codecov-action@v5
-              with:
-                  token: ${{ secrets.CODECOV_TOKEN }}
-                  slug: MoosicBox/MoosicBox
-                  fail_ci_if_error: true
-
     determine-affected-packages:
         name: Determine affected packages
         runs-on: ubuntu-latest
@@ -908,7 +795,7 @@ jobs:
             - uses: dtolnay/rust-toolchain@stable
               with:
                   toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
-                  components: rustfmt, clippy
+                  components: rustfmt, clippy, llvm-tools-preview
 
             - name: Install winget
               if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
@@ -963,16 +850,19 @@ jobs:
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
+            - name: cargo install cargo-llvm-cov
+              uses: taiki-e/install-action@cargo-llvm-cov
+
             - name: Run ${{ matrix.package.name }} tests
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
-                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
+                          command="${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} llvm-cov test --no-report --no-default-features --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}"
                           # Trim whitespace
                           command=$(echo "$command" | xargs)
                           echo "RUNNING \`$command\`"
-                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} test \
+                          if ${{ matrix.package.env }} cargo${{ matrix.package.nightly && ' +nightly' || '' }} llvm-cov test --no-report \
                               ${{ runner.debug && '-vv' }} \
                               --no-default-features \
                               --features="fail-on-warnings${{ matrix.package.requiredFeatures && format(',{0}', matrix.package.requiredFeatures) || '' }},$feature" ${{ matrix.package.cargo }}; then
@@ -982,7 +872,15 @@ jobs:
                               >&2 echo "COMMAND: (cd ${{ matrix.package.path }}; $command)";
                               return 1
                           fi
-                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
+                      done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')"
+                      cargo llvm-cov report --lcov --output-path lcov.info)
+
+            - name: Upload coverage reports to Codecov
+              uses: codecov/codecov-action@v5
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  slug: MoosicBox/MoosicBox
+                  fail_ci_if_error: true
 
             - name: Format ${{ matrix.package.name }}
               shell: bash
