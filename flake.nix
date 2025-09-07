@@ -36,6 +36,7 @@
             "rust-analyzer"
             "clippy"
             "rustfmt"
+            "llvm-tools-preview"
           ];
         };
 
@@ -219,14 +220,15 @@
             extraPackages ? [ ],
           }:
           pkgs.mkShell {
-            buildInputs =
-              [ rustToolchain ]
-              ++ baseBuildTools
-              ++ audioPackages
-              ++ displayServerPackages
-              ++ gtkPackages
-              ++ extraPackages
-              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ];
+            buildInputs = [
+              rustToolchain
+            ]
+            ++ baseBuildTools
+            ++ audioPackages
+            ++ displayServerPackages
+            ++ gtkPackages
+            ++ extraPackages
+            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ];
 
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment (GTK Backend)"
@@ -253,13 +255,14 @@
             extraPackages ? [ ],
           }:
           pkgs.mkShell {
-            buildInputs =
-              [ rustToolchain ]
-              ++ baseBuildTools
-              ++ audioPackages
-              ++ fltkPackages
-              ++ extraPackages
-              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ];
+            buildInputs = [
+              rustToolchain
+            ]
+            ++ baseBuildTools
+            ++ audioPackages
+            ++ fltkPackages
+            ++ extraPackages
+            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.clang ];
 
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment (FLTK Backend)"
@@ -283,17 +286,18 @@
             extraPackages ? [ ],
           }:
           pkgs.mkShell {
-            buildInputs =
-              [ rustToolchain ]
-              ++ baseBuildTools
-              ++ audioPackages
-              ++ eguiPackages
-              ++ extraPackages
-              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-                pkgs.clang
-                pkgs.darwin.apple_sdk.frameworks.Metal
-                pkgs.darwin.apple_sdk.frameworks.MetalKit
-              ];
+            buildInputs = [
+              rustToolchain
+            ]
+            ++ baseBuildTools
+            ++ audioPackages
+            ++ eguiPackages
+            ++ extraPackages
+            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+              pkgs.clang
+              pkgs.darwin.apple_sdk.frameworks.Metal
+              pkgs.darwin.apple_sdk.frameworks.MetalKit
+            ];
 
             shellHook = ''
               echo "🎵 MoosicBox ${name} Environment (Egui/WGPU Backend)"
@@ -336,16 +340,17 @@
           # ===== MAIN SHELLS =====
           default = pkgs.mkShell {
             # Kitchen sink environment with everything
-            buildInputs =
-              [ rustToolchain ]
-              ++ baseBuildTools
-              ++ audioPackages
-              ++ displayServerPackages
-              ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
-              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-                pkgs.clang
-                pkgs.portaudio
-              ];
+            buildInputs = [
+              rustToolchain
+            ]
+            ++ baseBuildTools
+            ++ audioPackages
+            ++ displayServerPackages
+            ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
+            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+              pkgs.clang
+              pkgs.portaudio
+            ];
 
             packages = with pkgs; [
               cargo-watch
@@ -390,18 +395,17 @@
 
           coverage = pkgs.mkShell {
             name = "Coverage Testing";
-            buildInputs =
-              [
-                rustToolchainNightly # Nightly for llvm-tools-preview
-              ]
-              ++ baseBuildTools
-              ++ audioPackages
-              ++ displayServerPackages
-              ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
-              ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-                pkgs.clang
-                pkgs.portaudio
-              ];
+            buildInputs = [
+              rustToolchainNightly # Nightly for llvm-tools-preview
+            ]
+            ++ baseBuildTools
+            ++ audioPackages
+            ++ displayServerPackages
+            ++ pkgs.lib.optionals pkgs.stdenv.isLinux (gtkPackages ++ fltkPackages ++ eguiPackages)
+            ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+              pkgs.clang
+              pkgs.portaudio
+            ];
 
             packages = with pkgs; [
               cargo-watch
