@@ -36,6 +36,11 @@ on:
                 description: 'Random seed for deterministic feature randomization (leave empty for random)'
                 required: false
                 type: string
+            packages:
+                description: 'Comma-separated list of packages to build (e.g., "server,tunnel_server,app"). Leave empty to build all packages.'
+                required: false
+                type: string
+                default: ''
 env:
     CARGO_TERM_COLOR: always
 
@@ -214,12 +219,23 @@ jobs:
 
                   # Determine if we should build anything based on event type and changes
                   SHOULD_BUILD=false
+                  SELECTED_PACKAGES="${{ github.event.inputs.packages }}"
 
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                      echo "🚀 Workflow dispatch detected - building all packages"
-                      CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
-                      ANALYSIS_TYPE="full"
-                      SHOULD_BUILD=true
+                      if [[ -n "$SELECTED_PACKAGES" ]]; then
+                          echo "🎯 Workflow dispatch with specific packages: $SELECTED_PACKAGES"
+                          # Convert comma-separated list to space-separated for clippier
+                          PACKAGE_LIST=$(echo "$SELECTED_PACKAGES" | tr ',' ' ')
+                          # Build clippier command for specific packages
+                          CLIPPIER_CMD="./target/release/clippier features . --packages $PACKAGE_LIST --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
+                          ANALYSIS_TYPE="selected"
+                          SHOULD_BUILD=true
+                      else
+                          echo "🚀 Workflow dispatch detected - building all packages"
+                          CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
+                          ANALYSIS_TYPE="full"
+                          SHOULD_BUILD=true
+                      fi
                   elif [[ "${{ github.event_name }}" == "schedule" ]]; then
                       echo "⏰ Scheduled run - building all packages"
                       CLIPPIER_CMD="./target/release/clippier features . --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
@@ -249,10 +265,14 @@ jobs:
                       echo "$FULL_OUTPUT" | jq .
 
                       # For manual/scheduled runs, enhance the reasoning with manual context
-                      if [[ "$ANALYSIS_TYPE" == "full" ]]; then
+                      if [[ "$ANALYSIS_TYPE" == "full" || "$ANALYSIS_TYPE" == "selected" ]]; then
                           MANUAL_REASON=""
                           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                              MANUAL_REASON="Manual workflow dispatch - all packages included"
+                              if [[ -n "$SELECTED_PACKAGES" ]]; then
+                                  MANUAL_REASON="Manual workflow dispatch - selected packages: $SELECTED_PACKAGES"
+                              else
+                                  MANUAL_REASON="Manual workflow dispatch - all packages included"
+                              fi
                           elif [[ "${{ github.event_name }}" == "schedule" ]]; then
                               MANUAL_REASON="Scheduled workflow run - all packages included"
                           fi
@@ -330,11 +350,27 @@ jobs:
                   echo "🎯 Checking Tauri-related changes..."
 
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
-                      # For manual or scheduled runs, assume Tauri is affected
-                      echo "Manual or scheduled run - assuming Tauri is affected"
-                      echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
-                      echo 'tauri-reasoning={"affected": true, "reasoning": ["Manual or scheduled workflow run - all packages assumed affected"]}' >> $GITHUB_OUTPUT
-                      echo "✅ Tauri-related changes assumed for manual/scheduled run"
+                      # For manual or scheduled runs, check if Tauri should be affected
+                      if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$SELECTED_PACKAGES" ]]; then
+                          # Check if app package is in the selected packages list
+                          if echo "$SELECTED_PACKAGES" | grep -qE "(^|,)app(,|$)"; then
+                              echo "Manual run with app package selected - Tauri is affected"
+                              echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
+                              echo 'tauri-reasoning={"affected": true, "reasoning": ["Manual workflow dispatch with app package selected"]}' >> $GITHUB_OUTPUT
+                              echo "✅ Tauri-related changes detected for selected app package"
+                          else
+                              echo "Manual run without app package selected - Tauri is not affected"
+                              echo "has-tauri-changes=false" >> $GITHUB_OUTPUT
+                              echo 'tauri-reasoning={"affected": false, "reasoning": ["Manual workflow dispatch without app package selected"]}' >> $GITHUB_OUTPUT
+                              echo "❌ Tauri-related changes not detected - app package not selected"
+                          fi
+                      else
+                          # For full manual or scheduled runs, assume Tauri is affected
+                          echo "Manual or scheduled run - assuming Tauri is affected"
+                          echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
+                          echo 'tauri-reasoning={"affected": true, "reasoning": ["Manual or scheduled workflow run - all packages assumed affected"]}' >> $GITHUB_OUTPUT
+                          echo "✅ Tauri-related changes assumed for manual/scheduled run"
+                      fi
                   elif [[ "$SHOULD_BUILD" == "true" && -n "$CHANGED_FILES" ]]; then
                       # First check if app-website files changed (these don't affect Rust packages but do affect Tauri)
                       WEBSITE_AFFECTED=false
@@ -442,17 +478,44 @@ jobs:
                   MATRIX_PROJECTS="[]"
 
                   # Determine which packages to build based on event type
+                  SELECTED_PACKAGES="${{ github.event.inputs.packages }}"
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
-                      echo "🎯 Manual/scheduled run: will build all Docker packages"
+                      if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$SELECTED_PACKAGES" ]]; then
+                          echo "🎯 Manual run with specific packages: will build Docker images for selected packages if available"
+                      else
+                          echo "🎯 Manual/scheduled run: will build all Docker packages"
+                      fi
 
-                      # Build all Docker packages
-                      for pkg_name in $(echo "$DOCKER_PACKAGES" | jq -r 'keys[]'); do
-                          create_docker_entry "$pkg_name" "$AFFECTED_MATRIX"
-                      done
+                      # Build Docker packages based on selection
+                      if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$SELECTED_PACKAGES" ]]; then
+                          # Only build Docker packages that are in the selected list
+                          IFS=',' read -ra SELECTED_ARRAY <<< "$SELECTED_PACKAGES"
+                          for selected_pkg in "${SELECTED_ARRAY[@]}"; do
+                              # Trim whitespace and add moosicbox_ prefix if not present
+                              selected_pkg=$(echo "$selected_pkg" | xargs)
+                              if [[ ! "$selected_pkg" =~ ^moosicbox_ ]]; then
+                                  selected_pkg="moosicbox_$selected_pkg"
+                              fi
+                              # Check if this selected package has a Docker image
+                              DOCKER_INFO=$(echo "$DOCKER_PACKAGES" | jq -r ".\"$selected_pkg\" // empty")
+                              if [[ -n "$DOCKER_INFO" && "$DOCKER_INFO" != "null" && "$DOCKER_INFO" != "empty" ]]; then
+                                  create_docker_entry "$selected_pkg" "$AFFECTED_MATRIX"
+                              fi
+                          done
+                      else
+                          # Build all Docker packages
+                          for pkg_name in $(echo "$DOCKER_PACKAGES" | jq -r 'keys[]'); do
+                              create_docker_entry "$pkg_name" "$AFFECTED_MATRIX"
+                          done
+                      fi
 
                       # Create list with manual reasoning
                       if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                          MANUAL_REASON="Manual workflow dispatch - all Docker packages included"
+                          if [[ -n "$SELECTED_PACKAGES" ]]; then
+                              MANUAL_REASON="Manual workflow dispatch - selected packages: $SELECTED_PACKAGES"
+                          else
+                              MANUAL_REASON="Manual workflow dispatch - all Docker packages included"
+                          fi
                       else
                           MANUAL_REASON="Scheduled workflow run - all Docker packages included"
                       fi
