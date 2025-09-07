@@ -83,7 +83,7 @@ jobs:
 
             - uses: dtolnay/rust-toolchain@stable
               with:
-                  toolchain: nightly
+                  toolchain: stable
                   components: rustfmt,llvm-tools-preview
 
             - name: cargo install cargo-llvm-cov
