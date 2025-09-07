@@ -49,9 +49,6 @@ for ((i=0; i<${#PACKAGES[@]}; i+=BATCH_SIZE)); do
         exit 1
     fi
 
-    # Critical: Remove profraw files after each batch
-    find target -name "*.profraw" -delete
-
     run_hook "post_batch"
 done
 
