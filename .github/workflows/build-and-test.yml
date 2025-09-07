@@ -858,7 +858,6 @@ jobs:
               run: rm -rf target
 
             - name: Run ${{ matrix.package.name }} tests
-              id: run-tests
               shell: bash
               run: |
                   (cd ${{ matrix.package.path }}; \
@@ -879,6 +878,10 @@ jobs:
                           fi
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
 
+            - name: Create coverage report
+              id: create_coverage_report
+              shell: bash
+              run: |
                   output=$(cargo llvm-cov report --lcov --output-path lcov.info 2>&1)
                   exit_code=$?
                   if [[ $exit_code -eq 1 ]] && echo "$output" | grep -q "no coverage data found"; then
@@ -898,7 +901,7 @@ jobs:
                   fi
 
             - name: Upload coverage reports to Codecov
-              if: steps.run-tests.outputs.has_coverage == 'true'
+              if: steps.create_coverage_report.outputs.has_coverage == 'true'
               uses: codecov/codecov-action@v5
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
