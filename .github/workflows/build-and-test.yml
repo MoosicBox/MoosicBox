@@ -879,21 +879,7 @@ jobs:
                       done <<<"$(echo '${{ toJson(matrix.package.features) }}' | jq -r '.[]')")
                   cargo llvm-cov report --lcov --output-path lcov.info
 
-            - name: Check for coverage files
-              id: coverage_check
-              shell: bash
-              run: |
-                  if find target/llvm-cov-target -name "*lcov*.info" -o -name "*.lcov" 2>/dev/null | grep -q .; then
-                      echo "has_coverage=true" >> $GITHUB_OUTPUT
-                      echo "Found coverage files in target/llvm-cov-target"
-                      ls -la target/llvm-cov-target/*.info 2>/dev/null || true
-                  else
-                      echo "has_coverage=false" >> $GITHUB_OUTPUT
-                      echo "No coverage files found"
-                  fi
-
             - name: Upload coverage reports to Codecov
-              if: steps.coverage_check.outputs.has_coverage == 'true'
               uses: codecov/codecov-action@v5
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
