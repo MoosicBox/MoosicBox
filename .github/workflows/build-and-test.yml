@@ -882,20 +882,25 @@ jobs:
               id: create_coverage_report
               shell: bash
               run: |
-                  output=$(cargo llvm-cov report --lcov --output-path lcov.info 2>&1)
-                  exit_code=$?
-                  if [[ $exit_code -eq 1 ]] && echo "$output" | grep -q "no coverage data found"; then
+                  (
+                      cargo llvm-cov report --lcov --output-path lcov.info 2>&1 || true
+                      echo $? > exit_code.txt  # Save exit code before subshell exits
+                  ) > coverage_output.txt 2>&1
+
+                  exit_code=$(cat exit_code.txt 2>/dev/null || echo "1")
+
+                  if [[ $exit_code -eq 1 ]] && grep -q "no coverage data found" coverage_output.txt; then
                       echo "No coverage files found"
-                      echo "$output" >&2
+                      cat coverage_output.txt >&2
                       echo "has_coverage=false" >> $GITHUB_OUTPUT
                   elif [[ $exit_code -eq 1 ]]; then
                       echo "Failed to create coverage"
-                      echo "$output" >&2
+                      cat coverage_output.txt >&2
                       echo "has_coverage=false" >> $GITHUB_OUTPUT
                       exit $exit_code
                   else
                       echo "Found coverage files"
-                      echo "$output"
+                      cat coverage_output.txt >&2
                       echo "has_coverage=true" >> $GITHUB_OUTPUT
                       exit $exit_code
                   fi
