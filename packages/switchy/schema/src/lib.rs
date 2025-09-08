@@ -196,6 +196,15 @@ pub enum MigrationError {
     /// Occurs when a migration fails to execute successfully.
     #[error("Migration execution failed: {0}")]
     Execution(String),
+
+    /// Dirty state detected
+    ///
+    /// Occurs when there are migrations in '`in_progress`' state that prevent new migrations from running.
+    #[error("Dirty migration state detected. Migrations in progress: {}", migrations.join(", "))]
+    DirtyState {
+        /// List of migration IDs that are in dirty state
+        migrations: Vec<String>,
+    },
 }
 
 /// Result type alias for migration operations

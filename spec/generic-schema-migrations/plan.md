@@ -3122,8 +3122,8 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
       - ✓ `.value("finished_on", DatabaseValue::Null)` at line 255
   - [x] Add `update_migration_status()` method:
       - ✓ Implementation at `packages/switchy/schema/src/version.rs:265-287`
-    - [x] Parameters: `id: &str, status: &str, failure_reason: Option<&str>` **IMPLEMENTATION**: Uses `&str` not enum
-      - ✓ Method signature at line 265: `pub async fn update_migration_status(&self, db: &dyn Database, migration_id: &str, status: &str, failure_reason: Option<&str>)`
+    - [x] Parameters: `id: &str, status: &str, failure_reason: Option<String>` **IMPLEMENTATION**: Uses `&str` for status, `Option<String>` for failure reason
+      - ✓ Method signature at line 265: `pub async fn update_migration_status(&self, db: &dyn Database, migration_id: &str, status: &str, failure_reason: Option<String>)`
     - [x] Update `finished_on = CURRENT_TIMESTAMP` when status changes to completed/failed
       - ✓ `.set("finished_on", DatabaseValue::Now)` at line 279
   - [x] Add `get_migration_status()` method:
@@ -3151,22 +3151,130 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     - [x] Added `chrono = { workspace = true }` to `packages/switchy/schema/Cargo.toml`
       - ✓ Entry at line 18: `chrono = { workspace = true }`
 
-#### 11.2.2 Update Migration Runner for Status Tracking
+#### 11.2.2 Update Migration Runner for Status Tracking ✅ **COMPLETED**
 
-- [ ] Update `MigrationRunner` in `packages/switchy/schema/src/runner.rs` ⚠️ **CRITICAL**
-  - [ ] Modify `apply_migration()` to track status:
-    - [ ] Call `version_tracker.record_migration()` before executing migration
-    - [ ] Execute migration with proper error handling
-    - [ ] On success: call `version_tracker.update_migration_status(id, MigrationStatus::Completed, None)`
-    - [ ] On failure: call `version_tracker.update_migration_status(id, MigrationStatus::Failed, Some(error.to_string()))`
-  - [ ] Add `check_dirty_state()` method:
-    - [ ] Query for migrations with `status = 'in_progress'`
-    - [ ] Return error if dirty migrations exist (prevent running with dirty state)
-    - [ ] Add `--force` flag support to bypass dirty state check (dangerous)
-  - [ ] Add recovery helper methods:
-    - [ ] `list_failed_migrations()` - return all migrations with `status = 'failed'`
-    - [ ] `retry_migration(id: &str)` - retry a specific failed migration
-    - [ ] `mark_migration_completed(id: &str)` - manually mark as completed (dangerous)
+**Implementation Notes:**
+- This phase uses string literals for status values ("in_progress", "completed", "failed") for compatibility with Phase 11.2.1
+- The MigrationStatus enum will be introduced in Phase 11.2.3 and adopted in Phase 11.2.7
+- The `run()` method is modified instead of creating a separate `apply_migration()` method to minimize changes
+- The --force flag is handled at the CLI level and passed as configuration to the runner
+- The `update_migration_status` method takes `Option<String>` not `Option<&str>` for ownership clarity
+- A new `remove_migration_record()` method is added to VersionTracker to support retry functionality
+- Recovery methods are added directly to MigrationRunner for easier access from CLI
+
+- [x] Update `MigrationRunner` in `packages/switchy/schema/src/runner.rs` ✅ **COMPLETED**
+    - ✓ All status tracking and recovery functionality implemented in packages/switchy/schema/src/runner.rs
+  - [x] Modify the `run()` method to track migration status: ✅ **COMPLETED**
+    - [x] Call `version_tracker.record_migration_started()` before executing migration (line 287-289)
+      - ✓ Implemented at packages/switchy/schema/src/runner.rs:287-289 before migration.up() call
+    - [x] Execute migration with proper error handling
+      - ✓ Try-catch block at packages/switchy/schema/src/runner.rs:291-321 with match statement
+    - [x] On success: call `version_tracker.update_migration_status(id, "completed", None)` (line 294-296)
+      - ✓ Success handler at packages/switchy/schema/src/runner.rs:294-296 updates status to "completed"
+      - **NOTE**: Using string literal "completed" until Phase 11.2.7 adds enum support
+    - [x] On failure: call `version_tracker.update_migration_status(id, "failed", Some(error.to_string()))` (line 305-311)
+      - ✓ Error handler at packages/switchy/schema/src/runner.rs:305-311 updates status to "failed" with error message
+      - **NOTE**: Using string literal "failed" until Phase 11.2.7 adds enum support
+  - [x] Add `check_dirty_state()` method to MigrationRunner: ✅ **COMPLETED**
+    - [x] Query for migrations with `status = 'in_progress'` using `version_tracker.get_dirty_migrations()` (line 225)
+      - ✓ Method at packages/switchy/schema/src/runner.rs:224-234, calls get_dirty_migrations at line 225
+    - [x] Return error if dirty migrations exist (prevent running with dirty state) (line 227-231)
+      - ✓ Error check at packages/switchy/schema/src/runner.rs:227-231 returns MigrationError::DirtyState
+    - [x] Add `allow_dirty: bool` field to MigrationRunner for bypassing check (line 132, 145, 186)
+      - ✓ Field declared at packages/switchy/schema/src/runner.rs:132
+      - ✓ Initialized to false at packages/switchy/schema/src/runner.rs:145
+      - ✓ Setter method with_allow_dirty() at packages/switchy/schema/src/runner.rs:186
+      - **NOTE**: CLI will set this based on --force flag (see Phase 11.2.4)
+  - [x] Call `check_dirty_state()` at the beginning of `run()` method (after ensuring table exists, line 254) ✅ **COMPLETED**
+    - ✓ Called at packages/switchy/schema/src/runner.rs:254 after ensure_table_exists()
+  - [x] Add `remove_migration_record()` method to VersionTracker: ✅ **COMPLETED**
+    - [x] Parameters: `migration_id: &str` (line 549-553)
+      - ✓ Method signature at packages/switchy/schema/src/version.rs:549-553
+    - [x] Delete the migration record from the tracking table (line 554-557)
+      - ✓ Delete operation at packages/switchy/schema/src/version.rs:554-557
+    - [x] Use `db.delete(&self.table_name).where_eq("id", migration_id).execute(db).await?`
+      - ✓ Exact implementation at packages/switchy/schema/src/version.rs:554-557
+    - [x] Idempotent operation - no error if migration doesn't exist
+      - ✓ No existence check, delete executes regardless (idempotent by design)
+    - [x] This enables retry functionality by allowing clean re-run
+      - ✓ Used by retry_migration() at packages/switchy/schema/src/runner.rs:586-588
+    - ✓ Duplicate method remove_migration() also exists at packages/switchy/schema/src/version.rs:532-539
+    - **NOTE**: Both `remove_migration()` and `remove_migration_record()` implemented with identical functionality
+  - [x] Add recovery helper methods to MigrationRunner: ✅ **COMPLETED**
+    - [x] `list_failed_migrations()` - return all failed migrations (line 551-567) ✅ **COMPLETED**
+      - ✓ Method at packages/switchy/schema/src/runner.rs:551-567
+      - [x] Call `version_tracker.get_dirty_migrations()` to get all non-completed (line 555)
+        - ✓ Called at packages/switchy/schema/src/runner.rs:555
+      - [x] Filter results to only include records where `status == "failed"` (line 558-561)
+        - ✓ Filter operation at packages/switchy/schema/src/runner.rs:558-561
+      - [x] Return `Vec<MigrationRecord>` of failed migrations
+        - ✓ Return type defined at packages/switchy/schema/src/runner.rs:554
+      - [x] Sort by `run_on` timestamp for chronological order (line 564)
+        - ✓ Sort operation at packages/switchy/schema/src/runner.rs:564
+    - [x] `retry_migration(id: &str)` - retry a specific failed migration (line 576-634) ✅ **COMPLETED**
+      - ✓ Method at packages/switchy/schema/src/runner.rs:576-634
+      - [x] First check migration exists and is in failed state using `version_tracker.get_migration_status()` (line 578-581)
+        - ✓ Status check at packages/switchy/schema/src/runner.rs:578-581
+      - [x] If not failed, return error with clear message (line 627-632)
+        - ✓ Error cases at packages/switchy/schema/src/runner.rs:627-632
+      - [x] Delete the failed record using `version_tracker.remove_migration()` (line 586-588)
+        - ✓ Deletion at packages/switchy/schema/src/runner.rs:586-588 (uses remove_migration not remove_migration_record)
+        - **NOTE**: Implementation uses `remove_migration()` instead of `remove_migration_record()` but both have identical functionality
+      - [x] Re-run the single migration by: (line 590-624)
+        - [x] Get migration from source by ID (line 591-599)
+          - ✓ Migration lookup at packages/switchy/schema/src/runner.rs:591-599
+        - [x] Call `version_tracker.record_migration_started(id)` (line 602-604)
+          - ✓ Start recording at packages/switchy/schema/src/runner.rs:602-604
+        - [x] Execute migration.up(db) (line 606)
+          - ✓ Execution at packages/switchy/schema/src/runner.rs:606
+        - [x] On success: call `version_tracker.update_migration_status(id, "completed", None)` (line 608-610)
+          - ✓ Success update at packages/switchy/schema/src/runner.rs:608-610
+        - [x] On failure: call `version_tracker.update_migration_status(id, "failed", Some(error.to_string()))` (line 612-620)
+          - ✓ Failure update at packages/switchy/schema/src/runner.rs:613-620
+    - [x] `mark_migration_completed(id: &str)` - manually mark as completed (dangerous) (line 641-671) ✅ **COMPLETED**
+      - ✓ Method at packages/switchy/schema/src/runner.rs:641-671
+      - [x] First check if migration exists using `version_tracker.get_migration_status(id)` (line 647-650)
+        - ✓ Status check at packages/switchy/schema/src/runner.rs:647-650
+      - [x] If doesn't exist, insert new record: (line 663-668)
+        - [x] Call `version_tracker.record_migration(id)` which already sets status="completed"
+          - ✓ New record insertion at packages/switchy/schema/src/runner.rs:665-666
+      - [x] If exists but not completed: (line 656-661)
+        - [x] Call `version_tracker.update_migration_status(id, "completed", None)`
+          - ✓ Status update at packages/switchy/schema/src/runner.rs:658-659
+      - [x] Return success message indicating action taken (line 654, 661, 668)
+        - ✓ Return messages at packages/switchy/schema/src/runner.rs:654, 661, 668
+      - **NOTE**: Will use `MigrationStatus::Completed` in Phase 11.2.7
+
+### Phase 11.2.2 Implementation Notes (Completed)
+
+**Key Implementation Details:**
+- ✅ All migration status tracking functionality implemented successfully
+- ✅ String literals used as specified: "in_progress", "completed", "failed"
+- ✅ Dirty state detection prevents concurrent migration execution by default
+- ✅ Allow dirty flag provides override mechanism for force operations
+- ✅ All recovery helper methods implemented with comprehensive error handling
+
+**Method Naming Clarification:**
+- Both `remove_migration()` and `remove_migration_record()` exist in VersionTracker with identical functionality
+- Implementation uses `remove_migration()` in `retry_migration()` method (line 587)
+- Both methods provide the same idempotent deletion behavior required for retry functionality
+
+**Status Tracking Implementation:**
+- **Migration Start**: `record_migration_started()` called at line 287-289 before migration execution
+- **Success Path**: `update_migration_status(id, "completed", None)` called at line 294-296
+- **Failure Path**: `update_migration_status(id, "failed", Some(error.to_string()))` called at line 305-311
+- **Dirty Check**: `check_dirty_state()` called at line 254 after table creation
+
+**Recovery Methods Functionality:**
+- **`list_failed_migrations()`**: Filters dirty migrations to failed status, sorts chronologically
+- **`retry_migration()`**: Validates failed state, deletes record, re-executes with proper status tracking
+- **`mark_migration_completed()`**: Handles both existing and new migration records with appropriate status updates
+
+**Verification Results:**
+- ✅ All 16 public methods in MigrationRunner include recovery functionality
+- ✅ Line numbers match actual implementation (updated from spec estimates)
+- ✅ Error handling comprehensive with clear messages for all failure cases
+- ✅ String literal usage consistent throughout (ready for enum conversion in Phase 11.2.7)
 
 #### 11.2.3 Create MigrationStatus Enum and Types
 
@@ -3214,9 +3322,10 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     - [ ] Manually update migration status to completed
     - [ ] Log this dangerous operation
   - [ ] Update `migrate` command:
-    - [ ] Check for dirty state before running
-    - [ ] Show error if dirty migrations exist
-    - [ ] Add --force flag to proceed despite dirty state
+    - [ ] Add --force flag to CLI argument parser
+    - [ ] Pass `allow_dirty: true` to MigrationRunner when --force is provided
+    - [ ] Pass `allow_dirty: false` to MigrationRunner by default
+    - [ ] Display warning when --force is used: "WARNING: Bypassing dirty state check - this may cause data corruption!"
 
 #### 11.2.5 Document Recovery Best Practices
 
@@ -3276,9 +3385,17 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
 - [ ] `cargo clippy -p switchy_schema --all-targets` - Zero warnings
 - [ ] `cargo test -p switchy_schema` - All tests pass including new recovery tests
 - [ ] `cargo build -p switchy_schema_cli` - CLI builds with new commands
+- [ ] Verify string literal status values work correctly ("in_progress", "completed", "failed")
+- [ ] Test that dirty state check prevents migrations by default
+- [ ] Test that allow_dirty flag bypasses dirty state check
+- [ ] Verify `remove_migration_record()` correctly deletes migration records
+- [ ] Test that `retry_migration` fails gracefully for non-existent migrations
+- [ ] Test that `mark_migration_completed` works for both existing and new records
+- [ ] Verify all methods handle Option<String> parameters correctly
 - [ ] Manual testing of recovery scenarios
 - [ ] RECOVERY.md documentation complete with examples
 - [ ] Integration tests cover all failure scenarios
+- [ ] Document that enum conversion will happen in Phase 11.2.7
 
 #### 11.2.7 Clean Up Row Handling with moosicbox_json_utils **PLANNED** - New Phase
 
@@ -3299,6 +3416,13 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     - [ ] Implement `ToValueType<MigrationRecord>` for `&Row`
     - [ ] Use `row.to_value("field_name")?` pattern throughout
     - [ ] Handle all field conversions with proper type safety
+  - [ ] Update Phase 11.2.2 implementations to use MigrationStatus enum:
+    - [ ] In `runner.rs` `run()` method:
+      - [ ] Change `"completed"` to `MigrationStatus::Completed.to_string()`
+      - [ ] Change `"failed"` to `MigrationStatus::Failed.to_string()`
+      - [ ] Change `"in_progress"` to `MigrationStatus::InProgress.to_string()`
+    - [ ] Update all string literal status comparisons to use enum
+    - [ ] Update method signatures if needed to accept MigrationStatus directly
   - [ ] Refactor VersionTracker methods to use ToValue traits:
     - [ ] `get_migration_status()`: Use `.to_value_type()` for clean Row conversion
     - [ ] `get_dirty_migrations()`: Use iterator mapping with ToValueType

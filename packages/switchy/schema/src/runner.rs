@@ -129,6 +129,7 @@ pub struct MigrationRunner<'a> {
     strategy: ExecutionStrategy,
     hooks: MigrationHooks,
     dry_run: bool,
+    allow_dirty: bool,
 }
 
 impl<'a> MigrationRunner<'a> {
@@ -141,6 +142,7 @@ impl<'a> MigrationRunner<'a> {
             strategy: ExecutionStrategy::All,
             hooks: MigrationHooks::default(),
             dry_run: false,
+            allow_dirty: false,
         }
     }
 
@@ -179,6 +181,13 @@ impl<'a> MigrationRunner<'a> {
         self
     }
 
+    /// Allow running migrations with dirty state (in-progress migrations)
+    #[must_use]
+    pub const fn with_allow_dirty(mut self, allow_dirty: bool) -> Self {
+        self.allow_dirty = allow_dirty;
+        self
+    }
+
     /// Create a runner for embedded migrations
     #[cfg(feature = "embedded")]
     #[must_use]
@@ -206,6 +215,24 @@ impl<'a> MigrationRunner<'a> {
         MigrationRunner::new(Box::new(source))
     }
 
+    /// Check for migrations in dirty state (in-progress) and return error if any exist
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * If dirty migrations exist and `allow_dirty` is false
+    async fn check_dirty_state(&self, db: &dyn Database) -> Result<()> {
+        let dirty_migrations = self.version_tracker.get_dirty_migrations(db).await?;
+
+        if !dirty_migrations.is_empty() && !self.allow_dirty {
+            return Err(crate::MigrationError::DirtyState {
+                migrations: dirty_migrations.into_iter().map(|r| r.id).collect(),
+            });
+        }
+
+        Ok(())
+    }
+
     /// Run migrations according to the configured strategy
     ///
     /// # Errors
@@ -222,6 +249,9 @@ impl<'a> MigrationRunner<'a> {
     pub async fn run(&self, db: &dyn Database) -> Result<()> {
         // Ensure the version tracking table exists
         self.version_tracker.ensure_table_exists(db).await?;
+
+        // Check for dirty state (migrations in progress)
+        self.check_dirty_state(db).await?;
 
         // Get all migrations from the source
         let migrations = self.source.migrations().await?;
@@ -253,11 +283,16 @@ impl<'a> MigrationRunner<'a> {
 
             // Execute migration (unless dry run)
             if !self.dry_run {
+                // Record migration as started
+                self.version_tracker
+                    .record_migration_started(db, &migration_id)
+                    .await?;
+
                 match migration.up(db).await {
                     Ok(()) => {
-                        // Record migration as completed
+                        // Update migration status as completed
                         self.version_tracker
-                            .record_migration(db, &migration_id)
+                            .update_migration_status(db, &migration_id, "completed", None)
                             .await?;
 
                         // Call after hook
@@ -266,6 +301,16 @@ impl<'a> MigrationRunner<'a> {
                         }
                     }
                     Err(e) => {
+                        // Update migration status as failed
+                        self.version_tracker
+                            .update_migration_status(
+                                db,
+                                &migration_id,
+                                "failed",
+                                Some(e.to_string()),
+                            )
+                            .await?;
+
                         // Call error hook
                         if let Some(ref hook) = self.hooks.on_error {
                             hook(&migration_id, &e);
@@ -496,6 +541,133 @@ impl<'a> MigrationRunner<'a> {
         migrations.sort_by(|a, b| a.id.cmp(&b.id));
 
         Ok(migrations)
+    }
+
+    /// List all migrations that are in failed state
+    ///
+    /// # Errors
+    ///
+    /// * If database query fails
+    pub async fn list_failed_migrations(
+        &self,
+        db: &dyn Database,
+    ) -> Result<Vec<crate::version::MigrationRecord>> {
+        let dirty_migrations = self.version_tracker.get_dirty_migrations(db).await?;
+
+        // Filter results to only include records where status == "failed"
+        let mut failed_migrations: Vec<_> = dirty_migrations
+            .into_iter()
+            .filter(|record| record.status == "failed")
+            .collect();
+
+        // Sort by run_on timestamp for chronological order
+        failed_migrations.sort_by(|a, b| a.run_on.cmp(&b.run_on));
+
+        Ok(failed_migrations)
+    }
+
+    /// Retry a specific failed migration
+    ///
+    /// # Errors
+    ///
+    /// * If migration doesn't exist or is not in failed state
+    /// * If migration source cannot provide the migration
+    /// * If migration execution fails
+    pub async fn retry_migration(&self, db: &dyn Database, migration_id: &str) -> Result<()> {
+        // First check migration exists and is in failed state
+        let migration_status = self
+            .version_tracker
+            .get_migration_status(db, migration_id)
+            .await?;
+
+        match migration_status {
+            Some(record) if record.status == "failed" => {
+                // Delete the failed record
+                self.version_tracker
+                    .remove_migration(db, migration_id)
+                    .await?;
+
+                // Get migration from source by ID
+                let migrations = self.source.migrations().await?;
+                let migration = migrations
+                    .iter()
+                    .find(|m| m.id() == migration_id)
+                    .ok_or_else(|| {
+                        crate::MigrationError::Discovery(format!(
+                            "Migration '{migration_id}' not found in source"
+                        ))
+                    })?;
+
+                // Re-run the single migration
+                self.version_tracker
+                    .record_migration_started(db, migration_id)
+                    .await?;
+
+                match migration.up(db).await {
+                    Ok(()) => {
+                        self.version_tracker
+                            .update_migration_status(db, migration_id, "completed", None)
+                            .await?;
+                    }
+                    Err(e) => {
+                        self.version_tracker
+                            .update_migration_status(
+                                db,
+                                migration_id,
+                                "failed",
+                                Some(e.to_string()),
+                            )
+                            .await?;
+                        return Err(e);
+                    }
+                }
+
+                Ok(())
+            }
+            Some(_) => Err(crate::MigrationError::Validation(format!(
+                "Migration '{migration_id}' is not in failed state"
+            ))),
+            None => Err(crate::MigrationError::Validation(format!(
+                "Migration '{migration_id}' not found"
+            ))),
+        }
+    }
+
+    /// Manually mark a migration as completed (dangerous operation)
+    ///
+    /// # Errors
+    ///
+    /// * If database operations fail
+    pub async fn mark_migration_completed(
+        &self,
+        db: &dyn Database,
+        migration_id: &str,
+    ) -> Result<String> {
+        // First check if migration exists
+        let migration_status = self
+            .version_tracker
+            .get_migration_status(db, migration_id)
+            .await?;
+
+        match migration_status {
+            Some(record) if record.status == "completed" => {
+                Ok(format!("Migration '{migration_id}' is already completed"))
+            }
+            Some(_) => {
+                // Exists but not completed - update status
+                self.version_tracker
+                    .update_migration_status(db, migration_id, "completed", None)
+                    .await?;
+                Ok(format!("Migration '{migration_id}' marked as completed"))
+            }
+            None => {
+                // Doesn't exist - insert new record as completed
+                self.version_tracker
+                    .record_migration(db, migration_id)
+                    .await?;
+                Ok(format!("Migration '{migration_id}' recorded as completed"))
+            }
+        }
     }
 }
 
@@ -932,6 +1104,472 @@ mod tests {
             assert!(updated_list[0].applied, "001_first should be applied");
             assert!(updated_list[1].applied, "002_second should be applied");
             assert!(!updated_list[2].applied, "003_third should not be applied");
+        }
+
+        #[tokio::test]
+        async fn test_dirty_state_check_prevents_migrations() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source)).with_allow_dirty(false);
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Insert a dirty migration (in_progress status)
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "test_migration")
+                .await
+                .expect("Failed to record migration start");
+
+            // Verify dirty state check fails
+            let result = runner.check_dirty_state(&*db).await;
+            assert!(result.is_err(), "Should fail with dirty migrations");
+
+            match result {
+                Err(crate::MigrationError::DirtyState { migrations }) => {
+                    assert_eq!(migrations.len(), 1);
+                    assert_eq!(migrations[0], "test_migration");
+                }
+                _ => panic!("Expected DirtyState error"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_allow_dirty_bypasses_check() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source)).with_allow_dirty(true);
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Insert a dirty migration
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "test_migration")
+                .await
+                .expect("Failed to record migration start");
+
+            // Verify dirty state check passes with allow_dirty = true
+            let result = runner.check_dirty_state(&*db).await;
+            assert!(result.is_ok(), "Should pass with allow_dirty = true");
+        }
+
+        #[tokio::test]
+        async fn test_migration_status_tracking_success() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create migration source with test migration
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE test (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Run migration
+            runner.run(&*db).await.expect("Migration should succeed");
+
+            // Verify migration status is "completed"
+            let status = runner
+                .version_tracker
+                .get_migration_status(&*db, "001_test")
+                .await
+                .expect("Failed to get migration status")
+                .expect("Migration should exist");
+
+            assert_eq!(status.status, "completed");
+            assert!(status.finished_on.is_some());
+            assert!(status.failure_reason.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_migration_status_tracking_failure() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create migration source with failing migration
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_failing".to_string(),
+                Box::new("INVALID SQL SYNTAX;".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Run migration - should fail
+            let result = runner.run(&*db).await;
+            assert!(result.is_err(), "Migration should fail");
+
+            // Verify migration status is "failed"
+            let status = runner
+                .version_tracker
+                .get_migration_status(&*db, "001_failing")
+                .await
+                .expect("Failed to get migration status")
+                .expect("Migration should exist");
+
+            assert_eq!(status.status, "failed");
+            assert!(status.finished_on.is_some());
+            assert!(status.failure_reason.is_some());
+        }
+
+        #[tokio::test]
+        async fn test_list_failed_migrations() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Insert test migration records with different statuses
+            runner
+                .version_tracker
+                .record_migration(&*db, "completed_migration")
+                .await
+                .expect("Failed to record completed migration");
+
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "in_progress_migration")
+                .await
+                .expect("Failed to record in-progress migration");
+
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "failed_migration")
+                .await
+                .expect("Failed to record failed migration start");
+            runner
+                .version_tracker
+                .update_migration_status(
+                    &*db,
+                    "failed_migration",
+                    "failed",
+                    Some("Test error".to_string()),
+                )
+                .await
+                .expect("Failed to update migration status");
+
+            // Get failed migrations
+            let failed_migrations = runner
+                .list_failed_migrations(&*db)
+                .await
+                .expect("Failed to list failed migrations");
+
+            // Should only return the failed migration
+            assert_eq!(failed_migrations.len(), 1);
+            assert_eq!(failed_migrations[0].id, "failed_migration");
+            assert_eq!(failed_migrations[0].status, "failed");
+        }
+
+        #[tokio::test]
+        async fn test_retry_migration_success() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create migration source with test migration
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_retry_test".to_string(),
+                Box::new("CREATE TABLE retry_test (id INTEGER);".to_string())
+                    as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Simulate a failed migration
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "001_retry_test")
+                .await
+                .expect("Failed to record migration start");
+            runner
+                .version_tracker
+                .update_migration_status(
+                    &*db,
+                    "001_retry_test",
+                    "failed",
+                    Some("Test error".to_string()),
+                )
+                .await
+                .expect("Failed to update migration status");
+
+            // Retry the migration
+            runner
+                .retry_migration(&*db, "001_retry_test")
+                .await
+                .expect("Retry should succeed");
+
+            // Verify migration status is now "completed"
+            let status = runner
+                .version_tracker
+                .get_migration_status(&*db, "001_retry_test")
+                .await
+                .expect("Failed to get migration status")
+                .expect("Migration should exist");
+
+            assert_eq!(status.status, "completed");
+            assert!(status.failure_reason.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_retry_migration_rejects_non_failed() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Record a completed migration
+            runner
+                .version_tracker
+                .record_migration(&*db, "completed_migration")
+                .await
+                .expect("Failed to record completed migration");
+
+            // Try to retry - should fail
+            let result = runner.retry_migration(&*db, "completed_migration").await;
+            assert!(
+                result.is_err(),
+                "Should reject retrying non-failed migration"
+            );
+
+            match result {
+                Err(crate::MigrationError::Validation(msg)) => {
+                    assert!(msg.contains("not in failed state"));
+                }
+                _ => panic!("Expected Validation error"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_retry_migration_rejects_nonexistent() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Try to retry non-existent migration
+            let result = runner.retry_migration(&*db, "nonexistent").await;
+            assert!(
+                result.is_err(),
+                "Should reject retrying non-existent migration"
+            );
+
+            match result {
+                Err(crate::MigrationError::Validation(msg)) => {
+                    assert!(msg.contains("not found"));
+                }
+                _ => panic!("Expected Validation error"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_mark_migration_completed_new_record() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Mark non-existent migration as completed
+            let message = runner
+                .mark_migration_completed(&*db, "new_migration")
+                .await
+                .expect("Should succeed");
+
+            assert!(message.contains("recorded as completed"));
+
+            // Verify migration was recorded as completed
+            let status = runner
+                .version_tracker
+                .get_migration_status(&*db, "new_migration")
+                .await
+                .expect("Failed to get migration status")
+                .expect("Migration should exist");
+
+            assert_eq!(status.status, "completed");
+        }
+
+        #[tokio::test]
+        async fn test_mark_migration_completed_existing_incomplete() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Record a failed migration
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "failed_migration")
+                .await
+                .expect("Failed to record migration start");
+            runner
+                .version_tracker
+                .update_migration_status(
+                    &*db,
+                    "failed_migration",
+                    "failed",
+                    Some("Test error".to_string()),
+                )
+                .await
+                .expect("Failed to update migration status");
+
+            // Mark as completed
+            let message = runner
+                .mark_migration_completed(&*db, "failed_migration")
+                .await
+                .expect("Should succeed");
+
+            assert!(message.contains("marked as completed"));
+
+            // Verify migration status was updated
+            let status = runner
+                .version_tracker
+                .get_migration_status(&*db, "failed_migration")
+                .await
+                .expect("Failed to get migration status")
+                .expect("Migration should exist");
+
+            assert_eq!(status.status, "completed");
+        }
+
+        #[tokio::test]
+        async fn test_mark_migration_completed_already_complete() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let source = CodeMigrationSource::new();
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Ensure version tracking table exists
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Failed to create version table");
+
+            // Record a completed migration
+            runner
+                .version_tracker
+                .record_migration(&*db, "completed_migration")
+                .await
+                .expect("Failed to record completed migration");
+
+            // Try to mark as completed again
+            let message = runner
+                .mark_migration_completed(&*db, "completed_migration")
+                .await
+                .expect("Should succeed");
+
+            assert!(message.contains("already completed"));
         }
     }
 }

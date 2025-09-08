@@ -305,19 +305,53 @@ impl VersionTracker {
                 .and_then(|v| v.as_str().map(ToString::to_string))
                 .ok_or_else(|| crate::MigrationError::Validation("Missing id field".into()))?;
 
-            let Some(DatabaseValue::DateTime(run_on)) = row.get("run_on") else {
-                return Err(crate::MigrationError::Validation(
-                    "Invalid run_on field".into(),
-                ));
+            let run_on = match row.get("run_on") {
+                Some(DatabaseValue::DateTime(dt)) => dt,
+                Some(DatabaseValue::String(dt_str)) => {
+                    // Parse datetime string (SQLite returns datetime as string)
+                    chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
+                        .or_else(|_| {
+                            chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
+                        })
+                        .map_err(|_| {
+                            crate::MigrationError::Validation(format!(
+                                "Invalid run_on datetime format: {dt_str}"
+                            ))
+                        })?
+                }
+                Some(other) => {
+                    return Err(crate::MigrationError::Validation(format!(
+                        "Invalid run_on field type, got: {other:?}"
+                    )));
+                }
+                None => {
+                    return Err(crate::MigrationError::Validation(
+                        "Missing run_on field".into(),
+                    ));
+                }
             };
 
             let finished_on = match row.get("finished_on") {
                 Some(DatabaseValue::DateTime(dt)) => Some(dt),
+                Some(DatabaseValue::String(dt_str)) => {
+                    // Parse datetime string (SQLite returns datetime as string)
+                    let parsed =
+                        chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
+                            .or_else(|_| {
+                                chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
+                            })
+                            .map_err(|_| {
+                                crate::MigrationError::Validation(format!(
+                                    "Invalid finished_on datetime format: {dt_str}"
+                                ))
+                            })?;
+                    Some(parsed)
+                }
                 Some(DatabaseValue::Null) | None => None,
-                _ => {
-                    return Err(crate::MigrationError::Validation(
-                        "Invalid finished_on field".into(),
-                    ));
+                Some(other) => {
+                    return Err(crate::MigrationError::Validation(format!(
+                        "Invalid finished_on field type, got: {other:?}"
+                    )));
                 }
             };
 
@@ -372,19 +406,53 @@ impl VersionTracker {
                 .and_then(|v| v.as_str().map(ToString::to_string))
                 .ok_or_else(|| crate::MigrationError::Validation("Missing id field".into()))?;
 
-            let Some(DatabaseValue::DateTime(run_on)) = row.get("run_on") else {
-                return Err(crate::MigrationError::Validation(
-                    "Invalid run_on field".into(),
-                ));
+            let run_on = match row.get("run_on") {
+                Some(DatabaseValue::DateTime(dt)) => dt,
+                Some(DatabaseValue::String(dt_str)) => {
+                    // Parse datetime string (SQLite returns datetime as string)
+                    chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
+                        .or_else(|_| {
+                            chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
+                        })
+                        .map_err(|_| {
+                            crate::MigrationError::Validation(format!(
+                                "Invalid run_on datetime format: {dt_str}"
+                            ))
+                        })?
+                }
+                Some(other) => {
+                    return Err(crate::MigrationError::Validation(format!(
+                        "Invalid run_on field type, got: {other:?}"
+                    )));
+                }
+                None => {
+                    return Err(crate::MigrationError::Validation(
+                        "Missing run_on field".into(),
+                    ));
+                }
             };
 
             let finished_on = match row.get("finished_on") {
                 Some(DatabaseValue::DateTime(dt)) => Some(dt),
+                Some(DatabaseValue::String(dt_str)) => {
+                    // Parse datetime string (SQLite returns datetime as string)
+                    let parsed =
+                        chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
+                            .or_else(|_| {
+                                chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
+                            })
+                            .map_err(|_| {
+                                crate::MigrationError::Validation(format!(
+                                    "Invalid finished_on datetime format: {dt_str}"
+                                ))
+                            })?;
+                    Some(parsed)
+                }
                 Some(DatabaseValue::Null) | None => None,
-                _ => {
-                    return Err(crate::MigrationError::Validation(
-                        "Invalid finished_on field".into(),
-                    ));
+                Some(other) => {
+                    return Err(crate::MigrationError::Validation(format!(
+                        "Invalid finished_on field type, got: {other:?}"
+                    )));
                 }
             };
 
@@ -469,10 +537,204 @@ impl VersionTracker {
 
         Ok(())
     }
+
+    /// Remove a migration record from the tracking table
+    ///
+    /// This method deletes a migration record to enable retry functionality.
+    ///
+    /// # Errors
+    ///
+    /// * If the database delete fails
+    /// * If migration doesn't exist (no error returned - idempotent operation)
+    pub async fn remove_migration_record(
+        &self,
+        db: &dyn Database,
+        migration_id: &str,
+    ) -> Result<()> {
+        db.delete(&self.table_name)
+            .where_eq("id", migration_id)
+            .execute(db)
+            .await?;
+
+        Ok(())
+    }
 }
 
 impl Default for VersionTracker {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use switchy_database_connection;
+
+    #[tokio::test]
+    async fn test_remove_migration_record_success() {
+        // Create in-memory database
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::new();
+
+        // Ensure table exists
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to create version table");
+
+        // Record a migration
+        tracker
+            .record_migration(&*db, "test_migration")
+            .await
+            .expect("Failed to record migration");
+
+        // Verify migration exists
+        let status = tracker
+            .get_migration_status(&*db, "test_migration")
+            .await
+            .expect("Failed to get migration status");
+        assert!(status.is_some());
+
+        // Remove the migration record
+        tracker
+            .remove_migration_record(&*db, "test_migration")
+            .await
+            .expect("Failed to remove migration record");
+
+        // Verify migration no longer exists
+        let status_after = tracker
+            .get_migration_status(&*db, "test_migration")
+            .await
+            .expect("Failed to get migration status");
+        assert!(status_after.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_remove_migration_record_nonexistent() {
+        // Create in-memory database
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::new();
+
+        // Ensure table exists
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to create version table");
+
+        // Try to remove non-existent migration - should be idempotent (no error)
+        tracker
+            .remove_migration_record(&*db, "nonexistent")
+            .await
+            .expect("Should succeed for non-existent migration (idempotent)");
+    }
+
+    #[tokio::test]
+    async fn test_get_dirty_migrations_filters_correctly() {
+        // Create in-memory database
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::new();
+
+        // Ensure table exists
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to create version table");
+
+        // Record migrations with different statuses
+        tracker
+            .record_migration(&*db, "completed_migration")
+            .await
+            .expect("Failed to record completed migration");
+
+        tracker
+            .record_migration_started(&*db, "in_progress_migration")
+            .await
+            .expect("Failed to record in-progress migration");
+
+        tracker
+            .record_migration_started(&*db, "failed_migration")
+            .await
+            .expect("Failed to record failed migration start");
+        tracker
+            .update_migration_status(
+                &*db,
+                "failed_migration",
+                "failed",
+                Some("Test error".to_string()),
+            )
+            .await
+            .expect("Failed to update migration status");
+
+        // Get dirty migrations (should exclude completed)
+        let dirty_migrations = tracker
+            .get_dirty_migrations(&*db)
+            .await
+            .expect("Failed to get dirty migrations");
+
+        // Should return in_progress and failed, but not completed
+        assert_eq!(dirty_migrations.len(), 2);
+
+        let migration_ids: Vec<&str> = dirty_migrations.iter().map(|r| r.id.as_str()).collect();
+        assert!(migration_ids.contains(&"in_progress_migration"));
+        assert!(migration_ids.contains(&"failed_migration"));
+        assert!(!migration_ids.contains(&"completed_migration"));
+    }
+
+    #[tokio::test]
+    async fn test_migration_record_fields() {
+        // Create in-memory database
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::new();
+
+        // Ensure table exists
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to create version table");
+
+        // Test failed migration with all fields
+        tracker
+            .record_migration_started(&*db, "test_migration")
+            .await
+            .expect("Failed to record migration start");
+
+        tracker
+            .update_migration_status(
+                &*db,
+                "test_migration",
+                "failed",
+                Some("Test error message".to_string()),
+            )
+            .await
+            .expect("Failed to update migration status");
+
+        // Get migration status and verify all fields
+        let status = tracker
+            .get_migration_status(&*db, "test_migration")
+            .await
+            .expect("Failed to get migration status")
+            .expect("Migration should exist");
+
+        assert_eq!(status.id, "test_migration");
+        assert_eq!(status.status, "failed");
+        assert!(status.run_on > chrono::NaiveDateTime::default());
+        assert!(status.finished_on.is_some());
+        assert_eq!(
+            status.failure_reason,
+            Some("Test error message".to_string())
+        );
     }
 }
