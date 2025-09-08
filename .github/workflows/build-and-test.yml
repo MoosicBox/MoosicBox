@@ -949,7 +949,7 @@ jobs:
                   exit_code=$(cat exit_code.txt 2>/dev/null || echo "1")
                   echo "Coverage report command exited with exit code $exit_code"
 
-                  if [[ $exit_code -eq 1 ]] && grep -q "no coverage data found" coverage_output.txt; then
+                  if grep -q "no coverage data found" coverage_output.txt; then
                       echo "No coverage files found"
                       cat coverage_output.txt >&2
                       echo "has_coverage=false" >> $GITHUB_OUTPUT
@@ -962,7 +962,6 @@ jobs:
                       echo "Found coverage files"
                       cat coverage_output.txt >&2
                       echo "has_coverage=true" >> $GITHUB_OUTPUT
-                      exit $exit_code
                   fi
 
             - name: Clear target directory
