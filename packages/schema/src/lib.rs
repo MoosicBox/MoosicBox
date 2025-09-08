@@ -16,6 +16,67 @@ pub enum MigrateError {
     Schema(#[from] SwitchyMigrationError),
 }
 
+/// Check if migration execution should be skipped based on environment variable
+#[cfg(any(feature = "postgres", feature = "sqlite"))]
+fn should_skip_migrations() -> bool {
+    switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
+        .as_deref()
+        .unwrap_or("0")
+        == "1"
+}
+
+/// Run `PostgreSQL` configuration migrations only
+///
+/// # Errors
+///
+/// * If the migrations fail to run
+#[cfg(feature = "postgres")]
+pub async fn migrate_config_postgres(
+    db: &dyn switchy_database::Database,
+) -> Result<(), MigrateError> {
+    log::debug!("migrate_config_postgres: running postgres migrations");
+    let source = postgres_config_migrations();
+    let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
+        .with_table_name("__moosicbox_schema_migrations");
+
+    if should_skip_migrations() {
+        log::info!(
+            "migrate_config_postgres: skipping postgres migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
+        );
+    } else {
+        runner.run(db).await?;
+    }
+    log::debug!("migrate_config_postgres: finished running postgres migrations");
+
+    Ok(())
+}
+
+/// Run `SQLite` configuration migrations only
+///
+/// # Errors
+///
+/// * If the migrations fail to run
+#[cfg(feature = "sqlite")]
+pub async fn migrate_config_sqlite(
+    db: &dyn switchy_database::Database,
+) -> Result<(), MigrateError> {
+    log::debug!("migrate_config_sqlite: running sqlite migrations");
+    let source = sqlite_config_migrations();
+    let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
+        .with_table_name("__moosicbox_schema_migrations");
+
+    if should_skip_migrations() {
+        log::info!(
+            "migrate_config_sqlite: skipping sqlite migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
+        );
+    } else {
+        runner.run(db).await?;
+    }
+    log::debug!("migrate_config_sqlite: finished running sqlite migrations");
+
+    Ok(())
+}
+
 /// # Panics
 ///
 /// * If the db connection fails to establish
@@ -27,45 +88,107 @@ pub enum MigrateError {
 pub async fn migrate_config(db: &dyn switchy_database::Database) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
     {
-        log::debug!("migrate_config: running postgres migrations");
-        let source = postgres_config_migrations();
-        let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
-            .with_table_name("__moosicbox_schema_migrations");
-
-        if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
-            .as_deref()
-            .unwrap_or("0")
-            == "1"
-        {
-            log::info!(
-                "migrate_config: skipping postgres migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
-            );
-        } else if let Err(e) = runner.run(db).await {
+        if let Err(e) = migrate_config_postgres(db).await {
             log::warn!("migrate_config: postgres migrations failed, continuing: {e:?}");
         }
-        log::debug!("migrate_config: finished running postgres migrations");
     }
 
     #[cfg(feature = "sqlite")]
     {
-        log::debug!("migrate_config: running sqlite migrations");
-        let source = sqlite_config_migrations();
-        let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
-            .with_table_name("__moosicbox_schema_migrations");
-
-        if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
-            .as_deref()
-            .unwrap_or("0")
-            == "1"
-        {
-            log::info!(
-                "migrate_config: skipping sqlite migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
-            );
-        } else {
-            runner.run(db).await?;
-        }
-        log::debug!("migrate_config: finished running sqlite migrations");
+        migrate_config_sqlite(db).await?;
     }
+
+    Ok(())
+}
+
+/// Run `PostgreSQL` library migrations only
+///
+/// # Errors
+///
+/// * If the migrations fail to run
+#[cfg(feature = "postgres")]
+pub async fn migrate_library_postgres(
+    db: &dyn switchy_database::Database,
+) -> Result<(), MigrateError> {
+    migrate_library_postgres_until(db, None).await
+}
+
+/// Run `PostgreSQL` library migrations only until a specific migration
+///
+/// # Errors
+///
+/// * If the migrations fail to run
+#[cfg(feature = "postgres")]
+pub async fn migrate_library_postgres_until(
+    db: &dyn switchy_database::Database,
+    migration_name: Option<&str>,
+) -> Result<(), MigrateError> {
+    log::debug!("migrate_library_postgres: running postgres migrations");
+    let source = postgres_library_migrations();
+    let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
+        .with_table_name("__moosicbox_schema_migrations");
+
+    if should_skip_migrations() {
+        log::info!(
+            "migrate_library_postgres: skipping postgres migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
+        );
+    } else {
+        let runner = if let Some(migration_name) = migration_name {
+            runner.with_strategy(switchy_schema::runner::ExecutionStrategy::UpTo(
+                migration_name.to_string(),
+            ))
+        } else {
+            runner.with_strategy(switchy_schema::runner::ExecutionStrategy::All)
+        };
+        runner.run(db).await?;
+    }
+    log::debug!("migrate_library_postgres: finished running postgres migrations");
+
+    Ok(())
+}
+
+/// Run `SQLite` library migrations only
+///
+/// # Errors
+///
+/// * If the migrations fail to run
+#[cfg(feature = "sqlite")]
+pub async fn migrate_library_sqlite(
+    db: &dyn switchy_database::Database,
+) -> Result<(), MigrateError> {
+    migrate_library_sqlite_until(db, None).await
+}
+
+/// Run `SQLite` library migrations only until a specific migration
+///
+/// # Errors
+///
+/// * If the migrations fail to run
+#[cfg(feature = "sqlite")]
+pub async fn migrate_library_sqlite_until(
+    db: &dyn switchy_database::Database,
+    migration_name: Option<&str>,
+) -> Result<(), MigrateError> {
+    log::debug!("migrate_library_sqlite: running sqlite migrations");
+    let source = sqlite_library_migrations();
+    let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
+        .with_table_name("__moosicbox_schema_migrations");
+
+    if should_skip_migrations() {
+        log::info!(
+            "migrate_library_sqlite: skipping sqlite migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
+        );
+    } else {
+        let runner = if let Some(migration_name) = migration_name {
+            runner.with_strategy(switchy_schema::runner::ExecutionStrategy::UpTo(
+                migration_name.to_string(),
+            ))
+        } else {
+            runner.with_strategy(switchy_schema::runner::ExecutionStrategy::All)
+        };
+        runner.run(db).await?;
+    }
+    log::debug!("migrate_library_sqlite: finished running sqlite migrations");
 
     Ok(())
 }
@@ -96,60 +219,14 @@ pub async fn migrate_library_until(
 ) -> Result<(), MigrateError> {
     #[cfg(feature = "postgres")]
     {
-        log::debug!("migrate_library: running postgres migrations");
-        let source = postgres_library_migrations();
-        let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
-            .with_table_name("__moosicbox_schema_migrations");
-
-        if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
-            .as_deref()
-            .unwrap_or("0")
-            == "1"
-        {
-            log::info!(
-                "migrate_library: skipping postgres migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
-            );
-        } else {
-            let runner = if let Some(migration_name) = migration_name {
-                runner.with_strategy(switchy_schema::runner::ExecutionStrategy::UpTo(
-                    migration_name.to_string(),
-                ))
-            } else {
-                runner.with_strategy(switchy_schema::runner::ExecutionStrategy::All)
-            };
-            if let Err(e) = runner.run(db).await {
-                log::warn!("migrate_library: postgres migrations failed, continuing: {e:?}");
-            }
+        if let Err(e) = migrate_library_postgres_until(db, migration_name).await {
+            log::warn!("migrate_library: postgres migrations failed, continuing: {e:?}");
         }
-        log::debug!("migrate_library: finished running postgres migrations");
     }
 
     #[cfg(feature = "sqlite")]
     {
-        log::debug!("migrate_library: running sqlite migrations");
-        let source = sqlite_library_migrations();
-        let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
-            .with_table_name("__moosicbox_schema_migrations");
-
-        if switchy_env::var("MOOSICBOX_SKIP_MIGRATION_EXECUTION")
-            .as_deref()
-            .unwrap_or("0")
-            == "1"
-        {
-            log::info!(
-                "migrate_library: skipping sqlite migration execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
-            );
-        } else {
-            let runner = if let Some(migration_name) = migration_name {
-                runner.with_strategy(switchy_schema::runner::ExecutionStrategy::UpTo(
-                    migration_name.to_string(),
-                ))
-            } else {
-                runner.with_strategy(switchy_schema::runner::ExecutionStrategy::All)
-            };
-            runner.run(db).await?;
-        }
-        log::debug!("migrate_library: finished running sqlite migrations");
+        migrate_library_sqlite_until(db, migration_name).await?;
     }
 
     Ok(())
@@ -373,7 +450,7 @@ mod sqlite_tests {
             .await
             .unwrap();
 
-        migrate_config(&*db).await.unwrap();
+        migrate_config_sqlite(&*db).await.unwrap();
     }
 
     #[test_log::test(switchy_async::test)]
@@ -382,21 +459,21 @@ mod sqlite_tests {
             .await
             .unwrap();
 
-        migrate_library(&*db).await.unwrap();
+        migrate_library_sqlite(&*db).await.unwrap();
     }
 
     #[test_log::test(switchy_async::test)]
     async fn rusqlite_config_migrations() {
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
-        migrate_config(&*db).await.unwrap();
+        migrate_config_sqlite(&*db).await.unwrap();
     }
 
     #[test_log::test(switchy_async::test)]
     async fn rusqlite_library_migrations() {
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
-        migrate_library(&*db).await.unwrap();
+        migrate_library_sqlite(&*db).await.unwrap();
     }
 
     #[test_log::test(switchy_async::test)]
@@ -419,7 +496,7 @@ mod sqlite_tests {
 
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
-        migrate_library_until(&*db, Some("2024-09-21-130720_set_journal_mode_to_wal"))
+        migrate_library_sqlite_until(&*db, Some("2024-09-21-130720_set_journal_mode_to_wal"))
             .await
             .unwrap();
 
@@ -449,7 +526,7 @@ mod sqlite_tests {
         .unwrap();
 
         // Run the migration
-        migrate_library(&*db).await.unwrap();
+        migrate_library_sqlite(&*db).await.unwrap();
 
         // Verify artists migration
         let artists = db
@@ -638,7 +715,7 @@ mod sqlite_tests {
 
         let db = switchy_database_connection::init_sqlite_rusqlite(None).unwrap();
 
-        migrate_library_until(
+        migrate_library_sqlite_until(
             &*db,
             Some("2025-05-31-110603_update_api_source_id_structure"),
         )
@@ -688,7 +765,7 @@ mod sqlite_tests {
         .unwrap();
 
         // Run the migration
-        migrate_library(&*db).await.unwrap();
+        migrate_library_sqlite(&*db).await.unwrap();
 
         // Verify artists migration
         let artists = db
