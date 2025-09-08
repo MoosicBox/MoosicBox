@@ -97,6 +97,7 @@ use crate::Result;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use chrono::NaiveDateTime;
 use switchy_database::Database;
 
 /// Information about a migration, including its current status
@@ -108,6 +109,14 @@ pub struct MigrationInfo {
     pub description: Option<String>,
     /// Whether this migration has been applied
     pub applied: bool,
+    /// Detailed status information (populated only when database is available)
+    pub status: Option<MigrationStatus>,
+    /// Error message if status == Failed
+    pub failure_reason: Option<String>,
+    /// When migration started
+    pub run_on: Option<NaiveDateTime>,
+    /// When migration completed/failed
+    pub finished_on: Option<NaiveDateTime>,
 }
 
 /// Migration execution status
@@ -190,6 +199,10 @@ pub trait MigrationSource<'a>: Send + Sync {
                 id: migration.id().to_string(),
                 description: migration.description().map(ToString::to_string),
                 applied: false, // Default - actual status determined by MigrationRunner
+                status: None,   // Populated only when database is available
+                failure_reason: None,
+                run_on: None,
+                finished_on: None,
             })
             .collect())
     }
@@ -240,6 +253,10 @@ mod tests {
             id: "001_test_migration".to_string(),
             description: Some("Test migration".to_string()),
             applied: false,
+            status: None,
+            failure_reason: None,
+            run_on: None,
+            finished_on: None,
         };
 
         assert_eq!(info.id, "001_test_migration");

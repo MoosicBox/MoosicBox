@@ -70,6 +70,9 @@ enum Commands {
             default_value = "__switchy_migrations"
         )]
         migration_table: String,
+        /// Show detailed status including failed and in-progress migrations
+        #[arg(long)]
+        show_failed: bool,
     },
     /// Run pending migrations
     Migrate {
@@ -100,6 +103,9 @@ enum Commands {
         /// Dry run - show what would be done without executing
         #[arg(long)]
         dry_run: bool,
+        /// Force migration even if dirty state detected (dangerous)
+        #[arg(long)]
+        force: bool,
     },
     /// Rollback migrations
     Rollback {
@@ -134,6 +140,55 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Retry a failed migration
+    Retry {
+        /// Database connection URL
+        #[arg(short, long, env = "SWITCHY_DATABASE_URL")]
+        database_url: String,
+        /// Directory containing migrations
+        #[arg(
+            short,
+            long,
+            env = "SWITCHY_MIGRATIONS_DIR",
+            default_value = "./migrations"
+        )]
+        migrations_dir: PathBuf,
+        /// Migration table name
+        #[arg(
+            long,
+            env = "SWITCHY_MIGRATION_TABLE",
+            default_value = "__switchy_migrations"
+        )]
+        migration_table: String,
+        /// Migration ID to retry
+        migration_id: String,
+    },
+    /// Mark a migration as completed (dangerous operation)
+    MarkCompleted {
+        /// Database connection URL
+        #[arg(short, long, env = "SWITCHY_DATABASE_URL")]
+        database_url: String,
+        /// Directory containing migrations
+        #[arg(
+            short,
+            long,
+            env = "SWITCHY_MIGRATIONS_DIR",
+            default_value = "./migrations"
+        )]
+        migrations_dir: PathBuf,
+        /// Migration table name
+        #[arg(
+            long,
+            env = "SWITCHY_MIGRATION_TABLE",
+            default_value = "__switchy_migrations"
+        )]
+        migration_table: String,
+        /// Migration ID to mark as completed
+        migration_id: String,
+        /// Force the operation without confirmation
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[tokio::main]
@@ -149,7 +204,8 @@ async fn main() -> Result<()> {
             database_url,
             migrations_dir,
             migration_table,
-        } => show_status(database_url, migrations_dir, migration_table).await,
+            show_failed,
+        } => show_status(database_url, migrations_dir, migration_table, show_failed).await,
         Commands::Migrate {
             database_url,
             migrations_dir,
@@ -157,6 +213,7 @@ async fn main() -> Result<()> {
             up_to,
             steps,
             dry_run,
+            force,
         } => {
             run_migrations(
                 database_url,
@@ -165,6 +222,7 @@ async fn main() -> Result<()> {
                 up_to,
                 steps,
                 dry_run,
+                force,
             )
             .await
         }
@@ -185,6 +243,28 @@ async fn main() -> Result<()> {
                 steps,
                 all,
                 dry_run,
+            )
+            .await
+        }
+        Commands::Retry {
+            database_url,
+            migrations_dir,
+            migration_table,
+            migration_id,
+        } => retry_migration(database_url, migrations_dir, migration_table, migration_id).await,
+        Commands::MarkCompleted {
+            database_url,
+            migrations_dir,
+            migration_table,
+            migration_id,
+            force,
+        } => {
+            mark_migration_completed(
+                database_url,
+                migrations_dir,
+                migration_table,
+                migration_id,
+                force,
             )
             .await
         }
@@ -272,10 +352,12 @@ fn create_migration(name: &str, migrations_dir: &PathBuf) -> Result<()> {
 }
 
 /// Show migration status
+#[allow(clippy::too_many_lines)]
 async fn show_status(
     database_url: String,
     migrations_dir: PathBuf,
     migration_table: String,
+    show_failed: bool,
 ) -> Result<()> {
     use switchy_schema::runner::MigrationRunner;
 
@@ -306,31 +388,117 @@ async fn show_status(
 
     let mut applied_count = 0;
     let mut pending_count = 0;
+    let mut failed_count = 0;
+    let mut in_progress_count = 0;
 
     for migration in &migrations {
-        let status = if migration.applied { "✓" } else { "✗" };
-        let applied_text = if migration.applied {
-            applied_count += 1;
-            "Applied"
+        if show_failed {
+            // Enhanced status display with colors
+            use colored::Colorize;
+            use switchy_schema::migration::MigrationStatus;
+
+            let (status_symbol, status_text, color_fn): (_, _, fn(&str) -> colored::ColoredString) =
+                match migration.status {
+                    Some(MigrationStatus::Completed) => {
+                        applied_count += 1;
+                        ("✓", "Completed", |s| s.green())
+                    }
+                    Some(MigrationStatus::Failed) => {
+                        failed_count += 1;
+                        ("✗", "Failed", |s| s.red())
+                    }
+                    Some(MigrationStatus::InProgress) => {
+                        in_progress_count += 1;
+                        ("⚠", "In Progress", |s| s.yellow())
+                    }
+                    None => {
+                        pending_count += 1;
+                        ("-", "Pending", |s| s.normal())
+                    }
+                };
+
+            println!(
+                "{} {:<11} {}",
+                status_symbol,
+                color_fn(status_text),
+                migration.id
+            );
+
+            // Show description if available
+            if let Some(description) = &migration.description
+                && !description.is_empty()
+            {
+                println!("               {description}");
+            }
+
+            // Show timestamps for applied migrations
+            if migration.applied {
+                if let Some(run_on) = migration.run_on {
+                    println!(
+                        "               Started: {}",
+                        run_on.format("%Y-%m-%d %H:%M:%S")
+                    );
+                }
+                if let Some(finished_on) = migration.finished_on {
+                    println!(
+                        "               Finished: {}",
+                        finished_on.format("%Y-%m-%d %H:%M:%S")
+                    );
+                }
+            }
+
+            // Show failure reason for failed migrations
+            if let Some(failure_reason) = &migration.failure_reason {
+                println!(
+                    "               {}",
+                    format!("Error: {failure_reason}").red()
+                );
+            }
         } else {
-            pending_count += 1;
-            "Pending"
-        };
+            // Original simple status display
+            let status = if migration.applied { "✓" } else { "✗" };
+            let applied_text = if migration.applied {
+                applied_count += 1;
+                "Applied"
+            } else {
+                pending_count += 1;
+                "Pending"
+            };
 
-        println!("{status} {:<8} {}", applied_text, migration.id);
+            println!("{status} {:<8} {}", applied_text, migration.id);
 
-        if let Some(description) = &migration.description
-            && !description.is_empty()
-        {
-            println!("             {description}");
+            if let Some(description) = &migration.description
+                && !description.is_empty()
+            {
+                println!("             {description}");
+            }
         }
     }
 
     println!();
     println!("Summary:");
-    println!("  Applied: {applied_count}");
-    println!("  Pending: {pending_count}");
-    println!("  Total:   {}", migrations.len());
+    if show_failed {
+        use colored::Colorize;
+        println!("  {}: {applied_count}", "Completed".green());
+        println!("  {}: {failed_count}", "Failed".red());
+        println!("  {}: {in_progress_count}", "In Progress".yellow());
+        println!("  Pending: {pending_count}");
+        println!("  Total:   {}", migrations.len());
+
+        // Show warnings for problematic states
+        if in_progress_count > 0 {
+            println!();
+            println!("{}", "⚠️  WARNING: Found migrations in progress - this may indicate interrupted operations".yellow());
+        }
+        if failed_count > 0 {
+            println!();
+            println!("{}", "❌ ERROR: Found failed migrations - use 'switchy-migrate retry <migration_id>' to retry".red());
+        }
+    } else {
+        println!("  Applied: {applied_count}");
+        println!("  Pending: {pending_count}");
+        println!("  Total:   {}", migrations.len());
+    }
 
     if pending_count > 0 {
         println!();
@@ -348,6 +516,7 @@ async fn run_migrations(
     up_to: Option<String>,
     steps: Option<usize>,
     dry_run: bool,
+    force: bool,
 ) -> Result<()> {
     use switchy_schema::runner::{ExecutionStrategy, MigrationRunner};
 
@@ -382,6 +551,19 @@ async fn run_migrations(
 
     if dry_run {
         runner = runner.dry_run();
+    }
+
+    if force {
+        use colored::Colorize;
+        println!(
+            "{}",
+            "⚠️  WARNING: Bypassing dirty state check - this may cause data corruption!"
+                .yellow()
+                .bold()
+        );
+        println!("Proceeding with --force flag...");
+        println!();
+        runner = runner.with_allow_dirty(true);
     }
 
     // Show what we're about to do
@@ -566,6 +748,115 @@ async fn rollback_migrations(
     Ok(())
 }
 
+/// Retry a failed migration
+async fn retry_migration(
+    database_url: String,
+    migrations_dir: PathBuf,
+    migration_table: String,
+    migration_id: String,
+) -> Result<()> {
+    use colored::Colorize;
+    use switchy_schema::runner::MigrationRunner;
+
+    // Connect to database
+    let db = utils::database::connect(&database_url).await?;
+
+    // Create migration runner with directory source
+    let runner = MigrationRunner::new_directory(&migrations_dir).with_table_name(migration_table);
+
+    println!("Retrying migration: {}", migration_id.cyan());
+    println!("Migrations directory: {}", migrations_dir.display());
+    println!();
+
+    // Retry the migration
+    match runner.retry_migration(&*db, &migration_id).await {
+        Ok(()) => {
+            println!(
+                "{} Successfully retried migration '{migration_id}'",
+                "✓".green()
+            );
+        }
+        Err(e) => {
+            println!(
+                "{} Failed to retry migration '{migration_id}': {e}",
+                "✗".red()
+            );
+            return Err(CliError::Migration(e));
+        }
+    }
+
+    Ok(())
+}
+
+/// Mark a migration as completed (dangerous operation)
+async fn mark_migration_completed(
+    database_url: String,
+    migrations_dir: PathBuf,
+    migration_table: String,
+    migration_id: String,
+    force: bool,
+) -> Result<()> {
+    use colored::Colorize;
+    use dialoguer::Confirm;
+    use switchy_schema::runner::MigrationRunner;
+
+    // Connect to database
+    let db = utils::database::connect(&database_url).await?;
+
+    // Create migration runner with directory source
+    let runner = MigrationRunner::new_directory(&migrations_dir).with_table_name(migration_table);
+
+    println!(
+        "{} Marking migration as completed: {}",
+        "⚠️".yellow(),
+        migration_id.cyan()
+    );
+    println!("Migrations directory: {}", migrations_dir.display());
+    println!();
+
+    // Show warning unless force flag is used
+    if !force {
+        println!(
+            "{}",
+            "⚠️  WARNING: This is a dangerous operation!"
+                .yellow()
+                .bold()
+        );
+        println!("Marking a migration as completed without running it can lead to:");
+        println!("- Database schema inconsistencies");
+        println!("- Failed future migrations");
+        println!("- Data corruption");
+        println!();
+
+        let confirmed = Confirm::new()
+            .with_prompt("Are you sure you want to mark this migration as completed?")
+            .default(false)
+            .interact()
+            .map_err(|e| CliError::Config(format!("Failed to get user confirmation: {e}")))?;
+
+        if !confirmed {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    }
+
+    // Mark the migration as completed
+    match runner.mark_migration_completed(&*db, &migration_id).await {
+        Ok(message) => {
+            println!("{} {}", "✓".green(), message);
+        }
+        Err(e) => {
+            println!(
+                "{} Failed to mark migration '{migration_id}' as completed: {e}",
+                "✗".red()
+            );
+            return Err(CliError::Migration(e));
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -744,6 +1035,7 @@ mod tests {
             "/app/migrations",
             "--migration-table",
             "schema_versions",
+            "--show-failed",
         ]);
 
         match cli.command {
@@ -751,10 +1043,12 @@ mod tests {
                 database_url,
                 migrations_dir,
                 migration_table,
+                show_failed,
             } => {
                 assert_eq!(database_url, "postgres://user:pass@localhost:5432/mydb");
                 assert_eq!(migrations_dir, PathBuf::from("/app/migrations"));
                 assert_eq!(migration_table, "schema_versions");
+                assert!(show_failed);
             }
             _ => panic!("Expected Status command"),
         }

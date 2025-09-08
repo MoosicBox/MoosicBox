@@ -161,6 +161,58 @@ pub mod test_utils;
 use switchy_database::DatabaseError;
 use thiserror::Error;
 
+/// Detailed validation error information
+///
+/// This enum provides structured information about validation failures,
+/// allowing callers to handle specific error cases appropriately.
+#[derive(Debug, Error)]
+pub enum ValidationError {
+    /// Migration not found in the database tracking table
+    #[error("Migration '{id}' has not been run yet")]
+    NotTracked { id: String },
+
+    /// Migration exists but is in wrong state for operation
+    #[error("Migration '{id}' is in {current:?} state, expected {expected:?}")]
+    WrongState {
+        id: String,
+        current: migration::MigrationStatus,
+        expected: migration::MigrationStatus,
+    },
+
+    /// Migration not found in migration source
+    #[error("Migration '{id}' not found in migration source")]
+    NotInSource { id: String },
+
+    /// Migration already in target state
+    #[error("Migration '{id}' is already {state:?}")]
+    AlreadyInState {
+        id: String,
+        state: migration::MigrationStatus,
+    },
+
+    /// Invalid migration status string
+    #[error(
+        "Invalid migration status: '{value}'. Valid values are: in_progress, completed, failed"
+    )]
+    InvalidStatus { value: String },
+
+    /// Generic validation error (for backward compatibility)
+    #[error("{0}")]
+    Generic(String),
+}
+
+impl From<String> for ValidationError {
+    fn from(msg: String) -> Self {
+        Self::Generic(msg)
+    }
+}
+
+impl From<&str> for ValidationError {
+    fn from(msg: &str) -> Self {
+        Self::Generic(msg.to_string())
+    }
+}
+
 /// Errors that can occur during migration operations
 ///
 /// This enum covers all possible error conditions in the migration system,
