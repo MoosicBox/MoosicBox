@@ -9,6 +9,7 @@ Clippier is a command-line utility designed to analyze Rust workspaces and autom
 - **CI/CD Pipeline Generation**: Generate feature matrices for testing
 - **Dependency Analysis**: Analyze workspace dependencies and relationships
 - **Feature Management**: Generate feature combinations for comprehensive testing
+- **Selective Package Processing**: Filter operations to specific packages for targeted analysis
 - **Feature Propagation Validation**: Ensure features are correctly propagated across workspace dependencies
 - **Docker Integration**: Generate optimized Dockerfiles for workspace packages
 - **Change Impact Analysis**: Determine which packages are affected by file changes
@@ -95,6 +96,31 @@ clippier features Cargo.toml \
 ```
 
 This enables replaying the same randomized distribution by using the printed seed value.
+
+#### Package Filtering
+
+Filter feature matrix generation to specific packages:
+```bash
+# Process only specific packages
+clippier features . \
+  --packages moosicbox_server,moosicbox_audio_decoder \
+  --chunked 15 \
+  --max-parallel 256 \
+  --output json
+
+# Combine with other filters
+clippier features . \
+  --packages moosicbox_server \
+  --os ubuntu \
+  --features "default,postgres" \
+  --skip-features "fail-on-warnings" \
+  --output json
+```
+
+This is particularly useful for:
+- **Focused testing**: Test only specific packages during development
+- **CI optimization**: Build matrix for selected components
+- **Monorepo management**: Process subsets of large workspaces
 
 #### Enhanced Change Impact Analysis
 
@@ -337,6 +363,7 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 | `--features` | Specific features to include | - |
 | `--skip-features` | Features to exclude | - |
 | `--required-features` | Always-required features | - |
+| `--packages` | Comma-separated list of packages to process | All packages |
 | `--changed-files` | Filter by changed files | - |
 | `--git-base` | Git base commit for external dep analysis | - |
 | `--git-head` | Git head commit for external dep analysis | - |
@@ -460,6 +487,40 @@ clippier features Cargo.toml \
 
 This ensures the same feature distribution is generated every time, enabling reproduction of specific CI failures.
 
+### Selective Package Processing
+
+Process specific packages in large workspaces:
+
+```bash
+# Generate feature matrix for specific packages only
+clippier features . \
+  --packages server,auth,database \
+  --max 10 \
+  --chunked 3 \
+  --output json
+
+# Useful for:
+# - Development: Focus on packages you're actively working on
+# - CI/CD: Create targeted test matrices
+# - Performance: Reduce processing time for large workspaces
+```
+
+#### Combining with Change Detection
+
+```bash
+# Process specific packages AND filter by changes
+clippier features . \
+  --packages server,auth \
+  --changed-files "src/lib.rs,Cargo.toml" \
+  --max 10 \
+  --output json
+```
+
+When both `--packages` and `--changed-files` are specified:
+- First filters to specified packages
+- Then applies change detection within those packages
+- Results in highly targeted feature matrices
+
 ### Docker Deployment
 
 Generate production-ready Dockerfiles with comprehensive dependency analysis:
@@ -495,8 +556,32 @@ clippier workspace-deps . my-package --all-potential-deps --format json
 - **Impact Analysis**: Determines which packages are affected by code changes
 - **External Dependency Tracking**: Monitors changes in external dependencies via git analysis
 - **Smart Filtering**: Reduces test scope by analyzing only affected packages
+- **Selective Package Processing**: Filter operations to specific packages for improved performance
 
 ## Advanced Features
+
+### Selective Package Processing
+
+The `--packages` flag enables targeted processing of specific workspace packages:
+
+- **Performance optimization**: Process only relevant packages instead of entire workspace
+- **Development workflow**: Focus on packages under active development
+- **CI/CD flexibility**: Create custom test matrices for different components
+- **Monorepo management**: Handle subsets of large multi-package repositories
+
+Example workflow for package groups:
+```bash
+# Frontend packages
+clippier features . --packages ui,web,app --output json
+
+# Backend services
+clippier features . --packages server,auth,database --output json
+
+# Core libraries
+clippier features . --packages core,utils,common --output json
+```
+
+Package names should match exactly as defined in Cargo.toml files. For packages with prefixes (e.g., `moosicbox_server`), use the full name.
 
 ### External Dependency Analysis
 
@@ -586,6 +671,86 @@ Human-readable text format for direct use in scripts:
 server
 auth
 database
+```
+
+## Package Selection Examples
+
+### Development Workflow
+
+Focus on packages you're actively developing:
+```bash
+# Working on authentication system
+clippier features . \
+  --packages auth,auth_middleware,auth_api \
+  --max 5 \
+  --output json
+
+# Testing database layer changes
+clippier features . \
+  --packages database,migrations,models \
+  --features "postgres,sqlite" \
+  --output json
+```
+
+### CI/CD Pipeline with Package Groups
+
+```yaml
+name: Component Testing
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: 'Component to test'
+        required: true
+        type: choice
+        options:
+          - frontend
+          - backend
+          - core
+
+jobs:
+  test-component:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set package list
+        id: packages
+        run: |
+          case "${{ github.event.inputs.component }}" in
+            frontend)
+              echo "list=ui,web,app" >> $GITHUB_OUTPUT
+              ;;
+            backend)
+              echo "list=server,api,auth" >> $GITHUB_OUTPUT
+              ;;
+            core)
+              echo "list=core,utils,common" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Generate test matrix
+        run: |
+          clippier features . \
+            --packages "${{ steps.packages.outputs.list }}" \
+            --max 10 \
+            --output json
+```
+
+### Performance Comparison
+
+```bash
+# Full workspace analysis (slow for large workspaces)
+time clippier features . --output json > all.json
+
+# Targeted package analysis (much faster)
+time clippier features . \
+  --packages critical_service \
+  --output json > critical.json
+
+# Measure the improvement
+echo "Full workspace: $(wc -l < all.json) configurations"
+echo "Single package: $(wc -l < critical.json) configurations"
 ```
 
 ## Integration Examples
@@ -798,6 +963,44 @@ echo "🎯 Feature validation completed successfully!"
    ]
    ```
 
+### Package Selection Best Practices
+
+1. **Use exact package names**: Specify packages exactly as they appear in Cargo.toml
+   ```bash
+   # Correct
+   clippier features . --packages moosicbox_server,moosicbox_auth
+
+   # Incorrect (unless packages are actually named this way)
+   clippier features . --packages server,auth
+   ```
+
+2. **Combine with other filters for precision**: Layer multiple filters for targeted analysis
+   ```bash
+   clippier features . \
+     --packages server,database \
+     --os ubuntu \
+     --features "production" \
+     --skip-features "dev,test"
+   ```
+
+3. **Use in CI/CD for component testing**: Create separate workflows for different components
+   ```bash
+   # Test only affected services
+   clippier features . \
+     --packages $AFFECTED_SERVICES \
+     --changed-files "$CHANGED_FILES"
+   ```
+
+4. **Performance optimization for large workspaces**: Process packages in groups
+   ```bash
+   # Process in batches for very large workspaces
+   BATCH1="pkg1,pkg2,pkg3,pkg4,pkg5"
+   BATCH2="pkg6,pkg7,pkg8,pkg9,pkg10"
+
+   clippier features . --packages $BATCH1 --output json > batch1.json
+   clippier features . --packages $BATCH2 --output json > batch2.json
+   ```
+
 ### General Workspace Management
 
 1. **Regular dependency analysis**: Run `workspace-deps` to understand your dependency graph
@@ -834,6 +1037,26 @@ echo "🎯 Feature validation completed successfully!"
 - Consider `--workspace-only` to reduce scope
 - Run validation in parallel with other CI steps
 
+### Package Selection Issues
+
+**"Package not found" warnings:**
+- Verify package names match exactly as in Cargo.toml
+- Check for typos or incorrect prefixes
+- Use `cargo metadata` to list all workspace packages
+- Remember packages are case-sensitive
+
+**Empty results with --packages:**
+- Ensure packages exist in the workspace
+- Check that packages have Cargo.toml files
+- Verify workspace members list includes the packages
+- Try without --packages flag to see all available packages
+
+**Combining --packages with --changed-files:**
+- Both filters are applied (packages AND changes)
+- May result in empty set if no changes affect selected packages
+- Use one or the other for broader results
+- Check package paths match changed file paths
+
 ### General Troubleshooting
 
 **Command not found errors:**
@@ -850,6 +1073,39 @@ echo "🎯 Feature validation completed successfully!"
 - Verify JSON output with `jq` or similar tools
 - Check for proper shell escaping in CI environments
 - Ensure output is captured correctly in scripts
+
+## Quick Reference
+
+### Common Package Selection Patterns
+
+```bash
+# Single package
+clippier features . --packages my_package
+
+# Multiple packages
+clippier features . --packages pkg1,pkg2,pkg3
+
+# With full names (including prefixes)
+clippier features . --packages moosicbox_server,moosicbox_auth
+
+# Combined with OS filter
+clippier features . --packages server --os ubuntu
+
+# Combined with feature filter
+clippier features . --packages server --features "default,tls"
+
+# Combined with change detection
+clippier features . --packages server --changed-files "src/main.rs"
+
+# With chunking for CI
+clippier features . --packages server,auth --chunked 5 --max-parallel 10
+
+# For Docker generation
+clippier workspace-deps . my_package --all-potential-deps
+
+# For affected packages
+clippier affected-packages . --changed-files "*.rs" --target-package server
+```
 
 ## See Also
 

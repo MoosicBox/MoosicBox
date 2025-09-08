@@ -118,6 +118,10 @@ enum Commands {
         #[arg(long)]
         include_reasoning: bool,
 
+        /// List of specific packages to process (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        packages: Option<Vec<String>>,
+
         #[arg(short, long, value_enum, default_value_t=OutputType::Raw)]
         output: OutputType,
     },
@@ -270,6 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(feature = "git-diff")]
             git_head,
             include_reasoning,
+            packages,
             output,
         } => handle_features_command(
             &file,
@@ -284,6 +289,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             features.as_deref(),
             skip_features.as_deref(),
             required_features.as_deref(),
+            packages.as_deref(),
             changed_files.as_deref(),
             #[cfg(feature = "git-diff")]
             git_base.as_deref(),

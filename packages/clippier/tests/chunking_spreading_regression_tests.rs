@@ -125,6 +125,7 @@ fn test_basic_chunking_respects_limit() {
         None,    // features
         None,    // skip_features
         None,    // required_features
+        None,    // packages
         None,    // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -162,6 +163,7 @@ fn test_basic_chunking_respects_limit() {
         None, // features
         None, // skip_features
         None, // required_features
+        None, // packages
         None, // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -205,6 +207,7 @@ fn test_basic_spreading_distributes_features() {
         None, // features
         None, // skip_features
         None, // required_features
+        None, // packages
         None, // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -251,6 +254,7 @@ fn test_chunking_and_spreading_combination() {
         None,    // features
         None,    // skip_features
         None,    // required_features
+        None,    // packages
         None,    // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -300,6 +304,7 @@ fn test_max_parallel_with_chunking() {
         None,    // features
         None,    // skip_features
         None,    // required_features
+        None,    // packages
         None,    // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -348,6 +353,7 @@ fn test_changed_files_respects_chunking_and_spreading() {
         None,    // features
         None,    // skip_features
         None,    // required_features
+        None,    // packages
         None,    // changed_files - test main path, not changed files path
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -403,6 +409,7 @@ fn test_chunking_with_small_limit() {
         None,    // features
         None,    // skip_features
         None,    // required_features
+        None,    // packages
         None,    // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -446,6 +453,7 @@ fn test_empty_workspace_with_chunking_spreading() {
         None, // features
         None, // skip_features
         None, // required_features
+        None, // packages
         None, // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -531,6 +539,7 @@ serde = "1.0"
         None,    // features
         None,    // skip_features
         None,    // required_features
+        None,    // packages
         None,    // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -579,6 +588,7 @@ fn test_complex_scenario_all_flags() {
         None,    // features
         None,    // skip_features
         None,    // required_features
+        None,    // packages
         None,    // changed_files - skip this for now since it's not working
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -625,6 +635,7 @@ fn test_chunking_without_spreading() {
         None, // features
         None, // skip_features
         None, // required_features
+        None, // packages
         None, // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -675,6 +686,7 @@ fn test_spreading_without_chunking() {
         None, // features
         None, // skip_features
         None, // required_features
+        None, // packages
         None, // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base

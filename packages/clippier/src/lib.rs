@@ -2517,6 +2517,7 @@ pub fn handle_features_command(
     features: Option<&str>,
     skip_features: Option<&str>,
     required_features: Option<&str>,
+    packages: Option<&[String]>,
     changed_files: Option<&[String]>,
     #[cfg(feature = "git-diff")] git_base: Option<&str>,
     #[cfg(feature = "git-diff")] git_head: Option<&str>,
@@ -2531,6 +2532,102 @@ pub fn handle_features_command(
         skip_features.map(|f| f.split(',').map(str::to_string).collect::<Vec<_>>());
     let required_features_list =
         required_features.map(|f| f.split(',').map(str::to_string).collect::<Vec<_>>());
+
+    // If specific packages are requested, filter to only those packages
+    if let Some(selected_packages) = packages
+        && !selected_packages.is_empty()
+    {
+        log::debug!("Filtering to specific packages: {selected_packages:?}");
+
+        // Get workspace members
+        let workspace_cargo_path = path.join("Cargo.toml");
+        let workspace_source = std::fs::read_to_string(&workspace_cargo_path)?;
+        let workspace_value: Value = toml::from_str(&workspace_source)?;
+
+        let workspace_members = workspace_value
+            .get("workspace")
+            .and_then(|x| x.get("members"))
+            .and_then(|x| x.as_array())
+            .and_then(|x| x.iter().map(|x| x.as_str()).collect::<Option<Vec<_>>>())
+            .unwrap_or_default();
+
+        // Map package names to paths
+        let mut package_name_to_path = BTreeMap::new();
+        for member_path in workspace_members {
+            let full_path = path.join(member_path);
+            let cargo_path = full_path.join("Cargo.toml");
+
+            if cargo_path.exists() {
+                let source = std::fs::read_to_string(&cargo_path)?;
+                let value: Value = toml::from_str(&source)?;
+
+                if let Some(package_name) = value
+                    .get("package")
+                    .and_then(|x| x.get("name"))
+                    .and_then(|x| x.as_str())
+                {
+                    package_name_to_path.insert(package_name.to_string(), member_path.to_string());
+                }
+            }
+        }
+
+        // Process only selected packages
+        let mut all_filtered_packages = Vec::new();
+        for selected_pkg in selected_packages {
+            if let Some(package_path) = package_name_to_path.get(selected_pkg) {
+                let package_dir = path.join(package_path);
+                let packages = process_configs(
+                    &package_dir,
+                    offset,
+                    max,
+                    chunked,
+                    spread,
+                    randomize,
+                    seed,
+                    specific_features.as_deref(),
+                    skip_features_list.as_deref(),
+                    required_features_list.as_deref(),
+                )?;
+
+                all_filtered_packages.extend(packages);
+            } else {
+                log::warn!("Package '{selected_pkg}' not found in workspace");
+            }
+        }
+
+        // Filter by OS if specified
+        if let Some(target_os) = os {
+            all_filtered_packages.retain(|package| {
+                package
+                    .get("os")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|pkg_os| pkg_os == target_os)
+            });
+        }
+
+        // Apply max_parallel re-chunking if specified
+        if let Some(max_parallel_limit) = max_parallel {
+            all_filtered_packages = apply_max_parallel_rechunking(
+                all_filtered_packages,
+                max_parallel_limit as usize,
+                chunked,
+            )?;
+        }
+
+        let result = match output {
+            OutputType::Json => serde_json::to_string(&all_filtered_packages)?,
+            OutputType::Raw => {
+                let mut results = Vec::new();
+                for package in all_filtered_packages {
+                    if let Some(features) = package.get("features") {
+                        results.push(features.to_string());
+                    }
+                }
+                results.join("\n")
+            }
+        };
+        return Ok(result);
+    }
 
     // Determine if we should use filtering logic based on changed files
     let use_filtering = changed_files.is_some() || {

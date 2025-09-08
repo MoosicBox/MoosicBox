@@ -222,6 +222,7 @@ fn test_handle_features_command_basic() {
         None,  // features
         None,  // skip_features
         None,  // required_features
+        None,  // packages
         None,  // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -404,6 +405,7 @@ fn test_handle_features_command_comprehensive() {
         Some("frontend,api"), // features
         Some("deprecated"),   // skip_features
         Some("core"),         // required_features
+        None,                 // packages
         None,                 // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -533,6 +535,7 @@ serde = "1.0"
         None,     // features
         None,     // skip_features
         None,     // required_features
+        None,     // packages
         None,     // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base
@@ -576,6 +579,7 @@ serde = "1.0"
         None,    // features
         None,    // skip_features
         None,    // required_features
+        None,    // packages
         None,    // changed_files
         #[cfg(feature = "git-diff")]
         None, // git_base

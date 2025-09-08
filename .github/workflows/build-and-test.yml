@@ -37,7 +37,7 @@ on:
                 required: false
                 type: string
             packages:
-                description: 'Comma-separated list of packages to build (e.g., "server,tunnel_server,app"). Leave empty to build all packages.'
+                description: 'Comma-separated list of packages to build (e.g., "moosicbox_server,moosicbox_tunnel_server,moosicbox_app"). Leave empty to build all packages.'
                 required: false
                 type: string
                 default: ''
@@ -224,10 +224,8 @@ jobs:
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       if [[ -n "$SELECTED_PACKAGES" ]]; then
                           echo "🎯 Workflow dispatch with specific packages: $SELECTED_PACKAGES"
-                          # Convert comma-separated list to space-separated for clippier
-                          PACKAGE_LIST=$(echo "$SELECTED_PACKAGES" | tr ',' ' ')
-                          # Build clippier command for specific packages
-                          CLIPPIER_CMD="./target/release/clippier features . --packages $PACKAGE_LIST --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
+                          # Pass through the packages directly to clippier
+                          CLIPPIER_CMD="./target/release/clippier features . --packages $SELECTED_PACKAGES --chunked 15 --max-parallel 256 -o json --spread --randomize --seed $RANDOMIZATION_SEED --skip-features fail-on-warnings"
                           ANALYSIS_TYPE="selected"
                           SHOULD_BUILD=true
                       else
@@ -352,17 +350,17 @@ jobs:
                   if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
                       # For manual or scheduled runs, check if Tauri should be affected
                       if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$SELECTED_PACKAGES" ]]; then
-                          # Check if app package is in the selected packages list
-                          if echo "$SELECTED_PACKAGES" | grep -qE "(^|,)app(,|$)"; then
-                              echo "Manual run with app package selected - Tauri is affected"
+                          # Check if app package is in the selected packages list (with full name)
+                          if echo "$SELECTED_PACKAGES" | grep -qE "(^|,)moosicbox_app(,|$)"; then
+                              echo "Manual run with moosicbox_app package selected - Tauri is affected"
                               echo "has-tauri-changes=true" >> $GITHUB_OUTPUT
-                              echo 'tauri-reasoning={"affected": true, "reasoning": ["Manual workflow dispatch with app package selected"]}' >> $GITHUB_OUTPUT
-                              echo "✅ Tauri-related changes detected for selected app package"
+                              echo 'tauri-reasoning={"affected": true, "reasoning": ["Manual workflow dispatch with moosicbox_app package selected"]}' >> $GITHUB_OUTPUT
+                              echo "✅ Tauri-related changes detected for selected moosicbox_app package"
                           else
-                              echo "Manual run without app package selected - Tauri is not affected"
+                              echo "Manual run without moosicbox_app package selected - Tauri is not affected"
                               echo "has-tauri-changes=false" >> $GITHUB_OUTPUT
-                              echo 'tauri-reasoning={"affected": false, "reasoning": ["Manual workflow dispatch without app package selected"]}' >> $GITHUB_OUTPUT
-                              echo "❌ Tauri-related changes not detected - app package not selected"
+                              echo 'tauri-reasoning={"affected": false, "reasoning": ["Manual workflow dispatch without moosicbox_app package selected"]}' >> $GITHUB_OUTPUT
+                              echo "❌ Tauri-related changes not detected - moosicbox_app package not selected"
                           fi
                       else
                           # For full manual or scheduled runs, assume Tauri is affected
