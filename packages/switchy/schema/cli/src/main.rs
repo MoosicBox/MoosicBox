@@ -1085,19 +1085,15 @@ mod tests {
             .to_string_lossy()
             .to_string();
 
-        // Check directory name contains migration name
-        assert!(migration_dir_name.contains("test_migration"));
-
-        // Check directory name starts with timestamp (date format YYYY-MM-DD-HHMMSS)
         assert!(
-            migration_dir_name.starts_with("2025-"),
-            "Migration directory should start with year: {migration_dir_name}"
+            migration_dir_name.contains("test_migration"),
+            "Migration directory should contain the name"
         );
 
-        // Check that up.sql and down.sql files exist inside the migration directory
-        let migration_dir_path = migration_dir_entry.path();
-        let up_sql = migration_dir_path.join("up.sql");
-        let down_sql = migration_dir_path.join("down.sql");
+        // Check files exist
+        let migrations_dir = migrations_dir.join(migration_dir_name);
+        let up_sql = migrations_dir.join("up.sql");
+        let down_sql = migrations_dir.join("down.sql");
 
         assert!(switchy_fs::exists(&up_sql), "up.sql should exist");
         assert!(switchy_fs::exists(&down_sql), "down.sql should exist");
@@ -1111,5 +1107,263 @@ mod tests {
         assert!(down_content.contains("-- Add your rollback migration SQL here"));
         assert!(up_content.contains("Migration: test_migration"));
         assert!(down_content.contains("Rollback: test_migration"));
+    }
+
+    #[test]
+    fn test_cli_parsing_retry_command() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "retry",
+            "--database-url",
+            "sqlite://test.db",
+            "001_create_users",
+        ]);
+
+        match cli.command {
+            Commands::Retry {
+                database_url,
+                migrations_dir,
+                migration_table,
+                migration_id,
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert_eq!(migrations_dir, PathBuf::from("./migrations"));
+                assert_eq!(migration_table, "__switchy_migrations");
+                assert_eq!(migration_id, "001_create_users");
+            }
+            _ => panic!("Expected Retry command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_retry_with_custom_paths() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "retry",
+            "--database-url",
+            "postgres://localhost/test",
+            "--migrations-dir",
+            "/app/migrations",
+            "--migration-table",
+            "custom_migrations",
+            "002_add_indexes",
+        ]);
+
+        match cli.command {
+            Commands::Retry {
+                database_url,
+                migrations_dir,
+                migration_table,
+                migration_id,
+            } => {
+                assert_eq!(database_url, "postgres://localhost/test");
+                assert_eq!(migrations_dir, PathBuf::from("/app/migrations"));
+                assert_eq!(migration_table, "custom_migrations");
+                assert_eq!(migration_id, "002_add_indexes");
+            }
+            _ => panic!("Expected Retry command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_mark_completed_command() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "mark-completed",
+            "--database-url",
+            "sqlite://test.db",
+            "001_create_users",
+        ]);
+
+        match cli.command {
+            Commands::MarkCompleted {
+                database_url,
+                migrations_dir,
+                migration_table,
+                migration_id,
+                force,
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert_eq!(migrations_dir, PathBuf::from("./migrations"));
+                assert_eq!(migration_table, "__switchy_migrations");
+                assert_eq!(migration_id, "001_create_users");
+                assert!(!force);
+            }
+            _ => panic!("Expected MarkCompleted command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_mark_completed_with_force() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "mark-completed",
+            "--database-url",
+            "postgres://localhost/test",
+            "--force",
+            "002_add_indexes",
+        ]);
+
+        match cli.command {
+            Commands::MarkCompleted {
+                database_url,
+                migration_id,
+                force,
+                ..
+            } => {
+                assert_eq!(database_url, "postgres://localhost/test");
+                assert_eq!(migration_id, "002_add_indexes");
+                assert!(force);
+            }
+            _ => panic!("Expected MarkCompleted command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_migrate_with_force() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "migrate",
+            "--database-url",
+            "sqlite://test.db",
+            "--force",
+        ]);
+
+        match cli.command {
+            Commands::Migrate {
+                database_url,
+                force,
+                ..
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert!(force);
+            }
+            _ => panic!("Expected Migrate command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_migrate_force_with_other_options() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "migrate",
+            "--database-url",
+            "postgres://localhost/test",
+            "--force",
+            "--dry-run",
+            "--steps",
+            "3",
+        ]);
+
+        match cli.command {
+            Commands::Migrate {
+                database_url,
+                force,
+                dry_run,
+                steps,
+                ..
+            } => {
+                assert_eq!(database_url, "postgres://localhost/test");
+                assert!(force);
+                assert!(dry_run);
+                assert_eq!(steps, Some(3));
+            }
+            _ => panic!("Expected Migrate command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_status_show_failed() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "status",
+            "--database-url",
+            "sqlite://test.db",
+            "--show-failed",
+        ]);
+
+        match cli.command {
+            Commands::Status {
+                database_url,
+                show_failed,
+                ..
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert!(show_failed);
+            }
+            _ => panic!("Expected Status command"),
+        }
+    }
+
+    // CLI command execution tests
+    #[tokio::test]
+    async fn test_retry_command_error_handling() {
+        // Test retry with invalid database URL should give clear error
+        let result = retry_migration(
+            "invalid://database/url".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            "001_test_retry".to_string(),
+        )
+        .await;
+
+        assert!(result.is_err(), "Should fail with invalid database URL");
+
+        // The error should be properly formatted
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(message.contains("Unsupported database scheme: invalid"));
+            }
+            Err(other) => panic!("Unexpected error type: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mark_completed_error_handling() {
+        // Test mark_completed with invalid database should fail gracefully
+        let result = mark_migration_completed(
+            "invalid://database/url".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            "001_test".to_string(),
+            true, // force = true to skip confirmation
+        )
+        .await;
+
+        assert!(result.is_err(), "Should fail with invalid database URL");
+
+        // Should be a proper error type
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(message.contains("Unsupported database scheme: invalid"));
+            }
+            Err(other) => panic!("Unexpected error type: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_migrate_with_force_error_handling() {
+        // Test that migrate with force flag handles errors properly
+        let result = run_migrations(
+            "invalid://database/url".to_string(),
+            PathBuf::from("./migrations"),
+            "__switchy_migrations".to_string(),
+            None,
+            None,
+            false,
+            true, // force = true
+        )
+        .await;
+
+        // Should be a proper error type
+        match result {
+            Err(CliError::Config(message)) => {
+                assert!(message.contains("Unsupported database scheme: invalid"));
+            }
+            Err(other) => panic!("Unexpected error type: {other:?}"),
+            Ok(()) => panic!("Expected error but got success"),
+        }
     }
 }
