@@ -947,6 +947,7 @@ jobs:
                   ) > coverage_output.txt 2>&1
 
                   exit_code=$(cat exit_code.txt 2>/dev/null || echo "1")
+                  echo "Coverage report command exited with exit code $exit_code"
 
                   if [[ $exit_code -eq 1 ]] && grep -q "no coverage data found" coverage_output.txt; then
                       echo "No coverage files found"
