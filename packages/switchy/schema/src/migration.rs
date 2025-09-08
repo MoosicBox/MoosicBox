@@ -110,6 +110,46 @@ pub struct MigrationInfo {
     pub applied: bool,
 }
 
+/// Migration execution status
+///
+/// Represents the current state of a migration in the tracking table.
+/// Migrations progress through these states during execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MigrationStatus {
+    /// Migration is currently being executed
+    InProgress,
+    /// Migration completed successfully
+    Completed,
+    /// Migration execution failed
+    Failed,
+}
+
+impl std::fmt::Display for MigrationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let status_str = match self {
+            Self::InProgress => "in_progress",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        };
+        write!(f, "{status_str}")
+    }
+}
+
+impl std::str::FromStr for MigrationStatus {
+    type Err = crate::MigrationError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "in_progress" => Ok(Self::InProgress),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            _ => Err(crate::MigrationError::Validation(format!(
+                "Invalid migration status: '{s}'. Valid values are: in_progress, completed, failed"
+            ))),
+        }
+    }
+}
+
 #[async_trait]
 pub trait Migration<'a>: Send + Sync + 'a {
     fn id(&self) -> &str;
