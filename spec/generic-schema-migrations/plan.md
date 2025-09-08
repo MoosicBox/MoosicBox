@@ -3303,6 +3303,17 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     ```
   - [ ] Implement Display and database serialization for MigrationStatus
 
+#### 11.2.3 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema` - compiles without errors
+- [ ] Run `cargo test -p switchy_schema -- migration_status` - enum tests pass
+- [ ] Unit test: MigrationStatus enum has all three states (InProgress, Completed, Failed)
+- [ ] Unit test: Display implementation outputs correct string values
+- [ ] Unit test: FromStr implementation parses all status strings correctly
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation comments added for public enum and its variants
+
 #### 11.2.4 Implement CLI Commands for Recovery
 
 - [ ] Update CLI in `packages/switchy/schema/cli/src/main.rs` 🟡 **IMPORTANT**
@@ -3326,6 +3337,20 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     - [ ] Pass `allow_dirty: true` to MigrationRunner when --force is provided
     - [ ] Pass `allow_dirty: false` to MigrationRunner by default
     - [ ] Display warning when --force is used: "WARNING: Bypassing dirty state check - this may cause data corruption!"
+
+#### 11.2.4 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema_cli` - CLI builds successfully
+- [ ] Unit test: `status --show-failed` command logic returns correct migration statuses
+- [ ] Unit test: `retry <migration_id>` command logic handles failed migrations
+- [ ] Unit test: `mark-completed --force <migration_id>` command logic updates status
+- [ ] Unit test: `migrate --force` flag sets allow_dirty correctly on MigrationRunner
+- [ ] Unit test: Invalid migration IDs return appropriate error types
+- [ ] Unit test: --force flag triggers warning message in output
+- [ ] Run `cargo test -p switchy_schema_cli` - all CLI unit tests pass
+- [ ] Run `cargo clippy -p switchy_schema_cli --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] CLI help text updated for all new commands
 
 #### 11.2.5 Document Recovery Best Practices
 
@@ -3358,8 +3383,19 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     switchy-migrate mark-completed --force 2024-01-15-123456_add_user_table
 
     # Run migrations with dirty state (dangerous!)
-    switchy-migrate up --force
-    ```
+     switchy-migrate up --force
+     ```
+
+#### 11.2.5 Verification Checklist
+
+- [ ] `RECOVERY.md` file created in `packages/switchy/schema/`
+- [ ] All failure scenarios documented with examples
+- [ ] Recovery procedures include step-by-step instructions
+- [ ] Best practices section is comprehensive
+- [ ] CLI usage examples are syntactically correct
+- [ ] Document reviewed for clarity and completeness
+- [ ] Links to related documentation added
+- [ ] Markdown formatting is correct (test with preview)
 
 #### 11.2.6 Add Integration Tests for Recovery Scenarios
 
@@ -3380,22 +3416,18 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     - [ ] Test migration of old table schema to new schema
     - [ ] Verify backward compatibility
 
-**Verification Checklist:**
-- [ ] `cargo fmt --check -p switchy_schema` - All code formatted
-- [ ] `cargo clippy -p switchy_schema --all-targets` - Zero warnings
-- [ ] `cargo test -p switchy_schema` - All tests pass including new recovery tests
-- [ ] `cargo build -p switchy_schema_cli` - CLI builds with new commands
-- [ ] Verify string literal status values work correctly ("in_progress", "completed", "failed")
-- [ ] Test that dirty state check prevents migrations by default
-- [ ] Test that allow_dirty flag bypasses dirty state check
-- [ ] Verify `remove_migration_record()` correctly deletes migration records
-- [ ] Test that `retry_migration` fails gracefully for non-existent migrations
-- [ ] Test that `mark_migration_completed` works for both existing and new records
-- [ ] Verify all methods handle Option<String> parameters correctly
-- [ ] Manual testing of recovery scenarios
-- [ ] RECOVERY.md documentation complete with examples
-- [ ] Integration tests cover all failure scenarios
-- [ ] Document that enum conversion will happen in Phase 11.2.7
+#### 11.2.6 Verification Checklist
+
+- [ ] Run `cargo test -p switchy_schema --test recovery` - all recovery tests pass
+- [ ] Integration test: Migration failure tracking with simulated failures
+- [ ] Integration test: Dirty state detection with interrupted migrations
+- [ ] Integration test: Recovery command flows (retry, mark-completed, status)
+- [ ] Integration test: Schema upgrade with version compatibility
+- [ ] Unit test: Each recovery scenario has isolated test coverage
+- [ ] Test cleanup verified (no test data persists after test run)
+- [ ] Run `cargo clippy --tests -p switchy_schema` - zero warnings in tests
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Test documentation includes clear scenario descriptions
 
 #### 11.2.7 Clean Up Row Handling with moosicbox_json_utils **PLANNED** - New Phase
 
@@ -3449,15 +3481,20 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
 - ✅ **Reusability**: ToValueType implementations work across the codebase
 - ✅ **Maintainability**: Adding new fields requires only updating ToValueType implementation
 
-**Verification Checklist:**
-- [ ] `cargo fmt --check -p switchy_schema` - All code formatted
-- [ ] `cargo clippy -p switchy_schema --all-targets` - Zero warnings
-- [ ] `cargo test -p switchy_schema` - All existing tests pass
-- [ ] Unit tests for MigrationStatus enum conversions
-- [ ] Unit tests for ToValueType<MigrationRecord> implementation
-- [ ] Integration tests verify same behavior with cleaner implementation
-- [ ] API remains backward compatible (enum converts to/from strings seamlessly)
-- [ ] Error messages are helpful and context-aware
+#### 11.2.7 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema` - builds with moosicbox_json_utils
+- [ ] Run `cargo test -p switchy_schema` - all existing tests still pass
+- [ ] Unit test: MigrationStatus enum to/from string conversions
+- [ ] Unit test: ToValueType<MigrationRecord> implementation with all fields
+- [ ] Unit test: Error cases for invalid status strings
+- [ ] Unit test: Row to MigrationRecord conversion with missing fields
+- [ ] Integration test: API compatibility with existing code
+- [ ] Unit test: Error messages contain helpful context
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Performance benchmark: Same or better than string implementation
+- [ ] Code metrics: Verify 30-50% reduction in boilerplate
 
 ### 11.3 Checksum Implementation
 
@@ -3467,13 +3504,18 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
   - [ ] Add checksum verification before execution
   - [ ] Handle checksum mismatches gracefully
 
-**Verification Checklist:**
-- [ ] `cargo fmt --all` - All code formatted
-- [ ] `cargo clippy --all-targets --all-features` - Zero warnings
-- [ ] `cargo test` - All tests pass
-- [ ] Unit tests for checksum calculation and validation
-- [ ] Integration tests for checksum mismatch handling
-- [ ] Documentation updated with checksum features
+#### 11.3 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema` - compiles with checksum support
+- [ ] Unit test: SHA256 checksum calculation for migration content
+- [ ] Unit test: Checksum verification before execution
+- [ ] Unit test: Checksum mismatch returns appropriate error
+- [ ] Integration test: Checksum validation in migration runner
+- [ ] Integration test: Modified migration detected by checksum
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation updated with checksum feature usage
+- [ ] Performance impact measured (should be minimal)
 
 ### 11.4 Remote Discovery Implementation
 
@@ -3484,15 +3526,19 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
   - [ ] Authentication and caching support
   - [ ] Network error handling
 
-**Verification Checklist:**
-- [ ] `cargo fmt --all` - All code formatted
-- [ ] `cargo clippy --all-targets --all-features` - Zero warnings
-- [ ] `cargo test` - All tests pass
-- [ ] `cargo check --no-default-features` - Compiles without remote feature
-- [ ] `cargo check --features remote` - Compiles with remote feature
-- [ ] Unit tests for remote source implementation
-- [ ] Integration tests with mock HTTP server
-- [ ] Documentation for remote source configuration
+#### 11.4 Verification Checklist
+
+- [ ] Run `cargo check --no-default-features` - compiles without remote feature
+- [ ] Run `cargo build --features remote` - compiles with remote feature
+- [ ] Unit test: RemoteMigrationSource implements MigrationSource trait
+- [ ] Unit test: Authentication header handling
+- [ ] Unit test: Network error returns appropriate error types
+- [ ] Integration test: Mock HTTP server provides migrations
+- [ ] Integration test: Caching behavior with TTL
+- [ ] Run `cargo clippy --all-targets --features remote` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation includes remote source configuration examples
+- [ ] Feature flag properly gates all remote functionality
 
 ### 11.5 Migration State Query API
 
@@ -3502,14 +3548,18 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
   - [ ] Get migration history
   - [ ] Separate from MigrationRunner for focused API
 
-**Verification Checklist:**
-- [ ] `cargo fmt --all` - All code formatted
-- [ ] `cargo clippy --all-targets --all-features` - Zero warnings
-- [ ] `cargo test` - All tests pass
-- [ ] Unit tests for all query API methods
-- [ ] Integration tests with database state verification
-- [ ] Documentation with API usage examples
-- [ ] Performance benchmarks if applicable
+#### 11.5 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema` - compiles with query API
+- [ ] Unit test: is_migration_applied() returns correct boolean
+- [ ] Unit test: get_pending_migrations() filters correctly
+- [ ] Unit test: get_migration_history() returns chronological list
+- [ ] Integration test: Query API with various database states
+- [ ] Performance benchmark: Query operations are efficient
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] API documentation with usage examples
+- [ ] Query API is separate from MigrationRunner as designed
 
 ### 11.6 Snapshot Testing Utilities
 
@@ -3544,15 +3594,19 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
     - [ ] Debugging aid for migration issues
     - [ ] Cross-database compatibility verification
 
-**Verification Checklist:**
-- [ ] `cargo fmt --all` - All code formatted
-- [ ] `cargo clippy --all-targets --all-features` - Zero warnings
-- [ ] `cargo test` - All tests pass
-- [ ] Unit tests for snapshot capture and comparison
-- [ ] Integration tests with schema evolution scenarios
-- [ ] Documentation with snapshot testing examples
-- [ ] Snapshot file format validation
-- [ ] `UPDATE_SNAPSHOTS=1` mechanism tested
+#### 11.6 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema` - compiles with snapshot support
+- [ ] Unit test: Schema snapshot capture after migration
+- [ ] Unit test: Schema comparison detects differences
+- [ ] Unit test: Migration sequence snapshot creation
+- [ ] Unit test: Snapshot format is deterministic
+- [ ] Integration test: UPDATE_SNAPSHOTS=1 updates snapshot files
+- [ ] Integration test: Schema evolution tracked correctly
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation includes snapshot testing examples
+- [ ] Snapshot files are human-readable and diff-friendly
 
 ### 11.7 Complete CodeMigrationSource Implementation
 
@@ -3563,6 +3617,18 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
   - [ ] Implement proper migration ordering (BTreeMap-based)
   - [ ] Add comprehensive tests for code-based migration functionality
   - [ ] Update documentation with working examples
+
+#### 11.7 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema --features code` - compiles successfully
+- [ ] Unit test: add_migration() adds to internal collection
+- [ ] Unit test: migrations() returns added migrations in order
+- [ ] Unit test: Arc-based ownership works correctly
+- [ ] Integration test: Code migrations execute in correct order
+- [ ] Run `cargo clippy -p switchy_schema --all-targets --features code` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation updated with working code migration examples
+- [ ] BTreeMap ordering verified for deterministic execution
 
 ### 11.8 Ergonomic Async Closure Support for Test Utilities
 
@@ -3598,6 +3664,17 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
 
 **Recommendation:** Defer decision until we have more real-world usage patterns. The current `Box::pin` approach is standard in the Rust async ecosystem and well-understood by developers.
 
+#### 11.8 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema_test_utils` - compiles successfully
+- [ ] Unit test: Selected approach works without Box::pin
+- [ ] Unit test: Backward compatibility maintained
+- [ ] Integration test: Real-world usage patterns covered
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation shows improved ergonomics
+- [ ] API migration guide if breaking changes
+
 ## ~~Phase 12: Migration Dependency Resolution~~ ❌ **REMOVED**
 
 ~~**Goal:** Advanced dependency management for complex migration scenarios~~
@@ -3623,12 +3700,32 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
   - [ ] OR: Add runtime table name resolution to existing methods
   - [ ] Maintain backward compatibility
 
+#### 12.1 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database` - compiles with new methods
+- [ ] Unit test: query_raw returns data correctly
+- [ ] Unit test: exec_query_raw executes and returns results
+- [ ] Integration test: Dynamic table names work across all backends
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Backward compatibility verified
+
 ### 12.2 Version Tracker Update
 
 - [ ] Update VersionTracker to use dynamic table names ❌ **IMPORTANT**
   - [ ] Remove current limitation/error messages
   - [ ] Full support for custom table names
   - [ ] Update all database operations to use dynamic names
+
+#### 12.2 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_schema` - compiles with dynamic table support
+- [ ] Unit test: Custom table names used in all operations
+- [ ] Integration test: Multiple migration tables in same database
+- [ ] Integration test: Migration tracking with custom names
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Error messages updated to remove limitations
 
 ## Phase 13: Advanced Transaction Features
 
@@ -3657,6 +3754,18 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
   - [ ] Test savepoint hierarchy management
   - [ ] Test error handling with failed savepoints
 
+#### 13.1 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database` - compiles with savepoint support
+- [ ] Unit test: Savepoint creation and naming
+- [ ] Unit test: Rollback to savepoint preserves outer transaction
+- [ ] Unit test: Savepoint release commits nested work
+- [ ] Integration test: Nested savepoints work correctly
+- [ ] Integration test: All database backends support savepoints
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation includes savepoint usage examples
+
 ### 13.2 Transaction Isolation Levels
 
 **Background:** Allow configuring transaction isolation for specific use cases.
@@ -3674,6 +3783,17 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
   - [ ] Verify isolation level enforcement
   - [ ] Test database-specific isolation behaviors
 
+#### 13.2 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database` - compiles with isolation levels
+- [ ] Unit test: TransactionIsolation enum values
+- [ ] Unit test: begin_transaction_with_isolation() sets level
+- [ ] Integration test: Isolation behavior per database backend
+- [ ] Integration test: Concurrent transaction scenarios
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation explains isolation levels per backend
+
 ### 13.3 Transaction Timeout and Resource Management
 
 **Background:** Prevent long-running transactions from holding resources indefinitely.
@@ -3690,6 +3810,18 @@ SQL blocks in this specification show conceptual schemas for clarity. The actual
   - [ ] Transaction monitoring and logging
   - [ ] Resource leak detection for unreleased transactions
   - [ ] Performance metrics collection
+
+#### 13.3 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database` - compiles with timeout support
+- [ ] Unit test: Transaction timeout triggers rollback
+- [ ] Unit test: Timeout configuration options
+- [ ] Integration test: Connection pool timeout handling
+- [ ] Integration test: Resource leak detection
+- [ ] Performance metrics collection verified
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation includes timeout configuration
 
 **Success Criteria for Phase 13:**
 - Nested transactions work correctly on all supported databases
@@ -3890,6 +4022,16 @@ impl RusqliteDatabase {
 - ✅ **Massive performance gain**: 0.10s vs 28+ seconds (280x improvement)
 - ✅ **Deadlock elimination**: Connection pool prevents blocking scenarios
 - ✅ **Simplified codebase**: Removed 150+ lines of complex semaphore logic
+
+#### 14.1 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database` - compiles with optimizations
+- [ ] Performance test: Parallel operations during transactions
+- [ ] Integration test: Connection pool architecture verified
+- [ ] Benchmark: Concurrent transaction throughput improved
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation updated with concurrency notes
 
 ### Phase 14.2: Additional Optimizations
 
