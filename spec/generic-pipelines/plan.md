@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-Create a generic CI/CD workflow tool that can translate GitHub Actions workflows into an abstract representation and execute them across different backends (GitHub Actions, GitLab CI, Jenkins, local imperative execution). The tool should handle GitHub Actions translation on-the-fly or through persisted generic representations, with first-class support for local execution without containerization.
+Create a universal CI/CD workflow tool that can execute and translate between different workflow formats, including a new generic workflow format that is backend-agnostic. The tool introduces a generic workflow format that allows users to write workflows once and run them on any supported backend (GitHub Actions, GitLab CI, local execution, etc.). Backend-specific functionality is supported through conditional execution blocks. The tool should handle workflow translation on-the-fly or through persisted generic representations, with first-class support for local execution without containerization.
 
 **Current Status:** 🔴 **Not Started** - Specification phase
 
@@ -21,19 +21,20 @@ Create a generic CI/CD workflow tool that can translate GitHub Actions workflows
 
 These items need further investigation or decision during implementation:
 
-### Architecture Decisions
+### Resolved Decisions
 
-- Should the AST be YAML-based, JSON-based, or a custom format?
-- How to handle GitHub Actions marketplace actions that don't have source available?
-- Should we support dynamic action resolution or require pre-registration?
-- How to handle secrets and credentials across different backends?
+- ✅ **AST format**: YAML-serializable for debugging and intermediate storage
+- ✅ **Expression syntax**: GitHub Actions compatible `${{ }}` syntax
+- ✅ **Backend conditionals**: Use `if: ${{ backend == 'name' }}` pattern
+- ✅ **Action pattern**: Follow GitHub's `uses:` and `with:` pattern
+- ✅ **Generic format**: Treated as first-class workflow format alongside GitHub/GitLab
 
-### Action Translation
+### Generic Format Questions
 
-- Should actions be translated at runtime or pre-processed?
-- How to handle composite actions vs JavaScript/Docker actions?
-- What's the fallback strategy when translation isn't possible?
-- Should we maintain a registry of common action translations?
+- How should generic action definitions be distributed and versioned?
+- Should we support a central registry for generic actions?
+- How do we handle generic action dependencies?
+- Where should action definition search paths be configured?
 
 ### Local Execution
 
@@ -42,20 +43,70 @@ These items need further investigation or decision during implementation:
 - How to manage artifact storage for local runs?
 - What's the strategy for network-dependent actions?
 
-### Expression Language
+### Backend Translation
 
-- How closely should we match GitHub Actions expression syntax?
-- Should we support extending expressions with custom functions?
-- How to handle context variable scope and inheritance?
-- What's the strategy for unsupported expression features?
+- Should actions be translated at runtime or pre-processed?
+- How to handle composite actions vs JavaScript/Docker actions?
+- What's the fallback strategy when translation isn't possible?
 
-## Phase 1: Core AST and Workflow Model 🔴
+## Phase 1: Generic Workflow Format Definition 🔴
 
-**Goal:** Define the abstract syntax tree for representing CI workflows
+**Goal:** Define the platform-agnostic workflow format that serves as the primary input format
+
+**Status:** All tasks pending - Core format design needed
+
+### 1.1 Generic Workflow Syntax
+
+- [ ] Define generic workflow YAML schema 🔴 **CRITICAL**
+- [ ] Support backend conditional blocks using `if: ${{ backend == 'name' }}` 🔴 **CRITICAL**
+- [ ] Define standard workflow structure (name, triggers, jobs, steps) 🔴 **CRITICAL**
+- [ ] Implement GitHub Actions compatible expression syntax 🔴 **CRITICAL**
+- [ ] Support environment variables and contexts 🟡 **IMPORTANT**
+
+#### 1.1 Verification
+
+- [ ] Run `cargo build -p pipeline_parser` - Package compiles
+- [ ] Run `cargo test -p pipeline_parser` - All tests pass
+- [ ] Run `cargo clippy -p pipeline_parser -- -D warnings` - No clippy warnings
+- [ ] Test parsing generic workflow format with backend conditionals
+
+### 1.2 Generic Action System
+
+- [ ] Define generic action definition format (YAML-based) 🔴 **CRITICAL**
+- [ ] Create action resolution system with search paths 🔴 **CRITICAL**
+- [ ] Support custom user-defined actions 🔴 **CRITICAL**
+- [ ] Implement action input/output specifications 🟡 **IMPORTANT**
+- [ ] Define action translation format for each backend 🔴 **CRITICAL**
+
+#### 1.2 Verification
+
+- [ ] Run `cargo build -p pipeline_actions` - Package compiles
+- [ ] Run `cargo test -p pipeline_actions` - All tests pass
+- [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
+- [ ] Test loading and resolving generic action definitions
+
+### 1.3 Backend Context System
+
+- [ ] Define `backend` context variable 🔴 **CRITICAL**
+- [ ] Implement backend-specific step skipping logic 🔴 **CRITICAL**
+- [ ] Create clear error messages for incompatible backends 🟡 **IMPORTANT**
+- [ ] Support backend detection for conditional execution 🔴 **CRITICAL**
+- [ ] Define supported backend identifiers (github, gitlab, local, etc.) 🔴 **CRITICAL**
+
+#### 1.3 Verification
+
+- [ ] Run `cargo build -p pipeline_runner` - Package compiles
+- [ ] Run `cargo test -p pipeline_runner` - All tests pass
+- [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
+- [ ] Test backend conditional execution and skipping
+
+## Phase 2: Core AST and Workflow Model 🔴
+
+**Goal:** Define the abstract syntax tree for representing ALL workflow formats (Generic, GitHub Actions, GitLab CI, etc.) in a unified internal structure
 
 **Status:** All tasks pending - Core workflow model design needed
 
-### 1.1 AST Definition
+### 2.1 AST Definition
 
 - [ ] Define workflow node types (Job, Step, Action, Script, Conditional) 🔴 **CRITICAL**
 - [ ] Create expression language for conditions and variables 🔴 **CRITICAL**
@@ -63,7 +114,7 @@ These items need further investigation or decision during implementation:
 - [ ] Support for artifacts and caching abstractions 🟡 **IMPORTANT**
 - [ ] Define secret/credential abstraction 🔴 **CRITICAL**
 
-#### 1.1 Verification
+#### 2.1 Verification
 
 - [ ] Run `cargo build -p pipeline_ast --all-features` - Verify compilation
 - [ ] Run `cargo test -p pipeline_ast` - All tests pass
@@ -71,7 +122,7 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo fmt -- --check` - Code properly formatted
 - [ ] Run `cargo doc -p pipeline_ast --no-deps` - Documentation builds
 
-### 1.2 Workflow Model
+### 2.2 Workflow Model
 
 - [ ] Create Workflow struct with metadata and jobs 🔴 **CRITICAL**
 - [ ] Define Job struct with dependencies and steps 🔴 **CRITICAL**
@@ -79,21 +130,21 @@ These items need further investigation or decision during implementation:
 - [ ] Implement Context struct for variables and state 🔴 **CRITICAL**
 - [ ] Add support for job outputs and step outputs 🟡 **IMPORTANT**
 
-#### 1.2 Verification
+#### 2.2 Verification
 
 - [ ] Run `cargo build -p pipeline_ast` - Package compiles
 - [ ] Run `cargo test -p pipeline_ast` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_ast -- -D warnings` - No clippy warnings
 - [ ] Run `cargo tarpaulin -p pipeline_ast` - Code coverage > 80%
 
-### 1.3 Package Structure
+### 2.3 Package Structure
 
 - [ ] Create packages/pipeline_ast package with Rust structures 🔴 **CRITICAL**
 - [ ] Implement Serialize/Deserialize for all AST nodes 🔴 **CRITICAL**
 - [ ] Add validation methods for workflow correctness 🟡 **IMPORTANT**
 - [ ] Include builder patterns for ergonomic construction 🟡 **IMPORTANT**
 
-#### 1.3 Verification
+#### 2.3 Verification
 
 - [ ] Run `cargo build -p pipeline_ast` - Package compiles
 - [ ] Run `cargo test -p pipeline_ast` - All tests pass
@@ -103,62 +154,65 @@ These items need further investigation or decision during implementation:
     - [ ] Run `cargo test -p pipeline_ast --test builder_patterns_test` - Builder tests pass
     - [ ] Run `cargo doc -p pipeline_ast` - Builder APIs documented
 
-## Phase 2: GitHub Actions Parser 🔴
+## Phase 3: Workflow Parsers 🔴
 
-**Goal:** Parse GitHub Actions YAML into the AST
+**Goal:** Parse all workflow formats (Generic, GitHub Actions, GitLab CI, etc.) into the AST
 
 **Status:** All tasks pending - Parser implementation needed
 
-### 2.1 YAML Parser
+### 5.1 Multi-Format Parser
 
+- [ ] Parse Generic workflow format (primary format) 🔴 **CRITICAL**
+- [ ] Parse GitHub Actions workflow format 🔴 **CRITICAL**
+- [ ] Parse GitLab CI workflow format 🟡 **IMPORTANT**
 - [ ] Parse workflow triggers (on: push, pull_request, etc.) 🔴 **CRITICAL**
 - [ ] Parse job definitions with needs dependencies 🔴 **CRITICAL**
-- [ ] Parse steps with uses/run/if conditions 🔴 **CRITICAL**
+- [ ] Parse steps with uses/run/if conditions including backend conditionals 🔴 **CRITICAL**
 - [ ] Handle with parameters and env variables 🔴 **CRITICAL**
 - [ ] Parse matrix strategies and includes/excludes 🟡 **IMPORTANT**
 
-#### 2.1 Verification
+#### 5.1 Verification
 
 - [ ] Run `cargo build -p pipeline_parser` - Package compiles
 - [ ] Run `cargo test -p pipeline_parser` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_parser -- -D warnings` - No clippy warnings
 - [ ] Test parsing MoosicBox workflows successfully
 
-### 2.2 Expression Evaluator
+### 5.2 Expression Evaluator
 
 - [ ] Implement GitHub Actions expression syntax parser 🔴 **CRITICAL**
 - [ ] Support context variables (github, env, secrets, etc.) 🔴 **CRITICAL**
 - [ ] Implement built-in functions (contains, startsWith, etc.) 🔴 **CRITICAL**
 - [ ] Handle string interpolation and type coercion 🟡 **IMPORTANT**
 
-#### 2.2 Verification
+#### 5.2 Verification
 
 - [ ] Run `cargo build -p pipeline_parser` - Package compiles
 - [ ] Run `cargo test -p pipeline_parser` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_parser -- -D warnings` - No clippy warnings
 - [ ] Test expression evaluation matches GitHub Actions behavior
 
-### 2.3 Workflow Validation
+### 5.3 Workflow Validation
 
 - [ ] Validate job dependency cycles 🔴 **CRITICAL**
 - [ ] Check for undefined variables and references 🟡 **IMPORTANT**
 - [ ] Validate action references and parameters 🟡 **IMPORTANT**
 - [ ] Provide detailed error messages with line numbers 🟡 **IMPORTANT**
 
-#### 2.3 Verification
+#### 5.3 Verification
 
 - [ ] Run `cargo build -p pipeline_parser` - Package compiles
 - [ ] Run `cargo test -p pipeline_parser` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_parser -- -D warnings` - No clippy warnings
 - [ ] Test validation provides clear error messages
 
-## Phase 3: Local Runner Implementation 🔴
+## Phase 4: Local Runner Implementation 🔴
 
 **Goal:** Execute workflows locally without containers
 
 **Status:** All tasks pending - Execution engine needed
 
-### 3.1 Execution Engine
+### 5.1 Execution Engine
 
 - [ ] Create LocalRunner struct implementing WorkflowBackend trait 🔴 **CRITICAL**
 - [ ] Implement job scheduler with dependency resolution 🔴 **CRITICAL**
@@ -166,14 +220,14 @@ These items need further investigation or decision during implementation:
 - [ ] Manage working directories and environment variables 🔴 **CRITICAL**
 - [ ] Handle step conditions and continue-on-error 🟡 **IMPORTANT**
 
-#### 3.1 Verification
+#### 5.1 Verification
 
 - [ ] Run `cargo build -p pipeline_runner` - Package compiles
 - [ ] Run `cargo test -p pipeline_runner` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
 - [ ] Test basic workflow execution works locally
 
-### 3.2 Environment Management
+### 5.2 Environment Management
 
 - [ ] Detect and validate local tool availability 🔴 **CRITICAL**
 - [ ] Set up PATH and environment variables 🔴 **CRITICAL**
@@ -181,34 +235,34 @@ These items need further investigation or decision during implementation:
 - [ ] Implement artifact upload/download locally 🟡 **IMPORTANT**
 - [ ] Handle cache storage and retrieval 🟢 **MINOR**
 
-#### 3.2 Verification
+#### 5.2 Verification
 
 - [ ] Run `cargo build -p pipeline_runner` - Package compiles
 - [ ] Run `cargo test -p pipeline_runner` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
 - [ ] Test environment isolation between jobs
 
-#### 3.3 Verification
+#### 5.3 Verification
 
 - [ ] Run `cargo build -p pipeline_runner` - Package compiles
 - [ ] Run `cargo test -p pipeline_runner` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
 - [ ] Test parallel job execution works
 
-#### 3.4 Verification
+#### 5.4 Verification
 
 - [ ] Run `cargo build -p pipeline_runner` - Package compiles
 - [ ] Run `cargo test -p pipeline_runner` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
 - [ ] Test error handling and recovery mechanisms
 
-## Phase 4: Action Translation System 🔴
+## Phase 5: Action Translation System 🔴
 
-**Goal:** Translate GitHub Actions to executable commands
+**Goal:** Translate all action types (Generic actions, GitHub Actions, GitLab CI actions) to executable commands for local execution and backend generation
 
 **Status:** All tasks pending - Action registry and translation needed
 
-### 4.1 Action Registry
+### 5.1 Action Registry
 
 - [ ] Define ActionTranslator trait 🔴 **CRITICAL**
 - [ ] Create registry for known action translations 🔴 **CRITICAL**
@@ -218,42 +272,42 @@ These items need further investigation or decision during implementation:
     - [ ] actions/cache → local cache operations 🟡 **IMPORTANT**
     - [ ] actions/upload-artifact → local file operations 🟡 **IMPORTANT**
 
-#### 4.1 Verification
+#### 5.1 Verification
 
 - [ ] Run `cargo build -p pipeline_actions` - Package compiles
 - [ ] Run `cargo test -p pipeline_actions` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
 - [ ] Test common actions (checkout, setup-\*, cache) translate correctly
 
-### 4.2 JavaScript Action Support
+### 5.2 JavaScript Action Support
 
 - [ ] Parse action.yml metadata files 🟡 **IMPORTANT**
 - [ ] Extract and execute Node.js action sources 🟡 **IMPORTANT**
 - [ ] Set up action inputs/outputs via environment 🟡 **IMPORTANT**
 - [ ] Handle pre/post scripts for actions 🟢 **MINOR**
 
-#### 4.2 Verification
+#### 5.2 Verification
 
 - [ ] Run `cargo build -p pipeline_actions` - Package compiles
 - [ ] Run `cargo test -p pipeline_actions` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
 - [ ] Test JavaScript action execution works
 
-#### 4.3 Verification
+#### 5.3 Verification
 
 - [ ] Run `cargo build -p pipeline_actions` - Package compiles
 - [ ] Run `cargo test -p pipeline_actions` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
 - [ ] Test fallback strategies work for untranslatable actions
 
-#### 4.4 Verification
+#### 5.4 Verification
 
 - [ ] Run `cargo build -p pipeline_actions` - Package compiles
 - [ ] Run `cargo test -p pipeline_actions` - All tests pass
 - [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
 - [ ] Test action metadata system works
 
-## Phase 5: Backend Abstraction Layer 🟡
+## Phase 6: Backend Abstraction Layer 🟡
 
 **Goal:** Support multiple CI/CD backends
 
@@ -294,13 +348,13 @@ These items need further investigation or decision during implementation:
 - [ ] Run `cargo clippy -p pipeline_backends -- -D warnings` - No clippy warnings
 - [ ] Test Jenkins pipeline generation works
 
-## Phase 6: CLI Interface 🟡
+## Phase 7: CLI Interface 🟡
 
 **Goal:** User-friendly command-line interface
 
 **Status:** All tasks pending - CLI implementation needed
 
-### 6.1 Core Commands
+### 5.1 Core Commands
 
 - [ ] `run` - Execute workflow locally 🔴 **CRITICAL**
 - [ ] `translate` - Convert between formats 🟡 **IMPORTANT**
@@ -308,88 +362,88 @@ These items need further investigation or decision during implementation:
 - [ ] `dry-run` - Show execution plan 🟡 **IMPORTANT**
 - [ ] `cache-action` - Pre-download action for offline use 🟢 **MINOR**
 
-#### 6.1 Verification
+#### 5.1 Verification
 
 - [ ] Run `cargo build --bin ci-runner` - Binary builds
 - [ ] Run `cargo test --bin ci-runner` - CLI tests pass
 - [ ] Run `cargo clippy --bin ci-runner -- -D warnings` - No warnings
 - [ ] Test CLI commands work with help flags
 
-#### 6.2 Verification
+#### 5.2 Verification
 
 - [ ] Run `cargo test` - All configuration tests pass
 - [ ] Test config file loading and validation
 - [ ] Test environment variable overrides work
 
-#### 6.3 Verification
+#### 5.3 Verification
 
 - [ ] Run `cargo test` - All output tests pass
 - [ ] Test colorized output and progress indicators
 - [ ] Test different verbosity levels work
 
-## Phase 7: Testing Infrastructure 🔴
+## Phase 8: Testing Infrastructure 🔴
 
 **Goal:** Comprehensive testing for all components
 
 **Status:** All tasks pending - Test infrastructure needed
 
-### 7.1 Unit Tests
+### 5.1 Unit Tests
 
 - [ ] AST construction and manipulation 🔴 **CRITICAL**
 - [ ] Parser for various workflow patterns 🔴 **CRITICAL**
 - [ ] Expression evaluation with fixtures 🔴 **CRITICAL**
 - [ ] Action translation correctness 🟡 **IMPORTANT**
 
-#### 7.1 Verification
+#### 5.1 Verification
 
 - [ ] Run `cargo test --workspace` - All unit tests pass
 - [ ] Run `cargo tarpaulin --workspace` - Coverage > 80%
 - [ ] Run `cargo clippy --workspace -- -D warnings` - No clippy warnings
 
-#### 7.2 Verification
+#### 5.2 Verification
 
 - [ ] Run `cargo test --workspace` - All integration tests pass
 - [ ] Test with real MoosicBox workflows
 - [ ] Run `cargo test --workspace --release` - Release mode works
 
-#### 7.3 Verification
+#### 5.3 Verification
 
 - [ ] Run all example workflows successfully
 - [ ] All examples have documentation
 - [ ] Test MoosicBox workflows execute locally
 
-#### 7.4 Verification
+#### 5.4 Verification
 
 - [ ] Run `cargo test --workspace` - All performance tests pass
 - [ ] Test with large workflows and stress scenarios
 - [ ] Verify resource usage is reasonable
 
-## Phase 8: Documentation 🟡
+## Phase 9: Documentation 🟡
 
 **Goal:** Comprehensive documentation and examples
 
 **Status:** All tasks pending - Documentation creation needed
 
-### 8.1 User Documentation
+### 5.1 User Documentation
 
 - [ ] Getting started guide 🟡 **IMPORTANT**
 - [ ] CLI command reference 🟡 **IMPORTANT**
 - [ ] Action translation guide 🟡 **IMPORTANT**
 - [ ] Backend configuration docs 🟢 **MINOR**
 
-#### 8.1 Verification
+#### 5.1 Verification
 
 - [ ] Run `mdbook build docs/` - User guide builds
 - [ ] Run `cargo test --doc` - Doc tests pass
 - [ ] Test all code examples in documentation work
 
-#### 8.2 Verification
+#### 5.2 Verification
 
 - [ ] Run `cargo doc --workspace` - Documentation builds
 - [ ] Verify all public APIs have examples
 - [ ] Architecture documentation is up to date
 
-#### 8.3 Verification
+#### 5.3 Verification
 
 - [ ] Run `cargo rustdoc --workspace -- -D warnings` - No doc warnings
 - [ ] Run `cargo test --doc --workspace` - All doc tests pass
