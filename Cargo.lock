@@ -14415,6 +14415,7 @@ dependencies = [
  "switchy_database",
  "switchy_database_connection",
  "switchy_fs",
+ "switchy_schema_test_utils",
  "thiserror 2.0.16",
  "tokio",
 ]
