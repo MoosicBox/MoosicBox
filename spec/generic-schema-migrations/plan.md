@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** ✅ **Phase 11.2.3 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1-10.2.1.10, 10.2.2.1-10.2.2.5, 10.2.3, 11.1, 11.2.1-11.2.3 complete. Basic usage example demonstrating type-safe schema builders implemented with zero raw SQL. All core generic schema migration functionality is complete. Enhanced error recovery infrastructure with status tracking and MigrationStatus enum ready for Phase 11.2.7 integration.
+**Current Status:** ✅ **Phase 11.2.5 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1-10.2.1.10, 10.2.2.1-10.2.2.5, 10.2.3, 11.1, 11.2.1-11.2.5 complete. Recovery documentation created with comprehensive failure scenarios, procedures, and best practices. Enhanced error recovery infrastructure fully documented and ready for production use.
 
-**Completion Estimate:** ~97% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, full API documentation, complete database transaction support, all schema builder extensions (DropTable, CreateIndex, DropIndex, AlterTable), basic usage example, CLI tools, and error recovery infrastructure all finished. Core generic schema migration system is production-ready with enhanced error tracking. Only remaining Phase 11 enhancements and optional features remain.
+**Completion Estimate:** ~98% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, full API documentation, complete database transaction support, all schema builder extensions (DropTable, CreateIndex, DropIndex, AlterTable), basic usage example, CLI tools, error recovery infrastructure, and recovery documentation all finished. Only Phase 11.2.6 integration tests and Phase 11.2.7 cleanup remain.
 
 ## Status Legend
 
@@ -3562,26 +3562,43 @@ Phase 11.2.4 is complete and all recovery functionality is ready for production 
 - [x] Run `cargo fmt` - format entire repository ✅
 - [x] CLI help text updated for all new commands and flags ✅
 
-#### 11.2.5 Document Recovery Best Practices
+#### 11.2.5 Document Recovery Best Practices ✅ **COMPLETED**
 
-- [ ] Create `RECOVERY.md` in `packages/switchy/schema/` 🟢 **MINOR**
-  - [ ] Document common failure scenarios:
-    - [ ] Network interruption during migration
-    - [ ] Process killed during migration
-    - [ ] SQL syntax errors in migration files
-    - [ ] Constraint violations during data migration
-  - [ ] Recovery procedures for each scenario:
-    - [ ] How to identify the failure (check status table)
-    - [ ] How to assess damage (check schema state)
-    - [ ] When to retry vs manual fix vs rollback
-    - [ ] How to clean up partial changes
-  - [ ] Best practices:
-    - [ ] Always backup before migrations
-    - [ ] Test migrations in staging first
-    - [ ] Monitor migration execution
-    - [ ] Use transactions where possible
-    - [ ] Keep migrations idempotent when feasible
-  - [ ] CLI usage examples for recovery:
+- [x] Create `RECOVERY.md` in `packages/switchy/schema/` ✅ **MINOR**
+  - ✓ Created at packages/switchy/schema/RECOVERY.md (2025-09-08)
+  - [x] Document common failure scenarios:
+    - [x] Network interruption during migration
+      - ✓ Documented with symptoms, causes, and SQL examples
+    - [x] Process killed during migration
+      - ✓ Documented with detection methods and recovery paths
+    - [x] SQL syntax errors in migration files
+      - ✓ Documented with failure_reason column usage
+    - [x] Constraint violations during data migration
+      - ✓ Documented with specific constraint examples
+  - [x] Recovery procedures for each scenario:
+    - [x] How to identify the failure (check status table)
+      - ✓ SQL queries and CLI commands provided for each scenario
+    - [x] How to assess damage (check schema state)
+      - ✓ Cross-database schema assessment queries included
+    - [x] When to retry vs manual fix vs rollback
+      - ✓ Decision matrix table provided with clear rationales
+    - [x] How to clean up partial changes
+      - ✓ Specific cleanup commands for tables, columns, indexes
+  - [x] Best practices:
+    - [x] Always backup before migrations
+      - ✓ Backup commands for SQLite, PostgreSQL, MySQL
+    - [x] Test migrations in staging first
+      - ✓ Testing strategies and validation steps documented
+    - [x] Monitor migration execution
+      - ✓ Monitoring commands and techniques included
+    - [x] Use transactions where possible
+      - ✓ Transaction behavior explained
+    - [x] Keep migrations idempotent when feasible
+      - ✓ Idempotent SQL examples provided
+  - [x] CLI usage examples for recovery:
+    - ✓ All examples verified against actual implementation
+    - ✓ Environment variable configuration added
+    - ✓ Cross-database examples included
     ```bash
     # Check migration status
     switchy-migrate status --show-failed
@@ -3592,20 +3609,51 @@ Phase 11.2.4 is complete and all recovery functionality is ready for production 
     # Force mark as completed (dangerous!)
     switchy-migrate mark-completed --force 2024-01-15-123456_add_user_table
 
-    # Run migrations with dirty state (dangerous!)
-     switchy-migrate up --force
+     # Run migrations with dirty state (dangerous!)
+     switchy-migrate migrate --force
      ```
 
-#### 11.2.5 Verification Checklist
+#### 11.2.5 Verification Checklist ✅ **COMPLETED**
 
-- [ ] `RECOVERY.md` file created in `packages/switchy/schema/`
-- [ ] All failure scenarios documented with examples
-- [ ] Recovery procedures include step-by-step instructions
-- [ ] Best practices section is comprehensive
-- [ ] CLI usage examples are syntactically correct
-- [ ] Document reviewed for clarity and completeness
-- [ ] Links to related documentation added
-- [ ] Markdown formatting is correct (test with preview)
+- [x] `RECOVERY.md` file created in `packages/switchy/schema/`
+  - ✓ Created at packages/switchy/schema/RECOVERY.md
+- [x] All failure scenarios documented with examples
+  - ✓ 4 scenarios with SQL examples and symptoms
+- [x] Recovery procedures include step-by-step instructions
+  - ✓ Detailed procedures for each scenario type
+- [x] Best practices section is comprehensive
+  - ✓ 5 best practices with examples
+- [x] CLI usage examples are syntactically correct
+  - ✓ Verified against actual CLI implementation
+- [x] Document reviewed for clarity and completeness
+  - ✓ Comprehensive guide with table of contents
+- [x] Links to related documentation added
+  - ✓ Links to README files included
+- [x] Markdown formatting is correct (test with preview)
+  - ✓ Proper markdown with code blocks, tables, headers
+
+### Phase 11.2.5 Implementation Notes (Completed 2025-09-08)
+
+**Key Implementation Details:**
+- ✅ Comprehensive RECOVERY.md created covering all failure scenarios
+- ✅ Cross-database examples for SQLite, PostgreSQL, and MySQL
+- ✅ Emergency recovery scenarios added beyond spec requirements
+- ✅ Schema state assessment queries for troubleshooting
+- ✅ Environment variable configuration documented
+- ✅ Decision matrix for retry vs manual fix vs rollback strategies
+
+**Documentation Enhancements Beyond Spec:**
+- Added emergency recovery scenarios section
+- Included schema drift detection and correction
+- Added migration table corruption recovery
+- Provided database-specific SQL examples for all assessments
+- Created comprehensive table of contents for easy navigation
+
+**Zero Compromises:**
+- All specified failure scenarios documented
+- All recovery procedures detailed with examples
+- All best practices included with practical examples
+- All CLI commands verified against actual implementation
 
 #### 11.2.6 Add Integration Tests for Recovery Scenarios
 
