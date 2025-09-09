@@ -548,6 +548,16 @@ impl ToValueType<NaiveDateTime> for DatabaseValue {
     fn to_value_type(self) -> Result<NaiveDateTime, ParseError> {
         match self {
             Self::DateTime(value) => Ok(value),
+            Self::String(dt_str) => {
+                // Parse datetime string (SQLite returns datetime as string)
+                chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
+                    .or_else(|_| {
+                        chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
+                    })
+                    .map_err(|_| {
+                        ParseError::ConvertType(format!("Invalid datetime format: {dt_str}"))
+                    })
+            }
             _ => Err(ParseError::ConvertType("NaiveDateTime".into())),
         }
     }
