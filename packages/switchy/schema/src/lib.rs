@@ -147,6 +147,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
 
+pub mod checksum_database;
+pub mod digest;
 pub mod discovery;
 pub mod migration;
 pub mod runner;
@@ -160,6 +162,9 @@ pub mod test_utils;
 
 use switchy_database::DatabaseError;
 use thiserror::Error;
+
+pub use checksum_database::{ChecksumDatabase, calculate_hash};
+pub use digest::Digest;
 
 /// Detailed validation error information
 ///

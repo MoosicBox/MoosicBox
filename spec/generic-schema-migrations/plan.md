@@ -4003,19 +4003,25 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 - Always maintain compilable code at every step
 - Async checksum methods eliminate blocking and provide natural async flow
 
-#### 11.3.1: Complete ChecksumDatabase Implementation ❌ **CHECKSUM_INFRA**
+#### 11.3.1: Complete ChecksumDatabase Implementation ✅ **COMPLETED** (2025-09-10)
 
 **Goal**: Create fully verified async ChecksumDatabase with complete Database trait implementation
 
 **Dependencies:**
-- [ ] Add to `packages/switchy/schema/Cargo.toml`:
-  - `bytes = { workspace = true }`
-  - `sha2 = { workspace = true }`
-  - `hex = { workspace = true }`
-  - `switchy_async = { workspace = true }`
+- [x] Add to `packages/switchy/schema/Cargo.toml`:
+  - [x] `bytes = { workspace = true }`
+    - ✓ Added at line 27 in packages/switchy/schema/Cargo.toml
+  - [x] `sha2 = { workspace = true }`
+    - ✓ Added at line 21 in packages/switchy/schema/Cargo.toml
+  - [x] ~~`hex = { workspace = true }`~~ **MOVED TO PHASE 11.3.2**
+    - ✓ Added at line 19 but not used in this phase - will be moved to 11.3.2 where it's actually needed for hex string conversion
+  - [x] `switchy_async = { workspace = true }`
+    - ✓ Added at line 22 with `features = ["sync"]` in packages/switchy/schema/Cargo.toml
 
 **Core Types:**
-- [ ] Create `packages/switchy/schema/src/digest.rs`:
+- [x] Create `packages/switchy/schema/src/digest.rs`:
+  - ✓ Created at packages/switchy/schema/src/digest.rs
+  - ✓ Digest trait defined exactly as specified
   ```rust
   use sha2::Sha256;
 
@@ -4026,7 +4032,12 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
   ```
 
 **ChecksumDatabase Implementation:**
-- [ ] Create `packages/switchy/schema/src/checksum_database.rs`:
+- [x] Create `packages/switchy/schema/src/checksum_database.rs`:
+  - ✓ Created at packages/switchy/schema/src/checksum_database.rs
+  - ✓ ChecksumDatabase struct with `Arc<Mutex<Sha256>>` at lines 15-17
+  - ✓ `new()` method at lines 26-31
+  - ✓ `with_hasher()` method at lines 33-35
+  - ✓ `finalize()` method returns `bytes::Bytes` at lines 37-50
   ```rust
   use sha2::{Sha256, Digest as _};
   use switchy_async::sync::Mutex;
@@ -4066,7 +4077,10 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
   ```
 
 **Complete Database Implementation:**
-- [ ] Implement ALL Database trait methods (verified against trait definition):
+- [x] Implement ALL Database trait methods (verified against trait definition):
+  - ✓ All 19 Database trait methods implemented at lines 54-156
+  - ✓ All methods digest their inputs and return appropriate empty responses
+  - ✓ DatabaseTransaction trait implemented at lines 158-183
   ```rust
   #[async_trait]
   impl Database for ChecksumDatabase {
@@ -4225,7 +4239,10 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
   ```
 
 **Digest Implementations for Expressions (Exhaustive):**
-- [ ] Implement `Digest` for all Expression types with complete DatabaseValue coverage:
+- [x] Implement `Digest` for all Expression types with complete DatabaseValue coverage:
+  - ✓ ExpressionType Digest implementation at lines 629-722 covers all 29 variants
+  - ✓ DatabaseValue handling within ExpressionType::Value variant
+  - ✓ All variants handled exhaustively with no wildcard matches
   ```rust
   impl<T: Expression + ?Sized> Digest for T {
       fn update_digest(&self, hasher: &mut Sha256) {
@@ -4335,7 +4352,15 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
   ```
 
 **Digest for Query/DDL Types with Deterministic Ordering:**
-- [ ] Implement `Digest` for all query and DDL types using BTreeMap/BTreeSet for consistent ordering:
+- [x] Implement `Digest` for all query and DDL types using BTreeMap/BTreeSet for consistent ordering:
+  - ✓ SelectQuery Digest at lines 724-792 with BTreeMap at lines 745, 765
+  - ✓ UpdateStatement Digest at lines 794-829 with BTreeMap at line 806
+  - ✓ InsertStatement Digest at lines 831-856 with BTreeMap at line 844
+  - ✓ DeleteStatement Digest at lines 858-876
+  - ✓ UpsertStatement Digest at lines 878-931 with BTreeMap at line 889
+  - ✓ UpsertMultiStatement Digest at lines 933-982 with BTreeMap at line 946
+  - ✓ CreateTableStatement Digest at lines 984-1048 with BTreeMap at line 997
+  - ✓ All use BTreeMap for deterministic iteration order
   ```rust
   use std::collections::{BTreeMap, BTreeSet};
 
@@ -4383,7 +4408,9 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
   ```
 
 **Helper Functions:**
-- [ ] Add to `checksum_database.rs`:
+- [x] Add to `checksum_database.rs`:
+  - ✓ `calculate_hash()` function implemented at lines 263-268
+  - ✓ Returns `bytes::Bytes` as specified
   ```rust
   pub fn calculate_hash(content: &str) -> bytes::Bytes {
       use sha2::{Sha256, Digest as _};
@@ -4394,7 +4421,11 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
   ```
 
 **Module Exports:**
-- [ ] Add to `packages/switchy/schema/src/lib.rs`:
+- [x] Add to `packages/switchy/schema/src/lib.rs`:
+  - ✓ `pub mod checksum_database;` at line 150
+  - ✓ `pub mod digest;` at line 151
+  - ✓ `pub use checksum_database::{ChecksumDatabase, calculate_hash};` at line 166
+  - ✓ `pub use digest::Digest;` at line 167
   ```rust
   pub mod checksum_database;
   pub mod digest;
@@ -4403,33 +4434,65 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
   ```
 
 **Implementation Success Factors:**
-- [ ] **Row Construction**: Use `Row { columns: vec![] }` for all empty row returns
-- [ ] **Complete Database Coverage**: ALL 20+ Database trait methods implemented
-- [ ] **Transaction Lifecycle**: begin/commit/rollback operations tracked in digest
-- [ ] **Graceful Finalize**: Arc::try_unwrap match prevents panics with multiple references
-- [ ] **Shared Hasher**: Transaction shares parent's Arc<Mutex<Sha256>> for unified digest
-- [ ] **Empty Returns**: All query methods return appropriate empty collections/None/empty rows
+- [x] **Row Construction**: Use `Row { columns: vec![] }` for all empty row returns
+  - ✓ Implemented throughout, e.g., line 63 in checksum_database.rs
+- [x] **Complete Database Coverage**: ALL 19 Database trait methods implemented
+  - ✓ All methods implemented at lines 54-156 in checksum_database.rs
+- [x] **Transaction Lifecycle**: begin/commit/rollback operations tracked in digest
+  - ✓ begin_transaction at 147-155, commit at 170-174, rollback at 176-180
+- [x] **Graceful Finalize**: Arc::try_unwrap match prevents panics with multiple references
+  - ✓ Implemented with match at lines 38-49 in checksum_database.rs
+- [x] **Shared Hasher**: Transaction shares parent's Arc<Mutex<Sha256>> for unified digest
+  - ✓ Transaction created with parent's hasher at line 150
+- [x] **Empty Returns**: All query methods return appropriate empty collections/None/empty rows
+  - ✓ All query methods return empty Vec or None as appropriate
 
 **Verification Checklist:**
-- [ ] Run `cargo build -p switchy_schema` - compiles successfully
-- [ ] ChecksumDatabase implements ALL Database trait methods (verified count: 20+ methods)
-- [ ] ChecksumDatabase implements DatabaseTransaction trait
-- [ ] Row construction works: `Row { columns: vec![] }`
-- [ ] Transaction operations (begin/commit/rollback) update digest appropriately
-- [ ] All methods digest inputs and return empty/default responses
-- [ ] Digest implemented for ALL ExpressionType variants (exhaustive match)
-- [ ] Digest implemented for ALL DatabaseValue variants (exhaustive match)
-- [ ] Digest implemented for all query/DDL types with deterministic ordering
-- [ ] Uses BTreeMap/BTreeSet for deterministic ordering where iteration matters
-- [ ] Graceful finalize() handling without panic using Arc::try_unwrap match
-- [ ] Thread-safe with async Mutex for concurrent access
-- [ ] Unit test: Same operations produce identical checksums
-- [ ] Unit test: Different operations produce different checksums
-- [ ] Unit test: Transaction patterns (commit vs rollback) produce different checksums
-- [ ] Unit test: Graceful finalize with multiple Arc references doesn't panic
-- [ ] Unit test: Shared hasher between parent and transaction works correctly
-- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
-- [ ] Run `cargo fmt --all` - format entire repository
+- [x] Run `cargo build -p switchy_schema` - compiles successfully
+  - ✓ Verified compilation successful
+- [x] ChecksumDatabase implements ALL Database trait methods (verified count: 19 methods)
+  - ✓ 19 methods implemented at lines 54-156 in checksum_database.rs
+- [x] ChecksumDatabase implements DatabaseTransaction trait
+  - ✓ Implemented at lines 158-183 in checksum_database.rs
+- [x] Row construction works: `Row { columns: vec![] }`
+  - ✓ Used throughout, e.g., line 63 in checksum_database.rs
+- [x] Transaction operations (begin/commit/rollback) update digest appropriately
+  - ✓ `begin_transaction()` at lines 147-155, `commit()` at 170-174, `rollback()` at 176-180
+- [x] All methods digest inputs and return empty/default responses
+  - ✓ All methods follow pattern of updating digest then returning empty response
+- [x] Digest implemented for ALL ExpressionType variants (exhaustive match)
+  - ✓ All 29 variants implemented at lines 629-722 in checksum_database.rs
+- [x] Digest implemented for ALL DatabaseValue variants (exhaustive match)
+  - ✓ All 17 variants implemented at lines 530-627 in checksum_database.rs
+- [x] Digest implemented for all query/DDL types with deterministic ordering
+  - ✓ All query types implemented: SelectQuery (724-792), UpdateStatement (794-829), InsertStatement (831-856), DeleteStatement (858-876), UpsertStatement (878-931), UpsertMultiStatement (933-982), CreateTableStatement (984-1048)
+- [x] Uses BTreeMap/BTreeSet for deterministic ordering where iteration matters
+  - ✓ BTreeMap used at lines 745, 765, 806, 844, 889, 946, 997, etc.
+- [x] Graceful finalize() handling without panic using Arc::try_unwrap match
+  - ✓ Arc::try_unwrap with proper error handling at lines 38-49
+- [x] Thread-safe with async Mutex for concurrent access
+  - ✓ Uses `switchy_async::sync::Mutex` imported at line 7
+- [x] Unit test: Same operations produce identical checksums
+  - ✓ `test_same_operations_produce_identical_checksums()` at lines 277-292
+- [x] Unit test: Different operations produce different checksums
+  - ✓ `test_different_operations_produce_different_checksums()` at lines 295-310
+- [x] Unit test: Transaction patterns (commit vs rollback) produce different checksums
+  - ✓ `test_transaction_patterns_produce_different_checksums()` at lines 313-333
+- [x] Unit test: Graceful finalize with multiple Arc references doesn't panic
+  - ✓ `test_graceful_finalize_with_multiple_arc_references()` at lines 335-349
+- [x] Unit test: Shared hasher between parent and transaction works correctly
+  - ✓ `test_shared_hasher_between_parent_and_transaction()` at lines 351-383
+- [x] **BONUS TESTS** (exceeding requirements):
+  - ✓ `test_database_value_digest_coverage()` at lines 386-415
+  - ✓ `test_calculate_hash_function()` at lines 418-429
+  - ✓ `test_all_database_methods_implemented()` at lines 432-493
+  - ✓ `test_row_construction()` at lines 496-504
+  - ✓ `test_transaction_digest_updates()` at lines 507-526
+  - ✓ **Total: 10 comprehensive unit tests** (5 more than minimum requirement)
+- [x] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+  - ✓ Zero clippy warnings achieved
+- [x] Run `cargo fmt --all` - format entire repository
+  - ✓ Code properly formatted
 
 #### 11.3.2: Atomic Database Schema and Migration Trait Update ❌ **ATOMIC_UPDATE**
 
@@ -4437,6 +4500,10 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 
 **⚠️ BACKWARDS INCOMPATIBLE**: Fresh installations only
 **⚠️ ATOMIC CHANGE**: Database and code updated together to prevent broken state
+
+**Dependencies:**
+- [ ] Use `hex = { workspace = true }` from Phase 11.3.1
+  - Note: hex crate moved from 11.3.1 where it was added but unused - needed here for converting bytes to hex strings for database storage
 
 **Database Schema Changes:**
 - [ ] Add NOT NULL checksum column: `checksum VARCHAR(64) NOT NULL`
@@ -4465,7 +4532,7 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 **VersionTracker Changes:**
 - [ ] Update `record_migration_started()` to require `checksum: &bytes::Bytes`
 - [ ] Validate checksum is exactly 32 bytes, return error if not
-- [ ] Convert to lowercase hex string (always 64 chars) for storage
+- [ ] Convert to lowercase hex string using `hex::encode()` (always 64 chars) for storage
 - [ ] Update `get_migration_status()` to return checksum as bytes::Bytes
 
 **MigrationRunner Changes:**
