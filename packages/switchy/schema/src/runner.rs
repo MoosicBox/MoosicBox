@@ -78,7 +78,11 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{Result, migration::MigrationSource, version::VersionTracker};
+use crate::{
+    Result,
+    migration::{MigrationSource, MigrationStatus},
+    version::VersionTracker,
+};
 use switchy_database::Database;
 
 #[cfg(feature = "embedded")]
@@ -292,7 +296,12 @@ impl<'a> MigrationRunner<'a> {
                     Ok(()) => {
                         // Update migration status as completed
                         self.version_tracker
-                            .update_migration_status(db, &migration_id, "completed", None)
+                            .update_migration_status(
+                                db,
+                                &migration_id,
+                                MigrationStatus::Completed,
+                                None,
+                            )
                             .await?;
 
                         // Call after hook
@@ -306,7 +315,7 @@ impl<'a> MigrationRunner<'a> {
                             .update_migration_status(
                                 db,
                                 &migration_id,
-                                "failed",
+                                MigrationStatus::Failed,
                                 Some(e.to_string()),
                             )
                             .await?;
@@ -554,10 +563,10 @@ impl<'a> MigrationRunner<'a> {
     ) -> Result<Vec<crate::version::MigrationRecord>> {
         let dirty_migrations = self.version_tracker.get_dirty_migrations(db).await?;
 
-        // Filter results to only include records where status == "failed"
+        // Filter results to only include records where status == MigrationStatus::Failed
         let mut failed_migrations: Vec<_> = dirty_migrations
             .into_iter()
-            .filter(|record| record.status == "failed")
+            .filter(|record| record.status == MigrationStatus::Failed)
             .collect();
 
         // Sort by run_on timestamp for chronological order
@@ -581,7 +590,7 @@ impl<'a> MigrationRunner<'a> {
             .await?;
 
         match migration_status {
-            Some(record) if record.status == "failed" => {
+            Some(record) if record.status == MigrationStatus::Failed => {
                 // Delete the failed record
                 self.version_tracker
                     .remove_migration(db, migration_id)
@@ -606,7 +615,12 @@ impl<'a> MigrationRunner<'a> {
                 match migration.up(db).await {
                     Ok(()) => {
                         self.version_tracker
-                            .update_migration_status(db, migration_id, "completed", None)
+                            .update_migration_status(
+                                db,
+                                migration_id,
+                                MigrationStatus::Completed,
+                                None,
+                            )
                             .await?;
                     }
                     Err(e) => {
@@ -614,7 +628,7 @@ impl<'a> MigrationRunner<'a> {
                             .update_migration_status(
                                 db,
                                 migration_id,
-                                "failed",
+                                MigrationStatus::Failed,
                                 Some(e.to_string()),
                             )
                             .await?;
@@ -650,13 +664,13 @@ impl<'a> MigrationRunner<'a> {
             .await?;
 
         match migration_status {
-            Some(record) if record.status == "completed" => {
+            Some(record) if record.status == MigrationStatus::Completed => {
                 Ok(format!("Migration '{migration_id}' is already completed"))
             }
             Some(_) => {
                 // Exists but not completed - update status
                 self.version_tracker
-                    .update_migration_status(db, migration_id, "completed", None)
+                    .update_migration_status(db, migration_id, MigrationStatus::Completed, None)
                     .await?;
                 Ok(format!("Migration '{migration_id}' marked as completed"))
             }
@@ -1198,7 +1212,7 @@ mod tests {
             // Run migration
             runner.run(&*db).await.expect("Migration should succeed");
 
-            // Verify migration status is "completed"
+            // Verify migration status is MigrationStatus::Completed
             let status = runner
                 .version_tracker
                 .get_migration_status(&*db, "001_test")
@@ -1206,7 +1220,7 @@ mod tests {
                 .expect("Failed to get migration status")
                 .expect("Migration should exist");
 
-            assert_eq!(status.status, "completed");
+            assert_eq!(status.status, MigrationStatus::Completed);
             assert!(status.finished_on.is_some());
             assert!(status.failure_reason.is_none());
         }
@@ -1234,7 +1248,7 @@ mod tests {
             let result = runner.run(&*db).await;
             assert!(result.is_err(), "Migration should fail");
 
-            // Verify migration status is "failed"
+            // Verify migration status is MigrationStatus::Failed
             let status = runner
                 .version_tracker
                 .get_migration_status(&*db, "001_failing")
@@ -1242,7 +1256,7 @@ mod tests {
                 .expect("Failed to get migration status")
                 .expect("Migration should exist");
 
-            assert_eq!(status.status, "failed");
+            assert_eq!(status.status, MigrationStatus::Failed);
             assert!(status.finished_on.is_some());
             assert!(status.failure_reason.is_some());
         }
@@ -1289,7 +1303,7 @@ mod tests {
                 .update_migration_status(
                     &*db,
                     "failed_migration",
-                    "failed",
+                    MigrationStatus::Failed,
                     Some("Test error".to_string()),
                 )
                 .await
@@ -1304,7 +1318,7 @@ mod tests {
             // Should only return the failed migration
             assert_eq!(failed_migrations.len(), 1);
             assert_eq!(failed_migrations[0].id, "failed_migration");
-            assert_eq!(failed_migrations[0].status, "failed");
+            assert_eq!(failed_migrations[0].status, MigrationStatus::Failed);
         }
 
         #[tokio::test]
@@ -1345,7 +1359,7 @@ mod tests {
                 .update_migration_status(
                     &*db,
                     "001_retry_test",
-                    "failed",
+                    MigrationStatus::Failed,
                     Some("Test error".to_string()),
                 )
                 .await
@@ -1357,7 +1371,7 @@ mod tests {
                 .await
                 .expect("Retry should succeed");
 
-            // Verify migration status is now "completed"
+            // Verify migration status is now MigrationStatus::Completed
             let status = runner
                 .version_tracker
                 .get_migration_status(&*db, "001_retry_test")
@@ -1365,7 +1379,7 @@ mod tests {
                 .expect("Failed to get migration status")
                 .expect("Migration should exist");
 
-            assert_eq!(status.status, "completed");
+            assert_eq!(status.status, MigrationStatus::Completed);
             assert!(status.failure_reason.is_none());
         }
 
@@ -1479,7 +1493,7 @@ mod tests {
                 .expect("Failed to get migration status")
                 .expect("Migration should exist");
 
-            assert_eq!(status.status, "completed");
+            assert_eq!(status.status, MigrationStatus::Completed);
         }
 
         #[tokio::test]
@@ -1512,7 +1526,7 @@ mod tests {
                 .update_migration_status(
                     &*db,
                     "failed_migration",
-                    "failed",
+                    MigrationStatus::Failed,
                     Some("Test error".to_string()),
                 )
                 .await
@@ -1534,7 +1548,7 @@ mod tests {
                 .expect("Failed to get migration status")
                 .expect("Migration should exist");
 
-            assert_eq!(status.status, "completed");
+            assert_eq!(status.status, MigrationStatus::Completed);
         }
 
         #[tokio::test]

@@ -14411,6 +14411,7 @@ dependencies = [
  "bytes",
  "chrono",
  "include_dir",
+ "moosicbox_json_utils",
  "switchy_async",
  "switchy_database",
  "switchy_database_connection",

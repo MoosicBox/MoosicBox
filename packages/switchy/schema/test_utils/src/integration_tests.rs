@@ -7,14 +7,6 @@
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-use crate::{MigrationTestBuilder, TestError};
-use std::sync::Arc;
-use switchy_database::{
-    Database,
-    query::{Expression, FilterableQuery},
-};
-use switchy_schema::{MigrationError, migration::Migration};
-
 /// Demonstrates rollback functionality with a realistic migration scenario
 ///
 /// This test creates a table, adds data, then rolls back the migration
@@ -28,8 +20,13 @@ use switchy_schema::{MigrationError, migration::Migration};
 ///
 /// * If the table `users` exists after rollback
 #[cfg(feature = "sqlite")]
-pub async fn demonstrate_rollback_functionality() -> Result<(), TestError> {
-    use crate::create_empty_in_memory;
+pub async fn demonstrate_rollback_functionality() -> Result<(), crate::TestError> {
+    use std::sync::Arc;
+
+    use switchy_database::query::FilterableQuery as _;
+    use switchy_schema::migration::Migration;
+
+    use crate::{MigrationTestBuilder, create_empty_in_memory};
 
     let db = create_empty_in_memory().await?;
 
@@ -74,8 +71,13 @@ pub async fn demonstrate_rollback_functionality() -> Result<(), TestError> {
 ///
 /// * If any of the assertions fail
 #[cfg(feature = "sqlite")]
-pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), TestError> {
-    use crate::create_empty_in_memory;
+pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::TestError> {
+    use std::sync::Arc;
+
+    use switchy_database::query::Expression as _;
+    use switchy_schema::migration::Migration;
+
+    use crate::{MigrationTestBuilder, create_empty_in_memory};
 
     let db = create_empty_in_memory().await?;
 
@@ -179,7 +181,9 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), TestError> 
 ///
 /// * If any of the assertions fail
 #[cfg(all(test, feature = "sqlite"))]
-pub async fn demonstrate_environment_variable_integration() -> Result<(), TestError> {
+pub async fn demonstrate_environment_variable_integration() -> Result<(), crate::TestError> {
+    use switchy_database::query::FilterableQuery as _;
+
     use crate::create_empty_in_memory;
 
     let db = create_empty_in_memory().await?;
@@ -223,19 +227,24 @@ pub async fn demonstrate_environment_variable_integration() -> Result<(), TestEr
 }
 
 /// Simple test migration implementation for demonstrations
+#[cfg(feature = "sqlite")]
 struct TestMigration {
     id: String,
     up_sql: Option<String>,
     down_sql: Option<String>,
 }
 
+#[cfg(feature = "sqlite")]
 #[async_trait::async_trait]
-impl Migration<'static> for TestMigration {
+impl switchy_schema::migration::Migration<'static> for TestMigration {
     fn id(&self) -> &str {
         &self.id
     }
 
-    async fn up(&self, db: &dyn Database) -> Result<(), MigrationError> {
+    async fn up(
+        &self,
+        db: &dyn switchy_database::Database,
+    ) -> Result<(), switchy_schema::MigrationError> {
         if let Some(sql) = &self.up_sql
             && !sql.is_empty()
         {
@@ -244,7 +253,10 @@ impl Migration<'static> for TestMigration {
         Ok(())
     }
 
-    async fn down(&self, db: &dyn Database) -> Result<(), MigrationError> {
+    async fn down(
+        &self,
+        db: &dyn switchy_database::Database,
+    ) -> Result<(), switchy_schema::MigrationError> {
         if let Some(sql) = &self.down_sql
             && !sql.is_empty()
         {

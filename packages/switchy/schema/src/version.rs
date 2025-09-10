@@ -49,10 +49,11 @@
 //! # }
 //! ```
 
-use crate::Result;
+use crate::{Result, migration::MigrationStatus};
 use chrono::NaiveDateTime;
+use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue};
 use switchy_database::{
-    Database, DatabaseValue,
+    Database, DatabaseValue, Row,
     query::{FilterableQuery, where_not_eq},
     schema::{Column, DataType},
 };
@@ -66,8 +67,33 @@ pub struct MigrationRecord {
     pub id: String,
     pub run_on: NaiveDateTime,
     pub finished_on: Option<NaiveDateTime>,
-    pub status: String,
+    pub status: MigrationStatus,
     pub failure_reason: Option<String>,
+}
+
+impl MissingValue<MigrationRecord> for &Row {}
+impl MissingValue<MigrationStatus> for &Row {}
+
+impl ToValueType<MigrationRecord> for &Row {
+    fn to_value_type(self) -> std::result::Result<MigrationRecord, ParseError> {
+        Ok(MigrationRecord {
+            id: self
+                .to_value("id")
+                .map_err(|e| ParseError::ConvertType(format!("id: {e}")))?,
+            run_on: self
+                .to_value("run_on")
+                .map_err(|e| ParseError::ConvertType(format!("run_on: {e}")))?,
+            finished_on: self
+                .to_value("finished_on")
+                .map_err(|e| ParseError::ConvertType(format!("finished_on: {e}")))?,
+            status: self
+                .to_value("status")
+                .map_err(|e| ParseError::ConvertType(format!("status: {e}")))?,
+            failure_reason: self
+                .to_value("failure_reason")
+                .map_err(|e| ParseError::ConvertType(format!("failure_reason: {e}")))?,
+        })
+    }
 }
 
 /// Tracks migration state in the database
@@ -199,7 +225,7 @@ impl VersionTracker {
         for row in &results {
             if let Some(status_value) = row.get("status")
                 && let Some(status_str) = status_value.as_str()
-                && status_str == "completed"
+                && status_str == MigrationStatus::Completed.to_string()
             {
                 return Ok(true);
             }
@@ -220,7 +246,7 @@ impl VersionTracker {
     pub async fn record_migration(&self, db: &dyn Database, migration_id: &str) -> Result<()> {
         db.insert(&self.table_name)
             .value("id", migration_id)
-            .value("status", "completed")
+            .value("status", MigrationStatus::Completed.to_string())
             .value("finished_on", DatabaseValue::Now)
             .value("failure_reason", DatabaseValue::Null)
             .execute(db)
@@ -245,7 +271,7 @@ impl VersionTracker {
     ) -> Result<()> {
         db.insert(&self.table_name)
             .value("id", migration_id)
-            .value("status", "in_progress")
+            .value("status", MigrationStatus::InProgress.to_string())
             .value("finished_on", DatabaseValue::Null)
             .value("failure_reason", DatabaseValue::Null)
             .execute(db)
@@ -266,11 +292,11 @@ impl VersionTracker {
         &self,
         db: &dyn Database,
         migration_id: &str,
-        status: &str,
+        status: MigrationStatus,
         failure_reason: Option<String>,
     ) -> Result<()> {
         db.update(&self.table_name)
-            .value("status", status)
+            .value("status", status.to_string())
             .value("finished_on", DatabaseValue::Now)
             .value("failure_reason", DatabaseValue::StringOpt(failure_reason))
             .where_eq("id", migration_id)
@@ -299,87 +325,15 @@ impl VersionTracker {
             .execute(db)
             .await?;
 
-        if let Some(row) = results.into_iter().next() {
-            let id = row
-                .get("id")
-                .and_then(|v| v.as_str().map(ToString::to_string))
-                .ok_or_else(|| crate::MigrationError::Validation("Missing id field".into()))?;
-
-            let run_on = match row.get("run_on") {
-                Some(DatabaseValue::DateTime(dt)) => dt,
-                Some(DatabaseValue::String(dt_str)) => {
-                    // Parse datetime string (SQLite returns datetime as string)
-                    chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
-                        .or_else(|_| {
-                            chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
-                        })
-                        .map_err(|_| {
-                            crate::MigrationError::Validation(format!(
-                                "Invalid run_on datetime format: {dt_str}"
-                            ))
-                        })?
-                }
-                Some(other) => {
-                    return Err(crate::MigrationError::Validation(format!(
-                        "Invalid run_on field type, got: {other:?}"
-                    )));
-                }
-                None => {
-                    return Err(crate::MigrationError::Validation(
-                        "Missing run_on field".into(),
-                    ));
-                }
-            };
-
-            let finished_on = match row.get("finished_on") {
-                Some(DatabaseValue::DateTime(dt)) => Some(dt),
-                Some(DatabaseValue::String(dt_str)) => {
-                    // Parse datetime string (SQLite returns datetime as string)
-                    let parsed =
-                        chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
-                            .or_else(|_| {
-                                chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
-                            })
-                            .map_err(|_| {
-                                crate::MigrationError::Validation(format!(
-                                    "Invalid finished_on datetime format: {dt_str}"
-                                ))
-                            })?;
-                    Some(parsed)
-                }
-                Some(DatabaseValue::Null) | None => None,
-                Some(other) => {
-                    return Err(crate::MigrationError::Validation(format!(
-                        "Invalid finished_on field type, got: {other:?}"
-                    )));
-                }
-            };
-
-            let status = row
-                .get("status")
-                .and_then(|v| v.as_str().map(ToString::to_string))
-                .ok_or_else(|| crate::MigrationError::Validation("Missing status field".into()))?;
-
-            let failure_reason = match row.get("failure_reason") {
-                Some(DatabaseValue::String(reason)) => Some(reason),
-                Some(DatabaseValue::Null) | None => None,
-                _ => {
-                    return Err(crate::MigrationError::Validation(
-                        "Invalid failure_reason field".into(),
-                    ));
-                }
-            };
-
-            Ok(Some(MigrationRecord {
-                id,
-                run_on,
-                finished_on,
-                status,
-                failure_reason,
-            }))
-        } else {
-            Ok(None)
-        }
+        results
+            .into_iter()
+            .next()
+            .map(|row| {
+                row.to_value_type().map_err(|e| {
+                    crate::MigrationError::Validation(format!("Row conversion failed: {e}"))
+                })
+            })
+            .transpose()
     }
 
     /// Get migrations that are not in 'completed' status (dirty migrations)
@@ -394,93 +348,22 @@ impl VersionTracker {
         let results = db
             .select(&self.table_name)
             .columns(&["id", "run_on", "finished_on", "status", "failure_reason"])
-            .filter(Box::new(where_not_eq("status", "completed")))
+            .filter(Box::new(where_not_eq(
+                "status",
+                MigrationStatus::Completed.to_string(),
+            )))
             .sort("run_on", switchy_database::query::SortDirection::Asc)
             .execute(db)
             .await?;
 
-        let mut records = Vec::new();
-        for row in results {
-            let id = row
-                .get("id")
-                .and_then(|v| v.as_str().map(ToString::to_string))
-                .ok_or_else(|| crate::MigrationError::Validation("Missing id field".into()))?;
-
-            let run_on = match row.get("run_on") {
-                Some(DatabaseValue::DateTime(dt)) => dt,
-                Some(DatabaseValue::String(dt_str)) => {
-                    // Parse datetime string (SQLite returns datetime as string)
-                    chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
-                        .or_else(|_| {
-                            chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
-                        })
-                        .map_err(|_| {
-                            crate::MigrationError::Validation(format!(
-                                "Invalid run_on datetime format: {dt_str}"
-                            ))
-                        })?
-                }
-                Some(other) => {
-                    return Err(crate::MigrationError::Validation(format!(
-                        "Invalid run_on field type, got: {other:?}"
-                    )));
-                }
-                None => {
-                    return Err(crate::MigrationError::Validation(
-                        "Missing run_on field".into(),
-                    ));
-                }
-            };
-
-            let finished_on = match row.get("finished_on") {
-                Some(DatabaseValue::DateTime(dt)) => Some(dt),
-                Some(DatabaseValue::String(dt_str)) => {
-                    // Parse datetime string (SQLite returns datetime as string)
-                    let parsed =
-                        chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%dT%H:%M:%S%.f")
-                            .or_else(|_| {
-                                chrono::NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
-                            })
-                            .map_err(|_| {
-                                crate::MigrationError::Validation(format!(
-                                    "Invalid finished_on datetime format: {dt_str}"
-                                ))
-                            })?;
-                    Some(parsed)
-                }
-                Some(DatabaseValue::Null) | None => None,
-                Some(other) => {
-                    return Err(crate::MigrationError::Validation(format!(
-                        "Invalid finished_on field type, got: {other:?}"
-                    )));
-                }
-            };
-
-            let status = row
-                .get("status")
-                .and_then(|v| v.as_str().map(ToString::to_string))
-                .ok_or_else(|| crate::MigrationError::Validation("Missing status field".into()))?;
-
-            let failure_reason = match row.get("failure_reason") {
-                Some(DatabaseValue::String(reason)) => Some(reason),
-                Some(DatabaseValue::Null) | None => None,
-                _ => {
-                    return Err(crate::MigrationError::Validation(
-                        "Invalid failure_reason field".into(),
-                    ));
-                }
-            };
-
-            records.push(MigrationRecord {
-                id,
-                run_on,
-                finished_on,
-                status,
-                failure_reason,
-            });
-        }
-
-        Ok(records)
+        results
+            .into_iter()
+            .map(|row| {
+                row.to_value_type().map_err(|e| {
+                    crate::MigrationError::Validation(format!("Row conversion failed: {e}"))
+                })
+            })
+            .collect()
     }
 
     /// Get all successfully applied migrations in reverse chronological order (most recent first)
@@ -510,7 +393,7 @@ impl VersionTracker {
 
                 // Only include completed migrations
                 if let (Some(id_str), Some(status_str)) = (id, status) {
-                    if status_str == "completed" {
+                    if status_str == MigrationStatus::Completed.to_string() {
                         Some(id_str)
                     } else {
                         None
@@ -669,7 +552,7 @@ mod tests {
             .update_migration_status(
                 &*db,
                 "failed_migration",
-                "failed",
+                MigrationStatus::Failed,
                 Some("Test error".to_string()),
             )
             .await
@@ -715,7 +598,7 @@ mod tests {
             .update_migration_status(
                 &*db,
                 "test_migration",
-                "failed",
+                MigrationStatus::Failed,
                 Some("Test error message".to_string()),
             )
             .await
@@ -729,7 +612,7 @@ mod tests {
             .expect("Migration should exist");
 
         assert_eq!(status.id, "test_migration");
-        assert_eq!(status.status, "failed");
+        assert_eq!(status.status, MigrationStatus::Failed);
         assert!(status.run_on > chrono::NaiveDateTime::default());
         assert!(status.finished_on.is_some());
         assert_eq!(

@@ -98,7 +98,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
+use moosicbox_json_utils::{MissingValue, ParseError, ToValueType};
 use switchy_database::Database;
+use switchy_database::DatabaseValue;
 
 /// Information about a migration, including its current status
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,17 +147,37 @@ impl std::fmt::Display for MigrationStatus {
 }
 
 impl std::str::FromStr for MigrationStatus {
-    type Err = crate::MigrationError;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "in_progress" => Ok(Self::InProgress),
             "completed" => Ok(Self::Completed),
             "failed" => Ok(Self::Failed),
-            _ => Err(crate::MigrationError::Validation(format!(
+            _ => Err(ParseError::ConvertType(format!(
                 "Invalid migration status: '{s}'. Valid values are: in_progress, completed, failed"
             ))),
         }
+    }
+}
+
+impl MissingValue<MigrationStatus> for &DatabaseValue {}
+impl MissingValue<MigrationStatus> for DatabaseValue {}
+
+impl ToValueType<MigrationStatus> for &DatabaseValue {
+    fn to_value_type(self) -> std::result::Result<MigrationStatus, ParseError> {
+        let status_str = self
+            .as_str()
+            .ok_or_else(|| ParseError::ConvertType("MigrationStatus".into()))?;
+        status_str
+            .parse()
+            .map_err(|_| ParseError::ConvertType("MigrationStatus".into()))
+    }
+}
+
+impl ToValueType<MigrationStatus> for DatabaseValue {
+    fn to_value_type(self) -> std::result::Result<MigrationStatus, ParseError> {
+        (&self).to_value_type()
     }
 }
 

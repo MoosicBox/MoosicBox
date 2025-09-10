@@ -259,6 +259,12 @@ pub enum MigrationError {
     },
 }
 
+impl From<moosicbox_json_utils::ParseError> for MigrationError {
+    fn from(err: moosicbox_json_utils::ParseError) -> Self {
+        Self::Validation(format!("Parse error: {err}"))
+    }
+}
+
 /// Result type alias for migration operations
 ///
 /// Most functions in this crate return this type for consistent error handling.

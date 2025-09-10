@@ -3,16 +3,17 @@
 //! These tests verify that the migration system properly handles failures,
 //! tracks status correctly, and provides working recovery mechanisms.
 
-use switchy_schema::{
-    MigrationError,
-    discovery::code::{CodeMigration, CodeMigrationSource},
-    runner::MigrationRunner,
-    version::VersionTracker,
-};
+use switchy_schema::{migration::MigrationStatus, version::VersionTracker};
 use switchy_schema_test_utils::create_empty_in_memory;
 
+#[cfg(feature = "code")]
 #[tokio::test]
 async fn test_migration_failure_tracking() {
+    use switchy_schema::{
+        discovery::code::{CodeMigration, CodeMigrationSource},
+        runner::MigrationRunner,
+    };
+
     let db = create_empty_in_memory().await.unwrap();
     let version_tracker = VersionTracker::with_table_name("__test_migrations");
 
@@ -50,7 +51,7 @@ async fn test_migration_failure_tracking() {
         .unwrap();
     assert!(first_status.is_some());
     let first_record = first_status.unwrap();
-    assert_eq!(first_record.status, "completed");
+    assert_eq!(first_record.status, MigrationStatus::Completed);
     assert!(first_record.failure_reason.is_none());
     assert!(first_record.finished_on.is_some());
 
@@ -61,7 +62,7 @@ async fn test_migration_failure_tracking() {
         .unwrap();
     assert!(failed_status.is_some());
     let failed_record = failed_status.unwrap();
-    assert_eq!(failed_record.status, "failed");
+    assert_eq!(failed_record.status, MigrationStatus::Failed);
     assert!(failed_record.failure_reason.is_some());
     assert!(failed_record.finished_on.is_some());
 
@@ -79,11 +80,18 @@ async fn test_migration_failure_tracking() {
         .unwrap();
     assert_eq!(dirty_migrations.len(), 1);
     assert_eq!(dirty_migrations[0].id, "002_failing_migration");
-    assert_eq!(dirty_migrations[0].status, "failed");
+    assert_eq!(dirty_migrations[0].status, MigrationStatus::Failed);
 }
 
+#[cfg(feature = "code")]
 #[tokio::test]
 async fn test_dirty_state_detection() {
+    use switchy_schema::{
+        MigrationError,
+        discovery::code::{CodeMigration, CodeMigrationSource},
+        runner::MigrationRunner,
+    };
+
     let db = create_empty_in_memory().await.unwrap();
     let version_tracker = VersionTracker::with_table_name("__test_migrations");
 
@@ -144,7 +152,10 @@ async fn test_dirty_state_detection() {
         .await
         .unwrap();
     assert!(new_migration_status.is_some());
-    assert_eq!(new_migration_status.unwrap().status, "completed");
+    assert_eq!(
+        new_migration_status.unwrap().status,
+        MigrationStatus::Completed
+    );
 
     // Verify the interrupted migration is still there
     let interrupted_status = check_version_tracker
@@ -152,11 +163,21 @@ async fn test_dirty_state_detection() {
         .await
         .unwrap();
     assert!(interrupted_status.is_some());
-    assert_eq!(interrupted_status.unwrap().status, "in_progress");
+    assert_eq!(
+        interrupted_status.unwrap().status,
+        MigrationStatus::InProgress
+    );
 }
 
+#[cfg(feature = "code")]
 #[tokio::test]
 async fn test_recovery_commands() {
+    use switchy_schema::{
+        MigrationError,
+        discovery::code::{CodeMigration, CodeMigrationSource},
+        runner::MigrationRunner,
+    };
+
     let db = create_empty_in_memory().await.unwrap();
     let version_tracker = VersionTracker::with_table_name("__test_migrations");
 
@@ -182,7 +203,7 @@ async fn test_recovery_commands() {
     let failed_migrations = runner.list_failed_migrations(&*db).await.unwrap();
     assert_eq!(failed_migrations.len(), 1);
     assert_eq!(failed_migrations[0].id, "002_failing_migration");
-    assert_eq!(failed_migrations[0].status, "failed");
+    assert_eq!(failed_migrations[0].status, MigrationStatus::Failed);
     assert!(failed_migrations[0].failure_reason.is_some());
 
     // Test retry_migration with a migration that's not failed (should error)
@@ -219,7 +240,7 @@ async fn test_recovery_commands() {
         .await
         .unwrap();
     assert!(status.is_some());
-    assert_eq!(status.unwrap().status, "completed");
+    assert_eq!(status.unwrap().status, MigrationStatus::Completed);
 
     // Test mark_migration_completed for already completed migration
     let mark_again_result = runner
@@ -241,11 +262,17 @@ async fn test_recovery_commands() {
         .await
         .unwrap();
     assert!(new_status.is_some());
-    assert_eq!(new_status.unwrap().status, "completed");
+    assert_eq!(new_status.unwrap().status, MigrationStatus::Completed);
 }
 
+#[cfg(feature = "code")]
 #[tokio::test]
 async fn test_retry_failed_migration() {
+    use switchy_schema::{
+        discovery::code::{CodeMigration, CodeMigrationSource},
+        runner::MigrationRunner,
+    };
+
     let db = create_empty_in_memory().await.unwrap();
     let version_tracker = VersionTracker::with_table_name("__test_migrations");
 
@@ -259,7 +286,7 @@ async fn test_retry_failed_migration() {
         .update_migration_status(
             &*db,
             "001_test_migration",
-            "failed",
+            MigrationStatus::Failed,
             Some("Test failure".to_string()),
         )
         .await
@@ -284,7 +311,7 @@ async fn test_retry_failed_migration() {
         .await
         .unwrap();
     assert!(initial_status.is_some());
-    assert_eq!(initial_status.unwrap().status, "failed");
+    assert_eq!(initial_status.unwrap().status, MigrationStatus::Failed);
 
     // Retry the migration
     let retry_result = runner.retry_migration(&*db, "001_test_migration").await;
@@ -301,7 +328,7 @@ async fn test_retry_failed_migration() {
         .unwrap();
     assert!(final_status.is_some());
     let final_record = final_status.unwrap();
-    assert_eq!(final_record.status, "completed");
+    assert_eq!(final_record.status, MigrationStatus::Completed);
     assert!(final_record.failure_reason.is_none());
 
     // Verify the table was actually created
@@ -311,8 +338,14 @@ async fn test_retry_failed_migration() {
     assert!(table_exists_result.is_ok());
 }
 
+#[cfg(feature = "code")]
 #[tokio::test]
 async fn test_schema_upgrade_compatibility() {
+    use switchy_schema::{
+        discovery::code::{CodeMigration, CodeMigrationSource},
+        runner::MigrationRunner,
+    };
+
     let db = create_empty_in_memory().await.unwrap();
 
     // First, create an old-style migrations table (without status columns)
@@ -350,7 +383,7 @@ async fn test_schema_upgrade_compatibility() {
         .unwrap();
     assert!(status.is_some());
     let record = status.unwrap();
-    assert_eq!(record.status, "completed");
+    assert_eq!(record.status, MigrationStatus::Completed);
     assert!(record.failure_reason.is_none());
     assert!(record.finished_on.is_some());
 
@@ -381,7 +414,7 @@ async fn test_migration_status_transitions() {
         .unwrap();
     assert!(status.is_some());
     let record = status.unwrap();
-    assert_eq!(record.status, "in_progress");
+    assert_eq!(record.status, MigrationStatus::InProgress);
     assert!(record.failure_reason.is_none());
     assert!(record.finished_on.is_none());
     // Use a more reasonable time comparison
@@ -394,7 +427,12 @@ async fn test_migration_status_transitions() {
 
     // 2. Update to failed status
     version_tracker
-        .update_migration_status(&*db, migration_id, "failed", Some("Test error".to_string()))
+        .update_migration_status(
+            &*db,
+            migration_id,
+            MigrationStatus::Failed,
+            Some("Test error".to_string()),
+        )
         .await
         .unwrap();
 
@@ -404,13 +442,13 @@ async fn test_migration_status_transitions() {
         .unwrap();
     assert!(status.is_some());
     let record = status.unwrap();
-    assert_eq!(record.status, "failed");
+    assert_eq!(record.status, MigrationStatus::Failed);
     assert_eq!(record.failure_reason, Some("Test error".to_string()));
     assert!(record.finished_on.is_some());
 
     // 3. Update to completed status (for retry scenario)
     version_tracker
-        .update_migration_status(&*db, migration_id, "completed", None)
+        .update_migration_status(&*db, migration_id, MigrationStatus::Completed, None)
         .await
         .unwrap();
 
@@ -420,7 +458,7 @@ async fn test_migration_status_transitions() {
         .unwrap();
     assert!(status.is_some());
     let record = status.unwrap();
-    assert_eq!(record.status, "completed");
+    assert_eq!(record.status, MigrationStatus::Completed);
     assert!(record.failure_reason.is_none()); // Should be cleared
     assert!(record.finished_on.is_some());
 
@@ -434,5 +472,5 @@ async fn test_migration_status_transitions() {
     let dirty_migrations = version_tracker.get_dirty_migrations(&*db).await.unwrap();
     assert_eq!(dirty_migrations.len(), 1); // Only the in_progress one
     assert_eq!(dirty_migrations[0].id, "002_in_progress");
-    assert_eq!(dirty_migrations[0].status, "in_progress");
+    assert_eq!(dirty_migrations[0].status, MigrationStatus::InProgress);
 }

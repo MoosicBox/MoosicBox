@@ -14,10 +14,11 @@ version     = "0.1.0"
 group = "switchy"
 
 [dependencies]
-async-trait      = { workspace = true }
-chrono           = { workspace = true }
-switchy_database = { workspace = true, features = ["schema"] }
-thiserror        = { workspace = true }
+async-trait          = { workspace = true }
+chrono               = { workspace = true }
+moosicbox_json_utils = { workspace = true, features = ["database"] }
+switchy_database     = { workspace = true, features = ["schema"] }
+thiserror            = { workspace = true }
 
 # Optional dependencies for discovery features
 bytes = { workspace = true }
@@ -32,7 +33,7 @@ chrono                      = { workspace = true }
 switchy_async               = { workspace = true, features = ["macros", "tokio"] }
 switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
 switchy_fs                  = { workspace = true, features = ["simulator-real-fs", "std"] }
-switchy_schema_test_utils   = { workspace = true }
+switchy_schema_test_utils   = { workspace = true, features = ["sqlite"] }
 tokio                       = { workspace = true, features = ["macros", "rt"] }
 
 [features]
