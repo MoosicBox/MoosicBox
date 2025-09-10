@@ -3992,24 +3992,799 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 
 ### 11.3 Checksum Implementation
 
-- [ ] Add checksum validation ❌ **MINOR**
-  - [ ] Choose checksum algorithm (SHA256 recommended)
-  - [ ] Implement checksum calculation for migrations
-  - [ ] Add checksum verification before execution
-  - [ ] Handle checksum mismatches gracefully
+**Purpose**: Add SHA256 checksum validation using async ChecksumDatabase for deterministic, database-agnostic checksumming.
 
-#### 11.3 Verification Checklist
+**⚠️ BACKWARDS INCOMPATIBLE**: This phase is designed for fresh installations only. Existing databases with migration records must be recreated.
 
-- [ ] Run `cargo build -p switchy_schema` - compiles with checksum support
-- [ ] Unit test: SHA256 checksum calculation for migration content
-- [ ] Unit test: Checksum verification before execution
-- [ ] Unit test: Checksum mismatch returns appropriate error
-- [ ] Integration test: Checksum validation in migration runner
-- [ ] Integration test: Modified migration detected by checksum
+**Requirements Summary**:
+- Use async ChecksumDatabase to digest structured operations for consistent checksums
+- Store checksums as NOT NULL columns in database for data integrity
+- Use bytes::Bytes throughout system until database storage boundary
+- Always maintain compilable code at every step
+- Async checksum methods eliminate blocking and provide natural async flow
+
+#### 11.3.1: Complete ChecksumDatabase Implementation ❌ **CHECKSUM_INFRA**
+
+**Goal**: Create fully verified async ChecksumDatabase with complete Database trait implementation
+
+**Dependencies:**
+- [ ] Add to `packages/switchy/schema/Cargo.toml`:
+  - `bytes = { workspace = true }`
+  - `sha2 = { workspace = true }`
+  - `hex = { workspace = true }`
+  - `switchy_async = { workspace = true }`
+
+**Core Types:**
+- [ ] Create `packages/switchy/schema/src/digest.rs`:
+  ```rust
+  use sha2::Sha256;
+
+  /// Trait for types that can contribute to a checksum digest
+  pub trait Digest {
+      fn update_digest(&self, hasher: &mut Sha256);
+  }
+  ```
+
+**ChecksumDatabase Implementation:**
+- [ ] Create `packages/switchy/schema/src/checksum_database.rs`:
+  ```rust
+  use sha2::{Sha256, Digest as _};
+  use switchy_async::sync::Mutex;
+  use switchy_database::{Database, DatabaseTransaction, DatabaseError, Row};
+  use std::sync::Arc;
+
+  pub struct ChecksumDatabase {
+      hasher: Arc<Mutex<Sha256>>,
+  }
+
+  impl ChecksumDatabase {
+      pub fn new() -> Self {
+          Self {
+              hasher: Arc::new(Mutex::new(Sha256::new()))
+          }
+      }
+
+      fn with_hasher(hasher: Arc<Mutex<Sha256>>) -> Self {
+          Self { hasher }
+      }
+
+      pub async fn finalize(self) -> bytes::Bytes {
+          match Arc::try_unwrap(self.hasher) {
+              Ok(mutex) => {
+                  let hasher = mutex.into_inner();
+                  bytes::Bytes::from(hasher.finalize().to_vec())
+              }
+              Err(arc) => {
+                  let hasher = arc.lock().await;
+                  let cloned = hasher.clone();
+                  drop(hasher);
+                  bytes::Bytes::from(cloned.finalize().to_vec())
+              }
+          }
+      }
+  }
+  ```
+
+**Complete Database Implementation:**
+- [ ] Implement ALL Database trait methods (verified against trait definition):
+  ```rust
+  #[async_trait]
+  impl Database for ChecksumDatabase {
+      // Query builders use default implementations
+      // fn select, update, insert, etc. return query builders
+
+      async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<Row>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"QUERY:");
+          query.update_digest(&mut *hasher);
+          Ok(vec![])
+      }
+
+      async fn query_first(&self, query: &SelectQuery<'_>) -> Result<Option<Row>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"QUERY_FIRST:");
+          query.update_digest(&mut *hasher);
+          Ok(None)
+      }
+
+      async fn exec_update(&self, statement: &UpdateStatement<'_>) -> Result<Vec<Row>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"UPDATE:");
+          statement.update_digest(&mut *hasher);
+          Ok(vec![])
+      }
+
+      async fn exec_update_first(&self, statement: &UpdateStatement<'_>) -> Result<Option<Row>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"UPDATE_FIRST:");
+          statement.update_digest(&mut *hasher);
+          Ok(None)
+      }
+
+      async fn exec_insert(&self, statement: &InsertStatement<'_>) -> Result<Row, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"INSERT:");
+          statement.update_digest(&mut *hasher);
+          Ok(Row { columns: vec![] })  // Empty row using known struct layout
+      }
+
+      async fn exec_upsert(&self, statement: &UpsertStatement<'_>) -> Result<Vec<Row>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"UPSERT:");
+          statement.update_digest(&mut *hasher);
+          Ok(vec![])
+      }
+
+      async fn exec_upsert_first(&self, statement: &UpsertStatement<'_>) -> Result<Row, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"UPSERT_FIRST:");
+          statement.update_digest(&mut *hasher);
+          Ok(Row { columns: vec![] })
+      }
+
+      async fn exec_upsert_multi(&self, statement: &UpsertMultiStatement<'_>) -> Result<Vec<Row>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"UPSERT_MULTI:");
+          statement.update_digest(&mut *hasher);
+          Ok(vec![])
+      }
+
+      async fn exec_delete(&self, statement: &DeleteStatement<'_>) -> Result<Vec<Row>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"DELETE:");
+          statement.update_digest(&mut *hasher);
+          Ok(vec![])
+      }
+
+      async fn exec_delete_first(&self, statement: &DeleteStatement<'_>) -> Result<Option<Row>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"DELETE_FIRST:");
+          statement.update_digest(&mut *hasher);
+          Ok(None)
+      }
+
+      async fn exec_raw(&self, statement: &str) -> Result<(), DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"EXEC_RAW:");
+          hasher.update(statement.as_bytes());
+          Ok(())
+      }
+
+      fn trigger_close(&self) -> Result<(), DatabaseError> {
+          Ok(())
+      }
+
+      async fn close(&self) -> Result<(), DatabaseError> {
+          Ok(())
+      }
+
+      #[cfg(feature = "schema")]
+      async fn exec_create_table(&self, statement: &schema::CreateTableStatement<'_>) -> Result<(), DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"CREATE_TABLE:");
+          statement.update_digest(&mut *hasher);
+          Ok(())
+      }
+
+      #[cfg(feature = "schema")]
+      async fn exec_drop_table(&self, statement: &schema::DropTableStatement<'_>) -> Result<(), DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"DROP_TABLE:");
+          statement.update_digest(&mut *hasher);
+          Ok(())
+      }
+
+      #[cfg(feature = "schema")]
+      async fn exec_create_index(&self, statement: &schema::CreateIndexStatement<'_>) -> Result<(), DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"CREATE_INDEX:");
+          statement.update_digest(&mut *hasher);
+          Ok(())
+      }
+
+      #[cfg(feature = "schema")]
+      async fn exec_drop_index(&self, statement: &schema::DropIndexStatement<'_>) -> Result<(), DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"DROP_INDEX:");
+          statement.update_digest(&mut *hasher);
+          Ok(())
+      }
+
+      #[cfg(feature = "schema")]
+      async fn exec_alter_table(&self, statement: &schema::AlterTableStatement<'_>) -> Result<(), DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"ALTER_TABLE:");
+          statement.update_digest(&mut *hasher);
+          Ok(())
+      }
+
+      async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"BEGIN_TRANSACTION:");
+          drop(hasher);
+
+          let tx = ChecksumDatabase::with_hasher(self.hasher.clone());
+          Ok(Box::new(tx))
+      }
+  }
+
+  #[async_trait]
+  impl DatabaseTransaction for ChecksumDatabase {
+      async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"COMMIT:");
+          Ok(())
+      }
+
+      async fn rollback(self: Box<Self>) -> Result<(), DatabaseError> {
+          let mut hasher = self.hasher.lock().await;
+          hasher.update(b"ROLLBACK:");
+          Ok(())
+      }
+  }
+  ```
+
+**Digest Implementations for Expressions (Exhaustive):**
+- [ ] Implement `Digest` for all Expression types with complete DatabaseValue coverage:
+  ```rust
+  impl<T: Expression + ?Sized> Digest for T {
+      fn update_digest(&self, hasher: &mut Sha256) {
+          match self.expression_type() {
+              ExpressionType::Column(name) => {
+                  hasher.update(b"COL:");
+                  hasher.update(name.as_bytes());
+              }
+              ExpressionType::Value(val) => {
+                  hasher.update(b"VAL:");
+                  match val {
+                      DatabaseValue::Null => hasher.update(b"NULL"),
+                      DatabaseValue::String(s) => {
+                          hasher.update(b"STR:");
+                          hasher.update(s.as_bytes());
+                      }
+                      DatabaseValue::StringOpt(opt) => {
+                          hasher.update(b"STROPT:");
+                          if let Some(s) = opt {
+                              hasher.update(s.as_bytes());
+                          } else {
+                              hasher.update(b"NONE");
+                          }
+                      }
+                      DatabaseValue::Bool(b) => {
+                          hasher.update(b"BOOL:");
+                          hasher.update(&[*b as u8]);
+                      }
+                      DatabaseValue::BoolOpt(opt) => {
+                          hasher.update(b"BOOLOPT:");
+                          if let Some(b) = opt {
+                              hasher.update(&[*b as u8]);
+                          } else {
+                              hasher.update(b"NONE");
+                          }
+                      }
+                      DatabaseValue::Number(n) => {
+                          hasher.update(b"NUM:");
+                          hasher.update(&n.to_le_bytes());
+                      }
+                      DatabaseValue::NumberOpt(opt) => {
+                          hasher.update(b"NUMOPT:");
+                          if let Some(n) = opt {
+                              hasher.update(&n.to_le_bytes());
+                          } else {
+                              hasher.update(b"NONE");
+                          }
+                      }
+                      DatabaseValue::UNumber(n) => {
+                          hasher.update(b"UNUM:");
+                          hasher.update(&n.to_le_bytes());
+                      }
+                      DatabaseValue::UNumberOpt(opt) => {
+                          hasher.update(b"UNUMOPT:");
+                          if let Some(n) = opt {
+                              hasher.update(&n.to_le_bytes());
+                          } else {
+                              hasher.update(b"NONE");
+                          }
+                      }
+                      DatabaseValue::Real(r) => {
+                          hasher.update(b"REAL:");
+                          hasher.update(&r.to_le_bytes());
+                      }
+                      DatabaseValue::RealOpt(opt) => {
+                          hasher.update(b"REALOPT:");
+                          if let Some(r) = opt {
+                              hasher.update(&r.to_le_bytes());
+                          } else {
+                              hasher.update(b"NONE");
+                          }
+                      }
+                      DatabaseValue::Now => hasher.update(b"NOW"),
+                      DatabaseValue::NowAdd(s) => {
+                          hasher.update(b"NOWADD:");
+                          hasher.update(s.as_bytes());
+                      }
+                      DatabaseValue::DateTime(dt) => {
+                          hasher.update(b"DT:");
+                          hasher.update(dt.to_string().as_bytes());
+                      }
+                  }
+              }
+              ExpressionType::Binary { left, op, right } => {
+                  hasher.update(b"BIN:");
+                  left.update_digest(hasher);
+                  hasher.update(b"OP:");
+                  hasher.update(op.as_bytes());
+                  right.update_digest(hasher);
+              }
+              ExpressionType::Unary { op, expr } => {
+                  hasher.update(b"UNARY:");
+                  hasher.update(op.as_bytes());
+                  expr.update_digest(hasher);
+              }
+              ExpressionType::Function { name, args } => {
+                  hasher.update(b"FN:");
+                  hasher.update(name.as_bytes());
+                  for arg in args {
+                      arg.update_digest(hasher);
+                  }
+              }
+              // ... ALL ExpressionType variants must be covered exhaustively
+          }
+      }
+  }
+  ```
+
+**Digest for Query/DDL Types with Deterministic Ordering:**
+- [ ] Implement `Digest` for all query and DDL types using BTreeMap/BTreeSet for consistent ordering:
+  ```rust
+  use std::collections::{BTreeMap, BTreeSet};
+
+  impl Digest for SelectQuery {
+      fn update_digest(&self, hasher: &mut Sha256) {
+          hasher.update(b"SELECT:");
+
+          // Sort columns for deterministic order
+          let mut columns: Vec<_> = self.columns.iter().collect();
+          columns.sort_by_key(|c| c.name());
+
+          for col in columns {
+              col.update_digest(hasher);
+          }
+
+          hasher.update(b"FROM:");
+          hasher.update(self.table.as_bytes());
+
+          if let Some(where_clause) = &self.where_clause {
+              hasher.update(b"WHERE:");
+              where_clause.update_digest(hasher);
+          }
+
+          // ... digest all query components with deterministic ordering
+      }
+  }
+
+  impl Digest for CreateTableStatement {
+      fn update_digest(&self, hasher: &mut Sha256) {
+          hasher.update(b"CREATE_TABLE:");
+          hasher.update(self.table_name.as_bytes());
+
+          // BTreeMap for deterministic column order
+          let columns: BTreeMap<_, _> = self.columns.iter()
+              .map(|c| (&c.name, c))
+              .collect();
+
+          for (name, column) in columns {
+              hasher.update(b"COLUMN:");
+              hasher.update(name.as_bytes());
+              // ... digest all column details deterministically
+          }
+      }
+  }
+  ```
+
+**Helper Functions:**
+- [ ] Add to `checksum_database.rs`:
+  ```rust
+  pub fn calculate_hash(content: &str) -> bytes::Bytes {
+      use sha2::{Sha256, Digest as _};
+      let mut hasher = Sha256::new();
+      hasher.update(content.as_bytes());
+      bytes::Bytes::from(hasher.finalize().to_vec())
+  }
+  ```
+
+**Module Exports:**
+- [ ] Add to `packages/switchy/schema/src/lib.rs`:
+  ```rust
+  pub mod checksum_database;
+  pub mod digest;
+  pub use checksum_database::{ChecksumDatabase, calculate_hash};
+  pub use digest::Digest;
+  ```
+
+**Implementation Success Factors:**
+- [ ] **Row Construction**: Use `Row { columns: vec![] }` for all empty row returns
+- [ ] **Complete Database Coverage**: ALL 20+ Database trait methods implemented
+- [ ] **Transaction Lifecycle**: begin/commit/rollback operations tracked in digest
+- [ ] **Graceful Finalize**: Arc::try_unwrap match prevents panics with multiple references
+- [ ] **Shared Hasher**: Transaction shares parent's Arc<Mutex<Sha256>> for unified digest
+- [ ] **Empty Returns**: All query methods return appropriate empty collections/None/empty rows
+
+**Verification Checklist:**
+- [ ] Run `cargo build -p switchy_schema` - compiles successfully
+- [ ] ChecksumDatabase implements ALL Database trait methods (verified count: 20+ methods)
+- [ ] ChecksumDatabase implements DatabaseTransaction trait
+- [ ] Row construction works: `Row { columns: vec![] }`
+- [ ] Transaction operations (begin/commit/rollback) update digest appropriately
+- [ ] All methods digest inputs and return empty/default responses
+- [ ] Digest implemented for ALL ExpressionType variants (exhaustive match)
+- [ ] Digest implemented for ALL DatabaseValue variants (exhaustive match)
+- [ ] Digest implemented for all query/DDL types with deterministic ordering
+- [ ] Uses BTreeMap/BTreeSet for deterministic ordering where iteration matters
+- [ ] Graceful finalize() handling without panic using Arc::try_unwrap match
+- [ ] Thread-safe with async Mutex for concurrent access
+- [ ] Unit test: Same operations produce identical checksums
+- [ ] Unit test: Different operations produce different checksums
+- [ ] Unit test: Transaction patterns (commit vs rollback) produce different checksums
+- [ ] Unit test: Graceful finalize with multiple Arc references doesn't panic
+- [ ] Unit test: Shared hasher between parent and transaction works correctly
 - [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Documentation updated with checksum feature usage
-- [ ] Performance impact measured (should be minimal)
+- [ ] Run `cargo fmt --all` - format entire repository
+
+#### 11.3.2: Atomic Database Schema and Migration Trait Update ❌ **ATOMIC_UPDATE**
+
+**Goal**: Add NOT NULL checksum storage and update Migration trait with async checksum
+
+**⚠️ BACKWARDS INCOMPATIBLE**: Fresh installations only
+**⚠️ ATOMIC CHANGE**: Database and code updated together to prevent broken state
+
+**Database Schema Changes:**
+- [ ] Add NOT NULL checksum column: `checksum VARCHAR(64) NOT NULL`
+- [ ] Update `MigrationRecord` struct with `checksum: String` field
+- [ ] Update table creation to include checksum column
+
+**Migration Trait Changes:**
+- [ ] Update `Migration` trait with async checksum method:
+  ```rust
+  #[async_trait]
+  pub trait Migration<'a>: Send + Sync + 'a {
+      fn id(&self) -> &str;
+
+      // NEW: Async checksum method, no parameters needed!
+      async fn checksum(&self) -> Result<bytes::Bytes> {
+          // Default returns 32 zero bytes
+          Ok(bytes::Bytes::from(vec![0u8; 32]))
+      }
+
+      async fn up(&self, db: &dyn Database) -> Result<()>;
+      async fn down(&self, _db: &dyn Database) -> Result<()> { Ok(()) }
+      // ... existing methods unchanged
+  }
+  ```
+
+**VersionTracker Changes:**
+- [ ] Update `record_migration_started()` to require `checksum: &bytes::Bytes`
+- [ ] Validate checksum is exactly 32 bytes, return error if not
+- [ ] Convert to lowercase hex string (always 64 chars) for storage
+- [ ] Update `get_migration_status()` to return checksum as bytes::Bytes
+
+**MigrationRunner Changes:**
+- [ ] Calculate checksum before recording:
+  ```rust
+  let checksum = migration.checksum().await?;
+  if checksum.len() != 32 {
+      return Err(MigrationError::InvalidChecksum(
+          format!("Expected 32 bytes, got {}", checksum.len())
+      ));
+  }
+  ```
+- [ ] Pass to version tracker: `record_migration_started(db, id, &checksum).await?`
+- [ ] Fail migration if checksum calculation fails
+
+**Implementation Strategy:**
+1. Update Migration trait with async checksum
+2. Update VersionTracker signatures and validation
+3. Update MigrationRecord and schema
+4. Update MigrationRunner to call async checksum
+5. Verify compilation
+
+**Verification Checklist:**
+- [ ] Run `cargo build -p switchy_schema` - compiles successfully
+- [ ] Schema creates NOT NULL checksum column
+- [ ] Migration trait has async checksum() method
+- [ ] MigrationRunner calls async checksum and passes to VersionTracker
+- [ ] System can run migrations with zero-byte checksums
+- [ ] Run `cargo test -p switchy_schema` - all tests pass
+- [ ] Unit test: Checksum validation (exactly 32 bytes)
+- [ ] Unit test: Hex encoding produces lowercase 64-char strings
+- [ ] Integration test: Migrations store zero checksums initially
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt --all` - format entire repository
+
+#### 11.3.3: Real Checksum Implementations with Transaction Support ❌ **REAL_CHECKSUMS**
+
+**Goal**: Implement actual async checksum calculations for each migration type
+
+**FileMigration Implementation:**
+- [ ] Override Migration::checksum() for FileMigration:
+  ```rust
+  #[async_trait]
+  impl Migration for FileMigration {
+      async fn checksum(&self) -> Result<bytes::Bytes> {
+          let content = std::fs::read_to_string(&self.path)?;
+          Ok(calculate_hash(&content))
+      }
+  }
+  ```
+
+**EmbeddedMigration Implementation:**
+- [ ] Override Migration::checksum() for EmbeddedMigration:
+  ```rust
+  #[async_trait]
+  impl Migration for EmbeddedMigration {
+      async fn checksum(&self) -> Result<bytes::Bytes> {
+          Ok(calculate_hash(&self.sql))
+      }
+  }
+  ```
+
+**CodeMigration Implementation with Full Transaction Support:**
+- [ ] Override Migration::checksum() for CodeMigration using ChecksumDatabase:
+  ```rust
+  #[async_trait]
+  impl Migration for CodeMigration {
+      async fn checksum(&self) -> Result<bytes::Bytes> {
+          let checksum_db = ChecksumDatabase::new();
+
+          // Execute operations against ChecksumDatabase
+          // This includes full transaction support - begin/commit/rollback all affect checksum
+          self.up_sql.execute(&checksum_db).await?;
+
+          // Get final checksum including all operations and transaction boundaries
+          Ok(checksum_db.finalize().await)
+      }
+  }
+  ```
+
+**Transaction Checksum Examples:**
+- [ ] Document how different transaction patterns produce different checksums:
+  ```rust
+  // Example 1: Operations with commit
+  let tx = db.begin_transaction().await?;  // Digest: "BEGIN_TRANSACTION:"
+  tx.exec_insert(&insert_stmt).await?;     // Digest: insert operation
+  tx.commit().await?;                      // Digest: "COMMIT:"
+
+  // Example 2: Operations with rollback (different checksum!)
+  let tx = db.begin_transaction().await?;  // Digest: "BEGIN_TRANSACTION:"
+  tx.exec_insert(&insert_stmt).await?;     // Digest: same insert operation
+  tx.rollback().await?;                    // Digest: "ROLLBACK:" (different from commit!)
+
+  // These produce completely different checksums even with identical operations
+  ```
+
+**Error Handling:**
+- [ ] File not found returns clear error for FileMigration
+- [ ] Executor failures propagate properly from ChecksumDatabase
+- [ ] Migration aborts if checksum calculation fails
+- [ ] Transaction errors in ChecksumDatabase don't actually fail (just digest)
+
+**Benefits of Transaction-Aware Checksums:**
+- [ ] Complete operation sequence captured including transaction boundaries
+- [ ] Commit vs rollback decisions affect checksum (important for correctness)
+- [ ] Nested transaction patterns properly handled
+- [ ] More accurate representation of what migration actually does
+
+**Verification Checklist:**
+- [ ] Run `cargo build -p switchy_schema` - compiles successfully
+- [ ] FileMigration produces consistent checksums for same file
+- [ ] EmbeddedMigration produces consistent checksums for same SQL
+- [ ] CodeMigration produces consistent checksums for same operations
+- [ ] Different migrations produce different checksums
+- [ ] Unit test: File modification changes FileMigration checksum
+- [ ] Unit test: Code operation changes produce different CodeMigration checksums
+- [ ] Unit test: Transaction commit vs rollback produces different checksums
+- [ ] Unit test: Same operations with/without transactions produce different checksums
+- [ ] Unit test: Nested transaction patterns handled correctly
+- [ ] Integration test: All migration types work end-to-end with async flow
+- [ ] Integration test: Complex transaction flows produce stable checksums
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt --all` - format entire repository
+
+#### 11.3.4: Checksum Validation Engine ❌ **VALIDATION**
+
+**Goal**: Detect drift in applied migrations using async checksum validation
+
+**ChecksumMismatch Type:**
+- [ ] Add to error types:
+  ```rust
+  #[derive(Debug)]
+  pub struct ChecksumMismatch {
+      pub migration_id: String,
+      pub stored_checksum: String,    // hex encoded
+      pub current_checksum: String,   // hex encoded
+  }
+  ```
+
+**Validation Implementation:**
+- [ ] Add `validate_checksums()` method to `MigrationRunner`:
+  ```rust
+  impl MigrationRunner {
+      pub async fn validate_checksums(&self, db: &dyn Database) -> Result<Vec<ChecksumMismatch>> {
+          let mut mismatches = vec![];
+          let applied = self.version_tracker.list_applied_migrations(db).await?;
+          let available = self.source.migrations().await?;
+
+          for record in applied {
+              if let Some(migration) = available.iter().find(|m| m.id() == record.id) {
+                  let current = migration.checksum().await?;
+                  let stored = hex::decode(&record.checksum)?;
+
+                  if current.as_ref() != stored.as_slice() {
+                      mismatches.push(ChecksumMismatch {
+                          migration_id: record.id.clone(),
+                          stored_checksum: record.checksum.clone(),
+                          current_checksum: hex::encode(&current),
+                      });
+                  }
+              }
+          }
+          Ok(mismatches)
+      }
+  }
+  ```
+
+**CLI Integration:**
+- [ ] Add `--validate-checksums` flag to CLI commands
+- [ ] Report mismatches clearly with migration IDs and checksum differences
+- [ ] Exit with error code if mismatches found
+- [ ] Option to show detailed diff information
+
+**Verification Checklist:**
+- [ ] Run `cargo build -p switchy_schema` - compiles successfully
+- [ ] Unit test: Validation detects when file changes
+- [ ] Unit test: Validation passes when checksums match
+- [ ] Unit test: Validation handles missing migrations gracefully
+- [ ] Integration test: CLI flag works correctly
+- [ ] Integration test: Modified migration triggers validation error
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt --all` - format entire repository
+
+#### 11.3.5: Strict Mode Enforcement ❌ **STRICT_MODE**
+
+**Goal**: Optional enforcement of checksum validation before migration runs
+
+**ChecksumConfig Implementation:**
+- [ ] Add configuration struct:
+  ```rust
+  #[derive(Debug, Clone, Default)]
+  pub struct ChecksumConfig {
+      pub require_validation: bool,
+  }
+  ```
+
+**MigrationRunner Integration:**
+- [ ] Add checksum config to MigrationRunner:
+  ```rust
+  impl MigrationRunner {
+      pub fn with_checksum_config(mut self, config: ChecksumConfig) -> Self {
+          self.checksum_config = config;
+          self
+      }
+
+      pub async fn run(&self, db: &dyn Database) -> Result<()> {
+          if self.checksum_config.require_validation {
+              let mismatches = self.validate_checksums(db).await?;
+              if !mismatches.is_empty() {
+                  return Err(MigrationError::ChecksumMismatch(mismatches));
+              }
+          }
+          // ... continue with migrations
+      }
+  }
+  ```
+
+**CLI Integration:**
+- [ ] Add `--require-checksum-validation` flag
+- [ ] Environment variable support: `MIGRATION_REQUIRE_CHECKSUM_VALIDATION=true`
+- [ ] Configuration file support where applicable
+
+**Future Extensibility:**
+- [ ] Document how ChecksumConfig can be extended:
+  ```rust
+  // Future additions won't break existing code:
+  // pub fail_on_missing: bool,
+  // pub validation_mode: ValidationMode,
+  // pub ignore_patterns: Vec<String>,
+  ```
+
+**Verification Checklist:**
+- [ ] Run `cargo build -p switchy_schema` - compiles successfully
+- [ ] Unit test: Strict mode prevents migration when validation fails
+- [ ] Unit test: Strict mode allows migration when validation passes
+- [ ] Unit test: Default config has validation disabled
+- [ ] Integration test: CLI flag enables strict mode
+- [ ] Integration test: Environment variable support
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt --all` - format entire repository
+
+### 11.3 Implementation Notes
+
+**⚠️ BACKWARDS INCOMPATIBILITY NOTICE**:
+This entire phase assumes fresh installations only. Existing databases with migration history must be recreated. This is an intentional design decision for implementation simplicity and data integrity with NOT NULL constraints.
+
+**Critical Path Dependencies**:
+```
+11.3.1 (Async ChecksumDatabase + Digest infrastructure - foundation for structured checksumming)
+    ↓
+11.3.2 (ATOMIC: Database schema + async Migration trait - system functional with zero checksums)
+    ↓
+11.3.3 (Real async checksum implementations - uses ChecksumDatabase from 11.3.1)
+    ↓
+11.3.4 (Validation engine - uses real checksums from 11.3.3)
+    ↓
+11.3.5 (Strict mode - uses validation from 11.3.4)
+```
+
+**Design Decisions**:
+
+1. **Always Compilable**: Every step leaves code in working state
+2. **Async ChecksumDatabase**: Natural async flow, no blocking operations
+3. **switchy_async::sync::Mutex**: Proper async synchronization for concurrent access
+4. **Empty Database Responses**: ChecksumDatabase returns empty/default data for all queries
+5. **Full Transaction Support**: begin_transaction/commit/rollback all contribute to checksums
+6. **Shared Hasher for Transactions**: Arc<Mutex<Sha256>> shared between parent and transaction
+7. **Graceful Finalize**: Arc::try_unwrap with fallback to clone, no panic
+8. **Async checksum()**: Clean Migration trait with natural async flow
+9. **Structured Data Digesting**: Database-agnostic, deterministic checksums
+10. **Exhaustive Expression Matching**: Compiler ensures all DatabaseValue and ExpressionType variants covered
+11. **Deterministic Ordering**: BTreeMap/BTreeSet for consistent iteration order
+12. **bytes::Bytes Throughout**: Binary checksums until database storage layer
+13. **NOT NULL Database Columns**: Enforced data integrity from the start
+14. **Fresh Installations Only**: No backward compatibility burden
+15. **Atomic Schema and Code Update**: Prevents broken intermediate states
+16. **Zero Byte Placeholders**: 32 zero bytes until real implementations (64 hex zeros when stored)
+17. **Hex Encoding at Boundary**: VersionTracker handles bytes↔hex conversion
+18. **Extensible Config**: ChecksumConfig struct allows future enhancements
+19. **Transaction Semantics in Checksums**: Commit vs rollback produces different results
+
+**Benefits**:
+
+- **No SQL Generation Needed**: ChecksumDatabase digests structured data directly
+- **Database Agnostic**: Same operations produce same checksum regardless of backend
+- **Complete Transaction Support**: Full transaction lifecycle captured in checksums
+- **Transaction Semantics Matter**: Commit vs rollback produces different checksums
+- **Natural Async Flow**: No blocking operations, fits async ecosystem
+- **Graceful Error Handling**: Arc finalization handles multiple references without panic
+- **Clean Abstraction**: Migration::checksum() is async with no parameters
+- **Fewer Code Changes**: Only MigrationRunner calls checksum(), not scattered call sites
+- **Type Safe**: Leverages existing Expression/Query type system with exhaustive matching
+- **Deterministic**: Structured digesting with ordered collections ensures consistency
+- **Thread Safe**: Async Mutex allows concurrent checksum calculations
+- **Shared State**: Transaction operations contribute to parent checksum naturally
+- **No Broken States**: System functional at every step
+- **Strong Data Integrity**: NOT NULL enforces checksum presence
+- **Future Proof**: Configuration allows easy extension
+- **Executor Flexibility**: CodeMigration executors handle their own data needs
+- **Complete Operation Tracking**: All database operations including transaction boundaries tracked
+
+**Migration Path for Fresh Installations**:
+
+1. **Phase 1** (11.3.1-11.3.2): Infrastructure ready, zero checksums stored
+   - Async ChecksumDatabase and Digest traits available
+   - Database schema includes NOT NULL checksum column
+   - All migrations store 32 zero bytes initially via async checksum()
+   - System fully functional with placeholder checksums
+
+2. **Phase 2** (11.3.3): Real checksums calculated for all migrations
+   - FileMigration: hashes file content asynchronously
+   - EmbeddedMigration: hashes SQL string asynchronously
+   - CodeMigration: digests structured operations via async ChecksumDatabase
+   - Zero byte placeholders replaced with actual hashes
+
+3. **Phase 3** (11.3.4-11.3.5): Validation and enforcement available
+   - `--validate-checksums` flag detects migration drift with async validation
+   - `--require-checksum-validation` enforces validation before runs
+   - Strict mode can be enabled immediately (all checksums are real)
 
 ### 11.4 Remote Discovery Implementation
 
