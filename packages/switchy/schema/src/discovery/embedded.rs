@@ -68,6 +68,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use include_dir::{Dir, DirEntry};
+use sha2::{Digest, Sha256};
 
 /// A single embedded migration with optional up and down SQL content
 ///
@@ -127,6 +128,24 @@ impl Migration<'static> for EmbeddedMigration {
             }
         }
         Ok(())
+    }
+
+    async fn up_checksum(&self) -> Result<bytes::Bytes> {
+        let mut hasher = Sha256::new();
+        match &self.up_content {
+            Some(content) => hasher.update(content),
+            None => hasher.update(b""), // Hash empty bytes for None
+        }
+        Ok(bytes::Bytes::from(hasher.finalize().to_vec()))
+    }
+
+    async fn down_checksum(&self) -> Result<bytes::Bytes> {
+        let mut hasher = Sha256::new();
+        match &self.down_content {
+            Some(content) => hasher.update(content),
+            None => hasher.update(b""), // Hash empty bytes for None
+        }
+        Ok(bytes::Bytes::from(hasher.finalize().to_vec()))
     }
 }
 
@@ -303,5 +322,38 @@ mod tests {
         assert_eq!(migration.id(), "test_migration");
         assert_eq!(migration.up_content, up_content);
         assert_eq!(migration.down_content, down_content);
+    }
+
+    #[tokio::test]
+    async fn test_embedded_migration_checksums() {
+        let migration = EmbeddedMigration::new(
+            "test_migration".to_string(),
+            Some(Bytes::from("CREATE TABLE test (id INTEGER PRIMARY KEY)")),
+            Some(Bytes::from("DROP TABLE test")),
+        );
+
+        let up_checksum = migration.up_checksum().await.unwrap();
+        let down_checksum = migration.down_checksum().await.unwrap();
+
+        // Verify checksums are 32 bytes (SHA256)
+        assert_eq!(up_checksum.len(), 32);
+        assert_eq!(down_checksum.len(), 32);
+
+        // Verify they're not all zeros
+        assert_ne!(up_checksum, bytes::Bytes::from(vec![0u8; 32]));
+        assert_ne!(down_checksum, bytes::Bytes::from(vec![0u8; 32]));
+
+        // Verify they're different (different content should produce different hashes)
+        assert_ne!(up_checksum, down_checksum);
+
+        // Test with None content
+        let migration_none = EmbeddedMigration::new("test_migration_none".to_string(), None, None);
+
+        let up_checksum_none = migration_none.up_checksum().await.unwrap();
+        let down_checksum_none = migration_none.down_checksum().await.unwrap();
+
+        // Should be equal since both hash empty content
+        assert_eq!(up_checksum_none, down_checksum_none);
+        assert_eq!(up_checksum_none.len(), 32);
     }
 }

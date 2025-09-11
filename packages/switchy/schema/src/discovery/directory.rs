@@ -58,6 +58,7 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
+use sha2::{Digest, Sha256};
 
 use crate::{Result, migration::Migration, migration::MigrationSource};
 
@@ -124,6 +125,24 @@ impl Migration<'static> for FileMigration {
             db.exec_raw(down_sql).await?;
         }
         Ok(())
+    }
+
+    async fn up_checksum(&self) -> Result<bytes::Bytes> {
+        let mut hasher = Sha256::new();
+        match &self.up_sql {
+            Some(content) => hasher.update(content.as_bytes()),
+            None => hasher.update(b""), // Hash empty bytes for None
+        }
+        Ok(bytes::Bytes::from(hasher.finalize().to_vec()))
+    }
+
+    async fn down_checksum(&self) -> Result<bytes::Bytes> {
+        let mut hasher = Sha256::new();
+        match &self.down_sql {
+            Some(content) => hasher.update(content.as_bytes()),
+            None => hasher.update(b""), // Hash empty bytes for None
+        }
+        Ok(bytes::Bytes::from(hasher.finalize().to_vec()))
     }
 }
 

@@ -121,7 +121,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{Result, migration::Migration, migration::MigrationSource};
+use crate::{
+    Result, checksum_database::ChecksumDatabase, migration::Migration, migration::MigrationSource,
+};
 use switchy_database::Executable;
 
 /// Migration implementation for code-based migrations using `Executable`
@@ -162,6 +164,37 @@ impl<'a> Migration<'a> for CodeMigration<'a> {
             down_sql.execute(db).await?;
         }
         Ok(())
+    }
+
+    async fn up_checksum(&self) -> Result<bytes::Bytes> {
+        // For code migrations, we use ChecksumDatabase to capture the actual SQL operations
+        // that are executed when the Executable runs, giving us real content-based checksums
+        let checksum_db = ChecksumDatabase::new();
+        self.up_sql.execute(&checksum_db).await.map_err(|e| {
+            crate::MigrationError::Execution(format!(
+                "Failed to execute migration for checksum: {e}"
+            ))
+        })?;
+        Ok(checksum_db.finalize().await)
+    }
+
+    async fn down_checksum(&self) -> Result<bytes::Bytes> {
+        if let Some(down_sql) = &self.down_sql {
+            // For code migrations, we use ChecksumDatabase to capture the actual SQL operations
+            let checksum_db = ChecksumDatabase::new();
+            down_sql.execute(&checksum_db).await.map_err(|e| {
+                crate::MigrationError::Execution(format!(
+                    "Failed to execute down migration for checksum: {e}"
+                ))
+            })?;
+            Ok(checksum_db.finalize().await)
+        } else {
+            // Hash empty bytes for None - consistent with other migration types
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(b"");
+            Ok(bytes::Bytes::from(hasher.finalize().to_vec()))
+        }
     }
 }
 
@@ -319,5 +352,50 @@ mod tests {
         // Description should be None for code migrations (no description implemented)
         assert_eq!(list[0].description, None);
         assert_eq!(list[1].description, None);
+    }
+
+    #[tokio::test]
+    async fn test_code_migration_checksums() {
+        use sha2::{Digest, Sha256};
+
+        // Test with String migration (should use ChecksumDatabase)
+        let migration = CodeMigration::new(
+            "test_migration".to_string(),
+            Box::new("CREATE TABLE test (id INTEGER PRIMARY KEY)".to_string()),
+            Some(Box::new("DROP TABLE test".to_string())),
+        );
+
+        let up_checksum = migration.up_checksum().await.unwrap();
+        let down_checksum = migration.down_checksum().await.unwrap();
+
+        // Verify checksums are 32 bytes (SHA256)
+        assert_eq!(up_checksum.len(), 32);
+        assert_eq!(down_checksum.len(), 32);
+
+        // Verify they're not all zeros (should be real checksums from ChecksumDatabase)
+        assert_ne!(up_checksum, bytes::Bytes::from(vec![0u8; 32]));
+        assert_ne!(down_checksum, bytes::Bytes::from(vec![0u8; 32]));
+
+        // Verify they're different (different SQL should produce different hashes)
+        assert_ne!(up_checksum, down_checksum);
+
+        // Test with None down migration
+        let migration_no_down = CodeMigration::new(
+            "test_migration_no_down".to_string(),
+            Box::new("CREATE TABLE test (id INTEGER PRIMARY KEY)".to_string()),
+            None,
+        );
+
+        let up_checksum_no_down = migration_no_down.up_checksum().await.unwrap();
+        let down_checksum_no_down = migration_no_down.down_checksum().await.unwrap();
+
+        // Up checksum should still be real
+        assert_ne!(up_checksum_no_down, bytes::Bytes::from(vec![0u8; 32]));
+
+        // Down checksum should be hash of empty bytes (consistent with other migration types)
+        let mut hasher = Sha256::new();
+        hasher.update(b"");
+        let expected_empty_hash = bytes::Bytes::from(hasher.finalize().to_vec());
+        assert_eq!(down_checksum_no_down, expected_empty_hash);
     }
 }
