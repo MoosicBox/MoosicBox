@@ -465,7 +465,7 @@ rand = "0.9.2"
 rangemap = "1.6.0"
 ratatui = "0.29.0"
 rb = "0.4.1"
-rcgen = "0.14.3"
+rcgen = "0.14.4"
 regex = "1.11.2"
 reqwest = { version = "0.12.23", default-features = false, features = [
     "rustls-tls",
@@ -507,7 +507,7 @@ swc_common = { version = "14.0.3", features = ["tty-emitter"] }
 swc_ecma_ast = "15.0.0"
 swc_ecma_codegen = "17.0.2"
 swc_ecma_loader = { version = "14.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "32.0.2"
+swc_ecma_minifier = "32.0.3"
 swc_ecma_parser = "24.0.0"
 swc_ecma_transforms_base = "26.0.0"
 swc_ecma_transforms_typescript = "29.0.0"
