@@ -1,0 +1,21 @@
+---
+source: packages/switchy/schema/cli/tests/validate_simple_test.rs
+expression: clean_output
+---
+Validate checksums of applied migrations
+
+Usage: switchy-migrate validate [OPTIONS] --database-url <DATABASE_URL>
+
+Options:
+  -d, --database-url <DATABASE_URL>
+          Database connection URL [env: SWITCHY_DATABASE_URL=]
+  -m, --migrations-dir <MIGRATIONS_DIR>
+          Directory containing migrations [env: SWITCHY_MIGRATIONS_DIR=] [default: ./migrations]
+      --migration-table <MIGRATION_TABLE>
+          Migration table name [env: SWITCHY_MIGRATION_TABLE=] [default: __switchy_migrations]
+      --strict
+          Exit with error code if mismatches found
+      --verbose
+          Show detailed checksum values
+  -h, --help
+          Print help

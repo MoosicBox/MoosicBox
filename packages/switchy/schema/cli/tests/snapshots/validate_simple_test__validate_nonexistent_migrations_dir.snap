@@ -1,0 +1,5 @@
+---
+source: packages/switchy/schema/cli/tests/validate_simple_test.rs
+expression: clean_output
+---
+Error: Migration(Database(SqliteSqlx(Sqlx(Database(SqliteError { code: 1, message: "no such table: __switchy_migrations" })))))

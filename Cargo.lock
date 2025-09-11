@@ -14441,11 +14441,16 @@ name = "switchy_schema_cli"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
+ "async-trait",
+ "bytes",
  "chrono",
  "clap 4.5.47",
  "colored",
  "dialoguer",
+ "insta",
  "predicates",
+ "regex",
+ "sha2",
  "switchy_async",
  "switchy_database",
  "switchy_database_connection",

@@ -1,0 +1,5 @@
+---
+source: packages/switchy/schema/cli/tests/validate_simple_test.rs
+expression: clean_output
+---
+Error: Config("SQLite connection error: error returned from database: (code: 14) unable to open database file")

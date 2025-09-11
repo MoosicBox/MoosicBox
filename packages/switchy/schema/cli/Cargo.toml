@@ -34,7 +34,13 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 
 [dev-dependencies]
 assert_cmd    = { workspace = true }
+async-trait   = { workspace = true }
+bytes         = { workspace = true }
+chrono        = { workspace = true }
+insta         = { workspace = true, features = ["redactions"] }
 predicates    = { workspace = true }
+regex         = { workspace = true }
+sha2          = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
 
 [features]
