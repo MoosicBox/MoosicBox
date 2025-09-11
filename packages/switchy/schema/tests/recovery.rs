@@ -99,8 +99,9 @@ async fn test_dirty_state_detection() {
     version_tracker.ensure_table_exists(&*db).await.unwrap();
 
     // Manually insert an "in_progress" migration to simulate interruption
+    let checksum = bytes::Bytes::from(vec![0u8; 32]);
     version_tracker
-        .record_migration_started(&*db, "001_interrupted_migration")
+        .record_migration_started(&*db, "001_interrupted_migration", &checksum, &checksum)
         .await
         .unwrap();
 
@@ -277,9 +278,10 @@ async fn test_retry_failed_migration() {
     let version_tracker = VersionTracker::with_table_name("__test_migrations");
 
     // First, create a failed migration manually
+    let checksum = bytes::Bytes::from(vec![0u8; 32]);
     version_tracker.ensure_table_exists(&*db).await.unwrap();
     version_tracker
-        .record_migration_started(&*db, "001_test_migration")
+        .record_migration_started(&*db, "001_test_migration", &checksum, &checksum)
         .await
         .unwrap();
     version_tracker
@@ -403,8 +405,9 @@ async fn test_migration_status_transitions() {
     let migration_id = "001_status_test";
 
     // 1. Record migration as started
+    let checksum = bytes::Bytes::from(vec![0u8; 32]);
     version_tracker
-        .record_migration_started(&*db, migration_id)
+        .record_migration_started(&*db, migration_id, &checksum, &checksum)
         .await
         .unwrap();
 
@@ -465,7 +468,7 @@ async fn test_migration_status_transitions() {
     // 4. Test get_dirty_migrations filtering
     // Add another migration in progress
     version_tracker
-        .record_migration_started(&*db, "002_in_progress")
+        .record_migration_started(&*db, "002_in_progress", &checksum, &checksum)
         .await
         .unwrap();
 

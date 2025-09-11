@@ -262,6 +262,12 @@ pub enum MigrationError {
         /// List of migration IDs that are in dirty state
         migrations: Vec<String>,
     },
+
+    /// Invalid checksum
+    ///
+    /// Occurs when a migration checksum is not exactly 32 bytes.
+    #[error("Invalid checksum: {0}")]
+    InvalidChecksum(String),
 }
 
 impl From<moosicbox_json_utils::ParseError> for MigrationError {

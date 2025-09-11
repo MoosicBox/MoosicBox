@@ -54,7 +54,7 @@ use chrono::NaiveDateTime;
 use moosicbox_json_utils::{MissingValue, ParseError, ToValueType, database::ToValue};
 use switchy_database::{
     Database, DatabaseValue, Row,
-    query::{FilterableQuery, where_not_eq},
+    query::{FilterableQuery, where_eq, where_not_eq},
     schema::{Column, DataType},
 };
 
@@ -69,6 +69,8 @@ pub struct MigrationRecord {
     pub finished_on: Option<NaiveDateTime>,
     pub status: MigrationStatus,
     pub failure_reason: Option<String>,
+    pub up_checksum: String,
+    pub down_checksum: String,
 }
 
 impl MissingValue<MigrationRecord> for &Row {}
@@ -92,6 +94,12 @@ impl ToValueType<MigrationRecord> for &Row {
             failure_reason: self
                 .to_value("failure_reason")
                 .map_err(|e| ParseError::ConvertType(format!("failure_reason: {e}")))?,
+            up_checksum: self
+                .to_value("up_checksum")
+                .map_err(|e| ParseError::ConvertType(format!("up_checksum: {e}")))?,
+            down_checksum: self
+                .to_value("down_checksum")
+                .map_err(|e| ParseError::ConvertType(format!("down_checksum: {e}")))?,
         })
     }
 }
@@ -183,6 +191,20 @@ impl VersionTracker {
                 default: None,
             })
             .column(Column {
+                name: "up_checksum".to_string(),
+                nullable: false,
+                auto_increment: false,
+                data_type: DataType::VarChar(64),
+                default: None,
+            })
+            .column(Column {
+                name: "down_checksum".to_string(),
+                nullable: false,
+                auto_increment: false,
+                data_type: DataType::VarChar(64),
+                default: None,
+            })
+            .column(Column {
                 name: "status".to_string(),
                 nullable: false,
                 auto_increment: false,
@@ -244,11 +266,17 @@ impl VersionTracker {
     ///
     /// * If the database insert fails
     pub async fn record_migration(&self, db: &dyn Database, migration_id: &str) -> Result<()> {
+        // Use default checksums (32 zero bytes each) for direct completed migrations
+        let up_checksum_hex = hex::encode(vec![0u8; 32]);
+        let down_checksum_hex = hex::encode(vec![0u8; 32]);
+
         db.insert(&self.table_name)
             .value("id", migration_id)
             .value("status", MigrationStatus::Completed.to_string())
             .value("finished_on", DatabaseValue::Now)
             .value("failure_reason", DatabaseValue::Null)
+            .value("up_checksum", up_checksum_hex)
+            .value("down_checksum", down_checksum_hex)
             .execute(db)
             .await?;
 
@@ -263,17 +291,40 @@ impl VersionTracker {
     ///
     /// # Errors
     ///
+    /// * If the checksum is not exactly 32 bytes
     /// * If the database insert fails
     pub async fn record_migration_started(
         &self,
         db: &dyn Database,
         migration_id: &str,
+        up_checksum: &bytes::Bytes,
+        down_checksum: &bytes::Bytes,
     ) -> Result<()> {
+        // Validate both checksums are exactly 32 bytes
+        if up_checksum.len() != 32 {
+            return Err(crate::MigrationError::InvalidChecksum(format!(
+                "Expected 32 bytes for up_checksum, got {}",
+                up_checksum.len()
+            )));
+        }
+        if down_checksum.len() != 32 {
+            return Err(crate::MigrationError::InvalidChecksum(format!(
+                "Expected 32 bytes for down_checksum, got {}",
+                down_checksum.len()
+            )));
+        }
+
+        // Convert to lowercase hex strings (always 64 chars each)
+        let up_checksum_hex = hex::encode(up_checksum);
+        let down_checksum_hex = hex::encode(down_checksum);
+
         db.insert(&self.table_name)
             .value("id", migration_id)
             .value("status", MigrationStatus::InProgress.to_string())
             .value("finished_on", DatabaseValue::Null)
             .value("failure_reason", DatabaseValue::Null)
+            .value("up_checksum", up_checksum_hex)
+            .value("down_checksum", down_checksum_hex)
             .execute(db)
             .await?;
 
@@ -320,7 +371,15 @@ impl VersionTracker {
     ) -> Result<Option<MigrationRecord>> {
         let results = db
             .select(&self.table_name)
-            .columns(&["id", "run_on", "finished_on", "status", "failure_reason"])
+            .columns(&[
+                "id",
+                "run_on",
+                "finished_on",
+                "status",
+                "failure_reason",
+                "up_checksum",
+                "down_checksum",
+            ])
             .where_eq("id", migration_id)
             .execute(db)
             .await?;
@@ -347,28 +406,38 @@ impl VersionTracker {
     pub async fn get_dirty_migrations(&self, db: &dyn Database) -> Result<Vec<MigrationRecord>> {
         let results = db
             .select(&self.table_name)
-            .columns(&["id", "run_on", "finished_on", "status", "failure_reason"])
+            .columns(&[
+                "id",
+                "run_on",
+                "finished_on",
+                "status",
+                "failure_reason",
+                "up_checksum",
+                "down_checksum",
+            ])
             .filter(Box::new(where_not_eq(
                 "status",
                 MigrationStatus::Completed.to_string(),
             )))
-            .sort("run_on", switchy_database::query::SortDirection::Asc)
             .execute(db)
             .await?;
 
-        results
+        let dirty_migrations = results
             .into_iter()
             .map(|row| {
                 row.to_value_type().map_err(|e| {
                     crate::MigrationError::Validation(format!("Row conversion failed: {e}"))
                 })
             })
-            .collect()
+            .collect::<Result<Vec<MigrationRecord>>>()?;
+
+        Ok(dirty_migrations)
     }
 
-    /// Get all successfully applied migrations in reverse chronological order (most recent first)
+    /// Get all successfully applied migrations in chronological order
     ///
-    /// Returns only migrations with status = 'completed'.
+    /// Returns migration IDs for all completed migrations, ordered by run time (oldest first).
+    /// This method is used by the migration runner to determine rollback order and track applied state.
     ///
     /// # Errors
     ///
@@ -376,49 +445,27 @@ impl VersionTracker {
     pub async fn get_applied_migrations(&self, db: &dyn Database) -> Result<Vec<String>> {
         let results = db
             .select(&self.table_name)
-            .columns(&["id", "status"])
-            .sort("run_on", switchy_database::query::SortDirection::Desc)
+            .columns(&["id"])
+            .filter(Box::new(where_eq(
+                "status",
+                MigrationStatus::Completed.to_string(),
+            )))
             .execute(db)
             .await?;
 
         let migration_ids: Vec<String> = results
             .into_iter()
-            .filter_map(|row| {
-                let id = row
-                    .get("id")
-                    .and_then(|value| value.as_str().map(std::string::ToString::to_string));
-                let status = row
-                    .get("status")
-                    .and_then(|value| value.as_str().map(ToString::to_string));
-
-                // Only include completed migrations
-                if let (Some(id_str), Some(status_str)) = (id, status) {
-                    if status_str == MigrationStatus::Completed.to_string() {
-                        Some(id_str)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+            .map(|row| {
+                row.to_value("id").map_err(|e| {
+                    crate::MigrationError::Validation(format!(
+                        "Failed to extract migration ID: {e}"
+                    ))
+                })
             })
-            .collect();
+            .collect::<Result<Vec<String>>>()?;
 
+        // Return in chronological order (oldest first) - database returns in insertion order
         Ok(migration_ids)
-    }
-
-    /// Remove a migration record (used during rollback)
-    ///
-    /// # Errors
-    ///
-    /// * If the database delete fails
-    pub async fn remove_migration(&self, db: &dyn Database, migration_id: &str) -> Result<()> {
-        db.delete(&self.table_name)
-            .where_eq("id", migration_id)
-            .execute(db)
-            .await?;
-
-        Ok(())
     }
 
     /// Remove a migration record from the tracking table
@@ -439,6 +486,16 @@ impl VersionTracker {
             .execute(db)
             .await?;
 
+        Ok(())
+    }
+
+    /// Alias for `remove_migration_record` for backward compatibility
+    ///
+    /// # Errors
+    ///
+    /// * If the database delete fails
+    pub async fn remove_migration(&self, db: &dyn Database, migration_id: &str) -> Result<()> {
+        self.remove_migration_record(db, migration_id).await?;
         Ok(())
     }
 }
@@ -539,13 +596,15 @@ mod tests {
             .await
             .expect("Failed to record completed migration");
 
+        let up_checksum = bytes::Bytes::from(vec![0u8; 32]);
+        let down_checksum = bytes::Bytes::from(vec![0u8; 32]);
         tracker
-            .record_migration_started(&*db, "in_progress_migration")
+            .record_migration_started(&*db, "in_progress_migration", &up_checksum, &down_checksum)
             .await
             .expect("Failed to record in-progress migration");
 
         tracker
-            .record_migration_started(&*db, "failed_migration")
+            .record_migration_started(&*db, "failed_migration", &up_checksum, &down_checksum)
             .await
             .expect("Failed to record failed migration start");
         tracker
@@ -574,6 +633,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_checksum_validation() {
+        // Create in-memory database
+        let db = switchy_database_connection::init_sqlite_sqlx(None)
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::with_table_name("__test_checksum_validation");
+
+        // Ensure table exists
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to create version table");
+
+        // Test valid 32-byte checksums
+        let valid_checksum = bytes::Bytes::from(vec![0u8; 32]);
+        let result = tracker
+            .record_migration_started(&*db, "valid_migration", &valid_checksum, &valid_checksum)
+            .await;
+        assert!(result.is_ok(), "Valid 32-byte checksums should be accepted");
+
+        // Test invalid checksum (too short)
+        let invalid_checksum_short = bytes::Bytes::from(vec![0u8; 16]);
+        let result = tracker
+            .record_migration_started(
+                &*db,
+                "invalid_migration_short",
+                &invalid_checksum_short,
+                &valid_checksum,
+            )
+            .await;
+        assert!(result.is_err(), "16-byte checksum should be rejected");
+        match result.unwrap_err() {
+            crate::MigrationError::InvalidChecksum(msg) => {
+                assert!(msg.contains("Expected 32 bytes for up_checksum, got 16"));
+            }
+            _ => panic!("Expected InvalidChecksum error"),
+        }
+
+        // Test invalid checksum (too long)
+        let invalid_checksum_long = bytes::Bytes::from(vec![0u8; 64]);
+        let result = tracker
+            .record_migration_started(
+                &*db,
+                "invalid_migration_long",
+                &invalid_checksum_long,
+                &valid_checksum,
+            )
+            .await;
+        assert!(result.is_err(), "64-byte checksum should be rejected");
+        match result.unwrap_err() {
+            crate::MigrationError::InvalidChecksum(msg) => {
+                assert!(msg.contains("Expected 32 bytes for up_checksum, got 64"));
+            }
+            _ => panic!("Expected InvalidChecksum error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_hex_encoding() {
+        // Test that 32 bytes always produces 64-character hex string
+        let checksum = vec![0u8; 32];
+        let hex_string = hex::encode(&checksum);
+        assert_eq!(
+            hex_string.len(),
+            64,
+            "32 bytes should produce 64-character hex string"
+        );
+        assert_eq!(
+            hex_string,
+            "0".repeat(64),
+            "Zero bytes should produce all zeros"
+        );
+
+        // Test with non-zero bytes
+        let checksum = vec![255u8; 32];
+        let hex_string = hex::encode(&checksum);
+        assert_eq!(
+            hex_string.len(),
+            64,
+            "32 bytes should produce 64-character hex string"
+        );
+        assert_eq!(
+            hex_string,
+            "ff".repeat(32),
+            "255 bytes should produce all 'ff'"
+        );
+    }
+
+    #[tokio::test]
     async fn test_migration_record_fields() {
         // Create in-memory database
         let db = switchy_database_connection::init_sqlite_sqlx(None)
@@ -589,8 +738,9 @@ mod tests {
             .expect("Failed to create version table");
 
         // Test failed migration with all fields
+        let checksum = bytes::Bytes::from(vec![0u8; 32]);
         tracker
-            .record_migration_started(&*db, "test_migration")
+            .record_migration_started(&*db, "test_migration", &checksum, &checksum)
             .await
             .expect("Failed to record migration start");
 

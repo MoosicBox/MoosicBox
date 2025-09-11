@@ -191,6 +191,26 @@ pub trait Migration<'a>: Send + Sync + 'a {
         Ok(())
     }
 
+    /// Calculate the checksum for the up migration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if checksum calculation fails
+    async fn up_checksum(&self) -> Result<bytes::Bytes> {
+        // Default returns 32 zero bytes
+        Ok(bytes::Bytes::from(vec![0u8; 32]))
+    }
+
+    /// Calculate the checksum for the down migration
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if checksum calculation fails
+    async fn down_checksum(&self) -> Result<bytes::Bytes> {
+        // Default returns 32 zero bytes
+        Ok(bytes::Bytes::from(vec![0u8; 32]))
+    }
+
     fn description(&self) -> Option<&str> {
         None
     }

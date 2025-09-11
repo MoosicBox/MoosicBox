@@ -14423,6 +14423,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
+ "hex",
  "include_dir",
  "moosicbox_json_utils",
  "sha2",

@@ -287,9 +287,23 @@ impl<'a> MigrationRunner<'a> {
 
             // Execute migration (unless dry run)
             if !self.dry_run {
-                // Record migration as started
+                // Calculate checksums and record migration as started
+                let up_checksum = migration.up_checksum().await?;
+                let down_checksum = migration.down_checksum().await?;
+                if up_checksum.len() != 32 {
+                    return Err(crate::MigrationError::InvalidChecksum(format!(
+                        "Expected 32 bytes for up_checksum, got {}",
+                        up_checksum.len()
+                    )));
+                }
+                if down_checksum.len() != 32 {
+                    return Err(crate::MigrationError::InvalidChecksum(format!(
+                        "Expected 32 bytes for down_checksum, got {}",
+                        down_checksum.len()
+                    )));
+                }
                 self.version_tracker
-                    .record_migration_started(db, &migration_id)
+                    .record_migration_started(db, &migration_id, &up_checksum, &down_checksum)
                     .await?;
 
                 match migration.up(db).await {
@@ -385,6 +399,11 @@ impl<'a> MigrationRunner<'a> {
     /// * If a migration's `down()` method fails
     /// * If a migration doesn't have a `down()` method when validation is enabled
     ///
+    /// # Panics
+    ///
+    /// This method does not panic. The use of `unwrap()` is safe as it is only called after
+    /// checking that the migrations list is not empty.
+    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -426,21 +445,21 @@ impl<'a> MigrationRunner<'a> {
                 if applied_migrations.is_empty() {
                     Vec::new()
                 } else {
-                    vec![applied_migrations[0].clone()]
+                    vec![applied_migrations.last().unwrap().clone()]
                 }
             }
-            RollbackStrategy::Steps(n) => applied_migrations.into_iter().take(n).collect(),
+            RollbackStrategy::Steps(n) => applied_migrations.into_iter().rev().take(n).collect(),
             RollbackStrategy::DownTo(target_id) => {
                 let mut result = Vec::new();
-                for migration_id in applied_migrations {
-                    if migration_id == target_id {
+                for migration_id in applied_migrations.into_iter().rev() {
+                    if migration_id == *target_id {
                         break;
                     }
                     result.push(migration_id);
                 }
                 result
             }
-            RollbackStrategy::All => applied_migrations,
+            RollbackStrategy::All => applied_migrations.into_iter().rev().collect(),
         };
 
         // If no migrations to rollback, return early
@@ -607,9 +626,23 @@ impl<'a> MigrationRunner<'a> {
                         ))
                     })?;
 
-                // Re-run the single migration
+                // Calculate checksums and re-run the single migration
+                let up_checksum = migration.up_checksum().await?;
+                let down_checksum = migration.down_checksum().await?;
+                if up_checksum.len() != 32 {
+                    return Err(crate::MigrationError::InvalidChecksum(format!(
+                        "Expected 32 bytes for up_checksum, got {}",
+                        up_checksum.len()
+                    )));
+                }
+                if down_checksum.len() != 32 {
+                    return Err(crate::MigrationError::InvalidChecksum(format!(
+                        "Expected 32 bytes for down_checksum, got {}",
+                        down_checksum.len()
+                    )));
+                }
                 self.version_tracker
-                    .record_migration_started(db, migration_id)
+                    .record_migration_started(db, migration_id, &up_checksum, &down_checksum)
                     .await?;
 
                 match migration.up(db).await {
@@ -1140,9 +1173,10 @@ mod tests {
                 .expect("Failed to create version table");
 
             // Insert a dirty migration (in_progress status)
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
             runner
                 .version_tracker
-                .record_migration_started(&*db, "test_migration")
+                .record_migration_started(&*db, "test_migration", &checksum, &checksum)
                 .await
                 .expect("Failed to record migration start");
 
@@ -1179,9 +1213,10 @@ mod tests {
                 .expect("Failed to create version table");
 
             // Insert a dirty migration
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
             runner
                 .version_tracker
-                .record_migration_started(&*db, "test_migration")
+                .record_migration_started(&*db, "test_migration", &checksum, &checksum)
                 .await
                 .expect("Failed to record migration start");
 
@@ -1287,15 +1322,16 @@ mod tests {
                 .await
                 .expect("Failed to record completed migration");
 
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
             runner
                 .version_tracker
-                .record_migration_started(&*db, "in_progress_migration")
+                .record_migration_started(&*db, "in_progress_migration", &checksum, &checksum)
                 .await
                 .expect("Failed to record in-progress migration");
 
             runner
                 .version_tracker
-                .record_migration_started(&*db, "failed_migration")
+                .record_migration_started(&*db, "failed_migration", &checksum, &checksum)
                 .await
                 .expect("Failed to record failed migration start");
             runner
@@ -1349,9 +1385,10 @@ mod tests {
                 .expect("Failed to create version table");
 
             // Simulate a failed migration
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
             runner
                 .version_tracker
-                .record_migration_started(&*db, "001_retry_test")
+                .record_migration_started(&*db, "001_retry_test", &checksum, &checksum)
                 .await
                 .expect("Failed to record migration start");
             runner
@@ -1516,9 +1553,10 @@ mod tests {
                 .expect("Failed to create version table");
 
             // Record a failed migration
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
             runner
                 .version_tracker
-                .record_migration_started(&*db, "failed_migration")
+                .record_migration_started(&*db, "failed_migration", &checksum, &checksum)
                 .await
                 .expect("Failed to record migration start");
             runner
