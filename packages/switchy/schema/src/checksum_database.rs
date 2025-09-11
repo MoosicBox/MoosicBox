@@ -3,7 +3,13 @@
 use crate::digest::Digest;
 use async_trait::async_trait;
 use sha2::{Digest as _, Sha256};
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 use switchy_async::sync::Mutex;
 use switchy_database::query::{
     DeleteStatement, Expression, ExpressionType, InsertStatement, SelectQuery, UpdateStatement,
@@ -14,6 +20,7 @@ use switchy_database::{Database, DatabaseError, DatabaseTransaction, DatabaseVal
 #[derive(Debug)]
 pub struct ChecksumDatabase {
     hasher: Arc<Mutex<Sha256>>,
+    transaction_depth: Arc<AtomicUsize>,
 }
 
 impl Default for ChecksumDatabase {
@@ -27,11 +34,15 @@ impl ChecksumDatabase {
     pub fn new() -> Self {
         Self {
             hasher: Arc::new(Mutex::new(Sha256::new())),
+            transaction_depth: Arc::new(AtomicUsize::new(0)),
         }
     }
 
-    const fn with_hasher(hasher: Arc<Mutex<Sha256>>) -> Self {
-        Self { hasher }
+    const fn with_hasher(hasher: Arc<Mutex<Sha256>>, transaction_depth: Arc<AtomicUsize>) -> Self {
+        Self {
+            hasher,
+            transaction_depth,
+        }
     }
 
     pub async fn finalize(self) -> bytes::Bytes {
@@ -237,11 +248,15 @@ impl Database for ChecksumDatabase {
     }
 
     async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
+        let depth = self.transaction_depth.fetch_add(1, Ordering::SeqCst);
         let mut hasher = self.hasher.lock().await;
+        if depth > 0 {
+            hasher.update(format!("D{}:", depth + 1).as_bytes());
+        }
         hasher.update(b"BEGIN_TRANSACTION:");
         drop(hasher);
 
-        let tx = Self::with_hasher(self.hasher.clone());
+        let tx = Self::with_hasher(self.hasher.clone(), self.transaction_depth.clone());
         Ok(Box::new(tx))
     }
 }
@@ -249,11 +264,13 @@ impl Database for ChecksumDatabase {
 #[async_trait]
 impl DatabaseTransaction for ChecksumDatabase {
     async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
+        self.transaction_depth.fetch_sub(1, Ordering::SeqCst);
         self.hasher.lock().await.update(b"COMMIT:");
         Ok(())
     }
 
     async fn rollback(self: Box<Self>) -> Result<(), DatabaseError> {
+        self.transaction_depth.fetch_sub(1, Ordering::SeqCst);
         self.hasher.lock().await.update(b"ROLLBACK:");
         Ok(())
     }
@@ -562,6 +579,26 @@ mod tests {
         assert_ne!(
             initial_checksum, final_checksum,
             "Transaction operations should change checksum"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_nested_transactions_produce_different_checksums() {
+        let db1 = ChecksumDatabase::new();
+        let tx1 = db1.begin_transaction().await.unwrap();
+        tx1.commit().await.unwrap();
+        let checksum1 = db1.finalize().await;
+
+        let db2 = ChecksumDatabase::new();
+        let tx1 = db2.begin_transaction().await.unwrap();
+        let tx2 = tx1.begin_transaction().await.unwrap();
+        tx2.commit().await.unwrap();
+        tx1.commit().await.unwrap();
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "Single vs nested transactions should produce different checksums"
         );
     }
 }
