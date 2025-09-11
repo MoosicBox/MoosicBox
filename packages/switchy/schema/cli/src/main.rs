@@ -189,6 +189,33 @@ enum Commands {
         #[arg(long)]
         force: bool,
     },
+    /// Validate checksums of applied migrations
+    Validate {
+        /// Database connection URL
+        #[arg(short, long, env = "SWITCHY_DATABASE_URL")]
+        database_url: String,
+        /// Directory containing migrations
+        #[arg(
+            short,
+            long,
+            env = "SWITCHY_MIGRATIONS_DIR",
+            default_value = "./migrations"
+        )]
+        migrations_dir: PathBuf,
+        /// Migration table name
+        #[arg(
+            long,
+            env = "SWITCHY_MIGRATION_TABLE",
+            default_value = "__switchy_migrations"
+        )]
+        migration_table: String,
+        /// Exit with error code if mismatches found
+        #[arg(long)]
+        strict: bool,
+        /// Show detailed checksum values
+        #[arg(long)]
+        verbose: bool,
+    },
 }
 
 #[tokio::main]
@@ -265,6 +292,22 @@ async fn main() -> Result<()> {
                 migration_table,
                 migration_id,
                 force,
+            )
+            .await
+        }
+        Commands::Validate {
+            database_url,
+            migrations_dir,
+            migration_table,
+            strict,
+            verbose,
+        } => {
+            validate_checksums(
+                database_url,
+                migrations_dir,
+                migration_table,
+                strict,
+                verbose,
             )
             .await
         }
@@ -857,6 +900,91 @@ async fn mark_migration_completed(
     Ok(())
 }
 
+/// Validate checksums of applied migrations
+async fn validate_checksums(
+    database_url: String,
+    migrations_dir: PathBuf,
+    migration_table: String,
+    strict: bool,
+    verbose: bool,
+) -> Result<()> {
+    use colored::Colorize;
+    use switchy_schema::runner::MigrationRunner;
+
+    // Connect to database
+    let db = utils::database::connect(&database_url).await?;
+
+    // Create migration runner with directory source
+    let runner =
+        MigrationRunner::new_directory(&migrations_dir).with_table_name(migration_table.clone());
+
+    println!(
+        "\
+        Validating migration checksums\n\
+        ==============================\n\
+        Migrations directory: {}\n\
+        Migration table: {migration_table}\n",
+        migrations_dir.display()
+    );
+
+    // Validate checksums
+    let mismatches = runner.validate_checksums(&*db).await?;
+
+    if mismatches.is_empty() {
+        println!("{} All migration checksums are valid!", "✓".green());
+        return Ok(());
+    }
+
+    // Display mismatches
+    println!(
+        "{} Found {} checksum mismatch(es):\n",
+        "✗".red(),
+        mismatches.len()
+    );
+
+    for mismatch in &mismatches {
+        println!(
+            "  {} Migration: {}\n\
+            Checksum type: {} migration\n\
+            {}\n",
+            "•".yellow(),
+            mismatch.migration_id.cyan(),
+            match mismatch.checksum_type {
+                switchy_schema::ChecksumType::Up => "UP".green(),
+                switchy_schema::ChecksumType::Down => "DOWN".blue(),
+            },
+            if verbose {
+                format!(
+                    "    Stored:  {}\n    Current: {}",
+                    mismatch.stored_checksum, mismatch.current_checksum,
+                )
+            } else {
+                String::new()
+            }
+        );
+    }
+
+    println!(
+        "{}\n\
+        This could indicate:\n\
+        - Accidental modification of migration files\n\
+        - Different migration content between environments\n\
+        - Potential database schema inconsistencies\n",
+        "⚠️  WARNING: Migration files have been modified after being applied!"
+            .yellow()
+            .bold()
+    );
+
+    if strict {
+        println!("{} Exiting with error due to --strict flag", "✗".red());
+        return Err(CliError::Migration(
+            switchy_schema::MigrationError::ChecksumValidationFailed { mismatches },
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1364,6 +1492,88 @@ mod tests {
             }
             Err(other) => panic!("Unexpected error type: {other:?}"),
             Ok(()) => panic!("Expected error but got success"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_validate_command() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "validate",
+            "--database-url",
+            "sqlite://test.db",
+            "--migrations-dir",
+            "/custom/migrations",
+            "--migration-table",
+            "custom_migrations",
+        ]);
+
+        match cli.command {
+            Commands::Validate {
+                database_url,
+                migrations_dir,
+                migration_table,
+                strict,
+                verbose,
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert_eq!(migrations_dir, PathBuf::from("/custom/migrations"));
+                assert_eq!(migration_table, "custom_migrations");
+                assert!(!strict);
+                assert!(!verbose);
+            }
+            _ => panic!("Expected Validate command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_validate_with_flags() {
+        let cli = Cli::parse_from([
+            "switchy-migrate",
+            "validate",
+            "--database-url",
+            "sqlite://test.db",
+            "--strict",
+            "--verbose",
+        ]);
+
+        match cli.command {
+            Commands::Validate {
+                database_url,
+                migrations_dir,
+                migration_table,
+                strict,
+                verbose,
+            } => {
+                assert_eq!(database_url, "sqlite://test.db");
+                assert_eq!(migrations_dir, PathBuf::from("./migrations")); // default
+                assert_eq!(migration_table, "__switchy_migrations"); // default
+                assert!(strict);
+                assert!(verbose);
+            }
+            _ => panic!("Expected Validate command"),
+        }
+    }
+
+    #[test]
+    fn test_validate_command_default_values() {
+        let cli = Cli::parse_from(["switchy-migrate", "validate", "-d", "sqlite://memory"]);
+
+        match cli.command {
+            Commands::Validate {
+                database_url,
+                migrations_dir,
+                migration_table,
+                strict,
+                verbose,
+            } => {
+                assert_eq!(database_url, "sqlite://memory");
+                assert_eq!(migrations_dir, PathBuf::from("./migrations"));
+                assert_eq!(migration_table, "__switchy_migrations");
+                assert!(!strict);
+                assert!(!verbose);
+            }
+            _ => panic!("Expected Validate command"),
         }
     }
 }
