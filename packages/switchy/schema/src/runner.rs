@@ -716,6 +716,104 @@ impl<'a> MigrationRunner<'a> {
             }
         }
     }
+
+    /// Validate checksums of applied migrations against current migration content
+    ///
+    /// Compares stored checksums in the database with current migration content to detect
+    /// if migrations have been modified since they were applied. This is crucial for
+    /// detecting migration drift in production environments.
+    ///
+    /// # Errors
+    ///
+    /// * If database operations fail
+    /// * If migration discovery fails
+    /// * If checksum calculation fails
+    /// * If hex decoding fails
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of all checksum mismatches found. An empty vector means all
+    /// checksums are valid.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use switchy_schema::runner::MigrationRunner;
+    /// use switchy_database::Database;
+    ///
+    /// # async fn example(runner: &MigrationRunner<'_>, db: &dyn Database) -> switchy_schema::Result<()> {
+    /// let mismatches = runner.validate_checksums(db).await?;
+    ///
+    /// if mismatches.is_empty() {
+    ///     println!("All migration checksums are valid!");
+    /// } else {
+    ///     for mismatch in mismatches {
+    ///         println!("Checksum mismatch in migration '{}' ({}): stored={}, current={}",
+    ///             mismatch.migration_id,
+    ///             mismatch.checksum_type,
+    ///             mismatch.stored_checksum,
+    ///             mismatch.current_checksum
+    ///         );
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn validate_checksums(
+        &self,
+        db: &dyn Database,
+    ) -> Result<Vec<crate::ChecksumMismatch>> {
+        let mut mismatches = vec![];
+
+        // Get all applied migrations with their stored checksums
+        let applied = self.version_tracker.list_applied_migrations(db).await?;
+        // Get all available migrations from source
+        let available = self.source.migrations().await?;
+
+        for record in applied {
+            if let Some(migration) = available.iter().find(|m| m.id() == record.id) {
+                // Validate UP migration checksum
+                let current_up = migration.up_checksum().await?;
+                let stored_up = hex::decode(&record.up_checksum).map_err(|e| {
+                    crate::MigrationError::Validation(format!(
+                        "Failed to decode stored up_checksum for migration '{}': {}",
+                        record.id, e
+                    ))
+                })?;
+
+                if current_up.as_ref() != stored_up.as_slice() {
+                    mismatches.push(crate::ChecksumMismatch {
+                        migration_id: record.id.clone(),
+                        checksum_type: crate::ChecksumType::Up,
+                        stored_checksum: record.up_checksum.clone(),
+                        current_checksum: hex::encode(&current_up),
+                    });
+                }
+
+                // Validate DOWN migration checksum
+                let current_down = migration.down_checksum().await?;
+                let stored_down = hex::decode(&record.down_checksum).map_err(|e| {
+                    crate::MigrationError::Validation(format!(
+                        "Failed to decode stored down_checksum for migration '{}': {}",
+                        record.id, e
+                    ))
+                })?;
+
+                if current_down.as_ref() != stored_down.as_slice() {
+                    mismatches.push(crate::ChecksumMismatch {
+                        migration_id: record.id.clone(),
+                        checksum_type: crate::ChecksumType::Down,
+                        stored_checksum: record.down_checksum.clone(),
+                        current_checksum: hex::encode(&current_down),
+                    });
+                }
+            }
+            // Note: We silently skip migrations that exist in database but not in source
+            // This could be reported in the future as a separate issue type
+        }
+
+        Ok(mismatches)
+    }
 }
 
 #[cfg(test)]
@@ -1622,6 +1720,265 @@ mod tests {
                 .expect("Should succeed");
 
             assert!(message.contains("already completed"));
+        }
+
+        #[tokio::test]
+        async fn test_validate_checksums_no_mismatches() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create migration source with test migrations
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test_validation".to_string(),
+                Box::new("CREATE TABLE test_validation (id INTEGER);".to_string())
+                    as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE test_validation;".to_string()) as Box<dyn Executable>),
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Run the migration first
+            runner.run(&*db).await.expect("Migration should succeed");
+
+            // Validate checksums - should find no mismatches
+            let mismatches = runner
+                .validate_checksums(&*db)
+                .await
+                .expect("Validation should succeed");
+
+            assert!(mismatches.is_empty(), "Should find no checksum mismatches");
+        }
+
+        #[tokio::test]
+        async fn test_validate_checksums_with_mismatches() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create first migration source and run a migration
+            let mut source1 = CodeMigrationSource::new();
+            source1.add_migration(CodeMigration::new(
+                "001_original".to_string(),
+                Box::new("CREATE TABLE original (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE original;".to_string()) as Box<dyn Executable>),
+            ));
+
+            let runner1 = MigrationRunner::new(Box::new(source1));
+            runner1.run(&*db).await.expect("Migration should succeed");
+
+            // Create second migration source with DIFFERENT content for same ID
+            let mut source2 = CodeMigrationSource::new();
+            source2.add_migration(CodeMigration::new(
+                "001_original".to_string(),
+                Box::new("CREATE TABLE modified (id INTEGER, name TEXT);".to_string())
+                    as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE modified;".to_string()) as Box<dyn Executable>),
+            ));
+
+            let runner2 = MigrationRunner::new(Box::new(source2));
+
+            // Validate checksums - should find mismatches
+            let mismatches = runner2
+                .validate_checksums(&*db)
+                .await
+                .expect("Validation should succeed");
+
+            assert_eq!(
+                mismatches.len(),
+                2,
+                "Should find 2 checksum mismatches (up and down)"
+            );
+
+            // Check that both up and down checksums are flagged
+            let up_mismatch = mismatches
+                .iter()
+                .find(|m| m.checksum_type == crate::ChecksumType::Up);
+            let down_mismatch = mismatches
+                .iter()
+                .find(|m| m.checksum_type == crate::ChecksumType::Down);
+
+            assert!(up_mismatch.is_some(), "Should find up checksum mismatch");
+            assert!(
+                down_mismatch.is_some(),
+                "Should find down checksum mismatch"
+            );
+
+            // Verify migration ID is correct
+            assert_eq!(up_mismatch.unwrap().migration_id, "001_original");
+            assert_eq!(down_mismatch.unwrap().migration_id, "001_original");
+        }
+
+        #[tokio::test]
+        async fn test_validate_checksums_empty_database() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create migration source but don't run any migrations
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_never_run".to_string(),
+                Box::new("CREATE TABLE never_run (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Ensure version tracking table exists first
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Should create version table");
+
+            // Validate checksums on empty database
+            let mismatches = runner
+                .validate_checksums(&*db)
+                .await
+                .expect("Validation should succeed");
+
+            assert!(
+                mismatches.is_empty(),
+                "Should find no mismatches in empty database"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_validate_checksums_partial_mismatch() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create migration with down migration = None
+            let mut source1 = CodeMigrationSource::new();
+            source1.add_migration(CodeMigration::new(
+                "001_no_down".to_string(),
+                Box::new("CREATE TABLE no_down (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None, // No down migration
+            ));
+
+            let runner1 = MigrationRunner::new(Box::new(source1));
+            runner1.run(&*db).await.expect("Migration should succeed");
+
+            // Create migration with SAME up content but different down content
+            let mut source2 = CodeMigrationSource::new();
+            source2.add_migration(CodeMigration::new(
+                "001_no_down".to_string(),
+                Box::new("CREATE TABLE no_down (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE no_down;".to_string()) as Box<dyn Executable>), // Now has down migration
+            ));
+
+            let runner2 = MigrationRunner::new(Box::new(source2));
+
+            // Validate checksums
+            let mismatches = runner2
+                .validate_checksums(&*db)
+                .await
+                .expect("Validation should succeed");
+
+            assert_eq!(
+                mismatches.len(),
+                1,
+                "Should find 1 checksum mismatch (only down)"
+            );
+
+            let mismatch = &mismatches[0];
+            assert_eq!(mismatch.checksum_type, crate::ChecksumType::Down);
+            assert_eq!(mismatch.migration_id, "001_no_down");
+        }
+
+        #[tokio::test]
+        async fn test_list_applied_migrations() {
+            use switchy_database_connection;
+
+            // Create in-memory database
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            // Create and run migrations
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_first".to_string(),
+                Box::new("CREATE TABLE first (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE first;".to_string()) as Box<dyn Executable>),
+            ));
+            source.add_migration(CodeMigration::new(
+                "002_second".to_string(),
+                Box::new("CREATE TABLE second (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+            runner.run(&*db).await.expect("Migrations should succeed");
+
+            // Test list_applied_migrations
+            let applied_migrations = runner
+                .version_tracker
+                .list_applied_migrations(&*db)
+                .await
+                .expect("Should list applied migrations");
+
+            assert_eq!(
+                applied_migrations.len(),
+                2,
+                "Should have 2 applied migrations"
+            );
+
+            // Verify migration records
+            let first = applied_migrations
+                .iter()
+                .find(|m| m.id == "001_first")
+                .unwrap();
+            let second = applied_migrations
+                .iter()
+                .find(|m| m.id == "002_second")
+                .unwrap();
+
+            assert_eq!(first.status, crate::migration::MigrationStatus::Completed);
+            assert_eq!(second.status, crate::migration::MigrationStatus::Completed);
+
+            // Verify checksums exist and are hex strings
+            assert_eq!(
+                first.up_checksum.len(),
+                64,
+                "Up checksum should be 64 char hex string"
+            );
+            assert_eq!(
+                first.down_checksum.len(),
+                64,
+                "Down checksum should be 64 char hex string"
+            );
+            assert_eq!(
+                second.up_checksum.len(),
+                64,
+                "Up checksum should be 64 char hex string"
+            );
+            assert_eq!(
+                second.down_checksum.len(),
+                64,
+                "Down checksum should be 64 char hex string"
+            );
+
+            // Verify checksums are valid hex
+            hex::decode(&first.up_checksum).expect("Should be valid hex");
+            hex::decode(&first.down_checksum).expect("Should be valid hex");
+            hex::decode(&second.up_checksum).expect("Should be valid hex");
+            hex::decode(&second.down_checksum).expect("Should be valid hex");
         }
     }
 }

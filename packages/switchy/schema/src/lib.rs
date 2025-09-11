@@ -218,6 +218,52 @@ impl From<&str> for ValidationError {
     }
 }
 
+/// Type of checksum that can have a mismatch
+///
+/// Used to distinguish between up migration and down migration checksum validation failures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChecksumType {
+    /// Up migration checksum
+    Up,
+    /// Down migration checksum
+    Down,
+}
+
+impl std::fmt::Display for ChecksumType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Up => write!(f, "up"),
+            Self::Down => write!(f, "down"),
+        }
+    }
+}
+
+/// Details about a checksum validation failure
+///
+/// Contains information about which migration failed validation,
+/// which checksum type (up/down) failed, and the expected vs actual checksums.
+#[derive(Debug, Clone)]
+pub struct ChecksumMismatch {
+    /// ID of the migration with checksum mismatch
+    pub migration_id: String,
+    /// Type of checksum that failed validation
+    pub checksum_type: ChecksumType,
+    /// Expected checksum (stored in database) as hex string
+    pub stored_checksum: String,
+    /// Actual checksum (calculated from current migration) as hex string
+    pub current_checksum: String,
+}
+
+impl std::fmt::Display for ChecksumMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Migration '{}' {} checksum mismatch: stored={}, current={}",
+            self.migration_id, self.checksum_type, self.stored_checksum, self.current_checksum
+        )
+    }
+}
+
 /// Errors that can occur during migration operations
 ///
 /// This enum covers all possible error conditions in the migration system,
@@ -268,6 +314,16 @@ pub enum MigrationError {
     /// Occurs when a migration checksum is not exactly 32 bytes.
     #[error("Invalid checksum: {0}")]
     InvalidChecksum(String),
+
+    /// Checksum validation failed
+    ///
+    /// Occurs when stored checksums don't match current migration content.
+    /// Contains a list of all mismatched migrations for comprehensive reporting.
+    #[error("Checksum validation failed: {} mismatch(es) found", mismatches.len())]
+    ChecksumValidationFailed {
+        /// List of all checksum mismatches found during validation
+        mismatches: Vec<ChecksumMismatch>,
+    },
 }
 
 impl From<moosicbox_json_utils::ParseError> for MigrationError {

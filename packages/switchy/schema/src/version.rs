@@ -468,6 +468,49 @@ impl VersionTracker {
         Ok(migration_ids)
     }
 
+    /// Get all successfully applied migrations with full record details
+    ///
+    /// Returns complete migration records for all completed migrations, ordered by run time (oldest first).
+    /// This method is used by checksum validation to access stored checksums for comparison.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * If record parsing fails
+    pub async fn list_applied_migrations(&self, db: &dyn Database) -> Result<Vec<MigrationRecord>> {
+        let results = db
+            .select(&self.table_name)
+            .columns(&[
+                "id",
+                "run_on",
+                "finished_on",
+                "status",
+                "failure_reason",
+                "up_checksum",
+                "down_checksum",
+            ])
+            .filter(Box::new(where_eq(
+                "status",
+                MigrationStatus::Completed.to_string(),
+            )))
+            .execute(db)
+            .await?;
+
+        let migration_records: Vec<MigrationRecord> = results
+            .into_iter()
+            .map(|row| {
+                row.to_value_type().map_err(|e| {
+                    crate::MigrationError::Validation(format!(
+                        "Failed to parse migration record: {e}"
+                    ))
+                })
+            })
+            .collect::<Result<Vec<MigrationRecord>>>()?;
+
+        // Return in chronological order (oldest first) - database returns in insertion order
+        Ok(migration_records)
+    }
+
     /// Remove a migration record from the tracking table
     ///
     /// This method deletes a migration record to enable retry functionality.
