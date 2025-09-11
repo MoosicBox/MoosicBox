@@ -246,23 +246,38 @@ pub fn test_internal(input: TokenStream) -> TokenStream {
         const SIMULATOR_ENABLED: bool = cfg!(feature = "simulator");
 
         if SIMULATOR_ENABLED {
-            // Skip the test by generating a non-test function
+            // Skip the test by generating a non-test function - preserve async if present
+            let async_token = &input_fn.sig.asyncness;
             let result = quote! {
                 #(#filtered_attrs)*
                 #[allow(dead_code)]
-                #fn_vis fn #fn_name(#fn_inputs) #fn_output #fn_block
+                #fn_vis #async_token fn #fn_name(#fn_inputs) #fn_output #fn_block
             };
             return result.into();
         }
 
-        // Generate a normal test function
-        let result = quote! {
-            #(#filtered_attrs)*
-            #[::core::prelude::v1::test]
-            #fn_vis fn #fn_name(#fn_inputs) #fn_output {
-                let rt = #crate_path::Builder::new().build().unwrap();
-                rt.block_on(async move #fn_block)
-                // Don't call rt.wait() as it can hang in tests
+        // Generate a normal test function - handle async properly
+        let result = if input_fn.sig.asyncness.is_some() {
+            // Input is async - use body directly in block_on without extra async move wrapper
+            quote! {
+                #(#filtered_attrs)*
+                #[::core::prelude::v1::test]
+                #fn_vis fn #fn_name() {
+                    let rt = #crate_path::Builder::new().build().unwrap();
+                    rt.block_on(async move #fn_block)
+                    // Don't call rt.wait() as it can hang in tests
+                }
+            }
+        } else {
+            // Input is sync - wrap in async move as before
+            quote! {
+                #(#filtered_attrs)*
+                #[::core::prelude::v1::test]
+                #fn_vis fn #fn_name(#fn_inputs) #fn_output {
+                    let rt = #crate_path::Builder::new().build().unwrap();
+                    rt.block_on(async move #fn_block)
+                    // Don't call rt.wait() as it can hang in tests
+                }
             }
         };
 
