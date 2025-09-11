@@ -382,6 +382,46 @@ mod tests {
         );
     }
 
+    #[switchy_async::test]
+    async fn test_same_operations_with_without_transactions_differ() {
+        // Without transaction
+        let db1 = ChecksumDatabase::new();
+        db1.exec_raw("INSERT INTO test VALUES (1)").await.unwrap();
+        let checksum1 = db1.finalize().await;
+
+        // With transaction
+        let db2 = ChecksumDatabase::new();
+        let tx = db2.begin_transaction().await.unwrap();
+        tx.exec_raw("INSERT INTO test VALUES (1)").await.unwrap();
+        tx.commit().await.unwrap();
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "Transaction wrapper should affect checksum - same operations should produce different hashes"
+        );
+
+        // Verify both are valid 32-byte checksums
+        assert_eq!(checksum1.len(), 32);
+        assert_eq!(checksum2.len(), 32);
+
+        // Test rollback produces different checksum than commit
+        let db3 = ChecksumDatabase::new();
+        let tx = db3.begin_transaction().await.unwrap();
+        tx.exec_raw("INSERT INTO test VALUES (1)").await.unwrap();
+        tx.rollback().await.unwrap();
+        let checksum3 = db3.finalize().await;
+
+        assert_ne!(
+            checksum2, checksum3,
+            "Commit vs rollback should produce different checksums"
+        );
+        assert_ne!(
+            checksum1, checksum3,
+            "Direct operation vs transaction rollback should produce different checksums"
+        );
+    }
+
     #[test]
     fn test_database_value_digest_coverage() {
         use sha2::{Digest as _, Sha256};

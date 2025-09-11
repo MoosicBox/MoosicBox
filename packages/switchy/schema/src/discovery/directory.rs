@@ -369,4 +369,67 @@ mod tests {
         // Migration with no SQL files should be valid but do nothing
         assert_eq!(migration.id(), "no_sql");
     }
+
+    #[switchy_async::test(real_fs)]
+    async fn test_file_modification_changes_checksum() {
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Create temporary directory with migration
+        let temp_dir = TempDir::new().unwrap();
+        let migration_dir = temp_dir.path().join("001_test");
+        fs::create_dir(&migration_dir).unwrap();
+
+        // Write initial SQL
+        fs::write(migration_dir.join("up.sql"), "CREATE TABLE test;").unwrap();
+        fs::write(migration_dir.join("down.sql"), "DROP TABLE test;").unwrap();
+
+        // Get initial checksum
+        let source1 = DirectoryMigrationSource::from_path(temp_dir.path().to_path_buf());
+        let migrations1 = source1.migrations().await.unwrap();
+        let checksum1_up = migrations1[0].up_checksum().await.unwrap();
+        let checksum1_down = migrations1[0].down_checksum().await.unwrap();
+
+        // Modify up file
+        fs::write(migration_dir.join("up.sql"), "CREATE TABLE test2;").unwrap();
+
+        // Get new checksum
+        let source2 = DirectoryMigrationSource::from_path(temp_dir.path().to_path_buf());
+        let migrations2 = source2.migrations().await.unwrap();
+        let checksum2_up = migrations2[0].up_checksum().await.unwrap();
+        let checksum2_down = migrations2[0].down_checksum().await.unwrap();
+
+        // Up checksum should change, down should remain the same
+        assert_ne!(
+            checksum1_up, checksum2_up,
+            "Up checksum should change when file is modified"
+        );
+        assert_eq!(
+            checksum1_down, checksum2_down,
+            "Down checksum should remain the same"
+        );
+
+        // Modify down file
+        fs::write(migration_dir.join("down.sql"), "DROP TABLE test2;").unwrap();
+
+        // Get third checksum
+        let source3 = DirectoryMigrationSource::from_path(temp_dir.path().to_path_buf());
+        let migrations3 = source3.migrations().await.unwrap();
+        let checksum3_up = migrations3[0].up_checksum().await.unwrap();
+        let checksum3_down = migrations3[0].down_checksum().await.unwrap();
+
+        // Up should remain the same, down should change
+        assert_eq!(
+            checksum2_up, checksum3_up,
+            "Up checksum should remain the same"
+        );
+        assert_ne!(
+            checksum2_down, checksum3_down,
+            "Down checksum should change when file is modified"
+        );
+
+        // Verify checksums are valid 32-byte SHA256 hashes
+        assert_eq!(checksum3_up.len(), 32);
+        assert_eq!(checksum3_down.len(), 32);
+    }
 }

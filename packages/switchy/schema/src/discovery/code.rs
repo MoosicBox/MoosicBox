@@ -398,4 +398,64 @@ mod tests {
         let expected_empty_hash = bytes::Bytes::from(hasher.finalize().to_vec());
         assert_eq!(down_checksum_no_down, expected_empty_hash);
     }
+
+    #[switchy_async::test]
+    async fn test_code_operation_changes_produce_different_checksums() {
+        // Migration with INSERT operation
+        let migration1 = CodeMigration::new(
+            "test1".to_string(),
+            Box::new("INSERT INTO users (name) VALUES ('Alice')".to_string()),
+            None,
+        );
+
+        // Migration with different INSERT operation
+        let migration2 = CodeMigration::new(
+            "test2".to_string(),
+            Box::new("INSERT INTO users (name) VALUES ('Bob')".to_string()),
+            None,
+        );
+
+        // Migration with different operation type
+        let migration3 = CodeMigration::new(
+            "test3".to_string(),
+            Box::new("CREATE TABLE users (id INTEGER, name TEXT)".to_string()),
+            None,
+        );
+
+        let checksum1 = migration1.up_checksum().await.unwrap();
+        let checksum2 = migration2.up_checksum().await.unwrap();
+        let checksum3 = migration3.up_checksum().await.unwrap();
+
+        // All checksums should be valid 32-byte hashes
+        assert_eq!(checksum1.len(), 32);
+        assert_eq!(checksum2.len(), 32);
+        assert_eq!(checksum3.len(), 32);
+
+        // All checksums should be different (different operations produce different hashes)
+        assert_ne!(
+            checksum1, checksum2,
+            "Different SQL strings should produce different checksums"
+        );
+        assert_ne!(
+            checksum1, checksum3,
+            "Different operation types should produce different checksums"
+        );
+        assert_ne!(
+            checksum2, checksum3,
+            "Different operation types should produce different checksums"
+        );
+
+        // Test with same operation - should produce identical checksums
+        let migration1_duplicate = CodeMigration::new(
+            "test1_dup".to_string(),
+            Box::new("INSERT INTO users (name) VALUES ('Alice')".to_string()),
+            None,
+        );
+
+        let checksum1_duplicate = migration1_duplicate.up_checksum().await.unwrap();
+        assert_eq!(
+            checksum1, checksum1_duplicate,
+            "Same operation should produce identical checksums"
+        );
+    }
 }
