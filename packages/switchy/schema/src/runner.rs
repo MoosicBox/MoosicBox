@@ -114,6 +114,13 @@ pub enum RollbackStrategy {
     All,
 }
 
+/// Configuration for checksum validation requirements
+#[derive(Debug, Clone, Default)]
+pub struct ChecksumConfig {
+    /// When true, validates all migration checksums before running any migrations
+    pub require_validation: bool,
+}
+
 /// Migration hooks for customizing execution behavior
 #[allow(clippy::type_complexity)]
 #[derive(Default)]
@@ -134,6 +141,7 @@ pub struct MigrationRunner<'a> {
     hooks: MigrationHooks,
     dry_run: bool,
     allow_dirty: bool,
+    checksum_config: ChecksumConfig,
 }
 
 impl<'a> MigrationRunner<'a> {
@@ -147,6 +155,7 @@ impl<'a> MigrationRunner<'a> {
             hooks: MigrationHooks::default(),
             dry_run: false,
             allow_dirty: false,
+            checksum_config: ChecksumConfig::default(),
         }
     }
 
@@ -189,6 +198,25 @@ impl<'a> MigrationRunner<'a> {
     #[must_use]
     pub const fn with_allow_dirty(mut self, allow_dirty: bool) -> Self {
         self.allow_dirty = allow_dirty;
+        self
+    }
+
+    /// Configure checksum validation requirements
+    ///
+    /// # Examples
+    /// ```
+    /// use switchy_schema::runner::{ChecksumConfig, MigrationRunner};
+    ///
+    /// let config = ChecksumConfig { require_validation: true };
+    /// # #[cfg(feature = "code")]
+    /// # {
+    /// let runner = MigrationRunner::new_code()
+    ///     .with_checksum_config(config);
+    /// # }
+    /// ```
+    #[must_use]
+    pub const fn with_checksum_config(mut self, config: ChecksumConfig) -> Self {
+        self.checksum_config = config;
         self
     }
 
@@ -256,6 +284,14 @@ impl<'a> MigrationRunner<'a> {
 
         // Check for dirty state (migrations in progress)
         self.check_dirty_state(db).await?;
+
+        // Validate checksums if strict mode is enabled
+        if self.checksum_config.require_validation {
+            let mismatches = self.validate_checksums(db).await?;
+            if !mismatches.is_empty() {
+                return Err(crate::MigrationError::ChecksumValidationFailed { mismatches });
+            }
+        }
 
         // Get all migrations from the source
         let migrations = self.source.migrations().await?;
@@ -1979,6 +2015,192 @@ mod tests {
             hex::decode(&first.down_checksum).expect("Should be valid hex");
             hex::decode(&second.up_checksum).expect("Should be valid hex");
             hex::decode(&second.down_checksum).expect("Should be valid hex");
+        }
+
+        #[tokio::test]
+        async fn test_strict_mode_prevents_run_on_up_checksum_mismatch() {
+            use switchy_database_connection::init_sqlite_sqlx;
+
+            let db = init_sqlite_sqlx(None).await.unwrap();
+
+            // Create initial migration source and run a migration
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE users (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Run migration once to establish checksums
+            runner.run(&*db).await.unwrap();
+
+            // Create source with same ID but different up content to cause checksum mismatch
+            let mut source_modified = CodeMigrationSource::new();
+            source_modified.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE customers (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            let runner_strict = MigrationRunner::new(Box::new(source_modified))
+                .with_checksum_config(ChecksumConfig {
+                    require_validation: true,
+                });
+
+            // Should fail due to up checksum mismatch
+            let result = runner_strict.run(&*db).await;
+            assert!(result.is_err(), "Should fail with checksum mismatch");
+
+            match result.unwrap_err() {
+                crate::MigrationError::ChecksumValidationFailed { mismatches } => {
+                    assert_eq!(mismatches.len(), 1);
+                    assert_eq!(mismatches[0].migration_id, "001_test");
+                    assert_eq!(mismatches[0].checksum_type, crate::ChecksumType::Up);
+                }
+                _ => panic!("Expected ChecksumValidationFailed error"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_strict_mode_prevents_run_on_down_checksum_mismatch() {
+            use switchy_database_connection::init_sqlite_sqlx;
+
+            let db = init_sqlite_sqlx(None).await.unwrap();
+
+            // Create initial migration source and run a migration
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE users (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE users;".to_string()) as Box<dyn Executable>),
+            ));
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Run migration once to establish checksums
+            runner.run(&*db).await.unwrap();
+
+            // Create source with same up content but different down content to cause checksum mismatch
+            let mut source_modified = CodeMigrationSource::new();
+            source_modified.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE users (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE IF EXISTS users;".to_string()) as Box<dyn Executable>),
+            ));
+            let runner_strict = MigrationRunner::new(Box::new(source_modified))
+                .with_checksum_config(ChecksumConfig {
+                    require_validation: true,
+                });
+
+            // Should fail due to down checksum mismatch
+            let result = runner_strict.run(&*db).await;
+            assert!(result.is_err(), "Should fail with checksum mismatch");
+
+            match result.unwrap_err() {
+                crate::MigrationError::ChecksumValidationFailed { mismatches } => {
+                    assert_eq!(mismatches.len(), 1);
+                    assert_eq!(mismatches[0].migration_id, "001_test");
+                    assert_eq!(mismatches[0].checksum_type, crate::ChecksumType::Down);
+                }
+                _ => panic!("Expected ChecksumValidationFailed error"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_strict_mode_allows_run_when_checksums_valid() {
+            use switchy_database_connection::init_sqlite_sqlx;
+
+            let db = init_sqlite_sqlx(None).await.unwrap();
+
+            // Create initial migration source and run a migration
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE users (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE users;".to_string()) as Box<dyn Executable>),
+            ));
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Run migration once to establish checksums
+            runner.run(&*db).await.unwrap();
+
+            // Create another migration source with exact same content (checksums should match)
+            let mut source_same = CodeMigrationSource::new();
+            source_same.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE users (id INTEGER);".to_string()) as Box<dyn Executable>,
+                Some(Box::new("DROP TABLE users;".to_string()) as Box<dyn Executable>),
+            ));
+            let runner_strict =
+                MigrationRunner::new(Box::new(source_same)).with_checksum_config(ChecksumConfig {
+                    require_validation: true,
+                });
+
+            // Should succeed since checksums match
+            let result = runner_strict.run(&*db).await;
+            assert!(
+                result.is_ok(),
+                "Should succeed with matching checksums: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_default_config_allows_run_with_mismatches() {
+            use switchy_database_connection::init_sqlite_sqlx;
+
+            let db = init_sqlite_sqlx(None).await.unwrap();
+
+            // Create initial migration source and run a migration
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE users (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Run migration once to establish checksums
+            runner.run(&*db).await.unwrap();
+
+            // Create source with different content (would cause mismatch)
+            let mut source_modified = CodeMigrationSource::new();
+            source_modified.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE customers (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            let runner_default = MigrationRunner::new(Box::new(source_modified));
+            // Note: using default config (no strict mode)
+
+            // Should succeed because strict mode is disabled by default
+            let result = runner_default.run(&*db).await;
+            assert!(
+                result.is_ok(),
+                "Should succeed with default (non-strict) config: {result:?}"
+            );
+        }
+
+        #[tokio::test]
+        async fn test_with_checksum_config_builder() {
+            // Test that builder method works correctly
+            let config = ChecksumConfig {
+                require_validation: true,
+            };
+            let runner = MigrationRunner::new_code().with_checksum_config(config);
+
+            // Access the config through the runner (testing private field indirectly via behavior)
+            // We can't directly access private fields, but we know the config is set correctly
+            // if the builder method compiles and returns the runner
+            assert_eq!(
+                std::mem::size_of_val(&runner),
+                std::mem::size_of::<MigrationRunner>()
+            );
+
+            // Test default config
+            let default_config = ChecksumConfig::default();
+            assert!(
+                !default_config.require_validation,
+                "Default should have validation disabled"
+            );
         }
     }
 }

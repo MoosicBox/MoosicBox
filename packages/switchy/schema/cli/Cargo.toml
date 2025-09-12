@@ -42,6 +42,7 @@ predicates    = { workspace = true }
 regex         = { workspace = true }
 sha2          = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "tokio"] }
+tempfile      = { workspace = true }
 
 [features]
 default = []

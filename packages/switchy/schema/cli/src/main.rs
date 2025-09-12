@@ -106,6 +106,9 @@ enum Commands {
         /// Force migration even if dirty state detected (dangerous)
         #[arg(long)]
         force: bool,
+        /// Require checksum validation before running migrations
+        #[arg(long)]
+        require_checksum_validation: bool,
     },
     /// Rollback migrations
     Rollback {
@@ -241,6 +244,7 @@ async fn main() -> Result<()> {
             steps,
             dry_run,
             force,
+            require_checksum_validation,
         } => {
             run_migrations(
                 database_url,
@@ -250,6 +254,7 @@ async fn main() -> Result<()> {
                 steps,
                 dry_run,
                 force,
+                require_checksum_validation,
             )
             .await
         }
@@ -552,6 +557,7 @@ async fn show_status(
 }
 
 /// Run pending migrations
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn run_migrations(
     database_url: String,
     migrations_dir: PathBuf,
@@ -560,14 +566,29 @@ async fn run_migrations(
     steps: Option<usize>,
     dry_run: bool,
     force: bool,
+    require_checksum_validation: bool,
 ) -> Result<()> {
-    use switchy_schema::runner::{ExecutionStrategy, MigrationRunner};
+    use switchy_schema::runner::{ChecksumConfig, ExecutionStrategy, MigrationRunner};
 
     // Validate arguments
     if up_to.is_some() && steps.is_some() {
         return Err(CliError::Config(
             "Cannot specify both --up-to and --steps".to_string(),
         ));
+    }
+
+    // Check environment variable with CLI priority
+    let require_validation = require_checksum_validation
+        || std::env::var("MIGRATION_REQUIRE_CHECKSUM_VALIDATION")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
+    // Warn if CLI overrides env var
+    if require_checksum_validation && std::env::var("MIGRATION_REQUIRE_CHECKSUM_VALIDATION").is_ok()
+    {
+        println!(
+            "Warning: CLI flag --require-checksum-validation overrides MIGRATION_REQUIRE_CHECKSUM_VALIDATION environment variable"
+        );
     }
 
     // Connect to database
@@ -587,10 +608,14 @@ async fn run_migrations(
         (Some(_), Some(_)) => unreachable!(), // Already validated above
     };
 
+    // Configure checksum validation
+    let config = ChecksumConfig { require_validation };
+
     // Create migration runner with directory source
     let mut runner = MigrationRunner::new_directory(&migrations_dir)
         .with_table_name(migration_table.clone())
-        .with_strategy(strategy);
+        .with_strategy(strategy)
+        .with_checksum_config(config);
 
     if dry_run {
         runner = runner.dry_run();
@@ -630,7 +655,34 @@ async fn run_migrations(
     let migrations_before = runner.list_migrations(&*db).await?;
     let pending_before: Vec<_> = migrations_before.iter().filter(|m| !m.applied).collect();
 
-    if pending_before.is_empty() {
+    // If strict mode is enabled, validate checksums even when no migrations are pending
+    if require_validation && !migrations_before.is_empty() {
+        let mismatches = runner.validate_checksums(&*db).await?;
+        if !mismatches.is_empty() {
+            use colored::Colorize;
+            eprintln!("{}", "Checksum validation failed!".red().bold());
+            eprintln!("The following migrations have been modified since they were applied:");
+            eprintln!();
+            for mismatch in &mismatches {
+                eprintln!("  Migration: {}", mismatch.migration_id.yellow());
+                eprintln!("    - {} script checksum mismatch", mismatch.checksum_type);
+                eprintln!("      Expected: {}", mismatch.stored_checksum);
+                eprintln!("      Actual:   {}", mismatch.current_checksum);
+                eprintln!();
+            }
+            eprintln!(
+                "Migration integrity check failed. Aborting to prevent potential data corruption."
+            );
+            eprintln!("If you're certain the changes are safe, you can:");
+            eprintln!("  1. Run without --require-checksum-validation flag");
+            eprintln!("  2. Use 'validate' command with --update flag to update checksums");
+            return Err(
+                switchy_schema::MigrationError::ChecksumValidationFailed { mismatches }.into(),
+            );
+        }
+    }
+
+    if pending_before.is_empty() && !require_validation {
         println!("No pending migrations found.");
         return Ok(());
     }
@@ -643,7 +695,11 @@ async fn run_migrations(
         println!();
         println!("Dry run completed. No changes were made.");
     } else {
-        println!("Applying {} migration(s):", pending_before.len());
+        if pending_before.is_empty() {
+            println!("No pending migrations to apply. Running checksum validation only.");
+        } else {
+            println!("Applying {} migration(s):", pending_before.len());
+        }
 
         // Run migrations
         runner.run(&*db).await?;
@@ -1481,7 +1537,8 @@ mod tests {
             None,
             None,
             false,
-            true, // force = true
+            true,  // force = true
+            false, // require_checksum_validation = false
         )
         .await;
 
