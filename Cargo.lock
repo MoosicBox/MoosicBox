@@ -14469,6 +14469,7 @@ dependencies = [
  "async-trait",
  "log 0.4.28",
  "moosicbox_schema",
+ "serde_json",
  "switchy_database",
  "switchy_database_connection",
  "switchy_schema",

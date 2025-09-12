@@ -4,9 +4,9 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** ✅ **Phase 11.3.4 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1-10.2.1.10, 10.2.2.1-10.2.2.5, 10.2.3, 11.1, 11.2.1-11.2.6, 11.3.1-11.3.4 complete. Checksum validation engine fully functional with CLI integration as validate subcommand. Dual checksum validation, colored output, strict mode, and verbose mode all implemented.
+**Current Status:** ✅ **Phase 11.4.1 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1-10.2.1.10, 10.2.2.1-10.2.2.5, 10.2.3, 11.1, 11.2.1-11.2.6, 11.3.1-11.3.5, 11.4.1 complete. Checksum validation engine fully functional with CLI integration as validate subcommand. Dual checksum validation, colored output, strict mode enforcement, and verbose mode all implemented. Snapshot testing feature flag configuration with JSON support now available.
 
-**Completion Estimate:** ~99% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, full API documentation, complete database transaction support, all schema builder extensions (DropTable, CreateIndex, DropIndex, AlterTable), basic usage example, CLI tools, error recovery infrastructure, recovery documentation, recovery integration tests, and checksum validation engine with CLI all finished. Only Phase 11.3.5 (strict mode enforcement) remains for full checksum feature completion.
+**Completion Estimate:** ~99.5% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, full API documentation, complete database transaction support, all schema builder extensions (DropTable, CreateIndex, DropIndex, AlterTable), basic usage example, CLI tools, error recovery infrastructure, recovery documentation, recovery integration tests, checksum validation engine with CLI, and strict mode enforcement all finished. Phase 11.4 (Snapshot Testing Utilities) remains for comprehensive migration verification capabilities.
 
 ## Status Legend
 
@@ -5280,51 +5280,140 @@ This entire phase assumes fresh installations only. Existing databases with migr
 
 Comprehensive snapshot testing infrastructure for migration verification using `insta`. Each subtask produces complete, working, compiling code with zero errors or warnings. **SQLite-only support** for all of Phase 11.4.
 
-#### 11.4.1 Feature Flag Configuration ❌ **HIGH PRIORITY**
+#### 11.4.1 Feature Flag Configuration ✅ **COMPLETED**
 
-Configure snapshot testing as an optional feature in the test_utils crate.
+Configure snapshot testing as an optional feature in the test_utils crate using JSON format for maximum compatibility and tooling support.
 
-- [ ] **Add Feature Flag to `packages/switchy/schema/test_utils/Cargo.toml`**
+- [x] **Add Feature Flag to `packages/switchy/schema/test_utils/Cargo.toml`**
   ```toml
   [features]
-  default = []
-  snapshots = ["dep:insta", "dep:serde", "dep:serde_yaml", "dep:thiserror"]
+  default = ["sqlite"]
+
+  fail-on-warnings = [
+      "switchy_database/fail-on-warnings",
+      "switchy_database_connection?/fail-on-warnings",
+      "switchy_schema/fail-on-warnings",
+  ]
+  sqlite = [
+      "dep:switchy_database_connection",
+      "switchy_database_connection/sqlite-sqlx",
+  ]
+  # NEW: Add snapshot testing feature using JSON format
+  snapshots = ["dep:insta", "dep:serde", "dep:serde_json"]
 
   [dependencies]
-  insta = { workspace = true, features = ["yaml"], optional = true }
-  serde = { workspace = true, optional = true }
-  serde_yaml = { workspace = true, optional = true }
-  thiserror = { workspace = true, optional = true }
+  # Existing dependencies unchanged...
+  async-trait                 = { workspace = true }
+  log                         = { workspace = true }
+  switchy_database            = { workspace = true, features = ["schema"] }
+  switchy_database_connection = { workspace = true, optional = true }
+  switchy_schema              = { workspace = true }
+  thiserror                   = { workspace = true }
+
+  # NEW: Add snapshot testing dependencies
+  insta      = { workspace = true, features = ["json"], optional = true }
+  serde      = { workspace = true, optional = true }
+  serde_json = { workspace = true, optional = true }
   ```
 
-- [ ] **Define Error Type**
+- [x] **Create `packages/switchy/schema/test_utils/src/snapshots.rs`**
   ```rust
-  #[cfg(feature = "snapshots")]
+  //! Snapshot testing utilities for migration verification using JSON format
+  //!
+  //! This module provides utilities for capturing and comparing database schemas
+  //! and migration results using insta's snapshot testing with JSON serialization.
+  //! JSON is used for its wide compatibility, active maintenance, and human readability
+  //! when pretty-printed.
+
+  use crate::TestError;
+  use switchy_database::DatabaseError;
+  use switchy_schema::MigrationError;
+
+  /// Error type for snapshot testing operations
   #[derive(Debug, thiserror::Error)]
   pub enum SnapshotError {
+      /// Database operation failed
       #[error("Database error: {0}")]
-      Database(#[from] switchy_database::DatabaseError),
+      Database(#[from] DatabaseError),
 
+      /// Migration operation failed
       #[error("Migration error: {0}")]
-      Migration(#[from] switchy_schema::MigrationError),
+      Migration(#[from] MigrationError),
 
+      /// IO operation failed
       #[error("IO error: {0}")]
       Io(#[from] std::io::Error),
 
+      /// Snapshot validation failed
       #[error("Snapshot validation failed: {0}")]
       Validation(String),
 
+      /// Test utilities error
       #[error("Test error: {0}")]
-      Test(#[from] crate::TestError),
+      Test(#[from] TestError),
+
+      /// JSON serialization/deserialization error
+      #[error("JSON error: {0}")]
+      Json(#[from] serde_json::Error),
+  }
+
+  /// Result type for snapshot operations
+  pub type Result<T> = std::result::Result<T, SnapshotError>;
+
+  /// Placeholder for snapshot testing functionality
+  /// Full implementation will come in Phase 11.4.2+
+  pub struct SnapshotTester {
+      // Implementation to follow in subsequent phases
   }
   ```
 
+- [x] **Update `packages/switchy/schema/test_utils/src/lib.rs`**
+  ```rust
+  // At the top of the file, add:
+  #[cfg(feature = "snapshots")]
+  pub mod snapshots;
+
+  // Re-export snapshot types when feature is enabled
+  #[cfg(feature = "snapshots")]
+  pub use snapshots::{SnapshotError, Result as SnapshotResult, SnapshotTester};
+  ```
+
+**Design Decision**: Use JSON instead of YAML for snapshot serialization:
+- **No new dependencies**: `serde_json` v1.0.143 already in workspace
+- **Active maintenance**: One of the most widely used Rust crates
+- **Universal tooling**: Every editor and tool supports JSON
+- **Insta support**: First-class support with `assert_json_snapshot!` and `assert_compact_json_snapshot!`
+- **Performance**: Generally faster than YAML parsing
+
 ##### 11.4.1 Verification Checklist
-- [ ] Run `cargo build -p switchy_schema_test_utils --no-default-features` - compiles without snapshots
-- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with snapshots
-- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --no-default-features` - zero warnings
-- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
-- [ ] Run `cargo fmt --all` - code is formatted
+
+**Without snapshots feature:**
+- [x] Run `cargo build -p switchy_schema_test_utils --no-default-features` - compiles without snapshots
+- [x] Run `cargo build -p switchy_schema_test_utils --features sqlite` - compiles with sqlite but no snapshots
+- [x] Run `cargo clippy -p switchy_schema_test_utils --all-targets --no-default-features` - zero warnings
+- [x] Verify `snapshots` module is NOT available when feature is disabled
+
+**With snapshots feature:**
+- [x] Run `cargo build -p switchy_schema_test_utils --features "sqlite,snapshots"` - compiles with snapshots
+- [x] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features "sqlite,snapshots"` - zero warnings
+- [x] Verify `SnapshotError` type is available when feature is enabled
+- [x] Verify `SnapshotTester` struct is available when feature is enabled
+- [x] Verify JSON serialization support is available
+
+**Code quality:**
+- [x] Run `cargo fmt --all` - code is formatted
+- [x] All new code has proper documentation comments
+- [x] Error types follow project conventions (using thiserror)
+- [x] Feature-gated code uses `#[cfg(feature = "snapshots")]` consistently
+
+**Success Criteria:**
+- ✅ Snapshot testing is completely optional - zero overhead when not enabled
+- ✅ Clean separation of concerns - snapshot code isolated in its own module
+- ✅ Type-safe error handling with proper error propagation
+- ✅ Feature compiles cleanly without needing any new workspace dependencies
+- ✅ Uses actively maintained JSON format with excellent tooling support
+- ✅ Documentation clearly indicates this is an optional feature
+- ✅ Prepared for future phases (SnapshotTester struct placeholder)
 
 #### 11.4.2 Test Migration Resources ❌ **HIGH PRIORITY**
 

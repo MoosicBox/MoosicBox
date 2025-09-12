@@ -112,6 +112,9 @@ pub mod builder;
 /// Integration tests demonstrating new migration capabilities
 pub mod integration_tests;
 
+#[cfg(feature = "snapshots")]
+pub mod snapshots;
+
 /// Test error type that wraps existing errors from `switchy_schema` and `switchy_database`
 #[derive(Debug, thiserror::Error)]
 pub enum TestError {
@@ -126,6 +129,10 @@ pub enum TestError {
     #[error(transparent)]
     DatabaseInit(#[from] switchy_database_connection::InitSqliteSqlxDatabaseError),
 }
+
+// Re-export snapshot types when feature is enabled
+#[cfg(feature = "snapshots")]
+pub use snapshots::{Result as SnapshotResult, SnapshotError, SnapshotTester};
 
 /// Feature-gated helper to create an empty in-memory `SQLite` database
 ///
