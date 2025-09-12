@@ -4,7 +4,7 @@
 
 Extract the generic migration logic from `moosicbox_schema` into a reusable `switchy_schema` package that any project can use for database schema evolution. This provides a foundation for HyperChad and other projects to manage their database schemas independently while maintaining full compatibility with existing MoosicBox code.
 
-**Current Status:** ✅ **Phase 11.4.1 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1-10.2.1.10, 10.2.2.1-10.2.2.5, 10.2.3, 11.1, 11.2.1-11.2.6, 11.3.1-11.3.5, 11.4.1 complete. Checksum validation engine fully functional with CLI integration as validate subcommand. Dual checksum validation, colored output, strict mode enforcement, and verbose mode all implemented. Snapshot testing feature flag configuration with JSON support now available.
+**Current Status:** ✅ **Phase 11.4.2 Complete** - Phases 1-5, 7 (all sub-phases), 8.1-8.6, 9.1, 10.1, 10.2.1.1-10.2.1.10, 10.2.2.1-10.2.2.5, 10.2.3, 11.1, 11.2.1-11.2.6, 11.3.1-11.3.5, 11.4.1-11.4.2 complete. Checksum validation engine fully functional with CLI integration as validate subcommand. Dual checksum validation, colored output, strict mode enforcement, and verbose mode all implemented. Snapshot testing feature flag configuration with JSON support and test migration resources now available.
 
 **Completion Estimate:** ~99.5% complete - Core foundation, traits, discovery methods, migration runner, rollback, Arc migration, comprehensive test utilities, moosicbox_schema wrapper, test migration, new feature demonstrations, complete documentation, migration listing, full API documentation, complete database transaction support, all schema builder extensions (DropTable, CreateIndex, DropIndex, AlterTable), basic usage example, CLI tools, error recovery infrastructure, recovery documentation, recovery integration tests, checksum validation engine with CLI, and strict mode enforcement all finished. Phase 11.4 (Snapshot Testing Utilities) remains for comprehensive migration verification capabilities.
 
@@ -5415,41 +5415,78 @@ Configure snapshot testing as an optional feature in the test_utils crate using 
 - ✅ Documentation clearly indicates this is an optional feature
 - ✅ Prepared for future phases (SnapshotTester struct placeholder)
 
-#### 11.4.2 Test Migration Resources ❌ **HIGH PRIORITY**
+#### 11.4.2 Test Migration Resources ✅ **COMPLETED**
 
 Create dedicated test migrations for snapshot testing with both minimal and comprehensive examples.
 
-- [ ] **Create Directory Structure**
+**Directory Creation Script:**
+```bash
+# Create the base directory structure
+mkdir -p packages/switchy/schema/test_utils/test-resources/snapshot-migrations/{minimal,comprehensive,edge_cases}
+
+# Create minimal migration directories
+mkdir -p packages/switchy/schema/test_utils/test-resources/snapshot-migrations/minimal/{001_create_table,002_add_column,003_create_index}
+
+# Create comprehensive migration directories
+mkdir -p packages/switchy/schema/test_utils/test-resources/snapshot-migrations/comprehensive/{001_initial_schema,002_add_constraints,003_add_indexes}
+
+# Create edge case migration directories
+mkdir -p packages/switchy/schema/test_utils/test-resources/snapshot-migrations/edge_cases/{001_nullable_columns,002_default_values}
+```
+
+- [x] **Create Directory Structure**
   ```
   packages/switchy/schema/test_utils/test-resources/snapshot-migrations/
-  ├── minimal/           # Single-operation migrations
-  │   ├── 001_create_table.sql
-  │   ├── 002_add_column.sql
-  │   └── 003_create_index.sql
-  ├── comprehensive/     # Realistic multi-table migrations
-  │   ├── 001_initial_schema.sql
-  │   ├── 002_add_constraints.sql
-  │   └── 003_add_indexes.sql
-  └── edge_cases/       # Special cases for testing
-      ├── 001_nullable_columns.sql
-      └── 002_default_values.sql
+  ├── minimal/                      # Single-operation migrations
+  │   ├── 001_create_table/
+  │   │   └── up.sql
+  │   ├── 002_add_column/
+  │   │   └── up.sql
+  │   └── 003_create_index/
+  │       └── up.sql
+  ├── comprehensive/                # Realistic multi-table migrations
+  │   ├── 001_initial_schema/
+  │   │   └── up.sql
+  │   ├── 002_add_constraints/
+  │   │   └── up.sql
+  │   └── 003_add_indexes/
+  │       └── up.sql
+  └── edge_cases/                   # Special cases for testing
+      ├── 001_nullable_columns/
+      │   └── up.sql
+      └── 002_default_values/
+          └── up.sql
   ```
 
-- [ ] **Minimal Migration Examples**
+  **Note:** Test migrations follow the DirectoryMigrationSource convention where each migration
+  is a subdirectory containing `up.sql` (and optionally `down.sql`). This structure is required
+  for compatibility with the migration loading system used in Phase 11.4.8. For these test
+  migrations, we only provide `up.sql` files since rollback testing is not the focus of
+  snapshot testing.
+
+  ✓ Directory structure created at packages/switchy/schema/test_utils/test-resources/snapshot-migrations/
+  ✓ All migration subdirectories created (minimal/, comprehensive/, edge_cases/)
+  ✓ Each migration has its own subdirectory with XXX_description/ format
+
+- [x] **Minimal Migration Examples**
   ```sql
-  -- minimal/001_create_table.sql
+  -- minimal/001_create_table/up.sql
   CREATE TABLE users (id INTEGER PRIMARY KEY);
 
-  -- minimal/002_add_column.sql
+  -- minimal/002_add_column/up.sql
   ALTER TABLE users ADD COLUMN name TEXT NOT NULL;
 
-  -- minimal/003_create_index.sql
+  -- minimal/003_create_index/up.sql
   CREATE INDEX idx_users_name ON users(name);
   ```
 
-- [ ] **Comprehensive Migration Examples**
+  ✓ Created minimal/001_create_table/up.sql with CREATE TABLE users
+  ✓ Created minimal/002_add_column/up.sql with ALTER TABLE ADD COLUMN
+  ✓ Created minimal/003_create_index/up.sql with CREATE INDEX
+
+- [x] **Comprehensive Migration Examples**
   ```sql
-  -- comprehensive/001_initial_schema.sql
+  -- comprehensive/001_initial_schema/up.sql
   CREATE TABLE users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT NOT NULL UNIQUE,
@@ -5466,7 +5503,7 @@ Create dedicated test migrations for snapshot testing with both minimal and comp
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
-  -- comprehensive/002_add_constraints.sql
+  -- comprehensive/002_add_constraints/up.sql
   -- Add foreign key constraint (requires rebuilding table in SQLite)
   CREATE TABLE posts_new (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5481,19 +5518,59 @@ Create dedicated test migrations for snapshot testing with both minimal and comp
   DROP TABLE posts;
   ALTER TABLE posts_new RENAME TO posts;
 
-  -- comprehensive/003_add_indexes.sql
+  -- comprehensive/003_add_indexes/up.sql
   CREATE INDEX idx_posts_user ON posts(user_id);
   CREATE INDEX idx_posts_published ON posts(published);
   CREATE INDEX idx_users_email ON users(email);
   ```
 
+  ✓ Created comprehensive/001_initial_schema/up.sql with users and posts tables
+  ✓ Created comprehensive/002_add_constraints/up.sql with foreign key constraint
+  ✓ Created comprehensive/003_add_indexes/up.sql with multiple indexes
+
+- [x] **Edge Case Migration Examples**
+  ```sql
+  -- edge_cases/001_nullable_columns/up.sql
+  CREATE TABLE optional_data (
+      id INTEGER PRIMARY KEY,
+      required_field TEXT NOT NULL,
+      optional_field TEXT,              -- Nullable column
+      nullable_with_default TEXT DEFAULT 'default_value'
+  );
+
+  -- edge_cases/002_default_values/up.sql
+  CREATE TABLE defaults_test (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      status TEXT DEFAULT 'pending',
+      counter INTEGER DEFAULT 0,
+      is_active BOOLEAN DEFAULT TRUE
+  );
+  ```
+
+  ✓ Created edge_cases/001_nullable_columns/up.sql with nullable and default value columns
+  ✓ Created edge_cases/002_default_values/up.sql with comprehensive default value testing
+
 ##### 11.4.2 Verification Checklist
-- [ ] Test migration directories created in correct location
-- [ ] Minimal migrations test single operations (CREATE, ALTER, INDEX)
-- [ ] Comprehensive migrations test realistic scenarios with relationships
-- [ ] All SQL files contain valid SQLite syntax
-- [ ] Edge case migrations cover nullable columns and defaults
-- [ ] Run `cargo fmt --all` - code is formatted
+- [x] Test migration directories created in correct location
+  ✓ Created at packages/switchy/schema/test_utils/test-resources/snapshot-migrations/
+- [x] Each migration is in its own subdirectory with format `XXX_description/`
+  ✓ All migrations follow format: 001_create_table/, 002_add_column/, etc.
+- [x] Each migration subdirectory contains at least `up.sql`
+  ✓ All 8 migration directories contain up.sql files
+- [x] Migration IDs match directory names (e.g., `001_create_table`)
+  ✓ Directory names match: 001_create_table/, 002_add_column/, 003_create_index/
+- [x] Minimal migrations test single operations (CREATE, ALTER, INDEX)
+  ✓ 001_create_table: CREATE TABLE, 002_add_column: ALTER TABLE, 003_create_index: CREATE INDEX
+- [x] Comprehensive migrations test realistic scenarios with relationships
+  ✓ 001_initial_schema: multi-table, 002_add_constraints: foreign keys, 003_add_indexes: multiple indexes
+- [x] Edge case migrations cover nullable columns and defaults
+  ✓ 001_nullable_columns: nullable fields, 002_default_values: various default types
+- [x] All SQL files contain valid SQLite syntax
+  ✓ All SQL uses SQLite-compatible syntax (INTEGER PRIMARY KEY, TEXT, BOOLEAN, etc.)
+- [ ] DirectoryMigrationSource can successfully load all test migrations (verification in Phase 11.4.8)
+- [x] Run `cargo fmt --all` - code is formatted
+  ✓ No Rust code to format - only SQL files created
 
 #### 11.4.3 Core Infrastructure ❌ **HIGH PRIORITY**
 

@@ -1,0 +1,7 @@
+CREATE TABLE defaults_test (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status TEXT DEFAULT 'pending',
+    counter INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE
+);
