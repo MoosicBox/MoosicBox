@@ -5270,98 +5270,1040 @@ This entire phase assumes fresh installations only. Existing databases with migr
    - `--require-checksum-validation` enforces validation before runs
    - Strict mode can be enabled immediately (all checksums are real)
 
-### 11.4 Remote Discovery Implementation
+### ~~11.4 Remote Discovery Implementation~~ → Moved to Parking Lot
+*Deferred to focus on core local migration functionality. See Parking Lot section for details.*
 
-- [ ] Remote migration source ❌ **MINOR**
-  - [ ] Implement `MigrationSource` trait for remote sources
-  - [ ] Feature-gated with `#[cfg(feature = "remote")]`
-  - [ ] Fetch migrations from remote sources
-  - [ ] Authentication and caching support
-  - [ ] Network error handling
+### ~~11.4 Migration State Query API~~ → Moved to Parking Lot
+*Deferred until clear use cases emerge. Current CLI output and migrations table provide sufficient visibility into migration state.*
 
-#### 11.4 Verification Checklist
+### 11.4 Snapshot Testing Utilities
 
-- [ ] Run `cargo check --no-default-features` - compiles without remote feature
-- [ ] Run `cargo build --features remote` - compiles with remote feature
-- [ ] Unit test: RemoteMigrationSource implements MigrationSource trait
-- [ ] Unit test: Authentication header handling
-- [ ] Unit test: Network error returns appropriate error types
-- [ ] Integration test: Mock HTTP server provides migrations
-- [ ] Integration test: Caching behavior with TTL
-- [ ] Run `cargo clippy --all-targets --features remote` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Documentation includes remote source configuration examples
-- [ ] Feature flag properly gates all remote functionality
+Comprehensive snapshot testing infrastructure for migration verification using `insta`. Each subtask produces complete, working, compiling code with zero errors or warnings. **SQLite-only support** for all of Phase 11.4.
 
-### 11.5 Migration State Query API
+#### 11.4.1 Feature Flag Configuration ❌ **HIGH PRIORITY**
 
-- [ ] Query API for migration state ❌ **MINOR**
-  - [ ] Check if specific migration is applied
-  - [ ] Get list of pending migrations
-  - [ ] Get migration history
-  - [ ] Separate from MigrationRunner for focused API
+Configure snapshot testing as an optional feature in the test_utils crate.
 
-#### 11.5 Verification Checklist
+- [ ] **Add Feature Flag to `packages/switchy/schema/test_utils/Cargo.toml`**
+  ```toml
+  [features]
+  default = []
+  snapshots = ["dep:insta", "dep:serde", "dep:serde_yaml", "dep:thiserror"]
 
-- [ ] Run `cargo build -p switchy_schema` - compiles with query API
-- [ ] Unit test: is_migration_applied() returns correct boolean
-- [ ] Unit test: get_pending_migrations() filters correctly
-- [ ] Unit test: get_migration_history() returns chronological list
-- [ ] Integration test: Query API with various database states
-- [ ] Performance benchmark: Query operations are efficient
-- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] API documentation with usage examples
-- [ ] Query API is separate from MigrationRunner as designed
+  [dependencies]
+  insta = { workspace = true, features = ["yaml"], optional = true }
+  serde = { workspace = true, optional = true }
+  serde_yaml = { workspace = true, optional = true }
+  thiserror = { workspace = true, optional = true }
+  ```
 
-### 11.6 Snapshot Testing Utilities
+- [ ] **Define Error Type**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  #[derive(Debug, thiserror::Error)]
+  pub enum SnapshotError {
+      #[error("Database error: {0}")]
+      Database(#[from] switchy_database::DatabaseError),
 
-- [ ] Snapshot testing infrastructure for migration verification ❌ **MINOR**
-  - [ ] **Schema Snapshots**
-    - [ ] Capture database schema state after each migration
-    - [ ] Normalize schema representation across database types
-    - [ ] Compare schema evolution over time
-    - [ ] Detect unintended schema changes
-  - [ ] **Migration Sequence Snapshots**
-    - [ ] Record the full sequence of migrations applied
-    - [ ] Track migration ordering and dependencies
-    - [ ] Useful for debugging migration issues
-  - [ ] **SQL Statement Snapshots** (optional)
-    - [ ] Capture actual SQL executed by migrations
-    - [ ] Review what changes migrations make
-    - [ ] Detect database-specific SQL differences
-  - [ ] **Data Snapshots** (complex - consider deferring)
-    - [ ] Capture data state at specific points
-    - [ ] Verify data transformations
-    - [ ] Handle non-deterministic data (timestamps, auto-increment IDs)
-  - [ ] **Implementation Considerations**
-    - [ ] Snapshot format (JSON, SQL, or custom format)
-    - [ ] Update mechanism via environment variable (e.g., `UPDATE_SNAPSHOTS=1`)
-    - [ ] Integration with existing test utilities
-    - [ ] Snapshot storage and versioning strategy
-    - [ ] Handling database-specific variations
-  - [ ] **Benefits**
-    - [ ] Regression detection for schema changes
-    - [ ] Documentation of schema evolution
-    - [ ] Review-friendly PR diffs for schema changes
-    - [ ] Debugging aid for migration issues
-    - [ ] Cross-database compatibility verification
+      #[error("Migration error: {0}")]
+      Migration(#[from] switchy_schema::MigrationError),
 
-#### 11.6 Verification Checklist
+      #[error("IO error: {0}")]
+      Io(#[from] std::io::Error),
 
-- [ ] Run `cargo build -p switchy_schema` - compiles with snapshot support
-- [ ] Unit test: Schema snapshot capture after migration
-- [ ] Unit test: Schema comparison detects differences
-- [ ] Unit test: Migration sequence snapshot creation
-- [ ] Unit test: Snapshot format is deterministic
-- [ ] Integration test: UPDATE_SNAPSHOTS=1 updates snapshot files
-- [ ] Integration test: Schema evolution tracked correctly
-- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Documentation includes snapshot testing examples
-- [ ] Snapshot files are human-readable and diff-friendly
+      #[error("Snapshot validation failed: {0}")]
+      Validation(String),
 
-### 11.7 Complete CodeMigrationSource Implementation
+      #[error("Test error: {0}")]
+      Test(#[from] crate::TestError),
+  }
+  ```
+
+##### 11.4.1 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --no-default-features` - compiles without snapshots
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with snapshots
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --no-default-features` - zero warnings
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+
+#### 11.4.2 Test Migration Resources ❌ **HIGH PRIORITY**
+
+Create dedicated test migrations for snapshot testing with both minimal and comprehensive examples.
+
+- [ ] **Create Directory Structure**
+  ```
+  packages/switchy/schema/test_utils/test-resources/snapshot-migrations/
+  ├── minimal/           # Single-operation migrations
+  │   ├── 001_create_table.sql
+  │   ├── 002_add_column.sql
+  │   └── 003_create_index.sql
+  ├── comprehensive/     # Realistic multi-table migrations
+  │   ├── 001_initial_schema.sql
+  │   ├── 002_add_constraints.sql
+  │   └── 003_add_indexes.sql
+  └── edge_cases/       # Special cases for testing
+      ├── 001_nullable_columns.sql
+      └── 002_default_values.sql
+  ```
+
+- [ ] **Minimal Migration Examples**
+  ```sql
+  -- minimal/001_create_table.sql
+  CREATE TABLE users (id INTEGER PRIMARY KEY);
+
+  -- minimal/002_add_column.sql
+  ALTER TABLE users ADD COLUMN name TEXT NOT NULL;
+
+  -- minimal/003_create_index.sql
+  CREATE INDEX idx_users_name ON users(name);
+  ```
+
+- [ ] **Comprehensive Migration Examples**
+  ```sql
+  -- comprehensive/001_initial_schema.sql
+  CREATE TABLE users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE,
+      username TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT,
+      published BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- comprehensive/002_add_constraints.sql
+  -- Add foreign key constraint (requires rebuilding table in SQLite)
+  CREATE TABLE posts_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT,
+      published BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+  INSERT INTO posts_new SELECT * FROM posts;
+  DROP TABLE posts;
+  ALTER TABLE posts_new RENAME TO posts;
+
+  -- comprehensive/003_add_indexes.sql
+  CREATE INDEX idx_posts_user ON posts(user_id);
+  CREATE INDEX idx_posts_published ON posts(published);
+  CREATE INDEX idx_users_email ON users(email);
+  ```
+
+##### 11.4.2 Verification Checklist
+- [ ] Test migration directories created in correct location
+- [ ] Minimal migrations test single operations (CREATE, ALTER, INDEX)
+- [ ] Comprehensive migrations test realistic scenarios with relationships
+- [ ] All SQL files contain valid SQLite syntax
+- [ ] Edge case migrations cover nullable columns and defaults
+- [ ] Run `cargo fmt --all` - code is formatted
+
+#### 11.4.3 Core Infrastructure ❌ **HIGH PRIORITY**
+
+Create the minimal working snapshot test infrastructure that compiles and runs.
+
+- [ ] **Create Basic Structure**
+  - [ ] Create `packages/switchy/schema/test_utils/src/snapshot.rs` with feature gate:
+    ```rust
+    #![cfg(feature = "snapshots")]
+
+    use crate::TestError;
+    use switchy_database::{Database, DatabaseError};
+    use std::path::PathBuf;
+
+    pub use crate::SnapshotError;
+
+    pub struct MigrationSnapshotTest {
+        test_name: String,
+    }
+
+    impl MigrationSnapshotTest {
+        pub fn new(test_name: &str) -> Self {
+            Self {
+                test_name: test_name.to_string(),
+            }
+        }
+
+        pub async fn run(self) -> Result<(), SnapshotError> {
+            // Minimal implementation that just passes
+            println!("Running snapshot test: {}", self.test_name);
+            Ok(())
+        }
+    }
+    ```
+
+  - [ ] Add to `packages/switchy/schema/test_utils/src/lib.rs`:
+    ```rust
+    #[cfg(feature = "snapshots")]
+    pub mod snapshot;
+
+    #[cfg(feature = "snapshots")]
+    pub use snapshot::*;
+    ```
+
+- [ ] **Add Minimal Test**
+  - [ ] Create `packages/switchy/schema/tests/snapshot_basic.rs`:
+    ```rust
+    #![cfg(feature = "snapshots")]
+
+    use switchy_schema_test_utils::snapshot::MigrationSnapshotTest;
+
+    #[tokio::test]
+    async fn test_snapshot_infrastructure() {
+        MigrationSnapshotTest::new("basic")
+            .run()
+            .await
+            .unwrap();
+    }
+    ```
+
+##### 11.4.3 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --no-default-features` - compiles without snapshots
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with snapshots
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - test passes
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+- [ ] Test `test_snapshot_infrastructure` runs and passes with snapshots feature
+
+#### 11.4.4 Builder Pattern Implementation ❌ **HIGH PRIORITY**
+
+Add builder pattern methods that compile but may use default/stub implementations. SQLite-only support.
+
+- [ ] **Extend MigrationSnapshotTest with Builder Methods**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  pub struct MigrationSnapshotTest {
+      test_name: String,
+      migrations_dir: PathBuf,
+      assert_schema: bool,
+      assert_sequence: bool,
+  }
+
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      pub fn new(test_name: &str) -> Self {
+          Self {
+              test_name: test_name.to_string(),
+              // Points to dedicated snapshot test migrations
+              migrations_dir: PathBuf::from("./test-resources/snapshot-migrations/minimal"),
+              assert_schema: true,
+              assert_sequence: true,
+          }
+      }
+
+      pub fn migrations_dir(mut self, path: impl Into<PathBuf>) -> Self {
+          self.migrations_dir = path.into();
+          self
+      }
+
+      pub fn assert_schema(mut self, enabled: bool) -> Self {
+          self.assert_schema = enabled;
+          self
+      }
+
+      pub fn assert_sequence(mut self, enabled: bool) -> Self {
+          self.assert_sequence = enabled;
+          self
+      }
+
+      pub async fn run(self) -> Result<(), SnapshotError> {
+          // Still minimal but uses configuration
+          println!("Test: {}", self.test_name);
+          println!("Migrations: {:?}", self.migrations_dir);
+          println!("Schema: {}, Sequence: {}", self.assert_schema, self.assert_sequence);
+          Ok(())
+      }
+  }
+  ```
+
+- [ ] **Add Optional Integration with MigrationTestBuilder**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      /// Optionally integrate with existing test builder for complex scenarios
+      pub fn with_test_builder(mut self, _builder: crate::MigrationTestBuilder) -> Self {
+          // Will be implemented in later phases
+          self
+      }
+  }
+  ```
+
+##### 11.4.4 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with zero errors
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - existing tests still pass
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+- [ ] Builder methods chain correctly in tests
+- [ ] Default migrations_dir points to new test resources location
+- [ ] No unused warnings for new fields
+
+#### 11.4.5 Insta Integration ❌ **HIGH PRIORITY**
+
+Integrate insta to generate actual snapshots (even if minimal). Snapshots stored alongside test files (insta default).
+
+- [ ] **Create Snapshot Structure**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  use serde::{Serialize, Deserialize};
+
+  #[cfg(feature = "snapshots")]
+  #[derive(Debug, Serialize, Deserialize)]
+  struct MigrationSnapshot {
+      test_name: String,
+      migration_sequence: Vec<String>,
+  }
+  // Note: This structure will grow in later phases.
+  // Breaking changes to snapshot structure are acceptable during development.
+  // Regenerate snapshots with `cargo insta review` when structure changes.
+  ```
+
+- [ ] **Update run() to Generate Snapshots**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  use insta::assert_yaml_snapshot;
+
+  #[cfg(feature = "snapshots")]
+  pub async fn run(self) -> Result<(), SnapshotError> {
+      // Create minimal snapshot
+      let snapshot = MigrationSnapshot {
+          test_name: self.test_name.clone(),
+          migration_sequence: vec!["001_initial".to_string()], // Stub data for now
+      };
+
+      // Generate snapshot with insta (stored in tests/snapshots/)
+      assert_yaml_snapshot!(self.test_name, snapshot);
+
+      Ok(())
+  }
+  ```
+
+- [ ] **Add .gitignore Entry** (if not exists)
+  ```
+  # Snapshot temp files (until reviewed)
+  *.snap.new
+  ```
+
+##### 11.4.5 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with insta
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - generates snapshots
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+- [ ] Run `cargo insta review` - can review generated snapshots
+- [ ] Snapshot files created in `packages/switchy/schema/tests/snapshots/`
+- [ ] No serialization errors
+- [ ] Snapshots are stored alongside test files (insta default)
+- [ ] Breaking changes to snapshot structure documented as acceptable
+
+#### 11.4.6 Database Connection ❌ **MEDIUM PRIORITY**
+
+Connect to actual SQLite test database (still with stub migration execution). Uses existing test utilities.
+
+- [ ] **Add Database Creation Using Existing Utilities**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      async fn create_test_database(&self) -> Result<Box<dyn Database>, SnapshotError> {
+          // Use existing test_utils helper (SQLite in-memory)
+          // This database persists for the entire test lifecycle
+          let db = switchy_database::create_empty_in_memory().await?;
+          Ok(db)
+      }
+  }
+  ```
+
+- [ ] **Update run() to Use Database**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  pub async fn run(self) -> Result<(), SnapshotError> {
+      // Create SQLite database - persists for entire test
+      let db = self.create_test_database().await?;
+
+      // Verify database works
+      db.exec_raw("SELECT 1").await?;
+
+      // Create snapshot with database info
+      let snapshot = MigrationSnapshot {
+          test_name: self.test_name.clone(),
+          migration_sequence: vec![], // No migrations yet
+      };
+
+      assert_yaml_snapshot!(self.test_name, snapshot);
+      Ok(())
+  }
+  ```
+
+##### 11.4.6 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with database
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - database connection works
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+- [ ] No database connection errors
+- [ ] SQLite in-memory database works via existing utilities
+- [ ] Database lifecycle is one-per-test (persists entire run)
+- [ ] Snapshots still generate correctly
+
+#### 11.4.7 Schema Capture (SQLite Only) ❌ **MEDIUM PRIORITY**
+
+Implement full schema capture for SQLite with complete column information and ToValue implementations.
+
+- [ ] **Implement ToValue for Row Types**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  use switchy_database::{Row, DatabaseValue};
+
+  #[cfg(feature = "snapshots")]
+  impl ToValue for Row {
+      fn to_value(&self) -> serde_yaml::Value {
+          let mut map = serde_yaml::Mapping::new();
+          for (column_name, value) in self.columns() {
+              map.insert(
+                  serde_yaml::Value::String(column_name.clone()),
+                  value.to_value()
+              );
+          }
+          serde_yaml::Value::Mapping(map)
+      }
+  }
+
+  #[cfg(feature = "snapshots")]
+  impl ToValue for DatabaseValue {
+      fn to_value(&self) -> serde_yaml::Value {
+          match self {
+              DatabaseValue::Integer(i) => serde_yaml::Value::Number((*i).into()),
+              DatabaseValue::Text(s) => serde_yaml::Value::String(s.clone()),
+              DatabaseValue::Null => serde_yaml::Value::Null,
+              DatabaseValue::Real(f) => serde_yaml::Value::Number(
+                  serde_yaml::Number::from(f64::from(*f))
+              ),
+              DatabaseValue::Blob(b) => serde_yaml::Value::String(
+                  format!("[BLOB {} bytes]", b.len())
+              ),
+          }
+      }
+  }
+  ```
+
+- [ ] **Add Complete Schema Types**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  use std::collections::BTreeMap;
+
+  #[cfg(feature = "snapshots")]
+  #[derive(Debug, Serialize, Deserialize)]
+  struct DatabaseSchema {
+      tables: BTreeMap<String, TableSchema>,
+  }
+
+  #[cfg(feature = "snapshots")]
+  #[derive(Debug, Serialize, Deserialize)]
+  struct TableSchema {
+      columns: Vec<ColumnInfo>,
+      indexes: Vec<String>,
+  }
+
+  #[cfg(feature = "snapshots")]
+  #[derive(Debug, Serialize, Deserialize)]
+  struct ColumnInfo {
+      name: String,
+      data_type: String,
+      nullable: bool,
+      default_value: Option<String>,
+      primary_key: bool,
+  }
+  ```
+
+- [ ] **Implement Full Schema Capture**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      async fn capture_schema(&self, db: &dyn Database) -> Result<DatabaseSchema, SnapshotError> {
+          let mut schema = DatabaseSchema {
+              tables: BTreeMap::new(),
+          };
+
+          // Query SQLite schema tables
+          let tables_result = db.query("
+              SELECT name FROM sqlite_master
+              WHERE type='table' AND name NOT LIKE 'sqlite_%'
+              ORDER BY name
+          ").await?;
+
+          for table_row in tables_result {
+              let table_name = table_row.get("name").as_string();
+
+              // Get column information using PRAGMA
+              let columns_result = db.query(&format!(
+                  "PRAGMA table_info({})", table_name
+              )).await?;
+
+              let mut columns = Vec::new();
+              for col_row in columns_result {
+                  columns.push(ColumnInfo {
+                      name: col_row.get("name").as_string(),
+                      data_type: col_row.get("type").as_string(),
+                      nullable: col_row.get("notnull").as_i64() == 0,
+                      default_value: col_row.get("dflt_value").as_string_option(),
+                      primary_key: col_row.get("pk").as_i64() > 0,
+                  });
+              }
+
+              // Get indexes
+              let indexes_result = db.query(&format!(
+                  "PRAGMA index_list({})", table_name
+              )).await?;
+
+              let mut indexes = Vec::new();
+              for idx_row in indexes_result {
+                  indexes.push(idx_row.get("name").as_string());
+              }
+
+              schema.tables.insert(table_name, TableSchema {
+                  columns,
+                  indexes,
+              });
+          }
+
+          Ok(schema)
+      }
+  }
+  ```
+
+- [ ] **Update Snapshot Structure**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  #[derive(Debug, Serialize, Deserialize)]
+  struct MigrationSnapshot {
+      test_name: String,
+      migration_sequence: Vec<String>,
+      schema: Option<DatabaseSchema>,
+  }
+  ```
+
+##### 11.4.7 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with schema capture
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - schema capture works
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+- [ ] ToValue implementations for Row and DatabaseValue compile
+- [ ] Schema capture returns complete column information
+- [ ] BTreeMap ensures deterministic ordering
+- [ ] Snapshots include full schema information with types and constraints
+
+#### 11.4.8 Migration Execution ❌ **MEDIUM PRIORITY**
+
+Execute actual migrations using MigrationRunner and capture results. Fail fast on any migration error.
+
+- [ ] **Add Migration Loading with Error Handling**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  use switchy_schema::discovery::DirectoryMigrationSource;
+  use std::sync::Arc;
+
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      async fn load_migrations(&self) -> Result<Vec<Arc<dyn switchy_schema::migration::Migration<'static> + 'static>>, SnapshotError> {
+          // Fail with clear error for missing directory (catches configuration mistakes)
+          if !self.migrations_dir.exists() {
+              return Err(SnapshotError::Validation(
+                  format!("Migrations directory does not exist: {:?}", self.migrations_dir)
+              ));
+          }
+
+          let source = DirectoryMigrationSource::new(&self.migrations_dir);
+          let migrations = source.migrations().await?;
+          Ok(migrations)
+      }
+  }
+  ```
+
+- [ ] **Execute Migrations with Direct MigrationRunner**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  pub async fn run(self) -> Result<(), SnapshotError> {
+      let db = self.create_test_database().await?;
+      let migrations = self.load_migrations().await?;
+
+      // Execute migrations - fail fast on any error
+      if !migrations.is_empty() {
+          let source = switchy_schema::discovery::VecMigrationSource::new(migrations.clone());
+          let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source));
+
+          // Any migration error will propagate and fail the test
+          runner.run(db.as_ref()).await?;
+      }
+
+      // Capture results based on configuration
+      let schema = if self.assert_schema {
+          Some(self.capture_schema(db.as_ref()).await?)
+      } else {
+          None
+      };
+
+      let sequence = if self.assert_sequence {
+          migrations.iter().map(|m| m.name().to_string()).collect()
+      } else {
+          vec![]
+      };
+
+      let snapshot = MigrationSnapshot {
+          test_name: self.test_name.clone(),
+          migration_sequence: sequence,
+          schema,
+      };
+
+      assert_yaml_snapshot!(self.test_name, snapshot);
+      Ok(())
+  }
+  ```
+
+##### 11.4.8 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with migration execution
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - migrations execute
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+- [ ] Test with dedicated snapshot test migrations works
+- [ ] Missing migration directory produces clear error message
+- [ ] Migration errors fail the test immediately (fail fast)
+- [ ] Snapshots capture migration results with schema and sequence
+
+#### 11.4.9 Redaction System ❌ **LOW PRIORITY**
+
+Add redaction support for deterministic snapshots using insta's built-in filters with precise YAML-specific patterns.
+
+- [ ] **Add Redaction Configuration**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  pub struct MigrationSnapshotTest {
+      // ... existing fields ...
+      redact_timestamps: bool,
+      redact_auto_ids: bool,
+      redact_paths: bool,
+  }
+
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      pub fn new(test_name: &str) -> Self {
+          Self {
+              // ... existing defaults ...
+              redact_timestamps: true,
+              redact_auto_ids: true,
+              redact_paths: true,
+          }
+      }
+
+      pub fn redact_timestamps(mut self, enabled: bool) -> Self {
+          self.redact_timestamps = enabled;
+          self
+      }
+
+      pub fn redact_auto_ids(mut self, enabled: bool) -> Self {
+          self.redact_auto_ids = enabled;
+          self
+      }
+
+      pub fn redact_paths(mut self, enabled: bool) -> Self {
+          self.redact_paths = enabled;
+          self
+      }
+  }
+  ```
+
+- [ ] **Use insta's Built-in Redactions with Precise YAML Patterns**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  use insta::{assert_yaml_snapshot, Settings};
+
+  #[cfg(feature = "snapshots")]
+  pub async fn run(self) -> Result<(), SnapshotError> {
+      // ... existing migration execution code ...
+
+      // Apply redactions using insta's Settings with precise patterns
+      let mut settings = Settings::clone_current();
+
+      if self.redact_timestamps {
+          // Precise timestamp patterns for different formats
+          settings.add_filter(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "[TIMESTAMP]");
+          settings.add_filter(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", "[TIMESTAMP]");
+          settings.add_filter(r"\d{4}-\d{2}-\d{2}", "[DATE]");
+      }
+
+      if self.redact_auto_ids {
+          // YAML-specific patterns for different ID fields
+          settings.add_filter(r"^(\s*)id: \d+", r"$1id: [ID]");
+          settings.add_filter(r"^(\s*)user_id: \d+", r"$1user_id: [USER_ID]");
+          settings.add_filter(r"^(\s*)post_id: \d+", r"$1post_id: [POST_ID]");
+          settings.add_filter(r"^(\s*)(\w+_id): \d+", r"$1$2: [FK_ID]");
+      }
+
+      if self.redact_paths {
+          // Unix and Windows path patterns
+          settings.add_filter(r"/[\w/.-]+", "[PATH]");
+          settings.add_filter(r"[A-Z]:\\[\w\\.-]+", "[PATH]");
+      }
+
+      settings.bind(|| {
+          assert_yaml_snapshot!(self.test_name, snapshot);
+      });
+
+      Ok(())
+  }
+  ```
+
+##### 11.4.9 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with redactions
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - redactions work
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+- [ ] Timestamps are properly redacted with precise patterns
+- [ ] Auto-IDs are redacted with YAML-specific patterns
+- [ ] Foreign key IDs are redacted appropriately
+- [ ] File paths are redacted to avoid system-specific differences
+- [ ] Snapshots are deterministic across systems
+- [ ] No regex compilation errors
+
+#### 11.4.10 Complete SQLite Feature Set ❌ **LOW PRIORITY**
+
+Add remaining features: data sampling with type-aware conversion, setup/verification hooks, and full integration.
+
+- [ ] **Add Data Sampling with Type-Aware Conversion**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  #[derive(Debug, Serialize, Deserialize)]
+  struct MigrationSnapshot {
+      test_name: String,
+      migration_sequence: Vec<String>,
+      schema: Option<DatabaseSchema>,
+      data_samples: Option<std::collections::HashMap<String, Vec<serde_yaml::Value>>>,
+  }
+
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      async fn capture_data_samples(&self, db: &dyn Database) -> Result<std::collections::HashMap<String, Vec<serde_yaml::Value>>, SnapshotError> {
+          let mut samples = std::collections::HashMap::new();
+
+          for (table, count) in &self.data_samples {
+              let query = format!("SELECT * FROM {} ORDER BY rowid LIMIT {}", table, count);
+              let rows = db.query(&query).await?;
+
+              let mut sample_data = Vec::new();
+              for row in rows {
+                  // Use ToValue implementation for type-aware conversion
+                  sample_data.push(row.to_value());
+              }
+
+              samples.insert(table.clone(), sample_data);
+          }
+
+          Ok(samples)
+      }
+  }
+  ```
+
+- [ ] **Add Remaining Builder Methods**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  pub struct MigrationSnapshotTest {
+      // ... existing fields ...
+      assert_data: bool,
+      data_samples: std::collections::HashMap<String, usize>,
+      setup_fn: Option<SetupFn>,
+      verification_fn: Option<VerificationFn>,
+  }
+
+  #[cfg(feature = "snapshots")]
+  type SetupFn = Box<dyn for<'a> Fn(&'a dyn Database) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>>>;
+  type VerificationFn = Box<dyn for<'a> Fn(&'a dyn Database) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>>>;
+
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      pub fn assert_data(mut self, enabled: bool) -> Self {
+          self.assert_data = enabled;
+          self
+      }
+
+      pub fn with_data_samples(mut self, table: &str, count: usize) -> Self {
+          self.data_samples.insert(table.to_string(), count);
+          self
+      }
+
+      pub fn with_setup<F>(mut self, f: F) -> Self
+      where
+          F: for<'a> Fn(&'a dyn Database) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>> + 'static,
+      {
+          self.setup_fn = Some(Box::new(f));
+          self
+      }
+
+      pub fn with_verification<F>(mut self, f: F) -> Self
+      where
+          F: for<'a> Fn(&'a dyn Database) -> Pin<Box<dyn Future<Output = Result<(), DatabaseError>> + Send + 'a>> + 'static,
+      {
+          self.verification_fn = Some(Box::new(f));
+          self
+      }
+  }
+  ```
+
+- [ ] **Document Async Closure API Limitations**
+  ```rust
+  // Note: These signatures will be simplified when async closures stabilize.
+  // For now, users must use Box::pin:
+  //
+  // .with_setup(|db| Box::pin(async move {
+  //     db.exec_raw("INSERT INTO users (name) VALUES ('test')").await
+  // }))
+  //
+  // Track: https://github.com/rust-lang/rust/issues/62290
+  ```
+
+- [ ] **Complete Integration with MigrationTestBuilder**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      /// Full integration with existing test builder for complex scenarios
+      pub fn with_test_builder(mut self, builder: crate::MigrationTestBuilder) -> Self {
+          // Run the builder first, then capture snapshots
+          // Implementation bridges the two systems
+          self
+      }
+  }
+  ```
+
+##### 11.4.10 Verification Checklist
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles completely
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - all features work
+- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+- [ ] Run `cargo fmt --all` - code is formatted
+- [ ] All builder methods compile and work for SQLite
+- [ ] Data sampling captures specified rows with type preservation
+- [ ] Setup and verification hooks execute properly with Box::pin
+- [ ] Integration with MigrationTestBuilder works
+- [ ] Async closure limitations documented
+
+#### 11.4.11 Integration Examples ❌ **DOCUMENTATION**
+
+Document integration patterns with existing test utilities and provide complete usage examples.
+
+- [ ] **Simple Snapshot Test Example**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  #[tokio::test]
+  async fn test_user_migration_schema() {
+      use switchy_schema_test_utils::snapshot::MigrationSnapshotTest;
+
+      MigrationSnapshotTest::new("user_migration")
+          .migrations_dir("./test-resources/snapshot-migrations/minimal")
+          .assert_schema(true)
+          .assert_sequence(true)
+          .run()
+          .await
+          .unwrap();
+  }
+  ```
+
+- [ ] **Complex Integration with MigrationTestBuilder**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  #[tokio::test]
+  async fn test_data_migration_with_snapshots() {
+      use switchy_schema_test_utils::{MigrationTestBuilder, snapshot::MigrationSnapshotTest};
+
+      // First run complex migration test
+      let db = switchy_database::create_empty_in_memory().await.unwrap();
+      let migrations = vec![/* your migrations */];
+
+      MigrationTestBuilder::new(migrations.clone())
+          .with_data_before("002_transform_users", |db| {
+              Box::pin(async move {
+                  db.exec_raw("INSERT INTO old_users (name) VALUES ('test')").await
+              })
+          })
+          .run(&*db)
+          .await
+          .unwrap();
+
+      // Then capture snapshot of final state
+      MigrationSnapshotTest::new("data_migration_result")
+          .assert_schema(true)
+          .assert_data(true)
+          .with_data_samples("users", 5)
+          .run()  // Uses same database instance
+          .await
+          .unwrap();
+  }
+  ```
+
+- [ ] **Comprehensive Example with All Features**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  #[tokio::test]
+  async fn test_comprehensive_snapshot() {
+      MigrationSnapshotTest::new("comprehensive_test")
+          .migrations_dir("./test-resources/snapshot-migrations/comprehensive")
+          .assert_schema(true)
+          .assert_sequence(true)
+          .assert_data(true)
+          .with_data_samples("users", 3)
+          .with_data_samples("posts", 5)
+          .redact_timestamps(true)
+          .redact_auto_ids(true)
+          .with_setup(|db| Box::pin(async move {
+              // Pre-migration setup
+              db.exec_raw("INSERT INTO config (key, value) VALUES ('version', '1.0')").await
+          }))
+          .with_verification(|db| Box::pin(async move {
+              // Post-migration verification
+              let count: i64 = db.query_scalar("SELECT COUNT(*) FROM users").await?;
+              assert!(count >= 0);
+              Ok(())
+          }))
+          .run()
+          .await
+          .unwrap();
+  }
+  ```
+
+- [ ] **Snapshot Review Workflow Documentation**
+  ```bash
+  # Run tests to generate snapshots
+  cargo test --features snapshots
+
+  # Review snapshot changes interactively
+  cargo insta review
+
+  # Accept all changes (if correct)
+  cargo insta accept
+
+  # Update specific snapshot
+  UPDATE_SNAPSHOTS=1 cargo test test_name --features snapshots
+  ```
+
+#### 11.4.12 Development Workflow ❌ **DOCUMENTATION**
+
+Document the snapshot development and maintenance workflow for developers.
+
+- [ ] **Snapshot Structure Evolution Process**
+  ```markdown
+  Breaking changes to MigrationSnapshot structure are acceptable during development:
+
+  1. Add new fields to the MigrationSnapshot struct
+  2. Run tests - they will fail due to snapshot mismatch
+  3. Review changes with `cargo insta review`
+  4. Accept new snapshots if correct (`y` in interactive mode)
+  5. Commit updated .snap files along with code changes
+
+  This process ensures snapshots stay in sync with code evolution.
+  ```
+
+- [ ] **Test Development Process**
+  ```markdown
+  Standard workflow for developing new snapshot tests:
+
+  1. Write test using MigrationSnapshotTest builder
+  2. Run test: `cargo test --features snapshots test_name`
+  3. Test will fail on first run (no snapshot exists yet)
+  4. Review generated snapshot: `cargo insta review`
+  5. Verify snapshot content is correct
+  6. Accept snapshot: press `y` in interactive review
+  7. Commit both test code and .snap file together
+  8. Future runs will compare against committed snapshot
+  ```
+
+- [ ] **Continuous Integration Setup**
+  ```yaml
+  # Example CI configuration for snapshot testing
+  test-snapshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run snapshot tests
+        run: cargo test -p switchy_schema_test_utils --features snapshots
+      - name: Check for snapshot changes
+        run: |
+          if git diff --exit-code --name-only | grep -q "\.snap$"; then
+            echo "Snapshot files have changed! Run 'cargo insta review' locally."
+            exit 1
+          fi
+
+  # Key points:
+  # - Never use UPDATE_SNAPSHOTS=1 in CI
+  # - CI should fail on snapshot mismatches
+  # - Developers update snapshots locally and commit changes
+  ```
+
+- [ ] **Debugging Failed Snapshot Tests**
+  ```bash
+  # When snapshots fail:
+
+  # 1. View the diff
+  cargo insta review
+
+  # 2. If change is expected, accept it
+  # Press 'y' in interactive mode
+
+  # 3. If change is unexpected, investigate:
+  # - Check if migration logic changed
+  # - Verify test setup is correct
+  # - Look for non-deterministic data (timestamps, IDs)
+
+  # 4. Reject unexpected changes and fix the code
+  # Press 'n' in interactive mode to reject
+  ```
+
+##### 11.4.12 Verification Checklist
+- [ ] Snapshot evolution process documented
+- [ ] Test development workflow documented
+- [ ] CI configuration examples provided
+- [ ] Debugging guidance included
+- [ ] Breaking changes policy clearly stated
+
+#### 11.4 Master Verification Checklist
+
+After all subtasks are complete:
+
+- [ ] Run `cargo build -p switchy_schema_test_utils --no-default-features` - compiles without snapshots
+- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with snapshots
+- [ ] Run `cargo build --workspace --all-features` - zero errors
+- [ ] Run `cargo test --workspace --all-features` - all pass
+- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - snapshot tests pass
+- [ ] Run `cargo clippy --workspace --all-targets --all-features` - zero warnings
+- [ ] Run `cargo fmt --all -- --check` - properly formatted
+- [ ] Run `cargo doc -p switchy_schema_test_utils --features snapshots` - documentation builds
+- [ ] Each phase produced working code with no compilation errors
+- [ ] No phase broke existing functionality
+- [ ] All tests pass at each phase
+- [ ] Feature flag properly gates all snapshot functionality
+- [ ] Test migration resources exist in correct locations
+- [ ] Both minimal and comprehensive test migrations work
+- [ ] ToValue implementations for Row and DatabaseValue compile
+- [ ] Missing migration directories produce clear error messages
+- [ ] Migration execution fails fast on any error
+- [ ] Data sampling preserves type information with Row.to_value()
+- [ ] Redaction patterns are YAML-specific and precise
+- [ ] Snapshot structure changes documented as acceptable during development
+- [ ] Setup/verification functions documented with async closure note
+- [ ] Database lifecycle is one-per-test (persists entire run)
+- [ ] Verify `cargo insta review` workflow works correctly
+- [ ] Verify `UPDATE_SNAPSHOTS=1 cargo test --features snapshots` updates snapshots
+- [ ] Verify snapshot files are stored in `tests/snapshots/` (insta default)
+- [ ] Verify snapshot diffs are readable in git/PR reviews
+- [ ] Verify CI properly fails on snapshot mismatches
+- [ ] Verify integration with existing MigrationTestBuilder works
+- [ ] SQLite schema capture includes full column information with types and constraints
+- [ ] Performance: Snapshot tests complete in < 30 seconds
+- [ ] Memory: No memory leaks in test execution
+- [ ] Documentation includes complete usage examples and workflow
+- [ ] Breaking changes: None to existing functionality (backward compatible)
+
+### 11.5 Complete CodeMigrationSource Implementation
 
 - [ ] Finish `CodeMigrationSource::migrations()` implementation ❌ **MINOR**
   - [ ] Replace empty Vec return with proper migration retrieval
@@ -5371,7 +6313,7 @@ This entire phase assumes fresh installations only. Existing databases with migr
   - [ ] Add comprehensive tests for code-based migration functionality
   - [ ] Update documentation with working examples
 
-#### 11.7 Verification Checklist
+#### 11.5 Verification Checklist
 
 - [ ] Run `cargo build -p switchy_schema --features code` - compiles successfully
 - [ ] Unit test: add_migration() adds to internal collection
@@ -5383,7 +6325,7 @@ This entire phase assumes fresh installations only. Existing databases with migr
 - [ ] Documentation updated with working code migration examples
 - [ ] BTreeMap ordering verified for deterministic execution
 
-### 11.8 Ergonomic Async Closure Support for Test Utilities
+### 11.6 Ergonomic Async Closure Support for Test Utilities
 
 **Goal:** Improve the ergonomics of `verify_migrations_with_state` to avoid requiring `Box::pin`
 
@@ -5417,7 +6359,7 @@ This entire phase assumes fresh installations only. Existing databases with migr
 
 **Recommendation:** Defer decision until we have more real-world usage patterns. The current `Box::pin` approach is standard in the Rust async ecosystem and well-understood by developers.
 
-#### 11.8 Verification Checklist
+#### 11.6 Verification Checklist
 
 - [ ] Run `cargo build -p switchy_schema_test_utils` - compiles successfully
 - [ ] Unit test: Selected approach works without Box::pin
@@ -6120,4 +7062,81 @@ This section captures potential future improvements that are not currently sched
 - **Migration format converters** - Import migrations from other tools (Diesel, SQLx migrate, etc.)
 - **Multi-database migrations** - Single migration that targets multiple database types
 - **Cloud database support** - Special handling for cloud-specific features (Aurora, Cosmos DB, etc.)
+
+### Remote Discovery Implementation (Originally Phase 11.4)
+**Status:** DEFERRED
+**Reason:** Deferred until concrete use cases emerge requiring remote migration sources. Current local file-based migrations meet all immediate needs. Remote sources add complexity (authentication, caching, network errors) without clear current benefit.
+
+**Original Phase Goals:**
+- [ ] Remote migration source ❌ **MINOR**
+  - [ ] Implement `MigrationSource` trait for remote sources
+  - [ ] Feature-gated with `#[cfg(feature = "remote")]`
+  - [ ] Fetch migrations from remote sources
+  - [ ] Authentication and caching support
+  - [ ] Network error handling
+
+**Verification Checklist (When Implemented):**
+- [ ] Run `cargo check --no-default-features` - compiles without remote feature
+- [ ] Run `cargo build --features remote` - compiles with remote feature
+- [ ] Unit test: RemoteMigrationSource implements MigrationSource trait
+- [ ] Unit test: Authentication header handling
+- [ ] Unit test: Network error returns appropriate error types
+- [ ] Integration test: Mock HTTP server provides migrations
+- [ ] Integration test: Caching behavior with TTL
+- [ ] Run `cargo clippy --all-targets --features remote` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] Documentation includes remote source configuration examples
+- [ ] Feature flag properly gates all remote functionality
+
+**Potential Remote Source Types to Consider:**
+- HTTP/HTTPS endpoints (REST API style)
+- S3-compatible storage (AWS S3, MinIO, etc.)
+- Git repositories (fetch migrations from a git repo)
+- Database-stored migrations (migrations in a table)
+- Custom protocol implementations
+
+**Architecture Considerations When Implementing:**
+- Should support multiple concurrent remote sources
+- Caching layer to reduce network calls
+- Retry logic with exponential backoff
+- Authentication token refresh mechanism
+- Checksum verification for remote migrations
+- Fallback to local cache if remote unavailable
+
+### Migration State Query API (Originally Phase 11.4)
+**Status:** DEFERRED
+**Reason:** Deferred until clear use cases emerge. Current CLI output and migrations table provide sufficient visibility into migration state. The runner already internally tracks state, and the CLI provides dry-run for preview.
+
+**Original Phase Goals:**
+- [ ] Query API for migration state ❌ **MINOR**
+  - [ ] Check if specific migration is applied
+  - [ ] Get list of pending migrations
+  - [ ] Get migration history
+  - [ ] Separate from MigrationRunner for focused API
+
+**Verification Checklist (When Implemented):**
+- [ ] Run `cargo build -p switchy_schema` - compiles with query API
+- [ ] Unit test: is_migration_applied() returns correct boolean
+- [ ] Unit test: get_pending_migrations() filters correctly
+- [ ] Unit test: get_migration_history() returns chronological list
+- [ ] Integration test: Query API with various database states
+- [ ] Performance benchmark: Query operations are efficient
+- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire repository
+- [ ] API documentation with usage examples
+- [ ] Query API is separate from MigrationRunner as designed
+
+**Potential Use Cases to Consider:**
+- Health check endpoints that verify expected migrations are applied
+- Admin dashboards showing migration history and status
+- CI/CD pipeline checks before deployment
+- Development tooling for migration debugging
+- Monitoring/alerting on migration state drift
+
+**Design Considerations When Implementing:**
+- Should this be a separate struct or extension trait?
+- Read-only interface that doesn't require mutable database access
+- Efficient queries that don't scan all migrations
+- Support for both file-based and code-based migration sources
+- Consider caching for frequently accessed state
 
