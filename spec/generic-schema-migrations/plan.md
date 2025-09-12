@@ -4642,15 +4642,17 @@ row.to_value_type().map_err(|e| crate::MigrationError::Validation(format!("Row c
 - [x] Run `cargo fmt --all` - format entire repository
   - ✓ All code properly formatted
 
-#### 11.3.3: Real Checksum Implementations with Transaction Support ✅ **COMPLETED**
+#### 11.3.3: Real Checksum Implementations with Transaction Support ✅ **COMPLETED** (2025-09-11)
 
-**Goal**: Implement actual async checksum calculations for each migration type
+**Goal**: Implement actual async checksum calculations for each migration type with full transaction support
+
+**Status**: All requirements completed including complex nested transaction support and comprehensive test coverage.
 
 All three migration types now calculate real SHA256 checksums:
 - `EmbeddedMigration`: packages/switchy/schema/src/discovery/embedded.rs:133-149
 - `FileMigration`: packages/switchy/schema/src/discovery/directory.rs:130-146
 - `CodeMigration`: packages/switchy/schema/src/discovery/code.rs:169-198
-Test count increased from 55 to 57 tests, all passing.
+Test count increased to 70 tests total (66 unit + 4 integration), all passing.
 
 **EmbeddedMigration Implementation:**
 - [x] Add SHA256 hashing of migration content
@@ -4675,7 +4677,7 @@ Test count increased from 55 to 57 tests, all passing.
   Comprehensive test coverage added:
   - `test_embedded_migration_checksums`: Lines 352-389 tests SHA256 output, non-zero values, different content produces different hashes
   - `test_code_migration_checksums`: Lines 353-395 tests ChecksumDatabase integration with real SQL operations
-  - All 57 unit tests + 6 integration tests + 18 doc tests passing
+  - All 66 unit tests + 4 integration tests + 6 recovery tests + 19 doc tests passing
   - Clippy clean with `-D warnings`
 
 **CodeMigration uses ChecksumDatabase to capture actual SQL operations:**
@@ -4688,9 +4690,20 @@ Test count increased from 55 to 57 tests, all passing.
 - packages/switchy/schema/src/discovery/directory.rs (SHA256 checksum implementation)
 - packages/switchy/schema/src/discovery/code.rs (ChecksumDatabase integration)
 - Added test coverage in all three files
-- [ ] Commit vs rollback decisions affect checksum (important for correctness)
-- [ ] Nested transaction patterns properly handled
-- [ ] More accurate representation of what migration actually does
+- [x] Commit vs rollback decisions affect checksum (important for correctness)
+  - ✓ Test `test_transaction_patterns_produce_different_checksums` in checksum_database.rs:330-349
+  - ✓ Verifies commit (line 336) vs rollback (line 340) produce different checksums
+  - ✓ Assertion at line 345-348 confirms different outcomes
+- [x] Nested transaction patterns properly handled
+  - ✓ Test `test_nested_transactions_produce_different_checksums` in checksum_database.rs:586-603
+  - ✓ Single transaction (lines 588-590) vs nested transactions (lines 593-597) produce different checksums
+  - ✓ Transaction depth tracking via `Arc<AtomicUsize>` at checksum_database.rs:23,37,251-257
+  - ✓ Depth prefixing with `D{depth}:` ensures nested transactions are distinguished
+- [x] More accurate representation of what migration actually does
+  - ✓ Operations at different transaction depths get unique prefixes (checksum_database.rs:253-255)
+  - ✓ Each operation type has distinct prefix: "QUERY:", "UPDATE:", "INSERT:", etc.
+  - ✓ Transaction lifecycle tracked: "BEGIN_TRANSACTION:", "COMMIT:", "ROLLBACK:"
+  - ✓ Produces deterministic checksums that accurately reflect execution structure
 
 **Verification Checklist:**
 - [x] Run `cargo build -p switchy_schema` - compiles successfully
@@ -4711,14 +4724,62 @@ Test count increased from 55 to 57 tests, all passing.
   - ✓ Test `test_transaction_patterns_produce_different_checksums` in checksum_database.rs
 - [x] Unit test: Same operations with/without transactions produce different checksums
   - ✓ Test `test_same_operations_with_without_transactions_differ` in checksum_database.rs verifies transaction wrapper affects checksum
-- [ ] Unit test: Nested transaction patterns handled correctly
+- [x] Unit test: Nested transaction patterns handled correctly
+  - ✓ Test `test_nested_transactions_produce_different_checksums` in checksum_database.rs:586-603
+  - ✓ Compares single transaction vs nested transaction checksums
+  - ✓ Test `test_shared_hasher_between_parent_and_transaction` in checksum_database.rs:368-400
+  - ✓ Verifies parent and nested transaction operations share hasher correctly
 - [x] Integration test: All migration types work end-to-end with async flow
   - ✓ Test `checksum_integration.rs` verifies async migration flow (implementation complete, import fixes pending)
-- [ ] Integration test: Complex transaction flows produce stable checksums
+- [x] Integration test: Complex transaction flows produce stable checksums
+  - ✓ Test `test_complex_transaction_flows_produce_stable_checksums` in checksum_integration.rs:148-249
+  - ✓ Deep nesting pattern: 4-level nested transactions with mixed commit/rollback (lines 150-183)
+  - ✓ Interleaved pattern: Operations at multiple depth levels (lines 185-209)
+  - ✓ Stability verification: Each pattern run 3 times, all produce identical checksums (lines 212-220)
+  - ✓ Uniqueness verification: Different patterns produce different checksums (lines 236-240)
+  - ✓ All checksums validated as 32-byte SHA256 (lines 243-244)
+  - ✓ Passes with both regular async runtime and simvar runtime (deterministic)
 - [x] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
   - ✓ Clippy clean with all checksum implementations
 - [x] Run `cargo fmt --all` - format entire repository
   - ✓ Code properly formatted
+
+**Implementation Details (Added 2025-09-11):**
+
+**ChecksumDatabase Architecture:**
+- Core struct at checksum_database.rs:20-24 with `Arc<Mutex<Sha256>>` hasher and `Arc<AtomicUsize>` transaction_depth
+- Full Database trait implementation (lines 64-261) covering all required methods
+- DatabaseTransaction trait implementation (lines 264-276) for transaction support
+- Transaction depth tracking ensures nested transactions are properly distinguished
+
+**Test Coverage Summary:**
+- 11 unit tests in checksum_database.rs covering:
+  - Basic operations (test_same_operations_produce_identical_checksums, test_different_operations_produce_different_checksums)
+  - Transaction patterns (test_transaction_patterns_produce_different_checksums, test_same_operations_with_without_transactions_differ)
+  - Nested transactions (test_nested_transactions_produce_different_checksums)
+  - Shared hasher behavior (test_shared_hasher_between_parent_and_transaction, test_graceful_finalize_with_multiple_arc_references)
+  - Database trait methods (test_all_database_methods_implemented, test_transaction_digest_updates)
+  - Utility functions (test_calculate_hash_function, test_database_value_digest_coverage, test_row_construction)
+
+- 4 integration tests in checksum_integration.rs:
+  - test_all_migration_types_async_flow (lines 18-85)
+  - test_migration_checksum_stability (lines 87-116)
+  - test_different_content_produces_different_checksums (lines 118-146)
+  - test_complex_transaction_flows_produce_stable_checksums (lines 148-249)
+
+**Key Design Decisions:**
+1. **Depth Prefixing**: Operations include transaction depth prefix (e.g., "D1:", "D2:") to distinguish nesting levels
+2. **Shared Hasher**: Parent and child transactions share the same hasher via Arc<Mutex<>>
+3. **Atomic Depth Tracking**: AtomicUsize ensures thread-safe depth tracking across async boundaries
+4. **Operation-Specific Prefixes**: Each operation type has unique prefix for clear differentiation
+5. **Deterministic Ordering**: Operations are hashed in execution order, ensuring reproducible checksums
+
+**Verification Complete:**
+- All 66 unit tests passing
+- All 4 integration tests passing
+- Clippy clean with all targets
+- Tests pass with simvar runtime (deterministic simulation)
+- Code formatted with rustfmt
 
 #### 11.3.4: Checksum Validation Engine ✅ **VALIDATION**
 

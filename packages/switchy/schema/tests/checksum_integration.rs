@@ -1,14 +1,20 @@
 //! Integration tests for checksum functionality across all migration types
 
 use bytes::Bytes;
-use std::sync::Arc;
 use switchy_async::test as async_test;
-use switchy_schema::discovery::code::CodeMigration;
-use switchy_schema::discovery::embedded::EmbeddedMigration;
-use switchy_schema::migration::Migration;
+use switchy_database::Database;
+use switchy_schema::checksum_database::ChecksumDatabase;
 
+#[cfg(all(feature = "embedded", feature = "code"))]
 #[async_test]
 async fn test_all_migration_types_async_flow() {
+    use std::sync::Arc;
+
+    use switchy_schema::{
+        discovery::{code::CodeMigration, embedded::EmbeddedMigration},
+        migration::Migration,
+    };
+
     // Create migrations of each type
     let embedded = Arc::new(EmbeddedMigration::new(
         "embedded_test".to_string(),
@@ -84,8 +90,13 @@ async fn test_all_migration_types_async_flow() {
     );
 }
 
+#[cfg(feature = "embedded")]
 #[async_test]
 async fn test_migration_checksum_stability() {
+    use std::sync::Arc;
+
+    use switchy_schema::{discovery::embedded::EmbeddedMigration, migration::Migration as _};
+
     // Test that checksums are stable across multiple async calls
     let migration = Arc::new(EmbeddedMigration::new(
         "stability_test".to_string(),
@@ -114,8 +125,13 @@ async fn test_migration_checksum_stability() {
     assert_eq!(checksums[0].len(), 32);
 }
 
+#[cfg(feature = "embedded")]
 #[async_test]
 async fn test_different_content_produces_different_checksums() {
+    use std::sync::Arc;
+
+    use switchy_schema::{discovery::embedded::EmbeddedMigration, migration::Migration as _};
+
     // Test that small changes in migration content produce different checksums
     let migration1 = Arc::new(EmbeddedMigration::new(
         "content_test".to_string(),
@@ -136,4 +152,116 @@ async fn test_different_content_produces_different_checksums() {
         checksum1, checksum2,
         "Different content should produce different checksums even with same ID"
     );
+}
+
+// ============================================================================
+// Complex Transaction Flow Integration Tests
+// ============================================================================
+
+#[async_test]
+async fn test_complex_transaction_flows_produce_stable_checksums() {
+    // Test Case 1: Deep nesting with mixed outcomes
+    async fn create_deep_mixed_pattern() -> Bytes {
+        let db = ChecksumDatabase::new();
+
+        // Begin TX1
+        let tx1 = db.begin_transaction().await.unwrap();
+        tx1.exec_raw("Operation A").await.unwrap();
+
+        // Begin TX2 (nested in TX1)
+        let tx2 = tx1.begin_transaction().await.unwrap();
+        tx2.exec_raw("Operation B").await.unwrap();
+
+        // Begin TX3 (nested in TX2)
+        let tx3 = tx2.begin_transaction().await.unwrap();
+        tx3.exec_raw("Operation C").await.unwrap();
+        tx3.commit().await.unwrap(); // Commit TX3
+
+        tx2.exec_raw("Operation D").await.unwrap();
+
+        // Begin TX4 (nested in TX2)
+        let tx4 = tx2.begin_transaction().await.unwrap();
+        tx4.exec_raw("Operation E").await.unwrap();
+        tx4.rollback().await.unwrap(); // Rollback TX4
+
+        tx2.commit().await.unwrap(); // Commit TX2
+
+        tx1.exec_raw("Operation F").await.unwrap();
+        tx1.commit().await.unwrap(); // Commit TX1
+
+        db.finalize().await
+    }
+
+    // Test Case 2: Interleaved operations with depth changes
+    async fn create_interleaved_pattern() -> Bytes {
+        let db = ChecksumDatabase::new();
+
+        // Operation at depth 0
+        db.exec_raw("ROOT_OP_1").await.unwrap();
+
+        let tx1 = db.begin_transaction().await.unwrap();
+        tx1.exec_raw("TX1_OP_1").await.unwrap();
+
+        let tx2 = tx1.begin_transaction().await.unwrap();
+        tx2.exec_raw("TX2_OP_1").await.unwrap();
+
+        let tx3 = tx2.begin_transaction().await.unwrap();
+        tx3.exec_raw("TX3_OP_1").await.unwrap();
+        tx3.commit().await.unwrap();
+
+        // Back to TX2 level
+        tx2.exec_raw("TX2_OP_2").await.unwrap();
+        tx2.commit().await.unwrap();
+
+        // Back to TX1 level
+        tx1.exec_raw("TX1_OP_2").await.unwrap();
+        tx1.commit().await.unwrap();
+
+        // Back to root level
+        db.exec_raw("ROOT_OP_2").await.unwrap();
+
+        db.finalize().await
+    }
+
+    // Run each pattern multiple times to verify stability
+    let pattern1_checksums = [
+        create_deep_mixed_pattern().await,
+        create_deep_mixed_pattern().await,
+        create_deep_mixed_pattern().await,
+    ];
+
+    let pattern2_checksums = [
+        create_interleaved_pattern().await,
+        create_interleaved_pattern().await,
+        create_interleaved_pattern().await,
+    ];
+
+    // Verify each pattern produces stable checksums
+    assert_eq!(
+        pattern1_checksums[0], pattern1_checksums[1],
+        "Deep mixed pattern should produce stable checksums"
+    );
+    assert_eq!(
+        pattern1_checksums[1], pattern1_checksums[2],
+        "Deep mixed pattern should be stable across all runs"
+    );
+
+    assert_eq!(
+        pattern2_checksums[0], pattern2_checksums[1],
+        "Interleaved pattern should produce stable checksums"
+    );
+    assert_eq!(
+        pattern2_checksums[1], pattern2_checksums[2],
+        "Interleaved pattern should be stable across all runs"
+    );
+
+    // Verify different patterns produce different checksums
+    assert_ne!(
+        pattern1_checksums[0], pattern2_checksums[0],
+        "Different complex patterns should produce different checksums"
+    );
+
+    // Verify all checksums are valid SHA256 (32 bytes)
+    assert_eq!(pattern1_checksums[0].len(), 32);
+    assert_eq!(pattern2_checksums[0].len(), 32);
 }
