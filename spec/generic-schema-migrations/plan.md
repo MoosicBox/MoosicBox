@@ -5863,40 +5863,126 @@ Connect to actual SQLite test database (still with stub migration execution). Us
 
 #### 11.4.7 Schema Capture (SQLite Only) ❌ **MEDIUM PRIORITY**
 
-Implement full schema capture for SQLite with complete column information and ToValue implementations.
+Implement full schema capture for SQLite with complete column information and JSON conversion implementations.
 
-- [ ] **Implement ToValue for Row Types**
+**Prerequisites:** Phase 16 (Table Introspection API) must be completed first to provide database schema querying capabilities.
+
+- [ ] **Implement JSON Conversion for Row Types**
   ```rust
   #[cfg(feature = "snapshots")]
   use switchy_database::{Row, DatabaseValue};
 
   #[cfg(feature = "snapshots")]
-  impl ToValue for Row {
-      fn to_value(&self) -> serde_yaml::Value {
-          let mut map = serde_yaml::Mapping::new();
-          for (column_name, value) in self.columns() {
-              map.insert(
-                  serde_yaml::Value::String(column_name.clone()),
-                  value.to_value()
-              );
-          }
-          serde_yaml::Value::Mapping(map)
+  impl From<Row> for serde_json::Value {
+      fn from(row: Row) -> Self {
+          let map: serde_json::Map<String, serde_json::Value> = row.columns
+              .into_iter()
+              .map(|(k, v)| (k, v.into()))
+              .collect();
+          serde_json::Value::Object(map)
       }
   }
 
   #[cfg(feature = "snapshots")]
-  impl ToValue for DatabaseValue {
-      fn to_value(&self) -> serde_yaml::Value {
-          match self {
-              DatabaseValue::Integer(i) => serde_yaml::Value::Number((*i).into()),
-              DatabaseValue::Text(s) => serde_yaml::Value::String(s.clone()),
-              DatabaseValue::Null => serde_yaml::Value::Null,
-              DatabaseValue::Real(f) => serde_yaml::Value::Number(
-                  serde_yaml::Number::from(f64::from(*f))
-              ),
-              DatabaseValue::Blob(b) => serde_yaml::Value::String(
-                  format!("[BLOB {} bytes]", b.len())
-              ),
+  impl From<DatabaseValue> for serde_json::Value {
+      fn from(value: DatabaseValue) -> Self {
+          match value {
+              DatabaseValue::Null => serde_json::Value::Null,
+              DatabaseValue::String(s) => serde_json::Value::String(s),
+              DatabaseValue::StringOpt(Some(s)) => serde_json::Value::String(s),
+              DatabaseValue::StringOpt(None) => serde_json::Value::Null,
+              DatabaseValue::Bool(b) => serde_json::Value::Bool(b),
+              DatabaseValue::BoolOpt(Some(b)) => serde_json::Value::Bool(b),
+              DatabaseValue::BoolOpt(None) => serde_json::Value::Null,
+              DatabaseValue::Number(i) => serde_json::Value::Number(i.into()),
+              DatabaseValue::NumberOpt(Some(i)) => serde_json::Value::Number(i.into()),
+              DatabaseValue::NumberOpt(None) => serde_json::Value::Null,
+              DatabaseValue::UNumber(u) => serde_json::Value::Number(u.into()),
+              DatabaseValue::UNumberOpt(Some(u)) => serde_json::Value::Number(u.into()),
+              DatabaseValue::UNumberOpt(None) => serde_json::Value::Null,
+              DatabaseValue::Real(f) => {
+                  serde_json::Number::from_f64(f)
+                      .map(serde_json::Value::Number)
+                      .unwrap_or(serde_json::Value::Null)
+              },
+              DatabaseValue::RealOpt(Some(f)) => {
+                  serde_json::Number::from_f64(f)
+                      .map(serde_json::Value::Number)
+                      .unwrap_or(serde_json::Value::Null)
+              },
+              DatabaseValue::RealOpt(None) => serde_json::Value::Null,
+              DatabaseValue::DateTime(dt) => serde_json::Value::String(dt.to_string()),
+              DatabaseValue::NowAdd(s) => serde_json::Value::String(format!("NOW + {}", s)),
+              DatabaseValue::Now => serde_json::Value::String("NOW".to_string()),
+          }
+      }
+  }
+  ```
+
+- [ ] **Update MigrationSnapshotTest for Table Discovery**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  pub struct MigrationSnapshotTest {
+      test_name: String,
+      migrations_dir: PathBuf,
+      assert_schema: bool,
+      assert_sequence: bool,
+      expected_tables: Vec<String>, // NEW: Tables to inspect for schema capture
+  }
+
+  #[cfg(feature = "snapshots")]
+  impl MigrationSnapshotTest {
+      pub fn new(test_name: &str) -> Self {
+          Self {
+              test_name: test_name.to_string(),
+              migrations_dir: PathBuf::from("./test-resources/snapshot-migrations/minimal"),
+              assert_schema: true,
+              assert_sequence: true,
+              expected_tables: Vec::new(), // Empty by default
+          }
+      }
+
+      /// Configure which tables to inspect for schema capture
+      #[must_use]
+      pub fn expected_tables(mut self, tables: Vec<String>) -> Self {
+          self.expected_tables = tables;
+          self
+      }
+
+      /// Auto-discover tables by parsing migration files (future enhancement)
+      #[must_use]
+      pub fn auto_discover_tables(mut self) -> Self {
+          // Will be implemented to parse CREATE TABLE from migration files
+          self
+      }
+  }
+  ```
+
+- [ ] **Add Conversion Traits for Phase 16 Types**
+  ```rust
+  #[cfg(feature = "snapshots")]
+  impl From<switchy_database::schema::TableInfo> for TableSchema {
+      fn from(info: switchy_database::schema::TableInfo) -> Self {
+          TableSchema {
+              columns: info.columns.into_iter()
+                  .map(ColumnInfo::from)
+                  .collect(),
+              indexes: info.indexes.into_iter()
+                  .map(|idx| idx.name)
+                  .collect(),
+          }
+      }
+  }
+
+  #[cfg(feature = "snapshots")]
+  impl From<switchy_database::schema::ColumnInfo> for ColumnInfo {
+      fn from(col: switchy_database::schema::ColumnInfo) -> Self {
+          ColumnInfo {
+              name: col.name,
+              data_type: format!("{:?}", col.data_type), // Convert DataType enum to string
+              nullable: col.nullable,
+              default_value: col.default_value.map(|v| format!("{:?}", v)),
+              primary_key: col.is_primary_key,
           }
       }
   }
@@ -5932,7 +6018,13 @@ Implement full schema capture for SQLite with complete column information and To
   ```
 
 - [ ] **Implement Full Schema Capture**
+
+  **Prerequisites: Requires Phase 16 (Table Introspection API) to be completed first.**
+
   ```rust
+  #[cfg(feature = "snapshots")]
+  use switchy_database::schema::{TableInfo, ColumnInfo as DbColumnInfo};
+
   #[cfg(feature = "snapshots")]
   impl MigrationSnapshotTest {
       async fn capture_schema(&self, db: &dyn Database) -> Result<DatabaseSchema, SnapshotError> {
@@ -5940,49 +6032,44 @@ Implement full schema capture for SQLite with complete column information and To
               tables: BTreeMap::new(),
           };
 
-          // Query SQLite schema tables
-          let tables_result = db.query("
-              SELECT name FROM sqlite_master
-              WHERE type='table' AND name NOT LIKE 'sqlite_%'
-              ORDER BY name
-          ").await?;
+          // Use Phase 16 table introspection API to get schema information
+          for table_name in &self.expected_tables {
+              if let Some(table_info) = db.get_table_info(table_name).await? {
+                  // Convert Phase 16 TableInfo to our snapshot types
+                  let columns = table_info.columns
+                      .into_iter()
+                      .map(|col| ColumnInfo {
+                          name: col.name,
+                          data_type: format!("{:?}", col.data_type), // Convert DataType enum to string
+                          nullable: col.nullable,
+                          default_value: col.default_value.map(|v| format!("{:?}", v)),
+                          primary_key: col.is_primary_key,
+                      })
+                      .collect();
 
-          for table_row in tables_result {
-              let table_name = table_row.get("name").as_string();
+                  let indexes = table_info.indexes
+                      .into_iter()
+                      .map(|idx| idx.name)
+                      .collect();
 
-              // Get column information using PRAGMA
-              let columns_result = db.query(&format!(
-                  "PRAGMA table_info({})", table_name
-              )).await?;
-
-              let mut columns = Vec::new();
-              for col_row in columns_result {
-                  columns.push(ColumnInfo {
-                      name: col_row.get("name").as_string(),
-                      data_type: col_row.get("type").as_string(),
-                      nullable: col_row.get("notnull").as_i64() == 0,
-                      default_value: col_row.get("dflt_value").as_string_option(),
-                      primary_key: col_row.get("pk").as_i64() > 0,
-                  });
+                  schema.tables.insert(
+                      table_name.clone(),
+                      TableSchema {
+                          columns,
+                          indexes,
+                      }
+                  );
               }
-
-              // Get indexes
-              let indexes_result = db.query(&format!(
-                  "PRAGMA index_list({})", table_name
-              )).await?;
-
-              let mut indexes = Vec::new();
-              for idx_row in indexes_result {
-                  indexes.push(idx_row.get("name").as_string());
-              }
-
-              schema.tables.insert(table_name, TableSchema {
-                  columns,
-                  indexes,
-              });
           }
 
           Ok(schema)
+      }
+
+      /// Auto-discover tables from migrations if expected_tables is empty
+      async fn discover_tables_from_migrations(&self) -> Result<Vec<String>, SnapshotError> {
+          // TODO: Parse migration files in migrations_dir to find CREATE TABLE statements
+          // For now, return empty vec - this would be implemented in a future enhancement
+          Ok(vec![])
       }
   }
   ```
@@ -5999,12 +6086,15 @@ Implement full schema capture for SQLite with complete column information and To
   ```
 
 ##### 11.4.7 Verification Checklist
+- [ ] **PREREQUISITE:** Phase 16 (Table Introspection API) must be completed first
 - [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with schema capture
 - [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - schema capture works
 - [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
 - [ ] Run `cargo fmt --all` - code is formatted
-- [ ] ToValue implementations for Row and DatabaseValue compile
-- [ ] Schema capture returns complete column information
+- [ ] From implementations for Row and DatabaseValue to serde_json::Value compile
+- [ ] Conversion traits from Phase 16 types to snapshot types work correctly
+- [ ] expected_tables field allows table selection for schema capture
+- [ ] Schema capture uses Phase 16 API (get_table_info) instead of raw SQL
 - [ ] BTreeMap ensures deterministic ordering
 - [ ] Snapshots include full schema information with types and constraints
 
@@ -6087,7 +6177,7 @@ Execute actual migrations using MigrationRunner and capture results. Fail fast o
 
 #### 11.4.9 Redaction System ❌ **LOW PRIORITY**
 
-Add redaction support for deterministic snapshots using insta's built-in filters with precise YAML-specific patterns.
+Add redaction support for deterministic snapshots using insta's built-in filters with precise JSON-specific patterns.
 
 - [ ] **Add Redaction Configuration**
   ```rust
@@ -6127,7 +6217,7 @@ Add redaction support for deterministic snapshots using insta's built-in filters
   }
   ```
 
-- [ ] **Use insta's Built-in Redactions with Precise YAML Patterns**
+- [ ] **Use insta's Built-in Redactions with Precise JSON Patterns**
   ```rust
   #[cfg(feature = "snapshots")]
   use insta::{assert_yaml_snapshot, Settings};
@@ -6147,11 +6237,11 @@ Add redaction support for deterministic snapshots using insta's built-in filters
       }
 
       if self.redact_auto_ids {
-          // YAML-specific patterns for different ID fields
-          settings.add_filter(r"^(\s*)id: \d+", r"$1id: [ID]");
-          settings.add_filter(r"^(\s*)user_id: \d+", r"$1user_id: [USER_ID]");
-          settings.add_filter(r"^(\s*)post_id: \d+", r"$1post_id: [POST_ID]");
-          settings.add_filter(r"^(\s*)(\w+_id): \d+", r"$1$2: [FK_ID]");
+          // JSON-specific patterns for different ID fields
+          settings.add_filter(r#""id": \d+"#, r#""id": "[ID]""#);
+          settings.add_filter(r#""user_id": \d+"#, r#""user_id": "[USER_ID]""#);
+          settings.add_filter(r#""post_id": \d+"#, r#""post_id": "[POST_ID]""#);
+          settings.add_filter(r#""(\w+_id)": \d+"#, r#""$1": "[FK_ID]""#);
       }
 
       if self.redact_paths {
@@ -6161,7 +6251,7 @@ Add redaction support for deterministic snapshots using insta's built-in filters
       }
 
       settings.bind(|| {
-          assert_yaml_snapshot!(self.test_name, snapshot);
+      insta::assert_json_snapshot!(self.test_name, snapshot);
       });
 
       Ok(())
@@ -6174,7 +6264,7 @@ Add redaction support for deterministic snapshots using insta's built-in filters
 - [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
 - [ ] Run `cargo fmt --all` - code is formatted
 - [ ] Timestamps are properly redacted with precise patterns
-- [ ] Auto-IDs are redacted with YAML-specific patterns
+- [ ] Auto-IDs are redacted with JSON-specific patterns
 - [ ] Foreign key IDs are redacted appropriately
 - [ ] File paths are redacted to avoid system-specific differences
 - [ ] Snapshots are deterministic across systems
@@ -6184,6 +6274,8 @@ Add redaction support for deterministic snapshots using insta's built-in filters
 
 Add remaining features: data sampling with type-aware conversion, setup/verification hooks, and full integration.
 
+**Note:** Data sampling uses structured query builders (no raw SQL), so it doesn't require Phase 16.
+
 - [ ] **Add Data Sampling with Type-Aware Conversion**
   ```rust
   #[cfg(feature = "snapshots")]
@@ -6192,23 +6284,25 @@ Add remaining features: data sampling with type-aware conversion, setup/verifica
       test_name: String,
       migration_sequence: Vec<String>,
       schema: Option<DatabaseSchema>,
-      data_samples: Option<std::collections::HashMap<String, Vec<serde_yaml::Value>>>,
+      data_samples: Option<std::collections::HashMap<String, Vec<serde_json::Value>>>,
   }
 
   #[cfg(feature = "snapshots")]
   impl MigrationSnapshotTest {
-      async fn capture_data_samples(&self, db: &dyn Database) -> Result<std::collections::HashMap<String, Vec<serde_yaml::Value>>, SnapshotError> {
+      async fn capture_data_samples(&self, db: &dyn Database) -> Result<std::collections::HashMap<String, Vec<serde_json::Value>>, SnapshotError> {
           let mut samples = std::collections::HashMap::new();
 
           for (table, count) in &self.data_samples {
-              let query = format!("SELECT * FROM {} ORDER BY rowid LIMIT {}", table, count);
+              // Use Database query builder instead of raw SQL
+              let query = db.select(table)
+                  .limit(*count);
+
               let rows = db.query(&query).await?;
 
-              let mut sample_data = Vec::new();
-              for row in rows {
-                  // Use ToValue implementation for type-aware conversion
-                  sample_data.push(row.to_value());
-              }
+              let sample_data: Vec<serde_json::Value> = rows
+                  .into_iter()
+                  .map(|row| row.into()) // Using From<Row> for serde_json::Value
+                  .collect();
 
               samples.insert(table.clone(), sample_data);
           }
@@ -7024,6 +7118,18 @@ impl RusqliteDatabase {
 
 ### 16.1 Define Core Types for Table Metadata
 
+- [ ] Add DatabaseError variant for unsupported types in `packages/database/src/lib.rs` ⚠️ **CRITICAL**
+  ```rust
+  #[derive(Debug, thiserror::Error)]
+  pub enum DatabaseError {
+      // ... existing variants ...
+
+      /// Data type not supported by introspection (will be extended in Phase 16.5)
+      #[error("Unsupported data type for introspection: {0}. This type will be supported in a future version.")]
+      UnsupportedDataType(String),
+  }
+  ```
+
 - [ ] Create types in `packages/database/src/schema.rs` ⚠️ **CRITICAL**
   - [ ] Create `ColumnInfo` struct:
     ```rust
@@ -7101,10 +7207,12 @@ impl RusqliteDatabase {
     ```sql
     PRAGMA table_info(table_name)
     ```
-    - [ ] Map SQLite types to DataType enum
+    - [ ] Map SQLite types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
     - [ ] Parse `notnull` flag for nullable
     - [ ] Parse `dflt_value` for default values
     - [ ] Parse `pk` flag for primary key
+    - [ ] Supported types initially: INTEGER→BigInt, TEXT→Text, REAL→Double, BOOLEAN→Bool
+    - [ ] Unsupported types: BLOB, JSON, custom types (Phase 16.5 will add these)
   - [ ] `column_exists()`:
     - [ ] Use PRAGMA table_info and search for column name
   - [ ] `get_table_info()`:
@@ -7142,10 +7250,12 @@ impl RusqliteDatabase {
     WHERE table_schema = 'public' AND table_name = $1
     ORDER BY ordinal_position
     ```
-  - [ ] Map PostgreSQL types to DataType enum
+  - [ ] Map PostgreSQL types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
   - [ ] Parse is_nullable for nullable flag
   - [ ] Parse column_default for default values
   - [ ] Query constraints for primary key information
+  - [ ] Supported types initially: integer→Int, text→Text, boolean→Bool, real→Real, etc.
+  - [ ] Unsupported types: JSON, JSONB, UUID, arrays, custom types (Phase 16.8 will add these)
 - [ ] Implement in `packages/database/src/sqlx/postgres.rs` using same queries
 
 ### 16.6 Implement for MySQL (sqlx)
@@ -7171,11 +7281,13 @@ impl RusqliteDatabase {
     WHERE table_schema = DATABASE() AND table_name = ?
     ORDER BY ORDINAL_POSITION
     ```
-  - [ ] Map MySQL types to DataType enum
+  - [ ] Map MySQL types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
   - [ ] Parse IS_NULLABLE for nullable flag
   - [ ] Parse COLUMN_DEFAULT for default values
   - [ ] Parse COLUMN_KEY for primary key detection
   - [ ] Parse EXTRA for auto_increment detection
+  - [ ] Supported types initially: INT→Int, VARCHAR→VarChar, TEXT→Text, DECIMAL→Decimal, etc.
+  - [ ] Unsupported types: JSON, BLOB, binary types, custom types (Phase 16.8 will add these)
 
 ### 16.7 Implement for Database Simulator
 
@@ -7183,15 +7295,16 @@ impl RusqliteDatabase {
   - [ ] Delegate all methods to inner database (rusqlite)
   - [ ] No custom logic needed
 
-### 16.8 Add Helper Function for Type Mapping
+### 16.9 Add Helper Function for Type Mapping
 
 - [ ] Create helper functions in each backend 🟡 **IMPORTANT**
-  - [ ] `map_native_type_to_datatype()` for each backend
-  - [ ] Handle all common SQL types
-  - [ ] Default to DataType::Text for unknown types (with logging)
+  - [ ] `map_native_type_to_datatype() -> Result<DataType, DatabaseError>` for each backend
+  - [ ] Handle all common SQL types supported by current DataType enum
+  - [ ] Return `DatabaseError::UnsupportedDataType` for unmapped types (fail fast)
   - [ ] Document type mapping for each backend
+  - [ ] Document that Phase 16.8 will expand supported types
 
-### 16.9 Add Comprehensive Tests
+### 16.10 Add Comprehensive Tests
 
 - [ ] Create tests in `packages/database/tests/schema_introspection.rs` 🟡 **IMPORTANT**
   - [ ] Test table existence checking
@@ -7204,7 +7317,7 @@ impl RusqliteDatabase {
   - [ ] Test non-existent table returns None/empty
   - [ ] Test within transaction context
 
-### 16.10 Update Documentation
+### 16.11 Update Documentation
 
 - [ ] Document in `packages/database/src/lib.rs` 🟢 **MINOR**
   - [ ] Add module-level documentation for schema introspection
@@ -7212,20 +7325,176 @@ impl RusqliteDatabase {
   - [ ] Document limitations (e.g., computed columns, complex defaults)
   - [ ] Add usage examples
 
-**Verification Checklist:**
+### 16.8 Extended DataType Support ❌ **MEDIUM PRIORITY**
+
+**Goal:** Add support for additional data types commonly found in production databases
+
+**Prerequisites:** Phase 16.1-16.7 complete (basic introspection working with error handling)
+
+- [ ] **Extend DataType Enum in `packages/database/src/schema.rs`** ⚠️ **CRITICAL**
+  ```rust
+  #[derive(Debug, Clone, Copy)]
+  pub enum DataType {
+      // Existing types
+      VarChar(u16),
+      Text,
+      Bool,
+      SmallInt,
+      Int,
+      BigInt,
+      Real,
+      Double,
+      Decimal(u8, u8),
+      DateTime,
+
+      // New types for Phase 16.8
+      Blob,                    // Binary data
+      Json,                    // JSON column type
+      Uuid,                    // UUID type
+      Timestamp,               // Distinct from DateTime
+      Date,                    // Date without time
+      Time,                    // Time without date
+      Char(u16),              // Fixed-length character
+      Binary(Option<u32>),    // Binary with optional length
+      Serial,                 // Auto-incrementing integer (PostgreSQL)
+      BigSerial,              // Auto-incrementing bigint (PostgreSQL)
+      Array(Box<DataType>),   // PostgreSQL arrays
+      Jsonb,                  // PostgreSQL binary JSON
+      Xml,                    // XML type
+      Money,                  // Monetary type
+      Inet,                   // IP address
+      MacAddr,                // MAC address
+
+      // Fallback for database-specific types
+      Custom(String),         // For types we don't explicitly handle
+  }
+  ```
+
+- [ ] **Update SQLite Type Mapping in `packages/database/src/rusqlite/mod.rs`** ⚠️ **CRITICAL**
+  ```rust
+  fn map_sqlite_type(sqlite_type: &str) -> Result<DataType, DatabaseError> {
+      match sqlite_type.to_uppercase().as_str() {
+          "INTEGER" => Ok(DataType::BigInt),
+          "TEXT" => Ok(DataType::Text),
+          "REAL" | "DOUBLE" | "FLOAT" => Ok(DataType::Double),
+          "BLOB" => Ok(DataType::Blob),
+          "BOOLEAN" | "BOOL" => Ok(DataType::Bool),
+          "DATE" => Ok(DataType::Date),
+          "DATETIME" => Ok(DataType::DateTime),
+          "TIMESTAMP" => Ok(DataType::Timestamp),
+          "JSON" => Ok(DataType::Json),
+          _ => Ok(DataType::Custom(sqlite_type.to_string()))
+      }
+  }
+  ```
+  - [ ] Remove most `UnsupportedDataType` errors
+  - [ ] Use `Custom(String)` for truly unknown types
+
+- [ ] **Update PostgreSQL Type Mapping in `packages/database/src/postgres/postgres.rs`** ⚠️ **CRITICAL**
+  ```rust
+  fn map_postgres_type(pg_type: &str) -> Result<DataType, DatabaseError> {
+      match pg_type.to_lowercase().as_str() {
+          "int2" | "smallint" => Ok(DataType::SmallInt),
+          "int4" | "integer" => Ok(DataType::Int),
+          "int8" | "bigint" => Ok(DataType::BigInt),
+          "serial" => Ok(DataType::Serial),
+          "bigserial" => Ok(DataType::BigSerial),
+          "text" => Ok(DataType::Text),
+          "varchar" => Ok(DataType::VarChar(255)), // Default length
+          "char" => Ok(DataType::Char(1)),
+          "bool" | "boolean" => Ok(DataType::Bool),
+          "real" | "float4" => Ok(DataType::Real),
+          "double precision" | "float8" => Ok(DataType::Double),
+          "decimal" | "numeric" => Ok(DataType::Decimal(10, 2)), // Default precision
+          "date" => Ok(DataType::Date),
+          "time" => Ok(DataType::Time),
+          "timestamp" => Ok(DataType::Timestamp),
+          "timestamptz" => Ok(DataType::DateTime),
+          "bytea" => Ok(DataType::Blob),
+          "json" => Ok(DataType::Json),
+          "jsonb" => Ok(DataType::Jsonb),
+          "uuid" => Ok(DataType::Uuid),
+          "xml" => Ok(DataType::Xml),
+          "money" => Ok(DataType::Money),
+          "inet" => Ok(DataType::Inet),
+          "macaddr" => Ok(DataType::MacAddr),
+          t if t.starts_with("_") => {
+              // Array types in PostgreSQL start with underscore
+              let inner = &t[1..];
+              map_postgres_type(inner).map(|dt| DataType::Array(Box::new(dt)))
+          }
+          _ => Ok(DataType::Custom(pg_type.to_string()))
+      }
+  }
+  ```
+
+- [ ] **Update MySQL Type Mapping in `packages/database/src/sqlx/mysql.rs`** ⚠️ **CRITICAL**
+  ```rust
+  fn map_mysql_type(mysql_type: &str) -> Result<DataType, DatabaseError> {
+      match mysql_type.to_uppercase().as_str() {
+          "TINYINT" => Ok(DataType::SmallInt),
+          "SMALLINT" => Ok(DataType::SmallInt),
+          "MEDIUMINT" | "INT" | "INTEGER" => Ok(DataType::Int),
+          "BIGINT" => Ok(DataType::BigInt),
+          "FLOAT" => Ok(DataType::Real),
+          "DOUBLE" | "DOUBLE PRECISION" => Ok(DataType::Double),
+          "DECIMAL" | "NUMERIC" => Ok(DataType::Decimal(10, 2)),
+          "BIT" | "BOOL" | "BOOLEAN" => Ok(DataType::Bool),
+          "CHAR" => Ok(DataType::Char(255)),
+          "VARCHAR" => Ok(DataType::VarChar(255)),
+          "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" => Ok(DataType::Text),
+          "BINARY" => Ok(DataType::Binary(None)),
+          "VARBINARY" => Ok(DataType::Binary(Some(255))),
+          "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => Ok(DataType::Blob),
+          "DATE" => Ok(DataType::Date),
+          "TIME" => Ok(DataType::Time),
+          "DATETIME" => Ok(DataType::DateTime),
+          "TIMESTAMP" => Ok(DataType::Timestamp),
+          "JSON" => Ok(DataType::Json),
+          _ => Ok(DataType::Custom(mysql_type.to_string()))
+      }
+  }
+  ```
+
+- [ ] **Update Schema Builder Support** 🟡 **IMPORTANT**
+  - [ ] Add builder methods for new types in Column struct
+  - [ ] Update SQL generation for new types per backend
+  - [ ] Ensure CREATE TABLE statements work with new types
+
+- [ ] **Add Integration Tests** 🟡 **IMPORTANT**
+  - [ ] Test introspection with tables containing new data types
+  - [ ] Verify Custom(String) fallback works correctly
+  - [ ] Test schema builder with new types
+  - [ ] Test that previously unsupported types now work
+
+##### 16.8 Verification Checklist
+- [ ] Extended DataType enum compiles and is backward compatible
+- [ ] All backends handle new data types correctly
+- [ ] Custom(String) fallback prevents unknown type errors
+- [ ] Schema builder can create tables with new types
+- [ ] Integration tests pass for all new data types
+- [ ] Documentation updated with complete type support matrix
+- [ ] No breaking changes to existing code
+
+**Verification Checklist (Phase 16.1-16.7):**
 - [ ] `cargo fmt --check -p switchy_database` - All code formatted
 - [ ] `cargo clippy -p switchy_database --all-targets --all-features` - Zero warnings
 - [ ] `cargo test -p switchy_database --features schema` - All tests pass
 - [ ] Test all methods across all 6 database backends
+- [ ] Verify `DatabaseError::UnsupportedDataType` is returned for unmapped types
 - [ ] Verify transaction context support
-- [ ] Documentation complete with examples
-- [ ] Type mapping documented for each backend
+- [ ] Documentation complete with examples and limitations
+- [ ] Type mapping documented for each backend with supported/unsupported types
+- [ ] Phase 16.8 adds extended type support (BLOB, JSON, etc.)
 
 **Benefits:**
 - Enables Phase 11.2.1 implementation (schema migration detection)
 - Generic API for table introspection across all backends
 - Foundation for schema diff and validation tools
 - Useful for debugging and tooling
+- **Phased implementation:** Phase 16.1-16.7 provides basic types, Phase 16.8 adds extended support
+- **Fail-fast approach:** Clear errors for unsupported types rather than silent data loss
+- **Production ready:** Common types work immediately, exotic types come later
 
 
 ## Parking Lot
