@@ -6,6 +6,7 @@
 //! when pretty-printed.
 
 use crate::TestError;
+use std::path::PathBuf;
 use switchy_database::DatabaseError;
 use switchy_schema::MigrationError;
 
@@ -49,6 +50,9 @@ pub struct SnapshotTester {
 /// Migration snapshot test struct for verifying database schema changes
 pub struct MigrationSnapshotTest {
     test_name: String,
+    migrations_dir: PathBuf,
+    assert_schema: bool,
+    assert_sequence: bool,
 }
 
 impl MigrationSnapshotTest {
@@ -57,7 +61,36 @@ impl MigrationSnapshotTest {
     pub fn new(test_name: &str) -> Self {
         Self {
             test_name: test_name.to_string(),
+            // Points to dedicated snapshot test migrations
+            migrations_dir: PathBuf::from("./test-resources/snapshot-migrations/minimal"),
+            assert_schema: true,
+            assert_sequence: true,
         }
+    }
+
+    #[must_use]
+    pub fn migrations_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.migrations_dir = path.into();
+        self
+    }
+
+    #[must_use]
+    pub const fn assert_schema(mut self, enabled: bool) -> Self {
+        self.assert_schema = enabled;
+        self
+    }
+
+    #[must_use]
+    pub const fn assert_sequence(mut self, enabled: bool) -> Self {
+        self.assert_sequence = enabled;
+        self
+    }
+
+    /// Optionally integrate with existing test builder for complex scenarios
+    #[must_use]
+    pub fn with_test_builder(self, _builder: crate::MigrationTestBuilder<'_>) -> Self {
+        // Will be implemented in later phases
+        self
     }
 
     /// Run the snapshot test
@@ -66,8 +99,13 @@ impl MigrationSnapshotTest {
     ///
     /// * Returns `SnapshotError` if test execution fails
     pub fn run(self) -> Result<()> {
-        // Minimal implementation that just passes
-        println!("Running snapshot test: {}", self.test_name);
+        // Still minimal but uses configuration
+        println!("Test: {}", self.test_name);
+        println!("Migrations: {}", self.migrations_dir.display());
+        println!(
+            "Schema: {}, Sequence: {}",
+            self.assert_schema, self.assert_sequence
+        );
         Ok(())
     }
 }
