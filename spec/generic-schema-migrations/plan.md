@@ -5799,27 +5799,31 @@ Integrate insta to generate actual snapshots (even if minimal). Snapshots stored
 - [x] Breaking changes to snapshot structure documented as acceptable
   ✓ Documented in code comments with regeneration instructions
 
-#### 11.4.6 Database Connection ❌ **MEDIUM PRIORITY**
+#### 11.4.6 Database Connection ✅ **MEDIUM PRIORITY**
 
 Connect to actual SQLite test database (still with stub migration execution). Uses existing test utilities.
 
-- [ ] **Add Database Creation Using Existing Utilities**
+- [x] **Add Database Creation Using Existing Utilities**
   ```rust
   #[cfg(feature = "snapshots")]
   impl MigrationSnapshotTest {
-      async fn create_test_database(&self) -> Result<Box<dyn Database>, SnapshotError> {
+      async fn create_test_database(&self) -> Result<Box<dyn Database>> {
           // Use existing test_utils helper (SQLite in-memory)
           // This database persists for the entire test lifecycle
-          let db = switchy_database::create_empty_in_memory().await?;
+          let db = crate::create_empty_in_memory()
+              .await
+              .map_err(TestError::from)?;
           Ok(db)
       }
   }
   ```
 
-- [ ] **Update run() to Use Database**
+  Added `create_test_database()` method in `packages/switchy/schema/test_utils/src/snapshots.rs:115-121` using `crate::create_empty_in_memory()` with proper error conversion via TestError.
+
+- [x] **Update run() to Use Database**
   ```rust
   #[cfg(feature = "snapshots")]
-  pub async fn run(self) -> Result<(), SnapshotError> {
+  pub async fn run(self) -> Result<()> {
       // Create SQLite database - persists for entire test
       let db = self.create_test_database().await?;
 
@@ -5832,20 +5836,30 @@ Connect to actual SQLite test database (still with stub migration execution). Us
           migration_sequence: vec![], // No migrations yet
       };
 
-      assert_yaml_snapshot!(self.test_name, snapshot);
+      insta::assert_json_snapshot!(self.test_name, snapshot);
       Ok(())
   }
   ```
 
+  Updated `run()` method to be async (lines 128-144), creates database, executes "SELECT 1", and generates JSON snapshots with empty migration_sequence as specified. Also maintained separate non-async version for non-snapshots feature.
+
 ##### 11.4.6 Verification Checklist
-- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with database
-- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - database connection works
-- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
-- [ ] Run `cargo fmt --all` - code is formatted
-- [ ] No database connection errors
-- [ ] SQLite in-memory database works via existing utilities
-- [ ] Database lifecycle is one-per-test (persists entire run)
-- [ ] Snapshots still generate correctly
+- [x] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with database
+  Compilation successful: `Finished dev profile [unoptimized + debuginfo] target(s) in 0.84s`
+- [x] Run `cargo test -p switchy_schema_test_utils --features snapshots` - database connection works
+  All tests pass: `test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out`
+- [x] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+  Clean clippy run: `Finished dev profile [unoptimized + debuginfo] target(s) in 1.19s` with no warnings
+- [x] Run `cargo fmt --all` - code is formatted
+  Code formatting completed successfully
+- [x] No database connection errors
+  Database connections work correctly, "SELECT 1" executes successfully in all tests
+- [x] SQLite in-memory database works via existing utilities
+  Using `crate::create_empty_in_memory()` from test_utils, databases created and verified in tests
+- [x] Database lifecycle is one-per-test (persists entire run)
+  Each test creates its own database instance that persists for the full test execution
+- [x] Snapshots still generate correctly
+  Snapshot tests pass: `test result: ok. 2 passed; 0 failed` with correct JSON snapshots generated
 
 #### 11.4.7 Schema Capture (SQLite Only) ❌ **MEDIUM PRIORITY**
 

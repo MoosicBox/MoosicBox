@@ -7,7 +7,7 @@
 
 use crate::TestError;
 use std::path::PathBuf;
-use switchy_database::DatabaseError;
+use switchy_database::{Database, DatabaseError};
 use switchy_schema::MigrationError;
 
 #[cfg(feature = "snapshots")]
@@ -107,34 +107,58 @@ impl MigrationSnapshotTest {
         self
     }
 
+    /// Create a test database using existing utilities
+    ///
+    /// # Errors
+    ///
+    /// * Returns `SnapshotError` if database creation fails
+    #[cfg(feature = "snapshots")]
+    async fn create_test_database(&self) -> Result<Box<dyn Database>> {
+        // Use existing test_utils helper (SQLite in-memory)
+        // This database persists for the entire test lifecycle
+        let db = crate::create_empty_in_memory()
+            .await
+            .map_err(TestError::from)?;
+        Ok(db)
+    }
+
     /// Run the snapshot test
     ///
     /// # Errors
     ///
     /// * Returns `SnapshotError` if test execution fails
+    #[cfg(feature = "snapshots")]
+    pub async fn run(self) -> Result<()> {
+        // Create SQLite database - persists for entire test
+        let db = self.create_test_database().await?;
+
+        // Verify database works
+        db.exec_raw("SELECT 1").await?;
+
+        // Create snapshot with database info
+        let snapshot = MigrationSnapshot {
+            test_name: self.test_name.clone(),
+            migration_sequence: vec![], // No migrations yet
+        };
+
+        insta::assert_json_snapshot!(self.test_name, snapshot);
+        Ok(())
+    }
+
+    /// Run the snapshot test (non-snapshots version)
+    ///
+    /// # Errors
+    ///
+    /// * Returns `SnapshotError` if test execution fails
+    #[cfg(not(feature = "snapshots"))]
     pub fn run(self) -> Result<()> {
-        // Create minimal snapshot
-        #[cfg(feature = "snapshots")]
-        {
-            let snapshot = MigrationSnapshot {
-                test_name: self.test_name.clone(),
-                migration_sequence: vec!["001_initial".to_string()], // Stub data for now
-            };
-
-            // Generate snapshot with insta (stored in tests/snapshots/)
-            insta::assert_json_snapshot!(self.test_name, snapshot);
-        }
-
-        #[cfg(not(feature = "snapshots"))]
-        {
-            // Still minimal but uses configuration
-            println!("Test: {}", self.test_name);
-            println!("Migrations: {}", self.migrations_dir.display());
-            println!(
-                "Schema: {}, Sequence: {}",
-                self.assert_schema, self.assert_sequence
-            );
-        }
+        // Still minimal but uses configuration
+        println!("Test: {}", self.test_name);
+        println!("Migrations: {}", self.migrations_dir.display());
+        println!(
+            "Schema: {}, Sequence: {}",
+            self.assert_schema, self.assert_sequence
+        );
 
         Ok(())
     }
