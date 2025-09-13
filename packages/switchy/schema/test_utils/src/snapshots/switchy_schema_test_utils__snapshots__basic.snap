@@ -1,0 +1,10 @@
+---
+source: packages/switchy/schema/test_utils/src/snapshots.rs
+expression: snapshot
+---
+{
+  "test_name": "basic",
+  "migration_sequence": [
+    "001_initial"
+  ]
+}

@@ -21,6 +21,8 @@ switchy_database_connection = { workspace = true, optional = true }
 switchy_schema              = { workspace = true }
 thiserror                   = { workspace = true }
 
+insta = { workspace = true, features = ["json"], optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -36,7 +38,7 @@ fail-on-warnings = [
     "switchy_database_connection?/fail-on-warnings",
     "switchy_schema/fail-on-warnings",
 ]
-snapshots = ["dep:serde_json"]
+snapshots = ["dep:insta", "dep:serde", "dep:serde_json"]
 sqlite = [
     "dep:switchy_database_connection",
     "switchy_database_connection/sqlite-sqlx",

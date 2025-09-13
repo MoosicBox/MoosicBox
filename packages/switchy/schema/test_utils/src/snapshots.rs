@@ -10,6 +10,9 @@ use std::path::PathBuf;
 use switchy_database::DatabaseError;
 use switchy_schema::MigrationError;
 
+#[cfg(feature = "snapshots")]
+use serde::{Deserialize, Serialize};
+
 /// Error type for snapshot testing operations
 #[derive(Debug, thiserror::Error)]
 pub enum SnapshotError {
@@ -40,6 +43,17 @@ pub enum SnapshotError {
 
 /// Result type for snapshot operations
 pub type Result<T> = std::result::Result<T, SnapshotError>;
+
+/// Snapshot structure for migration state verification
+/// Note: This structure will grow in later phases.
+/// Breaking changes to snapshot structure are acceptable during development.
+/// Regenerate snapshots with `cargo insta review` when structure changes.
+#[cfg(feature = "snapshots")]
+#[derive(Debug, Serialize, Deserialize)]
+struct MigrationSnapshot {
+    test_name: String,
+    migration_sequence: Vec<String>,
+}
 
 /// Placeholder for snapshot testing functionality
 /// Full implementation will come in Phase 11.4.2+
@@ -99,13 +113,29 @@ impl MigrationSnapshotTest {
     ///
     /// * Returns `SnapshotError` if test execution fails
     pub fn run(self) -> Result<()> {
-        // Still minimal but uses configuration
-        println!("Test: {}", self.test_name);
-        println!("Migrations: {}", self.migrations_dir.display());
-        println!(
-            "Schema: {}, Sequence: {}",
-            self.assert_schema, self.assert_sequence
-        );
+        // Create minimal snapshot
+        #[cfg(feature = "snapshots")]
+        {
+            let snapshot = MigrationSnapshot {
+                test_name: self.test_name.clone(),
+                migration_sequence: vec!["001_initial".to_string()], // Stub data for now
+            };
+
+            // Generate snapshot with insta (stored in tests/snapshots/)
+            insta::assert_json_snapshot!(self.test_name, snapshot);
+        }
+
+        #[cfg(not(feature = "snapshots"))]
+        {
+            // Still minimal but uses configuration
+            println!("Test: {}", self.test_name);
+            println!("Migrations: {}", self.migrations_dir.display());
+            println!(
+                "Schema: {}, Sequence: {}",
+                self.assert_schema, self.assert_sequence
+            );
+        }
+
         Ok(())
     }
 }

@@ -14467,8 +14467,10 @@ name = "switchy_schema_test_utils"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "insta",
  "log 0.4.28",
  "moosicbox_schema",
+ "serde",
  "serde_json",
  "switchy_database",
  "switchy_database_connection",
