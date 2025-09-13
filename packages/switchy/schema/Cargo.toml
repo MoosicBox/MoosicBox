@@ -36,7 +36,7 @@ chrono                      = { workspace = true }
 switchy_async               = { workspace = true, features = ["macros", "tokio"] }
 switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
 switchy_fs                  = { workspace = true, features = ["simulator-real-fs", "std"] }
-switchy_schema_test_utils   = { workspace = true, features = ["sqlite"] }
+switchy_schema_test_utils   = { workspace = true, features = ["sqlite", "snapshots"] }
 tempfile                    = { workspace = true }
 tokio                       = { workspace = true, features = ["macros", "rt"] }
 
@@ -54,3 +54,4 @@ directory     = ["dep:switchy_fs"]
 embedded      = ["dep:include_dir"]
 test-utils    = []
 validation    = []
+snapshots     = []

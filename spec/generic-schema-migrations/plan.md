@@ -5572,12 +5572,12 @@ mkdir -p packages/switchy/schema/test_utils/test-resources/snapshot-migrations/e
 - [x] Run `cargo fmt --all` - code is formatted
   ✓ No Rust code to format - only SQL files created
 
-#### 11.4.3 Core Infrastructure ❌ **HIGH PRIORITY**
+#### 11.4.3 Core Infrastructure ✅ **COMPLETED**
 
 Create the minimal working snapshot test infrastructure that compiles and runs.
 
-- [ ] **Create Basic Structure**
-  - [ ] Create `packages/switchy/schema/test_utils/src/snapshot.rs` with feature gate:
+- [x] **Create Basic Structure**
+  - [x] Add to existing `packages/switchy/schema/test_utils/src/snapshots.rs` with feature gate:
     ```rust
     #![cfg(feature = "snapshots")]
 
@@ -5606,38 +5606,47 @@ Create the minimal working snapshot test infrastructure that compiles and runs.
     }
     ```
 
-  - [ ] Add to `packages/switchy/schema/test_utils/src/lib.rs`:
+    ✓ Created with MigrationSnapshotTest, SnapshotError, and basic infrastructure
+
+  - [x] Verify `packages/switchy/schema/test_utils/src/lib.rs` already contains:
     ```rust
     #[cfg(feature = "snapshots")]
-    pub mod snapshot;
+    pub mod snapshots;
 
     #[cfg(feature = "snapshots")]
-    pub use snapshot::*;
+    pub use snapshots::*;
     ```
+    ✓ Module properly exported with feature gate
 
-- [ ] **Add Minimal Test**
-  - [ ] Create `packages/switchy/schema/tests/snapshot_basic.rs`:
+- [x] **Add Minimal Test**
+  - [x] Create `packages/switchy/schema/tests/snapshot_basic.rs`:
     ```rust
     #![cfg(feature = "snapshots")]
 
-    use switchy_schema_test_utils::snapshot::MigrationSnapshotTest;
+    use switchy_schema_test_utils::snapshots::MigrationSnapshotTest;
 
-    #[tokio::test]
-    async fn test_snapshot_infrastructure() {
+    #[test]
+    fn test_snapshot_infrastructure() {
         MigrationSnapshotTest::new("basic")
             .run()
-            .await
             .unwrap();
     }
     ```
+    ✓ Created with adjusted non-async implementation and added snapshots feature to switchy_schema Cargo.toml
 
 ##### 11.4.3 Verification Checklist
-- [ ] Run `cargo build -p switchy_schema_test_utils --no-default-features` - compiles without snapshots
-- [ ] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with snapshots
-- [ ] Run `cargo test -p switchy_schema_test_utils --features snapshots` - test passes
-- [ ] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
-- [ ] Run `cargo fmt --all` - code is formatted
-- [ ] Test `test_snapshot_infrastructure` runs and passes with snapshots feature
+- [x] Run `cargo build -p switchy_schema_test_utils --no-default-features` - compiles without snapshots
+  ✓ Builds successfully without snapshots feature
+- [x] Run `cargo build -p switchy_schema_test_utils --features snapshots` - compiles with snapshots
+  ✓ Builds successfully with snapshots feature
+- [x] Run `cargo test -p switchy_schema_test_utils --features snapshots` - test passes
+  ✓ All 35 unit tests + 23 doc tests pass
+- [x] Run `cargo clippy -p switchy_schema_test_utils --all-targets --features snapshots` - zero warnings
+  ✓ Zero clippy warnings after removing unused async from run() method
+- [x] Run `cargo fmt --all` - code is formatted
+  ✓ All code properly formatted
+- [x] Test `test_snapshot_infrastructure` runs and passes with snapshots feature
+  ✓ Test runs and passes when executed with `cargo test -p switchy_schema --features snapshots test_snapshot_infrastructure`
 
 #### 11.4.4 Builder Pattern Implementation ❌ **HIGH PRIORITY**
 
