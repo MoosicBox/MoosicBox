@@ -290,6 +290,8 @@ pub enum DatabaseError {
     TransactionFailed,
     #[error("Unexpected result from operation")]
     UnexpectedResult,
+    #[error("Unsupported data type: {0}")]
+    UnsupportedDataType(String),
 }
 
 impl DatabaseError {

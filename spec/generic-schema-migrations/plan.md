@@ -7116,64 +7116,89 @@ impl RusqliteDatabase {
 
 **Background:** During Phase 11.2.1 analysis, we discovered that checking for column existence in existing tables is not possible with the current Database trait API. We need a generic way to query table structure that works across SQLite, PostgreSQL, and MySQL.
 
-### 16.1 Define Core Types for Table Metadata
+### 16.1 Define Core Types for Table Metadata ✅ **COMPLETED**
 
-- [ ] Add DatabaseError variant for unsupported types in `packages/database/src/lib.rs` ⚠️ **CRITICAL**
+- [x] Add DatabaseError variant for unsupported types in `packages/database/src/lib.rs` ⚠️ **CRITICAL**
   ```rust
   #[derive(Debug, thiserror::Error)]
   pub enum DatabaseError {
       // ... existing variants ...
 
-      /// Data type not supported by introspection (will be extended in Phase 16.5)
-      #[error("Unsupported data type for introspection: {0}. This type will be supported in a future version.")]
+      /// Data type not supported by introspection (will be extended in Phase 16.8)
+      #[error("Unsupported data type: {0}")]
       UnsupportedDataType(String),
   }
   ```
+  `DatabaseError::UnsupportedDataType(String)` variant confirmed at line 294 in `packages/database/src/lib.rs` with error message "Unsupported data type: {0}" - verified present and correctly implemented
 
-- [ ] Create types in `packages/database/src/schema.rs` ⚠️ **CRITICAL**
-  - [ ] Create `ColumnInfo` struct:
+- [x] Add required import and update DataType in `packages/database/src/schema.rs` ⚠️ **CRITICAL**
+  ```rust
+  use std::collections::BTreeMap;  // Added at line 1
+
+  #[derive(Debug, Clone, Copy, PartialEq)]  // Added PartialEq
+  pub enum DataType { ... }
+  ```
+  BTreeMap import added at line 1, DataType enum updated with PartialEq trait for struct comparisons
+
+- [x] Create types in `packages/database/src/schema.rs` ⚠️ **CRITICAL**
+  - [x] Create `ColumnInfo` struct:
     ```rust
     #[derive(Debug, Clone, PartialEq)]
     pub struct ColumnInfo {
         pub name: String,
         pub data_type: DataType,
         pub nullable: bool,
-        pub default_value: Option<DatabaseValue>,
         pub is_primary_key: bool,
-        pub is_auto_increment: bool,
+        pub auto_increment: bool,  // Updated field name
+        pub default_value: Option<DatabaseValue>,
+        pub ordinal_position: u32,  // Added for proper column ordering (1-based)
     }
     ```
-  - [ ] Create `TableInfo` struct:
+    `ColumnInfo` struct successfully implemented at lines 334-349 in `packages/database/src/schema.rs` with all required fields plus `ordinal_position` for proper column ordering
+  - [x] Create `TableInfo` struct:
     ```rust
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq)]
     pub struct TableInfo {
         pub name: String,
-        pub columns: Vec<ColumnInfo>,
-        pub primary_key: Vec<String>,  // Column names in primary key
-        pub indexes: Vec<IndexInfo>,
-        pub foreign_keys: Vec<ForeignKeyInfo>,
+        // Changed to BTreeMap for O(log n) lookups by name (MoosicBox pattern)
+        pub columns: BTreeMap<String, ColumnInfo>,
+        pub indexes: BTreeMap<String, IndexInfo>,
+        pub foreign_keys: BTreeMap<String, ForeignKeyInfo>,
+        // Note: primary_key info available via ColumnInfo.is_primary_key
     }
     ```
-  - [ ] Create `IndexInfo` struct:
+    `TableInfo` struct successfully implemented at lines 382-392 in `packages/database/src/schema.rs` using `BTreeMap` collections for O(log n) lookups by name, following MoosicBox deterministic collections pattern
+  - [x] Create `IndexInfo` struct:
     ```rust
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct IndexInfo {
         pub name: String,
+        pub unique: bool,  // Updated field name (was is_unique)
         pub columns: Vec<String>,
-        pub is_unique: bool,
+        pub is_primary: bool,  // Added to identify primary key indexes
     }
     ```
-  - [ ] Create `ForeignKeyInfo` struct:
+    `IndexInfo` struct successfully implemented at lines 352-362 in `packages/database/src/schema.rs` with fields `name`, `unique`, `columns`, and `is_primary` for comprehensive index information
+  - [x] Create `ForeignKeyInfo` struct:
     ```rust
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct ForeignKeyInfo {
+        pub name: String,  // Added constraint name for identification
         pub column: String,
         pub referenced_table: String,
         pub referenced_column: String,
-        pub on_delete: Option<String>,  // CASCADE, RESTRICT, etc.
-        pub on_update: Option<String>,
+        pub on_update: Option<String>,  // CASCADE, RESTRICT, SET NULL, etc.
+        pub on_delete: Option<String>,  // CASCADE, RESTRICT, SET NULL, etc.
     }
     ```
+    `ForeignKeyInfo` struct successfully implemented at lines 365-379 in `packages/database/src/schema.rs` with all required fields including constraint name, column mappings, and referential actions
+
+**Implementation Notes:**
+* **BTreeMap Choice**: TableInfo uses `BTreeMap<String, T>` instead of `Vec<T>` for O(log n) lookups by name, following MoosicBox's deterministic collections pattern
+* **Primary Key Design**: No separate `primary_key` field in TableInfo - primary key information is encoded in `ColumnInfo.is_primary_key` to avoid data duplication
+* **Trait Limitations**: ColumnInfo and TableInfo implement only `PartialEq` (not `Eq`) due to `DatabaseValue` containing floating point values that cannot guarantee total equality
+* **Field Names**: Updated to follow Rust naming conventions (`auto_increment` vs `is_auto_increment`, `unique` vs `is_unique`)
+* **Enhanced Metadata**: Added `ordinal_position` to ColumnInfo and `is_primary` to IndexInfo for better introspection capabilities
 
 ### 16.2 Add Table Introspection Methods to Database Trait
 

@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
+
 use crate::{Database, DatabaseError, DatabaseValue};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataType {
     VarChar(u16),
     Text,
@@ -323,6 +325,70 @@ impl AlterTableStatement<'_> {
     pub async fn execute(self, db: &dyn Database) -> Result<(), DatabaseError> {
         db.exec_alter_table(&self).await
     }
+}
+
+// Table introspection types for Phase 16 (Table Introspection API)
+
+/// Information about a single column in a database table
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColumnInfo {
+    /// Column name
+    pub name: String,
+    /// Column data type
+    pub data_type: DataType,
+    /// Whether the column allows NULL values
+    pub nullable: bool,
+    /// Whether this column is part of the primary key
+    pub is_primary_key: bool,
+    /// Whether the column has auto-increment/serial behavior
+    pub auto_increment: bool,
+    /// Default value for the column
+    pub default_value: Option<DatabaseValue>,
+    /// Position/ordinal of the column in the table (1-based)
+    pub ordinal_position: u32,
+}
+
+/// Information about a database index
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexInfo {
+    /// Index name
+    pub name: String,
+    /// Whether this is a unique index
+    pub unique: bool,
+    /// Ordered list of column names in the index
+    pub columns: Vec<String>,
+    /// Whether this is a primary key index
+    pub is_primary: bool,
+}
+
+/// Information about a foreign key constraint
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignKeyInfo {
+    /// Foreign key constraint name
+    pub name: String,
+    /// Column name in the current table
+    pub column: String,
+    /// Referenced table name
+    pub referenced_table: String,
+    /// Referenced column name
+    pub referenced_column: String,
+    /// Action to take on UPDATE (CASCADE, RESTRICT, SET NULL, etc.)
+    pub on_update: Option<String>,
+    /// Action to take on DELETE (CASCADE, RESTRICT, SET NULL, etc.)
+    pub on_delete: Option<String>,
+}
+
+/// Complete information about a database table
+#[derive(Debug, Clone, PartialEq)]
+pub struct TableInfo {
+    /// Table name
+    pub name: String,
+    /// All columns in the table, indexed by column name for fast lookup
+    pub columns: BTreeMap<String, ColumnInfo>,
+    /// All indexes on the table, indexed by index name
+    pub indexes: BTreeMap<String, IndexInfo>,
+    /// All foreign key constraints, indexed by constraint name
+    pub foreign_keys: BTreeMap<String, ForeignKeyInfo>,
 }
 
 #[cfg(test)]
