@@ -453,37 +453,37 @@ impl Database for RusqliteDatabase {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
-        unimplemented!("table_exists not yet implemented for RusqliteDatabase")
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let connection = self.get_connection();
+        rusqlite_table_exists(&*connection.lock().await, table_name)
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
-        unimplemented!("get_table_info not yet implemented for RusqliteDatabase")
+        let connection = self.get_connection();
+        rusqlite_get_table_info(&*connection.lock().await, table_name)
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
-        unimplemented!("get_table_columns not yet implemented for RusqliteDatabase")
+        let connection = self.get_connection();
+        rusqlite_get_table_columns(&*connection.lock().await, table_name)
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
-        unimplemented!("column_exists not yet implemented for RusqliteDatabase")
+        let connection = self.get_connection();
+        rusqlite_column_exists(&*connection.lock().await, table_name, column_name)
     }
 
     async fn begin_transaction(
@@ -695,37 +695,33 @@ impl Database for RusqliteTransaction {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
-        unimplemented!("table_exists not yet implemented for RusqliteTransaction")
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        rusqlite_table_exists(&*self.connection.lock().await, table_name)
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
-        unimplemented!("get_table_info not yet implemented for RusqliteTransaction")
+        rusqlite_get_table_info(&*self.connection.lock().await, table_name)
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
-        unimplemented!("get_table_columns not yet implemented for RusqliteTransaction")
+        rusqlite_get_table_columns(&*self.connection.lock().await, table_name)
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
-        unimplemented!("column_exists not yet implemented for RusqliteTransaction")
+        rusqlite_column_exists(&*self.connection.lock().await, table_name, column_name)
     }
 
     async fn begin_transaction(
@@ -2585,6 +2581,235 @@ impl Expression for RusqliteDatabaseValue {
     }
 }
 
+#[cfg(feature = "schema")]
+fn rusqlite_table_exists(connection: &Connection, table_name: &str) -> Result<bool, DatabaseError> {
+    let query = "SELECT name FROM sqlite_master WHERE type='table' AND name=?";
+    let mut stmt = connection
+        .prepare_cached(query)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let exists = stmt
+        .exists([table_name])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    Ok(exists)
+}
+
+#[cfg(feature = "schema")]
+fn sqlite_type_to_data_type(sqlite_type: &str) -> Result<crate::schema::DataType, DatabaseError> {
+    let normalized_type = sqlite_type.to_uppercase();
+
+    match normalized_type.as_str() {
+        "INTEGER" => Ok(crate::schema::DataType::BigInt),
+        "TEXT" => Ok(crate::schema::DataType::Text),
+        "REAL" => Ok(crate::schema::DataType::Double),
+        "BOOLEAN" => Ok(crate::schema::DataType::Bool),
+        _ => Err(DatabaseError::UnsupportedDataType(sqlite_type.to_string())),
+    }
+}
+
+#[cfg(feature = "schema")]
+fn parse_default_value(default_str: Option<String>) -> Option<crate::DatabaseValue> {
+    default_str.and_then(|s| {
+        if s == "NULL" {
+            Some(crate::DatabaseValue::Null)
+        } else if s.starts_with('\'') && s.ends_with('\'') {
+            // String literal
+            let content = &s[1..s.len() - 1];
+            Some(crate::DatabaseValue::String(content.to_string()))
+        } else if let Ok(num) = s.parse::<i64>() {
+            Some(crate::DatabaseValue::Number(num))
+        } else if let Ok(real) = s.parse::<f64>() {
+            Some(crate::DatabaseValue::Real(real))
+        } else if s == "0" || s.to_uppercase() == "FALSE" {
+            Some(crate::DatabaseValue::Bool(false))
+        } else if s == "1" || s.to_uppercase() == "TRUE" {
+            Some(crate::DatabaseValue::Bool(true))
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_get_table_columns(
+    connection: &Connection,
+    table_name: &str,
+) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+    use crate::schema::ColumnInfo;
+
+    let query = format!("PRAGMA table_info({table_name})");
+    let mut stmt = connection
+        .prepare_cached(&query)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let column_rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, u32>(0)?,            // cid (ordinal position)
+                row.get::<_, String>(1)?,         // name
+                row.get::<_, String>(2)?,         // type
+                row.get::<_, bool>(3)?,           // notnull
+                row.get::<_, Option<String>>(4)?, // dflt_value
+                row.get::<_, bool>(5)?,           // pk (primary key)
+            ))
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let mut columns = Vec::new();
+
+    for column_result in column_rows {
+        let (ordinal, name, type_str, not_null, default_value, is_pk) =
+            column_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let data_type = sqlite_type_to_data_type(&type_str)?;
+        let default_val = parse_default_value(default_value);
+
+        columns.push(ColumnInfo {
+            name,
+            data_type,
+            nullable: !not_null,
+            is_primary_key: is_pk,
+            auto_increment: false, // SQLite auto-increment detection requires additional logic
+            default_value: default_val,
+            ordinal_position: ordinal + 1, // Convert 0-based to 1-based
+        });
+    }
+
+    Ok(columns)
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_column_exists(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<bool, DatabaseError> {
+    let columns = rusqlite_get_table_columns(connection, table_name)?;
+    Ok(columns.iter().any(|col| col.name == column_name))
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_get_table_info(
+    connection: &Connection,
+    table_name: &str,
+) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+    use crate::schema::{ForeignKeyInfo, IndexInfo, TableInfo};
+    use std::collections::BTreeMap;
+
+    // First check if table exists
+    if !rusqlite_table_exists(connection, table_name)? {
+        return Ok(None);
+    }
+
+    // Get columns
+    let columns_list = rusqlite_get_table_columns(connection, table_name)?;
+    let mut columns = BTreeMap::new();
+    for col in columns_list {
+        columns.insert(col.name.clone(), col);
+    }
+
+    // Get indexes
+    let index_query = format!("PRAGMA index_list({table_name})");
+    let mut index_stmt = connection
+        .prepare_cached(&index_query)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let index_rows = index_stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(1)?, // name
+                row.get::<_, bool>(2)?,   // unique
+                row.get::<_, String>(3)?, // origin ('c' for CREATE INDEX, 'u' for UNIQUE, 'pk' for PRIMARY KEY)
+            ))
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let mut indexes = BTreeMap::new();
+    for index_result in index_rows {
+        let (index_name, is_unique, origin) =
+            index_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Get index columns
+        let index_info_query = format!("PRAGMA index_info({index_name})");
+        let mut index_info_stmt = connection
+            .prepare_cached(&index_info_query)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let index_column_rows = index_info_stmt
+            .query_map([], |row| row.get::<_, String>(2)) // column name
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let mut index_columns = Vec::new();
+        for col_result in index_column_rows {
+            index_columns.push(col_result.map_err(RusqliteDatabaseError::Rusqlite)?);
+        }
+
+        indexes.insert(
+            index_name.clone(),
+            IndexInfo {
+                name: index_name,
+                unique: is_unique,
+                columns: index_columns,
+                is_primary: origin == "pk",
+            },
+        );
+    }
+
+    // Get foreign keys
+    let fk_query = format!("PRAGMA foreign_key_list({table_name})");
+    let mut fk_stmt = connection
+        .prepare_cached(&fk_query)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let fk_rows = fk_stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(2)?, // table (referenced table)
+                row.get::<_, String>(3)?, // from (column in current table)
+                row.get::<_, String>(4)?, // to (column in referenced table)
+                row.get::<_, String>(5)?, // on_update
+                row.get::<_, String>(6)?, // on_delete
+            ))
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let mut foreign_keys = BTreeMap::new();
+    for fk_result in fk_rows {
+        let (referenced_table, column, referenced_column, on_update, on_delete) =
+            fk_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let fk_name = format!("{table_name}_{column}_{referenced_table}_{referenced_column}");
+
+        foreign_keys.insert(
+            fk_name.clone(),
+            ForeignKeyInfo {
+                name: fk_name,
+                column,
+                referenced_table,
+                referenced_column,
+                on_update: if on_update == "NO ACTION" {
+                    None
+                } else {
+                    Some(on_update)
+                },
+                on_delete: if on_delete == "NO ACTION" {
+                    None
+                } else {
+                    Some(on_delete)
+                },
+            },
+        );
+    }
+
+    Ok(Some(TableInfo {
+        name: table_name.to_string(),
+        columns,
+        indexes,
+        foreign_keys,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2855,5 +3080,335 @@ mod tests {
         assert!(matches!(result, Err(DatabaseError::AlreadyInTransaction)));
 
         tx.rollback().await.expect("Failed to rollback");
+    }
+
+    #[cfg(feature = "schema")]
+    fn create_introspection_test_db() -> RusqliteDatabase {
+        use rusqlite::Connection;
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let test_id = std::thread::current().id();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let db_url = format!(
+            "file:introspection_testdb_{test_id:?}_{timestamp}:?mode=memory&cache=shared&uri=true"
+        );
+
+        let mut connections = Vec::new();
+
+        for i in 0..CONNECTION_POOL_SIZE {
+            let conn = Connection::open(&db_url).expect("Failed to create shared memory database");
+
+            if i == 0 {
+                // Create a comprehensive test schema
+                conn.execute(
+                    "CREATE TABLE users (
+                        id INTEGER PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        email TEXT UNIQUE,
+                        age INTEGER,
+                        is_active BOOLEAN DEFAULT 1,
+                        balance REAL DEFAULT 0.0,
+                        created_at TEXT
+                    )",
+                    [],
+                )
+                .expect("Failed to create users table");
+
+                conn.execute(
+                    "CREATE TABLE posts (
+                        id INTEGER PRIMARY KEY,
+                        user_id INTEGER NOT NULL,
+                        title TEXT NOT NULL,
+                        content TEXT,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )",
+                    [],
+                )
+                .expect("Failed to create posts table");
+
+                conn.execute("CREATE INDEX idx_users_email ON users (email)", [])
+                    .expect("Failed to create index");
+
+                conn.execute("CREATE UNIQUE INDEX idx_posts_title ON posts (title)", [])
+                    .expect("Failed to create unique index");
+            }
+
+            connections.push(Arc::new(Mutex::new(conn)));
+        }
+
+        RusqliteDatabase::new(connections)
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_table_exists() {
+        let db = create_introspection_test_db();
+
+        // Test existing table
+        let exists = db
+            .table_exists("users")
+            .await
+            .expect("Failed to check table existence");
+        assert!(exists, "users table should exist");
+
+        // Test non-existing table
+        let exists = db
+            .table_exists("nonexistent")
+            .await
+            .expect("Failed to check table existence");
+        assert!(!exists, "nonexistent table should not exist");
+
+        // Test with transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+        let exists = tx
+            .table_exists("posts")
+            .await
+            .expect("Failed to check table existence in transaction");
+        assert!(exists, "posts table should exist in transaction");
+        tx.rollback().await.expect("Failed to rollback");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_column_exists() {
+        let db = create_introspection_test_db();
+
+        // Test existing column
+        let exists = db
+            .column_exists("users", "name")
+            .await
+            .expect("Failed to check column existence");
+        assert!(exists, "name column should exist");
+
+        // Test non-existing column
+        let exists = db
+            .column_exists("users", "nonexistent")
+            .await
+            .expect("Failed to check column existence");
+        assert!(!exists, "nonexistent column should not exist");
+
+        // Test non-existing table
+        let result = db.column_exists("nonexistent_table", "name").await;
+        // This should succeed but return false since table doesn't exist
+        assert!(
+            !result.unwrap(),
+            "column in nonexistent table should not exist"
+        );
+
+        // Test with transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+        let exists = tx
+            .column_exists("posts", "title")
+            .await
+            .expect("Failed to check column existence in transaction");
+        assert!(exists, "title column should exist in transaction");
+        tx.rollback().await.expect("Failed to rollback");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_get_table_columns() {
+        let db = create_introspection_test_db();
+
+        // Test users table columns
+        let columns = db
+            .get_table_columns("users")
+            .await
+            .expect("Failed to get table columns");
+
+        assert!(!columns.is_empty(), "Should have columns");
+
+        // Find specific columns and verify their properties
+        let id_col = columns
+            .iter()
+            .find(|c| c.name == "id")
+            .expect("id column should exist");
+        assert_eq!(id_col.data_type, crate::schema::DataType::BigInt);
+        // SQLite PRIMARY KEY columns are nullable unless explicitly NOT NULL
+        assert!(
+            id_col.nullable,
+            "id should be nullable (SQLite PRIMARY KEY without NOT NULL)"
+        );
+        assert!(id_col.is_primary_key, "id should be primary key");
+
+        let name_col = columns
+            .iter()
+            .find(|c| c.name == "name")
+            .expect("name column should exist");
+        assert_eq!(name_col.data_type, crate::schema::DataType::Text);
+        assert!(!name_col.nullable, "name should not be nullable");
+        assert!(!name_col.is_primary_key, "name should not be primary key");
+
+        let is_active_col = columns
+            .iter()
+            .find(|c| c.name == "is_active")
+            .expect("is_active column should exist");
+        assert_eq!(is_active_col.data_type, crate::schema::DataType::Bool);
+        assert!(is_active_col.nullable, "is_active should be nullable");
+        assert!(
+            !is_active_col.is_primary_key,
+            "is_active should not be primary key"
+        );
+        // Note: Default value parsing is complex for SQLite, so we won't assert on it
+
+        let balance_col = columns
+            .iter()
+            .find(|c| c.name == "balance")
+            .expect("balance column should exist");
+        assert_eq!(balance_col.data_type, crate::schema::DataType::Double);
+
+        // Test with transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+        let tx_columns = tx
+            .get_table_columns("posts")
+            .await
+            .expect("Failed to get table columns in transaction");
+        assert!(!tx_columns.is_empty(), "Should have columns in transaction");
+        tx.rollback().await.expect("Failed to rollback");
+
+        // Test non-existent table - should succeed but return empty vec
+        let empty_columns = db
+            .get_table_columns("nonexistent")
+            .await
+            .expect("Failed to get columns for nonexistent table");
+        assert!(
+            empty_columns.is_empty(),
+            "Nonexistent table should have no columns"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_get_table_info() {
+        let db = create_introspection_test_db();
+
+        // Test existing table
+        let table_info = db
+            .get_table_info("users")
+            .await
+            .expect("Failed to get table info");
+        assert!(table_info.is_some(), "users table info should exist");
+
+        let info = table_info.unwrap();
+        assert_eq!(info.name, "users");
+
+        // Check columns
+        assert!(!info.columns.is_empty(), "Should have columns");
+        assert!(info.columns.contains_key("id"), "Should have id column");
+        assert!(info.columns.contains_key("name"), "Should have name column");
+        assert!(
+            info.columns.contains_key("email"),
+            "Should have email column"
+        );
+
+        // Check indexes (should include the email index we created)
+        assert!(!info.indexes.is_empty(), "Should have indexes");
+        let email_index = info
+            .indexes
+            .values()
+            .find(|idx| idx.columns.contains(&"email".to_string()));
+        assert!(email_index.is_some(), "Should have email index");
+
+        // Test posts table with foreign key
+        let posts_info = db
+            .get_table_info("posts")
+            .await
+            .expect("Failed to get posts table info");
+        assert!(posts_info.is_some(), "posts table info should exist");
+
+        let posts = posts_info.unwrap();
+        assert_eq!(posts.name, "posts");
+
+        // Check foreign keys
+        assert!(!posts.foreign_keys.is_empty(), "Should have foreign keys");
+        let fk = posts
+            .foreign_keys
+            .values()
+            .next()
+            .expect("Should have at least one foreign key");
+        assert_eq!(fk.referenced_table, "users");
+        assert_eq!(fk.column, "user_id");
+        assert_eq!(fk.referenced_column, "id");
+
+        // Test non-existent table
+        let no_info = db
+            .get_table_info("nonexistent")
+            .await
+            .expect("Failed to get nonexistent table info");
+        assert!(no_info.is_none(), "Nonexistent table should return None");
+
+        // Test with transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+        let tx_info = tx
+            .get_table_info("users")
+            .await
+            .expect("Failed to get table info in transaction");
+        assert!(tx_info.is_some(), "Should get table info in transaction");
+        tx.rollback().await.expect("Failed to rollback");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_unsupported_data_types() {
+        use rusqlite::Connection;
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
+
+        let test_id = std::thread::current().id();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let db_url = format!(
+            "file:unsupported_testdb_{test_id:?}_{timestamp}:?mode=memory&cache=shared&uri=true"
+        );
+
+        let mut connections = Vec::new();
+        for i in 0..CONNECTION_POOL_SIZE {
+            let conn = Connection::open(&db_url).expect("Failed to create shared memory database");
+
+            if i == 0 {
+                // Create table with unsupported type
+                conn.execute(
+                    "CREATE TABLE test_unsupported (
+                        id INTEGER PRIMARY KEY,
+                        data BLOB
+                    )",
+                    [],
+                )
+                .expect("Failed to create test table");
+            }
+
+            connections.push(Arc::new(Mutex::new(conn)));
+        }
+
+        let db = RusqliteDatabase::new(connections);
+
+        // This should return an UnsupportedDataType error
+        let result = db.get_table_columns("test_unsupported").await;
+        assert!(result.is_err(), "Should fail with unsupported data type");
+
+        match result.unwrap_err() {
+            DatabaseError::UnsupportedDataType(type_name) => {
+                assert_eq!(type_name, "BLOB", "Should report BLOB as unsupported");
+            }
+            other => panic!("Expected UnsupportedDataType error, got: {other:?}"),
+        }
     }
 }

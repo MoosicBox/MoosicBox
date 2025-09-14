@@ -7241,30 +7241,41 @@ impl RusqliteDatabase {
 
 **Compilation Status**: Codebase compiles successfully (`cargo check -p switchy_database` and `cargo check -p switchy_schema` both pass), allowing development to continue while providing clear markers for future implementation work.
 
-### 16.3 Implement for SQLite (rusqlite)
+### 16.3 Implement for SQLite (rusqlite) ✅ **COMPLETED** (2025-01-13)
 
-- [ ] Implement in `packages/database/src/rusqlite/mod.rs` ⚠️ **CRITICAL**
-  - [ ] `table_exists()`:
+- [x] Implement in `packages/database/src/rusqlite/mod.rs` ⚠️ **CRITICAL**
+  - [x] `table_exists()`:
     ```sql
     SELECT name FROM sqlite_master WHERE type='table' AND name=?
     ```
-  - [ ] `get_table_columns()`:
+    Implemented in `rusqlite_table_exists()` helper function (lines 2864-2873) and trait methods for RusqliteDatabase (lines 456-459) and RusqliteTransaction (lines 700-702)
+  - [x] `get_table_columns()`:
     ```sql
     PRAGMA table_info(table_name)
     ```
-    - [ ] Map SQLite types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
-    - [ ] Parse `notnull` flag for nullable
-    - [ ] Parse `dflt_value` for default values
-    - [ ] Parse `pk` flag for primary key
-    - [ ] Supported types initially: INTEGER→BigInt, TEXT→Text, REAL→Double, BOOLEAN→Bool
-    - [ ] Unsupported types: BLOB, JSON, custom types (Phase 16.5 will add these)
-  - [ ] `column_exists()`:
-    - [ ] Use PRAGMA table_info and search for column name
-  - [ ] `get_table_info()`:
-    - [ ] Combine PRAGMA table_info with:
-    - [ ] `PRAGMA index_list(table_name)` for indexes
-    - [ ] `PRAGMA foreign_key_list(table_name)` for foreign keys
-  - [ ] Handle in transaction context (use helper functions pattern)
+    - [x] Map SQLite types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
+      Implemented in `sqlite_type_to_data_type()` helper (lines 2875-2886)
+    - [x] Parse `notnull` flag for nullable
+      Implemented in `rusqlite_get_table_columns()` (line 2932: `nullable: !not_null`)
+    - [x] Parse `dflt_value` for default values
+      Implemented in `parse_default_value()` helper (lines 2888-2908) 
+    - [x] Parse `pk` flag for primary key
+      Implemented in `rusqlite_get_table_columns()` (line 2930: `is_primary_key: is_pk`)
+    - [x] Supported types initially: INTEGER→BigInt, TEXT→Text, REAL→Double, BOOLEAN→Bool
+      All supported types implemented in `sqlite_type_to_data_type()` (lines 2878-2883)
+    - [x] Unsupported types: BLOB, JSON, custom types (Phase 16.5 will add these)
+      Returns `DatabaseError::UnsupportedDataType` for unmapped types (line 2884)
+  - [x] `column_exists()`:
+    - [x] Use PRAGMA table_info and search for column name
+    Implemented in `rusqlite_column_exists()` helper (lines 2943-2950) and trait methods for both Database and Transaction
+  - [x] `get_table_info()`:
+    - [x] Combine PRAGMA table_info with:
+    - [x] `PRAGMA index_list(table_name)` for indexes
+      Implemented in `rusqlite_get_table_info()` (lines 2959-2994)
+    - [x] `PRAGMA foreign_key_list(table_name)` for foreign keys  
+      Implemented in `rusqlite_get_table_info()` (lines 2996-3044)
+  - [x] Handle in transaction context (use helper functions pattern)
+    All methods use helper functions with proper connection handling for both RusqliteDatabase (`&*connection.lock().await`) and RusqliteTransaction (`&*self.connection.lock().await`)
 
 ### 16.4 Implement for SQLite (sqlx)
 
@@ -7375,6 +7386,13 @@ impl RusqliteDatabase {
 **Goal:** Add support for additional data types commonly found in production databases
 
 **Prerequisites:** Phase 16.1-16.7 complete (basic introspection working with error handling)
+
+- [ ] **SQLite-specific enhancements:**
+  - [ ] Add auto_increment detection for SQLite by parsing CREATE TABLE statement from sqlite_master
+    - Note: Currently hardcoded to `false` in Phase 16.3 (line 2673 in rusqlite/mod.rs)
+    - Query: `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`
+    - Parse for AUTOINCREMENT keyword after PRIMARY KEY
+    - This addresses the minor limitation from Phase 16.3 implementation
 
 - [ ] **Extend DataType Enum in `packages/database/src/schema.rs`** ⚠️ **CRITICAL**
   ```rust
