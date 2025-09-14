@@ -7258,7 +7258,7 @@ impl RusqliteDatabase {
     - [x] Parse `notnull` flag for nullable
       Implemented in `rusqlite_get_table_columns()` (line 2932: `nullable: !not_null`)
     - [x] Parse `dflt_value` for default values
-      Implemented in `parse_default_value()` helper (lines 2888-2908) 
+      Implemented in `parse_default_value()` helper (lines 2888-2908)
     - [x] Parse `pk` flag for primary key
       Implemented in `rusqlite_get_table_columns()` (line 2930: `is_primary_key: is_pk`)
     - [x] Supported types initially: INTEGER→BigInt, TEXT→Text, REAL→Double, BOOLEAN→Bool
@@ -7272,21 +7272,72 @@ impl RusqliteDatabase {
     - [x] Combine PRAGMA table_info with:
     - [x] `PRAGMA index_list(table_name)` for indexes
       Implemented in `rusqlite_get_table_info()` (lines 2959-2994)
-    - [x] `PRAGMA foreign_key_list(table_name)` for foreign keys  
+    - [x] `PRAGMA foreign_key_list(table_name)` for foreign keys
       Implemented in `rusqlite_get_table_info()` (lines 2996-3044)
   - [x] Handle in transaction context (use helper functions pattern)
     All methods use helper functions with proper connection handling for both RusqliteDatabase (`&*connection.lock().await`) and RusqliteTransaction (`&*self.connection.lock().await`)
 
-### 16.4 Implement for SQLite (sqlx)
+- [x] **Comprehensive Tests Implemented:**
+  - [x] `test_table_exists` - ✅ PASS - Verifies existing/non-existing tables and transaction support
+  - [x] `test_column_exists` - ✅ PASS - Verifies existing/non-existing columns and transaction support
+  - [x] `test_get_table_columns` - ✅ PASS - Verifies complete column metadata (types, nullable, PK, ordinal)
+  - [x] `test_get_table_info` - ✅ PASS - Verifies comprehensive table metadata (columns, indexes, foreign keys)
+  - [x] `test_unsupported_data_types` - ✅ PASS - Verifies proper error handling for BLOB with UnsupportedDataType
 
-- [ ] Implement in `packages/database/src/sqlx/sqlite.rs` 🟡 **IMPORTANT**
-  - [ ] Follow same pattern as rusqlite but using sqlx queries
-  - [ ] Use `sqlx::query()` with PRAGMA commands
-  - [ ] Ensure transaction support using connection references
+- [x] **Verification Criteria Met:**
+  - [x] `cargo check -p switchy_database --features sqlite-rusqlite,schema` - ✅ PASS
+  - [x] `cargo test -p switchy_database --features sqlite-rusqlite,schema introspection` - ✅ ALL 5 TESTS PASS
+  - [x] `cargo clippy -p switchy_database --features sqlite-rusqlite,schema` - ✅ ZERO WARNINGS
+  - [x] Full transaction context support verified
 
-### 16.5 Implement for PostgreSQL (postgres and sqlx)
+### 16.4 Implement for SQLite (sqlx) 🟡 **IMPORTANT**
 
-- [ ] Implement in `packages/database/src/postgres/postgres.rs` 🟡 **IMPORTANT**
+**Prerequisites:** Phase 16.3 complete (rusqlite implementation as reference)
+
+- [ ] Create helper functions in `packages/database/src/sqlx/sqlite.rs`:
+  - [ ] `sqlx_sqlite_table_exists(executor: &mut SqliteConnection, table_name: &str) -> Result<bool, DatabaseError>`
+  - [ ] `sqlx_sqlite_get_table_columns(executor: &mut SqliteConnection, table_name: &str) -> Result<Vec<ColumnInfo>, DatabaseError>`
+  - [ ] `sqlx_sqlite_column_exists(executor: &mut SqliteConnection, table_name: &str, column_name: &str) -> Result<bool, DatabaseError>`
+  - [ ] `sqlx_sqlite_get_table_info(executor: &mut SqliteConnection, table_name: &str) -> Result<Option<TableInfo>, DatabaseError>`
+
+- [ ] **Specific Implementation Details:**
+  - [ ] **table_exists**: Use `sqlx::query_scalar!()` with `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`
+  - [ ] **get_table_columns**: Use `sqlx::query!()` with PRAGMA table_info, map Row to ColumnInfo
+  - [ ] **Type mapping**: Reuse `sqlite_type_to_data_type()` from rusqlite or create equivalent
+  - [ ] **Transaction support**: Both SqliteSqlxDatabase and SqliteSqlxTransaction must use helper pattern
+  - [ ] **Error handling**: Convert sqlx::Error to DatabaseError properly
+
+- [ ] **Required Tests** (add to existing test module):
+  - [ ] `test_sqlx_sqlite_table_exists` - Same scenarios as rusqlite
+  - [ ] `test_sqlx_sqlite_column_exists` - Test with/without table, with/without column
+  - [ ] `test_sqlx_sqlite_get_table_columns` - Verify all column properties
+  - [ ] `test_sqlx_sqlite_get_table_info` - Complete metadata including indexes and FKs
+  - [ ] `test_sqlx_sqlite_unsupported_types` - BLOB should return UnsupportedDataType
+  - [ ] `test_sqlx_sqlite_transaction_context` - All methods work in transaction
+
+- [ ] **Verification Criteria:**
+  - [ ] `cargo check -p switchy_database --features sqlx-sqlite,schema` passes
+  - [ ] `cargo test -p switchy_database --features sqlx-sqlite,schema introspection` passes
+  - [ ] `cargo clippy -p switchy_database --features sqlx-sqlite,schema` clean
+
+### 16.5 Implement for PostgreSQL (postgres and sqlx) 🟡 **IMPORTANT**
+
+**Prerequisites:** Phase 16.3-16.4 complete (SQLite implementations as reference)
+
+- [ ] **Create shared helpers** in new file `packages/database/src/postgres/introspection.rs`:
+  ```rust
+  pub(crate) async fn postgres_table_exists(
+      client: &impl GenericClient,
+      table_name: &str
+  ) -> Result<bool, DatabaseError>
+
+  pub(crate) async fn postgres_get_table_columns(
+      client: &impl GenericClient,
+      table_name: &str
+  ) -> Result<Vec<ColumnInfo>, DatabaseError>
+  ```
+
+- [ ] **Core SQL Queries:**
   - [ ] `table_exists()`:
     ```sql
     SELECT EXISTS (
@@ -7301,22 +7352,73 @@ impl RusqliteDatabase {
         data_type,
         is_nullable,
         column_default,
-        is_identity
+        ordinal_position
     FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = $1
     ORDER BY ordinal_position
     ```
-  - [ ] Map PostgreSQL types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
-  - [ ] Parse is_nullable for nullable flag
-  - [ ] Parse column_default for default values
-  - [ ] Query constraints for primary key information
-  - [ ] Supported types initially: integer→Int, text→Text, boolean→Bool, real→Real, etc.
-  - [ ] Unsupported types: JSON, JSONB, UUID, arrays, custom types (Phase 16.8 will add these)
-- [ ] Implement in `packages/database/src/sqlx/postgres.rs` using same queries
+  - [ ] **Primary Key Detection:**
+    ```sql
+    SELECT kcu.column_name
+    FROM information_schema.table_constraints tc
+    JOIN information_schema.key_column_usage kcu
+      ON tc.constraint_name = kcu.constraint_name
+    WHERE tc.table_schema = 'public'
+      AND tc.table_name = $1
+      AND tc.constraint_type = 'PRIMARY KEY'
+    ```
 
-### 16.6 Implement for MySQL (sqlx)
+- [ ] **Type Mapping Function:**
+  ```rust
+  fn postgres_type_to_data_type(pg_type: &str) -> Result<DataType, DatabaseError> {
+      match pg_type.to_uppercase().as_str() {
+          "SMALLINT" | "INT2" => Ok(DataType::SmallInt),
+          "INTEGER" | "INT" | "INT4" => Ok(DataType::Int),
+          "BIGINT" | "INT8" => Ok(DataType::BigInt),
+          "REAL" | "FLOAT4" => Ok(DataType::Real),
+          "DOUBLE PRECISION" | "FLOAT8" => Ok(DataType::Double),
+          "NUMERIC" | "DECIMAL" => Ok(DataType::Decimal(38, 10)), // Default precision
+          "TEXT" | "CHARACTER VARYING" | "VARCHAR" => Ok(DataType::Text),
+          "BOOLEAN" | "BOOL" => Ok(DataType::Bool),
+          "TIMESTAMP" | "TIMESTAMP WITHOUT TIME ZONE" => Ok(DataType::DateTime),
+          _ => Err(DatabaseError::UnsupportedDataType(pg_type.to_string()))
+      }
+  }
+  ```
 
-- [ ] Implement in `packages/database/src/sqlx/mysql.rs` 🟡 **IMPORTANT**
+- [ ] **Default Value Parsing:**
+  - [ ] Handle PostgreSQL default formats: `'value'::type`, `nextval('sequence')`, functions
+  - [ ] Parse to DatabaseValue or return None for complex expressions
+
+- [ ] **Implement in both backends:**
+  - [ ] `packages/database/src/postgres/postgres.rs` using tokio-postgres
+  - [ ] `packages/database/src/sqlx/postgres.rs` using sqlx queries
+
+- [ ] **Required Tests:**
+  - [ ] `test_postgres_table_exists` - Test with schemas, case sensitivity
+  - [ ] `test_postgres_column_metadata` - Verify serial/identity columns
+  - [ ] `test_postgres_constraints` - Primary keys, foreign keys, unique
+  - [ ] `test_postgres_type_mapping` - All supported PostgreSQL types
+  - [ ] `test_postgres_default_values` - Literals, sequences, functions
+  - [ ] `test_postgres_transaction_isolation` - Proper transaction handling
+
+- [ ] **Verification Criteria:**
+  - [ ] `cargo check -p switchy_database --features postgres,schema` passes
+  - [ ] `cargo check -p switchy_database --features sqlx-postgres,schema` passes
+  - [ ] All introspection tests pass for both backends
+  - [ ] Zero clippy warnings
+
+### 16.6 Implement for MySQL (sqlx) 🟡 **IMPORTANT**
+
+**Prerequisites:** Phase 16.3-16.5 complete (SQLite and PostgreSQL implementations as reference)
+
+- [ ] **MySQL-Specific Considerations:**
+  - [ ] **Character encoding**: Handle utf8mb4 vs utf8 in column definitions
+  - [ ] **Storage engines**: InnoDB vs MyISAM affect foreign key support
+  - [ ] **Version compatibility**: Different information_schema columns in MySQL 5.7 vs 8.0
+  - [ ] **Case sensitivity**: Depends on filesystem (Linux vs Windows)
+
+- [ ] **Core SQL Queries:**
   - [ ] `table_exists()`:
     ```sql
     SELECT EXISTS (
@@ -7329,27 +7431,118 @@ impl RusqliteDatabase {
     SELECT
         COLUMN_NAME,
         DATA_TYPE,
+        CHARACTER_MAXIMUM_LENGTH,
         IS_NULLABLE,
         COLUMN_DEFAULT,
         COLUMN_KEY,
-        EXTRA
+        EXTRA,
+        ORDINAL_POSITION
     FROM information_schema.columns
     WHERE table_schema = DATABASE() AND table_name = ?
     ORDER BY ORDINAL_POSITION
     ```
-  - [ ] Map MySQL types to DataType enum - return `DatabaseError::UnsupportedDataType` for unmapped types
+  - [ ] **Get Indexes:**
+    ```sql
+    SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME
+    FROM information_schema.STATISTICS
+    WHERE table_schema = DATABASE() AND table_name = ?
+    ORDER BY INDEX_NAME, SEQ_IN_INDEX
+    ```
+  - [ ] **Get Foreign Keys:**
+    ```sql
+    SELECT
+        CONSTRAINT_NAME,
+        COLUMN_NAME,
+        REFERENCED_TABLE_NAME,
+        REFERENCED_COLUMN_NAME
+    FROM information_schema.KEY_COLUMN_USAGE
+    WHERE table_schema = DATABASE()
+      AND table_name = ?
+      AND REFERENCED_TABLE_NAME IS NOT NULL
+    ```
+
+- [ ] **Type Mapping Function:**
+  ```rust
+  fn mysql_type_to_data_type(mysql_type: &str, char_max_length: Option<i32>) -> Result<DataType, DatabaseError> {
+      match mysql_type.to_uppercase().as_str() {
+          "TINYINT" => Ok(DataType::SmallInt),
+          "SMALLINT" => Ok(DataType::SmallInt),
+          "MEDIUMINT" | "INT" | "INTEGER" => Ok(DataType::Int),
+          "BIGINT" => Ok(DataType::BigInt),
+          "FLOAT" => Ok(DataType::Real),
+          "DOUBLE" | "DOUBLE PRECISION" => Ok(DataType::Double),
+          "DECIMAL" | "NUMERIC" => Ok(DataType::Decimal(65, 30)),
+          "VARCHAR" => Ok(DataType::VarChar(char_max_length.unwrap_or(255) as u16)),
+          "TEXT" | "MEDIUMTEXT" | "LONGTEXT" => Ok(DataType::Text),
+          "TINYINT(1)" | "BOOLEAN" | "BOOL" => Ok(DataType::Bool),
+          "DATETIME" | "TIMESTAMP" => Ok(DataType::DateTime),
+          _ => Err(DatabaseError::UnsupportedDataType(mysql_type.to_string()))
+      }
+  }
+  ```
+
+- [ ] **Implementation Details:**
   - [ ] Parse IS_NULLABLE for nullable flag
   - [ ] Parse COLUMN_DEFAULT for default values
-  - [ ] Parse COLUMN_KEY for primary key detection
-  - [ ] Parse EXTRA for auto_increment detection
-  - [ ] Supported types initially: INT→Int, VARCHAR→VarChar, TEXT→Text, DECIMAL→Decimal, etc.
-  - [ ] Unsupported types: JSON, BLOB, binary types, custom types (Phase 16.8 will add these)
+  - [ ] Parse COLUMN_KEY for primary key detection (PRI = primary key)
+  - [ ] Parse EXTRA for auto_increment detection ("auto_increment" substring)
+  - [ ] Handle CHARACTER_MAXIMUM_LENGTH for VARCHAR sizing
 
-### 16.7 Implement for Database Simulator
+- [ ] **Required Tests:**
+  - [ ] `test_mysql_table_exists` - Case sensitivity based on OS
+  - [ ] `test_mysql_auto_increment` - Verify EXTRA field parsing
+  - [ ] `test_mysql_charset_collation` - UTF8MB4 handling
+  - [ ] `test_mysql_type_mapping` - Include ENUM, SET types as unsupported
+  - [ ] `test_mysql_storage_engine_differences` - InnoDB vs MyISAM
+  - [ ] `test_mysql_varchar_lengths` - CHARACTER_MAXIMUM_LENGTH handling
+  - [ ] `test_mysql_transaction_context` - All methods work in transaction
 
-- [ ] Implement in `packages/database/src/simulator/mod.rs` 🟢 **MINOR**
-  - [ ] Delegate all methods to inner database (rusqlite)
-  - [ ] No custom logic needed
+- [ ] **Verification Criteria:**
+  - [ ] `cargo check -p switchy_database --features sqlx-mysql,schema` passes
+  - [ ] `cargo test -p switchy_database --features sqlx-mysql,schema introspection` passes
+  - [ ] Works with both MySQL 5.7 and 8.0 (test matrix)
+  - [ ] Zero clippy warnings
+
+### 16.7 Implement for Database Simulator 🟢 **MINOR**
+
+**Prerequisites:** Phase 16.3 complete (rusqlite implementation)
+
+- [ ] **Implementation in `packages/database/src/simulator/mod.rs`:**
+  ```rust
+  // Add to SimulatorDatabase impl Database
+  #[cfg(feature = "schema")]
+  async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+      self.inner.table_exists(table_name).await
+  }
+
+  #[cfg(feature = "schema")]
+  async fn get_table_info(&self, table_name: &str) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+      self.inner.get_table_info(table_name).await
+  }
+
+  #[cfg(feature = "schema")]
+  async fn get_table_columns(&self, table_name: &str) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+      self.inner.get_table_columns(table_name).await
+  }
+
+  #[cfg(feature = "schema")]
+  async fn column_exists(&self, table_name: &str, column_name: &str) -> Result<bool, DatabaseError> {
+      self.inner.column_exists(table_name, column_name).await
+  }
+  ```
+
+- [ ] **Add to SimulatorTransaction impl Database** (same pattern as above)
+- [ ] **No custom logic needed** - pure delegation to inner rusqlite database
+
+- [ ] **Required Tests:**
+  - [ ] `test_simulator_introspection_delegation` - Verify all methods delegate correctly
+  - [ ] `test_simulator_transaction_introspection` - Works in transaction context
+  - [ ] `test_simulator_path_isolation` - Different paths have separate schemas
+
+- [ ] **Verification Criteria:**
+  - [ ] `cargo check -p switchy_database --features simulator,schema` passes
+  - [ ] `cargo test -p switchy_database --features simulator,schema introspection` passes
+  - [ ] Zero clippy warnings
 
 ### 16.9 Add Helper Function for Type Mapping
 
@@ -7360,26 +7553,204 @@ impl RusqliteDatabase {
   - [ ] Document type mapping for each backend
   - [ ] Document that Phase 16.8 will expand supported types
 
-### 16.10 Add Comprehensive Tests
+### 16.10 Add Comprehensive Tests 🟡 **IMPORTANT**
 
-- [ ] Create tests in `packages/database/tests/schema_introspection.rs` 🟡 **IMPORTANT**
-  - [ ] Test table existence checking
-  - [ ] Test column information retrieval
-  - [ ] Test with various data types
-  - [ ] Test with nullable/non-nullable columns
-  - [ ] Test with default values
-  - [ ] Test with primary keys
-  - [ ] Test with auto-increment columns
-  - [ ] Test non-existent table returns None/empty
-  - [ ] Test within transaction context
+**Prerequisites:** Phase 16.3-16.7 complete (all backend implementations)
 
-### 16.11 Update Documentation
+- [ ] **Create Shared Test Framework** in `packages/database/tests/common/introspection_tests.rs`:
+  ```rust
+  pub trait IntrospectionTestSuite {
+      async fn create_test_schema(&self);
+      async fn test_table_exists(&self);
+      async fn test_column_exists(&self);
+      async fn test_get_table_columns(&self);
+      async fn test_get_table_info(&self);
+      async fn test_unsupported_types(&self);
+      async fn test_transaction_context(&self);
+      async fn test_edge_cases(&self);
+  }
 
-- [ ] Document in `packages/database/src/lib.rs` 🟢 **MINOR**
+  // Standard test schema for all backends
+  pub struct StandardTestSchema {
+      pub users_table: &'static str,
+      pub posts_table: &'static str,
+      pub unsupported_table: &'static str,
+  }
+  ```
+
+- [ ] **Implement for Each Backend:**
+  ```rust
+  impl IntrospectionTestSuite for RusqliteTestContext { ... }
+  impl IntrospectionTestSuite for SqlxSqliteTestContext { ... }
+  impl IntrospectionTestSuite for PostgresTestContext { ... }
+  impl IntrospectionTestSuite for SqlxPostgresTestContext { ... }
+  impl IntrospectionTestSuite for MySqlTestContext { ... }
+  impl IntrospectionTestSuite for SimulatorTestContext { ... }
+  ```
+
+- [ ] **Comprehensive Test Coverage:**
+  - [ ] **Table Existence:**
+    - [ ] Existing table returns true
+    - [ ] Non-existent table returns false
+    - [ ] Case sensitivity handling per backend
+    - [ ] Schema/database context awareness
+
+  - [ ] **Column Information:**
+    - [ ] All column properties (name, type, nullable, primary key, ordinal)
+    - [ ] Various data types (supported and unsupported)
+    - [ ] Default values (literals, functions, NULL)
+    - [ ] Auto-increment/serial columns
+    - [ ] Complex constraints (foreign keys, unique, check)
+
+  - [ ] **Edge Cases:**
+    - [ ] Empty database
+    - [ ] Tables with no columns (should not exist)
+    - [ ] Very long table/column names
+    - [ ] Special characters in names
+    - [ ] Reserved keywords as names
+    - [ ] Unicode/international characters
+
+  - [ ] **Transaction Context:**
+    - [ ] All methods work within transactions
+    - [ ] Transaction isolation (can't see uncommitted schema changes)
+    - [ ] Rollback doesn't affect introspection
+
+  - [ ] **Error Handling:**
+    - [ ] Unsupported data types return proper error
+    - [ ] Database connection failures
+    - [ ] Invalid SQL queries
+    - [ ] Permission denied scenarios
+
+- [ ] **Backend-Specific Test Suites:**
+  - [ ] **SQLite-specific:**
+    - [ ] PRAGMA commands work correctly
+    - [ ] sqlite_master queries
+    - [ ] AUTOINCREMENT vs PRIMARY KEY behavior
+    - [ ] Attached databases (if supported)
+
+  - [ ] **PostgreSQL-specific:**
+    - [ ] Schema awareness (public vs other schemas)
+    - [ ] Serial vs identity columns
+    - [ ] Array types (unsupported)
+    - [ ] Custom types (unsupported)
+    - [ ] Case sensitivity
+
+  - [ ] **MySQL-specific:**
+    - [ ] Storage engine differences (InnoDB vs MyISAM)
+    - [ ] Character sets and collations
+    - [ ] Version differences (5.7 vs 8.0)
+    - [ ] ENUM/SET types (unsupported)
+    - [ ] Auto-increment handling
+
+- [ ] **Integration Tests** in `packages/database/tests/schema_introspection_integration.rs`:
+  - [ ] Cross-backend consistency
+  - [ ] Migration + introspection workflows
+  - [ ] Performance benchmarks
+  - [ ] Memory usage patterns
+
+- [ ] **Test Data Management:**
+  - [ ] Isolated test databases per backend
+  - [ ] Cleanup after tests
+  - [ ] Parallel test execution safety
+  - [ ] CI/CD integration requirements
+
+### 16.11 Update Documentation 🟢 **MINOR**
+
+- [ ] **Core Documentation** in `packages/database/src/lib.rs`:
   - [ ] Add module-level documentation for schema introspection
   - [ ] Document backend-specific type mappings
   - [ ] Document limitations (e.g., computed columns, complex defaults)
-  - [ ] Add usage examples
+  - [ ] Add comprehensive usage examples
+
+- [ ] **Backend-Specific Documentation:**
+  - [ ] Document SQLite PRAGMA usage and limitations
+  - [ ] Document PostgreSQL schema awareness
+  - [ ] Document MySQL version compatibility
+  - [ ] Document simulator delegation behavior
+
+- [ ] **Common Pitfalls Documentation** in `packages/database/src/schema/introspection_guide.md`:
+  ```markdown
+  # Database Introspection: Common Pitfalls and Solutions
+
+  ## SQLite-Specific:
+  - PRIMARY KEY doesn't imply NOT NULL (unlike other databases)
+  - AUTOINCREMENT requires parsing CREATE TABLE SQL
+  - PRAGMA commands are case-sensitive
+  - Attached databases have separate schemas
+
+  ## PostgreSQL-Specific:
+  - Schema awareness crucial (public vs other schemas)
+  - Serial columns are actually integer + sequence
+  - Identity columns (SQL standard) vs Serial (PostgreSQL extension)
+  - Case sensitivity in identifiers
+
+  ## MySQL-Specific:
+  - Table/column name case sensitivity depends on filesystem
+  - Storage engine affects foreign key support
+  - Character set affects column length calculations
+  - TINYINT(1) vs BOOLEAN handling
+
+  ## Cross-Backend:
+  - NULL vs empty string in default values
+  - Auto-increment detection varies significantly
+  - Precision/scale handling in DECIMAL types
+  - Date/time type variations
+  ```
+
+- [ ] **Usage Examples:**
+  ```rust
+  // Example: Check if migration is needed
+  if !db.table_exists("users").await? {
+      // Create table
+  }
+
+  // Example: Add column if missing
+  if !db.column_exists("users", "email").await? {
+      // Add column
+  }
+
+  // Example: Validate schema matches expectations
+  let table_info = db.get_table_info("users").await?;
+  if let Some(info) = table_info {
+      assert!(info.columns.contains_key("id"));
+      assert!(info.columns["id"].is_primary_key);
+  }
+  ```
+
+### 16.12 Phase Completion Verification Criteria ⚠️ **CRITICAL**
+
+**Apply to ALL Phases 16.3-16.11**
+
+Each phase implementation must satisfy these criteria before marking as complete:
+
+#### **Compilation Requirements:**
+- [ ] `cargo check -p switchy_database --features <backend>,schema` passes without errors
+- [ ] `cargo build -p switchy_database --features <backend>,schema` completes successfully
+- [ ] No compilation warnings related to introspection code
+
+#### **Testing Requirements:**
+- [ ] All introspection unit tests pass: `cargo test -p switchy_database --features <backend>,schema introspection`
+- [ ] Transaction context tests pass
+- [ ] Error handling tests pass (unsupported types, invalid queries)
+- [ ] Edge case tests pass (empty database, non-existent tables)
+
+#### **Code Quality Requirements:**
+- [ ] `cargo clippy -p switchy_database --features <backend>,schema` produces zero warnings
+- [ ] `cargo fmt` applied to all modified files
+- [ ] All public methods have comprehensive doc comments with examples
+- [ ] Helper functions have appropriate visibility (pub(crate) or private)
+
+#### **Feature Integration Requirements:**
+- [ ] All methods properly feature-gated with `#[cfg(feature = "schema")]`
+- [ ] Database and DatabaseTransaction trait implementations complete
+- [ ] Helper functions follow established patterns
+- [ ] Error handling consistent with existing codebase
+
+#### **Documentation Requirements:**
+- [ ] Implementation details documented with line number references in plan.md
+- [ ] Backend-specific behavior and limitations documented
+- [ ] Test coverage documented with pass/fail status
+- [ ] Known limitations or compromises clearly stated
 
 ### 16.8 Extended DataType Support ❌ **MEDIUM PRIORITY**
 
