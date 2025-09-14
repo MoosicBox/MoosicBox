@@ -562,8 +562,8 @@ mod tests {
         Database, Row,
         query::*,
         schema::{
-            AlterTableStatement, CreateIndexStatement, CreateTableStatement, DropIndexStatement,
-            DropTableStatement,
+            AlterTableStatement, ColumnInfo, CreateIndexStatement, CreateTableStatement,
+            DropIndexStatement, DropTableStatement, TableInfo,
         },
     };
 
@@ -729,6 +729,32 @@ mod tests {
 
         async fn exec_raw(&self, _statement: &str) -> Result<(), DatabaseError> {
             Ok(())
+        }
+
+        async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
+            Ok(false)
+        }
+
+        async fn get_table_info(
+            &self,
+            _table_name: &str,
+        ) -> Result<Option<TableInfo>, DatabaseError> {
+            Ok(None)
+        }
+
+        async fn get_table_columns(
+            &self,
+            _table_name: &str,
+        ) -> Result<Vec<ColumnInfo>, DatabaseError> {
+            Ok(vec![])
+        }
+
+        async fn column_exists(
+            &self,
+            _table_name: &str,
+            _column_name: &str,
+        ) -> Result<bool, DatabaseError> {
+            Ok(false)
         }
 
         async fn begin_transaction(

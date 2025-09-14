@@ -452,6 +452,40 @@ impl Database for RusqliteDatabase {
         rusqlite_exec_alter_table(&*connection.lock().await, statement)
     }
 
+    #[cfg(feature = "schema")]
+    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
+        unimplemented!("table_exists not yet implemented for RusqliteDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_info(
+        &self,
+        _table_name: &str,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
+        unimplemented!("get_table_info not yet implemented for RusqliteDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_columns(
+        &self,
+        _table_name: &str,
+    ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
+        unimplemented!("get_table_columns not yet implemented for RusqliteDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn column_exists(
+        &self,
+        _table_name: &str,
+        _column_name: &str,
+    ) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
+        unimplemented!("column_exists not yet implemented for RusqliteDatabase")
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -658,6 +692,40 @@ impl Database for RusqliteTransaction {
         statement: &crate::schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
         rusqlite_exec_alter_table(&*self.connection.lock().await, statement)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
+        unimplemented!("table_exists not yet implemented for RusqliteTransaction")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_info(
+        &self,
+        _table_name: &str,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
+        unimplemented!("get_table_info not yet implemented for RusqliteTransaction")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_columns(
+        &self,
+        _table_name: &str,
+    ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
+        unimplemented!("get_table_columns not yet implemented for RusqliteTransaction")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn column_exists(
+        &self,
+        _table_name: &str,
+        _column_name: &str,
+    ) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.3 - SQLite (rusqlite)
+        unimplemented!("column_exists not yet implemented for RusqliteTransaction")
     }
 
     async fn begin_transaction(

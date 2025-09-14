@@ -247,6 +247,36 @@ impl Database for ChecksumDatabase {
         Ok(())
     }
 
+    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
+        // TODO: Implement checksum tracking for table existence checking
+        unimplemented!("table_exists not yet implemented for ChecksumDatabase")
+    }
+
+    async fn get_table_info(
+        &self,
+        _table_name: &str,
+    ) -> Result<Option<switchy_database::schema::TableInfo>, DatabaseError> {
+        // TODO: Implement checksum tracking for table info retrieval
+        unimplemented!("get_table_info not yet implemented for ChecksumDatabase")
+    }
+
+    async fn get_table_columns(
+        &self,
+        _table_name: &str,
+    ) -> Result<Vec<switchy_database::schema::ColumnInfo>, DatabaseError> {
+        // TODO: Implement checksum tracking for column info retrieval
+        unimplemented!("get_table_columns not yet implemented for ChecksumDatabase")
+    }
+
+    async fn column_exists(
+        &self,
+        _table_name: &str,
+        _column_name: &str,
+    ) -> Result<bool, DatabaseError> {
+        // TODO: Implement checksum tracking for column existence checking
+        unimplemented!("column_exists not yet implemented for ChecksumDatabase")
+    }
+
     async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
         let depth = self.transaction_depth.fetch_add(1, Ordering::SeqCst);
         let mut hasher = self.hasher.lock().await;

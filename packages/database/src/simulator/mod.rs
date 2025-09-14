@@ -203,6 +203,40 @@ impl Database for SimulationDatabase {
         self.inner.exec_alter_table(statement).await
     }
 
+    #[cfg(feature = "schema")]
+    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.7 - Database Simulator
+        unimplemented!("table_exists not yet implemented for SimulationDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_info(
+        &self,
+        _table_name: &str,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.7 - Database Simulator
+        unimplemented!("get_table_info not yet implemented for SimulationDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_columns(
+        &self,
+        _table_name: &str,
+    ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.7 - Database Simulator
+        unimplemented!("get_table_columns not yet implemented for SimulationDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn column_exists(
+        &self,
+        _table_name: &str,
+        _column_name: &str,
+    ) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.7 - Database Simulator
+        unimplemented!("column_exists not yet implemented for SimulationDatabase")
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {

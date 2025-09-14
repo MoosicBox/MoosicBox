@@ -466,6 +466,52 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         statement: &schema::AlterTableStatement<'_>,
     ) -> Result<(), DatabaseError>;
 
+    /// Check if a table exists in the database
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    #[cfg(feature = "schema")]
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError>;
+
+    /// Get complete information about a table including columns, indexes, and foreign keys
+    ///
+    /// Returns `None` if the table doesn't exist.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    #[cfg(feature = "schema")]
+    async fn get_table_info(
+        &self,
+        table_name: &str,
+    ) -> Result<Option<schema::TableInfo>, DatabaseError>;
+
+    /// Get all columns for a table
+    ///
+    /// Returns an empty Vec if the table doesn't exist.
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    #[cfg(feature = "schema")]
+    async fn get_table_columns(
+        &self,
+        table_name: &str,
+    ) -> Result<Vec<schema::ColumnInfo>, DatabaseError>;
+
+    /// Check if a column exists in a table
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    #[cfg(feature = "schema")]
+    async fn column_exists(
+        &self,
+        table_name: &str,
+        column_name: &str,
+    ) -> Result<bool, DatabaseError>;
+
     /// Begin a database transaction
     ///
     /// # Errors

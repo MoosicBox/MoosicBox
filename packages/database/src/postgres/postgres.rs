@@ -445,6 +445,40 @@ impl Database for PostgresDatabase {
             .map_err(Into::into)
     }
 
+    #[cfg(feature = "schema")]
+    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
+        unimplemented!("table_exists not yet implemented for PostgresDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_info(
+        &self,
+        _table_name: &str,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
+        unimplemented!("get_table_info not yet implemented for PostgresDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_columns(
+        &self,
+        _table_name: &str,
+    ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
+        unimplemented!("get_table_columns not yet implemented for PostgresDatabase")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn column_exists(
+        &self,
+        _table_name: &str,
+        _column_name: &str,
+    ) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
+        unimplemented!("column_exists not yet implemented for PostgresDatabase")
+    }
+
     async fn exec_insert(
         &self,
         statement: &InsertStatement<'_>,
@@ -743,6 +777,40 @@ impl Database for PostgresTransaction {
         postgres_exec_alter_table(&self.client, statement)
             .await
             .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
+        unimplemented!("table_exists not yet implemented for PostgresTransaction")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_info(
+        &self,
+        _table_name: &str,
+    ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
+        unimplemented!("get_table_info not yet implemented for PostgresTransaction")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn get_table_columns(
+        &self,
+        _table_name: &str,
+    ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
+        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
+        unimplemented!("get_table_columns not yet implemented for PostgresTransaction")
+    }
+
+    #[cfg(feature = "schema")]
+    async fn column_exists(
+        &self,
+        _table_name: &str,
+        _column_name: &str,
+    ) -> Result<bool, DatabaseError> {
+        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
+        unimplemented!("column_exists not yet implemented for PostgresTransaction")
     }
 
     async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {

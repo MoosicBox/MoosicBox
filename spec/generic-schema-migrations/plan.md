@@ -7202,8 +7202,8 @@ impl RusqliteDatabase {
 
 ### 16.2 Add Table Introspection Methods to Database Trait
 
-- [ ] Update `packages/database/src/lib.rs` Database trait ⚠️ **CRITICAL**
-  - [ ] Add method signatures:
+- [x] Update `packages/database/src/lib.rs` Database trait ⚠️ **CRITICAL**
+  - [x] Add method signatures:
     ```rust
     #[cfg(feature = "schema")]
     async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError>;
@@ -7217,9 +7217,29 @@ impl RusqliteDatabase {
     #[cfg(feature = "schema")]
     async fn column_exists(&self, table_name: &str, column_name: &str) -> Result<bool, DatabaseError>;
     ```
-  - [ ] These methods should be feature-gated with `#[cfg(feature = "schema")]`
-  - [ ] Document that `get_table_info` returns `None` if table doesn't exist
-  - [ ] Document that `get_table_columns` returns empty Vec if table doesn't exist
+    Four methods added to Database trait at lines 475, 485, 498, and 509 in `packages/database/src/lib.rs` with proper async signatures and return types using `schema::TableInfo` and `schema::ColumnInfo`
+  - [x] These methods should be feature-gated with `#[cfg(feature = "schema")]`
+    All four methods properly feature-gated with `#[cfg(feature = "schema")]` attribute
+  - [x] Document that `get_table_info` returns `None` if table doesn't exist
+    Documentation at line 479: "Returns `None` if the table doesn't exist."
+  - [x] Document that `get_table_columns` returns empty Vec if table doesn't exist
+    Documentation at line 492: "Returns an empty Vec if the table doesn't exist."
+
+**Phase 16.2 Complete**: All four table introspection methods successfully added to Database trait with comprehensive stub implementations across all 12 Database implementations (11 backend implementations + 1 checksum database).
+
+**Scope Expansion**: Original Phase 16.2 spec only required adding trait method signatures, but scope was expanded to include stub implementations using `unimplemented!()` macro to maintain a compiling codebase between phases. This prevents development blockage while providing clear implementation roadmap.
+
+**Stub Implementation Details**: Each stub uses `unimplemented!("method_name not yet implemented for SpecificDatabase")` with TODO comments referencing the specific phase where each will be implemented:
+- **Phase 16.3**: RusqliteDatabase, RusqliteTransaction (2 implementations)
+- **Phase 16.4**: SqliteSqlxDatabase, SqliteSqlxTransaction (2 implementations)
+- **Phase 16.5**: PostgresDatabase, PostgresTransaction, PostgresSqlxDatabase, PostgresSqlxTransaction (4 implementations)
+- **Phase 16.6**: MySqlSqlxDatabase, MysqlSqlxTransaction (2 implementations)
+- **Phase 16.7**: SimulationDatabase (1 implementation)
+- **Checksum Database**: ChecksumDatabase (1 implementation with checksum tracking TODOs, no feature gates as `switchy_schema` doesn't have "schema" feature)
+
+**Feature Gating**: All stub implementations in `switchy_database` backends are properly feature-gated with `#[cfg(feature = "schema")]`. ChecksumDatabase in `switchy_schema` uses no feature gates as that package always includes schema support through its dependency on `switchy_database` with "schema" feature enabled.
+
+**Compilation Status**: Codebase compiles successfully (`cargo check -p switchy_database` and `cargo check -p switchy_schema` both pass), allowing development to continue while providing clear markers for future implementation work.
 
 ### 16.3 Implement for SQLite (rusqlite)
 
