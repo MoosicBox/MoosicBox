@@ -309,11 +309,18 @@ pub enum SqlxDatabaseError {
     InvalidRequest,
     #[error("Missing unique")]
     MissingUnique,
+    #[error("Unsupported data type: {0}")]
+    UnsupportedDataType(String),
 }
 
 impl From<SqlxDatabaseError> for DatabaseError {
     fn from(value: SqlxDatabaseError) -> Self {
-        Self::SqliteSqlx(value)
+        match value {
+            SqlxDatabaseError::UnsupportedDataType(type_name) => {
+                Self::UnsupportedDataType(type_name)
+            }
+            other => Self::SqliteSqlx(other),
+        }
     }
 }
 
@@ -546,37 +553,49 @@ impl Database for SqliteSqlxDatabase {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.4 - SQLite (sqlx)
-        unimplemented!("table_exists not yet implemented for SqliteSqlxDatabase")
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        sqlx_sqlite_table_exists(
+            self.get_connection().await?.lock().await.as_mut(),
+            table_name,
+        )
+        .await
+        .map_err(Into::into)
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.4 - SQLite (sqlx)
-        unimplemented!("get_table_info not yet implemented for SqliteSqlxDatabase")
+        sqlx_sqlite_get_table_info(
+            self.get_connection().await?.lock().await.as_mut(),
+            table_name,
+        )
+        .await
+        .map_err(Into::into)
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.4 - SQLite (sqlx)
-        unimplemented!("get_table_columns not yet implemented for SqliteSqlxDatabase")
+        sqlx_sqlite_get_table_columns(
+            self.get_connection().await?.lock().await.as_mut(),
+            table_name,
+        )
+        .await
+        .map_err(Into::into)
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.4 - SQLite (sqlx)
-        unimplemented!("column_exists not yet implemented for SqliteSqlxDatabase")
+        let columns = self.get_table_columns(table_name).await?;
+        Ok(columns.iter().any(|col| col.name == column_name))
     }
 
     async fn begin_transaction(
@@ -2614,37 +2633,58 @@ impl Database for SqliteSqlxTransaction {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.4 - SQLite (sqlx)
-        unimplemented!("table_exists not yet implemented for SqliteSqlxTransaction")
+    #[allow(clippy::significant_drop_tightening)]
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        sqlx_sqlite_table_exists(&mut *tx, table_name)
+            .await
+            .map_err(Into::into)
     }
 
     #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.4 - SQLite (sqlx)
-        unimplemented!("get_table_info not yet implemented for SqliteSqlxTransaction")
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        sqlx_sqlite_get_table_info(&mut *tx, table_name)
+            .await
+            .map_err(Into::into)
     }
 
     #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.4 - SQLite (sqlx)
-        unimplemented!("get_table_columns not yet implemented for SqliteSqlxTransaction")
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        sqlx_sqlite_get_table_columns(&mut *tx, table_name)
+            .await
+            .map_err(Into::into)
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.4 - SQLite (sqlx)
-        unimplemented!("column_exists not yet implemented for SqliteSqlxTransaction")
+        let columns = self.get_table_columns(table_name).await?;
+        Ok(columns.iter().any(|col| col.name == column_name))
     }
 
     async fn begin_transaction(
@@ -2678,5 +2718,504 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
         tx.rollback().await.map_err(SqlxDatabaseError::Sqlx)?;
 
         Ok(())
+    }
+}
+// SQLite introspection helper functions (Phase 16.4)
+
+#[cfg(feature = "schema")]
+fn sqlite_type_to_data_type(sqlite_type: &str) -> Result<crate::schema::DataType, DatabaseError> {
+    let normalized_type = sqlite_type.to_uppercase();
+
+    match normalized_type.as_str() {
+        "INTEGER" => Ok(crate::schema::DataType::BigInt),
+        "TEXT" => Ok(crate::schema::DataType::Text),
+        "REAL" => Ok(crate::schema::DataType::Double),
+        "BOOLEAN" => Ok(crate::schema::DataType::Bool),
+        _ => Err(DatabaseError::UnsupportedDataType(sqlite_type.to_string())),
+    }
+}
+
+#[cfg(feature = "schema")]
+fn parse_default_value(default_str: Option<String>) -> Option<crate::DatabaseValue> {
+    default_str.and_then(|s| {
+        if s == "NULL" {
+            Some(crate::DatabaseValue::Null)
+        } else if s.starts_with('\'') && s.ends_with('\'') {
+            // String literal
+            let content = &s[1..s.len() - 1];
+            Some(crate::DatabaseValue::String(content.to_string()))
+        } else if let Ok(num) = s.parse::<i64>() {
+            Some(crate::DatabaseValue::Number(num))
+        } else if let Ok(real) = s.parse::<f64>() {
+            Some(crate::DatabaseValue::Real(real))
+        } else if s == "0" || s.to_uppercase() == "FALSE" {
+            Some(crate::DatabaseValue::Bool(false))
+        } else if s == "1" || s.to_uppercase() == "TRUE" {
+            Some(crate::DatabaseValue::Bool(true))
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_table_exists(
+    executor: &mut SqliteConnection,
+    table_name: &str,
+) -> Result<bool, SqlxDatabaseError> {
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?")
+            .bind(table_name)
+            .fetch_one(executor)
+            .await?;
+
+    Ok(count > 0)
+}
+
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_get_table_columns(
+    executor: &mut SqliteConnection,
+    table_name: &str,
+) -> Result<Vec<crate::schema::ColumnInfo>, SqlxDatabaseError> {
+    let mut columns = Vec::new();
+
+    let pragma_query = format!("PRAGMA table_info({table_name})");
+    let rows = sqlx::query(&pragma_query).fetch_all(executor).await?;
+
+    for row in rows {
+        let cid: i32 = row.get(0);
+        let name: String = row.get(1);
+        let type_str: String = row.get(2);
+        let notnull: i32 = row.get(3);
+        let dflt_value: Option<String> = row.get(4);
+        let pk: i32 = row.get(5);
+
+        let data_type = sqlite_type_to_data_type(&type_str).map_err(|e| match e {
+            DatabaseError::UnsupportedDataType(type_name) => {
+                SqlxDatabaseError::UnsupportedDataType(type_name)
+            }
+            _ => SqlxDatabaseError::InvalidRequest,
+        })?;
+
+        let default_value = parse_default_value(dflt_value);
+
+        columns.push(crate::schema::ColumnInfo {
+            name,
+            data_type,
+            nullable: notnull == 0,
+            is_primary_key: pk > 0,
+            auto_increment: false, // Hardcoded to false as per Phase 16.3 pattern
+            default_value,
+            ordinal_position: u32::try_from(cid + 1).unwrap_or(1), // Convert 0-based cid to 1-based ordinal
+        });
+    }
+
+    Ok(columns)
+}
+
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_get_table_info(
+    executor: &mut SqliteConnection,
+    table_name: &str,
+) -> Result<Option<crate::schema::TableInfo>, SqlxDatabaseError> {
+    use std::collections::BTreeMap;
+
+    // First check if table exists
+    if !sqlx_sqlite_table_exists(executor, table_name).await? {
+        return Ok(None);
+    }
+
+    // Get columns
+    let columns = sqlx_sqlite_get_table_columns(executor, table_name).await?;
+    let mut column_map = BTreeMap::new();
+    for column in columns {
+        column_map.insert(column.name.clone(), column);
+    }
+
+    // Get indexes
+    let mut indexes = BTreeMap::new();
+    let index_query = format!("PRAGMA index_list({table_name})");
+    let index_rows = sqlx::query(&index_query).fetch_all(&mut *executor).await?;
+
+    for row in index_rows {
+        let index_name: String = row.get(1);
+        let unique: i32 = row.get(2);
+        let origin: String = row.get(3);
+
+        // Get index columns
+        let index_info_query = format!("PRAGMA index_info({index_name})");
+        let column_rows = sqlx::query(&index_info_query)
+            .fetch_all(&mut *executor)
+            .await?;
+
+        let mut index_columns = Vec::new();
+        for col_row in column_rows {
+            let column_name: String = col_row.get(2);
+            index_columns.push(column_name);
+        }
+
+        indexes.insert(
+            index_name.clone(),
+            crate::schema::IndexInfo {
+                name: index_name,
+                unique: unique == 1,
+                columns: index_columns,
+                is_primary: origin == "pk",
+            },
+        );
+    }
+
+    // Get foreign keys
+    let mut foreign_keys = BTreeMap::new();
+    let fk_query = format!("PRAGMA foreign_key_list({table_name})");
+    let fk_rows = sqlx::query(&fk_query).fetch_all(&mut *executor).await?;
+
+    for row in fk_rows {
+        let id: i32 = row.get(0);
+        let _seq: i32 = row.get(1);
+        let table: String = row.get(2);
+        let from: String = row.get(3);
+        let to: String = row.get(4);
+        let on_update: String = row.get(5);
+        let on_delete: String = row.get(6);
+
+        let constraint_name = format!("fk_{table_name}_{id}");
+        foreign_keys.insert(
+            constraint_name.clone(),
+            crate::schema::ForeignKeyInfo {
+                name: constraint_name,
+                column: from,
+                referenced_table: table,
+                referenced_column: to,
+                on_update: Some(on_update),
+                on_delete: Some(on_delete),
+            },
+        );
+    }
+
+    Ok(Some(crate::schema::TableInfo {
+        name: table_name.to_string(),
+        columns: column_map,
+        indexes,
+        foreign_keys,
+    }))
+}
+
+#[cfg(all(test, feature = "schema"))]
+mod introspection_tests {
+    use super::*;
+    use crate::schema::DataType;
+    use std::sync::Arc;
+
+    async fn create_sqlx_introspection_test_db() -> SqliteSqlxDatabase {
+        let db_url = "sqlite::memory:".to_string();
+
+        let pool = SqlitePool::connect(&db_url)
+            .await
+            .expect("Failed to create SQLite pool");
+
+        // Create a comprehensive test schema matching rusqlite tests
+        sqlx::query(
+            "CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE,
+                age INTEGER,
+                is_active BOOLEAN DEFAULT 1,
+                balance REAL DEFAULT 0.0,
+                created_at TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create users table");
+
+        sqlx::query(
+            "CREATE TABLE posts (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create posts table");
+
+        sqlx::query("CREATE INDEX idx_users_email ON users (email)")
+            .execute(&pool)
+            .await
+            .expect("Failed to create index");
+
+        sqlx::query("CREATE UNIQUE INDEX idx_users_name_unique ON users (name)")
+            .execute(&pool)
+            .await
+            .expect("Failed to create unique index");
+
+        // Add table with unsupported types for testing
+        sqlx::query(
+            "CREATE TABLE unsupported_types (
+                id INTEGER PRIMARY KEY,
+                blob_data BLOB,
+                other_data CUSTOM_TYPE
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("Failed to create unsupported_types table");
+
+        SqliteSqlxDatabase::new(Arc::new(Mutex::new(pool)))
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test(no_simulator)]
+    async fn test_sqlx_sqlite_table_exists() {
+        let db = create_sqlx_introspection_test_db().await;
+
+        // Test existing table
+        let exists = db
+            .table_exists("users")
+            .await
+            .expect("Failed to check table existence");
+        assert!(exists, "users table should exist");
+
+        // Test non-existing table
+        let exists = db
+            .table_exists("nonexistent")
+            .await
+            .expect("Failed to check table existence");
+        assert!(!exists, "nonexistent table should not exist");
+
+        // Test with transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+        let exists = tx
+            .table_exists("posts")
+            .await
+            .expect("Failed to check table existence in transaction");
+        assert!(exists, "posts table should exist in transaction");
+        tx.rollback().await.expect("Failed to rollback");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test(no_simulator)]
+    async fn test_sqlx_sqlite_column_exists() {
+        let db = create_sqlx_introspection_test_db().await;
+
+        // Test existing column
+        let exists = db
+            .column_exists("users", "name")
+            .await
+            .expect("Failed to check column existence");
+        assert!(exists, "name column should exist");
+
+        // Test non-existing column
+        let exists = db
+            .column_exists("users", "nonexistent")
+            .await
+            .expect("Failed to check column existence");
+        assert!(!exists, "nonexistent column should not exist");
+
+        // Test non-existing table
+        let result = db.column_exists("nonexistent_table", "name").await;
+        assert!(
+            !result.unwrap(),
+            "column in nonexistent table should not exist"
+        );
+
+        // Test with transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+        let exists = tx
+            .column_exists("posts", "title")
+            .await
+            .expect("Failed to check column existence in transaction");
+        assert!(exists, "title column should exist in transaction");
+        tx.rollback().await.expect("Failed to rollback");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test(no_simulator)]
+    async fn test_sqlx_sqlite_get_table_columns() {
+        let db = create_sqlx_introspection_test_db().await;
+
+        // Test users table columns
+        let columns = db
+            .get_table_columns("users")
+            .await
+            .expect("Failed to get table columns");
+
+        assert!(!columns.is_empty(), "Should have columns");
+
+        // Find specific columns and verify their properties
+        let id_col = columns
+            .iter()
+            .find(|c| c.name == "id")
+            .expect("id column should exist");
+        assert_eq!(id_col.data_type, DataType::BigInt);
+        assert!(
+            id_col.nullable,
+            "id should be nullable (SQLite PRIMARY KEY without NOT NULL)"
+        );
+        assert!(id_col.is_primary_key, "id should be primary key");
+
+        let name_col = columns
+            .iter()
+            .find(|c| c.name == "name")
+            .expect("name column should exist");
+        assert_eq!(name_col.data_type, DataType::Text);
+        assert!(!name_col.nullable, "name should not be nullable");
+        assert!(!name_col.is_primary_key, "name should not be primary key");
+
+        let email_col = columns
+            .iter()
+            .find(|c| c.name == "email")
+            .expect("email column should exist");
+        assert_eq!(email_col.data_type, DataType::Text);
+        assert!(email_col.nullable, "email should be nullable");
+
+        // Test ordinal positions
+        let sorted_columns: Vec<_> = columns.iter().collect();
+        for (i, column) in sorted_columns.iter().enumerate() {
+            assert_eq!(
+                column.ordinal_position,
+                u32::try_from(i + 1).unwrap(),
+                "Column {} should have ordinal position {}",
+                column.name,
+                i + 1
+            );
+        }
+
+        // Test with non-existing table
+        let columns = db
+            .get_table_columns("nonexistent")
+            .await
+            .expect("Should succeed for nonexistent table");
+        assert!(
+            columns.is_empty(),
+            "Should return empty for nonexistent table"
+        );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test(no_simulator)]
+    async fn test_sqlx_sqlite_get_table_info() {
+        let db = create_sqlx_introspection_test_db().await;
+
+        // Test users table
+        let table_info = db
+            .get_table_info("users")
+            .await
+            .expect("Failed to get table info")
+            .expect("users table should exist");
+
+        assert_eq!(table_info.name, "users");
+        assert!(!table_info.columns.is_empty(), "Should have columns");
+        assert!(
+            table_info.columns.contains_key("id"),
+            "Should have id column"
+        );
+        assert!(
+            table_info.columns.contains_key("name"),
+            "Should have name column"
+        );
+
+        // Check indexes (should include both explicit indexes and automatic primary key)
+        assert!(!table_info.indexes.is_empty(), "Should have indexes");
+
+        // Should have the unique index we created
+        let has_email_index = table_info
+            .indexes
+            .values()
+            .any(|idx| idx.columns.contains(&"email".to_string()));
+        assert!(has_email_index, "Should have email index");
+
+        // Test non-existing table
+        let table_info = db
+            .get_table_info("nonexistent")
+            .await
+            .expect("Should succeed for nonexistent table");
+        assert!(
+            table_info.is_none(),
+            "Should return None for nonexistent table"
+        );
+
+        // Test with transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+        let table_info = tx
+            .get_table_info("posts")
+            .await
+            .expect("Failed to get table info in transaction")
+            .expect("posts table should exist");
+        assert_eq!(table_info.name, "posts");
+        tx.rollback().await.expect("Failed to rollback");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test(no_simulator)]
+    async fn test_sqlx_sqlite_unsupported_types() {
+        let db = create_sqlx_introspection_test_db().await;
+
+        // Test table with unsupported types
+        let result = db.get_table_columns("unsupported_types").await;
+
+        // Should fail with UnsupportedDataType for BLOB
+        assert!(result.is_err(), "Should fail with unsupported data type");
+
+        match result.unwrap_err() {
+            DatabaseError::UnsupportedDataType(type_name) => {
+                assert!(
+                    type_name == "BLOB" || type_name == "CUSTOM_TYPE",
+                    "Should report unsupported type, got: {type_name}"
+                );
+            }
+            other => panic!("Expected UnsupportedDataType error, got: {other:?}"),
+        }
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test(no_simulator)]
+    async fn test_sqlx_sqlite_transaction_context() {
+        let db = create_sqlx_introspection_test_db().await;
+
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // All introspection methods should work in transaction context
+        let exists = tx
+            .table_exists("users")
+            .await
+            .expect("table_exists should work in transaction");
+        assert!(exists);
+
+        let columns = tx
+            .get_table_columns("users")
+            .await
+            .expect("get_table_columns should work in transaction");
+        assert!(!columns.is_empty());
+
+        let table_info = tx
+            .get_table_info("users")
+            .await
+            .expect("get_table_info should work in transaction");
+        assert!(table_info.is_some());
+
+        let col_exists = tx
+            .column_exists("users", "name")
+            .await
+            .expect("column_exists should work in transaction");
+        assert!(col_exists);
+
+        tx.rollback().await.expect("Failed to rollback");
     }
 }
