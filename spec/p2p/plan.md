@@ -19,35 +19,33 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 
 ## Design Decisions (RESOLVED)
 
-All ambiguities have been resolved during the specification phase. See `clarifications.md` for complete details:
+**ALL** ambiguities have been resolved during the specification phase. See [`clarifications.md`](./clarifications.md) for complete details and rationale.
 
-### Identity & Discovery ✅
-- **Node Identity**: Ed25519 public keys (matching Iroh exactly)
-- **Discovery**: Mock DNS-like discovery in simulator, real discovery in production
-- **Authentication**: QUIC transport encryption, application-level connection acceptance
+**CRITICAL:** Refer to `clarifications.md` for any implementation questions. This plan assumes all decisions in that document.
 
-### Runtime & Dependencies ✅
-- **Async Runtime**: `switchy_async` for abstraction over tokio/simulator
-- **Time Management**: `switchy_time` for controllable time in tests
-- **Package Structure**: Single crate with feature flags (`simulator`, `iroh`)
+### Core Architecture Decisions ✅
+- **Package Structure**: Start with `lib.rs` only, grow organically
+- **Module Organization**: Extract modules when files exceed 500 lines
+- **Dependencies**: Just-in-time addition (zero dependencies in Phase 1)
+- **Error Handling**: Single flat `P2PError` enum with `thiserror`
 
-### Transport & Protocol ✅
-- **Message Format**: Raw bytes only (`&[u8]`, `Vec<u8>`)
-- **Transport Priority**: Streams first (reliable), datagrams later (real-time)
-- **Error Handling**: Single `P2PError` enum for all operations
-- **Serialization**: Application layer responsibility (no lock-in)
+### Implementation Strategy ✅
+- **Transport Abstraction**: Full abstraction supporting multiple backends
+- **Message Protocol**: Raw bytes only (`&[u8]`, `Vec<u8>`) - no serialization
+- **Trait Design**: Five core traits extracted from working simulator code
+- **Testing Approach**: Four critical scenarios drive simulator implementation
 
-### Testing Strategy ✅
-- **Property-based testing**: Invariants and edge cases via proptest
-- **Cross-implementation**: Same tests run on simulator and Iroh
-- **Network Simulation**: Graph-based topology with controllable conditions
-- **Deterministic Testing**: Seeded randomness and time control
+### Technical Decisions ✅
+- **Async Runtime**: `switchy_async` for abstraction (no direct tokio)
+- **Node Identity**: `[u8; 32]` matching Iroh's ed25519 public keys
+- **Connection Strategy**: Unidirectional QUIC streams for message boundaries
+- **Discovery**: Mock DNS in simulator, configurable in production
 
-### Migration Approach ✅
-- **No Fallback**: Clean separation, P2P is standalone alternative
-- **Compile-time Selection**: Feature flags choose backend
-- **Web-Server API**: REST-like routing familiar to tunnel users
-- **Phased Migration**: Service-by-service transition
+### Quality Standards ✅
+- **Phase Success**: All 4 test scenarios pass + >80% test coverage
+- **Code Quality**: Zero warnings, all clippy lints pass
+- **Documentation**: Every public API documented with examples
+- **Dependency Hygiene**: `cargo machete` clean after each phase
 
 ## Phase 1: Package Creation and Setup ✅ **NOT STARTED**
 
@@ -60,10 +58,17 @@ All ambiguities have been resolved during the specification phase. See `clarific
 - [ ] Create package directory structure 🔴 **CRITICAL**
   - [ ] Create `packages/p2p/` directory
   - [ ] Create `packages/p2p/src/` directory
-  - [ ] Create `packages/p2p/src/lib.rs` with ONLY clippy configuration:
+  - [ ] Create `packages/p2p/src/lib.rs` with ONLY clippy configuration (NO modules, NO code):
     ```rust
     #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
     #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
+    // IMPORTANT: No modules or code in Phase 1
+    // Modules will be added in later phases:
+    // - Phase 2.1: mod simulator;
+    // - Phase 3.1: mod traits;
+    // - Phase 4.1: mod types;
+    // - Phase 5.1: mod router;
     ```
   - [ ] Create `packages/p2p/Cargo.toml` with complete configuration:
     ```toml
@@ -79,29 +84,39 @@ All ambiguities have been resolved during the specification phase. See `clarific
     [package.metadata.workspaces]
     group = "p2p"
 
-     [dependencies]
-     # No dependencies in initial phase - they will be added when first used
+    [dependencies]
+    # CRITICAL: Completely empty dependencies section in Phase 1
+    # Dependencies will be added exactly when first used:
+    # - Phase 2.1: switchy_async, switchy_time, switchy_random
+    # - Phase 4.1: thiserror
+    # - Phase 7.1: iroh (optional)
+    # - Phase 8.1: proptest (dev-dependency)
 
-     [features]
-     default = ["simulator"]
-     simulator = []
-     fail-on-warnings = []
-     # Additional features will be added in later phases when dependencies are introduced
+    [features]
+    default = ["simulator"]
+    simulator = []
+    fail-on-warnings = []
+    # NOTE: iroh feature will be added in Phase 7.1
+    # NOTE: test-utils feature will be added in Phase 8.1
 
-     [dev-dependencies]
-     # Additional dev dependencies will be added in later phases when first used
+    [dev-dependencies]
+    # CRITICAL: Completely empty dev-dependencies in Phase 1
+    # Will be added when tests require them
     ```
+  - [ ] **VERIFICATION**: Run `cargo tree -p moosicbox_p2p` - should show ZERO dependencies
 
 #### 1.1 Verification Checklist
 - [ ] Directory structure exists at correct paths
 - [ ] `Cargo.toml` has valid TOML syntax and follows workspace conventions
-- [ ] `lib.rs` contains only clippy configuration and compiles cleanly
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p` (default features)
-- [ ] Run `cargo build -p moosicbox_p2p --no-default-features` (no features)
-- [ ] Run `cargo machete` (should report zero dependencies in moosicbox_p2p)
-- [ ] No compilation errors or warnings with any feature combination
+- [ ] `lib.rs` contains ONLY clippy configuration (no modules, no imports, no code)
+- [ ] **CRITICAL**: `cargo tree -p moosicbox_p2p` shows zero dependencies
+- [ ] **CRITICAL**: `cargo tree -p moosicbox_p2p --no-default-features` shows zero dependencies
+- [ ] Run `cargo fmt --check -p moosicbox_p2p` ✅ passes
+- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings` ✅ passes
+- [ ] Run `cargo build -p moosicbox_p2p` ✅ compiles with default features
+- [ ] Run `cargo build -p moosicbox_p2p --no-default-features` ✅ compiles with no features
+- [ ] Run `cargo machete` ✅ reports zero dependencies for moosicbox_p2p
+- [ ] **VERIFICATION**: Package builds but does nothing (empty lib.rs)
 
 ### 1.2 Workspace Integration
 
@@ -137,54 +152,81 @@ All ambiguities have been resolved during the specification phase. See `clarific
 
 ### 2.1 Node Identity and Core Types
 
+**CRITICAL NOTES:**
+- This is the FIRST code added to the package (lib.rs is currently empty)
+- SimulatorNodeId does NOT implement any traits yet (traits don't exist until Phase 3)
+- Use String for errors until Phase 4 (no P2PError yet)
+- No generic abstractions yet - only concrete simulator types
+
 - [ ] Add switchy dependencies to Cargo.toml 🔴 **CRITICAL**
-  - [ ] Add to `[dependencies]`:
-    - `switchy_async = { workspace = true }`
-    - `switchy_time = { workspace = true }`
-    - `switchy_random = { workspace = true }`
-  - [ ] Verify switchy dependencies exist in workspace (should already be present)
-- [ ] Create `src/simulator.rs` with node identity system 🔴 **CRITICAL**
-  - [ ] Add `#[cfg(feature = "simulator")] pub mod simulator;` to `lib.rs`
-  - [ ] Create `SimulatorNodeId` struct with ed25519-like behavior:
+  - [ ] Add to `[dependencies]` (FIRST dependencies added to package):
+    ```toml
+    switchy_async = { workspace = true }
+    switchy_time = { workspace = true }
+    switchy_random = { workspace = true }
+    ```
+  - [ ] Verify switchy dependencies exist in workspace (should already be present from other packages)
+  - [ ] **VERIFICATION**: Run `cargo tree -p moosicbox_p2p` to confirm exactly 3 dependencies added
+
+- [ ] Create `src/simulator.rs` with complete node identity system 🔴 **CRITICAL**
+  - [ ] Add `#[cfg(feature = "simulator")] pub mod simulator;` to `lib.rs` (FIRST line of real code)
+  - [ ] Create COMPLETE `SimulatorNodeId` implementation (not a snippet):
     ```rust
+    use std::fmt::{self, Display};
+    use switchy_random::{RngSeed, Rng};
+
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct SimulatorNodeId([u8; 32]);
 
     impl SimulatorNodeId {
+        /// Create a deterministic node ID from a string seed
+        /// Used for testing to create predictable node IDs
         pub fn from_seed(seed: &str) -> Self {
-            use switchy_random::{RngSeed, Rng};
             let mut rng = RngSeed::from_str(seed);
             let mut bytes = [0u8; 32];
             rng.fill_bytes(&mut bytes);
             Self(bytes)
         }
 
-        pub fn from_bytes(bytes: &[u8; 32]) -> Self {
-            Self(*bytes)
+        /// Create a node ID from raw bytes
+        pub fn from_bytes(bytes: [u8; 32]) -> Self {
+            Self(bytes)
         }
 
+        /// Get the raw bytes of this node ID
         pub fn as_bytes(&self) -> &[u8; 32] {
             &self.0
         }
 
+        /// Format as short hex string for display (first 5 bytes = 10 hex chars)
         pub fn fmt_short(&self) -> String {
             format!("{:02x}{:02x}{:02x}{:02x}{:02x}",
                 self.0[0], self.0[1], self.0[2], self.0[3], self.0[4])
         }
+
+        /// Generate a random node ID (for production use)
+        pub fn generate() -> Self {
+            let mut bytes = [0u8; 32];
+            switchy_random::rng().fill_bytes(&mut bytes);
+            Self(bytes)
+        }
     }
 
     impl Display for SimulatorNodeId {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            // Z-base-32 encoding like Iroh (simplified for now)
-            write!(f, "{}", hex::encode(&self.0))
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            // Full hex encoding for now (Iroh uses z-base-32, but hex is simpler)
+            for byte in &self.0 {
+                write!(f, "{:02x}", byte)?;
+            }
+            Ok(())
         }
     }
     ```
-  - [ ] Create `SimulatorP2P` struct with switchy types:
+  - [ ] Create `SimulatorP2P` struct with complete implementation:
     ```rust
-    use switchy::unsync::{sync::RwLock, task};
     use std::sync::Arc;
     use std::collections::BTreeMap;
+    use switchy_async::sync::RwLock;
 
     pub struct SimulatorP2P {
         node_id: SimulatorNodeId,
@@ -193,8 +235,9 @@ All ambiguities have been resolved during the specification phase. See `clarific
     }
 
     impl SimulatorP2P {
+        /// Create a new simulator P2P instance with random node ID
         pub fn new() -> Self {
-            let node_id = SimulatorNodeId::from_seed(&format!("node-{}", switchy_random::rng().gen::<u64>()));
+            let node_id = SimulatorNodeId::generate();
             Self {
                 node_id,
                 network_graph: Arc::new(RwLock::new(NetworkGraph::new())),
@@ -202,36 +245,106 @@ All ambiguities have been resolved during the specification phase. See `clarific
             }
         }
 
+        /// Create a simulator P2P instance with deterministic node ID (for testing)
+        pub fn with_seed(seed: &str) -> Self {
+            let node_id = SimulatorNodeId::from_seed(seed);
+            Self {
+                node_id,
+                network_graph: Arc::new(RwLock::new(NetworkGraph::new())),
+                connections: Arc::new(RwLock::new(BTreeMap::new())),
+            }
+        }
+
+        /// Get this node's ID
         pub fn local_node_id(&self) -> &SimulatorNodeId {
             &self.node_id
         }
     }
+
+    impl Default for SimulatorP2P {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
     ```
-  - [ ] Add test helper: `pub fn test_node_id(name: &str) -> SimulatorNodeId`
+  - [ ] Add test helper functions:
+    ```rust
+    /// Create a deterministic node ID for testing
+    pub fn test_node_id(name: &str) -> SimulatorNodeId {
+        SimulatorNodeId::from_seed(name)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_node_id_deterministic() {
+            let id1 = test_node_id("alice");
+            let id2 = test_node_id("alice");
+            assert_eq!(id1, id2);
+        }
+
+        #[test]
+        fn test_node_id_different() {
+            let alice = test_node_id("alice");
+            let bob = test_node_id("bob");
+            assert_ne!(alice, bob);
+        }
+
+        #[test]
+        fn test_fmt_short() {
+            let id = test_node_id("test");
+            let short = id.fmt_short();
+            assert_eq!(short.len(), 10); // 5 bytes = 10 hex chars
+        }
+    }
+    ```
 
 #### 2.1 Verification Checklist
-- [ ] Switchy dependencies are properly added and used
-- [ ] Simulator module compiles without errors
-- [ ] `SimulatorNodeId` can be created from seeds deterministically
-- [ ] `SimulatorP2P` can be created and returns consistent node IDs
-- [ ] `fmt_short()` produces readable 5-byte hex output
-- [ ] Test helper `test_node_id("alice")` produces consistent results
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo machete` (switchy dependencies should be used)
-- [ ] Unit tests for node identity pass
+- [ ] **CRITICAL**: Switchy dependencies added to Cargo.toml and workspace recognizes them
+- [ ] **CRITICAL**: `cargo tree -p moosicbox_p2p` shows exactly 3 dependencies (switchy_async, switchy_time, switchy_random)
+- [ ] Simulator module is created and lib.rs has simulator mod declaration
+- [ ] `SimulatorNodeId` deterministic creation: `test_node_id("alice")` produces same result every time
+- [ ] `SimulatorNodeId` different seeds: `test_node_id("alice") != test_node_id("bob")`
+- [ ] `SimulatorP2P` creation works: `SimulatorP2P::new()` and `SimulatorP2P::with_seed("test")`
+- [ ] `fmt_short()` produces exactly 10 character hex string (5 bytes)
+- [ ] All unit tests pass: `cargo test -p moosicbox_p2p test_node_id`
+- [ ] **CODE QUALITY**:
+  - [ ] Run `cargo fmt --check -p moosicbox_p2p` ✅ passes
+  - [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings` ✅ passes
+  - [ ] Run `cargo build -p moosicbox_p2p` ✅ compiles
+  - [ ] Run `cargo machete` ✅ all 3 switchy dependencies marked as used
+- [ ] **VERIFICATION**: Node identity system is complete and testable
 
 ### 2.2 Graph-Based Network Topology
 
-- [ ] Implement network graph for realistic P2P simulation 🔴 **CRITICAL**
-  - [ ] Create `NetworkGraph` struct in simulator module:
+**REQUIREMENTS FROM TEST SCENARIOS:**
+1. **Connectivity Testing**: Track which nodes can reach each other
+2. **Latency Simulation**: Each link has configurable latency (default 50ms)
+3. **NAT Simulation**: Mark nodes as "behind NAT" affecting connectivity
+4. **Data Integrity**: Message queues preserve order and content
+
+**ENVIRONMENT VARIABLES (with defaults):**
+- `SIMULATOR_DEFAULT_LATENCY_MS=50`
+- `SIMULATOR_DEFAULT_PACKET_LOSS=0.01`
+- `SIMULATOR_DISCOVERY_DELAY_MS=100`
+- `SIMULATOR_CONNECTION_TIMEOUT_SECS=30`
+- `SIMULATOR_MAX_MESSAGE_SIZE=1048576`
+
+- [ ] Implement COMPLETE network graph for realistic P2P simulation 🔴 **CRITICAL**
+  - [ ] Add to simulator.rs (in same file, after SimulatorP2P):
     ```rust
+    use std::time::Duration;
+    use std::collections::{BTreeMap, VecDeque};
+
+    #[derive(Debug, Clone)]
     pub struct NetworkGraph {
         nodes: BTreeMap<SimulatorNodeId, NodeInfo>,
         links: BTreeMap<(SimulatorNodeId, SimulatorNodeId), LinkInfo>,
     }
 
+    #[derive(Debug, Clone)]
     pub struct NodeInfo {
         id: SimulatorNodeId,
         is_online: bool,
@@ -239,10 +352,11 @@ All ambiguities have been resolved during the specification phase. See `clarific
         message_queues: BTreeMap<SimulatorNodeId, VecDeque<Vec<u8>>>,
     }
 
+    #[derive(Debug, Clone)]
     pub struct LinkInfo {
         latency: Duration,
         packet_loss: f64,
-        bandwidth_limit: Option<u64>,
+        bandwidth_limit: Option<u64>, // bytes per second
         is_active: bool,
     }
 
@@ -268,32 +382,47 @@ All ambiguities have been resolved during the specification phase. See `clarific
             self.links.insert((b, a), link); // Bidirectional
         }
 
+        /// Find path using simple BFS (for Phase 2, more sophisticated in Phase 6)
         pub fn find_path(&self, from: SimulatorNodeId, to: SimulatorNodeId) -> Option<Vec<SimulatorNodeId>> {
-            // Simple BFS pathfinding for now
-            // Returns None if nodes are partitioned
-        }
-    }
-    ```
-  - [ ] Add environment variable configuration:
-    ```rust
-    fn default_latency() -> Duration {
-        std::env::var("SIMULATOR_DEFAULT_LATENCY_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(Duration::from_millis)
-            .unwrap_or(Duration::from_millis(50))
-    }
+            if from == to {
+                return Some(vec![from]);
+            }
 
-    fn default_packet_loss() -> f64 {
-        std::env::var("SIMULATOR_DEFAULT_PACKET_LOSS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.01) // 1% default
-    }
-    ```
-  - [ ] Add network partition support:
-    ```rust
-    impl NetworkGraph {
+            let mut queue = VecDeque::new();
+            let mut visited = std::collections::HashSet::new();
+            let mut parent = BTreeMap::new();
+
+            queue.push_back(from);
+            visited.insert(from);
+
+            while let Some(current) = queue.pop_front() {
+                // Check all neighbors
+                for ((link_from, link_to), link_info) in &self.links {
+                    if *link_from == current && link_info.is_active {
+                        if *link_to == to {
+                            // Found path, reconstruct it
+                            let mut path = vec![to, current];
+                            let mut node = current;
+                            while let Some(&prev) = parent.get(&node) {
+                                path.push(prev);
+                                node = prev;
+                            }
+                            path.reverse();
+                            return Some(path);
+                        }
+
+                        if !visited.contains(link_to) {
+                            visited.insert(*link_to);
+                            parent.insert(*link_to, current);
+                            queue.push_back(*link_to);
+                        }
+                    }
+                }
+            }
+
+            None // No path found
+        }
+
         pub fn add_partition(&mut self, group_a: &[SimulatorNodeId], group_b: &[SimulatorNodeId]) {
             for &a in group_a {
                 for &b in group_b {
@@ -317,32 +446,109 @@ All ambiguities have been resolved during the specification phase. See `clarific
                 }
             }
         }
+
+        pub fn get_node_mut(&mut self, node_id: &SimulatorNodeId) -> Option<&mut NodeInfo> {
+            self.nodes.get_mut(node_id)
+        }
+
+        pub fn get_node(&self, node_id: &SimulatorNodeId) -> Option<&NodeInfo> {
+            self.nodes.get(node_id)
+        }
+    }
+
+    impl Default for NetworkGraph {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+    ```
+  - [ ] Add environment variable configuration functions:
+    ```rust
+    /// Get default latency from environment or use 50ms
+    fn default_latency() -> Duration {
+        std::env::var("SIMULATOR_DEFAULT_LATENCY_MS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::from_millis(50))
+    }
+
+    /// Get default packet loss from environment or use 1%
+    fn default_packet_loss() -> f64 {
+        std::env::var("SIMULATOR_DEFAULT_PACKET_LOSS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.01) // 1% default
+    }
+
+    /// Get discovery delay from environment or use 100ms
+    fn discovery_delay() -> Duration {
+        std::env::var("SIMULATOR_DISCOVERY_DELAY_MS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::from_millis(100))
+    }
+
+    /// Get connection timeout from environment or use 30s
+    fn connection_timeout() -> Duration {
+        std::env::var("SIMULATOR_CONNECTION_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(|secs| Duration::from_secs(secs))
+            .unwrap_or(Duration::from_secs(30))
+    }
+
+    /// Get max message size from environment or use 1MB
+    fn max_message_size() -> usize {
+        std::env::var("SIMULATOR_MAX_MESSAGE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1024 * 1024) // 1MB default
     }
     ```
 
 #### 2.2 Verification Checklist
-- [ ] NetworkGraph can add and connect nodes
-- [ ] Path finding works between connected nodes
-- [ ] Path finding returns None for partitioned nodes
-- [ ] Environment variables control latency and packet loss
-- [ ] Network partitions prevent path finding
-- [ ] Healing partitions restores connectivity
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
-- [ ] Run `cargo machete` (no unused dependencies workspace-wide)
-- [ ] Network topology tests pass
+- [ ] **TOPOLOGY FUNCTIONALITY**:
+  - [ ] NetworkGraph can add nodes: `graph.add_node(node_id)` works
+  - [ ] NetworkGraph can connect nodes: `graph.connect_nodes(a, b, link_info)` works
+  - [ ] Path finding works: `graph.find_path(a, b)` returns `Some(path)` for connected nodes
+  - [ ] Path finding fails correctly: `graph.find_path(a, b)` returns `None` for partitioned nodes
+  - [ ] Partitions work: `graph.add_partition(&[a], &[b])` prevents path finding
+  - [ ] Healing works: `graph.heal_partition(&[a], &[b])` restores connectivity
+- [ ] **ENVIRONMENT VARIABLES**:
+  - [ ] Test `SIMULATOR_DEFAULT_LATENCY_MS=100` changes default latency
+  - [ ] Test `SIMULATOR_DEFAULT_PACKET_LOSS=0.05` changes default packet loss
+  - [ ] Test `SIMULATOR_DISCOVERY_DELAY_MS=200` changes discovery delay
+  - [ ] All config functions have sensible defaults when env vars unset
+- [ ] **CODE QUALITY**:
+  - [ ] Run `cargo fmt --check -p moosicbox_p2p` ✅ passes
+  - [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings` ✅ passes
+  - [ ] Run `cargo build -p moosicbox_p2p` ✅ compiles
+  - [ ] Run `cargo test -p moosicbox_p2p` ✅ all tests pass
+  - [ ] Run `cargo machete` ✅ no unused dependencies workspace-wide
+- [ ] **VERIFICATION**: Complete unit tests for network topology functionality
 
 ### 2.3 Connection and Message Routing
 
-- [ ] Implement connection with graph-based routing 🔴 **CRITICAL**
-  - [ ] Create `SimulatorConnection` struct:
+**MESSAGE DELIVERY GUARANTEES:**
+- Messages delivered in order (FIFO queue per connection)
+- Messages delivered exactly once (no duplicates)
+- Message size limited by `SIMULATOR_MAX_MESSAGE_SIZE`
+- Connection close is clean (no message loss for sent messages)
+
+**TEST HELPERS REQUIRED:**
+- `setup_connected_peers(n: usize)` - Create n peers in fully connected mesh
+- `setup_partitioned_network(group_a: Vec<NodeId>, group_b: Vec<NodeId>)`
+- `inject_latency(from: NodeId, to: NodeId, latency: Duration)`
+- `inject_packet_loss(from: NodeId, to: NodeId, loss_rate: f64)`
+
+- [ ] Implement COMPLETE connection with graph-based routing 🔴 **CRITICAL**
+  - [ ] Create `SimulatorConnection` struct (add to simulator.rs):
     ```rust
-    use switchy::unsync::sync::Mutex;
-    use std::collections::VecDeque;
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    #[derive(Debug, Clone)]
     pub struct SimulatorConnection {
         local_id: SimulatorNodeId,
         remote_id: SimulatorNodeId,
@@ -351,30 +557,39 @@ All ambiguities have been resolved during the specification phase. See `clarific
     }
 
     impl SimulatorConnection {
+        /// Send data to remote peer through network simulation
         pub async fn send(&mut self, data: &[u8]) -> Result<(), String> {
             if !self.is_connected.load(Ordering::Relaxed) {
                 return Err("Connection closed".to_string());
             }
 
-            let graph = self.network_graph.read().await;
+            // Check message size limit
+            let max_size = max_message_size();
+            if data.len() > max_size {
+                return Err(format!("Message too large: {} bytes exceeds max {}", data.len(), max_size));
+            }
+
+            let mut graph = self.network_graph.write().await;
 
             // 1. Find path from local to remote
             let path = graph.find_path(self.local_id, self.remote_id)
-                .ok_or("No route to destination")?;
+                .ok_or("No route to destination".to_string())?;
 
             // 2. Calculate total latency along path
-            let total_latency = self.calculate_path_latency(&graph, &path);
+            let total_latency = self.calculate_path_latency(&*graph, &path);
 
             // 3. Check packet loss along path
-            if self.packet_lost(&graph, &path) {
-                return Ok(()); // Packet dropped, but not an error
+            if self.packet_lost(&*graph, &path) {
+                return Ok(()); // Packet dropped, but not an error (simulate UDP-like behavior)
             }
 
             // 4. Sleep for network latency using switchy_time
-            switchy::time::sleep(total_latency).await;
+            drop(graph); // Release lock before sleeping
+            switchy_time::sleep(total_latency).await;
 
             // 5. Deliver message to remote's queue
-            if let Some(remote_node) = graph.nodes.get_mut(&self.remote_id) {
+            let mut graph = self.network_graph.write().await;
+            if let Some(remote_node) = graph.get_node_mut(&self.remote_id) {
                 if let Some(queue) = remote_node.message_queues.get_mut(&self.local_id) {
                     queue.push_back(data.to_vec());
                 }
@@ -383,10 +598,11 @@ All ambiguities have been resolved during the specification phase. See `clarific
             Ok(())
         }
 
+        /// Receive data from remote peer (non-blocking)
         pub async fn recv(&mut self) -> Result<Vec<u8>, String> {
             let mut graph = self.network_graph.write().await;
 
-            if let Some(local_node) = graph.nodes.get_mut(&self.local_id) {
+            if let Some(local_node) = graph.get_node_mut(&self.local_id) {
                 if let Some(queue) = local_node.message_queues.get_mut(&self.remote_id) {
                     if let Some(message) = queue.pop_front() {
                         return Ok(message);
@@ -397,23 +613,54 @@ All ambiguities have been resolved during the specification phase. See `clarific
             Err("No message available".to_string())
         }
 
+        /// Check if connection is still active
         pub fn is_connected(&self) -> bool {
             self.is_connected.load(Ordering::Relaxed)
         }
 
+        /// Get remote peer's node ID
+        pub fn remote_node_id(&self) -> &SimulatorNodeId {
+            &self.remote_id
+        }
+
+        /// Close the connection
         pub fn close(&mut self) -> Result<(), String> {
             self.is_connected.store(false, Ordering::Relaxed);
             Ok(())
+        }
+
+        /// Calculate total latency along a path
+        fn calculate_path_latency(&self, graph: &NetworkGraph, path: &[SimulatorNodeId]) -> Duration {
+            let mut total = Duration::from_millis(0);
+            for window in path.windows(2) {
+                if let Some(link) = graph.links.get(&(window[0], window[1])) {
+                    total += link.latency;
+                }
+            }
+            total
+        }
+
+        /// Check if packet should be lost based on path
+        fn packet_lost(&self, graph: &NetworkGraph, path: &[SimulatorNodeId]) -> bool {
+            for window in path.windows(2) {
+                if let Some(link) = graph.links.get(&(window[0], window[1])) {
+                    if switchy_random::rng().gen_range(0.0..1.0) < link.packet_loss {
+                        return true;
+                    }
+                }
+            }
+            false
         }
     }
     ```
   - [ ] Implement `connect()` method in `SimulatorP2P`:
     ```rust
     impl SimulatorP2P {
+        /// Connect to a remote peer
         pub async fn connect(&self, remote_id: SimulatorNodeId) -> Result<SimulatorConnection, String> {
-            // 1. Ensure both nodes exist in graph
             let mut graph = self.network_graph.write().await;
 
+            // 1. Ensure both nodes exist in graph
             if !graph.nodes.contains_key(&self.node_id) {
                 graph.add_node(self.node_id);
             }
@@ -422,10 +669,10 @@ All ambiguities have been resolved during the specification phase. See `clarific
             }
 
             // 2. Create message queues for bidirectional communication
-            if let Some(local_node) = graph.nodes.get_mut(&self.node_id) {
+            if let Some(local_node) = graph.get_node_mut(&self.node_id) {
                 local_node.message_queues.entry(remote_id).or_insert_with(VecDeque::new);
             }
-            if let Some(remote_node) = graph.nodes.get_mut(&remote_id) {
+            if let Some(remote_node) = graph.get_node_mut(&remote_id) {
                 remote_node.message_queues.entry(self.node_id).or_insert_with(VecDeque::new);
             }
 
@@ -447,7 +694,7 @@ All ambiguities have been resolved during the specification phase. See `clarific
 
             // 5. Store in connections map
             let mut connections = self.connections.write().await;
-            connections.insert(remote_id, connection.clone()); // Note: need Clone trait
+            connections.insert(remote_id, connection.clone());
 
             Ok(connection)
         }
@@ -569,54 +816,91 @@ All ambiguities have been resolved during the specification phase. See `clarific
 
 ### 3.1 Create P2PSystem Trait with Associated Types
 
-- [ ] Extract `P2PSystem` trait with zero-cost abstractions 🔴 **CRITICAL**
-  - [ ] Add trait definition to `lib.rs` (NO `async-trait` dependency):
+**CRITICAL NOTES:**
+- Traits are extracted from working simulator code, NOT designed upfront
+- Traits MUST match exactly what the simulator already implements
+- No speculative methods or future-proofing
+- Use native async fn in traits (requires Rust 1.75+, NO async-trait dependency)
+
+- [ ] Extract `P2PSystem` traits with zero-cost abstractions 🔴 **CRITICAL**
+  - [ ] Create `src/traits.rs` and add to lib.rs: `pub mod traits;`
+  - [ ] Add COMPLETE trait definitions (NO `async-trait` dependency):
     ```rust
     use std::fmt::{Debug, Display};
 
+    // Note: P2PError will be defined in Phase 4, use String for now
+    type P2PResult<T> = Result<T, String>; // Temporary until Phase 4
+
     /// Zero-cost abstraction for P2P systems
+    /// Native async methods require Rust 1.75+ (no Box<dyn Future>)
     pub trait P2PSystem: Send + Sync + 'static {
         type NodeId: P2PNodeId;
         type Connection: P2PConnection<NodeId = Self::NodeId>;
         type Listener: P2PListener<Connection = Self::Connection>;
 
-        async fn connect(&self, node_id: Self::NodeId) -> Result<Self::Connection, P2PError>;
-        async fn listen(&self, addr: &str) -> Result<Self::Listener, P2PError>;
-        async fn discover(&self, name: &str) -> Result<Self::NodeId, P2PError>;
+        /// Connect to a remote peer by node ID
+        async fn connect(&self, node_id: Self::NodeId) -> P2PResult<Self::Connection>;
+
+        /// Start listening for incoming connections
+        async fn listen(&self, addr: &str) -> P2PResult<Self::Listener>;
+
+        /// Discover a peer by name (mock DNS in simulator)
+        async fn discover(&self, name: &str) -> P2PResult<Self::NodeId>;
+
+        /// Get this node's ID
         fn local_node_id(&self) -> &Self::NodeId;
     }
 
     /// Node identity trait matching Iroh's capabilities
     pub trait P2PNodeId: Clone + Debug + Display + Send + Sync + 'static {
-        fn from_bytes(bytes: &[u8; 32]) -> Result<Self, P2PError>;
+        /// Create node ID from 32 bytes (ed25519 public key format)
+        fn from_bytes(bytes: &[u8; 32]) -> P2PResult<Self>;
+
+        /// Get the raw bytes of this node ID
         fn as_bytes(&self) -> &[u8; 32];
+
+        /// Format as short hex string for display
         fn fmt_short(&self) -> String;
     }
 
-    /// Connection trait for reliable streams (initial implementation)
+    /// Connection trait for reliable message streams
     pub trait P2PConnection: Send + Sync + 'static {
         type NodeId: P2PNodeId;
 
-        async fn send(&mut self, data: &[u8]) -> Result<(), P2PError>;
-        async fn recv(&mut self) -> Result<Vec<u8>, P2PError>;
+        /// Send data to remote peer
+        async fn send(&mut self, data: &[u8]) -> P2PResult<()>;
+
+        /// Receive data from remote peer (non-blocking)
+        async fn recv(&mut self) -> P2PResult<Vec<u8>>;
+
+        /// Get remote peer's node ID
         fn remote_node_id(&self) -> &Self::NodeId;
+
+        /// Check if connection is still active
         fn is_connected(&self) -> bool;
-        fn close(&mut self) -> Result<(), P2PError>;
+
+        /// Close the connection
+        fn close(&mut self) -> P2PResult<()>;
     }
 
-    /// Listener trait for accepting connections
+    /// Listener trait for accepting incoming connections
     pub trait P2PListener: Send + Sync + 'static {
         type Connection: P2PConnection;
 
-        async fn accept(&mut self) -> Result<Self::Connection, P2PError>;
+        /// Accept an incoming connection
+        async fn accept(&mut self) -> P2PResult<Self::Connection>;
+
+        /// Get local listening address
         fn local_addr(&self) -> &str;
     }
     ```
-  - [ ] Implement `P2PNodeId` for `SimulatorNodeId`:
+  - [ ] Implement `P2PNodeId` for `SimulatorNodeId` (in simulator.rs):
     ```rust
+    use crate::traits::P2PNodeId;
+
     impl P2PNodeId for SimulatorNodeId {
-        fn from_bytes(bytes: &[u8; 32]) -> Result<Self, P2PError> {
-            Ok(Self::from_bytes(bytes))
+        fn from_bytes(bytes: &[u8; 32]) -> Result<Self, String> {
+            Ok(Self::from_bytes(*bytes))
         }
 
         fn as_bytes(&self) -> &[u8; 32] {
@@ -737,12 +1021,17 @@ All ambiguities have been resolved during the specification phase. See `clarific
 - [ ] Add thiserror dependency to Cargo.toml 🔴 **CRITICAL**
   - [ ] Add to `[dependencies]`: `thiserror = { workspace = true }`
   - [ ] Verify thiserror dependency exists in workspace (should already be present)
-- [ ] Create `src/types.rs` with comprehensive error handling 🔴 **CRITICAL**
+  - [ ] **VERIFICATION**: Run `cargo tree -p moosicbox_p2p` shows thiserror in dependency tree
+
+- [ ] Create `src/types.rs` with COMPLETE error handling 🔴 **CRITICAL**
   - [ ] Add `pub mod types;` to `lib.rs`
-  - [ ] Create `P2PError` enum with all needed variants:
+  - [ ] Create COMPLETE `P2PError` enum with ALL needed variants:
     ```rust
     use thiserror::Error;
+    use std::time::Duration;
 
+    /// All P2P errors in a single flat enum
+    /// Add new variants as needed, but keep flat structure
     #[derive(Debug, Error)]
     pub enum P2PError {
         #[error("Connection failed: {0}")]
@@ -757,14 +1046,14 @@ All ambiguities have been resolved during the specification phase. See `clarific
         #[error("Invalid node ID: {0}")]
         InvalidNodeId(String),
 
-        #[error("Operation timed out")]
-        Timeout,
+        #[error("Operation timed out after {0:?}")]
+        Timeout(Duration),
 
-        #[error("Connection closed")]
-        ConnectionClosed,
+        #[error("Connection closed by {reason}")]
+        ConnectionClosed { reason: String },
 
-        #[error("No route to destination")]
-        NoRoute,
+        #[error("No route to destination {node_id}")]
+        NoRoute { node_id: String },
 
         #[error("Discovery failed: {0}")]
         DiscoveryFailed(String),
@@ -772,26 +1061,41 @@ All ambiguities have been resolved during the specification phase. See `clarific
         #[error("Protocol error: {0}")]
         ProtocolError(String),
 
-        #[error("Serialization error: {0}")]
-        SerializationError(String),
+        #[error("Message too large: {size} bytes exceeds max {max}")]
+        MessageTooLarge { size: usize, max: usize },
 
-        #[error("Authentication failed")]
-        AuthenticationFailed,
+        #[error("Authentication failed for peer {peer}")]
+        AuthenticationFailed { peer: String },
 
         #[error("Invalid configuration: {0}")]
         InvalidConfiguration(String),
     }
 
-    // Convenience result type
+    /// Convenience type alias used throughout the codebase
     pub type P2PResult<T> = Result<T, P2PError>;
     ```
-  - [ ] Replace ALL `Result<T, String>` with `Result<T, P2PError>` in:
-    - [ ] `SimulatorConnection::send()` and `recv()`
-    - [ ] `SimulatorP2P::connect()` and `discover()`
-    - [ ] All trait method implementations
-    - [ ] All internal helper methods
-  - [ ] Update error handling in network graph operations
-  - [ ] Update all tests to expect `P2PError` instead of strings
+
+- [ ] **MIGRATION**: Replace ALL `Result<T, String>` with `P2PResult<T>` 🔴 **CRITICAL**
+  - [ ] Update `traits.rs`: Replace temporary `type P2PResult<T> = Result<T, String>;` with `use crate::types::P2PResult;`
+  - [ ] Update `SimulatorConnection` methods:
+    - [ ] `send(&mut self, data: &[u8]) -> P2PResult<()>`
+    - [ ] `recv(&mut self) -> P2PResult<Vec<u8>>`
+    - [ ] `close(&mut self) -> P2PResult<()>`
+  - [ ] Update `SimulatorP2P` methods:
+    - [ ] `connect(&self, remote_id: SimulatorNodeId) -> P2PResult<SimulatorConnection>`
+    - [ ] `discover(&self, name: &str) -> P2PResult<SimulatorNodeId>` (when implemented)
+  - [ ] Update error creation sites to use proper variants:
+    ```rust
+    // OLD: Err("Connection closed".to_string())
+    // NEW: Err(P2PError::ConnectionClosed { reason: "User requested".to_string() })
+
+    // OLD: Err("No route to destination".to_string())
+    // NEW: Err(P2PError::NoRoute { node_id: remote_id.fmt_short() })
+
+    // OLD: Err(format!("Message too large: {} bytes", size))
+    // NEW: Err(P2PError::MessageTooLarge { size, max: max_message_size() })
+    ```
+  - [ ] Update ALL test expectations from `assert!(result.is_err())` to expect specific `P2PError` variants
 
 #### 4.1 Verification Checklist
 - [ ] Thiserror dependency is properly added and used

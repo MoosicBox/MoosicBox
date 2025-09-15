@@ -628,6 +628,159 @@ router.route(Method::GET, "/health", |_req| {
 - [ ] Documentation covers all public APIs
 - [ ] Examples demonstrate real-world usage
 
+## Implementation Guidelines
+
+All design decisions are finalized and documented in [`clarifications.md`](./clarifications.md). This section provides concrete implementation guidance to eliminate ambiguity.
+
+### Dependency Philosophy
+**Just-in-time dependencies**: Add only when immediately used
+- **Phase 1**: Zero dependencies (completely empty package)
+- **Phase 2.1**: First dependencies: `switchy_async`, `switchy_time`, `switchy_random`
+- **Phase 4.1**: Add `thiserror` when creating error types
+- **Phase 7.1**: Add `iroh` when implementing real P2P
+- **Phase 8.1**: Add `proptest` when implementing property tests
+
+**Verify with tooling**: Run `cargo machete` after each phase
+**Document reasoning**: Explain why each dependency is needed in commit messages
+
+### Code Organization Principles
+**Start simple**: All code in `lib.rs` initially
+- **Phase 1**: Only clippy configuration in `lib.rs`
+- **Phase 2**: Add `mod simulator;` when implementing simulator
+- **Phase 3**: Add `mod traits;` when extracting traits
+- **Phase 4**: Add `mod types;` when adding error types
+
+**Extract gradually**: Move to modules when files exceed 500 lines
+**Feature-based**: Group by feature (`simulator.rs`) not type (`traits.rs`)
+
+### Testing Philosophy
+**Test-driven**: Write tests before implementation
+- Four critical test scenarios drive simulator implementation
+- All tests must pass for phase completion
+- Property-based tests for edge cases and invariants
+
+**Property-based**: Use proptest for invariants
+```rust
+proptest! {
+    #[test]
+    fn message_integrity(data in any::<Vec<u8>>()) {
+        // Property: Any data sent is received unchanged
+        let received = send_and_receive(data.clone());
+        assert_eq!(data, received);
+    }
+}
+```
+
+**Cross-implementation**: Same tests for simulator and Iroh
+- Generic test functions work with any `P2PSystem`
+- Ensures simulator and Iroh behave identically
+- Prevents implementation-specific behavior
+
+### Error Handling Standards
+**Single error type**: Flat `P2PError` enum (no nested errors)
+```rust
+#[derive(Debug, Error)]
+pub enum P2PError {
+    #[error("Connection failed: {0}")]
+    ConnectionFailed(String),
+    // All other variants...
+}
+```
+
+**Explicit variants**: Named variants for each error case
+**No panics**: All errors returned as `P2PResult<T>`, never panic in library code
+
+### Performance Goals
+**Zero-cost abstractions**: Associated types, not trait objects
+- Use `trait P2PSystem { type NodeId: P2PNodeId; }` not `Box<dyn P2PNodeId>`
+- Direct type aliases: `type IrohNodeId = iroh::NodeId` (no wrapper)
+
+**Predictable performance targets**:
+- Connection establishment: < 100ms local, < 500ms remote
+- Message latency: < 10ms local, < 100ms remote
+- Memory efficiency: < 1MB per connection
+- Scalability: Support 1000+ concurrent connections
+
+### Feature Flag Design
+**Mutually exclusive backends**:
+```toml
+[features]
+default = ["simulator"]
+simulator = ["dep:switchy_async", "dep:switchy_time", "dep:switchy_random"]
+iroh = ["dep:iroh"]
+test-utils = ["dep:proptest"]
+```
+
+**Compile-time selection**:
+```rust
+#[cfg(feature = "simulator")]
+pub type DefaultP2P = simulator::SimulatorP2P;
+
+#[cfg(feature = "iroh")]
+pub type DefaultP2P = iroh::IrohP2P;
+```
+
+### Documentation Standards
+**Every public item** needs rustdoc with working example:
+```rust
+/// Connect to a remote peer by node ID
+///
+/// # Examples
+///
+/// ```
+/// use moosicbox_p2p::*;
+/// let p2p = SimulatorP2P::new();
+/// let connection = p2p.connect(node_id).await?;
+/// ```
+///
+/// # Errors
+///
+/// Returns `P2PError::NoRoute` if no path exists to the peer.
+/// Returns `P2PError::Timeout` if connection takes longer than 30 seconds.
+///
+/// # Performance
+///
+/// Connection establishment typically completes in < 100ms for local peers.
+pub async fn connect(&self, node_id: NodeId) -> P2PResult<Connection> { ... }
+```
+
+**Include examples** for non-obvious APIs
+**Explain "why"** not just "what" - design rationale and trade-offs
+**Link to relevant** specifications or external documentation
+
+### Migration Strategy from Tunnel
+**Clean separation**: P2P is standalone alternative, not fallback
+- No tunnel dependencies in P2P code
+- Feature flags control which transport system is used
+- Same high-level API where possible (compatibility layer)
+
+**Service-by-service migration**:
+1. Audio streaming → P2P first (high bandwidth benefit)
+2. Metadata sync → P2P second (reduced latency benefit)
+3. Control messages → P2P last (minimal benefit, but consistency)
+
+**Rollback plan**: Keep tunnel code until P2P proven stable
+- Feature flags allow instant rollback without code changes
+- Monitor both systems during transition period
+- Document rollback procedures and triggers
+
+### Security Considerations
+**Identity management**: Peers authenticated via ed25519 public key cryptography
+- Application layer decides authorization policies
+- No built-in user management or permissions
+
+**Transport security**: All connections encrypted via QUIC/TLS 1.3
+- No unencrypted data transmission ever
+- Perfect forward secrecy where possible
+- No downgrade attacks possible
+
+**DoS protection**: Rate limiting and resource management at application layer
+- Connection rate limiting per peer
+- Message rate limiting per connection
+- Resource quotas for memory and bandwidth
+
 ### Next Steps
 
-This architecture document provides the complete technical foundation for implementation. All design decisions have been clarified and the approach is ready for Phase 1 implementation following the detailed plan in `plan.md`.
+This architecture document, combined with the clarifications and detailed plan, provides a complete and unambiguous technical foundation for implementation.
+
+**Phase 1 is ready to begin** following the explicit instructions in [`plan.md`](./plan.md).
