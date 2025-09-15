@@ -2,7 +2,7 @@
 
 ## System Overview
 
-The P2P integration provides a peer-to-peer communication alternative to MoosicBox's existing centralized tunnel server architecture. The system uses a trait-based abstraction that allows for multiple implementations while maintaining a consistent API.
+The P2P integration provides a peer-to-peer communication alternative to MoosicBox's existing centralized tunnel server architecture. The system uses a trait-based abstraction with zero-cost abstractions that allows for multiple implementations while maintaining a consistent API.
 
 ```
 Current Architecture (Tunnel):
@@ -19,37 +19,53 @@ Client A ←----------→ Client B
 - **Direct Connections**: Enable direct peer-to-peer communication without central infrastructure
 - **NAT Traversal**: Automatic hole-punching and relay fallback for complex network configurations
 - **Performance**: Reduce latency and improve throughput compared to tunnel approach
-- **Reliability**: Maintain or improve connection reliability through P2P redundancy
+- **Zero-Cost Abstractions**: No runtime overhead when using production Iroh backend
 
 ### Secondary Objectives
 - **Implementation Flexibility**: Support multiple P2P libraries through trait abstraction
-- **Testing**: Provide deterministic simulation for reliable automated testing
-- **Migration**: Smooth transition path from existing tunnel infrastructure
-- **Compatibility**: Maintain backward compatibility during migration period
+- **Deterministic Testing**: Provide controllable simulation for reliable automated testing
+- **Migration**: Clean transition path from existing tunnel infrastructure
+- **Web-Server-Like API**: Familiar REST-like routing abstraction for integration
 
 ## Component Architecture
 
-### Core Abstractions
+### Core Abstractions with Zero-Cost Design
 
 ```rust
-trait P2PProvider: Send + Sync {
-    type Connection: P2PConnection;
-    type Listener: P2PListener;
+// Main system trait with associated types for zero-cost abstraction
+trait P2PSystem: Send + Sync + 'static {
+    type NodeId: P2PNodeId;
+    type Connection: P2PConnection<NodeId = Self::NodeId>;
+    type Listener: P2PListener<Connection = Self::Connection>;
 
-    async fn connect(&self, peer_id: &str) -> Result<Self::Connection>;
-    async fn listen(&self, addr: &str) -> Result<Self::Listener>;
-    fn local_peer_id(&self) -> &str;
+    async fn connect(&self, node_id: Self::NodeId) -> Result<Self::Connection, P2PError>;
+    async fn listen(&self, addr: &str) -> Result<Self::Listener, P2PError>;
+    fn local_node_id(&self) -> &Self::NodeId;
 }
 
-trait P2PConnection: Send + Sync {
-    async fn send(&self, data: &[u8]) -> Result<()>;
-    async fn recv(&self) -> Result<Vec<u8>>;
-    fn peer_id(&self) -> &str;
+// Node identity trait matching Iroh's approach
+trait P2PNodeId: Clone + Debug + Display + Send + Sync + 'static {
+    fn from_bytes(bytes: &[u8; 32]) -> Result<Self, P2PError>;
+    fn as_bytes(&self) -> &[u8; 32];
+    fn fmt_short(&self) -> String;
+}
+
+// Connection trait for reliable streams (initial implementation)
+trait P2PConnection: Send + Sync + 'static {
+    type NodeId: P2PNodeId;
+
+    async fn send(&mut self, data: &[u8]) -> Result<(), P2PError>;
+    async fn recv(&mut self) -> Result<Vec<u8>, P2PError>;
+    fn remote_node_id(&self) -> &Self::NodeId;
     fn is_connected(&self) -> bool;
+    fn close(&mut self) -> Result<(), P2PError>;
 }
 
-trait P2PListener: Send + Sync {
-    async fn accept(&mut self) -> Result<Box<dyn P2PConnection>>;
+// Listener trait for accepting connections
+trait P2PListener: Send + Sync + 'static {
+    type Connection: P2PConnection;
+
+    async fn accept(&mut self) -> Result<Self::Connection, P2PError>;
     fn local_addr(&self) -> &str;
 }
 ```
@@ -57,343 +73,561 @@ trait P2PListener: Send + Sync {
 ### Implementation Hierarchy
 
 ```
-moosicbox_p2p
-├── Core Traits (always available)
-│   ├── P2PProvider
-│   ├── P2PConnection
-│   └── P2PListener
-├── Common Types
-│   ├── P2PError
-│   ├── PeerInfo
-│   └── ConnectionConfig
-├── Simulator Implementation (feature = "simulator")
-│   ├── SimulatorP2P
-│   ├── SimulatorConnection
-│   └── SimulatorListener
-└── Iroh Implementation (feature = "iroh")
-    ├── IrohP2P
-    ├── IrohConnection
-    └── IrohListener
+packages/p2p/
+├── Cargo.toml                  # Features: simulator (default), iroh
+├── src/
+│   ├── lib.rs                  # Public API and trait definitions
+│   ├── types.rs                # P2PError and common types
+│   ├── simulator.rs            # Simulator implementation (feature = "simulator")
+│   ├── iroh.rs                 # Iroh implementation (feature = "iroh")
+│   └── test_utils.rs           # Testing utilities and helpers
+├── tests/                      # Integration tests
+│   ├── simulator_tests.rs
+│   ├── cross_implementation.rs
+│   └── property_tests.rs
+├── examples/                   # Usage examples
+│   ├── basic_communication.rs
+│   ├── service_routing.rs
+│   └── migration_example.rs
+└── benches/                    # Performance benchmarks
+    ├── connection_latency.rs
+    └── throughput.rs
+```
+
+### Feature Configuration
+
+```toml
+[features]
+default = ["simulator"]
+simulator = [
+    "dep:switchy_async",
+    "dep:switchy_time",
+    "dep:switchy_random",
+    "dep:proptest"
+]
+iroh = [
+    "dep:iroh",
+    "dep:iroh-net",
+    "dep:tokio"
+]
+fail-on-warnings = []
+```
+
+### Zero-Cost Backend Selection
+
+```rust
+// Compile-time selection via features
+#[cfg(feature = "simulator")]
+pub type DefaultP2P = simulator::SimulatorP2P;
+
+#[cfg(feature = "iroh")]
+pub type DefaultP2P = iroh::IrohP2P;
+
+// When using Iroh: NodeId = iroh::NodeId (no wrapper)
+// When using simulator: NodeId = SimulatorNodeId
+// No runtime overhead, direct type usage
 ```
 
 ## Implementation Details
 
+### Web-Server-Like Integration API
+
+**Purpose**: Provide familiar REST-like routing abstraction for MoosicBox integration
+
+**Design**: Mix of HTTP semantics with service modularity
+```rust
+// Service registration
+trait P2PService {
+    fn register_routes(&self, router: &mut P2PRouter);
+}
+
+// HTTP-like routing
+impl P2PRouter {
+    pub fn route<H>(&mut self, method: Method, path: &str, handler: H)
+    where H: Fn(P2PRequest) -> P2PResponse + Send + Sync + 'static;
+}
+
+// Usage example
+struct AudioService;
+impl P2PService for AudioService {
+    fn register_routes(&self, router: &mut P2PRouter) {
+        router.route(Method::GET, "/audio/stream/:id", handle_audio_stream);
+        router.route(Method::POST, "/audio/metadata", handle_metadata);
+    }
+}
+```
+
 ### Simulator Implementation
 
-**Purpose**: Deterministic testing and development without real network dependencies
+**Purpose**: Deterministic testing with controllable network conditions
 
 **Architecture**:
-- In-memory message routing between simulated peers
-- Configurable network conditions (latency, packet loss, failures)
-- Thread-safe peer registry for connection establishment
+- Graph-based network topology simulation
+- Controllable time via `switchy_time`
+- In-memory message routing with realistic network effects
 - Environment variable configuration following switchy patterns
 
-**Key Features**:
+**Network Graph Model**:
 ```rust
-// Environment variable configuration
-SIMULATOR_P2P_LATENCY_MS=50       // Simulated network latency
-SIMULATOR_P2P_PACKET_LOSS=0.01    // 1% packet loss rate
-SIMULATOR_P2P_FAILURE_RATE=0.001  // Connection failure rate
+struct NetworkGraph {
+    nodes: BTreeMap<SimulatorNodeId, NodeInfo>,
+    links: BTreeMap<(SimulatorNodeId, SimulatorNodeId), LinkInfo>,
+}
+
+struct LinkInfo {
+    latency: Duration,
+    packet_loss: f64,
+    bandwidth_limit: Option<u64>,
+    is_active: bool,
+}
 ```
 
-**Message Flow**:
+**Environment Configuration**:
+```bash
+# Time control (via switchy_time)
+SIMULATOR_TIME_MULTIPLIER=1000    # 1000x speed for testing
+SIMULATOR_STEP_SIZE_MS=10         # 10ms time steps
+
+# Network conditions
+SIMULATOR_DEFAULT_LATENCY_MS=50   # Base latency
+SIMULATOR_DEFAULT_PACKET_LOSS=0.01  # 1% packet loss
+SIMULATOR_PARTITION_PROBABILITY=0.001  # Network partition chance
+
+# Discovery simulation
+SIMULATOR_DISCOVERY_DELAY_MS=100  # DNS lookup delay
+SIMULATOR_DNS_TTL_SECONDS=300     # DNS cache TTL
 ```
-Peer A → SimulatorP2P → MessageQueue → SimulatorP2P → Peer B
-                      ↑                ↓
-                  [Latency]      [Packet Loss]
-                  [Failures]     [Bandwidth]
+
+**Message Routing**:
+```
+Alice wants to send to Bob:
+1. Alice calls connection.send(data)
+2. Simulator looks up network path: Alice -> Router -> Bob
+3. Applies latency via switchy_time.sleep(calculated_latency)
+4. Applies packet loss via deterministic random
+5. Delivers to Bob's message queue
+6. Bob receives via connection.recv()
+```
+
+**Mock Discovery Service**:
+```rust
+// Registration
+simulator.register_peer("alice", alice_addr);
+simulator.register_peer("bob", bob_addr);
+
+// Discovery
+let bob_addr = simulator.discover("bob").await?; // Returns registered address
+let connection = simulator.connect(bob_addr).await?;
 ```
 
 ### Iroh Implementation
 
-**Purpose**: Production P2P communication with real networking
+**Purpose**: Production P2P networking with automatic NAT traversal
 
 **Architecture**:
-- Wraps Iroh's Endpoint and Connection types
-- QUIC-based transport with automatic encryption
-- Integrated NAT traversal using STUN/TURN
-- Public key based peer identity
+- Direct wrapper around Iroh's `Endpoint` and `Connection` types
+- Zero-cost abstraction - no wrapper overhead
+- Automatic NAT traversal and relay fallback
+- Real cryptographic node identity
 
-**Key Features**:
-- **Automatic NAT Traversal**: Hole-punching with relay fallback
-- **Connection Persistence**: Automatic reconnection on network changes
-- **Multiple Transports**: UDP, TCP, and relay connections
-- **Security**: Built-in encryption and authentication
-
-**Iroh Integration**:
+**Identity Management**:
 ```rust
-// Iroh Endpoint wrapping
-struct IrohP2P {
-    endpoint: iroh::Endpoint,
-    config: P2PConfig,
-}
+// Direct use of Iroh types for zero cost
+type IrohNodeId = iroh::NodeId;  // = iroh::PublicKey
 
-// Connection wrapping
+impl P2PNodeId for IrohNodeId {
+    fn from_bytes(bytes: &[u8; 32]) -> Result<Self, P2PError> {
+        iroh::PublicKey::from_bytes(bytes).map_err(Into::into)
+    }
+
+    fn as_bytes(&self) -> &[u8; 32] {
+        self.as_bytes()  // Direct delegation
+    }
+
+    fn fmt_short(&self) -> String {
+        self.fmt_short()  // Direct delegation
+    }
+}
+```
+
+**Connection Handling**:
+```rust
 struct IrohConnection {
     connection: iroh::Connection,
-    peer_id: String,
+    // Additional state if needed
+}
+
+impl P2PConnection for IrohConnection {
+    type NodeId = IrohNodeId;
+
+    async fn send(&mut self, data: &[u8]) -> Result<(), P2PError> {
+        let mut stream = self.connection.open_uni().await?;
+        stream.write_all(data).await?;
+        stream.finish()?;
+        Ok(())
+    }
+
+    async fn recv(&mut self) -> Result<Vec<u8>, P2PError> {
+        let mut stream = self.connection.accept_uni().await?;
+        let data = stream.read_to_end(usize::MAX).await?;
+        Ok(data)
+    }
 }
 ```
 
-## Connection Lifecycle
+**NAT Traversal Configuration**:
+```rust
+// Iroh automatically handles:
+// - STUN for discovering external IP/port
+// - ICE for hole punching
+// - Relay fallback when direct connection fails
+// - Connection persistence and reconnection
 
-### Connection Establishment
+let endpoint = Endpoint::builder()
+    .discovery(Box::new(DnsDiscovery::n0_dns()))  // Optional discovery
+    .relay_mode(RelayMode::Default)               // Use default relays
+    .bind().await?;
+## Testing Framework
 
-```mermaid
-sequenceDiagram
-    participant A as Peer A
-    participant B as Peer B
+### Property-Based Testing with Cross-Implementation Compatibility
 
-    A->>A: provider.connect(peer_b_id)
-    A->>B: Connection Request
-    B->>B: listener.accept()
-    B->>A: Connection Accept
-    A->>B: Handshake
-    B->>A: Handshake Response
-    Note over A,B: Connection Established
-    A<->B: Data Exchange
+**Purpose**: Ensure all implementations behave identically and satisfy protocol invariants
+
+**Architecture**:
+```rust
+// Generic tests that work with any P2PSystem implementation
+fn test_basic_communication<S: P2PSystem>(system: S) {
+    proptest!(|(message in any_message())| {
+        // Test invariant: any message sent is received intact
+        let alice = system.create_node();
+        let bob = system.create_node();
+
+        let connection = alice.connect(bob.node_id()).await?;
+        connection.send(&message).await?;
+        let received = bob.accept().await?.recv().await?;
+
+        assert_eq!(message, received);
+    });
+}
+
+// Cross-implementation compatibility tests
+#[test]
+fn simulator_and_iroh_compatibility() {
+    let simulator_alice = create_simulator_node();
+    let iroh_bob = create_iroh_node();
+
+    // Test that simulator can talk to Iroh and vice versa
+    // (when running integration tests)
+}
 ```
 
-### Message Flow
+**Test Categories**:
+- **Unit Tests**: Individual component behavior
+- **Property Tests**: Protocol invariants and edge cases
+- **Integration Tests**: End-to-end communication scenarios
+- **Performance Tests**: Latency, throughput, resource usage
+- **Cross-Implementation**: Simulator ↔ Iroh compatibility
 
-1. **Connection Request**: Peer A initiates connection to Peer B using peer ID
-2. **Discovery**: P2P implementation locates Peer B (via DHT, direct address, etc.)
-3. **NAT Traversal**: Automatic hole-punching or relay connection
-4. **Handshake**: Protocol negotiation and authentication
-5. **Data Transfer**: Bidirectional message exchange
-6. **Connection Management**: Keep-alive, reconnection, cleanup
+### Deterministic Testing via Simulator
 
-### Error Handling
+**Controlled Environment**:
+```rust
+// Deterministic test setup
+let simulator = SimulatorP2P::new()
+    .with_seed(12345)                    // Reproducible randomness
+    .with_time_control()                 // Manual time advancement
+    .with_network_topology(topology);    // Predefined network graph
+
+// Test specific scenarios
+simulator.add_network_partition("alice", "bob");
+simulator.advance_time(Duration::from_secs(30));
+assert!(connection_times_out);
+
+simulator.heal_partition();
+simulator.advance_time(Duration::from_secs(5));
+assert!(connection_recovers);
+```
+
+## Connection Lifecycle Management
+
+### Hybrid Approach (Matching Iroh)
 
 ```rust
-enum P2PError {
+// Automatic cleanup on drop (RAII)
+{
+    let connection = p2p.connect(node_id).await?;
+    // Connection automatically closed when dropped
+} // <- Connection closed here
+
+// Explicit close for immediate closure
+let mut connection = p2p.connect(node_id).await?;
+connection.close()?; // Immediate closure
+
+// Clone-able handles
+let connection1 = p2p.connect(node_id).await?;
+let connection2 = connection1.clone(); // Same underlying connection
+// Closes when ALL handles are dropped
+
+// Configurable idle timeout
+let p2p = P2PBuilder::new()
+    .idle_timeout(Duration::from_secs(300))
+    .build();
+```
+
+### Error Handling - Unified Approach
+
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum P2PError {
+    #[error("Connection failed: {0}")]
     ConnectionFailed(String),
-    PeerNotFound(String),
-    NetworkError(NetworkError),
+
+    #[error("Node not found: {0}")]
+    NodeNotFound(String),
+
+    #[error("Network error: {0}")]
+    NetworkError(String),
+
+    #[error("Protocol error: {0}")]
     ProtocolError(String),
-    TimeoutError,
+
+    #[error("Operation timed out")]
+    Timeout,
+
+    #[error("Authentication failed")]
     AuthenticationFailed,
+
+    #[error("Invalid node ID: {0}")]
+    InvalidNodeId(String),
+
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 }
 ```
 
-## Protocol Design
+## Security and Authentication
 
-### Message Format
-
-```rust
-// Basic message structure
-struct P2PMessage {
-    message_id: u64,
-    peer_id: String,
-    payload: Vec<u8>,
-    timestamp: SystemTime,
-}
-
-// Protocol messages
-enum ProtocolMessage {
-    Handshake { version: u32, capabilities: Vec<String> },
-    Data { payload: Vec<u8> },
-    Keepalive,
-    Disconnect { reason: String },
-}
-```
-
-### Protocol Versioning
-
-- Version negotiation during handshake
-- Backward compatibility for migration period
-- Feature capability advertisement
-- Graceful degradation for unsupported features
-
-## Security Model
-
-### Identity and Authentication
-
-- **Peer Identity**: Public key based identification
-- **Authentication**: Challenge-response using peer's private key
-- **Connection Security**: All data encrypted in transit (QUIC provides this)
+### Identity Management
+- **Ed25519 Keys**: Cryptographically secure node identity
+- **QUIC Encryption**: Built-in transport encryption via Iroh
+- **No Additional Auth**: Application decides connection acceptance
+- **Key Persistence**: Deterministic keys for testing, secure generation for production
 
 ### Network Security
+- **Mandatory Encryption**: All communication encrypted via QUIC
+- **Peer Authentication**: Public key verification during handshake
+- **DoS Protection**: Connection limits and rate limiting at application layer
+- **No Plaintext**: No fallback to unencrypted communication
 
-- **Encrypted Transport**: QUIC provides built-in encryption
-- **Peer Verification**: Authenticate peer identity before data exchange
-- **DoS Protection**: Rate limiting and connection limits
-- **Network Isolation**: Proper firewall and network segmentation
+## Resource Management
 
-## Performance Considerations
-
-### Connection Management
-
-- **Connection Pooling**: Reuse connections for multiple requests
-- **Keep-alive**: Maintain connections across requests
-- **Lazy Connection**: Connect on first use, not initialization
-- **Connection Limits**: Prevent resource exhaustion
-
-### Message Optimization
-
-- **Message Batching**: Combine small messages for efficiency
-- **Compression**: Optional compression for large payloads
-- **Streaming**: Support for large data transfers
-- **Prioritization**: Priority queues for different message types
-
-### Resource Management
-
-- **Memory**: Bounded buffers and connection limits
-- **CPU**: Efficient serialization and async processing
-- **Network**: Bandwidth management and QoS
-- **File Descriptors**: Proper cleanup and limits
-
-## Network Topology Considerations
-
-### Direct Connections
-
+### Connection Configuration
+```rust
+// Basic configuration without performance targets
+P2PBuilder::new()
+    .max_connections(100)
+    .connection_timeout(Duration::from_secs(30))
+    .max_message_size(1024 * 1024) // 1MB
+    .build()
 ```
-Peer A ←→ Peer B
-```
-- Lowest latency
-- Best bandwidth utilization
-- Requires successful NAT traversal
 
-### Relay Connections
+### Zero-Cost Abstractions
+- When using Iroh: Direct type usage, no wrapper overhead
+- When using simulator: Minimal abstraction for testing
+- Compile-time backend selection via features
 
-```
-Peer A ←→ Relay Server ←→ Peer B
-```
-- Fallback when direct connection fails
-- Higher latency but more reliable
-- Uses Iroh's relay infrastructure
+## MoosicBox Integration Strategy
 
-### Hybrid Topology
-
-```
-Peer A ←→ Peer B (direct)
-Peer A ←→ Relay ←→ Peer C (relayed)
-```
-- Combination based on network conditions
-- Automatic fallback and optimization
-- Dynamic topology adjustment
-
-## Integration Strategy
-
-### Feature Flag Control
+### Web-Server-Like API for Familiar Integration
 
 ```rust
-// Compile-time selection
-#[cfg(feature = "p2p-simulator")]
-let provider = moosicbox_p2p::SimulatorP2P::new(config);
+// Initialize P2P system
+let p2p_system = P2PBuilder::new()
+    .backend(DefaultP2P::new())  // Compile-time selected
+    .build();
 
-#[cfg(feature = "p2p-iroh")]
-let provider = moosicbox_p2p::IrohP2P::new(config);
+// Create router with HTTP-like semantics
+let mut router = P2PRouter::new();
+
+// Register services (similar to web route registration)
+let audio_service = AudioService::new();
+audio_service.register_routes(&mut router);
+
+let sync_service = SyncService::new();
+sync_service.register_routes(&mut router);
+
+// Start P2P server
+p2p_system.serve(router).await?;
+
+// Service implementation example
+impl P2PService for AudioService {
+    fn register_routes(&self, router: &mut P2PRouter) {
+        router.route(Method::GET, "/audio/stream/:id", |req| {
+            let track_id = req.path_param("id")?;
+            let audio_data = self.get_audio_stream(track_id)?;
+            P2PResponse::ok(audio_data)
+        });
+
+        router.route(Method::POST, "/audio/metadata", |req| {
+            let metadata: AudioMetadata = deserialize(&req.body)?;
+            self.update_metadata(metadata)?;
+            P2PResponse::ok(b"updated")
+        });
+    }
+}
 ```
 
-### Configuration Management
+### Compile-Time Backend Selection
 
 ```toml
-# Environment configuration
-P2P_IMPLEMENTATION=iroh
-P2P_LISTEN_PORT=8800
-P2P_BOOTSTRAP_PEERS=peer1,peer2
-P2P_RELAY_SERVERS=relay1.example.com,relay2.example.com
+# Cargo.toml for testing
+[dependencies.moosicbox_p2p]
+features = ["simulator"]
+
+# Cargo.toml for production
+[dependencies.moosicbox_p2p]
+features = ["iroh"]
 ```
 
-### Migration Path
+```rust
+// Automatic selection based on features
+use moosicbox_p2p::DefaultP2P;
 
-1. **Phase 1**: Deploy P2P alongside tunnel (feature flags)
-2. **Phase 2**: Route new connections through P2P
-3. **Phase 3**: Migrate existing connections gradually
-4. **Phase 4**: Deprecate tunnel infrastructure
+// In simulator build: DefaultP2P = SimulatorP2P
+// In iroh build: DefaultP2P = IrohP2P
+let p2p = DefaultP2P::new(config);
+```
+
+### Migration from Tunnel Server
+
+**Phase 1**: P2P as Alternative (No Tunnel Fallback)
+```rust
+// Clean separation - choose one at compile time
+match env::var("MOOSICBOX_TRANSPORT") {
+    Ok("p2p") => {
+        let transport = P2PTransport::new();
+        server.use_transport(transport);
+    }
+    _ => {
+        let transport = TunnelTransport::new();
+        server.use_transport(transport);
+    }
+}
+```
+
+**Phase 2**: Service-by-Service Migration
+- Audio streaming → P2P first
+- Metadata sync → P2P second
+- Control messages → P2P last
+- Independent rollout per service
+
+**Phase 3**: Tunnel Deprecation
+- Remove tunnel dependencies
+- P2P becomes default
+- Clean up migration code
+
+## Configuration and Environment Integration
+
+### Switchy Pattern Integration
+
+```bash
+# Time control (development/testing)
+SIMULATOR_TIME_MULTIPLIER=1000
+SIMULATOR_STEP_SIZE_MS=10
+
+# Network simulation
+SIMULATOR_DEFAULT_LATENCY_MS=50
+SIMULATOR_PACKET_LOSS=0.01
+
+# Production configuration
+P2P_LISTEN_PORT=8800
+P2P_RELAY_MODE=default
+P2P_DISCOVERY_MODE=mdns
+```
+
+### Development vs Production
+
+```rust
+// Development: Fast simulation
+#[cfg(debug_assertions)]
+let p2p = P2PBuilder::new()
+    .backend(SimulatorP2P::new())
+    .fast_mode()  // Minimal delays
+    .build();
+
+// Production: Real networking
+#[cfg(not(debug_assertions))]
+let p2p = P2PBuilder::new()
+    .backend(IrohP2P::new())
+    .discovery_mode(DiscoveryMode::MdnsAndDht)
+    .relay_mode(RelayMode::Default)
+    .build();
+```
 
 ## Monitoring and Observability
 
-### Metrics Collection
-
-- **Connection Metrics**: Establishment time, success rate, active connections
-- **Performance Metrics**: Latency, throughput, error rates
-- **Network Metrics**: NAT traversal success, relay usage
-- **Resource Metrics**: Memory usage, CPU utilization
-
-### Logging Integration
+### Integration with Existing Telemetry
 
 ```rust
-// Structured logging
-log::info!("P2P connection established";
-    "peer_id" => peer_id,
-    "connection_type" => "direct",
-    "latency_ms" => establishment_time.as_millis()
-);
+// Use existing MoosicBox telemetry patterns
+use moosicbox_telemetry::{track_latency, track_counter};
+
+impl P2PConnection for IrohConnection {
+    async fn send(&mut self, data: &[u8]) -> Result<(), P2PError> {
+        let _timer = track_latency("p2p.message.send");
+        track_counter("p2p.messages.sent", 1);
+
+        // Actual send implementation
+        let result = self.inner_send(data).await;
+
+        if result.is_err() {
+            track_counter("p2p.errors.send", 1);
+        }
+
+        result
+    }
+}
 ```
 
-### Health Checks
+### Health Checks and Diagnostics
 
-- Connection pool health
-- Peer reachability tests
-- Network connectivity validation
-- Performance threshold monitoring
+```rust
+// Health check endpoint
+router.route(Method::GET, "/health", |_req| {
+    let health = P2PHealth {
+        active_connections: p2p.connection_count(),
+        node_id: p2p.local_node_id().fmt_short(),
+        network_type: if p2p.has_direct_connections() { "direct" } else { "relay" },
+        uptime: p2p.uptime(),
+    };
+    P2PResponse::json(health)
+});
+```
 
-## Testing Strategy
+## Implementation Validation
 
-### Unit Testing
+### Success Criteria Summary
 
-- Trait-based tests work with all implementations
-- Mock implementations for isolated testing
-- Error condition and edge case coverage
-- Performance and resource usage validation
+**Functional Requirements**:
+- [x] Zero-cost abstraction when using Iroh
+- [x] Deterministic testing via simulator
+- [x] Web-server-like integration API
+- [x] Raw bytes transport (no serialization lock-in)
+- [x] Ed25519 node identity matching Iroh
 
-### Integration Testing
+**Technical Requirements**:
+- [ ] Zero-cost abstraction when using Iroh backend
+- [ ] No wrapper overhead in production builds
+- [ ] Deterministic behavior in simulator mode
+- [ ] Resource cleanup prevents leaks
 
-- Real network scenarios with Iroh
-- Simulator testing for deterministic scenarios
-- Cross-implementation compatibility
-- Migration and compatibility testing
+**Quality Requirements**:
+- [ ] Zero clippy warnings with fail-on-warnings
+- [ ] Property tests pass on all implementations
+- [ ] Cross-implementation compatibility tests pass
+- [ ] Documentation covers all public APIs
+- [ ] Examples demonstrate real-world usage
 
-### Performance Testing
+### Next Steps
 
-- Latency and throughput benchmarks
-- Scalability testing with multiple peers
-- Resource usage profiling
-- Comparison with tunnel baseline
-
-## Deployment Considerations
-
-### Infrastructure Requirements
-
-- **Simulator**: No external dependencies
-- **Iroh**: Internet connectivity for NAT traversal
-- **Relay Servers**: Optional relay infrastructure for fallback
-
-### Configuration Management
-
-- Environment variable configuration
-- Runtime configuration updates where safe
-- Secure configuration for production
-- Development vs production settings
-
-### Rollout Strategy
-
-- Feature flags for gradual enablement
-- Canary deployments with monitoring
-- Rollback procedures for issues
-- Performance monitoring during rollout
-
-## Future Enhancements
-
-### Additional P2P Libraries
-
-The trait-based architecture allows for additional implementations:
-- libp2p integration
-- Custom protocol implementations
-- Specialized network optimizations
-
-### Advanced Features
-
-- **Mesh Networking**: Multi-hop routing for complex topologies
-- **Content Distribution**: Efficient data distribution across peers
-- **Load Balancing**: Distribute load across multiple peer connections
-- **Caching**: Peer-based caching for improved performance
-
-### Protocol Evolution
-
-- Version negotiation framework
-- Feature capability system
-- Backward compatibility maintenance
-- Migration tools for protocol upgrades
+This architecture document provides the complete technical foundation for implementation. All design decisions have been clarified and the approach is ready for Phase 1 implementation following the detailed plan in `plan.md`.
