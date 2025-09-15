@@ -7858,6 +7858,78 @@ Phase 16.6 is **100% complete** with zero compromises, comprehensive test covera
   - [ ] `cargo test -p switchy_database --features simulator,schema introspection` passes
   - [ ] Zero clippy warnings
 
+### 16.8 Fix VARCHAR Length Mapping Issues 🟡 **IMPORTANT**
+
+**Issue Discovered:** During Phase 16.6 implementation review, we identified that both PostgreSQL and MySQL implementations have an oversight where VARCHAR columns with specific lengths are being mapped to `DataType::Text` instead of preserving the length information in `DataType::VarChar(length)`.
+
+**Impact:** This reduces schema introspection fidelity and loses important constraint information that applications might need for validation or schema recreation.
+
+#### 16.8.1 PostgreSQL VARCHAR Length Fix 🟡 **IMPORTANT**
+
+**Problem:** PostgreSQL implementations map all character types to `DataType::Text`, losing VARCHAR length information.
+
+**Current Issue:**
+- tokio-postgres: `packages/database/src/postgres/introspection.rs:98` - Maps `"CHARACTER VARYING" | "VARCHAR"` to `DataType::Text`
+- sqlx: `packages/database/src/sqlx/postgres_introspection.rs` - Same issue, doesn't even query `character_maximum_length`
+
+- [ ] **Fix tokio-postgres implementation** (`packages/database/src/postgres/introspection.rs`):
+  - [ ] Update column query to include `character_maximum_length` in SELECT statement
+  - [ ] Update `postgres_type_to_data_type()` function signature to accept `char_max_length: Option<i32>`
+  - [ ] Map `VARCHAR`/`CHARACTER VARYING` to `DataType::VarChar(length)` when length is available
+  - [ ] Keep `TEXT` mapping to `DataType::Text`
+  - [ ] Handle cases where length is NULL (use reasonable default like 255)
+
+- [ ] **Fix sqlx PostgreSQL implementation** (`packages/database/src/sqlx/postgres_introspection.rs`):
+  - [ ] Add `character_maximum_length` to the column query (lines 34-38)
+  - [ ] Extract `character_maximum_length` from row data
+  - [ ] Update `postgres_sqlx_type_to_data_type()` function to accept length parameter
+  - [ ] Apply same VARCHAR vs TEXT mapping logic as tokio-postgres
+
+#### 16.8.2 MySQL VARCHAR Length Fix 🟡 **IMPORTANT**
+
+**Problem:** MySQL implementation queries `CHARACTER_MAXIMUM_LENGTH` but doesn't use it in type mapping.
+
+**Current Issue:**
+- `packages/database/src/sqlx/mysql_introspection.rs:41` - Queries `CHARACTER_MAXIMUM_LENGTH` but doesn't pass to type mapping
+- `packages/database/src/sqlx/mysql_introspection.rs:86` - Calls `mysql_type_to_data_type(&data_type_str)` without length
+
+- [ ] **Fix MySQL implementation** (`packages/database/src/sqlx/mysql_introspection.rs`):
+  - [ ] Extract `CHARACTER_MAXIMUM_LENGTH` from row data (around line 85)
+  - [ ] Update `mysql_type_to_data_type()` function signature to accept `char_max_length: Option<i64>`
+  - [ ] Map `CHAR`/`VARCHAR` to `DataType::VarChar(length as u16)` when length is available
+  - [ ] Keep `TEXT`/`MEDIUMTEXT`/`LONGTEXT` mapping to `DataType::Text`
+  - [ ] Handle edge cases where length might be NULL
+
+#### 16.8.3 SQLite - No Changes Needed ✅
+
+**SQLite Status:** SQLite correctly maps all text types to `DataType::Text` because SQLite doesn't have true VARCHAR types internally. VARCHAR(n) is treated as TEXT in SQLite, so current mapping is accurate.
+
+#### 16.8.4 Test Updates Required 🟢 **MINOR**
+
+- [ ] **Update existing tests** that may expect VARCHAR columns to have `DataType::Text`
+- [ ] **Add new tests** to verify VARCHAR length preservation:
+  - [ ] Test `VARCHAR(50)` maps to `DataType::VarChar(50)`
+  - [ ] Test `VARCHAR(255)` maps to `DataType::VarChar(255)`
+  - [ ] Test `TEXT` still maps to `DataType::Text`
+  - [ ] Test edge cases like VARCHAR without explicit length
+- [ ] **Test both PostgreSQL backends** (tokio-postgres and sqlx)
+
+#### 16.8.5 Implementation Strategy
+
+**Recommended Approach:**
+1. **Phase 16.8.1**: Fix PostgreSQL implementations first (both tokio-postgres and sqlx)
+2. **Phase 16.8.2**: Fix MySQL implementation
+3. **Phase 16.8.3**: Update and add tests for all affected backends
+4. **Phase 16.8.4**: Verify compilation and test compatibility
+
+**Benefits of Fix:**
+1. **Schema Fidelity**: Preserves exact VARCHAR length constraints from database schema
+2. **Migration Accuracy**: Enables accurate schema recreation during migrations
+3. **Validation Support**: Applications can validate data length before database operations
+4. **API Consistency**: Properly utilizes the `DataType::VarChar(u16)` variant that exists for this purpose
+
+**Breaking Changes:** This could be a breaking change for code that expects VARCHAR columns to return `DataType::Text`. However, this is a bug fix that improves accuracy, so the breaking change is justified.
+
 ### 16.9 Add Helper Function for Type Mapping
 
 - [ ] Create helper functions in each backend 🟡 **IMPORTANT**
@@ -8066,7 +8138,7 @@ Each phase implementation must satisfy these criteria before marking as complete
 - [ ] Test coverage documented with pass/fail status
 - [ ] Known limitations or compromises clearly stated
 
-### 16.8 Extended DataType Support ❌ **MEDIUM PRIORITY**
+### 16.13 Extended DataType Support ❌ **MEDIUM PRIORITY**
 
 **Goal:** Add support for additional data types commonly found in production databases
 
