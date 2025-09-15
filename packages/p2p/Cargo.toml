@@ -1,0 +1,33 @@
+[package]
+authors     = { workspace = true }
+categories  = ["network-programming"]
+description = "P2P communication system for MoosicBox"
+edition     = { workspace = true }
+keywords    = ["communication", "networking", "p2p", "peer-to-peer"]
+license     = { workspace = true }
+name        = "moosicbox_p2p"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[package.metadata.workspaces]
+group = "p2p"
+
+[dependencies]
+# CRITICAL: Completely empty dependencies section in Phase 1
+# Dependencies will be added exactly when first used:
+# - Phase 2.1: switchy_async, switchy_time, switchy_random
+# - Phase 4.1: thiserror
+# - Phase 7.1: iroh (optional)
+# - Phase 8.1: proptest (dev-dependency)
+
+[features]
+default          = ["simulator"]
+fail-on-warnings = []
+simulator        = []
+# NOTE: iroh feature will be added in Phase 7.1
+# NOTE: test-utils feature will be added in Phase 8.1
+
+[dev-dependencies]
+# CRITICAL: Completely empty dev-dependencies in Phase 1
+# Will be added when tests require them

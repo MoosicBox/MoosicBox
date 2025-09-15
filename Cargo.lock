@@ -8414,6 +8414,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "moosicbox_p2p"
+version = "0.1.0"
+
+[[package]]
 name = "moosicbox_paging"
 version = "0.1.4"
 dependencies = [
