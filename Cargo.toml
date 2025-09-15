@@ -476,14 +476,14 @@ rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rust-embed = "8.7.2"
-rust_decimal = { version = "1.37.2", default-features = false }
-rust_decimal_macros = { version = "1.37.1", default-features = false }
+rust_decimal = { version = "1.38.0", default-features = false }
+rust_decimal_macros = { version = "1.38.0", default-features = false }
 ryu = "1.0.20"
 scoped-tls = "1.0.1"
-serde = { version = "1.0.221", features = ["derive"] }
+serde = { version = "1.0.223", features = ["derive"] }
 serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
-serde_json = "1.0.144"
+serde_json = "1.0.145"
 serde_urlencoded = "0.7.1"
 serial_test = "3.2.0"
 sha2 = "0.10.9"
@@ -507,7 +507,7 @@ swc_common = { version = "14.0.3", features = ["tty-emitter"] }
 swc_ecma_ast = "15.0.0"
 swc_ecma_codegen = "17.0.2"
 swc_ecma_loader = { version = "14.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "32.0.3"
+swc_ecma_minifier = "32.0.4"
 swc_ecma_parser = "24.0.1"
 swc_ecma_transforms_base = "26.0.1"
 swc_ecma_transforms_typescript = "29.0.0"
