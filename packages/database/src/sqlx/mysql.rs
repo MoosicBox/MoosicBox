@@ -497,37 +497,46 @@ impl Database for MySqlSqlxDatabase {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.6 - MySQL (sqlx)
-        unimplemented!("table_exists not yet implemented for MySqlSqlxDatabase")
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        super::mysql_introspection::mysql_sqlx_table_exists(&mut connection, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.6 - MySQL (sqlx)
-        unimplemented!("get_table_info not yet implemented for MySqlSqlxDatabase")
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        super::mysql_introspection::mysql_sqlx_get_table_info(&mut connection, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.6 - MySQL (sqlx)
-        unimplemented!("get_table_columns not yet implemented for MySqlSqlxDatabase")
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        super::mysql_introspection::mysql_sqlx_get_table_columns(&mut connection, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.6 - MySQL (sqlx)
-        unimplemented!("column_exists not yet implemented for MySqlSqlxDatabase")
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        super::mysql_introspection::mysql_sqlx_column_exists(
+            &mut connection,
+            table_name,
+            column_name,
+        )
+        .await
     }
 
     async fn begin_transaction(
@@ -842,37 +851,54 @@ impl Database for MysqlSqlxTransaction {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.6 - MySQL (sqlx)
-        unimplemented!("table_exists not yet implemented for MysqlSqlxTransaction")
+    #[allow(clippy::significant_drop_tightening)]
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_table_exists(&mut *tx, table_name).await
     }
 
     #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.6 - MySQL (sqlx)
-        unimplemented!("get_table_info not yet implemented for MysqlSqlxTransaction")
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_get_table_info(&mut *tx, table_name).await
     }
 
     #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.6 - MySQL (sqlx)
-        unimplemented!("get_table_columns not yet implemented for MysqlSqlxTransaction")
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_get_table_columns(&mut *tx, table_name).await
     }
 
     #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.6 - MySQL (sqlx)
-        unimplemented!("column_exists not yet implemented for MysqlSqlxTransaction")
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_column_exists(&mut *tx, table_name, column_name)
+            .await
     }
 
     async fn begin_transaction(
@@ -2140,5 +2166,252 @@ impl Expression for MySqlDatabaseValue {
 
     fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::DatabaseValue(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::schema::DataType;
+    use sqlx::MySqlPool;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    fn get_mysql_test_url() -> Option<String> {
+        std::env::var("MYSQL_TEST_URL").ok()
+    }
+
+    async fn create_pool(url: &str) -> Result<Arc<Mutex<MySqlPool>>, sqlx::Error> {
+        let pool = MySqlPool::connect(url).await?;
+        Ok(Arc::new(Mutex::new(pool)))
+    }
+
+    #[tokio::test]
+    async fn test_mysql_table_exists() {
+        let Some(url) = get_mysql_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = MySqlSqlxDatabase::new(pool);
+
+        // Test non-existent table
+        assert!(!db.table_exists("non_existent_table").await.unwrap());
+
+        // Create test table
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_table_exists (id INTEGER PRIMARY KEY AUTO_INCREMENT)",
+        )
+        .await
+        .unwrap();
+
+        // Test existing table
+        assert!(db.table_exists("test_table_exists").await.unwrap());
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_table_exists")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_mysql_get_table_columns() {
+        let Some(url) = get_mysql_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = MySqlSqlxDatabase::new(pool);
+
+        // Create test table with various column types
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_table_columns (
+                id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(100) NOT NULL,
+                age INT,
+                active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .await
+        .unwrap();
+
+        let columns = db.get_table_columns("test_table_columns").await.unwrap();
+
+        assert_eq!(columns.len(), 5);
+
+        // Check id column
+        let id_col = columns.iter().find(|c| c.name == "id").unwrap();
+        assert_eq!(id_col.data_type, DataType::Int);
+        assert!(!id_col.nullable);
+        assert!(id_col.is_primary_key);
+        assert!(id_col.auto_increment);
+
+        // Check name column
+        let name_col = columns.iter().find(|c| c.name == "name").unwrap();
+        assert_eq!(name_col.data_type, DataType::Text);
+        assert!(!name_col.nullable);
+        assert!(!name_col.is_primary_key);
+
+        // Check age column
+        let age_col = columns.iter().find(|c| c.name == "age").unwrap();
+        assert_eq!(age_col.data_type, DataType::Int);
+        assert!(age_col.nullable);
+        assert!(!age_col.is_primary_key);
+
+        // Check active column
+        let active_col = columns.iter().find(|c| c.name == "active").unwrap();
+        assert_eq!(active_col.data_type, DataType::Bool);
+        assert!(active_col.nullable);
+        assert!(active_col.default_value.is_some());
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_table_columns")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_mysql_column_exists() {
+        let Some(url) = get_mysql_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = MySqlSqlxDatabase::new(pool);
+
+        // Create test table
+        db.exec_raw("CREATE TABLE IF NOT EXISTS test_column_exists (id INTEGER, name VARCHAR(50))")
+            .await
+            .unwrap();
+
+        // Test existing columns
+        assert!(db.column_exists("test_column_exists", "id").await.unwrap());
+        assert!(
+            db.column_exists("test_column_exists", "name")
+                .await
+                .unwrap()
+        );
+
+        // Test non-existent column
+        assert!(
+            !db.column_exists("test_column_exists", "nonexistent")
+                .await
+                .unwrap()
+        );
+
+        // Test non-existent table
+        assert!(!db.column_exists("non_existent_table", "id").await.unwrap());
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_column_exists")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_mysql_get_table_info() {
+        let Some(url) = get_mysql_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = MySqlSqlxDatabase::new(pool);
+
+        // Create test table
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_table_info (
+                id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(100) NOT NULL,
+                email VARCHAR(255)
+            )",
+        )
+        .await
+        .unwrap();
+
+        let table_info = db.get_table_info("test_table_info").await.unwrap();
+        assert!(table_info.is_some());
+
+        let table_info = table_info.unwrap();
+        assert_eq!(table_info.name, "test_table_info");
+        assert_eq!(table_info.columns.len(), 3);
+
+        // Check that we have the expected columns
+        assert!(table_info.columns.contains_key("id"));
+        assert!(table_info.columns.contains_key("name"));
+        assert!(table_info.columns.contains_key("email"));
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_table_info")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_mysql_get_table_info_empty() {
+        let Some(url) = get_mysql_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = MySqlSqlxDatabase::new(pool);
+
+        // Test non-existent table
+        let table_info = db.get_table_info("non_existent_table").await.unwrap();
+        assert!(table_info.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_mysql_get_table_info_with_indexes_and_foreign_keys() {
+        let Some(url) = get_mysql_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = MySqlSqlxDatabase::new(pool);
+
+        // Create parent table
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_parent (
+                id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(100) UNIQUE
+            )",
+        )
+        .await
+        .unwrap();
+
+        // Create child table with foreign key and index
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_child (
+                id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                parent_id INTEGER,
+                description TEXT,
+                INDEX idx_description (description(100)),
+                FOREIGN KEY (parent_id) REFERENCES test_parent(id) ON DELETE CASCADE
+            )",
+        )
+        .await
+        .unwrap();
+
+        let table_info = db.get_table_info("test_child").await.unwrap();
+        assert!(table_info.is_some());
+
+        let table_info = table_info.unwrap();
+        assert_eq!(table_info.name, "test_child");
+
+        // Check indexes (should have PRIMARY and idx_description)
+        assert!(table_info.indexes.len() >= 2);
+        assert!(table_info.indexes.contains_key("PRIMARY"));
+
+        // Check foreign keys
+        assert!(!table_info.foreign_keys.is_empty());
+
+        // Clean up (order matters due to foreign key)
+        db.exec_raw("DROP TABLE IF EXISTS test_child")
+            .await
+            .unwrap();
+        db.exec_raw("DROP TABLE IF EXISTS test_parent")
+            .await
+            .unwrap();
     }
 }
