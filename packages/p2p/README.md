@@ -1,6 +1,6 @@
-# MoosicBox P2P
+# Switchy P2P
 
-P2P communication system for MoosicBox - enables direct device-to-device connections with automatic NAT traversal.
+P2P communication abstraction system - enables direct device-to-device connections with automatic NAT traversal.
 
 ## Status
 
@@ -13,4 +13,4 @@ P2P communication system for MoosicBox - enables direct device-to-device connect
 
 ## License
 
-Licensed under the same terms as the MoosicBox project.
+Licensed under the same terms as the parent project.

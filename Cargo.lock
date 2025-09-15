@@ -8414,10 +8414,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moosicbox_p2p"
-version = "0.1.0"
-
-[[package]]
 name = "moosicbox_paging"
 version = "0.1.4"
 dependencies = [
@@ -14422,6 +14418,10 @@ dependencies = [
  "switchy_async",
  "thiserror 2.0.16",
 ]
+
+[[package]]
+name = "switchy_p2p"
+version = "0.1.0"
 
 [[package]]
 name = "switchy_random"

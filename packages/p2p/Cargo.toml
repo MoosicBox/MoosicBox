@@ -1,11 +1,11 @@
 [package]
 authors     = { workspace = true }
 categories  = ["network-programming"]
-description = "P2P communication system for MoosicBox"
+description = "P2P communication abstraction system"
 edition     = { workspace = true }
 keywords    = ["communication", "networking", "p2p", "peer-to-peer"]
 license     = { workspace = true }
-name        = "moosicbox_p2p"
+name        = "switchy_p2p"
 readme      = "README.md"
 repository  = { workspace = true }
 version     = "0.1.0"

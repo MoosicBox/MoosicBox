@@ -45,7 +45,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 
 ## Phase 1: Package Creation and Setup ✅ **COMPLETED**
 
-**Goal:** Create the moosicbox_p2p package and integrate it into the workspace
+**Goal:** Create the switchy_p2p package and integrate it into the workspace
 
 **Status:** All tasks completed successfully
 
@@ -72,13 +72,13 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     File created with all required metadata fields (readme, keywords, categories)
     ```toml
     [package]
-    name = "moosicbox_p2p"
+    name = "switchy_p2p"
     version = "0.1.0"
     edition = { workspace = true }
     authors = { workspace = true }
     license = { workspace = true }
     repository = { workspace = true }
-    description = "P2P communication system for MoosicBox"
+    description = "P2P communication abstraction system"
 
     [package.metadata.workspaces]
     group = "p2p"
@@ -102,8 +102,8 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     # CRITICAL: Completely empty dev-dependencies in Phase 1
     # Will be added when tests require them
     ```
-  - [x] **VERIFICATION**: Run `cargo tree -p moosicbox_p2p` - should show ZERO dependencies
-    `moosicbox_p2p v0.1.0 (/hdd/GitHub/wt-moosicbox/p2p/packages/p2p)` - zero dependencies confirmed
+  - [x] **VERIFICATION**: Run `cargo tree -p switchy_p2p` - should show ZERO dependencies
+    `switchy_p2p v0.1.0 (/hdd/GitHub/wt-moosicbox/p2p/packages/p2p)` - zero dependencies confirmed
 
 #### 1.1 Verification Checklist
 - [x] Directory structure exists at correct paths
@@ -112,19 +112,19 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
   Valid TOML with workspace inheritance, all required metadata fields
 - [x] `lib.rs` contains ONLY clippy configuration (no modules, no imports, no code)
   Contains only clippy lints and phase comments as specified
-- [x] **CRITICAL**: `cargo tree -p moosicbox_p2p` shows zero dependencies
-  `moosicbox_p2p v0.1.0` with no dependencies listed
-- [x] **CRITICAL**: `cargo tree -p moosicbox_p2p --no-default-features` shows zero dependencies
-  `moosicbox_p2p v0.1.0` with no dependencies listed (no features)
-- [x] Run `cargo fmt --check -p moosicbox_p2p` ✅ passes
+- [x] **CRITICAL**: `cargo tree -p switchy_p2p` shows zero dependencies
+  `switchy_p2p v0.1.0` with no dependencies listed
+- [x] **CRITICAL**: `cargo tree -p switchy_p2p --no-default-features` shows zero dependencies
+  `switchy_p2p v0.1.0` with no dependencies listed (no features)
+- [x] Run `cargo fmt --check -p switchy_p2p` ✅ passes
   Formatting check passed after adding trailing newline
-- [x] Run `cargo clippy -p moosicbox_p2p -- -D warnings` ✅ passes
+- [x] Run `cargo clippy -p switchy_p2p -- -D warnings` ✅ passes
   All clippy lints passed (added required metadata fields)
-- [x] Run `cargo build -p moosicbox_p2p` ✅ compiles with default features
+- [x] Run `cargo build -p switchy_p2p` ✅ compiles with default features
   Compiled successfully in 0.36s
-- [x] Run `cargo build -p moosicbox_p2p --no-default-features` ✅ compiles with no features
+- [x] Run `cargo build -p switchy_p2p --no-default-features` ✅ compiles with no features
   Compiled successfully in 0.30s
-- [x] Run `cargo machete` ✅ reports zero dependencies for moosicbox_p2p
+- [x] Run `cargo machete` ✅ reports zero dependencies for switchy_p2p
   No unused dependencies detected workspace-wide
 - [x] **VERIFICATION**: Package builds but does nothing (empty lib.rs)
   Package successfully builds and exports nothing as intended
@@ -134,14 +134,14 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [x] Update root `Cargo.toml` 🔴 **CRITICAL**
   - [x] Add `packages/p2p` to workspace members
     Added between `packages/paging` and `packages/parsing_utils` alphabetically
-  - [x] Add `moosicbox_p2p = { path = "packages/p2p" }` to workspace dependencies section
+  - [x] Add `switchy_p2p = { path = "packages/p2p" }` to workspace dependencies section
     Added with version 0.1.0 between moosicbox_paging and moosicbox_parsing_utils
   - [ ] Note: Additional workspace dependencies will be added in later phases when first used
   - [ ] Note: Initial package has zero dependencies to start completely clean
 
 **Note on dependency management:**
-- In the workspace root `Cargo.toml`, we define: `moosicbox_p2p = { path = "packages/p2p" }`
-- When other packages depend on `moosicbox_p2p`, they should use: `moosicbox_p2p = { workspace = true }`
+- In the workspace root `Cargo.toml`, we define: `switchy_p2p = { path = "packages/p2p" }`
+- When other packages depend on `switchy_p2p`, they should use: `switchy_p2p = { workspace = true }`
 - **Never use version numbers directly in package dependencies** - always use `{ workspace = true }`
 - All new dependencies must specify the latest full semantic version (including patch) in the workspace
 
@@ -150,9 +150,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
   Package appears in workspace metadata
 - [x] New workspace dependencies are properly added to root `Cargo.toml`
   Added to both members array and workspace.dependencies section
-- [x] Run `cargo metadata | grep moosicbox_p2p`
-  Returns: "moosicbox_p2p" confirming package recognition
-- [x] Run `cargo tree -p moosicbox_p2p --no-default-features` (check minimal deps)
+- [x] Run `cargo metadata | grep switchy_p2p`
+  Returns: "switchy_p2p" confirming package recognition
+- [x] Run `cargo tree -p switchy_p2p --no-default-features` (check minimal deps)
   Shows zero dependencies as required
 - [x] Basic compilation checks pass
   All build commands completed successfully
@@ -189,7 +189,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     switchy_random = { workspace = true }
     ```
   - [ ] Verify switchy dependencies exist in workspace (should already be present from other packages)
-  - [ ] **VERIFICATION**: Run `cargo tree -p moosicbox_p2p` to confirm exactly 3 dependencies added
+  - [ ] **VERIFICATION**: Run `cargo tree -p switchy_p2p` to confirm exactly 3 dependencies added
 
 - [ ] Create `src/simulator.rs` with complete node identity system 🔴 **CRITICAL**
   - [ ] Add `#[cfg(feature = "simulator")] pub mod simulator;` to `lib.rs` (FIRST line of real code)
@@ -326,17 +326,17 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 
 #### 2.1 Verification Checklist
 - [ ] **CRITICAL**: Switchy dependencies added to Cargo.toml and workspace recognizes them
-- [ ] **CRITICAL**: `cargo tree -p moosicbox_p2p` shows exactly 3 dependencies (switchy_async, switchy_time, switchy_random)
+- [ ] **CRITICAL**: `cargo tree -p switchy_p2p` shows exactly 3 dependencies (switchy_async, switchy_time, switchy_random)
 - [ ] Simulator module is created and lib.rs has simulator mod declaration
 - [ ] `SimulatorNodeId` deterministic creation: `test_node_id("alice")` produces same result every time
 - [ ] `SimulatorNodeId` different seeds: `test_node_id("alice") != test_node_id("bob")`
 - [ ] `SimulatorP2P` creation works: `SimulatorP2P::new()` and `SimulatorP2P::with_seed("test")`
 - [ ] `fmt_short()` produces exactly 10 character hex string (5 bytes)
-- [ ] All unit tests pass: `cargo test -p moosicbox_p2p test_node_id`
+- [ ] All unit tests pass: `cargo test -p switchy_p2p test_node_id`
 - [ ] **CODE QUALITY**:
-  - [ ] Run `cargo fmt --check -p moosicbox_p2p` ✅ passes
-  - [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings` ✅ passes
-  - [ ] Run `cargo build -p moosicbox_p2p` ✅ compiles
+  - [ ] Run `cargo fmt --check -p switchy_p2p` ✅ passes
+  - [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` ✅ passes
+  - [ ] Run `cargo build -p switchy_p2p` ✅ compiles
   - [ ] Run `cargo machete` ✅ all 3 switchy dependencies marked as used
 - [ ] **VERIFICATION**: Node identity system is complete and testable
 
@@ -545,10 +545,10 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
   - [ ] Test `SIMULATOR_DISCOVERY_DELAY_MS=200` changes discovery delay
   - [ ] All config functions have sensible defaults when env vars unset
 - [ ] **CODE QUALITY**:
-  - [ ] Run `cargo fmt --check -p moosicbox_p2p` ✅ passes
-  - [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings` ✅ passes
-  - [ ] Run `cargo build -p moosicbox_p2p` ✅ compiles
-  - [ ] Run `cargo test -p moosicbox_p2p` ✅ all tests pass
+  - [ ] Run `cargo fmt --check -p switchy_p2p` ✅ passes
+  - [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` ✅ passes
+  - [ ] Run `cargo build -p switchy_p2p` ✅ compiles
+  - [ ] Run `cargo test -p switchy_p2p` ✅ all tests pass
   - [ ] Run `cargo machete` ✅ no unused dependencies workspace-wide
 - [ ] **VERIFICATION**: Complete unit tests for network topology functionality
 
@@ -732,10 +732,10 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Partitioned nodes cannot communicate
 - [ ] Connection close properly sets disconnected state
 - [ ] Message queues are properly managed
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (no unused dependencies workspace-wide)
 - [ ] End-to-end communication tests pass
 
@@ -824,10 +824,10 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Discovery delay is controlled by environment variable
 - [ ] `connect_by_name()` provides convenient discovery + connect
 - [ ] Test helpers create connected network topology
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (all core dependencies should be used workspace-wide)
 - [ ] Discovery integration tests pass
 
@@ -942,9 +942,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] `SimulatorNodeId` implements `P2PNodeId` trait correctly
 - [ ] All trait methods are properly typed (no Box<dyn>)
 - [ ] Traits accurately represent existing simulator functionality
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
 - [ ] No compilation errors with trait definitions
 
 ### 3.2 Implement Traits for Simulator Types
@@ -1021,15 +1021,15 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] All simulator types implement their respective traits
 - [ ] Zero-cost abstraction works (no Box<dyn> trait objects)
 - [ ] Default type aliases resolve correctly with features:
-  - [ ] `cargo build -p moosicbox_p2p` (default=simulator)
-  - [ ] `cargo build -p moosicbox_p2p --features iroh` (iroh backend)
-  - [ ] `cargo build -p moosicbox_p2p --no-default-features` (no backend)
+  - [ ] `cargo build -p switchy_p2p` (default=simulator)
+  - [ ] `cargo build -p switchy_p2p --features iroh` (iroh backend)
+  - [ ] `cargo build -p switchy_p2p --no-default-features` (no backend)
 - [ ] Error conversion between string errors and P2PError works
 - [ ] Trait-based interface preserves all existing functionality
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (no unused dependencies from refactoring)
 - [ ] All tests work through trait interface
 
@@ -1044,7 +1044,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Add thiserror dependency to Cargo.toml 🔴 **CRITICAL**
   - [ ] Add to `[dependencies]`: `thiserror = { workspace = true }`
   - [ ] Verify thiserror dependency exists in workspace (should already be present)
-  - [ ] **VERIFICATION**: Run `cargo tree -p moosicbox_p2p` shows thiserror in dependency tree
+  - [ ] **VERIFICATION**: Run `cargo tree -p switchy_p2p` shows thiserror in dependency tree
 
 - [ ] Create `src/types.rs` with COMPLETE error handling 🔴 **CRITICAL**
   - [ ] Add `pub mod types;` to `lib.rs`
@@ -1126,10 +1126,10 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Error conversion preserves error information
 - [ ] All existing code compiles with new error types
 - [ ] Tests work with proper error handling
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Error messages are clear and actionable
 
 ### 4.2 Add Configuration and Helper Types
@@ -1213,10 +1213,10 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Type safety improvements work correctly
 - [ ] All existing functionality preserved
 - [ ] Configuration types match actual usage
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (thiserror and config types should be used)
 - [ ] Type conversions work as expected
 
@@ -1343,9 +1343,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Handler trait works with closures and structs
 - [ ] Status codes and convenience methods work
 - [ ] Route matching is case-sensitive and exact
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
 - [ ] Router unit tests pass
 
 ### 5.2 Service Registration Pattern
@@ -1418,10 +1418,10 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Service registration helper methods work correctly
 - [ ] Example services demonstrate realistic usage patterns
 - [ ] Route isolation between services works properly
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Service integration tests pass
 
 ## Phase 6: Listener Functionality ✅ **NOT STARTED**
@@ -1444,10 +1444,10 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Connections can be accepted from listener
 - [ ] Multiple concurrent connections work
 - [ ] Tests demonstrate full connection lifecycle
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Listener tests pass consistently
 
 ### 5.2 Extract Listener Trait
@@ -1464,10 +1464,10 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Trait is immediately implemented and used
 - [ ] Provider integration works correctly
 - [ ] All listener functionality preserved
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Trait abstraction doesn't break functionality
 
 ## Phase 6: Enhanced Simulation Features ✅ **NOT STARTED**
@@ -1490,9 +1490,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Environment variables control simulation correctly
 - [ ] Tests demonstrate simulation features working
 - [ ] Configuration follows established patterns
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Simulation features are actually tested
 - [ ] Environment integration works correctly
 
@@ -1516,11 +1516,11 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Package builds with `iroh` feature enabled
 - [ ] Package builds without `iroh` feature (simulator only)
 - [ ] No dependency conflicts in workspace
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo build -p moosicbox_p2p --features iroh`
-- [ ] Run `cargo build -p moosicbox_p2p --no-default-features`
-- [ ] Run `cargo clippy -p moosicbox_p2p --features iroh -- -D warnings`
-- [ ] Run `cargo tree -p moosicbox_p2p --features iroh` (check iroh deps)
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo build -p switchy_p2p --features iroh`
+- [ ] Run `cargo build -p switchy_p2p --no-default-features`
+- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings`
+- [ ] Run `cargo tree -p switchy_p2p --features iroh` (check iroh deps)
 - [ ] Verify iroh 0.91.2 is pulled in with iroh feature
 - [ ] Verify tokio is available transitively through iroh (not as direct dependency)
 - [ ] Run `cargo machete` (verify iroh dependency is used when feature enabled)
@@ -1603,9 +1603,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Key generation produces valid peer identities
 - [ ] Endpoint configuration is appropriate for use case
 - [ ] Provider works with existing trait interface
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p --features iroh -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p --features iroh`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p --features iroh`
 - [ ] Basic Iroh functionality works with existing tests
 - [ ] Peer identity management is secure
 
@@ -1760,9 +1760,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] QUIC stream handling works correctly
 - [ ] Connection and listener lifecycle is properly managed
 - [ ] Resource cleanup prevents leaks
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p --features iroh -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p --features iroh`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p --features iroh`
 - [ ] Existing tests work with Iroh implementation
 - [ ] Error handling is robust
 
@@ -1780,9 +1780,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] STUN servers are properly configured
 - [ ] Relay fallback is available when needed
 - [ ] Peer discovery works in test scenarios
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p --features iroh -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p --features iroh`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p --features iroh`
 - [ ] Iroh integration tests pass consistently
 - [ ] Connection reliability is acceptable
 
@@ -1909,15 +1909,15 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 
 #### 8.1 Verification Checklist
 - [ ] Proptest dependency is properly feature-gated and available
-- [ ] Run `cargo build -p moosicbox_p2p` (default features include proptest)
-- [ ] Run `cargo tree -p moosicbox_p2p` (verify proptest 1.7.0 is available)
+- [ ] Run `cargo build -p switchy_p2p` (default features include proptest)
+- [ ] Run `cargo tree -p switchy_p2p` (verify proptest 1.7.0 is available)
 - [ ] Generic tests work with both simulator and Iroh
 - [ ] Test coverage includes all trait methods
 - [ ] Failure scenarios are thoroughly tested
 - [ ] Performance tests provide meaningful metrics
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo test -p moosicbox_p2p`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (verify proptest is used in tests and dev-dependencies)
 - [ ] Tests pass with all feature combinations
 - [ ] Test utilities are well-documented
@@ -1928,7 +1928,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
   - [ ] Create `tests/properties.rs`:
     ```rust
     use proptest::prelude::*;
-    use moosicbox_p2p::test_utils::{generators::*, *};
+    use switchy_p2p::test_utils::{generators::*, *};
 
     proptest! {
         #[test]
@@ -1937,8 +1937,8 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
         ) {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             runtime.block_on(async {
-                let system_a = moosicbox_p2p::simulator::SimulatorP2P::new();
-                let system_b = moosicbox_p2p::simulator::SimulatorP2P::new();
+                let system_a = switchy_p2p::simulator::SimulatorP2P::new();
+                let system_b = switchy_p2p::simulator::SimulatorP2P::new();
 
                 test_message_integrity(system_a, system_b, message).await.unwrap();
             });
@@ -1951,8 +1951,8 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
         ) {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             runtime.block_on(async {
-                let system_a = moosicbox_p2p::iroh::IrohP2P::new().await.unwrap();
-                let system_b = moosicbox_p2p::iroh::IrohP2P::new().await.unwrap();
+                let system_a = switchy_p2p::iroh::IrohP2P::new().await.unwrap();
+                let system_b = switchy_p2p::iroh::IrohP2P::new().await.unwrap();
 
                 test_message_integrity(system_a, system_b, message).await.unwrap();
             });
@@ -1962,8 +1962,8 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
         fn connection_lifecycle_simulator() {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             runtime.block_on(async {
-                let system_a = moosicbox_p2p::simulator::SimulatorP2P::new();
-                let system_b = moosicbox_p2p::simulator::SimulatorP2P::new();
+                let system_a = switchy_p2p::simulator::SimulatorP2P::new();
+                let system_b = switchy_p2p::simulator::SimulatorP2P::new();
 
                 test_connection_lifecycle(system_a, system_b).await.unwrap();
             });
@@ -1974,7 +1974,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
             path in any_path(),
             message in any_message()
         ) {
-            use moosicbox_p2p::router::{P2PRouter, Method, P2PRequest, P2PResponse};
+            use switchy_p2p::router::{P2PRouter, Method, P2PRequest, P2PResponse};
 
             let mut router = P2PRouter::new();
             router.route(Method::GET, &path, |_req| P2PResponse::ok(b"found".to_vec()));
@@ -1988,7 +1988,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
             };
 
             let response = router.handle_request(request);
-            assert_eq!(response.status, moosicbox_p2p::router::StatusCode::Ok);
+            assert_eq!(response.status, switchy_p2p::router::StatusCode::Ok);
         }
     }
     ```
@@ -1996,7 +1996,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     ```rust
     //! Tests that verify simulator and Iroh implementations behave identically
 
-    use moosicbox_p2p::test_utils::*;
+    use switchy_p2p::test_utils::*;
 
     #[tokio::test]
     async fn simulator_and_iroh_basic_communication() {
@@ -2004,15 +2004,15 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
         let message = b"Hello, P2P World!";
 
         // Test with simulator
-        let sim_a = moosicbox_p2p::simulator::SimulatorP2P::new();
-        let sim_b = moosicbox_p2p::simulator::SimulatorP2P::new();
+        let sim_a = switchy_p2p::simulator::SimulatorP2P::new();
+        let sim_b = switchy_p2p::simulator::SimulatorP2P::new();
         test_message_integrity(sim_a, sim_b, message.to_vec()).await.unwrap();
 
         // Test with Iroh (if available)
         #[cfg(feature = "iroh")]
         {
-            let iroh_a = moosicbox_p2p::iroh::IrohP2P::new().await.unwrap();
-            let iroh_b = moosicbox_p2p::iroh::IrohP2P::new().await.unwrap();
+            let iroh_a = switchy_p2p::iroh::IrohP2P::new().await.unwrap();
+            let iroh_b = switchy_p2p::iroh::IrohP2P::new().await.unwrap();
             test_message_integrity(iroh_a, iroh_b, message.to_vec()).await.unwrap();
         }
     }
@@ -2022,13 +2022,13 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
         // Test that NodeId representations are compatible
         let test_bytes = [42u8; 32];
 
-        let sim_id = moosicbox_p2p::simulator::SimulatorNodeId::from_bytes(&test_bytes);
+        let sim_id = switchy_p2p::simulator::SimulatorNodeId::from_bytes(&test_bytes);
         assert_eq!(sim_id.as_bytes(), &test_bytes);
         assert_eq!(sim_id.fmt_short().len(), 10); // 5 bytes as hex
 
         #[cfg(feature = "iroh")]
         {
-            let iroh_id = moosicbox_p2p::iroh::IrohNodeId::from_bytes(&test_bytes).unwrap();
+            let iroh_id = switchy_p2p::iroh::IrohNodeId::from_bytes(&test_bytes).unwrap();
             assert_eq!(iroh_id.as_bytes(), &test_bytes);
             assert_eq!(iroh_id.fmt_short().len(), 10); // Should match simulator
         }
@@ -2038,7 +2038,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     ```rust
     //! Complex network scenario testing
 
-    use moosicbox_p2p::simulator::*;
+    use switchy_p2p::simulator::*;
     use std::time::Duration;
 
     #[tokio::test]
@@ -2080,9 +2080,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Multi-peer tests work with various topologies
 - [ ] Cross-implementation tests ensure compatibility
 - [ ] Failure recovery tests validate robustness
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo test -p moosicbox_p2p --test integration`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo test -p switchy_p2p --test integration`
 - [ ] All integration tests pass consistently
 - [ ] Performance metrics are within acceptable ranges
 
@@ -2106,9 +2106,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Code examples compile and run correctly
 - [ ] Documentation covers both simulator and Iroh usage
 - [ ] Migration guide provides clear steps
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo doc -p moosicbox_p2p`
-- [ ] Run `cargo test -p moosicbox_p2p --doc`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo doc -p switchy_p2p`
+- [ ] Run `cargo test -p switchy_p2p --doc`
 - [ ] Documentation builds without warnings
 - [ ] Examples work as documented
 
@@ -2126,9 +2126,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Examples demonstrate key P2P features
 - [ ] Code is well-commented and educational
 - [ ] Examples work with different feature configurations
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p --examples -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p --examples`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p --examples -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p --examples`
 - [ ] Examples execute successfully
 - [ ] Performance examples provide useful metrics
 
@@ -2291,7 +2291,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     ```rust
     //! Basic P2P communication example
 
-     use moosicbox_p2p::{P2PBuilder, P2PSystem, P2PNodeId};
+     use switchy_p2p::{P2PBuilder, P2PSystem, P2PNodeId};
 
      // Note: For examples with Iroh backend, we need an actual async runtime
      // In production code, we use switchy_async for abstraction
@@ -2336,7 +2336,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     ```rust
     //! Web-server-like API example
 
-    use moosicbox_p2p::{P2PBuilder, P2PRouter, P2PService, Method, P2PResponse};
+    use switchy_p2p::{P2PBuilder, P2PRouter, P2PService, Method, P2PResponse};
 
     struct MusicService;
 
@@ -2378,9 +2378,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Default type aliases resolve to correct backends
 - [ ] Feature flags control compilation correctly
 - [ ] Documentation covers all public APIs
-- [ ] Run `cargo fmt --check -p moosicbox_p2p`
-- [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
-- [ ] Run `cargo build -p moosicbox_p2p --examples`
+- [ ] Run `cargo fmt --check -p switchy_p2p`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo build -p switchy_p2p --examples`
 - [ ] Run examples with different feature combinations
 - [ ] Run `cargo machete` (final check - no unused dependencies in workspace)
 

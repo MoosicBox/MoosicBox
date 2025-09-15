@@ -481,17 +481,17 @@ impl P2PService for AudioService {
 
 ```toml
 # Cargo.toml for testing
-[dependencies.moosicbox_p2p]
+[dependencies.switchy_p2p]
 features = ["simulator"]
 
 # Cargo.toml for production
-[dependencies.moosicbox_p2p]
+[dependencies.switchy_p2p]
 features = ["iroh"]
 ```
 
 ```rust
 // Automatic selection based on features
-use moosicbox_p2p::DefaultP2P;
+use switchy_p2p::DefaultP2P;
 
 // In simulator build: DefaultP2P = SimulatorP2P
 // In iroh build: DefaultP2P = IrohP2P
@@ -728,7 +728,7 @@ pub type DefaultP2P = iroh::IrohP2P;
 /// # Examples
 ///
 /// ```
-/// use moosicbox_p2p::*;
+/// use switchy_p2p::*;
 /// let p2p = SimulatorP2P::new();
 /// let connection = p2p.connect(node_id).await?;
 /// ```
