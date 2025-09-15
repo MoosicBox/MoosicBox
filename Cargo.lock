@@ -14313,6 +14313,8 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_assert",
  "moosicbox_profiles",
+ "native-tls",
+ "postgres-native-tls",
  "postgres-protocol",
  "pretty_assertions",
  "regex",

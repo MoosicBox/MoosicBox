@@ -12,6 +12,12 @@ use thiserror::Error;
 use tokio::{pin, sync::Mutex};
 use tokio_postgres::{Client, Row, RowStream, types::IsNull};
 
+#[cfg(feature = "schema")]
+use super::introspection::{
+    postgres_column_exists, postgres_get_table_columns, postgres_get_table_info,
+    postgres_table_exists,
+};
+
 use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
@@ -446,37 +452,41 @@ impl Database for PostgresDatabase {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
-        unimplemented!("table_exists not yet implemented for PostgresDatabase")
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        postgres_table_exists(client_ref, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
-        unimplemented!("get_table_info not yet implemented for PostgresDatabase")
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        postgres_get_table_info(client_ref, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
-        unimplemented!("get_table_columns not yet implemented for PostgresDatabase")
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        postgres_get_table_columns(client_ref, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
-        unimplemented!("column_exists not yet implemented for PostgresDatabase")
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        postgres_column_exists(client_ref, table_name, column_name).await
     }
 
     async fn exec_insert(
@@ -780,37 +790,37 @@ impl Database for PostgresTransaction {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
-        unimplemented!("table_exists not yet implemented for PostgresTransaction")
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let client_ref: &Client = &self.client;
+        postgres_table_exists(client_ref, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
-        unimplemented!("get_table_info not yet implemented for PostgresTransaction")
+        let client_ref: &Client = &self.client;
+        postgres_get_table_info(client_ref, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
-        unimplemented!("get_table_columns not yet implemented for PostgresTransaction")
+        let client_ref: &Client = &self.client;
+        postgres_get_table_columns(client_ref, table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.5 - PostgreSQL (postgres and sqlx)
-        unimplemented!("column_exists not yet implemented for PostgresTransaction")
+        let client_ref: &Client = &self.client;
+        postgres_column_exists(client_ref, table_name, column_name).await
     }
 
     async fn exec_raw(&self, sql: &str) -> Result<(), DatabaseError> {
@@ -2279,5 +2289,318 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
     {
         log::trace!("to_sql: ty={}, {ty:?}", ty.name());
         self.to_sql_checked(ty, out)
+    }
+}
+
+#[cfg(all(test, feature = "schema"))]
+mod tests {
+    use super::*;
+    use crate::postgres::postgres::PostgresDatabase;
+
+    fn get_postgres_test_url() -> Option<String> {
+        std::env::var("POSTGRES_TEST_URL").ok()
+    }
+
+    fn create_pool(url: &str) -> Result<Pool, deadpool_postgres::CreatePoolError> {
+        // Simple approach: create a connection manually then build pool from it
+        // For tests, we'll use direct connection parameters
+        let mut cfg = deadpool_postgres::Config::new();
+        cfg.url = Some(url.to_string());
+
+        if url.contains("sslmode=require") {
+            let connector = native_tls::TlsConnector::builder()
+                .danger_accept_invalid_certs(true) // For testing only!
+                .build()
+                .unwrap();
+            let connector = postgres_native_tls::MakeTlsConnector::new(connector);
+
+            cfg.create_pool(Some(deadpool_postgres::Runtime::Tokio1), connector)
+        } else {
+            cfg.create_pool(
+                Some(deadpool_postgres::Runtime::Tokio1),
+                tokio_postgres::NoTls,
+            )
+        }
+    }
+
+    #[tokio::test]
+    async fn test_postgres_table_exists() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).expect("Failed to create pool");
+        let db = PostgresDatabase::new(pool);
+
+        // Test non-existent table
+        assert!(!db.table_exists("non_existent_table").await.unwrap());
+
+        // Create test table
+        db.exec_raw("CREATE TABLE IF NOT EXISTS test_table_exists (id INTEGER PRIMARY KEY)")
+            .await
+            .unwrap();
+
+        // Test existing table
+        assert!(db.table_exists("test_table_exists").await.unwrap());
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_table_exists")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_column_metadata() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).expect("Failed to create pool");
+        let db = PostgresDatabase::new(pool);
+
+        // Create test table with various column types
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_column_metadata (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            age INTEGER DEFAULT 0,
+            height REAL,
+            is_active BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        )
+        .await
+        .unwrap();
+
+        // Get column metadata
+        let columns = db.get_table_columns("test_column_metadata").await.unwrap();
+
+        // Verify we have the expected columns
+        assert_eq!(columns.len(), 6);
+
+        // Check ID column (should be primary key)
+        let id_column = columns.iter().find(|c| c.name == "id").unwrap();
+        assert!(id_column.is_primary_key);
+        assert!(!id_column.nullable);
+
+        // Check name column (not null, text)
+        let name_column = columns.iter().find(|c| c.name == "name").unwrap();
+        assert!(!name_column.nullable);
+        assert!(!name_column.is_primary_key);
+
+        // Check age column (has default)
+        let age_column = columns.iter().find(|c| c.name == "age").unwrap();
+        assert!(age_column.nullable); // PostgreSQL allows NULL even with DEFAULT
+        assert!(age_column.default_value.is_some());
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_column_metadata")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_constraints() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).expect("Failed to create pool");
+        let db = PostgresDatabase::new(pool);
+
+        // Create test tables with constraints
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_parent (
+            id SERIAL PRIMARY KEY,
+            email VARCHAR(100) UNIQUE
+        )",
+        )
+        .await
+        .unwrap();
+
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_child (
+            id SERIAL PRIMARY KEY,
+            parent_id INTEGER REFERENCES test_parent(id),
+            name TEXT NOT NULL
+        )",
+        )
+        .await
+        .unwrap();
+
+        // Get table info with constraints
+        let table_info = db.get_table_info("test_parent").await.unwrap().unwrap();
+
+        // Should have primary key and unique constraints reflected in indexes
+        assert!(!table_info.indexes.is_empty());
+
+        let child_info = db.get_table_info("test_child").await.unwrap().unwrap();
+
+        // Should have foreign key constraint
+        assert!(!child_info.foreign_keys.is_empty());
+
+        // Clean up (order matters due to foreign key)
+        db.exec_raw("DROP TABLE IF EXISTS test_child")
+            .await
+            .unwrap();
+        db.exec_raw("DROP TABLE IF EXISTS test_parent")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_type_mapping() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).expect("Failed to create pool");
+        let db = PostgresDatabase::new(pool);
+
+        // Create test table with all supported PostgreSQL types
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_type_mapping (
+            small_col SMALLINT,
+            int_col INTEGER,
+            big_col BIGINT,
+            real_col REAL,
+            double_col DOUBLE PRECISION,
+            decimal_col DECIMAL(10,2),
+            text_col TEXT,
+            varchar_col VARCHAR(50),
+            bool_col BOOLEAN,
+            timestamp_col TIMESTAMP
+        )",
+        )
+        .await
+        .unwrap();
+
+        let columns = db.get_table_columns("test_type_mapping").await.unwrap();
+
+        // Verify type mapping
+        let small_col = columns.iter().find(|c| c.name == "small_col").unwrap();
+        assert!(matches!(
+            small_col.data_type,
+            crate::schema::DataType::SmallInt
+        ));
+
+        let int_col = columns.iter().find(|c| c.name == "int_col").unwrap();
+        assert!(matches!(int_col.data_type, crate::schema::DataType::Int));
+
+        let big_col = columns.iter().find(|c| c.name == "big_col").unwrap();
+        assert!(matches!(big_col.data_type, crate::schema::DataType::BigInt));
+
+        let text_col = columns.iter().find(|c| c.name == "text_col").unwrap();
+        assert!(matches!(text_col.data_type, crate::schema::DataType::Text));
+
+        let bool_col = columns.iter().find(|c| c.name == "bool_col").unwrap();
+        assert!(matches!(bool_col.data_type, crate::schema::DataType::Bool));
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_type_mapping")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_default_values() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).expect("Failed to create pool");
+        let db = PostgresDatabase::new(pool);
+
+        // Create test table with various default value formats
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_default_values (
+            id SERIAL PRIMARY KEY,
+            name TEXT DEFAULT 'unknown',
+            age INTEGER DEFAULT 18,
+            is_active BOOLEAN DEFAULT true,
+            score REAL DEFAULT 0.0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        )
+        .await
+        .unwrap();
+
+        let columns = db.get_table_columns("test_default_values").await.unwrap();
+
+        // Check string default
+        let name_col = columns.iter().find(|c| c.name == "name").unwrap();
+        assert!(name_col.default_value.is_some());
+
+        // Check numeric default
+        let age_col = columns.iter().find(|c| c.name == "age").unwrap();
+        assert!(age_col.default_value.is_some());
+
+        // Check boolean default
+        let active_col = columns.iter().find(|c| c.name == "is_active").unwrap();
+        assert!(active_col.default_value.is_some());
+
+        // Check real default
+        let score_col = columns.iter().find(|c| c.name == "score").unwrap();
+        assert!(score_col.default_value.is_some());
+
+        // Function defaults like CURRENT_TIMESTAMP may not be parsed as simple values
+        let _created_col = columns.iter().find(|c| c.name == "created_at").unwrap();
+        // This might be None due to complexity of CURRENT_TIMESTAMP
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_default_values")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_transaction_isolation() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).expect("Failed to create pool");
+        let db = PostgresDatabase::new(pool);
+
+        // Create test table
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_transaction_iso (id INTEGER PRIMARY KEY, name TEXT)",
+        )
+        .await
+        .unwrap();
+
+        // Start transaction
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Test introspection methods work within transaction
+        assert!(tx.table_exists("test_transaction_iso").await.unwrap());
+
+        // Test column_exists within transaction
+        assert!(
+            tx.column_exists("test_transaction_iso", "id")
+                .await
+                .unwrap()
+        );
+        assert!(
+            !tx.column_exists("test_transaction_iso", "nonexistent")
+                .await
+                .unwrap()
+        );
+
+        // Test get_table_columns within transaction
+        let columns = tx.get_table_columns("test_transaction_iso").await.unwrap();
+        assert_eq!(columns.len(), 2);
+
+        // Test get_table_info within transaction
+        let table_info = tx.get_table_info("test_transaction_iso").await.unwrap();
+        assert!(table_info.is_some());
+
+        // Commit transaction
+        tx.commit().await.unwrap();
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_transaction_iso")
+            .await
+            .unwrap();
     }
 }

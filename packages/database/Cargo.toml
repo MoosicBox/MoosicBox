@@ -47,6 +47,8 @@ tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
 
 [dev-dependencies]
+native-tls = { workspace = true }
+postgres-native-tls = { workspace = true }
 pretty_assertions = { workspace = true }
 switchy_async = { workspace = true, features = ["macros", "time"] }
 switchy_database_connection = { workspace = true, features = [
@@ -74,7 +76,7 @@ fail-on-warnings = [
     "switchy_time/fail-on-warnings",
 ]
 
-tls = ["sqlx/tls-rustls"]
+tls = ["sqlx?/tls-rustls"]
 
 api = ["dep:actix-web", "dep:futures"]
 

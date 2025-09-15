@@ -4,3 +4,6 @@ pub mod mysql;
 pub mod postgres;
 #[cfg(feature = "sqlite-sqlx")]
 pub mod sqlite;
+
+#[cfg(all(feature = "postgres-sqlx", feature = "schema"))]
+pub(crate) mod postgres_introspection;
