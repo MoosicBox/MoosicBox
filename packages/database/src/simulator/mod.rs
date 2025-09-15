@@ -204,37 +204,33 @@ impl Database for SimulationDatabase {
     }
 
     #[cfg(feature = "schema")]
-    async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.7 - Database Simulator
-        unimplemented!("table_exists not yet implemented for SimulationDatabase")
+    async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        self.inner.table_exists(table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Option<crate::schema::TableInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.7 - Database Simulator
-        unimplemented!("get_table_info not yet implemented for SimulationDatabase")
+        self.inner.get_table_info(table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
-        _table_name: &str,
+        table_name: &str,
     ) -> Result<Vec<crate::schema::ColumnInfo>, DatabaseError> {
-        // TODO: Implement in Phase 16.7 - Database Simulator
-        unimplemented!("get_table_columns not yet implemented for SimulationDatabase")
+        self.inner.get_table_columns(table_name).await
     }
 
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,
-        _table_name: &str,
-        _column_name: &str,
+        table_name: &str,
+        column_name: &str,
     ) -> Result<bool, DatabaseError> {
-        // TODO: Implement in Phase 16.7 - Database Simulator
-        unimplemented!("column_exists not yet implemented for SimulationDatabase")
+        self.inner.column_exists(table_name, column_name).await
     }
 
     async fn begin_transaction(
@@ -415,5 +411,141 @@ mod tests {
                 columns: vec![("id".into(), 1.into()), ("value".into(), "initial".into())]
             }]
         );
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_simulator_introspection_delegation() {
+        // Create SimulationDatabase
+        let db = SimulationDatabase::new().unwrap();
+
+        // Create a test table with various column types
+        db.exec_raw(
+            "CREATE TABLE test_introspection (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                age INTEGER,
+                score REAL DEFAULT 0.0
+            )",
+        )
+        .await
+        .unwrap();
+
+        // Test table_exists - should delegate to rusqlite
+        assert!(db.table_exists("test_introspection").await.unwrap());
+        assert!(!db.table_exists("nonexistent_table").await.unwrap());
+
+        // Test column_exists - should delegate to rusqlite
+        assert!(db.column_exists("test_introspection", "id").await.unwrap());
+        assert!(
+            db.column_exists("test_introspection", "name")
+                .await
+                .unwrap()
+        );
+        assert!(
+            !db.column_exists("test_introspection", "nonexistent")
+                .await
+                .unwrap()
+        );
+        assert!(!db.column_exists("nonexistent_table", "id").await.unwrap());
+
+        // Test get_table_columns - should delegate to rusqlite
+        let columns = db.get_table_columns("test_introspection").await.unwrap();
+        assert_eq!(columns.len(), 4);
+
+        // Verify column details (order should match CREATE TABLE)
+        assert_eq!(columns[0].name, "id");
+        assert!(columns[0].is_primary_key);
+        assert_eq!(columns[1].name, "name");
+        assert!(!columns[1].nullable);
+        assert_eq!(columns[2].name, "age");
+        assert!(columns[2].nullable);
+        assert_eq!(columns[3].name, "score");
+        assert!(columns[3].nullable);
+
+        // Test get_table_info - should delegate to rusqlite
+        let table_info = db.get_table_info("test_introspection").await.unwrap();
+        assert!(table_info.is_some());
+
+        let info = table_info.unwrap();
+        assert_eq!(info.name, "test_introspection");
+        assert_eq!(info.columns.len(), 4);
+        assert!(info.columns.contains_key("id"));
+        assert!(info.columns.contains_key("name"));
+        assert!(info.columns.contains_key("age"));
+        assert!(info.columns.contains_key("score"));
+
+        // Test with nonexistent table
+        let empty_columns = db.get_table_columns("nonexistent").await.unwrap();
+        assert!(empty_columns.is_empty());
+
+        let no_table_info = db.get_table_info("nonexistent").await.unwrap();
+        assert!(no_table_info.is_none());
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_simulator_transaction_introspection() {
+        // Create SimulationDatabase
+        let db = SimulationDatabase::new().unwrap();
+
+        // Create a test table
+        db.exec_raw("CREATE TABLE tx_test (id INTEGER PRIMARY KEY, data TEXT)")
+            .await
+            .unwrap();
+
+        // Begin transaction and test introspection works in transaction context
+        let transaction = db.begin_transaction().await.unwrap();
+
+        // All introspection methods should work through transaction delegation
+        assert!(transaction.table_exists("tx_test").await.unwrap());
+        assert!(transaction.column_exists("tx_test", "id").await.unwrap());
+
+        let columns = transaction.get_table_columns("tx_test").await.unwrap();
+        assert_eq!(columns.len(), 2);
+
+        let table_info = transaction.get_table_info("tx_test").await.unwrap();
+        assert!(table_info.is_some());
+
+        transaction.commit().await.unwrap();
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_simulator_path_isolation() {
+        // Create two databases with different paths
+        let db1 = SimulationDatabase::new_for_path(Some("introspection_path1.db")).unwrap();
+        let db2 = SimulationDatabase::new_for_path(Some("introspection_path2.db")).unwrap();
+
+        // Create different tables in each database
+        db1.exec_raw("CREATE TABLE path1_table (id INTEGER, name TEXT)")
+            .await
+            .unwrap();
+        db2.exec_raw("CREATE TABLE path2_table (id INTEGER, value TEXT)")
+            .await
+            .unwrap();
+
+        // Verify isolation - each database should only see its own tables
+        assert!(db1.table_exists("path1_table").await.unwrap());
+        assert!(!db1.table_exists("path2_table").await.unwrap());
+
+        assert!(db2.table_exists("path2_table").await.unwrap());
+        assert!(!db2.table_exists("path1_table").await.unwrap());
+
+        // Verify column isolation
+        assert!(db1.column_exists("path1_table", "name").await.unwrap());
+        assert!(!db1.column_exists("path1_table", "value").await.unwrap());
+
+        assert!(db2.column_exists("path2_table", "value").await.unwrap());
+        assert!(!db2.column_exists("path2_table", "name").await.unwrap());
+
+        // Verify schema isolation through get_table_info
+        let info1 = db1.get_table_info("path1_table").await.unwrap();
+        let info2 = db2.get_table_info("path2_table").await.unwrap();
+
+        assert!(info1.is_some());
+        assert!(info2.is_some());
+        assert!(info1.unwrap().columns.contains_key("name"));
+        assert!(info2.unwrap().columns.contains_key("value"));
     }
 }
