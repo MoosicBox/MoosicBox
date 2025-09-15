@@ -19,10 +19,6 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 
 ## Design Decisions (RESOLVED)
 
-**ALL** ambiguities have been resolved during the specification phase. See [`clarifications.md`](./clarifications.md) for complete details and rationale.
-
-**CRITICAL:** Refer to `clarifications.md` for any implementation questions. This plan assumes all decisions in that document.
-
 ### Core Architecture Decisions ✅
 - **Package Structure**: Start with `lib.rs` only, grow organically
 - **Module Organization**: Extract modules when files exceed 500 lines
