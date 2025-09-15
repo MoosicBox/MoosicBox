@@ -79,16 +79,8 @@ All ambiguities have been resolved during the specification phase. See `clarific
     [package.metadata.workspaces]
     group = "p2p"
 
-    [dependencies]
-    # Core async runtime abstraction (always required)
-    switchy_async = { workspace = true }
-    switchy_time = { workspace = true }
-    switchy_random = { workspace = true }
-
-    # Error handling
-    thiserror = { workspace = true }
-
-     # Additional dependencies will be added in later phases when first used
+     [dependencies]
+     # No dependencies in initial phase - they will be added when first used
 
      [features]
      default = ["simulator"]
@@ -108,7 +100,7 @@ All ambiguities have been resolved during the specification phase. See `clarific
 - [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
 - [ ] Run `cargo build -p moosicbox_p2p` (default features)
 - [ ] Run `cargo build -p moosicbox_p2p --no-default-features` (no features)
-- [ ] Run `cargo machete` (no unused dependencies workspace-wide)
+- [ ] Run `cargo machete` (should report zero dependencies in moosicbox_p2p)
 - [ ] No compilation errors or warnings with any feature combination
 
 ### 1.2 Workspace Integration
@@ -116,9 +108,8 @@ All ambiguities have been resolved during the specification phase. See `clarific
 - [ ] Update root `Cargo.toml` 🔴 **CRITICAL**
   - [ ] Add `packages/p2p` to workspace members
   - [ ] Add `moosicbox_p2p = { path = "packages/p2p" }` to workspace dependencies section
-  - [ ] Verify switchy dependencies are properly defined in workspace
-  - [ ] Verify thiserror dependency exists in workspace (already present)
   - [ ] Note: Additional workspace dependencies will be added in later phases when first used
+  - [ ] Note: Initial package has zero dependencies to start completely clean
 
 **Note on dependency management:**
 - In the workspace root `Cargo.toml`, we define: `moosicbox_p2p = { path = "packages/p2p" }`
@@ -146,6 +137,12 @@ All ambiguities have been resolved during the specification phase. See `clarific
 
 ### 2.1 Node Identity and Core Types
 
+- [ ] Add switchy dependencies to Cargo.toml 🔴 **CRITICAL**
+  - [ ] Add to `[dependencies]`:
+    - `switchy_async = { workspace = true }`
+    - `switchy_time = { workspace = true }`
+    - `switchy_random = { workspace = true }`
+  - [ ] Verify switchy dependencies exist in workspace (should already be present)
 - [ ] Create `src/simulator.rs` with node identity system 🔴 **CRITICAL**
   - [ ] Add `#[cfg(feature = "simulator")] pub mod simulator;` to `lib.rs`
   - [ ] Create `SimulatorNodeId` struct with ed25519-like behavior:
@@ -213,6 +210,7 @@ All ambiguities have been resolved during the specification phase. See `clarific
   - [ ] Add test helper: `pub fn test_node_id(name: &str) -> SimulatorNodeId`
 
 #### 2.1 Verification Checklist
+- [ ] Switchy dependencies are properly added and used
 - [ ] Simulator module compiles without errors
 - [ ] `SimulatorNodeId` can be created from seeds deterministically
 - [ ] `SimulatorP2P` can be created and returns consistent node IDs
@@ -221,7 +219,7 @@ All ambiguities have been resolved during the specification phase. See `clarific
 - [ ] Run `cargo fmt --check -p moosicbox_p2p`
 - [ ] Run `cargo clippy -p moosicbox_p2p -- -D warnings`
 - [ ] Run `cargo build -p moosicbox_p2p`
-- [ ] Run `cargo machete` (no unused dependencies workspace-wide)
+- [ ] Run `cargo machete` (switchy dependencies should be used)
 - [ ] Unit tests for node identity pass
 
 ### 2.2 Graph-Based Network Topology
@@ -736,6 +734,9 @@ All ambiguities have been resolved during the specification phase. See `clarific
 
 ### 4.1 Create Unified P2PError with thiserror
 
+- [ ] Add thiserror dependency to Cargo.toml 🔴 **CRITICAL**
+  - [ ] Add to `[dependencies]`: `thiserror = { workspace = true }`
+  - [ ] Verify thiserror dependency exists in workspace (should already be present)
 - [ ] Create `src/types.rs` with comprehensive error handling 🔴 **CRITICAL**
   - [ ] Add `pub mod types;` to `lib.rs`
   - [ ] Create `P2PError` enum with all needed variants:
@@ -793,6 +794,7 @@ All ambiguities have been resolved during the specification phase. See `clarific
   - [ ] Update all tests to expect `P2PError` instead of strings
 
 #### 4.1 Verification Checklist
+- [ ] Thiserror dependency is properly added and used
 - [ ] Error types cover all existing error cases
 - [ ] Error conversion preserves error information
 - [ ] All existing code compiles with new error types
