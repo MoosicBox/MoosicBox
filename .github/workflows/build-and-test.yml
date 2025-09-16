@@ -1080,6 +1080,17 @@ jobs:
                   git checkout edge
                   git rebase master
 
+            - name: Setup clippier
+              uses: BSteffaniak/cache-artifact@master
+              with:
+                  directory: ./packages/clippier
+                  command: cargo build --package clippier --features git-diff --release
+                  output-path: ./target/release/clippier
+                  artifact-name: clippier-binary
+                  cache-key-prefix: moosicbox-clippier
+                  make-executable: true
+                  verify-command: --version
+
             - name: Generate Dockerfile
               shell: bash
               run: |
