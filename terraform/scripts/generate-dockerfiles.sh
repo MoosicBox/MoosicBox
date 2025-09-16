@@ -51,12 +51,16 @@ log_error() {
 
 # Build clippier if needed
 build_clippier() {
-    log_info "Building clippier tool..."
-    if ! cargo build --package clippier --release; then
-        log_error "Failed to build clippier"
-        exit 1
+    if [[ -f "target/release/clippier" ]]; then
+        log_info "Clippier already built"
+    else
+        log_info "Building clippier tool..."
+        if ! cargo build --package clippier --release; then
+            log_error "Failed to build clippier"
+            exit 1
+        fi
+        log_success "Clippier built successfully"
     fi
-    log_success "Clippier built successfully"
 }
 
 # Generate dockerfile for a package
