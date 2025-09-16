@@ -8293,46 +8293,62 @@ Each phase implementation satisfied these criteria and is marked as complete:
 
 **Goal:** Add support for additional data types commonly found in production databases
 
-**Prerequisites:** Phase 16.1-16.7 complete (basic introspection working with error handling)
+**Prerequisites:** Phase 16.11 complete (all introspection functionality verified and production-ready)
 
-- [ ] **SQLite-specific enhancements:**
-  - [ ] Add auto_increment detection for SQLite by parsing CREATE TABLE statement from sqlite_master
-    - Note: Currently hardcoded to `false` in Phase 16.3 (line 2673 in rusqlite/mod.rs)
-    - Query: `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`
-    - Parse for AUTOINCREMENT keyword after PRIMARY KEY
-    - This addresses the minor limitation from Phase 16.3 implementation
+⚠️ **BREAKING CHANGE NOTICE**: This phase introduces new DataType enum variants that will require updates to all exhaustive match statements on DataType across the codebase. This is an intentional breaking change to expand type support.
 
-- [ ] **Extend DataType Enum in `packages/database/src/schema.rs`** ⚠️ **CRITICAL**
+#### **Critical Impact Analysis**
+
+**Files requiring updates:** 9 files across all database backends
+**Match statements to update:** 31+ exhaustive patterns
+**Total lines affected:** ~500-600 lines of code
+**Compilation will fail** until ALL match statements are updated to handle new enum variants.
+
+#### **Phase 16.12.1: Core DataType Extension** ⚠️ **CRITICAL**
+
+- [ ] **Extend DataType Enum in `packages/database/src/schema.rs` (Line 222-234)**
   ```rust
-  #[derive(Debug, Clone, Copy)]
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
   pub enum DataType {
-      // Existing types
-      VarChar(u16),
+      // Text types
       Text,
-      Bool,
+      VarChar(u16),
+      Char(u16),
+
+      // Integer types
       SmallInt,
       Int,
       BigInt,
+      Serial,                 // Auto-incrementing integer (PostgreSQL)
+      BigSerial,              // Auto-incrementing bigint (PostgreSQL)
+
+      // Floating point types
       Real,
       Double,
       Decimal(u8, u8),
-      DateTime,
-
-      // New types for Phase 16.8
-      Blob,                    // Binary data
-      Json,                    // JSON column type
-      Uuid,                    // UUID type
-      Timestamp,               // Distinct from DateTime
-      Date,                    // Date without time
-      Time,                    // Time without date
-      Char(u16),              // Fixed-length character
-      Binary(Option<u32>),    // Binary with optional length
-      Serial,                 // Auto-incrementing integer (PostgreSQL)
-      BigSerial,              // Auto-incrementing bigint (PostgreSQL)
-      Array(Box<DataType>),   // PostgreSQL arrays
-      Jsonb,                  // PostgreSQL binary JSON
-      Xml,                    // XML type
       Money,                  // Monetary type
+
+      // Boolean type
+      Bool,
+
+      // Date/Time types
+      Date,                   // Date without time
+      Time,                   // Time without date
+      DateTime,               // Date and time
+      Timestamp,              // Timestamp (distinct from DateTime)
+
+      // Binary types
+      Blob,                   // Binary data
+      Binary(Option<u32>),    // Binary with optional length
+
+      // JSON types
+      Json,                   // JSON column type
+      Jsonb,                  // PostgreSQL binary JSON
+
+      // Specialized types
+      Uuid,                   // UUID type
+      Xml,                    // XML type
+      Array(Box<DataType>),   // PostgreSQL arrays
       Inet,                   // IP address
       MacAddr,                // MAC address
 
@@ -8341,9 +8357,11 @@ Each phase implementation satisfied these criteria and is marked as complete:
   }
   ```
 
-- [ ] **Update SQLite Type Mapping in `packages/database/src/rusqlite/mod.rs`** ⚠️ **CRITICAL**
+#### **Phase 16.12.2: Update Type Mapping Functions** ⚠️ **CRITICAL**
+
+- [ ] **SQLite rusqlite (`packages/database/src/rusqlite/mod.rs` Line 2695-2705)**
   ```rust
-  fn map_sqlite_type(sqlite_type: &str) -> Result<DataType, DatabaseError> {
+  fn sqlite_type_to_data_type(sqlite_type: &str) -> Result<DataType, DatabaseError> {
       match sqlite_type.to_uppercase().as_str() {
           "INTEGER" => Ok(DataType::BigInt),
           "TEXT" => Ok(DataType::Text),
@@ -8358,29 +8376,32 @@ Each phase implementation satisfied these criteria and is marked as complete:
       }
   }
   ```
-  - [ ] Remove most `UnsupportedDataType` errors
-  - [ ] Use `Custom(String)` for truly unknown types
 
-- [ ] **Update PostgreSQL Type Mapping in `packages/database/src/postgres/postgres.rs`** ⚠️ **CRITICAL**
+- [ ] **PostgreSQL introspection (`packages/database/src/postgres/introspection.rs` Line 226-249)**
   ```rust
-  fn map_postgres_type(pg_type: &str) -> Result<DataType, DatabaseError> {
+  fn postgres_type_to_data_type(pg_type: &str, char_max_length: Option<i32>) -> Result<DataType, DatabaseError> {
       match pg_type.to_lowercase().as_str() {
-          "int2" | "smallint" => Ok(DataType::SmallInt),
-          "int4" | "integer" => Ok(DataType::Int),
-          "int8" | "bigint" => Ok(DataType::BigInt),
+          "smallint" | "int2" => Ok(DataType::SmallInt),
+          "integer" | "int" | "int4" => Ok(DataType::Int),
+          "bigint" | "int8" => Ok(DataType::BigInt),
           "serial" => Ok(DataType::Serial),
           "bigserial" => Ok(DataType::BigSerial),
+          "character varying" | "varchar" => {
+              match char_max_length {
+                  Some(length) if length > 0 => Ok(DataType::VarChar(u16::try_from(length).unwrap())),
+                  _ => Ok(DataType::VarChar(255)),
+              }
+          }
+          "character" | "char" => Ok(DataType::Char(1)),
           "text" => Ok(DataType::Text),
-          "varchar" => Ok(DataType::VarChar(255)), // Default length
-          "char" => Ok(DataType::Char(1)),
-          "bool" | "boolean" => Ok(DataType::Bool),
+          "boolean" | "bool" => Ok(DataType::Bool),
           "real" | "float4" => Ok(DataType::Real),
           "double precision" | "float8" => Ok(DataType::Double),
-          "decimal" | "numeric" => Ok(DataType::Decimal(10, 2)), // Default precision
+          "numeric" | "decimal" => Ok(DataType::Decimal(38, 10)),
           "date" => Ok(DataType::Date),
           "time" => Ok(DataType::Time),
-          "timestamp" => Ok(DataType::Timestamp),
-          "timestamptz" => Ok(DataType::DateTime),
+          "timestamp" | "timestamp without time zone" => Ok(DataType::Timestamp),
+          "timestamptz" | "timestamp with time zone" => Ok(DataType::DateTime),
           "bytea" => Ok(DataType::Blob),
           "json" => Ok(DataType::Json),
           "jsonb" => Ok(DataType::Jsonb),
@@ -8392,80 +8413,133 @@ Each phase implementation satisfied these criteria and is marked as complete:
           t if t.starts_with("_") => {
               // Array types in PostgreSQL start with underscore
               let inner = &t[1..];
-              map_postgres_type(inner).map(|dt| DataType::Array(Box::new(dt)))
+              postgres_type_to_data_type(inner, None).map(|dt| DataType::Array(Box::new(dt)))
           }
           _ => Ok(DataType::Custom(pg_type.to_string()))
       }
   }
   ```
 
-- [ ] **Update MySQL Type Mapping in `packages/database/src/sqlx/mysql.rs`** ⚠️ **CRITICAL**
-  ```rust
-  fn map_mysql_type(mysql_type: &str) -> Result<DataType, DatabaseError> {
-      match mysql_type.to_uppercase().as_str() {
-          "TINYINT" => Ok(DataType::SmallInt),
-          "SMALLINT" => Ok(DataType::SmallInt),
-          "MEDIUMINT" | "INT" | "INTEGER" => Ok(DataType::Int),
-          "BIGINT" => Ok(DataType::BigInt),
-          "FLOAT" => Ok(DataType::Real),
-          "DOUBLE" | "DOUBLE PRECISION" => Ok(DataType::Double),
-          "DECIMAL" | "NUMERIC" => Ok(DataType::Decimal(10, 2)),
-          "BIT" | "BOOL" | "BOOLEAN" => Ok(DataType::Bool),
-          "CHAR" => Ok(DataType::Char(255)),
-          "VARCHAR" => Ok(DataType::VarChar(255)),
-          "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" => Ok(DataType::Text),
-          "BINARY" => Ok(DataType::Binary(None)),
-          "VARBINARY" => Ok(DataType::Binary(Some(255))),
-          "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => Ok(DataType::Blob),
-          "DATE" => Ok(DataType::Date),
-          "TIME" => Ok(DataType::Time),
-          "DATETIME" => Ok(DataType::DateTime),
-          "TIMESTAMP" => Ok(DataType::Timestamp),
-          "JSON" => Ok(DataType::Json),
-          _ => Ok(DataType::Custom(mysql_type.to_string()))
-      }
-  }
-  ```
+- [ ] **PostgreSQL sqlx (`packages/database/src/sqlx/postgres_introspection.rs` Line 108-124)**
+- [ ] **MySQL (`packages/database/src/sqlx/mysql_introspection.rs` Line 408-433)**
+- [ ] **SQLite sqlx (`packages/database/src/sqlx/sqlite.rs` Line 2718-2736)**
 
-- [ ] **Update Schema Builder Support** 🟡 **IMPORTANT**
-  - [ ] Add builder methods for new types in Column struct
-  - [ ] Update SQL generation for new types per backend
-  - [ ] Ensure CREATE TABLE statements work with new types
+#### **Phase 16.12.3: Update CREATE TABLE SQL Generation** ⚠️ **CRITICAL**
 
-- [ ] **Add Integration Tests** 🟡 **IMPORTANT**
-  - [ ] Test introspection with tables containing new data types
-  - [ ] Verify Custom(String) fallback works correctly
-  - [ ] Test schema builder with new types
-  - [ ] Test that previously unsupported types now work
+All CREATE TABLE implementations use exhaustive match statements that WILL cause compilation errors:
 
-##### 16.8 Verification Checklist
-- [ ] Extended DataType enum compiles and is backward compatible
-- [ ] All backends handle new data types correctly
-- [ ] Custom(String) fallback prevents unknown type errors
-- [ ] Schema builder can create tables with new types
-- [ ] Integration tests pass for all new data types
+- [ ] **SQLite rusqlite (`packages/database/src/rusqlite/mod.rs`)**
+  - Line 931-948: CREATE TABLE column type generation
+  - Add cases for all 17 new DataType variants
+
+- [ ] **PostgreSQL raw (`packages/database/src/postgres/postgres.rs`)**
+  - Line 938-977: CREATE TABLE column type generation
+  - Handle Serial/BigSerial auto-increment logic
+
+- [ ] **PostgreSQL sqlx (`packages/database/src/sqlx/postgres.rs`)**
+  - Line 1014-1053: CREATE TABLE column type generation
+
+- [ ] **MySQL sqlx (`packages/database/src/sqlx/mysql.rs`)**
+  - Line 965-991: CREATE TABLE column type generation
+
+- [ ] **SQLite sqlx (`packages/database/src/sqlx/sqlite.rs`)**
+  - Line 1016-1033: CREATE TABLE column type generation
+
+#### **Phase 16.12.4: Update ALTER TABLE SQL Generation** ⚠️ **CRITICAL**
+
+ALTER TABLE implementations also use exhaustive matching:
+
+- [ ] **SQLite rusqlite (`packages/database/src/rusqlite/mod.rs`)**
+  - Line 1111-1124: ALTER TABLE ADD COLUMN type mapping
+  - Line 1228-1241: MODIFY COLUMN workaround type mapping
+  - Line 1452-1462: Table recreation type mapping
+  - Line 1664-1676: CAST type conversion mapping
+
+- [ ] **PostgreSQL sqlx (`packages/database/src/sqlx/postgres.rs`)**
+  - Line 1223-1235: ALTER TABLE type mapping
+
+- [ ] **MySQL sqlx (`packages/database/src/sqlx/mysql.rs`)**
+  - Line 1182-1195: ALTER TABLE ADD COLUMN type mapping
+  - Line 1266-1279: ALTER TABLE MODIFY COLUMN type mapping
+
+#### **Phase 16.12.5: SQLite Auto-increment Detection** 🟡 **IMPORTANT**
+
+- [ ] **Parse CREATE TABLE from sqlite_master (`packages/database/src/rusqlite/mod.rs` Line 2769)**
+  - Currently hardcoded to `false` - implement actual detection
+  - Query: `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`
+  - Parse for `AUTOINCREMENT` keyword after `PRIMARY KEY`
+  - Handle edge cases: case sensitivity, whitespace, multiple primary keys
+
+#### **Phase 16.12.6: Comprehensive Testing** 🟡 **IMPORTANT**
+
+- [ ] **Test new DataType introspection across all backends**
+  - Create tables with new data types
+  - Verify introspection returns correct DataType variants
+  - Test Custom(String) fallback for truly unknown types
+
+- [ ] **Test CREATE TABLE with new types**
+  - Verify SQL generation works for all new DataType variants
+  - Test that tables can be created and used
+
+- [ ] **Test ALTER TABLE with new types**
+  - Test ADD COLUMN, MODIFY COLUMN with new types
+  - Verify type conversion works correctly
+
+- [ ] **Update existing tests that may have exhaustive DataType matching**
+
+#### **Phase 16.12.7: Documentation Updates** 📚 **IMPORTANT**
+
+- [ ] **Update type mapping tables in documentation**
+  - Add all new types to backend comparison tables
+  - Document which types are supported by each backend
+  - Update introspection_guide.md with new type pitfalls
+
+- [ ] **Update examples in schema.rs module documentation**
+  - Show usage of new DataType variants
+  - Document Custom(String) fallback behavior
+
+##### **Breaking Change Mitigation Strategy**
+
+1. **All match statements are exhaustive** - no wildcard patterns exist
+2. **Compilation will fail** until ALL 31+ match statements are updated
+3. **This is intentional** - ensures all code paths handle new types
+4. **Consider adding `#[non_exhaustive]`** to DataType for future changes
+
+##### **16.12 Verification Checklist**
+- [ ] Extended DataType enum compiles with all new variants
+- [ ] All 31+ match statements updated to handle new types
+- [ ] All backends handle new data types correctly in CREATE TABLE
+- [ ] All backends handle new data types correctly in ALTER TABLE
+- [ ] Custom(String) fallback prevents UnsupportedDataType errors
+- [ ] SQLite auto-increment detection works correctly
+- [ ] All integration tests pass for new data types
 - [ ] Documentation updated with complete type support matrix
-- [ ] No breaking changes to existing code
+- [ ] Zero compilation warnings across all backends
 
-**Verification Checklist (Phase 16.1-16.7):**
-- [ ] `cargo fmt --check -p switchy_database` - All code formatted
+##### **Final Verification Requirements**
+- [ ] `cargo check -p switchy_database --all-features` - All feature combinations compile
 - [ ] `cargo clippy -p switchy_database --all-targets --all-features` - Zero warnings
 - [ ] `cargo test -p switchy_database --features schema` - All tests pass
-- [ ] Test all methods across all 6 database backends
-- [ ] Verify `DatabaseError::UnsupportedDataType` is returned for unmapped types
-- [ ] Verify transaction context support
-- [ ] Documentation complete with examples and limitations
-- [ ] Type mapping documented for each backend with supported/unsupported types
-- [ ] Phase 16.8 adds extended type support (BLOB, JSON, etc.)
+- [ ] `cargo doc -p switchy_database --features schema` - Documentation compiles
+- [ ] Test introspection methods across all 6 database backends
+- [ ] Verify Custom(String) fallback replaces UnsupportedDataType errors
+- [ ] Verify transaction context support for all new types
+- [ ] All CREATE TABLE and ALTER TABLE operations work with new types
 
-**Benefits:**
-- Enables Phase 11.2.1 implementation (schema migration detection)
-- Generic API for table introspection across all backends
-- Foundation for schema diff and validation tools
-- Useful for debugging and tooling
-- **Phased implementation:** Phase 16.1-16.7 provides basic types, Phase 16.8 adds extended support
-- **Fail-fast approach:** Clear errors for unsupported types rather than silent data loss
-- **Production ready:** Common types work immediately, exotic types come later
+##### **Implementation Statistics**
+- **New DataType variants**: 17 (including Custom(String))
+- **Files modified**: 9 backend implementation files
+- **Match statements updated**: 31+ exhaustive pattern matches
+- **Lines of code affected**: ~500-600 lines
+- **Breaking change impact**: Compilation failure until all matches updated
+
+##### **Benefits of Extended Type Support**
+- **Production database compatibility**: Support for BLOB, JSON, UUID, and specialized types
+- **Reduced UnsupportedDataType errors**: Custom(String) fallback for unknown types
+- **PostgreSQL advanced types**: Arrays, JSONB, network types (INET, MACADDR)
+- **MySQL compatibility**: Binary types, specialized text types
+- **Better auto-increment detection**: Proper SQLite AUTOINCREMENT parsing
+- **Foundation for schema diffing**: More accurate type representation for migration tools
 
 
 ## Parking Lot
