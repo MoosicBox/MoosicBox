@@ -1,3 +1,111 @@
+//! Database simulator for testing and development
+//!
+//! This module provides a database simulator that delegates all operations to an underlying
+//! `SQLite` database using rusqlite. It's designed for testing scenarios where you need
+//! consistent, predictable database behavior without external dependencies.
+//!
+//! # Delegation Architecture
+//!
+//! The `SimulationDatabase` is a **pure delegation wrapper** around `RusqliteDatabase`:
+//!
+//! ## Complete Delegation
+//! ALL database operations are delegated without modification:
+//! - **Query operations**: `select()`, `find()`, `update()`, `insert()`, `delete()`, `upsert()`
+//! - **Schema operations**: `exec_create_table()`, `drop_table()`, `alter_table()`
+//! - **Introspection operations**: `table_exists()`, `get_table_info()`, `column_exists()`, `get_table_columns()`
+//! - **Transaction operations**: `begin_transaction()` → returns `RusqliteTransaction`
+//!
+//! ## No Simulation Logic
+//! The simulator does NOT provide:
+//! - Mock data or fake responses
+//! - Special test behavior or stubbing
+//! - Query interception or modification
+//! - Different behavior from rusqlite
+//!
+//! ## Purpose: Shared Test Databases
+//! The primary purpose is **database instance sharing** during tests:
+//! - Multiple test components can reference the same database by path
+//! - Prevents test isolation issues from multiple database instances
+//! - Ensures consistent state across test components
+//!
+//! # Schema Introspection Behavior
+//!
+//! Since the simulator delegates to `RusqliteDatabase`, ALL introspection behavior
+//! is identical to the `SQLite` backend:
+//!
+//! ## Data Type Mappings
+//! Same as `SQLite`:
+//! - `INTEGER` → `BigInt`
+//! - `TEXT` → `Text`  
+//! - `REAL` → `Double`
+//! - `BOOLEAN` → `Bool`
+//!
+//! ## PRAGMA Commands
+//! Uses the same `SQLite` PRAGMA commands:
+//! - `PRAGMA table_info()` for column metadata
+//! - `PRAGMA index_list()` for index information
+//! - `PRAGMA foreign_key_list()` for foreign keys
+//!
+//! ## Limitations
+//! Inherits all `SQLite` limitations:
+//! - Limited auto-increment detection
+//! - PRIMARY KEY doesn't imply NOT NULL
+//! - Dynamic typing with type affinity
+//! - Complex default value parsing limitations
+//!
+//! # Database Registry
+//!
+//! The simulator maintains a global registry of database instances:
+//!
+//! ```rust,ignore
+//! // Creates or reuses database for path "test.db"
+//! let db1 = SimulationDatabase::new(Some("test.db")).await?;
+//! let db2 = SimulationDatabase::new(Some("test.db")).await?;
+//! // db1 and db2 reference the same underlying SQLite database
+//! ```
+//!
+//! ## Registry Key Behavior
+//! - **File path**: `Some("path/to/file.db")` → Uses file path as registry key
+//! - **In-memory**: `None` → Uses generated unique key for each instance
+//! - **Path normalization**: Paths are used as-is (no canonicalization)
+//!
+//! ## Thread Safety
+//! - Registry protected by `std::sync::Mutex`
+//! - Multiple threads can safely access the same simulated database
+//! - Underlying `SQLite` operations use connection pooling (from rusqlite implementation)
+//!
+//! # Usage in Tests
+//!
+//! ## Shared Database Instance
+//! ```rust,ignore
+//! // In test setup
+//! let db = SimulationDatabase::new(Some("test_shared.db")).await?;
+//! db.create_table("users").column(...).execute().await?;
+//!
+//! // In test component A
+//! let db_a = SimulationDatabase::new(Some("test_shared.db")).await?;
+//! // Sees the "users" table created above
+//!
+//! // In test component B  
+//! let db_b = SimulationDatabase::new(Some("test_shared.db")).await?;
+//! // Same database instance as db_a
+//! ```
+//!
+//! ## Isolated Test Instances
+//! ```rust,ignore
+//! // Each test gets unique in-memory database
+//! let db1 = SimulationDatabase::new(None).await?; // Independent
+//! let db2 = SimulationDatabase::new(None).await?; // Independent
+//! let db3 = SimulationDatabase::new(None).await?; // Independent
+//! ```
+//!
+//! # Transaction Behavior
+//!
+//! Transactions are delegated to the underlying `RusqliteDatabase`:
+//! - `begin_transaction()` returns `RusqliteTransaction` (not a simulator transaction)
+//! - All transaction isolation and connection pooling behavior from rusqlite applies
+//! - No special simulator transaction logic
+
 use async_trait::async_trait;
 use std::{
     collections::BTreeMap,

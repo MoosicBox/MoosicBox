@@ -1,3 +1,137 @@
+//! `PostgreSQL` schema introspection implementation
+//!
+//! This module implements schema introspection for `PostgreSQL` using the standard
+//! `information_schema` views. It provides PostgreSQL-specific handling for schemas,
+//! data types, and constraints.
+//!
+//! # Schema Awareness
+//!
+//! `PostgreSQL` is schema-aware, meaning tables exist within named schemas (namespaces).
+//! This implementation currently focuses on the **'public' schema only**:
+//!
+//! - **`table_exists()`**: Only searches `information_schema.tables` where `table_schema = 'public'`
+//! - **`get_table_columns()`**: Only searches `information_schema.columns` where `table_schema = 'public'`
+//! - **`get_table_info()`**: All queries filtered to 'public' schema
+//!
+//! ## Schema Search Path
+//!
+//! `PostgreSQL` uses a `search_path` setting to determine which schemas to search when
+//! an unqualified table name is used. The default search path is typically:
+//! `"$user", public`
+//!
+//! Our implementation explicitly targets 'public' schema rather than using the search path.
+//!
+//! ## Limitation: Single Schema Support
+//!
+//! Currently, this implementation only supports the 'public' schema. Tables in other
+//! schemas (e.g., '`information_schema`', user-defined schemas) are not discoverable.
+//!
+//! # PostgreSQL-Specific Data Type Mappings
+//!
+//! `PostgreSQL` has a rich type system. Our mapping to [`DataType`](crate::schema::DataType):
+//!
+//! ## Integer Types
+//! - `SMALLINT`, `INT2` → `SmallInt` (16-bit)
+//! - `INTEGER`, `INT`, `INT4` → `Int` (32-bit)  
+//! - `BIGINT`, `INT8` → `BigInt` (64-bit)
+//!
+//! ## Floating Point Types
+//! - `REAL`, `FLOAT4` → `Real` (32-bit float)
+//! - `DOUBLE PRECISION`, `FLOAT8` → `Double` (64-bit float)
+//!
+//! ## Decimal Types
+//! - `NUMERIC`, `DECIMAL` → `Decimal(38, 10)` (default precision/scale)
+//!
+//! ## String Types
+//! - `CHARACTER VARYING`, `VARCHAR` → `VarChar(length)` or `VarChar(255)` if no length
+//! - `TEXT` → `Text`
+//!
+//! ## Other Types
+//! - `BOOLEAN`, `BOOL` → `Bool`
+//! - `TIMESTAMP`, `TIMESTAMP WITHOUT TIME ZONE` → `DateTime`
+//!
+//! ## Unsupported Types
+//! Types that generate `UnsupportedDataType` errors:
+//! - `TIMESTAMP WITH TIME ZONE` (timezone-aware timestamps)
+//! - `DATE`, `TIME` (separate date/time types)
+//! - `JSON`, `JSONB` (JSON types)
+//! - `UUID` (universally unique identifiers)
+//! - `ARRAY` types (e.g., `INTEGER[]`)
+//! - User-defined types, enums, composite types
+//! - Geometric types (`POINT`, `POLYGON`, etc.)
+//! - Network types (`INET`, `CIDR`, etc.)
+//!
+//! # Serial vs Identity Columns
+//!
+//! `PostgreSQL` has two auto-increment mechanisms:
+//!
+//! ## SERIAL Types (`PostgreSQL` Extension)
+//! ```sql
+//! CREATE TABLE users (
+//!     id SERIAL PRIMARY KEY  -- Creates sequence + default
+//! );
+//! ```
+//! - `SERIAL` = `INTEGER` + `DEFAULT nextval('sequence')`
+//! - `BIGSERIAL` = `BIGINT` + `DEFAULT nextval('sequence')`
+//!
+//! ## IDENTITY Columns (SQL Standard)
+//! ```sql
+//! CREATE TABLE users (
+//!     id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY
+//! );
+//! ```
+//!
+//! ## Current Limitation
+//! Auto-increment detection is **not fully implemented**. The `auto_increment` field
+//! in [`ColumnInfo`](crate::schema::ColumnInfo) is always set to `false`.
+//!
+//! Proper implementation would need to:
+//! 1. Detect `nextval()` calls in default values (SERIAL)
+//! 2. Query `information_schema.sequences` for identity columns
+//! 3. Check `is_identity` and `identity_generation` columns
+//!
+//! # Default Value Parsing
+//!
+//! `PostgreSQL` default values can be complex expressions. Our parser handles:
+//!
+//! ## String Literals
+//! - `'value'::type` → `DatabaseValue::String("value")`
+//! - Extracts content between single quotes
+//!
+//! ## Boolean Values
+//! - `TRUE`, `true` → `DatabaseValue::Bool(true)`
+//! - `FALSE`, `false` → `DatabaseValue::Bool(false)`
+//!
+//! ## Numeric Values
+//! - Integer literals: `42` → `DatabaseValue::Number(42)`
+//! - Floating point: `3.14` → `DatabaseValue::Real(3.14)`
+//!
+//! ## Sequence Defaults
+//! - `nextval('sequence_name'::regclass)` → `None` (not representable)
+//!
+//! ## Function Calls
+//! - `now()`, `CURRENT_TIMESTAMP` → `None` (not parsed)
+//! - Complex expressions → `None`
+//!
+//! # Case Sensitivity
+//!
+//! `PostgreSQL` folds unquoted identifiers to lowercase:
+//! - `CREATE TABLE Users` creates table named `users`
+//! - `CREATE TABLE "Users"` creates table named `Users`
+//!
+//! Our introspection queries use lowercase table/column names, which matches
+//! `PostgreSQL`'s default behavior for unquoted identifiers.
+//!
+//! # Primary Key and Constraint Detection
+//!
+//! Primary keys are detected using `information_schema.table_constraints` and
+//! `information_schema.key_column_usage` joins. This correctly identifies:
+//! - Single-column primary keys
+//! - Multi-column composite primary keys
+//! - Named and unnamed primary key constraints
+//!
+//! Foreign key detection follows the same pattern using constraint metadata.
+
 use crate::schema::{ColumnInfo, DataType, ForeignKeyInfo, IndexInfo, TableInfo};
 use crate::{DatabaseError, DatabaseValue};
 use std::collections::BTreeMap;

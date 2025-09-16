@@ -1,3 +1,139 @@
+//! `MySQL` schema introspection implementation using sqlx
+//!
+//! This module implements schema introspection for `MySQL` using the standard
+//! `information_schema` database. It provides MySQL-specific handling for
+//! data types, constraints, and version-specific features.
+//!
+//! # `MySQL` Version Compatibility
+//!
+//! This implementation targets **`MySQL` 5.7+** and **`MariaDB` 10.2+**:
+//!
+//! ## Supported Versions
+//! - **`MySQL` 5.7, 8.0**: Full support for all introspection features
+//! - **`MariaDB` 10.2+**: Compatible with `MySQL` 5.7+ features used
+//! - **Percona Server**: Compatible as `MySQL` drop-in replacement
+//!
+//! ## Version-Specific Features Used
+//!
+//! ### `information_schema` Tables (`MySQL` 5.0+)
+//! - `information_schema.tables` - Basic table metadata
+//! - `information_schema.columns` - Column definitions and constraints
+//! - `information_schema.key_column_usage` - Primary/foreign key information
+//! - `information_schema.referential_constraints` - Foreign key actions
+//! - `information_schema.statistics` - Index information
+//!
+//! ### `MySQL` 8.0 Features NOT Used
+//! We intentionally avoid `MySQL` 8.0-specific features for broader compatibility:
+//! - **Invisible columns**: Not detected in introspection
+//! - **Generated columns**: Not handled specifically (appear as regular columns)
+//! - **Check constraints**: Not introspected (would require `MySQL` 8.0.16+)
+//! - **Role-based privileges**: Not considered in introspection
+//!
+//! # MySQL-Specific Data Type Mappings
+//!
+//! `MySQL` has extensive data type support. Our mapping to [`DataType`](crate::schema::DataType):
+//!
+//! ## Integer Types
+//! - `TINYINT`, `SMALLINT` → `SmallInt` (8-bit, 16-bit)
+//! - `MEDIUMINT`, `INT`, `INTEGER` → `Int` (24-bit, 32-bit)
+//! - `BIGINT` → `BigInt` (64-bit)
+//!
+//! ## Floating Point Types
+//! - `FLOAT` → `Real` (32-bit float)
+//! - `DOUBLE`, `REAL` → `Double` (64-bit float)
+//!
+//! ## Fixed Point Types
+//! - `DECIMAL`, `NUMERIC` → `Decimal(38, 10)` (default precision)
+//!
+//! ## String Types
+//! - `CHAR`, `VARCHAR` → `VarChar(length)` or `VarChar(255)` if no length
+//! - `TEXT`, `TINYTEXT`, `MEDIUMTEXT`, `LONGTEXT` → `Text`
+//!
+//! ## Other Types
+//! - `BOOLEAN`, `BOOL` → `Bool` (stored as `TINYINT(1)`)
+//! - `DATE`, `TIME`, `DATETIME`, `TIMESTAMP` → `DateTime`
+//!
+//! ## Unsupported Types
+//! Types that generate `UnsupportedDataType` errors:
+//! - `BINARY`, `VARBINARY` (binary data)
+//! - `BLOB`, `TINYBLOB`, `MEDIUMBLOB`, `LONGBLOB` (binary large objects)
+//! - `BIT` (bit field)
+//! - `ENUM` (enumeration)
+//! - `SET` (set of values)
+//! - `JSON` (`MySQL` 5.7+ JSON type)
+//! - `GEOMETRY` and spatial types
+//! - `YEAR` (year type)
+//!
+//! # MySQL-Specific Behavior
+//!
+//! ## Database Scope
+//! `MySQL` is database-aware but not schema-aware (unlike PostgreSQL):
+//! - Uses `DATABASE()` function to limit queries to current database
+//! - No schema concept - tables exist directly in databases
+//! - Introspection limited to currently connected database
+//!
+//! ## Case Sensitivity
+//! Table and column name case sensitivity depends on the filesystem:
+//! - **Linux/Unix**: Case-sensitive by default (`lower_case_table_names=0`)
+//! - **Windows**: Case-insensitive (`lower_case_table_names=1`)  
+//! - **macOS**: Case-insensitive (`lower_case_table_names=2`)
+//!
+//! Our introspection preserves the exact case as stored in `information_schema`.
+//!
+//! ## Storage Engine Considerations
+//! Different storage engines affect foreign key support:
+//! - **`InnoDB`**: Full foreign key support (default in `MySQL` 5.7+)
+//! - **`MyISAM`**: No foreign key support (constraints ignored)
+//! - **Memory**: No foreign key support
+//!
+//! Foreign key introspection only returns meaningful results for `InnoDB` tables.
+//!
+//! ## Auto-increment Detection
+//! `MySQL` provides auto-increment information in the `EXTRA` column:
+//! - `auto_increment` in `EXTRA` field → `auto_increment: true`
+//! - Empty `EXTRA` or other values → `auto_increment: false`
+//!
+//! This is more reliable than `SQLite`'s limited detection.
+//!
+//! ## Character Set Handling
+//! - Character sets affect column length calculations
+//! - `CHARACTER_MAXIMUM_LENGTH` reflects character count, not byte count
+//! - UTF-8 characters may use 1-4 bytes but count as 1 character
+//!
+//! # Default Value Parsing
+//!
+//! `MySQL` default values have specific formatting. Our parser handles:
+//!
+//! ## `MySQL` Functions
+//! - `CURRENT_TIMESTAMP`, `NOW()` → `DatabaseValue::Now`
+//! - Other functions → `None` (not representable)
+//!
+//! ## Literal Values
+//! - Quoted strings: `'value'` → `DatabaseValue::String("value")`
+//! - Numbers: `42`, `3.14` → `DatabaseValue::Number()` or `Real()`
+//! - `NULL` or empty → `None`
+//!
+//! ## Boolean Values
+//! `MySQL` stores booleans as `TINYINT(1)`:
+//! - `1` → `DatabaseValue::Bool(true)`
+//! - `0` → `DatabaseValue::Bool(false)`
+//!
+//! # Limitations
+//!
+//! ## Generated/Computed Columns (`MySQL` 5.7+)
+//! Generated columns appear in `information_schema.columns` but:
+//! - `GENERATION_EXPRESSION` column not parsed
+//! - Treated as regular columns in introspection
+//! - May have complex default expressions not representable
+//!
+//! ## Partitioned Tables
+//! - Partition information not included in introspection
+//! - Tables appear as single units regardless of partitioning
+//!
+//! ## Triggers and Procedures
+//! - Trigger information not included in table metadata
+//! - Stored procedures not introspected
+
 use std::collections::BTreeMap;
 
 use crate::{

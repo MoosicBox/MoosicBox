@@ -1,3 +1,135 @@
+//! Database Abstraction Layer for Switchy Ecosystem
+//!
+//! This crate provides a unified interface for working with multiple database backends
+//! including `SQLite` (rusqlite and sqlx), `PostgreSQL` (raw and sqlx), and `MySQL` (sqlx).
+//!
+//! ## Features
+//!
+//! * **Multiple Backend Support**: `SQLite`, `PostgreSQL`, `MySQL` with consistent APIs
+//! * **Query Builder**: Type-safe query construction for common operations
+//! * **Schema Management**: Create/alter tables, indexes with portable definitions
+//! * **Schema Introspection**: Query existing database structure programmatically
+//! * **Transaction Support**: Safe transaction handling across all backends
+//! * **Connection Pooling**: Efficient connection management for concurrent operations
+//!
+//! ## Schema Introspection
+//!
+//! The schema introspection capabilities allow you to programmatically examine
+//! your database structure. This is particularly useful for:
+//!
+//! * **Migration Systems**: Check if tables/columns exist before creating them
+//! * **Dynamic Schema Validation**: Ensure your code matches the database structure
+//! * **Database Documentation**: Generate schema documentation automatically
+//! * **Cross-Backend Compatibility**: Handle backend differences transparently
+//!
+//! ### Core Introspection Methods
+//!
+//! ```rust,no_run
+//! # use switchy_database::{Database, DatabaseError};
+//! # async fn example(db: &dyn Database) -> Result<(), DatabaseError> {
+//! // Check if a table exists before creating it
+//! if !db.table_exists("users").await? {
+//!     // Create the table...
+//! }
+//!
+//! // Check if a column exists before adding it
+//! if !db.column_exists("users", "email").await? {
+//!     // Add the column...
+//! }
+//!
+//! // Get complete table information
+//! if let Some(table_info) = db.get_table_info("users").await? {
+//!     for (column_name, column_info) in &table_info.columns {
+//!         println!("Column {}: {:?}", column_name, column_info.data_type);
+//!     }
+//! }
+//!
+//! // Get just the columns
+//! let columns = db.get_table_columns("users").await?;
+//! for column in columns {
+//!     println!("Column: {} ({})", column.name,
+//!              if column.nullable { "NULL" } else { "NOT NULL" });
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Backend-Specific Type Mappings
+//!
+//! Each database backend maps its native types to our common [`schema::DataType`] enum:
+//!
+//! | `DataType` | `SQLite` | `PostgreSQL` | `MySQL` |
+//! |----------|--------|------------|-------|
+//! | `Text` | `TEXT` | `TEXT` | `TEXT` |
+//! | `VarChar(n)` | `VARCHAR(n)` | `VARCHAR(n)` | `VARCHAR(n)` |
+//! | `Bool` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` |
+//! | `Int` | `INTEGER` | `INTEGER` | `INT` |
+//! | `BigInt` | `BIGINT` | `BIGINT` | `BIGINT` |
+//! | `Real` | `REAL` | `REAL` | `FLOAT` |
+//! | `Double` | `DOUBLE` | `DOUBLE PRECISION` | `DOUBLE` |
+//! | `DateTime` | `DATETIME` | `TIMESTAMP` | `DATETIME` |
+//!
+//! ### Known Limitations
+//!
+//! Schema introspection has some limitations that vary by backend:
+//!
+//! * **Computed/Generated Columns**: Not currently supported for introspection
+//! * **Complex Default Values**: Function calls and expressions may not be parsed correctly
+//! * **Custom Types**: User-defined types map to closest standard type
+//! * **Views**: Currently not supported - only tables are introspected
+//! * **Triggers**: Trigger information is not included in table info
+//!
+//! ### Common Pitfalls
+//!
+//! * **Case Sensitivity**: `PostgreSQL` folds unquoted identifiers to lowercase
+//! * **Schema Awareness**: `PostgreSQL` searches `search_path`, others use default schema
+//! * **Auto-increment Detection**: Implementation varies significantly between backends
+//! * **NULL vs NOT NULL**: `SQLite` PRIMARY KEY doesn't imply NOT NULL (unlike other DBs)
+//!
+//! ## Example: Migration-Safe Table Creation
+//!
+//! ```rust,no_run
+//! use switchy_database::{Database, DatabaseError, schema::{create_table, Column, DataType}};
+//!
+//! async fn ensure_users_table(db: &dyn Database) -> Result<(), DatabaseError> {
+//!     // Check if table exists first
+//!     if db.table_exists("users").await? {
+//!         // Table exists - check if we need to add columns
+//!         if !db.column_exists("users", "email").await? {
+//!             // Add email column - you'd use ALTER TABLE here
+//!         }
+//!         return Ok(());
+//!     }
+//!
+//!     // Create the table from scratch
+//!     create_table("users")
+//!         .column(Column {
+//!             name: "id".to_string(),
+//!             nullable: false,
+//!             auto_increment: true,
+//!             data_type: DataType::BigInt,
+//!             default: None,
+//!         })
+//!         .column(Column {
+//!             name: "username".to_string(),
+//!             nullable: false,
+//!             auto_increment: false,
+//!             data_type: DataType::VarChar(50),
+//!             default: None,
+//!         })
+//!         .column(Column {
+//!             name: "email".to_string(),
+//!             nullable: true,
+//!             auto_increment: false,
+//!             data_type: DataType::VarChar(255),
+//!             default: None,
+//!         })
+//!         .primary_key("id")
+//!         .execute(db)
+//!         .await
+//! }
+//! ```
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![allow(clippy::multiple_crate_versions)]
@@ -468,6 +600,17 @@ pub trait Database: Send + Sync + std::fmt::Debug {
 
     /// Check if a table exists in the database
     ///
+    /// This method queries the appropriate system catalog for each database backend:
+    /// - **SQLite**: Queries `sqlite_master` table for table existence
+    /// - **PostgreSQL**: Queries `information_schema.tables` with schema awareness (defaults to 'public')
+    /// - **MySQL**: Queries `information_schema.tables` for current database
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// - **PostgreSQL**: Only searches in 'public' schema by default
+    /// - **MySQL**: Uses `DATABASE()` function to limit to current database
+    /// - **SQLite**: Searches all attached databases
+    ///
     /// # Errors
     ///
     /// * If the database query fails
@@ -476,11 +619,40 @@ pub trait Database: Send + Sync + std::fmt::Debug {
 
     /// Get complete information about a table including columns, indexes, and foreign keys
     ///
-    /// Returns `None` if the table doesn't exist.
+    /// Returns `None` if the table doesn't exist. Provides comprehensive metadata including:
+    /// - All column information with data types, constraints, and defaults
+    /// - All indexes with column lists and uniqueness constraints
+    /// - All foreign key relationships with referential actions
+    ///
+    /// # Data Type Mappings
+    ///
+    /// Each backend maps its native types to our common [`schema::DataType`] enum:
+    ///
+    /// | Common Type | SQLite | `PostgreSQL` | `MySQL` |
+    /// |-------------|---------|------------|-------|
+    /// | `BigInt` | `INTEGER` | `BIGINT`, `INT8` | `BIGINT` |
+    /// | `Int` | - | `INTEGER`, `INT4` | `INT`, `INTEGER`, `MEDIUMINT` |
+    /// | `SmallInt` | - | `SMALLINT`, `INT2` | `TINYINT`, `SMALLINT` |
+    /// | `Text` | `TEXT` | `TEXT` | `TEXT`, `TINYTEXT`, `MEDIUMTEXT`, `LONGTEXT` |
+    /// | `VarChar(n)` | - | `VARCHAR(n)` | `VARCHAR(n)`, `CHAR(n)` |
+    /// | `Bool` | `BOOLEAN` | `BOOLEAN`, `BOOL` | `BOOLEAN`, `BOOL` |
+    /// | `Real` | - | `REAL`, `FLOAT4` | `FLOAT` |
+    /// | `Double` | `REAL` | `DOUBLE PRECISION`, `FLOAT8` | `DOUBLE`, `REAL` |
+    /// | `DateTime` | - | `TIMESTAMP` (without time zone) | `DATETIME`, `TIMESTAMP`, `DATE`, `TIME` |
+    /// | `Decimal(p,s)` | - | `NUMERIC`, `DECIMAL` | `DECIMAL`, `NUMERIC` |
+    ///
+    /// # Limitations
+    ///
+    /// - **Computed/Generated Columns**: Not supported for introspection
+    /// - **Complex Default Values**: Function calls and expressions may not parse correctly
+    /// - **Custom Types**: User-defined types map to closest standard type or return `UnsupportedDataType` error
+    /// - **Views**: Only tables are introspected, not views
+    /// - **Auto-increment Detection**: Limited implementation (`SQLite` requires additional parsing)
     ///
     /// # Errors
     ///
     /// * If the database query fails
+    /// * If an unsupported data type is encountered (`DatabaseError::UnsupportedDataType`)
     #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
@@ -489,11 +661,30 @@ pub trait Database: Send + Sync + std::fmt::Debug {
 
     /// Get all columns for a table
     ///
-    /// Returns an empty Vec if the table doesn't exist.
+    /// Returns an empty Vec if the table doesn't exist. This is a lighter-weight alternative
+    /// to [`get_table_info`](Self::get_table_info) when you only need column information.
+    ///
+    /// # Column Information Provided
+    ///
+    /// Each [`schema::ColumnInfo`] includes:
+    /// - **name**: Column name as stored in database
+    /// - **`data_type`**: Mapped to common [`schema::DataType`] enum (see [`get_table_info`](Self::get_table_info) for mapping table)
+    /// - **nullable**: Whether column allows NULL values
+    /// - **`is_primary_key`**: Whether column is part of primary key
+    /// - **`auto_increment`**: Whether column has auto-increment behavior (limited detection)
+    /// - **`default_value`**: Parsed default value as [`DatabaseValue`] (where possible)
+    /// - **`ordinal_position`**: 1-based position of column in table definition
+    ///
+    /// # Backend-Specific Parsing
+    ///
+    /// - **`SQLite`**: Uses `PRAGMA table_info()`, limited auto-increment detection
+    /// - **`PostgreSQL`**: Queries `information_schema.columns` with type casting awareness
+    /// - **`MySQL`**: Queries `information_schema.columns` with `EXTRA` field for auto-increment
     ///
     /// # Errors
     ///
     /// * If the database query fails
+    /// * If an unsupported data type is encountered
     #[cfg(feature = "schema")]
     async fn get_table_columns(
         &self,
@@ -502,9 +693,20 @@ pub trait Database: Send + Sync + std::fmt::Debug {
 
     /// Check if a column exists in a table
     ///
+    /// This is a convenience method that's more efficient than getting all columns
+    /// when you only need to check for existence of a specific column.
+    ///
+    /// # Implementation Details
+    ///
+    /// - **`SQLite`**: Uses `PRAGMA table_info()` and searches results
+    /// - **`PostgreSQL`**: Queries `information_schema.columns` with column name filter
+    /// - **`MySQL`**: Queries `information_schema.columns` with column name filter
+    ///
+    /// Returns `false` if either the table or column doesn't exist.
+    ///
     /// # Errors
     ///
-    /// * If the database query fails
+    /// * If the database query fails (but not if table/column doesn't exist)
     #[cfg(feature = "schema")]
     async fn column_exists(
         &self,

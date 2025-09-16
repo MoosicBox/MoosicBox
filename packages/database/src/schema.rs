@@ -1,3 +1,220 @@
+//! Database schema management and introspection types
+//!
+//! This module provides types and functionality for both creating and inspecting database schemas.
+//! It includes both schema construction (creating tables, indexes) and schema introspection
+//! (discovering existing database structure).
+//!
+//! # Schema Creation
+//!
+//! Use the builder patterns to create database schema elements:
+//!
+//! ```rust,no_run
+//! use switchy_database::schema::{create_table, Column, DataType};
+//! use switchy_database::{Database, DatabaseValue};
+//!
+//! # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+//! // Create a users table
+//! create_table("users")
+//!     .column(Column {
+//!         name: "id".to_string(),
+//!         nullable: false,
+//!         auto_increment: true,
+//!         data_type: DataType::BigInt,
+//!         default: None,
+//!     })
+//!     .column(Column {
+//!         name: "email".to_string(),
+//!         nullable: false,
+//!         auto_increment: false,
+//!         data_type: DataType::VarChar(255),
+//!         default: None,
+//!     })
+//!     .column(Column {
+//!         name: "created_at".to_string(),
+//!         nullable: false,
+//!         auto_increment: false,
+//!         data_type: DataType::DateTime,
+//!         default: Some(DatabaseValue::Now),
+//!     })
+//!     .primary_key("id")
+//!     .execute(db)
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Schema Introspection
+//!
+//! Discover existing database structure using the introspection types:
+//!
+//! ```rust,no_run
+//! use switchy_database::Database;
+//!
+//! # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+//! // Check if table exists before creating
+//! if !db.table_exists("users").await? {
+//!     // Create table (see creation example above)
+//! }
+//!
+//! // Get complete table information
+//! if let Some(table_info) = db.get_table_info("users").await? {
+//!     println!("Table: {}", table_info.name);
+//!     
+//!     // Inspect columns
+//!     for (col_name, col_info) in &table_info.columns {
+//!         println!("  Column: {} {:?} {}",
+//!             col_name,
+//!             col_info.data_type,
+//!             if col_info.nullable { "NULL" } else { "NOT NULL" }
+//!         );
+//!         
+//!         if col_info.is_primary_key {
+//!             println!("    (Primary Key)");
+//!         }
+//!         
+//!         if let Some(default) = &col_info.default_value {
+//!             println!("    Default: {:?}", default);
+//!         }
+//!     }
+//!     
+//!     // Inspect indexes
+//!     for (idx_name, idx_info) in &table_info.indexes {
+//!         println!("  Index: {} on {:?} {}",
+//!             idx_name,
+//!             idx_info.columns,
+//!             if idx_info.unique { "(UNIQUE)" } else { "" }
+//!         );
+//!     }
+//!     
+//!     // Inspect foreign keys
+//!     for (fk_name, fk_info) in &table_info.foreign_keys {
+//!         println!("  FK: {}.{} -> {}.{}",
+//!             table_info.name, fk_info.column,
+//!             fk_info.referenced_table, fk_info.referenced_column
+//!         );
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Migration-Safe Schema Operations
+//!
+//! Combine introspection with schema creation for safe migrations:
+//!
+//! ```rust,no_run
+//! use switchy_database::schema::{create_table, Column, DataType};
+//! use switchy_database::{Database, DatabaseValue};
+//!
+//! # async fn example(db: &dyn Database) -> Result<(), switchy_database::DatabaseError> {
+//! // Safe migration: add column if it doesn't exist
+//! if db.table_exists("users").await? {
+//!     if !db.column_exists("users", "last_login").await? {
+//!         // In real code, you'd use ALTER TABLE here
+//!         // This example shows the introspection pattern
+//!         println!("Need to add last_login column");
+//!     }
+//! } else {
+//!     // Table doesn't exist - create it
+//!     create_table("users")
+//!         .column(Column {
+//!             name: "id".to_string(),
+//!             nullable: false,
+//!             auto_increment: true,
+//!             data_type: DataType::BigInt,
+//!             default: None,
+//!         })
+//!         .column(Column {
+//!             name: "last_login".to_string(),
+//!             nullable: true,
+//!             auto_increment: false,
+//!             data_type: DataType::DateTime,
+//!             default: None,
+//!         })
+//!         .primary_key("id")
+//!         .execute(db)
+//!         .await?;
+//! }
+//!
+//! // Validate schema matches expectations
+//! let columns = db.get_table_columns("users").await?;
+//! let id_column = columns.iter().find(|c| c.name == "id")
+//!     .expect("users table should have id column");
+//!
+//! assert!(id_column.is_primary_key, "id should be primary key");
+//! assert!(!id_column.nullable, "id should be NOT NULL");
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Working with Different Data Types
+//!
+//! The [`DataType`] enum provides a common representation across database backends:
+//!
+//! ```rust,no_run
+//! use switchy_database::schema::{DataType, Column};
+//! use switchy_database::DatabaseValue;
+//!
+//! // Text types
+//! let short_string = Column {
+//!     name: "code".to_string(),
+//!     data_type: DataType::VarChar(10), // Fixed-width string
+//!     nullable: false,
+//!     auto_increment: false,
+//!     default: None,
+//! };
+//!
+//! let long_text = Column {
+//!     name: "description".to_string(),
+//!     data_type: DataType::Text, // Variable-length text
+//!     nullable: true,
+//!     auto_increment: false,
+//!     default: Some(DatabaseValue::String("".to_string())),
+//! };
+//!
+//! // Numeric types
+//! let counter = Column {
+//!     name: "count".to_string(),
+//!     data_type: DataType::Int, // 32-bit integer
+//!     nullable: false,
+//!     auto_increment: false,
+//!     default: Some(DatabaseValue::Number(0)),
+//! };
+//!
+//! let big_id = Column {
+//!     name: "big_id".to_string(),
+//!     data_type: DataType::BigInt, // 64-bit integer
+//!     nullable: false,
+//!     auto_increment: true,
+//!     default: None,
+//! };
+//!
+//! let price = Column {
+//!     name: "price".to_string(),
+//!     data_type: DataType::Decimal(10, 2), // DECIMAL(10,2) for currency
+//!     nullable: false,
+//!     auto_increment: false,
+//!     default: Some(DatabaseValue::Real(0.0)),
+//! };
+//!
+//! // Boolean and date types  
+//! let active = Column {
+//!     name: "active".to_string(),
+//!     data_type: DataType::Bool,
+//!     nullable: false,
+//!     auto_increment: false,
+//!     default: Some(DatabaseValue::Bool(true)),
+//! };
+//!
+//! let created_at = Column {
+//!     name: "created_at".to_string(),
+//!     data_type: DataType::DateTime,
+//!     nullable: false,
+//!     auto_increment: false,
+//!     default: Some(DatabaseValue::Now), // Use current timestamp
+//! };
+//! ```
+
 use std::collections::BTreeMap;
 
 use crate::{Database, DatabaseError, DatabaseValue};

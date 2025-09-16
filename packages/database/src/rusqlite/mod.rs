@@ -1,3 +1,99 @@
+//! `SQLite` database backend using rusqlite
+//!
+//! This module provides `SQLite` database support using the `rusqlite` crate for synchronous
+//! `SQLite` access wrapped in async interfaces. It implements schema introspection using
+//! `SQLite`'s PRAGMA commands.
+//!
+//! # Schema Introspection Implementation
+//!
+//! `SQLite` introspection uses several PRAGMA commands to discover database structure:
+//!
+//! ## PRAGMA Commands Used
+//!
+//! - **`PRAGMA table_info(table_name)`**: Gets column information including:
+//!   - Column ID (ordinal position, 0-based)
+//!   - Column name
+//!   - Data type string (e.g., "INTEGER", "TEXT", "REAL", "BOOLEAN")
+//!   - NOT NULL constraint (boolean)
+//!   - Default value (as string, may be NULL)
+//!   - Primary key flag (boolean)
+//!
+//! - **`PRAGMA index_list(table_name)`**: Gets all indexes for a table including:
+//!   - Index name
+//!   - Unique constraint flag
+//!   - Origin ('c' for CREATE INDEX, 'u' for UNIQUE, 'pk' for PRIMARY KEY)
+//!
+//! - **`PRAGMA index_info(index_name)`**: Gets columns in an index including:
+//!   - Column ordinal position within index
+//!   - Column name
+//!
+//! - **`PRAGMA foreign_key_list(table_name)`**: Gets foreign key constraints including:
+//!   - Referenced table name
+//!   - Local column name
+//!   - Referenced column name
+//!   - ON UPDATE action
+//!   - ON DELETE action
+//!
+//! ## SQLite-Specific Limitations
+//!
+//! ### Data Type Mapping
+//!
+//! `SQLite` has dynamic typing, but CREATE TABLE statements use type affinity strings.
+//! Our introspection maps common type names to [`DataType`](crate::schema::DataType):
+//!
+//! - `INTEGER` → `BigInt` (`SQLite` integers can be up to 8 bytes)
+//! - `TEXT` → `Text`
+//! - `REAL` → `Double` (`SQLite` uses double-precision floating point)
+//! - `BOOLEAN` → `Bool`
+//! - Other types → `UnsupportedDataType` error
+//!
+//! ### Auto-increment Detection
+//!
+//! `SQLite` auto-increment detection is **limited**. The `PRAGMA table_info()` does not
+//! indicate AUTOINCREMENT columns directly. True auto-increment detection requires:
+//! 1. Parsing the original CREATE TABLE statement
+//! 2. Checking for `AUTOINCREMENT` keyword on INTEGER PRIMARY KEY columns
+//!
+//! Current implementation sets `auto_increment: false` for all columns.
+//!
+//! ### Primary Key Behavior
+//!
+//! **Important**: In `SQLite`, PRIMARY KEY does NOT imply NOT NULL (unlike other databases):
+//! - `CREATE TABLE users (id INTEGER PRIMARY KEY)` - id can be NULL
+//! - `CREATE TABLE users (id INTEGER PRIMARY KEY NOT NULL)` - id cannot be NULL
+//!
+//! This differs from PostgreSQL/MySQL where PRIMARY KEY implies NOT NULL.
+//!
+//! ### Default Value Parsing
+//!
+//! `SQLite` stores default values as strings in the schema. Our parser handles:
+//! - `NULL` → None
+//! - String literals: `'value'` → `DatabaseValue::String("value")`
+//! - Numeric literals: `42` → `DatabaseValue::Number(42)`
+//! - Boolean literals: `1`/`TRUE`, `0`/`FALSE` → `DatabaseValue::Bool`
+//! - Real literals: `3.14` → `DatabaseValue::Real(3.14)`
+//! - Complex expressions → None (not parsed)
+//!
+//! ### PRAGMA Considerations
+//!
+//! - **Case Sensitivity**: PRAGMA commands are case-sensitive
+//! - **Attached Databases**: `table_exists()` searches all attached databases
+//! - **Temporary Tables**: Temporary tables are included in results
+//! - **Schema Modifications**: PRAGMA results reflect current schema, not historical
+//!
+//! # Connection Pool Architecture
+//!
+//! This implementation uses a connection pool to enable concurrent operations:
+//! - 5 connections per database instance
+//! - Round-robin connection selection
+//! - Shared in-memory databases using `SQLite` URI syntax for tests
+//! - Thread-safe access through `Arc<Mutex<Connection>>`
+//!
+//! # Transaction Support
+//!
+//! Transactions get dedicated connections from the pool to ensure isolation.
+//! Each transaction uses SQL commands: `BEGIN`, `COMMIT`, `ROLLBACK`.
+
 use std::{
     ops::Deref,
     sync::{
