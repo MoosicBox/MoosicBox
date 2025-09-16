@@ -559,8 +559,7 @@ mod simulator {
     generate_tests!();
 
     // Additional tests specific to simulator state tracking
-    #[switchy_async::test]
-    #[test_log::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_operation_after_commit_verification() {
         let db = setup_db().await;
         let db = &**db;
@@ -582,8 +581,7 @@ mod simulator {
         assert_eq!(rows.len(), 1);
     }
 
-    #[switchy_async::test]
-    #[test_log::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_operation_after_rollback_verification() {
         let db = setup_db().await;
         let db = &**db;
@@ -606,8 +604,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[switchy_async::test]
-    #[test_log::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_drop_table_operations() {
         let db = setup_db().await;
         let db = &**db;
@@ -644,7 +641,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_create_index_operations() {
         let db = setup_db().await;
         let db = &**db;
@@ -701,7 +698,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_drop_index_operations() {
         let db = setup_db().await;
         let db = &**db;
@@ -762,7 +759,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_alter_table_add_column() {
         let db = setup_db().await;
         let db = &**db;
@@ -805,7 +802,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_alter_table_drop_column() {
         let db = setup_db().await;
         let db = &**db;
@@ -848,7 +845,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_alter_table_rename_column() {
         let db = setup_db().await;
         let db = &**db;
@@ -888,7 +885,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_alter_table_modify_column() {
         let db = setup_db().await;
         let db = &**db;
@@ -936,7 +933,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_alter_table_multiple_operations() {
         let db = setup_db().await;
         let db = &**db;
@@ -996,7 +993,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_alter_table_transaction_rollback() {
         let db = setup_db().await;
         let db = &**db;
@@ -1037,7 +1034,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_alter_table_constraint_detection() {
         let db = setup_db().await;
         let db = &**db;
@@ -1114,7 +1111,7 @@ mod simulator {
     }
 
     #[cfg(feature = "schema")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_alter_table_table_recreation_applies_changes() {
         let db = setup_db().await;
         let db = &**db;
@@ -1183,5 +1180,473 @@ mod simulator {
 
         // Clean up
         db.exec_raw("DROP TABLE recreation_test").await.unwrap();
+    }
+}
+
+mod common;
+
+use common::introspection_tests::IntrospectionTestSuite;
+
+// Rusqlite backend introspection tests
+#[cfg(feature = "sqlite-rusqlite")]
+mod rusqlite_introspection_tests {
+    use super::*;
+    use ::rusqlite::Connection;
+    use std::sync::Arc;
+    use switchy_async::sync::Mutex;
+    use switchy_database::rusqlite::RusqliteDatabase;
+
+    struct RusqliteIntrospectionTests;
+
+    impl IntrospectionTestSuite for RusqliteIntrospectionTests {
+        type DatabaseType = RusqliteDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            // Create test database similar to existing rusqlite tests
+            let test_id = std::thread::current().id();
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let db_url = format!(
+                "file:introspection_test_{test_id:?}_{timestamp}:?mode=memory&cache=shared&uri=true"
+            );
+
+            let mut connections = Vec::new();
+            for _ in 0..5 {
+                let conn = Connection::open(&db_url).ok()?;
+                connections.push(Arc::new(Mutex::new(conn)));
+            }
+
+            Some(Arc::new(RusqliteDatabase::new(connections)))
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_introspection_table_exists() {
+        let suite = RusqliteIntrospectionTests;
+        suite.test_table_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_introspection_column_exists() {
+        let suite = RusqliteIntrospectionTests;
+        suite.test_column_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_introspection_get_table_columns() {
+        let suite = RusqliteIntrospectionTests;
+        suite.test_get_table_columns().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_introspection_get_table_info() {
+        let suite = RusqliteIntrospectionTests;
+        suite.test_get_table_info().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_introspection_unsupported_types() {
+        let suite = RusqliteIntrospectionTests;
+        suite.test_unsupported_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_introspection_transaction_context() {
+        let suite = RusqliteIntrospectionTests;
+        suite.test_transaction_context().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_introspection_edge_cases() {
+        let suite = RusqliteIntrospectionTests;
+        suite.test_edge_cases().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_rusqlite_introspection_all() {
+        let suite = RusqliteIntrospectionTests;
+        suite.run_all_tests().await;
+    }
+}
+
+// SQLx SQLite backend introspection tests
+#[cfg(feature = "sqlite-sqlx")]
+mod sqlx_sqlite_introspection_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::sqlx::sqlite::SqliteSqlxDatabase;
+
+    struct SqlxSqliteIntrospectionTests;
+
+    impl IntrospectionTestSuite for SqlxSqliteIntrospectionTests {
+        type DatabaseType = SqliteSqlxDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            use sqlx::SqlitePool;
+            use switchy_async::sync::Mutex;
+
+            // Create in-memory database for testing
+            let db_url = "sqlite::memory:";
+            let pool = SqlitePool::connect(db_url).await.ok()?;
+            let db = SqliteSqlxDatabase::new(Arc::new(Mutex::new(pool)));
+            Some(Arc::new(db))
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlx_sqlite_introspection_table_exists() {
+        let suite = SqlxSqliteIntrospectionTests;
+        suite.test_table_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlx_sqlite_introspection_column_exists() {
+        let suite = SqlxSqliteIntrospectionTests;
+        suite.test_column_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlx_sqlite_introspection_get_table_columns() {
+        let suite = SqlxSqliteIntrospectionTests;
+        suite.test_get_table_columns().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlx_sqlite_introspection_get_table_info() {
+        let suite = SqlxSqliteIntrospectionTests;
+        suite.test_get_table_info().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlx_sqlite_introspection_unsupported_types() {
+        let suite = SqlxSqliteIntrospectionTests;
+        suite.test_unsupported_types().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlx_sqlite_introspection_transaction_context() {
+        let suite = SqlxSqliteIntrospectionTests;
+        suite.test_transaction_context().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlx_sqlite_introspection_edge_cases() {
+        let suite = SqlxSqliteIntrospectionTests;
+        suite.test_edge_cases().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlx_sqlite_introspection_all() {
+        let suite = SqlxSqliteIntrospectionTests;
+        suite.run_all_tests().await;
+    }
+}
+
+// PostgreSQL tokio-postgres backend introspection tests
+#[cfg(feature = "postgres")]
+mod postgres_introspection_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::postgres::postgres::PostgresDatabase;
+
+    struct PostgresIntrospectionTests;
+
+    impl IntrospectionTestSuite for PostgresIntrospectionTests {
+        type DatabaseType = PostgresDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            let url = std::env::var("POSTGRES_TEST_URL").ok()?;
+
+            let mut cfg = deadpool_postgres::Config::new();
+            cfg.url = Some(url.clone());
+
+            let pool = if url.contains("sslmode=require") {
+                let connector = native_tls::TlsConnector::builder()
+                    .danger_accept_invalid_certs(true)
+                    .build()
+                    .ok()?;
+                let connector = postgres_native_tls::MakeTlsConnector::new(connector);
+                cfg.create_pool(Some(deadpool_postgres::Runtime::Tokio1), connector)
+                    .ok()?
+            } else {
+                cfg.create_pool(
+                    Some(deadpool_postgres::Runtime::Tokio1),
+                    tokio_postgres::NoTls,
+                )
+                .ok()?
+            };
+
+            Some(Arc::new(PostgresDatabase::new(pool)))
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_introspection_table_exists() {
+        let suite = PostgresIntrospectionTests;
+        suite.test_table_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_introspection_column_exists() {
+        let suite = PostgresIntrospectionTests;
+        suite.test_column_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_introspection_get_table_columns() {
+        let suite = PostgresIntrospectionTests;
+        suite.test_get_table_columns().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_introspection_get_table_info() {
+        let suite = PostgresIntrospectionTests;
+        suite.test_get_table_info().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_introspection_unsupported_types() {
+        let suite = PostgresIntrospectionTests;
+        suite.test_unsupported_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_introspection_transaction_context() {
+        let suite = PostgresIntrospectionTests;
+        suite.test_transaction_context().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_introspection_edge_cases() {
+        let suite = PostgresIntrospectionTests;
+        suite.test_edge_cases().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_postgres_introspection_all() {
+        let suite = PostgresIntrospectionTests;
+        suite.run_all_tests().await;
+    }
+}
+
+// PostgreSQL sqlx backend introspection tests
+#[cfg(feature = "postgres-sqlx")]
+mod sqlx_postgres_introspection_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::sqlx::postgres::PostgresSqlxDatabase;
+
+    struct SqlxPostgresIntrospectionTests;
+
+    impl IntrospectionTestSuite for SqlxPostgresIntrospectionTests {
+        type DatabaseType = PostgresSqlxDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            use sqlx::PgPool;
+            use switchy_async::sync::Mutex;
+
+            let url = std::env::var("POSTGRES_TEST_URL").ok()?;
+            let pool = PgPool::connect(&url).await.ok()?;
+            let pool = Arc::new(Mutex::new(pool));
+            let db = PostgresSqlxDatabase::new(pool);
+            Some(Arc::new(db))
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_postgres_introspection_table_exists() {
+        let suite = SqlxPostgresIntrospectionTests;
+        suite.test_table_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_postgres_introspection_column_exists() {
+        let suite = SqlxPostgresIntrospectionTests;
+        suite.test_column_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_postgres_introspection_get_table_columns() {
+        let suite = SqlxPostgresIntrospectionTests;
+        suite.test_get_table_columns().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_postgres_introspection_get_table_info() {
+        let suite = SqlxPostgresIntrospectionTests;
+        suite.test_get_table_info().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_postgres_introspection_unsupported_types() {
+        let suite = SqlxPostgresIntrospectionTests;
+        suite.test_unsupported_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_postgres_introspection_transaction_context() {
+        let suite = SqlxPostgresIntrospectionTests;
+        suite.test_transaction_context().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_postgres_introspection_edge_cases() {
+        let suite = SqlxPostgresIntrospectionTests;
+        suite.test_edge_cases().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_postgres_introspection_all() {
+        let suite = SqlxPostgresIntrospectionTests;
+        suite.run_all_tests().await;
+    }
+}
+
+// MySQL sqlx backend introspection tests
+#[cfg(feature = "mysql-sqlx")]
+mod sqlx_mysql_introspection_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::sqlx::mysql::MySqlSqlxDatabase;
+
+    struct SqlxMysqlIntrospectionTests;
+
+    impl IntrospectionTestSuite for SqlxMysqlIntrospectionTests {
+        type DatabaseType = MySqlSqlxDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            use sqlx::MySqlPool;
+            use switchy_async::sync::Mutex;
+
+            let url = std::env::var("MYSQL_TEST_URL").ok()?;
+            let pool = MySqlPool::connect(&url).await.ok()?;
+            let pool = Arc::new(Mutex::new(pool));
+            let db = MySqlSqlxDatabase::new(pool);
+            Some(Arc::new(db))
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_mysql_introspection_table_exists() {
+        let suite = SqlxMysqlIntrospectionTests;
+        suite.test_table_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_mysql_introspection_column_exists() {
+        let suite = SqlxMysqlIntrospectionTests;
+        suite.test_column_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_mysql_introspection_get_table_columns() {
+        let suite = SqlxMysqlIntrospectionTests;
+        suite.test_get_table_columns().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_mysql_introspection_get_table_info() {
+        let suite = SqlxMysqlIntrospectionTests;
+        suite.test_get_table_info().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_mysql_introspection_unsupported_types() {
+        let suite = SqlxMysqlIntrospectionTests;
+        suite.test_unsupported_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_mysql_introspection_transaction_context() {
+        let suite = SqlxMysqlIntrospectionTests;
+        suite.test_transaction_context().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_mysql_introspection_edge_cases() {
+        let suite = SqlxMysqlIntrospectionTests;
+        suite.test_edge_cases().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_sqlx_mysql_introspection_all() {
+        let suite = SqlxMysqlIntrospectionTests;
+        suite.run_all_tests().await;
+    }
+}
+
+// Simulator backend introspection tests
+#[cfg(feature = "simulator")]
+mod simulator_introspection_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::simulator::SimulationDatabase;
+
+    struct SimulatorIntrospectionTests;
+
+    impl IntrospectionTestSuite for SimulatorIntrospectionTests {
+        type DatabaseType = SimulationDatabase;
+
+        async fn get_database(&self) -> Option<Arc<Self::DatabaseType>> {
+            let test_id = std::thread::current().id();
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = format!("simulator_introspection_test_{test_id:?}_{timestamp}.db");
+
+            let simulator = SimulationDatabase::new_for_path(Some(&path)).ok()?;
+            Some(Arc::new(simulator))
+        }
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_introspection_table_exists() {
+        let suite = SimulatorIntrospectionTests;
+        suite.test_table_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_introspection_column_exists() {
+        let suite = SimulatorIntrospectionTests;
+        suite.test_column_exists().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_introspection_get_table_columns() {
+        let suite = SimulatorIntrospectionTests;
+        suite.test_get_table_columns().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_introspection_get_table_info() {
+        let suite = SimulatorIntrospectionTests;
+        suite.test_get_table_info().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_introspection_unsupported_types() {
+        let suite = SimulatorIntrospectionTests;
+        suite.test_unsupported_types().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_introspection_transaction_context() {
+        let suite = SimulatorIntrospectionTests;
+        suite.test_transaction_context().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_introspection_edge_cases() {
+        let suite = SimulatorIntrospectionTests;
+        suite.test_edge_cases().await;
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_introspection_all() {
+        let suite = SimulatorIntrospectionTests;
+        suite.run_all_tests().await;
     }
 }
