@@ -1185,10 +1185,11 @@ mod simulator {
 
 mod common;
 
+#[cfg(feature = "schema")]
 use common::introspection_tests::IntrospectionTestSuite;
 
 // Rusqlite backend introspection tests
-#[cfg(feature = "sqlite-rusqlite")]
+#[cfg(all(feature = "sqlite-rusqlite", feature = "schema"))]
 mod rusqlite_introspection_tests {
     use super::*;
     use ::rusqlite::Connection;
@@ -1272,7 +1273,7 @@ mod rusqlite_introspection_tests {
 }
 
 // SQLx SQLite backend introspection tests
-#[cfg(feature = "sqlite-sqlx")]
+#[cfg(all(feature = "sqlite-sqlx", feature = "schema"))]
 mod sqlx_sqlite_introspection_tests {
     use super::*;
     use std::sync::Arc;
@@ -1345,7 +1346,7 @@ mod sqlx_sqlite_introspection_tests {
 }
 
 // PostgreSQL tokio-postgres backend introspection tests
-#[cfg(feature = "postgres")]
+#[cfg(all(feature = "postgres", feature = "schema"))]
 mod postgres_introspection_tests {
     use super::*;
     use std::sync::Arc;
@@ -1432,7 +1433,7 @@ mod postgres_introspection_tests {
 }
 
 // PostgreSQL sqlx backend introspection tests
-#[cfg(feature = "postgres-sqlx")]
+#[cfg(all(feature = "postgres-sqlx", feature = "schema"))]
 mod sqlx_postgres_introspection_tests {
     use super::*;
     use std::sync::Arc;
@@ -1505,7 +1506,7 @@ mod sqlx_postgres_introspection_tests {
 }
 
 // MySQL sqlx backend introspection tests
-#[cfg(feature = "mysql-sqlx")]
+#[cfg(all(feature = "mysql-sqlx", feature = "schema"))]
 mod sqlx_mysql_introspection_tests {
     use super::*;
     use std::sync::Arc;
@@ -1578,7 +1579,7 @@ mod sqlx_mysql_introspection_tests {
 }
 
 // Simulator backend introspection tests
-#[cfg(feature = "simulator")]
+#[cfg(all(feature = "simulator", feature = "schema"))]
 mod simulator_introspection_tests {
     use super::*;
     use std::sync::Arc;

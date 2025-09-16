@@ -2171,262 +2171,266 @@ impl Expression for MySqlDatabaseValue {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::schema::DataType;
-    use sqlx::MySqlPool;
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
+    #[cfg(feature = "schema")]
+    mod schema {
+        use super::super::*;
+        use crate::schema::DataType;
+        use sqlx::MySqlPool;
+        use std::sync::Arc;
+        use tokio::sync::Mutex;
 
-    fn get_mysql_test_url() -> Option<String> {
-        std::env::var("MYSQL_TEST_URL").ok()
-    }
+        fn get_mysql_test_url() -> Option<String> {
+            std::env::var("MYSQL_TEST_URL").ok()
+        }
 
-    async fn create_pool(url: &str) -> Result<Arc<Mutex<MySqlPool>>, sqlx::Error> {
-        let pool = MySqlPool::connect(url).await?;
-        Ok(Arc::new(Mutex::new(pool)))
-    }
+        async fn create_pool(url: &str) -> Result<Arc<Mutex<MySqlPool>>, sqlx::Error> {
+            let pool = MySqlPool::connect(url).await?;
+            Ok(Arc::new(Mutex::new(pool)))
+        }
 
-    #[tokio::test]
-    async fn test_mysql_table_exists() {
-        let Some(url) = get_mysql_test_url() else {
-            return;
-        };
+        #[tokio::test]
+        async fn test_mysql_table_exists() {
+            let Some(url) = get_mysql_test_url() else {
+                return;
+            };
 
-        let pool = create_pool(&url).await.expect("Failed to create pool");
-        let db = MySqlSqlxDatabase::new(pool);
+            let pool = create_pool(&url).await.expect("Failed to create pool");
+            let db = MySqlSqlxDatabase::new(pool);
 
-        // Test non-existent table
-        assert!(!db.table_exists("non_existent_table").await.unwrap());
+            // Test non-existent table
+            assert!(!db.table_exists("non_existent_table").await.unwrap());
 
-        // Create test table
-        db.exec_raw(
+            // Create test table
+            db.exec_raw(
             "CREATE TABLE IF NOT EXISTS test_table_exists (id INTEGER PRIMARY KEY AUTO_INCREMENT)",
         )
         .await
         .unwrap();
 
-        // Test existing table
-        assert!(db.table_exists("test_table_exists").await.unwrap());
+            // Test existing table
+            assert!(db.table_exists("test_table_exists").await.unwrap());
 
-        // Clean up
-        db.exec_raw("DROP TABLE IF EXISTS test_table_exists")
-            .await
-            .unwrap();
-    }
+            // Clean up
+            db.exec_raw("DROP TABLE IF EXISTS test_table_exists")
+                .await
+                .unwrap();
+        }
 
-    #[tokio::test]
-    async fn test_mysql_get_table_columns() {
-        let Some(url) = get_mysql_test_url() else {
-            return;
-        };
+        #[tokio::test]
+        async fn test_mysql_get_table_columns() {
+            let Some(url) = get_mysql_test_url() else {
+                return;
+            };
 
-        let pool = create_pool(&url).await.expect("Failed to create pool");
-        let db = MySqlSqlxDatabase::new(pool);
+            let pool = create_pool(&url).await.expect("Failed to create pool");
+            let db = MySqlSqlxDatabase::new(pool);
 
-        // Create test table with various column types
-        db.exec_raw(
-            "CREATE TABLE IF NOT EXISTS test_table_columns (
+            // Create test table with various column types
+            db.exec_raw(
+                "CREATE TABLE IF NOT EXISTS test_table_columns (
                 id INTEGER PRIMARY KEY AUTO_INCREMENT,
                 name VARCHAR(100) NOT NULL,
                 age INT,
                 active BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )",
-        )
-        .await
-        .unwrap();
-
-        let columns = db.get_table_columns("test_table_columns").await.unwrap();
-
-        assert_eq!(columns.len(), 5);
-
-        // Check id column
-        let id_col = columns.iter().find(|c| c.name == "id").unwrap();
-        assert_eq!(id_col.data_type, DataType::Int);
-        assert!(!id_col.nullable);
-        assert!(id_col.is_primary_key);
-        assert!(id_col.auto_increment);
-
-        // Check name column
-        let name_col = columns.iter().find(|c| c.name == "name").unwrap();
-        assert_eq!(name_col.data_type, DataType::Text);
-        assert!(!name_col.nullable);
-        assert!(!name_col.is_primary_key);
-
-        // Check age column
-        let age_col = columns.iter().find(|c| c.name == "age").unwrap();
-        assert_eq!(age_col.data_type, DataType::Int);
-        assert!(age_col.nullable);
-        assert!(!age_col.is_primary_key);
-
-        // Check active column
-        let active_col = columns.iter().find(|c| c.name == "active").unwrap();
-        assert_eq!(active_col.data_type, DataType::Bool);
-        assert!(active_col.nullable);
-        assert!(active_col.default_value.is_some());
-
-        // Clean up
-        db.exec_raw("DROP TABLE IF EXISTS test_table_columns")
-            .await
-            .unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_mysql_column_exists() {
-        let Some(url) = get_mysql_test_url() else {
-            return;
-        };
-
-        let pool = create_pool(&url).await.expect("Failed to create pool");
-        let db = MySqlSqlxDatabase::new(pool);
-
-        // Create test table
-        db.exec_raw("CREATE TABLE IF NOT EXISTS test_column_exists (id INTEGER, name VARCHAR(50))")
+            )
             .await
             .unwrap();
 
-        // Test existing columns
-        assert!(db.column_exists("test_column_exists", "id").await.unwrap());
-        assert!(
-            db.column_exists("test_column_exists", "name")
+            let columns = db.get_table_columns("test_table_columns").await.unwrap();
+
+            assert_eq!(columns.len(), 5);
+
+            // Check id column
+            let id_col = columns.iter().find(|c| c.name == "id").unwrap();
+            assert_eq!(id_col.data_type, DataType::Int);
+            assert!(!id_col.nullable);
+            assert!(id_col.is_primary_key);
+            assert!(id_col.auto_increment);
+
+            // Check name column
+            let name_col = columns.iter().find(|c| c.name == "name").unwrap();
+            assert_eq!(name_col.data_type, DataType::Text);
+            assert!(!name_col.nullable);
+            assert!(!name_col.is_primary_key);
+
+            // Check age column
+            let age_col = columns.iter().find(|c| c.name == "age").unwrap();
+            assert_eq!(age_col.data_type, DataType::Int);
+            assert!(age_col.nullable);
+            assert!(!age_col.is_primary_key);
+
+            // Check active column
+            let active_col = columns.iter().find(|c| c.name == "active").unwrap();
+            assert_eq!(active_col.data_type, DataType::Bool);
+            assert!(active_col.nullable);
+            assert!(active_col.default_value.is_some());
+
+            // Clean up
+            db.exec_raw("DROP TABLE IF EXISTS test_table_columns")
                 .await
-                .unwrap()
-        );
+                .unwrap();
+        }
 
-        // Test non-existent column
-        assert!(
-            !db.column_exists("test_column_exists", "nonexistent")
-                .await
-                .unwrap()
-        );
+        #[tokio::test]
+        async fn test_mysql_column_exists() {
+            let Some(url) = get_mysql_test_url() else {
+                return;
+            };
 
-        // Test non-existent table
-        assert!(!db.column_exists("non_existent_table", "id").await.unwrap());
+            let pool = create_pool(&url).await.expect("Failed to create pool");
+            let db = MySqlSqlxDatabase::new(pool);
 
-        // Clean up
-        db.exec_raw("DROP TABLE IF EXISTS test_column_exists")
+            // Create test table
+            db.exec_raw(
+                "CREATE TABLE IF NOT EXISTS test_column_exists (id INTEGER, name VARCHAR(50))",
+            )
             .await
             .unwrap();
-    }
 
-    #[tokio::test]
-    async fn test_mysql_get_table_info() {
-        let Some(url) = get_mysql_test_url() else {
-            return;
-        };
+            // Test existing columns
+            assert!(db.column_exists("test_column_exists", "id").await.unwrap());
+            assert!(
+                db.column_exists("test_column_exists", "name")
+                    .await
+                    .unwrap()
+            );
 
-        let pool = create_pool(&url).await.expect("Failed to create pool");
-        let db = MySqlSqlxDatabase::new(pool);
+            // Test non-existent column
+            assert!(
+                !db.column_exists("test_column_exists", "nonexistent")
+                    .await
+                    .unwrap()
+            );
 
-        // Create test table
-        db.exec_raw(
-            "CREATE TABLE IF NOT EXISTS test_table_info (
+            // Test non-existent table
+            assert!(!db.column_exists("non_existent_table", "id").await.unwrap());
+
+            // Clean up
+            db.exec_raw("DROP TABLE IF EXISTS test_column_exists")
+                .await
+                .unwrap();
+        }
+
+        #[tokio::test]
+        async fn test_mysql_get_table_info() {
+            let Some(url) = get_mysql_test_url() else {
+                return;
+            };
+
+            let pool = create_pool(&url).await.expect("Failed to create pool");
+            let db = MySqlSqlxDatabase::new(pool);
+
+            // Create test table
+            db.exec_raw(
+                "CREATE TABLE IF NOT EXISTS test_table_info (
                 id INTEGER PRIMARY KEY AUTO_INCREMENT,
                 name VARCHAR(100) NOT NULL,
                 email VARCHAR(255)
             )",
-        )
-        .await
-        .unwrap();
-
-        let table_info = db.get_table_info("test_table_info").await.unwrap();
-        assert!(table_info.is_some());
-
-        let table_info = table_info.unwrap();
-        assert_eq!(table_info.name, "test_table_info");
-        assert_eq!(table_info.columns.len(), 3);
-
-        // Check that we have the expected columns
-        assert!(table_info.columns.contains_key("id"));
-        assert!(table_info.columns.contains_key("name"));
-        assert!(table_info.columns.contains_key("email"));
-
-        // Clean up
-        db.exec_raw("DROP TABLE IF EXISTS test_table_info")
+            )
             .await
             .unwrap();
-    }
 
-    #[tokio::test]
-    async fn test_mysql_get_table_info_empty() {
-        let Some(url) = get_mysql_test_url() else {
-            return;
-        };
+            let table_info = db.get_table_info("test_table_info").await.unwrap();
+            assert!(table_info.is_some());
 
-        let pool = create_pool(&url).await.expect("Failed to create pool");
-        let db = MySqlSqlxDatabase::new(pool);
+            let table_info = table_info.unwrap();
+            assert_eq!(table_info.name, "test_table_info");
+            assert_eq!(table_info.columns.len(), 3);
 
-        // Test non-existent table
-        let table_info = db.get_table_info("non_existent_table").await.unwrap();
-        assert!(table_info.is_none());
-    }
+            // Check that we have the expected columns
+            assert!(table_info.columns.contains_key("id"));
+            assert!(table_info.columns.contains_key("name"));
+            assert!(table_info.columns.contains_key("email"));
 
-    #[tokio::test]
-    async fn test_mysql_get_table_info_with_indexes_and_foreign_keys() {
-        let Some(url) = get_mysql_test_url() else {
-            return;
-        };
+            // Clean up
+            db.exec_raw("DROP TABLE IF EXISTS test_table_info")
+                .await
+                .unwrap();
+        }
 
-        let pool = create_pool(&url).await.expect("Failed to create pool");
-        let db = MySqlSqlxDatabase::new(pool);
+        #[tokio::test]
+        async fn test_mysql_get_table_info_empty() {
+            let Some(url) = get_mysql_test_url() else {
+                return;
+            };
 
-        // Create parent table
-        db.exec_raw(
-            "CREATE TABLE IF NOT EXISTS test_parent (
+            let pool = create_pool(&url).await.expect("Failed to create pool");
+            let db = MySqlSqlxDatabase::new(pool);
+
+            // Test non-existent table
+            let table_info = db.get_table_info("non_existent_table").await.unwrap();
+            assert!(table_info.is_none());
+        }
+
+        #[tokio::test]
+        async fn test_mysql_get_table_info_with_indexes_and_foreign_keys() {
+            let Some(url) = get_mysql_test_url() else {
+                return;
+            };
+
+            let pool = create_pool(&url).await.expect("Failed to create pool");
+            let db = MySqlSqlxDatabase::new(pool);
+
+            // Create parent table
+            db.exec_raw(
+                "CREATE TABLE IF NOT EXISTS test_parent (
                 id INTEGER PRIMARY KEY AUTO_INCREMENT,
                 name VARCHAR(100) UNIQUE
             )",
-        )
-        .await
-        .unwrap();
+            )
+            .await
+            .unwrap();
 
-        // Create child table with foreign key and index
-        db.exec_raw(
-            "CREATE TABLE IF NOT EXISTS test_child (
+            // Create child table with foreign key and index
+            db.exec_raw(
+                "CREATE TABLE IF NOT EXISTS test_child (
                 id INTEGER PRIMARY KEY AUTO_INCREMENT,
                 parent_id INTEGER,
                 description TEXT,
                 INDEX idx_description (description(100)),
                 FOREIGN KEY (parent_id) REFERENCES test_parent(id) ON DELETE CASCADE
             )",
-        )
-        .await
-        .unwrap();
-
-        let table_info = db.get_table_info("test_child").await.unwrap();
-        assert!(table_info.is_some());
-
-        let table_info = table_info.unwrap();
-        assert_eq!(table_info.name, "test_child");
-
-        // Check indexes (should have PRIMARY and idx_description)
-        assert!(table_info.indexes.len() >= 2);
-        assert!(table_info.indexes.contains_key("PRIMARY"));
-
-        // Check foreign keys
-        assert!(!table_info.foreign_keys.is_empty());
-
-        // Clean up (order matters due to foreign key)
-        db.exec_raw("DROP TABLE IF EXISTS test_child")
+            )
             .await
             .unwrap();
-        db.exec_raw("DROP TABLE IF EXISTS test_parent")
-            .await
-            .unwrap();
-    }
 
-    #[tokio::test]
-    async fn test_mysql_varchar_length_preservation() {
-        let Some(url) = get_mysql_test_url() else {
-            return;
-        };
+            let table_info = db.get_table_info("test_child").await.unwrap();
+            assert!(table_info.is_some());
 
-        let pool = create_pool(&url).await.expect("Failed to create pool");
-        let db = MySqlSqlxDatabase::new(pool);
+            let table_info = table_info.unwrap();
+            assert_eq!(table_info.name, "test_child");
 
-        // Create test table with various VARCHAR lengths
-        db.exec_raw(
-            "CREATE TABLE IF NOT EXISTS test_varchar_lengths (
+            // Check indexes (should have PRIMARY and idx_description)
+            assert!(table_info.indexes.len() >= 2);
+            assert!(table_info.indexes.contains_key("PRIMARY"));
+
+            // Check foreign keys
+            assert!(!table_info.foreign_keys.is_empty());
+
+            // Clean up (order matters due to foreign key)
+            db.exec_raw("DROP TABLE IF EXISTS test_child")
+                .await
+                .unwrap();
+            db.exec_raw("DROP TABLE IF EXISTS test_parent")
+                .await
+                .unwrap();
+        }
+
+        #[tokio::test]
+        async fn test_mysql_varchar_length_preservation() {
+            let Some(url) = get_mysql_test_url() else {
+                return;
+            };
+
+            let pool = create_pool(&url).await.expect("Failed to create pool");
+            let db = MySqlSqlxDatabase::new(pool);
+
+            // Create test table with various VARCHAR lengths
+            db.exec_raw(
+                "CREATE TABLE IF NOT EXISTS test_varchar_lengths (
                 id INTEGER PRIMARY KEY AUTO_INCREMENT,
                 varchar_50 VARCHAR(50) NOT NULL,
                 varchar_255 VARCHAR(255),
@@ -2434,42 +2438,43 @@ mod tests {
                 text_col TEXT,
                 bool_col BOOLEAN
             )",
-        )
-        .await
-        .unwrap();
-
-        let columns = db.get_table_columns("test_varchar_lengths").await.unwrap();
-
-        // Verify VARCHAR length preservation
-        let varchar_50_col = columns.iter().find(|c| c.name == "varchar_50").unwrap();
-        assert!(matches!(
-            varchar_50_col.data_type,
-            crate::schema::DataType::VarChar(50)
-        ));
-
-        let varchar_255_col = columns.iter().find(|c| c.name == "varchar_255").unwrap();
-        assert!(matches!(
-            varchar_255_col.data_type,
-            crate::schema::DataType::VarChar(255)
-        ));
-
-        let char_10_col = columns.iter().find(|c| c.name == "char_10").unwrap();
-        assert!(matches!(
-            char_10_col.data_type,
-            crate::schema::DataType::VarChar(10)
-        ));
-
-        // Verify TEXT still maps to Text
-        let text_col = columns.iter().find(|c| c.name == "text_col").unwrap();
-        assert!(matches!(text_col.data_type, crate::schema::DataType::Text));
-
-        // Verify other types still work
-        let bool_col = columns.iter().find(|c| c.name == "bool_col").unwrap();
-        assert!(matches!(bool_col.data_type, crate::schema::DataType::Bool));
-
-        // Clean up
-        db.exec_raw("DROP TABLE IF EXISTS test_varchar_lengths")
+            )
             .await
             .unwrap();
+
+            let columns = db.get_table_columns("test_varchar_lengths").await.unwrap();
+
+            // Verify VARCHAR length preservation
+            let varchar_50_col = columns.iter().find(|c| c.name == "varchar_50").unwrap();
+            assert!(matches!(
+                varchar_50_col.data_type,
+                crate::schema::DataType::VarChar(50)
+            ));
+
+            let varchar_255_col = columns.iter().find(|c| c.name == "varchar_255").unwrap();
+            assert!(matches!(
+                varchar_255_col.data_type,
+                crate::schema::DataType::VarChar(255)
+            ));
+
+            let char_10_col = columns.iter().find(|c| c.name == "char_10").unwrap();
+            assert!(matches!(
+                char_10_col.data_type,
+                crate::schema::DataType::VarChar(10)
+            ));
+
+            // Verify TEXT still maps to Text
+            let text_col = columns.iter().find(|c| c.name == "text_col").unwrap();
+            assert!(matches!(text_col.data_type, crate::schema::DataType::Text));
+
+            // Verify other types still work
+            let bool_col = columns.iter().find(|c| c.name == "bool_col").unwrap();
+            assert!(matches!(bool_col.data_type, crate::schema::DataType::Bool));
+
+            // Clean up
+            db.exec_raw("DROP TABLE IF EXISTS test_varchar_lengths")
+                .await
+                .unwrap();
+        }
     }
 }

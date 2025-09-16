@@ -50,7 +50,12 @@ tokio-util  = { workspace = true, optional = true }
 native-tls = { workspace = true }
 postgres-native-tls = { workspace = true }
 pretty_assertions = { workspace = true }
-switchy_async = { workspace = true, features = ["macros", "time"] }
+switchy_async = { workspace = true, features = [
+    "macros",
+    "sync",
+    "time",
+    "tokio",
+] }
 switchy_database_connection = { workspace = true, features = [
     "sqlite-rusqlite",
     "sqlite-sqlx",

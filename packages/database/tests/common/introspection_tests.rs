@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use switchy_database::{Database, schema::DataType};
+use switchy_database::Database;
 
 /// Standard test schema for all backends
 pub struct StandardTestSchema {
@@ -100,6 +100,8 @@ pub trait IntrospectionTestSuite {
 
     /// Test getting table columns with metadata
     async fn test_get_table_columns(&self) {
+        use switchy_database::schema::DataType;
+
         let Some(db) = self.get_database().await else {
             return;
         };
