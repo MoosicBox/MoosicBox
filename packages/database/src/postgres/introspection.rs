@@ -32,7 +32,7 @@
 //!
 //! ## Integer Types
 //! - `SMALLINT`, `INT2` → `SmallInt` (16-bit)
-//! - `INTEGER`, `INT`, `INT4` → `Int` (32-bit)  
+//! - `INTEGER`, `INT`, `INT4` → `Int` (32-bit)
 //! - `BIGINT`, `INT8` → `BigInt` (64-bit)
 //!
 //! ## Floating Point Types
@@ -227,24 +227,42 @@ fn postgres_type_to_data_type(
     pg_type: &str,
     char_max_length: Option<i32>,
 ) -> Result<DataType, DatabaseError> {
-    match pg_type.to_uppercase().as_str() {
-        "SMALLINT" | "INT2" => Ok(DataType::SmallInt),
-        "INTEGER" | "INT" | "INT4" => Ok(DataType::Int),
-        "BIGINT" | "INT8" => Ok(DataType::BigInt),
-        "REAL" | "FLOAT4" => Ok(DataType::Real),
-        "DOUBLE PRECISION" | "FLOAT8" => Ok(DataType::Double),
-        "NUMERIC" | "DECIMAL" => Ok(DataType::Decimal(38, 10)), // Default precision
-        "CHARACTER VARYING" | "VARCHAR" => {
-            // Map VARCHAR with length to VarChar(length), fallback to 255 if NULL
-            match char_max_length {
-                Some(length) if length > 0 => Ok(DataType::VarChar(u16::try_from(length).unwrap())),
-                _ => Ok(DataType::VarChar(255)), // Default length when not specified
+    match pg_type.to_lowercase().as_str() {
+        "smallint" | "int2" => Ok(DataType::SmallInt),
+        "integer" | "int" | "int4" => Ok(DataType::Int),
+        "bigint" | "int8" => Ok(DataType::BigInt),
+        "serial" => Ok(DataType::Serial),
+        "bigserial" => Ok(DataType::BigSerial),
+        "character varying" | "varchar" => match char_max_length {
+            Some(length) if length > 0 => {
+                Ok(DataType::VarChar(u16::try_from(length).unwrap_or(255)))
             }
+            _ => Ok(DataType::VarChar(255)),
+        },
+        "character" | "char" => Ok(DataType::Char(1)),
+        "text" => Ok(DataType::Text),
+        "boolean" | "bool" => Ok(DataType::Bool),
+        "real" | "float4" => Ok(DataType::Real),
+        "double precision" | "float8" => Ok(DataType::Double),
+        "numeric" | "decimal" => Ok(DataType::Decimal(38, 10)),
+        "money" => Ok(DataType::Money),
+        "date" => Ok(DataType::Date),
+        "time" => Ok(DataType::Time),
+        "timestamp" | "timestamp without time zone" => Ok(DataType::Timestamp),
+        "timestamptz" | "timestamp with time zone" => Ok(DataType::DateTime),
+        "bytea" => Ok(DataType::Blob),
+        "json" => Ok(DataType::Json),
+        "jsonb" => Ok(DataType::Jsonb),
+        "uuid" => Ok(DataType::Uuid),
+        "xml" => Ok(DataType::Xml),
+        "inet" => Ok(DataType::Inet),
+        "macaddr" => Ok(DataType::MacAddr),
+        t if t.starts_with('_') => {
+            // Array types in PostgreSQL start with underscore
+            let inner = &t[1..];
+            postgres_type_to_data_type(inner, None).map(|dt| DataType::Array(Box::new(dt)))
         }
-        "TEXT" => Ok(DataType::Text),
-        "BOOLEAN" | "BOOL" => Ok(DataType::Bool),
-        "TIMESTAMP" | "TIMESTAMP WITHOUT TIME ZONE" => Ok(DataType::DateTime),
-        _ => Err(DatabaseError::UnsupportedDataType(pg_type.to_string())),
+        _ => Ok(DataType::Custom(pg_type.to_string())),
     }
 }
 

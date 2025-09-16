@@ -1019,17 +1019,37 @@ async fn sqlite_sqlx_exec_create_table(
                 query.push_str(&size.to_string());
                 query.push(')');
             }
-            crate::schema::DataType::Text => query.push_str("TEXT"),
+            crate::schema::DataType::Text
+            | crate::schema::DataType::Date
+            | crate::schema::DataType::Time
+            | crate::schema::DataType::DateTime
+            | crate::schema::DataType::Timestamp
+            | crate::schema::DataType::Json
+            | crate::schema::DataType::Jsonb
+            | crate::schema::DataType::Uuid
+            | crate::schema::DataType::Xml
+            | crate::schema::DataType::Array(_)
+            | crate::schema::DataType::Inet
+            | crate::schema::DataType::MacAddr => query.push_str("TEXT"), // SQLite stores many types as text
+            crate::schema::DataType::Char(size) => {
+                query.push_str("CHAR(");
+                query.push_str(&size.to_string());
+                query.push(')');
+            }
             crate::schema::DataType::Bool
             | crate::schema::DataType::SmallInt
             | crate::schema::DataType::Int
-            | crate::schema::DataType::BigInt => {
-                query.push_str("INTEGER");
+            | crate::schema::DataType::BigInt
+            | crate::schema::DataType::Serial
+            | crate::schema::DataType::BigSerial => query.push_str("INTEGER"), // SQLite uses INTEGER for many numeric types
+            crate::schema::DataType::Real
+            | crate::schema::DataType::Double
+            | crate::schema::DataType::Decimal(_, _)
+            | crate::schema::DataType::Money => query.push_str("REAL"), // SQLite doesn't have exact decimal
+            crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
+                query.push_str("BLOB");
             }
-            crate::schema::DataType::Double
-            | crate::schema::DataType::Decimal(..)
-            | crate::schema::DataType::Real => query.push_str("REAL"),
-            crate::schema::DataType::DateTime => query.push_str("VARCHAR(23)"),
+            crate::schema::DataType::Custom(ref type_name) => query.push_str(type_name),
         }
 
         if !column.nullable {
@@ -1199,17 +1219,33 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
             } => {
                 let type_str = match data_type {
                     crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
-                    crate::schema::DataType::Text => "TEXT".to_string(),
-                    crate::schema::DataType::Bool => "BOOLEAN".to_string(),
-                    crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
-                    crate::schema::DataType::Int => "INTEGER".to_string(),
-                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
-                    crate::schema::DataType::Real => "REAL".to_string(),
-                    crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
-                    crate::schema::DataType::Decimal(precision, scale) => {
-                        format!("DECIMAL({precision}, {scale})")
+                    crate::schema::DataType::Text
+                    | crate::schema::DataType::Date
+                    | crate::schema::DataType::Time
+                    | crate::schema::DataType::DateTime
+                    | crate::schema::DataType::Timestamp
+                    | crate::schema::DataType::Json
+                    | crate::schema::DataType::Jsonb
+                    | crate::schema::DataType::Uuid
+                    | crate::schema::DataType::Xml
+                    | crate::schema::DataType::Array(_)
+                    | crate::schema::DataType::Inet
+                    | crate::schema::DataType::MacAddr => "TEXT".to_string(),
+                    crate::schema::DataType::Char(len) => format!("CHAR({len})"),
+                    crate::schema::DataType::Bool
+                    | crate::schema::DataType::SmallInt
+                    | crate::schema::DataType::Int
+                    | crate::schema::DataType::BigInt
+                    | crate::schema::DataType::Serial
+                    | crate::schema::DataType::BigSerial => "INTEGER".to_string(),
+                    crate::schema::DataType::Real
+                    | crate::schema::DataType::Double
+                    | crate::schema::DataType::Decimal(_, _)
+                    | crate::schema::DataType::Money => "REAL".to_string(),
+                    crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
+                        "BLOB".to_string()
                     }
-                    crate::schema::DataType::DateTime => "DATETIME".to_string(),
+                    crate::schema::DataType::Custom(type_name) => type_name.clone(),
                 };
 
                 let nullable_str = if *nullable { "" } else { " NOT NULL" };
@@ -1281,7 +1317,7 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                         connection,
                         statement.table_name,
                         name,
-                        *new_data_type,
+                        new_data_type.clone(),
                         *new_nullable,
                         new_default.as_ref(),
                     )
@@ -1292,7 +1328,7 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                         connection,
                         statement.table_name,
                         name,
-                        *new_data_type,
+                        new_data_type.clone(),
                         *new_nullable,
                         new_default.as_ref(),
                     )
@@ -1320,17 +1356,31 @@ async fn sqlite_sqlx_exec_modify_column_workaround(
 
     let type_str = match new_data_type {
         crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
-        crate::schema::DataType::Text => "TEXT".to_string(),
-        crate::schema::DataType::Bool => "BOOLEAN".to_string(),
-        crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
-        crate::schema::DataType::Int => "INTEGER".to_string(),
-        crate::schema::DataType::BigInt => "BIGINT".to_string(),
-        crate::schema::DataType::Real => "REAL".to_string(),
-        crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
-        crate::schema::DataType::Decimal(precision, scale) => {
-            format!("DECIMAL({precision}, {scale})")
-        }
-        crate::schema::DataType::DateTime => "DATETIME".to_string(),
+        crate::schema::DataType::Text
+        | crate::schema::DataType::Date
+        | crate::schema::DataType::Time
+        | crate::schema::DataType::DateTime
+        | crate::schema::DataType::Timestamp
+        | crate::schema::DataType::Json
+        | crate::schema::DataType::Jsonb
+        | crate::schema::DataType::Uuid
+        | crate::schema::DataType::Xml
+        | crate::schema::DataType::Array(_)
+        | crate::schema::DataType::Inet
+        | crate::schema::DataType::MacAddr => "TEXT".to_string(),
+        crate::schema::DataType::Char(len) => format!("CHAR({len})"),
+        crate::schema::DataType::Bool
+        | crate::schema::DataType::SmallInt
+        | crate::schema::DataType::Int
+        | crate::schema::DataType::BigInt
+        | crate::schema::DataType::Serial
+        | crate::schema::DataType::BigSerial => "INTEGER".to_string(),
+        crate::schema::DataType::Real
+        | crate::schema::DataType::Double
+        | crate::schema::DataType::Decimal(_, _)
+        | crate::schema::DataType::Money => "REAL".to_string(),
+        crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => "BLOB".to_string(),
+        crate::schema::DataType::Custom(type_name) => type_name.clone(),
     };
 
     let temp_column = format!(
@@ -1502,7 +1552,7 @@ fn sqlite_modify_create_table_sql(
     original_table_name: &str,
     new_table_name: &str,
     column_name: &str,
-    new_data_type: crate::schema::DataType,
+    new_data_type: &crate::schema::DataType,
     new_nullable: Option<bool>,
     new_default: Option<&crate::DatabaseValue>,
 ) -> Result<String, SqlxDatabaseError> {
@@ -1510,15 +1560,32 @@ fn sqlite_modify_create_table_sql(
     // This handles most common cases but could be enhanced with a proper SQL parser
 
     let data_type_str = match new_data_type {
-        crate::schema::DataType::Text | crate::schema::DataType::VarChar(_) => "TEXT",
-        crate::schema::DataType::Bool => "BOOLEAN",
-        crate::schema::DataType::SmallInt
+        crate::schema::DataType::Bool
+        | crate::schema::DataType::SmallInt
         | crate::schema::DataType::Int
-        | crate::schema::DataType::BigInt => "INTEGER",
+        | crate::schema::DataType::BigInt
+        | crate::schema::DataType::Serial
+        | crate::schema::DataType::BigSerial => "INTEGER",
         crate::schema::DataType::Real
         | crate::schema::DataType::Double
-        | crate::schema::DataType::Decimal(_, _) => "REAL",
-        crate::schema::DataType::DateTime => "TIMESTAMP",
+        | crate::schema::DataType::Decimal(_, _)
+        | crate::schema::DataType::Money => "REAL",
+        crate::schema::DataType::Date
+        | crate::schema::DataType::Time
+        | crate::schema::DataType::DateTime
+        | crate::schema::DataType::Text
+        | crate::schema::DataType::VarChar(_)
+        | crate::schema::DataType::Char(_)
+        | crate::schema::DataType::Timestamp
+        | crate::schema::DataType::Json
+        | crate::schema::DataType::Jsonb
+        | crate::schema::DataType::Uuid
+        | crate::schema::DataType::Xml
+        | crate::schema::DataType::Array(_)
+        | crate::schema::DataType::Inet
+        | crate::schema::DataType::MacAddr
+        | crate::schema::DataType::Custom(_) => "TEXT",
+        crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => "BLOB",
     };
 
     // Build the new column definition
@@ -1638,7 +1705,7 @@ async fn sqlite_sqlx_exec_table_recreation_workaround(
             table_name,
             &temp_table,
             column_name,
-            new_data_type,
+            &new_data_type,
             new_nullable,
             new_default,
         )?;
@@ -1664,16 +1731,33 @@ async fn sqlite_sqlx_exec_table_recreation_workaround(
                 if col == column_name {
                     // Apply CAST for the modified column to ensure proper type conversion
                     let cast_type = match new_data_type {
-                        crate::schema::DataType::Text |
-                        crate::schema::DataType::VarChar(_) => "TEXT",
-                        crate::schema::DataType::Bool => "BOOLEAN",
+                        crate::schema::DataType::Bool |
                         crate::schema::DataType::SmallInt |
                         crate::schema::DataType::Int |
-                        crate::schema::DataType::BigInt => "INTEGER",
+                        crate::schema::DataType::BigInt |
+                        crate::schema::DataType::Serial |
+                        crate::schema::DataType::BigSerial => "INTEGER",
                         crate::schema::DataType::Real |
                         crate::schema::DataType::Double |
-                        crate::schema::DataType::Decimal(_, _) => "REAL",
-                        crate::schema::DataType::DateTime => "TIMESTAMP",
+                        crate::schema::DataType::Decimal(_, _) |
+                        crate::schema::DataType::Money => "REAL",
+                        crate::schema::DataType::Text |
+                        crate::schema::DataType::VarChar(_) |
+                        crate::schema::DataType::Char(_) |
+                        crate::schema::DataType::Date |
+                        crate::schema::DataType::Time |
+                        crate::schema::DataType::DateTime |
+                        crate::schema::DataType::Timestamp |
+                        crate::schema::DataType::Json |
+                        crate::schema::DataType::Jsonb |
+                        crate::schema::DataType::Uuid |
+                        crate::schema::DataType::Xml |
+                        crate::schema::DataType::Array(_) |
+                        crate::schema::DataType::Inet |
+                        crate::schema::DataType::MacAddr |
+                        crate::schema::DataType::Custom(_) => "TEXT",
+                        crate::schema::DataType::Blob |
+                        crate::schema::DataType::Binary(_) => "BLOB",
                     };
                     format!("CAST(`{col}` AS {cast_type}) AS `{col}`")
                 } else {
@@ -2723,15 +2807,20 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
 // SQLite introspection helper functions (Phase 16.4)
 
 #[cfg(feature = "schema")]
-fn sqlite_type_to_data_type(sqlite_type: &str) -> Result<crate::schema::DataType, DatabaseError> {
+fn sqlite_type_to_data_type(sqlite_type: &str) -> crate::schema::DataType {
     let normalized_type = sqlite_type.to_uppercase();
 
     match normalized_type.as_str() {
-        "INTEGER" => Ok(crate::schema::DataType::BigInt),
-        "TEXT" => Ok(crate::schema::DataType::Text),
-        "REAL" => Ok(crate::schema::DataType::Double),
-        "BOOLEAN" => Ok(crate::schema::DataType::Bool),
-        _ => Err(DatabaseError::UnsupportedDataType(sqlite_type.to_string())),
+        "INTEGER" => crate::schema::DataType::BigInt,
+        "TEXT" => crate::schema::DataType::Text,
+        "REAL" | "DOUBLE" | "FLOAT" => crate::schema::DataType::Double,
+        "BLOB" => crate::schema::DataType::Blob,
+        "BOOLEAN" | "BOOL" => crate::schema::DataType::Bool,
+        "DATE" => crate::schema::DataType::Date,
+        "DATETIME" => crate::schema::DataType::DateTime,
+        "TIMESTAMP" => crate::schema::DataType::Timestamp,
+        "JSON" => crate::schema::DataType::Json,
+        _ => crate::schema::DataType::Custom(sqlite_type.to_string()),
     }
 }
 
@@ -2780,7 +2869,7 @@ async fn sqlx_sqlite_get_table_columns(
     let mut columns = Vec::new();
 
     let pragma_query = format!("PRAGMA table_info({table_name})");
-    let rows = sqlx::query(&pragma_query).fetch_all(executor).await?;
+    let rows = sqlx::query(&pragma_query).fetch_all(&mut *executor).await?;
 
     for row in rows {
         let cid: i32 = row.get(0);
@@ -2790,27 +2879,76 @@ async fn sqlx_sqlite_get_table_columns(
         let dflt_value: Option<String> = row.get(4);
         let pk: i32 = row.get(5);
 
-        let data_type = sqlite_type_to_data_type(&type_str).map_err(|e| match e {
-            DatabaseError::UnsupportedDataType(type_name) => {
-                SqlxDatabaseError::UnsupportedDataType(type_name)
-            }
-            _ => SqlxDatabaseError::InvalidRequest,
-        })?;
+        let data_type = sqlite_type_to_data_type(&type_str);
 
         let default_value = parse_default_value(dflt_value);
+
+        let auto_increment = if pk > 0 {
+            // Check if this column has AUTOINCREMENT in the CREATE TABLE statement
+            check_sqlite_sqlx_autoincrement(executor, table_name, &name).await?
+        } else {
+            false
+        };
 
         columns.push(crate::schema::ColumnInfo {
             name,
             data_type,
             nullable: notnull == 0,
             is_primary_key: pk > 0,
-            auto_increment: false, // Hardcoded to false as per Phase 16.3 pattern
+            auto_increment,
             default_value,
             ordinal_position: u32::try_from(cid + 1).unwrap_or(1), // Convert 0-based cid to 1-based ordinal
         });
     }
 
     Ok(columns)
+}
+
+#[cfg(feature = "schema")]
+async fn check_sqlite_sqlx_autoincrement(
+    executor: &mut SqliteConnection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<bool, SqlxDatabaseError> {
+    // Query the CREATE TABLE statement from sqlite_master
+    let sql: Option<String> =
+        sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+            .bind(table_name)
+            .fetch_optional(executor)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+    if let Some(create_sql) = sql {
+        // Parse the CREATE TABLE statement for AUTOINCREMENT
+        // Look for pattern: column_name TYPE PRIMARY KEY AUTOINCREMENT
+        let normalized_sql = create_sql.to_uppercase();
+        let normalized_column = column_name.to_uppercase();
+
+        // Find the column definition
+        if let Some(column_start) = normalized_sql.find(&normalized_column) {
+            // Get the portion from the column name onwards
+            let column_portion = &normalized_sql[column_start..];
+
+            // Look for PRIMARY KEY followed by AUTOINCREMENT
+            if column_portion.contains("PRIMARY KEY") {
+                // Find PRIMARY KEY position relative to column start
+                if let Some(pk_pos) = column_portion.find("PRIMARY KEY") {
+                    // Get text after PRIMARY KEY
+                    let after_pk = &column_portion[pk_pos + "PRIMARY KEY".len()..];
+
+                    // Check if AUTOINCREMENT appears before the next comma or closing paren
+                    let end_pos = after_pk
+                        .find(',')
+                        .unwrap_or_else(|| after_pk.find(')').unwrap_or(after_pk.len()));
+                    let column_rest = &after_pk[..end_pos];
+
+                    return Ok(column_rest.contains("AUTOINCREMENT"));
+                }
+            }
+        }
+    }
+
+    Ok(false)
 }
 
 #[cfg(feature = "schema")]
@@ -3167,17 +3305,52 @@ mod introspection_tests {
         // Test table with unsupported types
         let result = db.get_table_columns("unsupported_types").await;
 
-        // Should fail with UnsupportedDataType for BLOB
-        assert!(result.is_err(), "Should fail with unsupported data type");
+        // Should now succeed with Custom DataType fallback
+        assert!(
+            result.is_ok(),
+            "Should succeed with Custom DataType fallback"
+        );
 
-        match result.unwrap_err() {
-            DatabaseError::UnsupportedDataType(type_name) => {
-                assert!(
-                    type_name == "BLOB" || type_name == "CUSTOM_TYPE",
-                    "Should report unsupported type, got: {type_name}"
-                );
+        let columns = result.unwrap();
+        assert!(!columns.is_empty(), "Should have columns");
+
+        // Check that unsupported types become Custom DataType
+        for column in &columns {
+            match &column.data_type {
+                DataType::Text
+                | DataType::VarChar(_)
+                | DataType::Char(_)
+                | DataType::SmallInt
+                | DataType::Int
+                | DataType::BigInt
+                | DataType::Serial
+                | DataType::BigSerial
+                | DataType::Real
+                | DataType::Double
+                | DataType::Decimal(_, _)
+                | DataType::Money
+                | DataType::Bool
+                | DataType::Date
+                | DataType::Time
+                | DataType::DateTime
+                | DataType::Timestamp
+                | DataType::Blob
+                | DataType::Binary(_)
+                | DataType::Json
+                | DataType::Jsonb
+                | DataType::Uuid
+                | DataType::Xml
+                | DataType::Array(_)
+                | DataType::Inet
+                | DataType::MacAddr => {}
+                DataType::Custom(type_name) => {
+                    // Custom types should be preserved
+                    assert!(
+                        type_name == "CUSTOM_TYPE" || type_name == "UNKNOWN_TYPE",
+                        "Unexpected custom type: {type_name}"
+                    );
+                }
             }
-            other => panic!("Expected UnsupportedDataType error, got: {other:?}"),
         }
     }
 

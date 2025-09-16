@@ -75,7 +75,7 @@
 //! ## Case Sensitivity
 //! Table and column name case sensitivity depends on the filesystem:
 //! - **Linux/Unix**: Case-sensitive by default (`lower_case_table_names=0`)
-//! - **Windows**: Case-insensitive (`lower_case_table_names=1`)  
+//! - **Windows**: Case-insensitive (`lower_case_table_names=1`)
 //! - **macOS**: Case-insensitive (`lower_case_table_names=2`)
 //!
 //! Our introspection preserves the exact case as stored in `information_schema`.
@@ -221,7 +221,7 @@ pub async fn mysql_sqlx_get_table_columns(
 
         let char_max_length: Option<i64> = row.try_get("CHARACTER_MAXIMUM_LENGTH").ok();
 
-        let data_type = mysql_type_to_data_type(&data_type_str, char_max_length)?;
+        let data_type = mysql_type_to_data_type(&data_type_str, char_max_length);
 
         let is_nullable_str: String = row
             .try_get("IS_NULLABLE")
@@ -405,30 +405,36 @@ pub async fn mysql_sqlx_get_table_info(
 }
 
 /// Map `MySQL` data types to our `DataType` enum
-fn mysql_type_to_data_type(
-    mysql_type: &str,
-    char_max_length: Option<i64>,
-) -> Result<DataType, DatabaseError> {
+fn mysql_type_to_data_type(mysql_type: &str, char_max_length: Option<i64>) -> DataType {
     match mysql_type.to_uppercase().as_str() {
-        "TINYINT" | "SMALLINT" => Ok(DataType::SmallInt),
-        "MEDIUMINT" | "INT" | "INTEGER" => Ok(DataType::Int),
-        "BIGINT" => Ok(DataType::BigInt),
-        "FLOAT" => Ok(DataType::Real),
-        "DOUBLE" | "REAL" => Ok(DataType::Double),
-        "DECIMAL" | "NUMERIC" => Ok(DataType::Decimal(38, 10)), // Default precision
-        "CHAR" | "VARCHAR" => {
-            // Map CHAR/VARCHAR with length to VarChar(length), fallback to 255 if NULL
-            match char_max_length {
-                Some(length) if length > 0 && length <= i64::from(u16::MAX) => {
-                    Ok(DataType::VarChar(u16::try_from(length).unwrap()))
-                }
-                _ => Ok(DataType::VarChar(255)), // Default length when not specified or out of range
+        "TINYINT" | "SMALLINT" => DataType::SmallInt,
+        "MEDIUMINT" | "INT" | "INTEGER" => DataType::Int,
+        "BIGINT" => DataType::BigInt,
+        "FLOAT" => DataType::Real,
+        "DOUBLE" | "REAL" => DataType::Double,
+        "DECIMAL" | "NUMERIC" => DataType::Decimal(38, 10),
+        "CHAR" => match char_max_length {
+            Some(length) if length > 0 && length <= i64::from(u16::MAX) => {
+                DataType::Char(u16::try_from(length).unwrap_or(1))
             }
-        }
-        "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" => Ok(DataType::Text),
-        "BOOLEAN" | "BOOL" => Ok(DataType::Bool),
-        "DATE" | "TIME" | "DATETIME" | "TIMESTAMP" => Ok(DataType::DateTime),
-        _ => Err(DatabaseError::UnsupportedDataType(mysql_type.to_string())),
+            _ => DataType::Char(1),
+        },
+        "VARCHAR" => match char_max_length {
+            Some(length) if length > 0 && length <= i64::from(u16::MAX) => {
+                DataType::VarChar(u16::try_from(length).unwrap_or(255))
+            }
+            _ => DataType::VarChar(255),
+        },
+        "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" => DataType::Text,
+        "BOOLEAN" | "BOOL" => DataType::Bool,
+        "DATE" => DataType::Date,
+        "TIME" => DataType::Time,
+        "DATETIME" => DataType::DateTime,
+        "TIMESTAMP" => DataType::Timestamp,
+        "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => DataType::Blob,
+        "BINARY" | "VARBINARY" => DataType::Binary(None),
+        "JSON" => DataType::Json,
+        _ => DataType::Custom(mysql_type.to_string()),
     }
 }
 

@@ -968,17 +968,18 @@ async fn mysql_sqlx_exec_create_table(
                 query.push_str(&size.to_string());
                 query.push(')');
             }
-            crate::schema::DataType::Text => query.push_str("TEXT"),
+            crate::schema::DataType::Text | crate::schema::DataType::Xml => query.push_str("TEXT"), // MySQL doesn't have native XML
+            crate::schema::DataType::Char(size) => {
+                query.push_str("CHAR(");
+                query.push_str(&size.to_string());
+                query.push(')');
+            }
             crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
-            crate::schema::DataType::SmallInt => {
-                query.push_str("SMALLINT");
-            }
-            crate::schema::DataType::Int => {
-                query.push_str("INT");
-            }
-            crate::schema::DataType::BigInt => {
+            crate::schema::DataType::SmallInt => query.push_str("SMALLINT"),
+            crate::schema::DataType::Int | crate::schema::DataType::Serial => query.push_str("INT"), // MySQL doesn't have SERIAL, use INT with AUTO_INCREMENT
+            crate::schema::DataType::BigInt | crate::schema::DataType::BigSerial => {
                 query.push_str("BIGINT");
-            }
+            } // MySQL doesn't have BIGSERIAL
             crate::schema::DataType::Real => query.push_str("FLOAT"),
             crate::schema::DataType::Double => query.push_str("DOUBLE"),
             crate::schema::DataType::Decimal(precision, scale) => {
@@ -988,7 +989,28 @@ async fn mysql_sqlx_exec_create_table(
                 query.push_str(&scale.to_string());
                 query.push(')');
             }
+            crate::schema::DataType::Money => query.push_str("DECIMAL(19,4)"), // MySQL doesn't have MONEY type
+            crate::schema::DataType::Date => query.push_str("DATE"),
+            crate::schema::DataType::Time => query.push_str("TIME"),
             crate::schema::DataType::DateTime => query.push_str("DATETIME"),
+            crate::schema::DataType::Timestamp => query.push_str("TIMESTAMP"),
+            crate::schema::DataType::Blob => query.push_str("BLOB"),
+            crate::schema::DataType::Binary(size) => {
+                if let Some(size) = size {
+                    query.push_str("BINARY(");
+                    query.push_str(&size.to_string());
+                    query.push(')');
+                } else {
+                    query.push_str("VARBINARY(255)");
+                }
+            }
+            crate::schema::DataType::Json
+            | crate::schema::DataType::Jsonb
+            | crate::schema::DataType::Array(_) => query.push_str("JSON"), // MySQL doesn't distinguish JSON/JSONB, doesn't have arrays
+            crate::schema::DataType::Uuid => query.push_str("CHAR(36)"), // MySQL doesn't have native UUID
+            crate::schema::DataType::Inet => query.push_str("VARCHAR(45)"), // MySQL doesn't have INET
+            crate::schema::DataType::MacAddr => query.push_str("VARCHAR(17)"), // MySQL doesn't have MACADDR
+            crate::schema::DataType::Custom(ref type_name) => query.push_str(type_name),
         }
 
         if column.auto_increment {
@@ -1181,17 +1203,40 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
             } => {
                 let type_str = match data_type {
                     crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
-                    crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Text | crate::schema::DataType::Xml => {
+                        "TEXT".to_string()
+                    }
+                    crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool => "BOOLEAN".to_string(),
                     crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
                     crate::schema::DataType::Int => "INTEGER".to_string(),
-                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::BigInt | crate::schema::DataType::BigSerial => {
+                        "BIGINT".to_string()
+                    }
+                    crate::schema::DataType::Serial => "INT".to_string(),
                     crate::schema::DataType::Real => "FLOAT".to_string(),
                     crate::schema::DataType::Double => "DOUBLE".to_string(),
                     crate::schema::DataType::Decimal(precision, scale) => {
                         format!("DECIMAL({precision}, {scale})")
                     }
+                    crate::schema::DataType::Money => "DECIMAL(19,4)".to_string(),
+                    crate::schema::DataType::Date => "DATE".to_string(),
+                    crate::schema::DataType::Time => "TIME".to_string(),
                     crate::schema::DataType::DateTime => "DATETIME".to_string(),
+                    crate::schema::DataType::Timestamp => "TIMESTAMP".to_string(),
+                    crate::schema::DataType::Blob => "BLOB".to_string(),
+                    crate::schema::DataType::Binary(size) => size.as_ref().map_or_else(
+                        || "VARBINARY(255)".to_string(),
+                        |size| format!("BINARY({size})"),
+                    ),
+                    crate::schema::DataType::Json
+                    | crate::schema::DataType::Jsonb
+                    | crate::schema::DataType::Array(_) => "JSON".to_string(),
+                    crate::schema::DataType::Uuid => "CHAR(36)".to_string(),
+
+                    crate::schema::DataType::Inet => "VARCHAR(45)".to_string(),
+                    crate::schema::DataType::MacAddr => "VARCHAR(17)".to_string(),
+                    crate::schema::DataType::Custom(type_name) => type_name.clone(),
                 };
 
                 let nullable_str = if *nullable { "" } else { " NOT NULL" };
@@ -1265,17 +1310,40 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                 // MySQL supports ALTER TABLE ... MODIFY COLUMN for changing type, nullable, and default
                 let type_str = match new_data_type {
                     crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
-                    crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Text | crate::schema::DataType::Xml => {
+                        "TEXT".to_string()
+                    }
+                    crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool => "BOOLEAN".to_string(),
                     crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
                     crate::schema::DataType::Int => "INTEGER".to_string(),
-                    crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::BigInt | crate::schema::DataType::BigSerial => {
+                        "BIGINT".to_string()
+                    }
+                    crate::schema::DataType::Serial => "INT".to_string(),
                     crate::schema::DataType::Real => "FLOAT".to_string(),
                     crate::schema::DataType::Double => "DOUBLE".to_string(),
                     crate::schema::DataType::Decimal(precision, scale) => {
                         format!("DECIMAL({precision}, {scale})")
                     }
+                    crate::schema::DataType::Money => "DECIMAL(19,4)".to_string(),
+                    crate::schema::DataType::Date => "DATE".to_string(),
+                    crate::schema::DataType::Time => "TIME".to_string(),
                     crate::schema::DataType::DateTime => "DATETIME".to_string(),
+                    crate::schema::DataType::Timestamp => "TIMESTAMP".to_string(),
+                    crate::schema::DataType::Blob => "BLOB".to_string(),
+                    crate::schema::DataType::Binary(size) => size.as_ref().map_or_else(
+                        || "VARBINARY(255)".to_string(),
+                        |size| format!("BINARY({size})"),
+                    ),
+                    crate::schema::DataType::Json
+                    | crate::schema::DataType::Jsonb
+                    | crate::schema::DataType::Array(_) => "JSON".to_string(),
+                    crate::schema::DataType::Uuid => "CHAR(36)".to_string(),
+
+                    crate::schema::DataType::Inet => "VARCHAR(45)".to_string(),
+                    crate::schema::DataType::MacAddr => "VARCHAR(17)".to_string(),
+                    crate::schema::DataType::Custom(type_name) => type_name.clone(),
                 };
 
                 let nullable_str = match new_nullable {

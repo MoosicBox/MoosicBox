@@ -219,18 +219,52 @@ use std::collections::BTreeMap;
 
 use crate::{Database, DatabaseError, DatabaseValue};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataType {
-    VarChar(u16),
+    // Text types
     Text,
-    Bool,
+    VarChar(u16),
+    Char(u16),
+
+    // Integer types
     SmallInt,
     Int,
     BigInt,
+    Serial,    // Auto-incrementing integer (PostgreSQL)
+    BigSerial, // Auto-incrementing bigint (PostgreSQL)
+
+    // Floating point types
     Real,
     Double,
     Decimal(u8, u8),
-    DateTime,
+    Money, // Monetary type
+
+    // Boolean type
+    Bool,
+
+    // Date/Time types
+    Date,      // Date without time
+    Time,      // Time without date
+    DateTime,  // Date and time
+    Timestamp, // Timestamp (distinct from DateTime)
+
+    // Binary types
+    Blob,                // Binary data
+    Binary(Option<u32>), // Binary with optional length
+
+    // JSON types
+    Json,  // JSON column type
+    Jsonb, // PostgreSQL binary JSON
+
+    // Specialized types
+    Uuid,                 // UUID type
+    Xml,                  // XML type
+    Array(Box<DataType>), // PostgreSQL arrays
+    Inet,                 // IP address
+    MacAddr,              // MAC address
+
+    // Fallback for database-specific types
+    Custom(String), // For types we don't explicitly handle
 }
 
 #[derive(Debug, Clone)]

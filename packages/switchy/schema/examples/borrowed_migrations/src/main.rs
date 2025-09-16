@@ -143,7 +143,7 @@ impl<'a> Migration<'a> for ConfigBasedMigration<'a> {
                     name: col_config.name.clone(),
                     nullable: col_config.nullable,
                     auto_increment: col_config.name == table_config.primary_key,
-                    data_type: col_config.data_type,
+                    data_type: col_config.data_type.clone(),
                     default: None,
                 });
             }
@@ -215,7 +215,7 @@ fn create_table_migration<'a>(
             name: col_name.to_string(),
             nullable: false,
             auto_increment: *col_name == primary_key,
-            data_type: *data_type,
+            data_type: data_type.clone(),
             default: None,
         });
     }

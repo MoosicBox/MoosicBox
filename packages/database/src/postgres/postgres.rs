@@ -942,6 +942,11 @@ async fn postgres_exec_create_table(
                 query.push(')');
             }
             crate::schema::DataType::Text => query.push_str("TEXT"),
+            crate::schema::DataType::Char(size) => {
+                query.push_str("CHAR(");
+                query.push_str(&size.to_string());
+                query.push(')');
+            }
             crate::schema::DataType::Bool => query.push_str("BOOLEAN"),
             crate::schema::DataType::SmallInt => {
                 if column.auto_increment {
@@ -964,6 +969,8 @@ async fn postgres_exec_create_table(
                     query.push_str("BIGINT");
                 }
             }
+            crate::schema::DataType::Serial => query.push_str("SERIAL"),
+            crate::schema::DataType::BigSerial => query.push_str("BIGSERIAL"),
             crate::schema::DataType::Real => query.push_str("REAL"),
             crate::schema::DataType::Double => query.push_str("DOUBLE PRECISION"),
             crate::schema::DataType::Decimal(precision, scale) => {
@@ -973,7 +980,34 @@ async fn postgres_exec_create_table(
                 query.push_str(&scale.to_string());
                 query.push(')');
             }
-            crate::schema::DataType::DateTime => query.push_str("TIMESTAMP"),
+            crate::schema::DataType::Money => query.push_str("MONEY"),
+            crate::schema::DataType::Date => query.push_str("DATE"),
+            crate::schema::DataType::Time => query.push_str("TIME"),
+            crate::schema::DataType::DateTime => query.push_str("TIMESTAMP WITH TIME ZONE"),
+            crate::schema::DataType::Timestamp => query.push_str("TIMESTAMP"),
+            crate::schema::DataType::Blob => query.push_str("BYTEA"),
+            crate::schema::DataType::Binary(_) => {
+                query.push_str("BYTEA"); // PostgreSQL doesn't have fixed-size binary
+            }
+            crate::schema::DataType::Json => query.push_str("JSON"),
+            crate::schema::DataType::Jsonb => query.push_str("JSONB"),
+            crate::schema::DataType::Uuid => query.push_str("UUID"),
+            crate::schema::DataType::Xml => query.push_str("XML"),
+            crate::schema::DataType::Array(ref inner_type) => {
+                // Recursively handle the inner type
+                match **inner_type {
+                    crate::schema::DataType::Text => query.push_str("TEXT[]"),
+                    crate::schema::DataType::Int => query.push_str("INTEGER[]"),
+                    crate::schema::DataType::BigInt => query.push_str("BIGINT[]"),
+                    _ => {
+                        // For complex nested types, fall back to Custom
+                        query.push_str("TEXT[]");
+                    }
+                }
+            }
+            crate::schema::DataType::Inet => query.push_str("INET"),
+            crate::schema::DataType::MacAddr => query.push_str("MACADDR"),
+            crate::schema::DataType::Custom(ref type_name) => query.push_str(type_name),
         }
 
         if !column.nullable {
@@ -1144,16 +1178,38 @@ pub(crate) async fn postgres_exec_alter_table(
                 let type_str = match data_type {
                     crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
                     crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool => "BOOLEAN".to_string(),
                     crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
                     crate::schema::DataType::Int => "INTEGER".to_string(),
                     crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::Serial => "SERIAL".to_string(),
+                    crate::schema::DataType::BigSerial => "BIGSERIAL".to_string(),
                     crate::schema::DataType::Real => "REAL".to_string(),
                     crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
                     crate::schema::DataType::Decimal(precision, scale) => {
                         format!("DECIMAL({precision}, {scale})")
                     }
-                    crate::schema::DataType::DateTime => "TIMESTAMP".to_string(),
+                    crate::schema::DataType::Money => "MONEY".to_string(),
+                    crate::schema::DataType::Date => "DATE".to_string(),
+                    crate::schema::DataType::Time => "TIME".to_string(),
+                    crate::schema::DataType::DateTime => "TIMESTAMP WITH TIME ZONE".to_string(),
+                    crate::schema::DataType::Timestamp => "TIMESTAMP".to_string(),
+                    crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
+                        "BYTEA".to_string()
+                    }
+                    crate::schema::DataType::Json => "JSON".to_string(),
+                    crate::schema::DataType::Jsonb => "JSONB".to_string(),
+                    crate::schema::DataType::Uuid => "UUID".to_string(),
+                    crate::schema::DataType::Xml => "XML".to_string(),
+                    crate::schema::DataType::Array(inner_type) => match **inner_type {
+                        crate::schema::DataType::Int => "INTEGER[]".to_string(),
+                        crate::schema::DataType::BigInt => "BIGINT[]".to_string(),
+                        _ => "TEXT[]".to_string(),
+                    },
+                    crate::schema::DataType::Inet => "INET".to_string(),
+                    crate::schema::DataType::MacAddr => "MACADDR".to_string(),
+                    crate::schema::DataType::Custom(type_name) => type_name.clone(),
                 };
 
                 let nullable_str = if *nullable { "" } else { " NOT NULL" };
@@ -1221,16 +1277,38 @@ pub(crate) async fn postgres_exec_alter_table(
                 let type_str = match new_data_type {
                     crate::schema::DataType::VarChar(len) => format!("VARCHAR({len})"),
                     crate::schema::DataType::Text => "TEXT".to_string(),
+                    crate::schema::DataType::Char(len) => format!("CHAR({len})"),
                     crate::schema::DataType::Bool => "BOOLEAN".to_string(),
                     crate::schema::DataType::SmallInt => "SMALLINT".to_string(),
                     crate::schema::DataType::Int => "INTEGER".to_string(),
                     crate::schema::DataType::BigInt => "BIGINT".to_string(),
+                    crate::schema::DataType::Serial => "SERIAL".to_string(),
+                    crate::schema::DataType::BigSerial => "BIGSERIAL".to_string(),
                     crate::schema::DataType::Real => "REAL".to_string(),
                     crate::schema::DataType::Double => "DOUBLE PRECISION".to_string(),
                     crate::schema::DataType::Decimal(precision, scale) => {
                         format!("DECIMAL({precision}, {scale})")
                     }
-                    crate::schema::DataType::DateTime => "TIMESTAMP".to_string(),
+                    crate::schema::DataType::Money => "MONEY".to_string(),
+                    crate::schema::DataType::Date => "DATE".to_string(),
+                    crate::schema::DataType::Time => "TIME".to_string(),
+                    crate::schema::DataType::DateTime => "TIMESTAMP WITH TIME ZONE".to_string(),
+                    crate::schema::DataType::Timestamp => "TIMESTAMP".to_string(),
+                    crate::schema::DataType::Blob | crate::schema::DataType::Binary(_) => {
+                        "BYTEA".to_string()
+                    }
+                    crate::schema::DataType::Json => "JSON".to_string(),
+                    crate::schema::DataType::Jsonb => "JSONB".to_string(),
+                    crate::schema::DataType::Uuid => "UUID".to_string(),
+                    crate::schema::DataType::Xml => "XML".to_string(),
+                    crate::schema::DataType::Array(inner_type) => match **inner_type {
+                        crate::schema::DataType::Int => "INTEGER[]".to_string(),
+                        crate::schema::DataType::BigInt => "BIGINT[]".to_string(),
+                        _ => "TEXT[]".to_string(),
+                    },
+                    crate::schema::DataType::Inet => "INET".to_string(),
+                    crate::schema::DataType::MacAddr => "MACADDR".to_string(),
+                    crate::schema::DataType::Custom(type_name) => type_name.clone(),
                 };
 
                 // Change data type
