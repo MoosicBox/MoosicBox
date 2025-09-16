@@ -11,7 +11,7 @@ repository  = { workspace = true }
 version     = "0.1.0"
 
 [package.metadata.workspaces]
-group = "p2p"
+group = "switchy"
 
 [dependencies]
 # CRITICAL: Completely empty dependencies section in Phase 1
