@@ -2414,4 +2414,62 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[tokio::test]
+    async fn test_mysql_varchar_length_preservation() {
+        let Some(url) = get_mysql_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = MySqlSqlxDatabase::new(pool);
+
+        // Create test table with various VARCHAR lengths
+        db.exec_raw(
+            "CREATE TABLE IF NOT EXISTS test_varchar_lengths (
+                id INTEGER PRIMARY KEY AUTO_INCREMENT,
+                varchar_50 VARCHAR(50) NOT NULL,
+                varchar_255 VARCHAR(255),
+                char_10 CHAR(10),
+                text_col TEXT,
+                bool_col BOOLEAN
+            )",
+        )
+        .await
+        .unwrap();
+
+        let columns = db.get_table_columns("test_varchar_lengths").await.unwrap();
+
+        // Verify VARCHAR length preservation
+        let varchar_50_col = columns.iter().find(|c| c.name == "varchar_50").unwrap();
+        assert!(matches!(
+            varchar_50_col.data_type,
+            crate::schema::DataType::VarChar(50)
+        ));
+
+        let varchar_255_col = columns.iter().find(|c| c.name == "varchar_255").unwrap();
+        assert!(matches!(
+            varchar_255_col.data_type,
+            crate::schema::DataType::VarChar(255)
+        ));
+
+        let char_10_col = columns.iter().find(|c| c.name == "char_10").unwrap();
+        assert!(matches!(
+            char_10_col.data_type,
+            crate::schema::DataType::VarChar(10)
+        ));
+
+        // Verify TEXT still maps to Text
+        let text_col = columns.iter().find(|c| c.name == "text_col").unwrap();
+        assert!(matches!(text_col.data_type, crate::schema::DataType::Text));
+
+        // Verify other types still work
+        let bool_col = columns.iter().find(|c| c.name == "bool_col").unwrap();
+        assert!(matches!(bool_col.data_type, crate::schema::DataType::Bool));
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_varchar_lengths")
+            .await
+            .unwrap();
+    }
 }

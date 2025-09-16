@@ -31,6 +31,7 @@ pub async fn postgres_get_table_columns(
     let query = "SELECT
         column_name,
         data_type,
+        character_maximum_length,
         is_nullable,
         column_default,
         ordinal_position
@@ -63,11 +64,12 @@ pub async fn postgres_get_table_columns(
     for row in rows {
         let column_name: String = row.get(0);
         let data_type_str: String = row.get(1);
-        let is_nullable_str: String = row.get(2);
-        let column_default: Option<String> = row.get(3);
-        let ordinal_position: i32 = row.get(4);
+        let char_max_length: Option<i32> = row.get(2);
+        let is_nullable_str: String = row.get(3);
+        let column_default: Option<String> = row.get(4);
+        let ordinal_position: i32 = row.get(5);
 
-        let data_type = postgres_type_to_data_type(&data_type_str)?;
+        let data_type = postgres_type_to_data_type(&data_type_str, char_max_length)?;
         let nullable = is_nullable_str == "YES";
         let is_primary_key = primary_key_columns.contains(&column_name);
         let default_value = column_default.as_deref().and_then(parse_default_value);
@@ -87,7 +89,10 @@ pub async fn postgres_get_table_columns(
 }
 
 /// Map `PostgreSQL` data types to our `DataType` enum
-fn postgres_type_to_data_type(pg_type: &str) -> Result<DataType, DatabaseError> {
+fn postgres_type_to_data_type(
+    pg_type: &str,
+    char_max_length: Option<i32>,
+) -> Result<DataType, DatabaseError> {
     match pg_type.to_uppercase().as_str() {
         "SMALLINT" | "INT2" => Ok(DataType::SmallInt),
         "INTEGER" | "INT" | "INT4" => Ok(DataType::Int),
@@ -95,7 +100,14 @@ fn postgres_type_to_data_type(pg_type: &str) -> Result<DataType, DatabaseError> 
         "REAL" | "FLOAT4" => Ok(DataType::Real),
         "DOUBLE PRECISION" | "FLOAT8" => Ok(DataType::Double),
         "NUMERIC" | "DECIMAL" => Ok(DataType::Decimal(38, 10)), // Default precision
-        "TEXT" | "CHARACTER VARYING" | "VARCHAR" => Ok(DataType::Text),
+        "CHARACTER VARYING" | "VARCHAR" => {
+            // Map VARCHAR with length to VarChar(length), fallback to 255 if NULL
+            match char_max_length {
+                Some(length) if length > 0 => Ok(DataType::VarChar(u16::try_from(length).unwrap())),
+                _ => Ok(DataType::VarChar(255)), // Default length when not specified
+            }
+        }
+        "TEXT" => Ok(DataType::Text),
         "BOOLEAN" | "BOOL" => Ok(DataType::Bool),
         "TIMESTAMP" | "TIMESTAMP WITHOUT TIME ZONE" => Ok(DataType::DateTime),
         _ => Err(DatabaseError::UnsupportedDataType(pg_type.to_string())),
@@ -149,8 +161,8 @@ pub async fn postgres_column_exists(
 ) -> Result<bool, DatabaseError> {
     let query = "SELECT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' 
-        AND table_name = $1 
+        WHERE table_schema = 'public'
+        AND table_name = $1
         AND column_name = $2
     )";
 

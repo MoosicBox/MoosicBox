@@ -2541,6 +2541,12 @@ mod tests {
         let text_col = columns.iter().find(|c| c.name == "text_col").unwrap();
         assert!(matches!(text_col.data_type, crate::schema::DataType::Text));
 
+        let varchar_col = columns.iter().find(|c| c.name == "varchar_col").unwrap();
+        assert!(matches!(
+            varchar_col.data_type,
+            crate::schema::DataType::VarChar(50)
+        ));
+
         let bool_col = columns.iter().find(|c| c.name == "bool_col").unwrap();
         assert!(matches!(bool_col.data_type, crate::schema::DataType::Bool));
 
