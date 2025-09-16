@@ -14423,6 +14423,11 @@ dependencies = [
 [[package]]
 name = "switchy_p2p"
 version = "0.1.0"
+dependencies = [
+ "switchy_async",
+ "switchy_random",
+ "switchy_time",
+]
 
 [[package]]
 name = "switchy_random"
