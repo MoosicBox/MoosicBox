@@ -889,6 +889,8 @@ jobs:
 
             - name: Clippy ${{ matrix.package.name }}
               shell: bash
+              env:
+                  CARGO_LOG: ${{ runner.debug && 'cargo=debug' || '' }}
               run: |
                   (cd ${{ matrix.package.path }}; \
                       while read -r feature; do \
