@@ -136,8 +136,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     Added between `packages/paging` and `packages/parsing_utils` alphabetically
   - [x] Add `switchy_p2p = { path = "packages/p2p" }` to workspace dependencies section
     Added with version 0.1.0 between moosicbox_paging and moosicbox_parsing_utils
-  - [ ] Note: Additional workspace dependencies will be added in later phases when first used
-  - [ ] Note: Initial package has zero dependencies to start completely clean
+
+**Note:** Additional workspace dependencies will be added in later phases when first used.
+Initial package has zero dependencies to start completely clean.
 
 **Note on dependency management:**
 - In the workspace root `Cargo.toml`, we define: `switchy_p2p = { path = "packages/p2p" }`
@@ -167,7 +168,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [x] No workspace-level errors or warnings
   All verification commands completed without errors
 
-## Phase 2: Working Simulator Implementation ✅ **NOT STARTED**
+## Phase 2: Working Simulator Implementation 🔴 **NOT STARTED**
 
 **Goal:** Create a working P2P simulator with concrete functionality (no traits yet)
 
@@ -184,7 +185,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Add switchy dependencies to Cargo.toml 🔴 **CRITICAL**
   - [ ] Add to `[dependencies]` (FIRST dependencies added to package):
     ```toml
-    switchy_async = { workspace = true }
+    switchy_async = { workspace = true, features = ["sync", "time"] }
     switchy_time = { workspace = true }
     switchy_random = { workspace = true }
     ```
@@ -196,7 +197,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
   - [ ] Create COMPLETE `SimulatorNodeId` implementation (not a snippet):
     ```rust
     use std::fmt::{self, Display};
-    use switchy_random::{RngSeed, Rng};
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    use switchy_random::Rng;
 
     #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub struct SimulatorNodeId([u8; 32]);
@@ -205,7 +208,12 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
         /// Create a deterministic node ID from a string seed
         /// Used for testing to create predictable node IDs
         pub fn from_seed(seed: &str) -> Self {
-            let mut rng = RngSeed::from_str(seed);
+            // Convert string to u64 for seeding
+            let mut hasher = DefaultHasher::new();
+            seed.hash(&mut hasher);
+            let seed_u64 = hasher.finish();
+
+            let mut rng = Rng::from_seed(seed_u64);
             let mut bytes = [0u8; 32];
             rng.fill_bytes(&mut bytes);
             Self(bytes)
@@ -356,7 +364,52 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - `SIMULATOR_MAX_MESSAGE_SIZE=1048576`
 
 - [ ] Implement COMPLETE network graph for realistic P2P simulation 🔴 **CRITICAL**
-  - [ ] Add to simulator.rs (in same file, after SimulatorP2P):
+  - [ ] Add environment helper functions first (at top of simulator.rs after imports):
+    ```rust
+    /// Get default latency from environment or use 50ms
+    fn default_latency() -> Duration {
+        std::env::var("SIMULATOR_DEFAULT_LATENCY_MS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::from_millis(50))
+    }
+
+    /// Get default packet loss from environment or use 1%
+    fn default_packet_loss() -> f64 {
+        std::env::var("SIMULATOR_DEFAULT_PACKET_LOSS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.01) // 1% default
+    }
+
+    /// Get discovery delay from environment or use 100ms
+    fn discovery_delay() -> Duration {
+        std::env::var("SIMULATOR_DISCOVERY_DELAY_MS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(Duration::from_millis)
+            .unwrap_or(Duration::from_millis(100))
+    }
+
+    /// Get connection timeout from environment or use 30s
+    fn connection_timeout() -> Duration {
+        std::env::var("SIMULATOR_CONNECTION_TIMEOUT_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .map(|secs| Duration::from_secs(secs))
+            .unwrap_or(Duration::from_secs(30))
+    }
+
+    /// Get max message size from environment or use 1MB
+    fn max_message_size() -> usize {
+        std::env::var("SIMULATOR_MAX_MESSAGE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1024 * 1024) // 1MB default
+    }
+    ```
+  - [ ] Add network graph types (after helper functions):
     ```rust
     use std::time::Duration;
     use std::collections::{BTreeMap, VecDeque};
@@ -485,51 +538,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
         }
     }
     ```
-  - [ ] Add environment variable configuration functions:
-    ```rust
-    /// Get default latency from environment or use 50ms
-    fn default_latency() -> Duration {
-        std::env::var("SIMULATOR_DEFAULT_LATENCY_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(Duration::from_millis)
-            .unwrap_or(Duration::from_millis(50))
-    }
 
-    /// Get default packet loss from environment or use 1%
-    fn default_packet_loss() -> f64 {
-        std::env::var("SIMULATOR_DEFAULT_PACKET_LOSS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0.01) // 1% default
-    }
-
-    /// Get discovery delay from environment or use 100ms
-    fn discovery_delay() -> Duration {
-        std::env::var("SIMULATOR_DISCOVERY_DELAY_MS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(Duration::from_millis)
-            .unwrap_or(Duration::from_millis(100))
-    }
-
-    /// Get connection timeout from environment or use 30s
-    fn connection_timeout() -> Duration {
-        std::env::var("SIMULATOR_CONNECTION_TIMEOUT_SECS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(|secs| Duration::from_secs(secs))
-            .unwrap_or(Duration::from_secs(30))
-    }
-
-    /// Get max message size from environment or use 1MB
-    fn max_message_size() -> usize {
-        std::env::var("SIMULATOR_MAX_MESSAGE_SIZE")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(1024 * 1024) // 1MB default
-    }
-    ```
 
 #### 2.2 Verification Checklist
 - [ ] **TOPOLOGY FUNCTIONALITY**:
@@ -606,9 +615,9 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
                 return Ok(()); // Packet dropped, but not an error (simulate UDP-like behavior)
             }
 
-            // 4. Sleep for network latency using switchy_time
+            // 4. Sleep for network latency using switchy_async
             drop(graph); // Release lock before sleeping
-            switchy_time::sleep(total_latency).await;
+            switchy_async::time::sleep(total_latency).await;
 
             // 5. Deliver message to remote's queue
             let mut graph = self.network_graph.write().await;
@@ -764,7 +773,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
         pub async fn discover(&self, name: &str) -> Result<SimulatorNodeId, String> {
             // Simulate DNS lookup delay
             let delay = discovery_delay();
-            switchy::time::sleep(delay).await;
+            switchy_async::time::sleep(delay).await;
 
             let graph = self.network_graph.read().await;
 
@@ -794,6 +803,8 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
     ```
   - [ ] Add convenience test helpers:
     ```rust
+    use std::time::Duration;
+
     #[cfg(test)]
     impl SimulatorP2P {
         pub fn test_setup() -> (Self, SimulatorNodeId, SimulatorNodeId) {
@@ -831,7 +842,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Run `cargo machete` (all core dependencies should be used workspace-wide)
 - [ ] Discovery integration tests pass
 
-## Phase 3: Extract Traits from Working Code ✅ **NOT STARTED**
+## Phase 3: Extract Traits from Working Code 🔴 **NOT STARTED**
 
 **Goal:** Extract traits from the working simulator implementation
 
@@ -1033,7 +1044,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Run `cargo machete` (no unused dependencies from refactoring)
 - [ ] All tests work through trait interface
 
-## Phase 4: Error Handling and Types ✅ **NOT STARTED**
+## Phase 4: Error Handling and Types 🔴 **NOT STARTED**
 
 **Goal:** Replace string-based errors with proper error types
 
@@ -1220,7 +1231,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Run `cargo machete` (thiserror and config types should be used)
 - [ ] Type conversions work as expected
 
-## Phase 5: Web-Server-Like Integration API ✅ **NOT STARTED**
+## Phase 5: Web-Server-Like Integration API 🔴 **NOT STARTED**
 
 **Goal:** Create familiar REST-like routing abstraction for MoosicBox integration
 
@@ -1424,7 +1435,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Service integration tests pass
 
-## Phase 6: Listener Functionality ✅ **NOT STARTED**
+## Phase 6: Listener Functionality 🔴 **NOT STARTED**
 
 **Goal:** Add listener support to enable incoming connections
 
@@ -1470,7 +1481,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Trait abstraction doesn't break functionality
 
-## Phase 6: Enhanced Simulation Features ✅ **NOT STARTED**
+## Phase 6: Enhanced Simulation Features 🔴 **NOT STARTED**
 
 **Goal:** Add advanced simulation capabilities that are actually used
 
@@ -1496,7 +1507,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Simulation features are actually tested
 - [ ] Environment integration works correctly
 
-## Phase 7: Iroh Implementation ✅ **NOT STARTED**
+## Phase 7: Iroh Implementation 🔴 **NOT STARTED**
 
 **Goal:** Implement real P2P using Iroh library
 
@@ -1786,7 +1797,7 @@ Implement a P2P (peer-to-peer) communication system as an alternative to the exi
 - [ ] Iroh integration tests pass consistently
 - [ ] Connection reliability is acceptable
 
-## Phase 8: Testing Infrastructure ✅ **NOT STARTED**
+## Phase 8: Testing Infrastructure 🔴 **NOT STARTED**
 
 **Goal:** Comprehensive testing framework for P2P functionality
 
