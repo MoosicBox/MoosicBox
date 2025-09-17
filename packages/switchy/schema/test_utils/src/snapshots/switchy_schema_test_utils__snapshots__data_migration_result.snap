@@ -5,14 +5,46 @@ expression: snapshot
 {
   "test_name": "data_migration_result",
   "migration_sequence": [
-    "001_create_table",
-    "002_add_column",
-    "003_create_index"
+    "001_create_users",
+    "002_add_email"
   ],
   "schema": {
-    "tables": {}
+    "tables": {
+      "users": {
+        "columns": [
+          {
+            "name": "email",
+            "data_type": "Text",
+            "nullable": true,
+            "default_value": null,
+            "primary_key": false
+          },
+          {
+            "name": "id",
+            "data_type": "BigInt",
+            "nullable": true,
+            "default_value": null,
+            "primary_key": true
+          },
+          {
+            "name": "name",
+            "data_type": "Text",
+            "nullable": false,
+            "default_value": null,
+            "primary_key": false
+          }
+        ],
+        "indexes": []
+      }
+    }
   },
   "data_samples": {
-    "users": []
+    "users": [
+      {
+        "email": null,
+        "id": "[ID]",
+        "name": "test_user"
+      }
+    ]
   }
 }

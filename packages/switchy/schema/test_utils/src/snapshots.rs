@@ -152,7 +152,7 @@ pub struct SnapshotTester {
 #[allow(clippy::struct_excessive_bools)]
 pub struct MigrationSnapshotTest {
     test_name: String,
-    migrations_dir: PathBuf,
+    migrations_dir: Option<PathBuf>,
     assert_schema: bool,
     assert_sequence: bool,
     expected_tables: Vec<String>, // NEW: Tables to inspect for schema capture
@@ -163,6 +163,8 @@ pub struct MigrationSnapshotTest {
     data_samples: std::collections::BTreeMap<String, usize>,
     setup_fn: Option<SetupFn>,
     verification_fn: Option<VerificationFn>,
+    db: Option<Box<dyn Database>>,
+    migrations_table_name: Option<String>,
 }
 
 impl MigrationSnapshotTest {
@@ -171,10 +173,8 @@ impl MigrationSnapshotTest {
     pub fn new(test_name: &str) -> Self {
         Self {
             test_name: test_name.to_string(),
-            // Points to dedicated snapshot test migrations
-            migrations_dir: PathBuf::from(
-                "./test_utils/test-resources/snapshot-migrations/minimal",
-            ),
+            // No default migrations directory
+            migrations_dir: None,
             assert_schema: true,
             assert_sequence: true,
             expected_tables: Vec::new(), // Empty by default
@@ -185,12 +185,14 @@ impl MigrationSnapshotTest {
             data_samples: std::collections::BTreeMap::new(),
             setup_fn: None,
             verification_fn: None,
+            db: None,
+            migrations_table_name: None,
         }
     }
 
     #[must_use]
     pub fn migrations_dir(mut self, path: impl Into<PathBuf>) -> Self {
-        self.migrations_dir = path.into();
+        self.migrations_dir = Some(path.into());
         self
     }
 
@@ -282,6 +284,21 @@ impl MigrationSnapshotTest {
         self
     }
 
+    /// Use an existing database instance instead of creating a new one
+    /// This allows integration with `MigrationTestBuilder` or other test scenarios
+    #[must_use]
+    pub fn with_database(mut self, db: Box<dyn Database>) -> Self {
+        self.db = Some(db);
+        self
+    }
+
+    /// Set custom migrations table name (defaults to `__switchy_migrations`)
+    #[must_use]
+    pub fn with_migrations_table(mut self, table_name: impl Into<String>) -> Self {
+        self.migrations_table_name = Some(table_name.into());
+        self
+    }
+
     /// Auto-discover tables by parsing migration files (future enhancement)
     #[must_use]
     pub const fn auto_discover_tables(self) -> Self {
@@ -366,9 +383,9 @@ impl MigrationSnapshotTest {
     ) -> Result<std::collections::BTreeMap<String, Vec<serde_json::Value>>> {
         let mut samples = std::collections::BTreeMap::new();
 
-        for (table, count) in &self.data_samples {
+        for (table, &count) in &self.data_samples {
             // Use Database query builder instead of raw SQL
-            let query = db.select(table).limit(*count);
+            let query = db.select(table).limit(count);
 
             let rows = query.execute(db).await?;
 
@@ -399,32 +416,62 @@ impl MigrationSnapshotTest {
         Ok(db)
     }
 
-    /// Load migrations from directory with error handling
+    /// Load migrations from directory that need to be applied
     ///
     /// # Errors
     ///
     /// * Returns `SnapshotError` if migration loading fails
     #[cfg(feature = "snapshots")]
     async fn load_migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
-        // Fail with clear error for missing directory (catches configuration mistakes)
-        if !self.migrations_dir.exists() {
+        if let Some(ref migrations_dir) = self.migrations_dir {
+            if migrations_dir.exists() {
+                log::debug!(
+                    "Loading migrations from directory: {}",
+                    migrations_dir.display()
+                );
+
+                let source = DirectoryMigrationSource::from_path(migrations_dir.clone());
+                let migrations = source.migrations().await?;
+
+                log::debug!("Loaded {} migrations from directory", migrations.len());
+                return Ok(migrations);
+            }
+
             log::debug!(
                 "Migrations directory does not exist: {}",
-                self.migrations_dir.display()
+                migrations_dir.display()
             );
-            return Err(SnapshotError::Validation(format!(
-                "Migrations directory does not exist: {}",
-                self.migrations_dir.display()
-            )));
+        } else {
+            log::debug!("No migrations directory configured");
         }
-        log::debug!("Loading migrations from directory");
 
-        let source = DirectoryMigrationSource::from_path(self.migrations_dir.clone());
-        let migrations = source.migrations().await?;
+        Ok(vec![])
+    }
 
-        log::debug!("Loaded {} migrations", migrations.len());
+    /// Get the sequence of already applied migrations from the database
+    ///
+    /// # Errors
+    ///
+    /// * Returns `SnapshotError` if querying fails
+    #[cfg(feature = "snapshots")]
+    async fn get_migration_sequence(&self, db: &dyn Database) -> Result<Vec<String>> {
+        use switchy_schema::{migration::MigrationStatus, version::VersionTracker};
 
-        Ok(migrations)
+        let tracker = self
+            .migrations_table_name
+            .as_ref()
+            .map_or_else(VersionTracker::new, |table_name| {
+                VersionTracker::with_table_name(table_name.clone())
+            });
+
+        // Just call it directly - it handles missing table gracefully
+        let ids = tracker
+            .get_applied_migration_ids(db, MigrationStatus::Completed)
+            .await
+            .map_err(SnapshotError::Migration)?;
+
+        log::debug!("Found {} applied migrations in database", ids.len());
+        Ok(ids)
     }
 
     /// Run the snapshot test
@@ -434,34 +481,42 @@ impl MigrationSnapshotTest {
     /// * Returns `SnapshotError` if test execution fails
     #[cfg(feature = "snapshots")]
     #[allow(clippy::cognitive_complexity)]
-    pub async fn run(self) -> Result<()> {
-        let db = self.create_test_database().await?;
-        let migrations = self.load_migrations().await?;
+    pub async fn run(mut self) -> Result<()> {
+        // Use provided database or create a new one
+        let db = if let Some(db) = self.db.take() {
+            db
+        } else {
+            self.create_test_database().await?
+        };
+        let db = &*db;
+
+        // Load migrations from directory (these will be applied to the DB)
+        let migrations_to_apply = self.load_migrations().await?;
 
         // Execute setup function if provided
         if let Some(setup_fn) = &self.setup_fn {
             log::debug!("run: executing setup function");
-            setup_fn(db.as_ref()).await?;
+            setup_fn(db).await?;
         } else {
             log::debug!("run: no setup function provided");
         }
 
         // Execute migrations - fail fast on any error
-        if migrations.is_empty() {
-            log::debug!("run: no migrations provided");
+        if migrations_to_apply.is_empty() {
+            log::debug!("run: no new migrations to apply");
         } else {
-            log::debug!("run: executing migrations");
-            let source = VecMigrationSource::new(migrations.clone());
+            log::debug!("run: executing {} migrations", migrations_to_apply.len());
+            let source = VecMigrationSource::new(migrations_to_apply.clone());
             let runner = MigrationRunner::new(Box::new(source));
 
             // Any migration error will propagate and fail the test
-            runner.run(db.as_ref()).await?;
+            runner.run(db).await?;
         }
 
         // Execute verification function if provided
         if let Some(verification_fn) = &self.verification_fn {
             log::debug!("run: executing verification function");
-            verification_fn(db.as_ref()).await?;
+            verification_fn(db).await?;
         } else {
             log::debug!("run: no verification function provided");
         }
@@ -469,15 +524,16 @@ impl MigrationSnapshotTest {
         // Capture results based on configuration
         let schema = if self.assert_schema {
             log::debug!("run: capturing schema");
-            Some(self.capture_schema(db.as_ref()).await?)
+            Some(self.capture_schema(db).await?)
         } else {
             log::debug!("run: no schema capture");
             None
         };
 
+        // Get the sequence of already applied migrations AFTER running new ones
         let sequence = if self.assert_sequence {
             log::debug!("run: capturing migration sequence");
-            migrations.iter().map(|m| m.id().to_string()).collect()
+            self.get_migration_sequence(db).await?
         } else {
             log::debug!("run: no migration sequence capture");
             vec![]
@@ -486,7 +542,7 @@ impl MigrationSnapshotTest {
 
         let data_samples = if self.assert_data {
             log::debug!("run: capturing data samples");
-            Some(self.capture_data_samples(db.as_ref()).await?)
+            Some(self.capture_data_samples(db).await?)
         } else {
             log::debug!("run: no data samples capture");
             None

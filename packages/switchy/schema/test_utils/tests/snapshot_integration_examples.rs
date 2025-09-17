@@ -60,10 +60,10 @@ async fn test_complex_integration_example() {
         .await
         .unwrap();
 
-    // Then capture snapshot of final state using a fresh database
-    // (since the builder test runs migrations, we need a clean state)
+    // Then capture snapshot of final state the same db
     MigrationSnapshotTest::new("data_migration_result")
-        .migrations_dir("./test-resources/snapshot-migrations/minimal")
+        .with_database(db) // Reuse the same database instance!
+        .expected_tables(vec!["users".to_string()])
         .assert_schema(true)
         .assert_data(true)
         .with_data_samples("users", 5)
