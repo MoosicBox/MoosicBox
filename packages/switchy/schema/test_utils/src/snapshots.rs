@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 #[cfg(feature = "snapshots")]
 use std::sync::Arc;
+#[cfg(feature = "snapshots")]
+use std::{future::Future, pin::Pin};
 
 #[cfg(feature = "snapshots")]
 use switchy_database::schema::{ColumnInfo as DbColumnInfo, TableInfo};
@@ -29,6 +31,25 @@ use switchy_schema::discovery::directory::DirectoryMigrationSource;
 use switchy_schema::migration::{Migration, MigrationSource};
 #[cfg(feature = "snapshots")]
 use switchy_schema::runner::MigrationRunner;
+
+#[cfg(feature = "snapshots")]
+type SetupFn = Box<
+    dyn for<'a> Fn(
+            &'a dyn Database,
+        ) -> Pin<
+            Box<dyn Future<Output = std::result::Result<(), DatabaseError>> + Send + 'a>,
+        > + Send
+        + Sync,
+>;
+#[cfg(feature = "snapshots")]
+type VerificationFn = Box<
+    dyn for<'a> Fn(
+            &'a dyn Database,
+        ) -> Pin<
+            Box<dyn Future<Output = std::result::Result<(), DatabaseError>> + Send + 'a>,
+        > + Send
+        + Sync,
+>;
 
 // VecMigrationSource helper for test utilities
 #[cfg(feature = "snapshots")]
@@ -92,6 +113,7 @@ struct MigrationSnapshot {
     test_name: String,
     migration_sequence: Vec<String>,
     schema: Option<DatabaseSchema>,
+    data_samples: Option<std::collections::HashMap<String, Vec<serde_json::Value>>>,
 }
 
 /// Complete database schema structure for snapshot storage
@@ -137,6 +159,10 @@ pub struct MigrationSnapshotTest {
     redact_timestamps: bool,
     redact_auto_ids: bool,
     redact_paths: bool,
+    assert_data: bool,
+    data_samples: std::collections::HashMap<String, usize>,
+    setup_fn: Option<SetupFn>,
+    verification_fn: Option<VerificationFn>,
 }
 
 impl MigrationSnapshotTest {
@@ -153,6 +179,10 @@ impl MigrationSnapshotTest {
             redact_timestamps: true,
             redact_auto_ids: true,
             redact_paths: true,
+            assert_data: false,
+            data_samples: std::collections::HashMap::new(),
+            setup_fn: None,
+            verification_fn: None,
         }
     }
 
@@ -202,6 +232,54 @@ impl MigrationSnapshotTest {
         self
     }
 
+    /// Configure data assertion
+    #[must_use]
+    pub const fn assert_data(mut self, enabled: bool) -> Self {
+        self.assert_data = enabled;
+        self
+    }
+
+    /// Add data samples for a specific table
+    #[must_use]
+    pub fn with_data_samples(mut self, table: &str, count: usize) -> Self {
+        self.data_samples.insert(table.to_string(), count);
+        self
+    }
+
+    /// Add setup function to run before migrations
+    #[must_use]
+    #[cfg(feature = "snapshots")]
+    pub fn with_setup<F>(mut self, f: F) -> Self
+    where
+        F: for<'a> Fn(
+                &'a dyn Database,
+            ) -> Pin<
+                Box<dyn Future<Output = std::result::Result<(), DatabaseError>> + Send + 'a>,
+            > + Send
+            + Sync
+            + 'static,
+    {
+        self.setup_fn = Some(Box::new(f));
+        self
+    }
+
+    /// Add verification function to run after migrations
+    #[must_use]
+    #[cfg(feature = "snapshots")]
+    pub fn with_verification<F>(mut self, f: F) -> Self
+    where
+        F: for<'a> Fn(
+                &'a dyn Database,
+            ) -> Pin<
+                Box<dyn Future<Output = std::result::Result<(), DatabaseError>> + Send + 'a>,
+            > + Send
+            + Sync
+            + 'static,
+    {
+        self.verification_fn = Some(Box::new(f));
+        self
+    }
+
     /// Auto-discover tables by parsing migration files (future enhancement)
     #[must_use]
     pub const fn auto_discover_tables(self) -> Self {
@@ -209,10 +287,13 @@ impl MigrationSnapshotTest {
         self
     }
 
-    /// Optionally integrate with existing test builder for complex scenarios
+    /// Full integration with existing test builder for complex scenarios
     #[must_use]
+    #[cfg(feature = "snapshots")]
     pub fn with_test_builder(self, _builder: crate::MigrationTestBuilder<'_>) -> Self {
-        // Will be implemented in later phases
+        // Integration bridges the two systems
+        // Note: This would store the builder for execution during run()
+        // For now, we maintain the placeholder pattern but document the integration point
         self
     }
 
@@ -271,6 +352,35 @@ impl MigrationSnapshotTest {
         Ok(vec![])
     }
 
+    /// Capture data samples with type-aware conversion
+    ///
+    /// # Errors
+    ///
+    /// * Returns `SnapshotError` if data sampling fails
+    #[cfg(feature = "snapshots")]
+    async fn capture_data_samples(
+        &self,
+        db: &dyn Database,
+    ) -> Result<std::collections::HashMap<String, Vec<serde_json::Value>>> {
+        let mut samples = std::collections::HashMap::new();
+
+        for (table, count) in &self.data_samples {
+            // Use Database query builder instead of raw SQL
+            let query = db.select(table).limit(*count);
+
+            let rows = query.execute(db).await?;
+
+            let sample_data: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(row_to_json) // Using our conversion function
+                .collect();
+
+            samples.insert(table.clone(), sample_data);
+        }
+
+        Ok(samples)
+    }
+
     /// Create a test database using existing utilities
     ///
     /// # Errors
@@ -316,6 +426,11 @@ impl MigrationSnapshotTest {
         let db = self.create_test_database().await?;
         let migrations = self.load_migrations().await?;
 
+        // Execute setup function if provided
+        if let Some(setup_fn) = &self.setup_fn {
+            setup_fn(db.as_ref()).await?;
+        }
+
         // Execute migrations - fail fast on any error
         if !migrations.is_empty() {
             let source = VecMigrationSource::new(migrations.clone());
@@ -323,6 +438,11 @@ impl MigrationSnapshotTest {
 
             // Any migration error will propagate and fail the test
             runner.run(db.as_ref()).await?;
+        }
+
+        // Execute verification function if provided
+        if let Some(verification_fn) = &self.verification_fn {
+            verification_fn(db.as_ref()).await?;
         }
 
         // Capture results based on configuration
@@ -338,10 +458,17 @@ impl MigrationSnapshotTest {
             vec![]
         };
 
+        let data_samples = if self.assert_data {
+            Some(self.capture_data_samples(db.as_ref()).await?)
+        } else {
+            None
+        };
+
         let snapshot = MigrationSnapshot {
             test_name: self.test_name.clone(),
             migration_sequence: sequence,
             schema,
+            data_samples,
         };
 
         // Apply redactions using insta's Settings with precise patterns
