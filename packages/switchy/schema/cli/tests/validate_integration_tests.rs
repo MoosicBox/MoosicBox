@@ -58,8 +58,8 @@ async fn test_validate_with_valid_migrations() {
         .replace(&db_url, "[DATABASE_URL]");
 
     assert_snapshot!("validate_with_valid_migrations", filtered);
-    // Command should fail because no migration table exists
-    assert!(!output.status.success());
+    // Should handle case when migration table doesn't exist
+    assert!(output.status.success());
 }
 
 #[switchy_async::test(no_simulator)]
@@ -91,8 +91,8 @@ async fn test_validate_empty_database() {
         .replace(&db_url, "[DATABASE_URL]");
 
     assert_snapshot!("validate_empty_database_integration", filtered);
-    // Command should fail because no migration table exists
-    assert!(!output.status.success());
+    // Should handle case when migration table doesn't exist
+    assert!(output.status.success());
 }
 
 #[switchy_async::test(no_simulator)]
@@ -125,6 +125,6 @@ async fn test_validate_verbose_mode() {
         .replace(&db_url, "[DATABASE_URL]");
 
     assert_snapshot!("validate_verbose_mode_integration", filtered);
-    // Command should fail because no migration table exists
-    assert!(!output.status.success());
+    // Should handle case when migration table doesn't exist
+    assert!(output.status.success());
 }

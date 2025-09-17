@@ -71,13 +71,12 @@ fn test_validate_empty_migrations_directory() {
 
     // Print stderr for debugging
     if !output.status.success() {
-        println!("Command failed with stderr: {}", stderr);
+        panic!("Command failed with stderr: {stderr}");
     }
 
     assert_snapshot!("validate_empty_migrations", clean_output);
-    // Empty migrations directory with no migration table should fail
-    // This is expected behavior since there's no __switchy_migrations table
-    assert!(!output.status.success());
+    // Should handle case when migration table doesn't exist
+    assert!(output.status.success());
 }
 
 #[test]
@@ -108,8 +107,8 @@ fn test_validate_with_verbose_flag() {
     let clean_output = strip_ansi_codes(&filtered);
 
     assert_snapshot!("validate_empty_migrations_verbose", clean_output);
-    // Should fail because migration table doesn't exist
-    assert!(!output.status.success());
+    // Should handle case when migration table doesn't exist
+    assert!(output.status.success());
 }
 
 #[test]
@@ -140,8 +139,8 @@ fn test_validate_with_strict_flag() {
     let clean_output = strip_ansi_codes(&filtered);
 
     assert_snapshot!("validate_empty_migrations_strict", clean_output);
-    // Should fail because migration table doesn't exist
-    assert!(!output.status.success());
+    // Should handle case when migration table doesn't exist
+    assert!(output.status.success());
 }
 
 #[switchy_async::test(no_simulator)]

@@ -6,3 +6,5 @@ Validating migration checksums
 ==============================
 Migrations directory: [MIGRATIONS_DIR]
 Migration table: __switchy_migrations
+
+✓ All migration checksums are valid!

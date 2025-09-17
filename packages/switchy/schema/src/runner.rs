@@ -473,7 +473,10 @@ impl<'a> MigrationRunner<'a> {
         self.version_tracker.ensure_table_exists(db).await?;
 
         // Get all applied migrations in reverse chronological order
-        let applied_migrations = self.version_tracker.get_applied_migrations(db).await?;
+        let applied_migrations = self
+            .version_tracker
+            .get_applied_migration_ids(db, MigrationStatus::Completed)
+            .await?;
 
         // Determine which migrations to roll back based on strategy
         let migrations_to_rollback = match strategy {
@@ -592,7 +595,10 @@ impl<'a> MigrationRunner<'a> {
         let mut migrations = self.source.list().await?;
 
         // Get applied migration IDs
-        let applied_migrations = self.version_tracker.get_applied_migrations(db).await?;
+        let applied_migrations = self
+            .version_tracker
+            .get_applied_migration_ids(db, MigrationStatus::Completed)
+            .await?;
         let applied_set: std::collections::HashSet<String> =
             applied_migrations.into_iter().collect();
 
@@ -802,7 +808,10 @@ impl<'a> MigrationRunner<'a> {
         let mut mismatches = vec![];
 
         // Get all applied migrations with their stored checksums
-        let applied = self.version_tracker.list_applied_migrations(db).await?;
+        let applied = self
+            .version_tracker
+            .get_applied_migrations(db, MigrationStatus::Completed)
+            .await?;
         // Get all available migrations from source
         let available = self.source.migrations().await?;
 
@@ -1965,7 +1974,7 @@ mod tests {
             // Test list_applied_migrations
             let applied_migrations = runner
                 .version_tracker
-                .list_applied_migrations(&*db)
+                .get_applied_migrations(&*db, MigrationStatus::Completed)
                 .await
                 .expect("Should list applied migrations");
 

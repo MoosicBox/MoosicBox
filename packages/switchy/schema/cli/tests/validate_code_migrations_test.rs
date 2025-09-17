@@ -53,8 +53,8 @@ async fn test_code_migrations_with_empty_directory() {
         .replace(&db_url, "[DATABASE_URL]");
 
     assert_snapshot!("validate_empty_code_migrations_dir", filtered);
-    // Should fail because migration table doesn't exist
-    assert!(!output.status.success());
+    // Should handle case when migration table doesn't exist
+    assert!(output.status.success());
 }
 
 // Unit tests using in-memory databases to test validation logic directly

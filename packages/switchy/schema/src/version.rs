@@ -434,24 +434,37 @@ impl VersionTracker {
         Ok(dirty_migrations)
     }
 
-    /// Get all successfully applied migrations in chronological order
+    /// Get all successfully applied migration IDs in chronological order
     ///
     /// Returns migration IDs for all completed migrations, ordered by run time (oldest first).
     /// This method is used by the migration runner to determine rollback order and track applied state.
     ///
+    /// This method will return an empty list if the migrations table does not exist.
+    ///
     /// # Errors
     ///
     /// * If the database query fails
-    pub async fn get_applied_migrations(&self, db: &dyn Database) -> Result<Vec<String>> {
-        let results = db
-            .select(&self.table_name)
-            .columns(&["id"])
-            .filter(Box::new(where_eq(
-                "status",
-                MigrationStatus::Completed.to_string(),
-            )))
-            .execute(db)
-            .await?;
+    pub async fn get_applied_migration_ids(
+        &self,
+        db: &dyn Database,
+        status: impl Into<Option<MigrationStatus>>,
+    ) -> Result<Vec<String>> {
+        // Check if the migrations table exists first using the schema feature
+        if db.get_table_info(&self.table_name).await?.is_none() {
+            // Table doesn't exist yet - return empty list (fresh database)
+            return Ok(vec![]);
+        }
+
+        // Table exists, proceed with query
+        let results = db.select(&self.table_name).columns(&["id"]);
+
+        let results = if let Some(status) = status.into() {
+            results.filter(Box::new(where_eq("status", status.to_string())))
+        } else {
+            results
+        };
+
+        let results = results.execute(db).await?;
 
         let migration_ids: Vec<String> = results
             .into_iter()
@@ -473,28 +486,40 @@ impl VersionTracker {
     /// Returns complete migration records for all completed migrations, ordered by run time (oldest first).
     /// This method is used by checksum validation to access stored checksums for comparison.
     ///
+    /// This method will return an empty list if the migrations table does not exist.
+    ///
     /// # Errors
     ///
     /// * If the database query fails
     /// * If record parsing fails
-    pub async fn list_applied_migrations(&self, db: &dyn Database) -> Result<Vec<MigrationRecord>> {
-        let results = db
-            .select(&self.table_name)
-            .columns(&[
-                "id",
-                "run_on",
-                "finished_on",
-                "status",
-                "failure_reason",
-                "up_checksum",
-                "down_checksum",
-            ])
-            .filter(Box::new(where_eq(
-                "status",
-                MigrationStatus::Completed.to_string(),
-            )))
-            .execute(db)
-            .await?;
+    pub async fn get_applied_migrations(
+        &self,
+        db: &dyn Database,
+        status: impl Into<Option<MigrationStatus>>,
+    ) -> Result<Vec<MigrationRecord>> {
+        // Check if the migrations table exists first using the schema feature
+        if db.get_table_info(&self.table_name).await?.is_none() {
+            // Table doesn't exist yet - return empty list (fresh database)
+            return Ok(vec![]);
+        }
+
+        let results = db.select(&self.table_name).columns(&[
+            "id",
+            "run_on",
+            "finished_on",
+            "status",
+            "failure_reason",
+            "up_checksum",
+            "down_checksum",
+        ]);
+
+        let results = if let Some(status) = status.into() {
+            results.filter(Box::new(where_eq("status", status.to_string())))
+        } else {
+            results
+        };
+
+        let results = results.execute(db).await?;
 
         let migration_records: Vec<MigrationRecord> = results
             .into_iter()
