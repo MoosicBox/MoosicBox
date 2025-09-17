@@ -6967,36 +6967,420 @@ The original concern about `&'static str` was unfounded - Rust's deref coercion 
 
 ### 13.1 Nested Transaction Support (Savepoints)
 
-**Background:** Savepoints allow nested transactions within a main transaction, enabling partial rollback without losing the entire transaction.
+**Background:** Savepoints allow nested transactions within a main transaction, enabling partial rollback without losing the entire transaction. All three databases (SQLite, PostgreSQL, MySQL) support identical SAVEPOINT SQL syntax.
 
-- [ ] Add savepoint support to `DatabaseTransaction` trait ❌ **MINOR**
-  - [ ] Add `async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError>`
-  - [ ] Add `Savepoint` trait with `release()` and `rollback_to()` methods
-- [ ] Implement for SQLite backends:
-  - [ ] Use `SAVEPOINT name` / `RELEASE name` / `ROLLBACK TO name` commands
-  - [ ] Track savepoint hierarchy for proper cleanup
-- [ ] Implement for PostgreSQL backends:
-  - [ ] Use PostgreSQL savepoint syntax (same as SQLite)
-  - [ ] Handle PostgreSQL-specific savepoint behavior
-- [ ] Implement for MySQL backends:
-  - [ ] Use MySQL savepoint syntax
-  - [ ] Handle InnoDB engine requirements
-- [ ] Add comprehensive testing:
-  - [ ] Test nested savepoint creation and rollback
-  - [ ] Test savepoint hierarchy management
-  - [ ] Test error handling with failed savepoints
+**Implementation Strategy:** To avoid compilation errors and warnings, implementation follows a careful staged approach with stub implementations first.
 
-#### 13.1 Verification Checklist
+#### 13.1.1 Add Complete Trait Infrastructure with Stubs (Single Step)
 
-- [ ] Run `cargo build -p switchy_database` - compiles with savepoint support
-- [ ] Unit test: Savepoint creation and naming
-- [ ] Unit test: Rollback to savepoint preserves outer transaction
-- [ ] Unit test: Savepoint release commits nested work
-- [ ] Integration test: Nested savepoints work correctly
-- [ ] Integration test: All database backends support savepoints
-- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Documentation includes savepoint usage examples
+**Critical:** This entire step must be done together to maintain compilation.
+
+- [ ] Add Savepoint trait to `packages/database/src/lib.rs`:
+  ```rust
+  /// Savepoint within a transaction for nested transaction support
+  #[async_trait]
+  pub trait Savepoint: Send + Sync {
+      /// Release (commit) this savepoint, merging changes into parent transaction
+      async fn release(self: Box<Self>) -> Result<(), DatabaseError>;
+
+      /// Rollback to this savepoint, undoing all changes after it
+      async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError>;
+
+      /// Get the name of this savepoint
+      fn name(&self) -> &str;
+  }
+  ```
+
+- [ ] Add savepoint() method to `DatabaseTransaction` trait
+- [ ] Create stub Savepoint implementations for ALL backends:
+  - [ ] `RusqliteSavepoint` stub in `packages/database/src/rusqlite/mod.rs`
+  - [ ] `SqliteSqlxSavepoint` stub in `packages/database/src/sqlx/sqlite.rs`
+  - [ ] `PostgresSavepoint` stub in `packages/database/src/postgres/postgres.rs`
+  - [ ] `PostgresSqlxSavepoint` stub in `packages/database/src/sqlx/postgres.rs`
+  - [ ] `MysqlSqlxSavepoint` stub in `packages/database/src/sqlx/mysql.rs`
+- [ ] Each stub implementation just returns Unsupported errors
+- [ ] Each transaction's savepoint() method returns its stub implementation
+
+Example stub:
+```rust
+struct RusqliteSavepoint {
+    name: String,
+}
+
+#[async_trait]
+impl Savepoint for RusqliteSavepoint {
+    async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+        Err(DatabaseError::Unsupported("Savepoints not yet implemented"))
+    }
+
+    async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+        Err(DatabaseError::Unsupported("Savepoints not yet implemented"))
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+```
+
+#### 13.1.1 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --all-features` - compiles with no errors
+- [ ] Savepoint trait added with all three methods (release, rollback_to, name)
+- [ ] DatabaseTransaction trait has savepoint() method
+- [ ] All 6 backends have stub savepoint structs
+- [ ] Savepoint trait is implemented by all stubs
+- [ ] Run `cargo clippy -p switchy_database --all-features` - zero warnings
+- [ ] No allow attributes needed
+- [ ] Methods have correct signatures (Box<Self> for consuming methods)
+- [ ] Stub implementations return Unsupported errors
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.2 Add Error Variants with Validation Logic
+
+- [ ] Add to `DatabaseError` enum in `packages/database/src/lib.rs`:
+  ```rust
+  /// Invalid savepoint name (contains invalid characters or empty)
+  #[error("Invalid savepoint name: {0}")]
+  InvalidSavepointName(String),
+
+  /// Savepoint with this name already exists
+  #[error("Savepoint already exists: {0}")]
+  SavepointExists(String),
+
+  /// Savepoint not found for rollback/release
+  #[error("Savepoint not found: {0}")]
+  SavepointNotFound(String),
+  ```
+
+- [ ] Create validation helper in `packages/database/src/lib.rs`:
+  ```rust
+  /// Validate savepoint name follows SQL identifier rules
+  pub(crate) fn validate_savepoint_name(name: &str) -> Result<(), DatabaseError> {
+      if name.is_empty() {
+          return Err(DatabaseError::InvalidSavepointName(
+              "Savepoint name cannot be empty".to_string()
+          ));
+      }
+
+      // Check for valid SQL identifier characters
+      if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint name '{}' contains invalid characters", name)
+          ));
+      }
+
+      // Check doesn't start with number
+      if name.chars().next().map_or(false, |c| c.is_numeric()) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint name '{}' cannot start with a number", name)
+          ));
+      }
+
+      Ok(())
+  }
+  ```
+
+- [ ] Update the default `savepoint()` implementation to use new validation:
+  ```rust
+  async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError> {
+      validate_savepoint_name(name)?; // Now uses the new error variant
+      Err(DatabaseError::Unsupported("Savepoints not yet implemented for this backend"))
+  }
+  ```
+
+#### 13.1.2 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database` - compiles with new error variants
+- [ ] InvalidSavepointName variant added to DatabaseError enum
+- [ ] SavepointExists variant added to DatabaseError enum
+- [ ] SavepointNotFound variant added to DatabaseError enum
+- [ ] validate_savepoint_name() helper function compiles
+- [ ] Validation checks empty names
+- [ ] Validation checks for SQL injection characters (spaces, semicolons)
+- [ ] Validation checks names starting with numbers
+- [ ] Default savepoint() uses validate_savepoint_name()
+- [ ] Run `cargo clippy -p switchy_database --all-features` - no unused variant warnings
+- [ ] Error messages are descriptive and include the invalid name
+- [ ] Run `cargo test -p switchy_database --lib validate_savepoint` - validation tests pass
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.3 Implement SQLite (rusqlite) - First Complete Implementation
+
+- [ ] Create `packages/database/src/rusqlite/savepoint.rs`:
+  ```rust
+  use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+  use async_trait::async_trait;
+  use tokio::sync::Mutex;
+  use rusqlite::Connection;
+  use crate::{DatabaseError, Savepoint};
+
+  pub(crate) struct RusqliteSavepoint {
+      name: String,
+      connection: Arc<Mutex<Connection>>,
+      released: AtomicBool,
+      rolled_back: AtomicBool,
+  }
+
+  impl RusqliteSavepoint {
+      pub(crate) fn new(name: String, connection: Arc<Mutex<Connection>>) -> Self {
+          Self {
+              name,
+              connection,
+              released: AtomicBool::new(false),
+              rolled_back: AtomicBool::new(false),
+          }
+      }
+  }
+
+  #[async_trait]
+  impl Savepoint for RusqliteSavepoint {
+      async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+          // Implementation here
+      }
+
+      async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+          // Implementation here
+      }
+
+      fn name(&self) -> &str {
+          &self.name
+      }
+  }
+  ```
+
+- [ ] Add module declaration to `packages/database/src/rusqlite/mod.rs`:
+  ```rust
+  mod savepoint;
+  use savepoint::RusqliteSavepoint;
+  ```
+
+- [ ] Override `savepoint()` in `RusqliteTransaction`:
+  ```rust
+  async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError> {
+      crate::validate_savepoint_name(name)?;
+
+      // Execute SAVEPOINT SQL
+      self.connection
+          .lock()
+          .await
+          .execute(&format!("SAVEPOINT {}", name), [])
+          .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+      Ok(Box::new(RusqliteSavepoint::new(
+          name.to_string(),
+          Arc::clone(&self.connection),
+      )))
+  }
+  ```
+
+- [ ] Remove `#[allow(dead_code)]` from Savepoint trait (now has implementation)
+
+- [ ] Add tests in `packages/database/src/rusqlite/mod.rs`:
+  ```rust
+  #[cfg(test)]
+  mod savepoint_tests {
+      use super::*;
+
+      #[tokio::test]
+      async fn test_savepoint_basic() {
+          // Test can run with just rusqlite implementation
+      }
+  }
+  ```
+
+#### 13.1.3 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features rusqlite` - compiles successfully
+- [ ] RusqliteSavepoint struct implements Savepoint trait
+- [ ] release() executes RELEASE SAVEPOINT SQL command
+- [ ] rollback_to() executes ROLLBACK TO SAVEPOINT SQL command
+- [ ] State tracking prevents double release/rollback
+- [ ] RusqliteTransaction::savepoint() creates savepoints correctly
+- [ ] Connection sharing works with parent transaction
+- [ ] Unit test: test_rusqlite_savepoint_create_release passes
+- [ ] Unit test: test_rusqlite_savepoint_rollback passes
+- [ ] Unit test: test_rusqlite_nested_savepoints passes
+- [ ] Unit test: test_rusqlite_invalid_savepoint_name returns error
+- [ ] Run `cargo clippy -p switchy_database --features rusqlite` - zero warnings
+- [ ] Stub implementation replaced with real implementation
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.4 Implement SQLite (sqlx)
+
+- [ ] Create `packages/database/src/sqlx/sqlite_savepoint.rs`
+- [ ] Implement `SqliteSqlxSavepoint` struct
+- [ ] Override `savepoint()` in `SqliteSqlxTransaction`
+- [ ] Add sqlite-specific tests
+
+#### 13.1.4 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features sqlite-sqlx` - compiles successfully
+- [ ] SqliteSqlxSavepoint struct created and implements Savepoint trait
+- [ ] Raw SQL execution works through sqlx
+- [ ] SqliteSqlxTransaction::savepoint() implementation complete
+- [ ] Unit test: test_sqlite_sqlx_savepoint_basic passes
+- [ ] Unit test: test_sqlite_sqlx_nested_savepoints passes
+- [ ] Connection reference properly maintained
+- [ ] Run `cargo clippy -p switchy_database --features sqlite-sqlx` - zero warnings
+- [ ] Both SQLite implementations have consistent behavior
+- [ ] Run `cargo test -p switchy_database --features sqlite-sqlx savepoint` - all pass
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.5 Implement PostgreSQL (postgres)
+
+- [ ] Create `packages/database/src/postgres/savepoint.rs`
+- [ ] Implement `PostgresSavepoint` struct
+- [ ] Override `savepoint()` in `PostgresTransaction`
+- [ ] Add postgres-specific tests
+
+#### 13.1.5 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features postgres` - compiles successfully
+- [ ] PostgresSavepoint struct implements Savepoint trait
+- [ ] PostgreSQL-specific SQL syntax works correctly
+- [ ] PostgresTransaction::savepoint() uses pooled connection
+- [ ] Unit test: test_postgres_savepoint_basic passes
+- [ ] Unit test: test_postgres_automatic_cleanup on error
+- [ ] Handles PostgreSQL's automatic savepoint cleanup
+- [ ] Run `cargo clippy -p switchy_database --features postgres` - zero warnings
+- [ ] Run `cargo test -p switchy_database --features postgres savepoint` - all pass
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.6 Implement PostgreSQL (sqlx)
+
+- [ ] Create `packages/database/src/sqlx/postgres_savepoint.rs`
+- [ ] Implement `PostgresSqlxSavepoint` struct
+- [ ] Override `savepoint()` in `PostgresSqlxTransaction`
+- [ ] Add postgres-sqlx-specific tests
+
+#### 13.1.6 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features postgres-sqlx` - compiles successfully
+- [ ] PostgresSqlxSavepoint struct implements Savepoint trait
+- [ ] Raw SQL execution through sqlx works
+- [ ] PostgresSqlxTransaction::savepoint() implementation complete
+- [ ] Unit test: test_postgres_sqlx_savepoint passes
+- [ ] Consistent behavior with postgres crate implementation
+- [ ] Run `cargo clippy -p switchy_database --features postgres-sqlx` - zero warnings
+- [ ] Run `cargo test -p switchy_database --features postgres-sqlx savepoint` - all pass
+- [ ] Both PostgreSQL implementations behave identically
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.7 Implement MySQL (sqlx)
+
+- [ ] Create `packages/database/src/sqlx/mysql_savepoint.rs`
+- [ ] Implement `MysqlSqlxSavepoint` struct
+- [ ] Override `savepoint()` in `MysqlSqlxTransaction`
+- [ ] Add MySQL-specific tests including InnoDB verification
+
+#### 13.1.7 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features mysql-sqlx` - compiles successfully
+- [ ] MysqlSqlxSavepoint struct implements Savepoint trait
+- [ ] MySQL savepoint syntax works correctly
+- [ ] MysqlSqlxTransaction::savepoint() implementation complete
+- [ ] Unit test: test_mysql_savepoint_basic passes
+- [ ] Unit test: test_mysql_innodb_requirement passes
+- [ ] Unit test: test_mysql_identifier_length_limit (64 chars)
+- [ ] Graceful error for non-InnoDB tables
+- [ ] Run `cargo clippy -p switchy_database --features mysql-sqlx` - zero warnings
+- [ ] Run `cargo test -p switchy_database --features mysql-sqlx savepoint` - all pass
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.8 Remove Default Implementation
+
+- [ ] Remove default implementation from `DatabaseTransaction::savepoint()`
+- [ ] Ensure all backends have their own implementation
+- [ ] Simulator automatically delegates to underlying implementation
+
+#### 13.1.8 Verification Checklist
+
+- [ ] Default savepoint() method removed from DatabaseTransaction trait
+- [ ] All 6 backends have their own savepoint() implementation
+- [ ] SimulatorDatabase correctly delegates to underlying implementation
+- [ ] Run `cargo build -p switchy_database --all-features` - compiles successfully
+- [ ] No more Unsupported errors for savepoints
+- [ ] Run `cargo clippy -p switchy_database --all-features` - zero warnings
+- [ ] Run `cargo test -p switchy_database --all-features` - all existing tests pass
+- [ ] Breaking change documented if trait no longer has default
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.9 Comprehensive Integration Tests
+
+- [ ] Create `packages/database/tests/savepoint_integration.rs`:
+  ```rust
+  #[cfg(all(test, feature = "sqlite"))]
+  mod sqlite_savepoint_tests {
+      // Cross-backend savepoint tests
+  }
+
+  #[cfg(all(test, feature = "postgres"))]
+  mod postgres_savepoint_tests {
+      // Same tests for postgres
+  }
+
+  #[cfg(all(test, feature = "mysql"))]
+  mod mysql_savepoint_tests {
+      // Same tests for mysql
+  }
+  ```
+
+- [ ] Test scenarios:
+  - [ ] Nested savepoints (3 levels deep)
+  - [ ] Rollback to middle savepoint
+  - [ ] Release savepoints out of order
+  - [ ] Error handling and state consistency
+  - [ ] Transaction commit with unreleased savepoints
+  - [ ] Savepoint name validation edge cases
+
+#### 13.1.9 Verification Checklist
+
+- [ ] savepoint_integration.rs file created in tests directory
+- [ ] Test: nested_savepoints_three_levels works on all backends
+- [ ] Test: rollback_to_middle_savepoint preserves outer data
+- [ ] Test: release_savepoints_out_of_order handles correctly
+- [ ] Test: error_during_savepoint maintains consistency
+- [ ] Test: commit_with_unreleased_savepoints auto-cleanup
+- [ ] Test: savepoint_name_edge_cases validates properly
+- [ ] Test: concurrent_savepoints_different_transactions
+- [ ] Test: savepoint_after_failed_operation recovery
+- [ ] Cross-backend consistency verified
+- [ ] Run `cargo test -p switchy_database --all-features savepoint_integration` - all pass
+- [ ] Run `cargo clippy -p switchy_database --all-features -- -D warnings` - zero issues
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
+
+#### 13.1.10 Documentation and Examples
+
+- [ ] Add savepoint example to transaction documentation
+- [ ] Document any database-specific quirks discovered
+- [ ] Add practical use case example (batch processing)
+
+#### 13.1.10 Verification Checklist
+
+- [ ] Transaction documentation updated with savepoint examples
+- [ ] Batch processing example added showing partial rollback
+- [ ] Migration safety example using savepoints
+- [ ] Database-specific quirks documented (if any found)
+- [ ] API documentation includes all error conditions
+- [ ] Example shows nested savepoint usage
+- [ ] Example demonstrates error recovery with savepoints
+- [ ] Run `cargo doc -p switchy_database --all-features --no-deps` - docs build
+- [ ] Doc tests in lib.rs pass
+- [ ] README updated if significant new feature
+- [ ] CHANGELOG entry added for savepoint support
+- [ ] Breaking changes noted if any
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Run `cargo machete` - no unused dependencies
 
 ### ~~13.2 Transaction Isolation Levels~~ ❌ **REMOVED - NOT SYMMETRICAL**
 
