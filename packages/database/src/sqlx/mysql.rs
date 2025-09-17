@@ -908,6 +908,25 @@ impl Database for MysqlSqlxTransaction {
     }
 }
 
+struct MysqlSqlxSavepoint {
+    name: String,
+}
+
+#[async_trait]
+impl crate::Savepoint for MysqlSqlxSavepoint {
+    async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+        unimplemented!("Savepoints not yet implemented")
+    }
+
+    async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+        unimplemented!("Savepoints not yet implemented")
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 #[async_trait]
 impl crate::DatabaseTransaction for MysqlSqlxTransaction {
     #[allow(clippy::significant_drop_tightening)]
@@ -932,6 +951,12 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
         tx.rollback().await.map_err(SqlxDatabaseError::Sqlx)?;
 
         Ok(())
+    }
+
+    async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
+        Ok(Box::new(MysqlSqlxSavepoint {
+            name: name.to_string(),
+        }))
     }
 }
 

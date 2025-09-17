@@ -828,6 +828,25 @@ impl Database for RusqliteTransaction {
     }
 }
 
+struct RusqliteSavepoint {
+    name: String,
+}
+
+#[async_trait]
+impl crate::Savepoint for RusqliteSavepoint {
+    async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+        unimplemented!("Savepoints not yet implemented")
+    }
+
+    async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+        unimplemented!("Savepoints not yet implemented")
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 #[async_trait]
 impl DatabaseTransaction for RusqliteTransaction {
     async fn commit(self: Box<Self>) -> Result<(), DatabaseError> {
@@ -866,6 +885,12 @@ impl DatabaseTransaction for RusqliteTransaction {
 
         self.rolled_back.store(true, Ordering::SeqCst);
         Ok(())
+    }
+
+    async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
+        Ok(Box::new(RusqliteSavepoint {
+            name: name.to_string(),
+        }))
     }
 }
 

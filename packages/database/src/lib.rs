@@ -723,6 +723,69 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError>;
 }
 
+/// Savepoint within a transaction for nested transaction support
+///
+/// Savepoints allow creating nested transaction boundaries within a main transaction.
+/// They enable partial rollback without losing the entire transaction, useful for
+/// implementing complex business logic with conditional rollback points.
+///
+/// # Usage Example
+///
+/// ```rust,ignore
+/// let tx = db.begin_transaction().await?;
+///
+/// // Do some work
+/// tx.insert("users").value("name", "Alice").execute(&*tx).await?;
+///
+/// // Create a savepoint before risky operation
+/// let sp = tx.savepoint("before_risky_op").await?;
+///
+/// // Try risky operation
+/// match risky_operation(&*tx).await {
+///     Ok(_) => sp.release().await?, // Success: merge into transaction
+///     Err(_) => sp.rollback_to().await?, // Error: rollback to savepoint
+/// }
+///
+/// // Continue with transaction
+/// tx.commit().await?;
+/// ```
+///
+/// # Database Support
+///
+/// All supported databases (`SQLite`, `PostgreSQL`, `MySQL`) implement savepoints using
+/// standard SQL commands:
+/// - `SAVEPOINT name` - Create savepoint
+/// - `RELEASE SAVEPOINT name` - Commit savepoint changes
+/// - `ROLLBACK TO SAVEPOINT name` - Rollback to savepoint
+#[async_trait]
+pub trait Savepoint: Send + Sync {
+    /// Release (commit) this savepoint, merging changes into parent transaction
+    ///
+    /// This consumes the savepoint and makes all changes since the savepoint
+    /// permanent within the parent transaction. The parent transaction can
+    /// still be rolled back.
+    ///
+    /// # Errors
+    ///
+    /// * If the savepoint was already released or rolled back
+    /// * If the underlying database operation fails
+    async fn release(self: Box<Self>) -> Result<(), DatabaseError>;
+
+    /// Rollback to this savepoint, undoing all changes after it
+    ///
+    /// This consumes the savepoint and undoes all changes made since the
+    /// savepoint was created. The transaction remains active and can continue.
+    ///
+    /// # Errors
+    ///
+    /// * If the savepoint was already released or rolled back
+    /// * If the underlying database operation fails
+    async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError>;
+
+    /// Get the name of this savepoint
+    fn name(&self) -> &str;
+}
+
 /// Database transaction trait that extends Database functionality
 ///
 /// Transactions provide ACID properties for database operations. All Database trait
@@ -961,6 +1024,17 @@ pub trait DatabaseTransaction: Database + Send + Sync {
     /// * If the rollback operation fails
     /// * If the transaction was already committed or rolled back
     async fn rollback(self: Box<Self>) -> Result<(), DatabaseError>;
+
+    /// Create a savepoint within this transaction
+    ///
+    /// # Errors
+    ///
+    /// * If the savepoint creation fails
+    /// * If a savepoint with this name already exists
+    /// * If the savepoint name is invalid
+    async fn savepoint(&self, _name: &str) -> Result<Box<dyn Savepoint>, DatabaseError> {
+        unimplemented!("Savepoints not yet implemented for this backend")
+    }
 }
 
 #[async_trait]

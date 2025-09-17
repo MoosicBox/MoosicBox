@@ -957,6 +957,25 @@ impl Database for PostgresSqlxTransaction {
     }
 }
 
+struct PostgresSqlxSavepoint {
+    name: String,
+}
+
+#[async_trait]
+impl crate::Savepoint for PostgresSqlxSavepoint {
+    async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+        unimplemented!("Savepoints not yet implemented")
+    }
+
+    async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+        unimplemented!("Savepoints not yet implemented")
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 #[async_trait]
 impl crate::DatabaseTransaction for PostgresSqlxTransaction {
     #[allow(clippy::significant_drop_tightening)]
@@ -981,6 +1000,12 @@ impl crate::DatabaseTransaction for PostgresSqlxTransaction {
         tx.rollback().await.map_err(SqlxDatabaseError::Sqlx)?;
 
         Ok(())
+    }
+
+    async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
+        Ok(Box::new(PostgresSqlxSavepoint {
+            name: name.to_string(),
+        }))
     }
 }
 

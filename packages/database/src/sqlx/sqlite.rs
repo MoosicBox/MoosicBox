@@ -2778,6 +2778,25 @@ impl Database for SqliteSqlxTransaction {
     }
 }
 
+struct SqliteSqlxSavepoint {
+    name: String,
+}
+
+#[async_trait]
+impl crate::Savepoint for SqliteSqlxSavepoint {
+    async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+        unimplemented!("Savepoints not yet implemented")
+    }
+
+    async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+        unimplemented!("Savepoints not yet implemented")
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
 #[async_trait]
 impl DatabaseTransaction for SqliteSqlxTransaction {
     #[allow(clippy::significant_drop_tightening)]
@@ -2802,6 +2821,12 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
         tx.rollback().await.map_err(SqlxDatabaseError::Sqlx)?;
 
         Ok(())
+    }
+
+    async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
+        Ok(Box::new(SqliteSqlxSavepoint {
+            name: name.to_string(),
+        }))
     }
 }
 // SQLite introspection helper functions (Phase 16.4)
