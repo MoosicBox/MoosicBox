@@ -6963,6 +6963,8 @@ The original concern about `&'static str` was unfounded - Rust's deref coercion 
 
 **Prerequisites:** Phase 10.2.1 (Database Transaction Support) must be complete
 
+**Important Note:** After analysis, only Phase 13.1 (Savepoints) can be implemented without compromises. Phases 13.2 and 13.3 have been removed due to irreconcilable differences in database backend support.
+
 ### 13.1 Nested Transaction Support (Savepoints)
 
 **Background:** Savepoints allow nested transactions within a main transaction, enabling partial rollback without losing the entire transaction.
@@ -6996,68 +6998,105 @@ The original concern about `&'static str` was unfounded - Rust's deref coercion 
 - [ ] Run `cargo fmt` - format entire repository
 - [ ] Documentation includes savepoint usage examples
 
-### 13.2 Transaction Isolation Levels
+### ~~13.2 Transaction Isolation Levels~~ ❌ **REMOVED - NOT SYMMETRICAL**
 
-**Background:** Allow configuring transaction isolation for specific use cases.
+~~**Background:** Allow configuring transaction isolation for specific use cases.~~
 
-- [ ] Add isolation level support ❌ **MINOR**
-  - [ ] Define `TransactionIsolation` enum (ReadUncommitted, ReadCommitted, RepeatableRead, Serializable)
-  - [ ] Add `begin_transaction_with_isolation()` method to Database trait
-  - [ ] Add `set_isolation_level()` method to existing transactions
-- [ ] Implement for all database backends:
-  - [ ] Map enum values to database-specific isolation levels
-  - [ ] Handle database-specific limitations (e.g., SQLite limited isolation)
-  - [ ] Provide sensible defaults for each backend
-- [ ] Add testing for isolation behavior:
-  - [ ] Test concurrent transaction scenarios
-  - [ ] Verify isolation level enforcement
-  - [ ] Test database-specific isolation behaviors
+**Status:** ❌ **REMOVED** - Cannot be implemented symmetrically across all database backends
 
-#### 13.2 Verification Checklist
+**Reason for Removal:** Transaction isolation levels have fundamentally different support across databases:
 
-- [ ] Run `cargo build -p switchy_database` - compiles with isolation levels
-- [ ] Unit test: TransactionIsolation enum values
-- [ ] Unit test: begin_transaction_with_isolation() sets level
-- [ ] Integration test: Isolation behavior per database backend
-- [ ] Integration test: Concurrent transaction scenarios
-- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Documentation explains isolation levels per backend
+1. **SQLite Limitations**: SQLite doesn't support ANSI SQL isolation levels. It only has:
+   - `DEFERRED` (default) - Similar to READ UNCOMMITTED but not exactly
+   - `IMMEDIATE` - Acquires write lock immediately
+   - `EXCLUSIVE` - Locks database for exclusive access
+   - These don't map to standard READ COMMITTED, REPEATABLE READ, or SERIALIZABLE levels
 
-### 13.3 Transaction Timeout and Resource Management
+2. **PostgreSQL & MySQL**: Both fully support all 4 ANSI isolation levels with proper semantics
 
-**Background:** Prevent long-running transactions from holding resources indefinitely.
+3. **Irreconcilable Differences**: Any implementation would require either:
+   - **Fake emulation** in SQLite that doesn't provide real isolation guarantees
+   - **Lowest common denominator** limiting all databases to SQLite's model
+   - **Database-specific APIs** breaking the abstraction promise
 
-- [ ] Add transaction timeout support ❌ **MINOR**
-  - [ ] Add `begin_transaction_with_timeout()` method
-  - [ ] Implement timeout enforcement per backend
-  - [ ] Automatic rollback on timeout expiration
-- [ ] Improve connection pool handling:
-  - [ ] Configurable transaction timeout for pool connections
-  - [ ] Connection health checks for long-running transactions
-  - [ ] Pool monitoring and metrics for transaction resource usage
-- [ ] Add resource management utilities:
-  - [ ] Transaction monitoring and logging
-  - [ ] Resource leak detection for unreleased transactions
-  - [ ] Performance metrics collection
+**Conclusion**: This feature would violate the "no compromises" principle. Applications needing specific isolation levels should use database-specific features directly.
 
-#### 13.3 Verification Checklist
+~~- [ ] Add isolation level support ❌ **MINOR**~~
+~~- [ ] Define `TransactionIsolation` enum (ReadUncommitted, ReadCommitted, RepeatableRead, Serializable)~~
+~~- [ ] Add `begin_transaction_with_isolation()` method to Database trait~~
+~~- [ ] Add `set_isolation_level()` method to existing transactions~~
+~~- [ ] Implement for all database backends:~~
+~~- [ ] Map enum values to database-specific isolation levels~~
+~~- [ ] Handle database-specific limitations (e.g., SQLite limited isolation)~~
+~~- [ ] Provide sensible defaults for each backend~~
+~~- [ ] Add testing for isolation behavior:~~
+~~- [ ] Test concurrent transaction scenarios~~
+~~- [ ] Verify isolation level enforcement~~
+~~- [ ] Test database-specific isolation behaviors~~
 
-- [ ] Run `cargo build -p switchy_database` - compiles with timeout support
-- [ ] Unit test: Transaction timeout triggers rollback
-- [ ] Unit test: Timeout configuration options
-- [ ] Integration test: Connection pool timeout handling
-- [ ] Integration test: Resource leak detection
-- [ ] Performance metrics collection verified
-- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Documentation includes timeout configuration
+#### ~~13.2 Verification Checklist~~
+
+~~- [ ] Run `cargo build -p switchy_database` - compiles with isolation levels~~
+~~- [ ] Unit test: TransactionIsolation enum values~~
+~~- [ ] Unit test: begin_transaction_with_isolation() sets level~~
+~~- [ ] Integration test: Isolation behavior per database backend~~
+~~- [ ] Integration test: Concurrent transaction scenarios~~
+~~- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings~~
+~~- [ ] Run `cargo fmt` - format entire repository~~
+~~- [ ] Documentation explains isolation levels per backend~~
+
+### ~~13.3 Transaction Timeout and Resource Management~~ ❌ **REMOVED - NOT SYMMETRICAL**
+
+~~**Background:** Prevent long-running transactions from holding resources indefinitely.~~
+
+**Status:** ❌ **REMOVED** - Timeout mechanisms are fundamentally different across databases
+
+**Reason for Removal:** Transaction timeout implementations are incompatible across backends:
+
+1. **Different Timeout Types**:
+   - **PostgreSQL**: `statement_timeout` (per statement), `idle_in_transaction_session_timeout` (idle time)
+   - **MySQL**: `innodb_lock_wait_timeout` (waiting for locks), connection-level timeouts
+   - **SQLite**: `busy_timeout` (waiting to acquire locks, not transaction duration)
+
+2. **Semantic Differences**:
+   - SQLite's timeout is about lock acquisition, not transaction duration
+   - PostgreSQL can timeout individual statements within a transaction
+   - MySQL timeouts are primarily about lock waits, not total transaction time
+
+3. **No Common Abstraction**: These timeout mechanisms serve different purposes and can't be unified without losing their specific semantics.
+
+**Alternative**: Applications should configure timeouts at the connection pool level or use database-specific timeout settings appropriate to their use case.
+
+~~- [ ] Add transaction timeout support ❌ **MINOR**~~
+~~- [ ] Add `begin_transaction_with_timeout()` method~~
+~~- [ ] Implement timeout enforcement per backend~~
+~~- [ ] Automatic rollback on timeout expiration~~
+~~- [ ] Improve connection pool handling:~~
+~~- [ ] Configurable transaction timeout for pool connections~~
+~~- [ ] Connection health checks for long-running transactions~~
+~~- [ ] Pool monitoring and metrics for transaction resource usage~~
+~~- [ ] Add resource management utilities:~~
+~~- [ ] Transaction monitoring and logging~~
+~~- [ ] Resource leak detection for unreleased transactions~~
+~~- [ ] Performance metrics collection~~
+
+#### ~~13.3 Verification Checklist~~
+
+~~- [ ] Run `cargo build -p switchy_database` - compiles with timeout support~~
+~~- [ ] Unit test: Transaction timeout triggers rollback~~
+~~- [ ] Unit test: Timeout configuration options~~
+~~- [ ] Integration test: Connection pool timeout handling~~
+~~- [ ] Integration test: Resource leak detection~~
+~~- [ ] Performance metrics collection verified~~
+~~- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings~~
+~~- [ ] Run `cargo fmt` - format entire repository~~
+~~- [ ] Documentation includes timeout configuration~~
 
 **Success Criteria for Phase 13:**
-- Nested transactions work correctly on all supported databases
-- Isolation levels properly enforced with database-appropriate behavior
-- Transaction resource management prevents connection pool exhaustion
-- Comprehensive testing covers edge cases and concurrent scenarios
+- ✅ **Phase 13.1 Only**: Nested transactions (savepoints) work correctly on all supported databases
+- ~~Isolation levels properly enforced with database-appropriate behavior~~ ❌ **Removed** - Not implementable without compromises
+- ~~Transaction resource management prevents connection pool exhaustion~~ ❌ **Removed** - Different timeout semantics across databases
+- Comprehensive testing covers savepoint edge cases and concurrent scenarios
 
 ## Success Metrics
 
