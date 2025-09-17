@@ -17,6 +17,7 @@ group = "switchy"
 async-trait          = { workspace = true }
 chrono               = { workspace = true }
 hex                  = { workspace = true }
+log                  = { workspace = true }
 moosicbox_json_utils = { workspace = true, features = ["database"] }
 sha2                 = { workspace = true }
 switchy_async        = { workspace = true, features = ["sync"] }
@@ -32,13 +33,17 @@ switchy_fs = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-chrono                      = { workspace = true }
-switchy_async               = { workspace = true, features = ["macros", "tokio"] }
+chrono = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_database_connection = { workspace = true, features = ["sqlite-sqlx"] }
-switchy_fs                  = { workspace = true, features = ["simulator-real-fs", "std"] }
-switchy_schema_test_utils   = { workspace = true, features = ["sqlite", "snapshots"] }
-tempfile                    = { workspace = true }
-tokio                       = { workspace = true, features = ["macros", "rt"] }
+switchy_fs = { workspace = true, features = ["simulator-real-fs", "std"] }
+switchy_schema_test_utils = { workspace = true, features = [
+    "snapshots",
+    "sqlite",
+] }
+tempfile = { workspace = true }
+test-log = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = ["all-discovery"]
@@ -52,6 +57,6 @@ all-discovery = ["code", "directory", "embedded"]
 code          = []
 directory     = ["dep:switchy_fs"]
 embedded      = ["dep:include_dir"]
+snapshots     = []
 test-utils    = []
 validation    = []
-snapshots     = []

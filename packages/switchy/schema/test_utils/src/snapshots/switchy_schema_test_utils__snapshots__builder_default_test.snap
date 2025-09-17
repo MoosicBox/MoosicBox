@@ -1,0 +1,16 @@
+---
+source: packages/switchy/schema/test_utils/src/snapshots.rs
+expression: snapshot
+---
+{
+  "test_name": "builder_default_test",
+  "migration_sequence": [
+    "001_create_table",
+    "002_add_column",
+    "003_create_index"
+  ],
+  "schema": {
+    "tables": {}
+  },
+  "data_samples": null
+}

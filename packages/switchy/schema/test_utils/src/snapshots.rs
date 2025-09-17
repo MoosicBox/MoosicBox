@@ -113,7 +113,7 @@ struct MigrationSnapshot {
     test_name: String,
     migration_sequence: Vec<String>,
     schema: Option<DatabaseSchema>,
-    data_samples: Option<std::collections::HashMap<String, Vec<serde_json::Value>>>,
+    data_samples: Option<std::collections::BTreeMap<String, Vec<serde_json::Value>>>,
 }
 
 /// Complete database schema structure for snapshot storage
@@ -160,7 +160,7 @@ pub struct MigrationSnapshotTest {
     redact_auto_ids: bool,
     redact_paths: bool,
     assert_data: bool,
-    data_samples: std::collections::HashMap<String, usize>,
+    data_samples: std::collections::BTreeMap<String, usize>,
     setup_fn: Option<SetupFn>,
     verification_fn: Option<VerificationFn>,
 }
@@ -182,7 +182,7 @@ impl MigrationSnapshotTest {
             redact_auto_ids: true,
             redact_paths: true,
             assert_data: false,
-            data_samples: std::collections::HashMap::new(),
+            data_samples: std::collections::BTreeMap::new(),
             setup_fn: None,
             verification_fn: None,
         }
@@ -363,8 +363,8 @@ impl MigrationSnapshotTest {
     async fn capture_data_samples(
         &self,
         db: &dyn Database,
-    ) -> Result<std::collections::HashMap<String, Vec<serde_json::Value>>> {
-        let mut samples = std::collections::HashMap::new();
+    ) -> Result<std::collections::BTreeMap<String, Vec<serde_json::Value>>> {
+        let mut samples = std::collections::BTreeMap::new();
 
         for (table, count) in &self.data_samples {
             // Use Database query builder instead of raw SQL
@@ -390,6 +390,7 @@ impl MigrationSnapshotTest {
     /// * Returns `SnapshotError` if database creation fails
     #[cfg(feature = "snapshots")]
     async fn create_test_database(&self) -> Result<Box<dyn Database>> {
+        log::debug!("Creating test database");
         // Use existing test_utils helper (SQLite in-memory)
         // This database persists for the entire test lifecycle
         let db = crate::create_empty_in_memory()
@@ -407,14 +408,22 @@ impl MigrationSnapshotTest {
     async fn load_migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
         // Fail with clear error for missing directory (catches configuration mistakes)
         if !self.migrations_dir.exists() {
+            log::debug!(
+                "Migrations directory does not exist: {}",
+                self.migrations_dir.display()
+            );
             return Err(SnapshotError::Validation(format!(
                 "Migrations directory does not exist: {}",
                 self.migrations_dir.display()
             )));
         }
+        log::debug!("Loading migrations from directory");
 
         let source = DirectoryMigrationSource::from_path(self.migrations_dir.clone());
         let migrations = source.migrations().await?;
+
+        log::debug!("Loaded {} migrations", migrations.len());
+
         Ok(migrations)
     }
 
@@ -424,17 +433,24 @@ impl MigrationSnapshotTest {
     ///
     /// * Returns `SnapshotError` if test execution fails
     #[cfg(feature = "snapshots")]
+    #[allow(clippy::cognitive_complexity)]
     pub async fn run(self) -> Result<()> {
         let db = self.create_test_database().await?;
         let migrations = self.load_migrations().await?;
 
         // Execute setup function if provided
         if let Some(setup_fn) = &self.setup_fn {
+            log::debug!("run: executing setup function");
             setup_fn(db.as_ref()).await?;
+        } else {
+            log::debug!("run: no setup function provided");
         }
 
         // Execute migrations - fail fast on any error
-        if !migrations.is_empty() {
+        if migrations.is_empty() {
+            log::debug!("run: no migrations provided");
+        } else {
+            log::debug!("run: executing migrations");
             let source = VecMigrationSource::new(migrations.clone());
             let runner = MigrationRunner::new(Box::new(source));
 
@@ -444,25 +460,35 @@ impl MigrationSnapshotTest {
 
         // Execute verification function if provided
         if let Some(verification_fn) = &self.verification_fn {
+            log::debug!("run: executing verification function");
             verification_fn(db.as_ref()).await?;
+        } else {
+            log::debug!("run: no verification function provided");
         }
 
         // Capture results based on configuration
         let schema = if self.assert_schema {
+            log::debug!("run: capturing schema");
             Some(self.capture_schema(db.as_ref()).await?)
         } else {
+            log::debug!("run: no schema capture");
             None
         };
 
         let sequence = if self.assert_sequence {
+            log::debug!("run: capturing migration sequence");
             migrations.iter().map(|m| m.id().to_string()).collect()
         } else {
+            log::debug!("run: no migration sequence capture");
             vec![]
         };
+        log::debug!("run: migration sequence: {sequence:?}");
 
         let data_samples = if self.assert_data {
+            log::debug!("run: capturing data samples");
             Some(self.capture_data_samples(db.as_ref()).await?)
         } else {
+            log::debug!("run: no data samples capture");
             None
         };
 
@@ -472,6 +498,8 @@ impl MigrationSnapshotTest {
             schema,
             data_samples,
         };
+
+        log::debug!("run: snapshot={snapshot:?}");
 
         // Apply redactions using insta's Settings with precise patterns
         let mut settings = Settings::clone_current();

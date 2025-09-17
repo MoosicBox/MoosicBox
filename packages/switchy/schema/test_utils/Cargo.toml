@@ -13,20 +13,25 @@ version     = "0.1.0"
 [package.metadata.workspaces]
 group = "switchy"
 
+[package.metadata.cargo-machete]
+ignored = ["switchy_fs"]
+
 [dependencies]
 async-trait                 = { workspace = true }
 log                         = { workspace = true }
 switchy_database            = { workspace = true, features = ["schema"] }
 switchy_database_connection = { workspace = true, optional = true }
-switchy_schema              = { workspace = true, features = ["directory"] }
+switchy_schema              = { workspace = true, features = ["directory", "embedded"] }
 thiserror                   = { workspace = true }
 
-insta      = { workspace = true, features = ["json", "filters"], optional = true }
+insta      = { workspace = true, features = ["filters", "json"], optional = true }
 serde      = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 moosicbox_schema = { workspace = true, features = ["sqlite"] }
+switchy_async    = { workspace = true, features = ["macros", "tokio"] }
+switchy_fs       = { workspace = true, features = ["simulator-real-fs"] }
 test-log         = { workspace = true }
 tokio            = { workspace = true, features = ["macros", "rt"] }
 

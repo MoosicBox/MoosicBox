@@ -1,0 +1,12 @@
+---
+source: packages/switchy/schema/test_utils/src/snapshots.rs
+expression: snapshot
+---
+{
+  "test_name": "builder_comprehensive_test",
+  "migration_sequence": [],
+  "schema": {
+    "tables": {}
+  },
+  "data_samples": null
+}

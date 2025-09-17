@@ -69,7 +69,7 @@ use crate::{Result, migration::Migration, migration::MigrationSource};
 /// consists of:
 ///
 /// * **ID**: The directory name (used for ordering)
-/// * **Path**: The filesystem path to the migration directory  
+/// * **Path**: The filesystem path to the migration directory
 /// * **Up SQL**: Optional SQL for applying the migration
 /// * **Down SQL**: Optional SQL for rolling back the migration
 ///
@@ -206,6 +206,8 @@ impl DirectoryMigrationSource {
 #[async_trait]
 impl MigrationSource<'static> for DirectoryMigrationSource {
     async fn migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
+        log::trace!("Discovering migrations from directory");
+
         let migration_map = self.extract_migrations().await?;
         let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = migration_map
             .into_values()
@@ -224,6 +226,14 @@ impl DirectoryMigrationSource {
     /// * If any migration directory cannot be accessed
     /// * If any SQL file cannot be read
     async fn extract_migrations(&self) -> Result<BTreeMap<String, FileMigration>> {
+        log::trace!(
+            "extract_migrations: extracting migrations from directory from '{}' (cwd='{}')",
+            self.migrations_path.display(),
+            std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .display()
+        );
+
         let mut migrations = BTreeMap::new();
 
         // Read all entries in the migrations directory
@@ -232,8 +242,14 @@ impl DirectoryMigrationSource {
         for entry in entries {
             let entry_path = entry.path();
 
+            log::trace!(
+                "extract_migrations: processing entry '{}'",
+                entry_path.display()
+            );
+
             // Only process directories (each directory is one migration)
             if !entry.file_type().await?.is_dir() {
+                log::trace!("extract_migrations: skipping non-directory entry");
                 continue;
             }
 
@@ -254,13 +270,21 @@ impl DirectoryMigrationSource {
 
             // Skip migrations with no SQL files at all
             if up_sql.is_none() && down_sql.is_none() {
+                log::trace!("extract_migrations: skipping migration with no SQL files");
                 continue;
             }
 
             let migration = FileMigration::new(migration_id.clone(), entry_path, up_sql, down_sql);
 
+            log::trace!("extract_migrations: extracted migration '{migration_id}'");
+
             migrations.insert(migration_id, migration);
         }
+
+        log::trace!(
+            "extract_migrations: extracted {} migrations",
+            migrations.len()
+        );
 
         Ok(migrations)
     }
