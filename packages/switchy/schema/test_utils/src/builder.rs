@@ -79,7 +79,7 @@ use switchy_database::{Database, DatabaseError};
 use switchy_schema::{
     migration::{Migration, MigrationSource},
     runner::MigrationRunner,
-    version::VersionTracker,
+    version::{DEFAULT_MIGRATIONS_TABLE, VersionTracker},
 };
 
 use crate::TestError;
@@ -331,8 +331,7 @@ impl<'a> MigrationTestBuilder<'a> {
             if let Some(ref table_name) = table_name {
                 Self::record_migration(db, table_name, target_migration.id()).await?;
             } else {
-                Self::record_migration(db, "__switchy_schema_migrations", target_migration.id())
-                    .await?;
+                Self::record_migration(db, DEFAULT_MIGRATIONS_TABLE, target_migration.id()).await?;
             }
 
             current_migration_index += 1;
