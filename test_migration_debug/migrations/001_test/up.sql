@@ -1,1 +1,0 @@
-CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT);
