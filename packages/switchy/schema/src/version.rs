@@ -577,12 +577,11 @@ impl Default for VersionTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use switchy_database_connection;
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_remove_migration_record_success() {
         // Create in-memory database
-        let db = switchy_database_connection::init_sqlite_sqlx(None)
+        let db = switchy_schema_test_utils::create_empty_in_memory()
             .await
             .expect("Failed to create test database");
 
@@ -621,10 +620,10 @@ mod tests {
         assert!(status_after.is_none());
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_remove_migration_record_nonexistent() {
         // Create in-memory database
-        let db = switchy_database_connection::init_sqlite_sqlx(None)
+        let db = switchy_schema_test_utils::create_empty_in_memory()
             .await
             .expect("Failed to create test database");
 
@@ -643,10 +642,10 @@ mod tests {
             .expect("Should succeed for non-existent migration (idempotent)");
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_get_dirty_migrations_filters_correctly() {
         // Create in-memory database
-        let db = switchy_database_connection::init_sqlite_sqlx(None)
+        let db = switchy_schema_test_utils::create_empty_in_memory()
             .await
             .expect("Failed to create test database");
 
@@ -700,10 +699,10 @@ mod tests {
         assert!(!migration_ids.contains(&"completed_migration"));
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_checksum_validation() {
         // Create in-memory database
-        let db = switchy_database_connection::init_sqlite_sqlx(None)
+        let db = switchy_schema_test_utils::create_empty_in_memory()
             .await
             .expect("Failed to create test database");
 
@@ -759,7 +758,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_hex_encoding() {
         // Test that 32 bytes always produces 64-character hex string
         let checksum = vec![0u8; 32];
@@ -790,10 +789,10 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[test_log::test(switchy_async::test)]
     async fn test_migration_record_fields() {
         // Create in-memory database
-        let db = switchy_database_connection::init_sqlite_sqlx(None)
+        let db = switchy_schema_test_utils::create_empty_in_memory()
             .await
             .expect("Failed to create test database");
 
@@ -837,5 +836,222 @@ mod tests {
             status.failure_reason,
             Some("Test error message".to_string())
         );
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_applied_migrations_no_table() {
+        // Test graceful handling when migrations table doesn't exist
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::new();
+
+        // DON'T create the table - test fresh database scenario
+
+        // Should return empty list, not error
+        let migrations = tracker
+            .get_applied_migrations(&*db, None)
+            .await
+            .expect("Should not error when table doesn't exist");
+
+        assert_eq!(
+            migrations.len(),
+            0,
+            "Should return empty list for fresh database"
+        );
+
+        // Also test with specific status filter
+        let completed_migrations = tracker
+            .get_applied_migrations(&*db, MigrationStatus::Completed)
+            .await
+            .expect("Should not error even with status filter");
+
+        assert_eq!(completed_migrations.len(), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_applied_migrations_empty_table() {
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::new();
+
+        // Create table but don't add any migrations
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to create version table");
+
+        // Test with no status filter
+        let migrations = tracker
+            .get_applied_migrations(&*db, None)
+            .await
+            .expect("Should succeed with empty table");
+
+        assert_eq!(
+            migrations.len(),
+            0,
+            "Should return empty list for empty table"
+        );
+
+        // Test with status filter
+        let completed = tracker
+            .get_applied_migrations(&*db, MigrationStatus::Completed)
+            .await
+            .expect("Should succeed with status filter");
+
+        assert_eq!(completed.len(), 0);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_applied_migrations_with_data() {
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::new();
+
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to create version table");
+
+        // Add some completed migrations
+        tracker.record_migration(&*db, "001_initial").await.unwrap();
+        tracker
+            .record_migration(&*db, "002_add_users")
+            .await
+            .unwrap();
+        tracker
+            .record_migration(&*db, "003_add_posts")
+            .await
+            .unwrap();
+
+        // Get all migrations (no status filter)
+        let all_migrations = tracker
+            .get_applied_migrations(&*db, None)
+            .await
+            .expect("Should return migrations");
+
+        assert_eq!(all_migrations.len(), 3, "Should return all 3 migrations");
+
+        // Verify they're all completed and have the right IDs
+        let ids: Vec<&str> = all_migrations.iter().map(|m| m.id.as_str()).collect();
+        assert_eq!(ids, vec!["001_initial", "002_add_users", "003_add_posts"]);
+        assert!(
+            all_migrations
+                .iter()
+                .all(|m| m.status == MigrationStatus::Completed)
+        );
+
+        // Get only completed migrations (should be the same)
+        let completed = tracker
+            .get_applied_migrations(&*db, MigrationStatus::Completed)
+            .await
+            .expect("Should return migrations");
+
+        assert_eq!(completed.len(), 3);
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_applied_migrations_mixed_status() {
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .expect("Failed to create test database");
+
+        let tracker = VersionTracker::new();
+
+        tracker
+            .ensure_table_exists(&*db)
+            .await
+            .expect("Failed to create version table");
+
+        // Add completed migration
+        tracker
+            .record_migration(&*db, "001_completed")
+            .await
+            .unwrap();
+
+        // Add in-progress migration
+        let checksum = bytes::Bytes::from(vec![0u8; 32]);
+        tracker
+            .record_migration_started(&*db, "002_in_progress", &checksum, &checksum)
+            .await
+            .unwrap();
+
+        // Add failed migration
+        tracker
+            .record_migration_started(&*db, "003_failed", &checksum, &checksum)
+            .await
+            .unwrap();
+        tracker
+            .update_migration_status(
+                &*db,
+                "003_failed",
+                MigrationStatus::Failed,
+                Some("Test error".to_string()),
+            )
+            .await
+            .unwrap();
+
+        // Test getting all migrations
+        let all = tracker
+            .get_applied_migrations(&*db, None)
+            .await
+            .expect("Should return all migrations");
+
+        assert_eq!(all.len(), 3, "Should return all 3 migrations");
+
+        // Test filtering by status
+        let completed = tracker
+            .get_applied_migrations(&*db, MigrationStatus::Completed)
+            .await
+            .unwrap();
+        assert_eq!(completed.len(), 1);
+        assert_eq!(completed[0].id, "001_completed");
+
+        let in_progress = tracker
+            .get_applied_migrations(&*db, MigrationStatus::InProgress)
+            .await
+            .unwrap();
+        assert_eq!(in_progress.len(), 1);
+        assert_eq!(in_progress[0].id, "002_in_progress");
+
+        let failed = tracker
+            .get_applied_migrations(&*db, MigrationStatus::Failed)
+            .await
+            .unwrap();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].id, "003_failed");
+        assert_eq!(failed[0].failure_reason, Some("Test error".to_string()));
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_get_applied_migrations_custom_table_name() {
+        let db = switchy_schema_test_utils::create_empty_in_memory()
+            .await
+            .expect("Failed to create test database");
+
+        // Use custom table name
+        let tracker = VersionTracker::with_table_name("__custom_migrations");
+
+        // Test without table existing
+        let empty = tracker
+            .get_applied_migrations(&*db, None)
+            .await
+            .expect("Should handle missing custom table");
+        assert_eq!(empty.len(), 0);
+
+        // Create custom table and add migration
+        tracker.ensure_table_exists(&*db).await.unwrap();
+        tracker.record_migration(&*db, "custom_001").await.unwrap();
+
+        // Verify it works with custom table
+        let migrations = tracker.get_applied_migrations(&*db, None).await.unwrap();
+
+        assert_eq!(migrations.len(), 1);
+        assert_eq!(migrations[0].id, "custom_001");
     }
 }
