@@ -4,5 +4,9 @@ expression: snapshot
 ---
 {
   "test_name": "comprehensive_test",
-  "migration_sequence": []
+  "migration_sequence": [],
+  "schema": {
+    "tables": {}
+  },
+  "data_samples": null
 }

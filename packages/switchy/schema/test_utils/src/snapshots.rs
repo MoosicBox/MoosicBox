@@ -172,7 +172,9 @@ impl MigrationSnapshotTest {
         Self {
             test_name: test_name.to_string(),
             // Points to dedicated snapshot test migrations
-            migrations_dir: PathBuf::from("./test-resources/snapshot-migrations/minimal"),
+            migrations_dir: PathBuf::from(
+                "./test_utils/test-resources/snapshot-migrations/minimal",
+            ),
             assert_schema: true,
             assert_sequence: true,
             expected_tables: Vec::new(), // Empty by default

@@ -5,26 +5,33 @@ use switchy_schema_test_utils::snapshots::MigrationSnapshotTest;
 
 #[tokio::test]
 async fn test_snapshot_infrastructure() {
-    MigrationSnapshotTest::new("basic").run().await.unwrap();
+    MigrationSnapshotTest::new("basic")
+        .migrations_dir("./test_utils/test-resources/snapshot-migrations/minimal")
+        .run()
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
 async fn test_builder_methods() {
     // Test 1: Builder methods chain correctly
     let test = MigrationSnapshotTest::new("builder_test")
-        .migrations_dir("./custom/migrations")
+        .migrations_dir("./test_utils/test-resources/snapshot-migrations/minimal")
         .assert_schema(false)
         .assert_sequence(true);
 
     test.run().await.unwrap();
 
     // Test 2: Default migrations_dir is correctly set
-    let default_test = MigrationSnapshotTest::new("default_test");
+    let default_test = MigrationSnapshotTest::new("default_test")
+        .migrations_dir("./test_utils/test-resources/snapshot-migrations/minimal");
     default_test.run().await.unwrap();
 
     // Test 3: All builder methods work together
     let full_test = MigrationSnapshotTest::new("comprehensive_test")
-        .migrations_dir(PathBuf::from("./another/path"))
+        .migrations_dir(PathBuf::from(
+            "./test_utils/test-resources/snapshot-migrations/comprehensive",
+        ))
         .assert_schema(true)
         .assert_sequence(false);
 

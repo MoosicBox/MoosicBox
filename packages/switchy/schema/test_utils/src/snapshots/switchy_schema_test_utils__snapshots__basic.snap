@@ -4,5 +4,13 @@ expression: snapshot
 ---
 {
   "test_name": "basic",
-  "migration_sequence": []
+  "migration_sequence": [
+    "001_create_table",
+    "002_add_column",
+    "003_create_index"
+  ],
+  "schema": {
+    "tables": {}
+  },
+  "data_samples": null
 }
