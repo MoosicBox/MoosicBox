@@ -15,9 +15,39 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "snapshots")]
 use std::collections::BTreeMap;
 #[cfg(feature = "snapshots")]
+use std::sync::Arc;
+
+#[cfg(feature = "snapshots")]
 use switchy_database::schema::{ColumnInfo as DbColumnInfo, TableInfo};
 #[cfg(feature = "snapshots")]
 use switchy_database::{DatabaseValue, Row};
+#[cfg(feature = "snapshots")]
+use switchy_schema::discovery::directory::DirectoryMigrationSource;
+#[cfg(feature = "snapshots")]
+use switchy_schema::migration::{Migration, MigrationSource};
+#[cfg(feature = "snapshots")]
+use switchy_schema::runner::MigrationRunner;
+
+// VecMigrationSource helper for test utilities
+#[cfg(feature = "snapshots")]
+struct VecMigrationSource<'a> {
+    migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
+}
+
+#[cfg(feature = "snapshots")]
+impl<'a> VecMigrationSource<'a> {
+    fn new(migrations: Vec<Arc<dyn Migration<'a> + 'a>>) -> Self {
+        Self { migrations }
+    }
+}
+
+#[cfg(feature = "snapshots")]
+#[async_trait::async_trait]
+impl<'a> MigrationSource<'a> for VecMigrationSource<'a> {
+    async fn migrations(&self) -> switchy_schema::Result<Vec<Arc<dyn Migration<'a> + 'a>>> {
+        Ok(self.migrations.clone())
+    }
+}
 
 /// Error type for snapshot testing operations
 #[derive(Debug, thiserror::Error)]
@@ -226,6 +256,26 @@ impl MigrationSnapshotTest {
         Ok(db)
     }
 
+    /// Load migrations from directory with error handling
+    ///
+    /// # Errors
+    ///
+    /// * Returns `SnapshotError` if migration loading fails
+    #[cfg(feature = "snapshots")]
+    async fn load_migrations(&self) -> Result<Vec<Arc<dyn Migration<'static> + 'static>>> {
+        // Fail with clear error for missing directory (catches configuration mistakes)
+        if !self.migrations_dir.exists() {
+            return Err(SnapshotError::Validation(format!(
+                "Migrations directory does not exist: {}",
+                self.migrations_dir.display()
+            )));
+        }
+
+        let source = DirectoryMigrationSource::from_path(self.migrations_dir.clone());
+        let migrations = source.migrations().await?;
+        Ok(migrations)
+    }
+
     /// Run the snapshot test
     ///
     /// # Errors
@@ -233,23 +283,34 @@ impl MigrationSnapshotTest {
     /// * Returns `SnapshotError` if test execution fails
     #[cfg(feature = "snapshots")]
     pub async fn run(self) -> Result<()> {
-        // Create SQLite database - persists for entire test
         let db = self.create_test_database().await?;
+        let migrations = self.load_migrations().await?;
 
-        // Verify database works
-        db.exec_raw("SELECT 1").await?;
+        // Execute migrations - fail fast on any error
+        if !migrations.is_empty() {
+            let source = VecMigrationSource::new(migrations.clone());
+            let runner = MigrationRunner::new(Box::new(source));
 
-        // Capture schema if expected_tables is specified
-        let schema = if self.expected_tables.is_empty() {
-            None
+            // Any migration error will propagate and fail the test
+            runner.run(db.as_ref()).await?;
+        }
+
+        // Capture results based on configuration
+        let schema = if self.assert_schema {
+            Some(self.capture_schema(db.as_ref()).await?)
         } else {
-            Some(self.capture_schema(&*db).await?)
+            None
         };
 
-        // Create snapshot with database info
+        let sequence = if self.assert_sequence {
+            migrations.iter().map(|m| m.id().to_string()).collect()
+        } else {
+            vec![]
+        };
+
         let snapshot = MigrationSnapshot {
             test_name: self.test_name.clone(),
-            migration_sequence: vec![], // No migrations yet
+            migration_sequence: sequence,
             schema,
         };
 
