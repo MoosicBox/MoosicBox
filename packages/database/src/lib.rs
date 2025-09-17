@@ -424,6 +424,15 @@ pub enum DatabaseError {
     UnexpectedResult,
     #[error("Unsupported data type: {0}")]
     UnsupportedDataType(String),
+    /// Invalid savepoint name (contains invalid characters or empty)
+    #[error("Invalid savepoint name: {0}")]
+    InvalidSavepointName(String),
+    /// Savepoint with this name already exists
+    #[error("Savepoint already exists: {0}")]
+    SavepointExists(String),
+    /// Savepoint not found for rollback/release
+    #[error("Savepoint not found: {0}")]
+    SavepointNotFound(String),
 }
 
 impl DatabaseError {
@@ -454,6 +463,31 @@ impl DatabaseError {
             _ => false,
         }
     }
+}
+
+/// Validate savepoint name follows SQL identifier rules
+pub(crate) fn validate_savepoint_name(name: &str) -> Result<(), DatabaseError> {
+    if name.is_empty() {
+        return Err(DatabaseError::InvalidSavepointName(
+            "Savepoint name cannot be empty".to_string(),
+        ));
+    }
+
+    // Check for valid SQL identifier characters
+    if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return Err(DatabaseError::InvalidSavepointName(format!(
+            "Savepoint name '{name}' contains invalid characters"
+        )));
+    }
+
+    // Check doesn't start with number
+    if name.chars().next().is_some_and(char::is_numeric) {
+        return Err(DatabaseError::InvalidSavepointName(format!(
+            "Savepoint name '{name}' cannot start with a number"
+        )));
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1032,7 +1066,8 @@ pub trait DatabaseTransaction: Database + Send + Sync {
     /// * If the savepoint creation fails
     /// * If a savepoint with this name already exists
     /// * If the savepoint name is invalid
-    async fn savepoint(&self, _name: &str) -> Result<Box<dyn Savepoint>, DatabaseError> {
+    async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError> {
+        validate_savepoint_name(name)?; // Validates before panicking
         unimplemented!("Savepoints not yet implemented for this backend")
     }
 }

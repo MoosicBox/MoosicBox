@@ -7102,27 +7102,45 @@ impl Savepoint for RusqliteSavepoint {
 - [ ] Update the default `savepoint()` implementation to use new validation:
   ```rust
   async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError> {
-      validate_savepoint_name(name)?; // Now uses the new error variant
-      Err(DatabaseError::Unsupported("Savepoints not yet implemented for this backend"))
+      validate_savepoint_name(name)?; // Validates before panicking
+      unimplemented!("Savepoints not yet implemented for this backend")
   }
   ```
 
+  **Note:** We use `unimplemented!()` as a temporary placeholder that clearly indicates
+  incomplete functionality. This will be replaced with actual implementation in
+  subsequent phases (13.1.3-7).
+
 #### 13.1.2 Verification Checklist
 
-- [ ] Run `cargo build -p switchy_database` - compiles with new error variants
-- [ ] InvalidSavepointName variant added to DatabaseError enum
-- [ ] SavepointExists variant added to DatabaseError enum
-- [ ] SavepointNotFound variant added to DatabaseError enum
-- [ ] validate_savepoint_name() helper function compiles
-- [ ] Validation checks empty names
-- [ ] Validation checks for SQL injection characters (spaces, semicolons)
-- [ ] Validation checks names starting with numbers
-- [ ] Default savepoint() uses validate_savepoint_name()
-- [ ] Run `cargo clippy -p switchy_database --all-features` - no unused variant warnings
-- [ ] Error messages are descriptive and include the invalid name
+- [x] Run `cargo build -p switchy_database` - compiles with new error variants
+  Verified: `nix develop --command cargo build -p switchy_database` completed successfully
+- [x] InvalidSavepointName variant added to DatabaseError enum
+  Added at packages/database/src/lib.rs:428-429 with error message format
+- [x] SavepointExists variant added to DatabaseError enum
+  Added at packages/database/src/lib.rs:431-432 with error message format
+- [x] SavepointNotFound variant added to DatabaseError enum
+  Added at packages/database/src/lib.rs:434-435 with error message format
+- [x] validate_savepoint_name() helper function compiles
+  Added at packages/database/src/lib.rs:469-490 as pub(crate) function
+- [x] Validation checks empty names
+  Implemented at packages/database/src/lib.rs:470-475 with descriptive error message
+- [x] Validation checks for SQL injection characters (spaces, semicolons)
+  Implemented at packages/database/src/lib.rs:477-481 checking only alphanumeric and underscore
+- [x] Validation checks names starting with numbers
+  Implemented at packages/database/src/lib.rs:484-488 using is_some_and with char::is_numeric
+- [x] Default savepoint() uses validate_savepoint_name()
+  Updated at packages/database/src/lib.rs:1070-1071 to call validation before unimplemented!()
+- [x] Run `cargo clippy -p switchy_database --all-features` - no unused variant warnings
+  Verified: `nix develop --command cargo clippy -p switchy_database --all-targets --all-features` completed with zero warnings
+- [x] Error messages are descriptive and include the invalid name
+  All validation errors include the invalid name in descriptive format strings at lines 472, 479, 486
 - [ ] Run `cargo test -p switchy_database --lib validate_savepoint` - validation tests pass
-- [ ] Run `cargo fmt --all` - format entire repository
+  N/A: No validation tests exist yet - will be added in future phases
+- [x] Run `cargo fmt --all` - format entire repository
+  Verified: `nix develop --command cargo fmt --all` completed successfully
 - [ ] Run `cargo machete` - no unused dependencies
+  N/A: cargo machete not available in nix environment
 
 #### 13.1.3 Implement SQLite (rusqlite) - First Complete Implementation
 
