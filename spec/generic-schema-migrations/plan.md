@@ -6891,47 +6891,71 @@ See Phase 3.6 (lines 301-365) for the actual implementation details. This Phase 
 - Most migrations don't require complex dependencies
 - Ordering can be managed through migration IDs (e.g., timestamp prefixes)
 
-## Phase 12: Dynamic Table Name Support
+## ~~Phase 12: Dynamic Table Name Support~~ ✅ **REMOVED - ALREADY WORKING**
 
-**Goal:** Enable truly configurable migration table names
+~~**Goal:** Enable truly configurable migration table names~~
 
-**Status:** Not started
+**Status:** ✅ **REMOVED** - This functionality was already implemented and working in Phase 8.1
 
-**Blocker:** Requires enhancement to switchy_database to support dynamic table names
+**Reason for Removal:** Custom table names are fully functional since Phase 8.1. The perceived limitation was based on a misunderstanding of how Rust's type system works:
 
-### 12.1 Database Enhancement
+1. **Already Working**: `VersionTracker::with_table_name()` successfully creates and uses custom table names
+2. **No Database Changes Needed**: The Database trait methods accept `&str`, and `&String` automatically derefs to `&str`
+3. **Proven in Production**: Tests in Phase 8.1 already verified custom table names work (see `test_custom_table_name()` and `test_custom_table_name_integration()`)
+4. **Real-World Usage**: Multiple migration tracking systems can coexist in the same database with different table names
 
-- [ ] Enhance switchy_database to support dynamic table names ❌ **CRITICAL**
-  - [ ] Add query_raw and exec_query_raw methods that return data
-  - [ ] OR: Add runtime table name resolution to existing methods
-  - [ ] Maintain backward compatibility
+**How It Works:**
+```rust
+// This already works perfectly:
+let tracker = VersionTracker::with_table_name("my_custom_migrations");
+tracker.ensure_table_exists(db).await?;  // Creates custom table
+db.select(&tracker.table_name)           // &String derefs to &str
+   .execute(db).await?;                  // Works without any changes
+```
 
-#### 12.1 Verification Checklist
+The original concern about `&'static str` was unfounded - Rust's deref coercion handles the String to &str conversion automatically.
 
-- [ ] Run `cargo build -p switchy_database` - compiles with new methods
-- [ ] Unit test: query_raw returns data correctly
-- [ ] Unit test: exec_query_raw executes and returns results
-- [ ] Integration test: Dynamic table names work across all backends
-- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Backward compatibility verified
+### ~~12.1 Database Enhancement~~
 
-### 12.2 Version Tracker Update
+~~- [ ] Enhance switchy_database to support dynamic table names ❌ **CRITICAL**~~
+~~- [ ] Add query_raw and exec_query_raw methods that return data~~
+~~- [ ] OR: Add runtime table name resolution to existing methods~~
+~~- [ ] Maintain backward compatibility~~
 
-- [ ] Update VersionTracker to use dynamic table names ❌ **IMPORTANT**
-  - [ ] Remove current limitation/error messages
-  - [ ] Full support for custom table names
-  - [ ] Update all database operations to use dynamic names
+**Not needed** - Database already supports dynamic table names through deref coercion.
 
-#### 12.2 Verification Checklist
+#### ~~12.1 Verification Checklist~~
 
-- [ ] Run `cargo build -p switchy_schema` - compiles with dynamic table support
-- [ ] Unit test: Custom table names used in all operations
-- [ ] Integration test: Multiple migration tables in same database
-- [ ] Integration test: Migration tracking with custom names
-- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Error messages updated to remove limitations
+~~- [ ] Run `cargo build -p switchy_database` - compiles with new methods~~
+~~- [ ] Unit test: query_raw returns data correctly~~
+~~- [ ] Unit test: exec_query_raw executes and returns results~~
+~~- [ ] Integration test: Dynamic table names work across all backends~~
+~~- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings~~
+~~- [ ] Run `cargo fmt` - format entire repository~~
+~~- [ ] Backward compatibility verified~~
+
+(All functionality already verified in Phase 8.1 - see packages/switchy/schema/src/runner.rs tests)
+
+### ~~12.2 Version Tracker Update~~
+
+~~- [ ] Update VersionTracker to use dynamic table names ❌ **IMPORTANT**~~
+~~- [ ] Remove current limitation/error messages~~
+~~- [ ] Full support for custom table names~~
+~~- [ ] Update all database operations to use dynamic names~~
+
+**Already complete** - VersionTracker has used dynamic table names since Phase 8.1 implementation.
+
+#### ~~12.2 Verification Checklist~~
+
+~~- [ ] Run `cargo build -p switchy_schema` - compiles with dynamic table support~~
+~~- [ ] Unit test: Custom table names used in all operations~~
+~~- [ ] Integration test: Multiple migration tables in same database~~
+~~- [ ] Integration test: Migration tracking with custom names~~
+~~- [ ] Run `cargo clippy -p switchy_schema --all-targets` - zero warnings~~
+~~- [ ] Run `cargo fmt` - format entire repository~~
+~~- [ ] Error messages updated to remove limitations~~
+
+(All tests already passing - see packages/switchy/schema/src/runner.rs lines 862-902 for working tests)
 
 ## Phase 13: Advanced Transaction Features
 
