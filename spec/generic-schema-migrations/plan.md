@@ -6801,27 +6801,40 @@ After all subtasks are complete:
 - [x] Breaking changes: None to existing functionality (backward compatible)
   - ✓ All new features are additive, existing APIs unchanged
 
-### 11.5 Complete CodeMigrationSource Implementation
+### ~~11.5 Complete CodeMigrationSource Implementation~~ ✅ **REMOVED - DUPLICATE**
 
-- [ ] Finish `CodeMigrationSource::migrations()` implementation ❌ **MINOR**
-  - [ ] Replace empty Vec return with proper migration retrieval
-  - [ ] Support dynamic addition of migrations via `add_migration()`
-  - [ ] Handle ownership correctly with Arc-based migrations
-  - [ ] Implement proper migration ordering (BTreeMap-based)
-  - [ ] Add comprehensive tests for code-based migration functionality
-  - [ ] Update documentation with working examples
+**Status:** ✅ **REMOVED** - This work was already completed in Phase 3.6
 
-#### 11.5 Verification Checklist
+**Reason for Removal:** CodeMigrationSource was fully implemented during Phase 3.6 "Implement Code Discovery with Executable Integration". The implementation includes:
+- Full `migrations()` method returning sorted migrations (Phase 3.6.4)
+- `add_migration()` support with Arc-based ownership
+- BTreeMap-style deterministic ordering
+- Comprehensive tests and documentation
+- All features working as specified
 
-- [ ] Run `cargo build -p switchy_schema --features code` - compiles successfully
-- [ ] Unit test: add_migration() adds to internal collection
-- [ ] Unit test: migrations() returns added migrations in order
-- [ ] Unit test: Arc-based ownership works correctly
-- [ ] Integration test: Code migrations execute in correct order
-- [ ] Run `cargo clippy -p switchy_schema --all-targets --features code` - zero warnings
-- [ ] Run `cargo fmt` - format entire repository
-- [ ] Documentation updated with working code migration examples
-- [ ] BTreeMap ordering verified for deterministic execution
+See Phase 3.6 (lines 301-365) for the actual implementation details. This Phase 11.5 entry was a duplicate that wasn't removed when Phase 3.6 was completed.
+
+~~- [ ] Finish `CodeMigrationSource::migrations()` implementation ❌ **MINOR**~~
+~~- [ ] Replace empty Vec return with proper migration retrieval~~
+~~- [ ] Support dynamic addition of migrations via `add_migration()`~~
+~~- [ ] Handle ownership correctly with Arc-based migrations~~
+~~- [ ] Implement proper migration ordering (BTreeMap-based)~~
+~~- [ ] Add comprehensive tests for code-based migration functionality~~
+~~- [ ] Update documentation with working examples~~
+
+#### ~~11.5 Verification Checklist~~
+
+~~- [ ] Run `cargo build -p switchy_schema --features code` - compiles successfully~~
+~~- [ ] Unit test: add_migration() adds to internal collection~~
+~~- [ ] Unit test: migrations() returns added migrations in order~~
+~~- [ ] Unit test: Arc-based ownership works correctly~~
+~~- [ ] Integration test: Code migrations execute in correct order~~
+~~- [ ] Run `cargo clippy -p switchy_schema --all-targets --features code` - zero warnings~~
+~~- [ ] Run `cargo fmt` - format entire repository~~
+~~- [ ] Documentation updated with working code migration examples~~
+~~- [ ] BTreeMap ordering verified for deterministic execution~~
+
+(All items already verified in Phase 3.6 - see packages/switchy/schema/src/discovery/code.rs for working implementation)
 
 ### 11.6 Ergonomic Async Closure Support for Test Utilities
 
