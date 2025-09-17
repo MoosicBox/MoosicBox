@@ -11,6 +11,8 @@ use switchy_database::{Database, DatabaseError};
 use switchy_schema::MigrationError;
 
 #[cfg(feature = "snapshots")]
+use insta::Settings;
+#[cfg(feature = "snapshots")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "snapshots")]
 use std::collections::BTreeMap;
@@ -125,12 +127,16 @@ pub struct SnapshotTester {
 }
 
 /// Migration snapshot test struct for verifying database schema changes
+#[allow(clippy::struct_excessive_bools)]
 pub struct MigrationSnapshotTest {
     test_name: String,
     migrations_dir: PathBuf,
     assert_schema: bool,
     assert_sequence: bool,
     expected_tables: Vec<String>, // NEW: Tables to inspect for schema capture
+    redact_timestamps: bool,
+    redact_auto_ids: bool,
+    redact_paths: bool,
 }
 
 impl MigrationSnapshotTest {
@@ -144,6 +150,9 @@ impl MigrationSnapshotTest {
             assert_schema: true,
             assert_sequence: true,
             expected_tables: Vec::new(), // Empty by default
+            redact_timestamps: true,
+            redact_auto_ids: true,
+            redact_paths: true,
         }
     }
 
@@ -169,6 +178,27 @@ impl MigrationSnapshotTest {
     #[must_use]
     pub fn expected_tables(mut self, tables: Vec<String>) -> Self {
         self.expected_tables = tables;
+        self
+    }
+
+    /// Configure timestamp redaction
+    #[must_use]
+    pub const fn redact_timestamps(mut self, enabled: bool) -> Self {
+        self.redact_timestamps = enabled;
+        self
+    }
+
+    /// Configure auto-ID redaction
+    #[must_use]
+    pub const fn redact_auto_ids(mut self, enabled: bool) -> Self {
+        self.redact_auto_ids = enabled;
+        self
+    }
+
+    /// Configure path redaction
+    #[must_use]
+    pub const fn redact_paths(mut self, enabled: bool) -> Self {
+        self.redact_paths = enabled;
         self
     }
 
@@ -314,7 +344,34 @@ impl MigrationSnapshotTest {
             schema,
         };
 
-        insta::assert_json_snapshot!(self.test_name, snapshot);
+        // Apply redactions using insta's Settings with precise patterns
+        let mut settings = Settings::clone_current();
+
+        if self.redact_timestamps {
+            // Precise timestamp patterns for different formats
+            settings.add_filter(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", "[TIMESTAMP]");
+            settings.add_filter(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", "[TIMESTAMP]");
+            settings.add_filter(r"\d{4}-\d{2}-\d{2}", "[DATE]");
+        }
+
+        if self.redact_auto_ids {
+            // JSON-specific patterns for different ID fields
+            settings.add_filter(r#""id": \d+"#, r#""id": "[ID]""#);
+            settings.add_filter(r#""user_id": \d+"#, r#""user_id": "[USER_ID]""#);
+            settings.add_filter(r#""post_id": \d+"#, r#""post_id": "[POST_ID]""#);
+            settings.add_filter(r#""(\w+_id)": \d+"#, r#""$1": "[FK_ID]""#);
+        }
+
+        if self.redact_paths {
+            // Unix and Windows path patterns
+            settings.add_filter(r"/[\w/.-]+", "[PATH]");
+            settings.add_filter(r"[A-Z]:\\[\w\\.-]+", "[PATH]");
+        }
+
+        settings.bind(|| {
+            insta::assert_json_snapshot!(self.test_name, snapshot);
+        });
+
         Ok(())
     }
 

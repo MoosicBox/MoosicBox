@@ -21,7 +21,7 @@ switchy_database_connection = { workspace = true, optional = true }
 switchy_schema              = { workspace = true, features = ["directory"] }
 thiserror                   = { workspace = true }
 
-insta      = { workspace = true, features = ["json"], optional = true }
+insta      = { workspace = true, features = ["json", "filters"], optional = true }
 serde      = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
 
