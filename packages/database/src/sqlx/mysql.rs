@@ -954,6 +954,7 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
     }
 
     async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
+        crate::validate_savepoint_name(name)?;
         Ok(Box::new(MysqlSqlxSavepoint {
             name: name.to_string(),
         }))

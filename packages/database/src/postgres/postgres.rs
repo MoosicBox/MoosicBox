@@ -902,6 +902,7 @@ impl crate::DatabaseTransaction for PostgresTransaction {
     }
 
     async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
+        crate::validate_savepoint_name(name)?;
         Ok(Box::new(PostgresSavepoint {
             name: name.to_string(),
         }))

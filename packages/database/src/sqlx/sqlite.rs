@@ -2824,6 +2824,7 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
     }
 
     async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
+        crate::validate_savepoint_name(name)?;
         Ok(Box::new(SqliteSqlxSavepoint {
             name: name.to_string(),
         }))

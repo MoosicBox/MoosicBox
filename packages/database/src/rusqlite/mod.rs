@@ -830,16 +830,59 @@ impl Database for RusqliteTransaction {
 
 struct RusqliteSavepoint {
     name: String,
+    connection: Arc<Mutex<Connection>>,
+    released: AtomicBool,
+    rolled_back: AtomicBool,
 }
 
 #[async_trait]
 impl crate::Savepoint for RusqliteSavepoint {
     async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
-        unimplemented!("Savepoints not yet implemented")
+        if self.released.swap(true, Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already released",
+                self.name
+            )));
+        }
+
+        if self.rolled_back.load(Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already rolled back",
+                self.name
+            )));
+        }
+
+        self.connection
+            .lock()
+            .await
+            .execute(&format!("RELEASE SAVEPOINT {}", self.name), [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        Ok(())
     }
 
     async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
-        unimplemented!("Savepoints not yet implemented")
+        if self.rolled_back.swap(true, Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already rolled back",
+                self.name
+            )));
+        }
+
+        if self.released.load(Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already released",
+                self.name
+            )));
+        }
+
+        self.connection
+            .lock()
+            .await
+            .execute(&format!("ROLLBACK TO SAVEPOINT {}", self.name), [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        Ok(())
     }
 
     fn name(&self) -> &str {
@@ -888,8 +931,20 @@ impl DatabaseTransaction for RusqliteTransaction {
     }
 
     async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
+        crate::validate_savepoint_name(name)?;
+
+        // Execute SAVEPOINT SQL
+        self.connection
+            .lock()
+            .await
+            .execute(&format!("SAVEPOINT {name}"), [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
         Ok(Box::new(RusqliteSavepoint {
             name: name.to_string(),
+            connection: Arc::clone(&self.connection),
+            released: AtomicBool::new(false),
+            rolled_back: AtomicBool::new(false),
         }))
     }
 }
@@ -3687,5 +3742,53 @@ mod tests {
             }
             other => panic!("Expected Blob DataType, got: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_savepoint_basic() {
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let transaction = RusqliteTransaction::new(Arc::clone(&connection));
+
+        let savepoint = transaction.savepoint("test_sp").await.unwrap();
+        assert_eq!(savepoint.name(), "test_sp");
+
+        // Release should work
+        savepoint.release().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_savepoint_release() {
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let transaction = RusqliteTransaction::new(Arc::clone(&connection));
+
+        let savepoint = transaction.savepoint("test_release").await.unwrap();
+        savepoint.release().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_savepoint_rollback() {
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let transaction = RusqliteTransaction::new(Arc::clone(&connection));
+
+        let savepoint = transaction.savepoint("test_rollback").await.unwrap();
+        savepoint.rollback_to().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_savepoint_name_validation() {
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let transaction = RusqliteTransaction::new(Arc::clone(&connection));
+
+        // Empty name should fail
+        let result = transaction.savepoint("").await;
+        assert!(result.is_err());
+
+        // Invalid characters should fail
+        let result = transaction.savepoint("test;drop").await;
+        assert!(result.is_err());
+
+        // Starting with number should fail
+        let result = transaction.savepoint("1invalid").await;
+        assert!(result.is_err());
     }
 }
