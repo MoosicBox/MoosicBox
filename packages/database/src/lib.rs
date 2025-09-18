@@ -25,6 +25,8 @@
 //! ### Core Introspection Methods
 //!
 //! ```rust,no_run
+//! # #[cfg(feature = "schema")]
+//! # {
 //! # use switchy_database::{Database, DatabaseError};
 //! # async fn example(db: &dyn Database) -> Result<(), DatabaseError> {
 //! // Check if a table exists before creating it
@@ -51,6 +53,7 @@
 //!              if column.nullable { "NULL" } else { "NOT NULL" });
 //! }
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 //!
@@ -88,7 +91,10 @@
 //!
 //! ## Example: Migration-Safe Table Creation
 //!
+//!
 //! ```rust,no_run
+//! # #[cfg(feature = "schema")]
+//! # {
 //! use switchy_database::{Database, DatabaseError, schema::{create_table, Column, DataType}};
 //!
 //! async fn ensure_users_table(db: &dyn Database) -> Result<(), DatabaseError> {
@@ -128,6 +134,7 @@
 //!         .execute(db)
 //!         .await
 //! }
+//! # }
 //! ```
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
