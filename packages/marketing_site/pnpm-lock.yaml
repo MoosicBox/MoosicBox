@@ -18,8 +18,8 @@ importers:
         specifier: ^6.83.0
         version: 6.83.0(typescript@5.9.2)
       '@pulumi/pulumi':
-        specifier: ^3.196.0
-        version: 3.196.0(typescript@5.9.2)
+        specifier: ^3.197.0
+        version: 3.197.0(typescript@5.9.2)
       '@tsconfig/node18':
         specifier: 18.2.2
         version: 18.2.2
@@ -320,8 +320,8 @@ packages:
   '@pulumi/aws@6.83.0':
     resolution: {integrity: sha512-uYpYSA5aaDERFuxy3D+FDWiwH7YYNHSwGLpHVuARAzBfQ/SQDkS/tfJI5NNo7/+KCmje3rloKE2enUK/Q9bVBg==}
 
-  '@pulumi/pulumi@3.196.0':
-    resolution: {integrity: sha512-rsNQEuRCNkJy1yMXzSTAt/8mLM+yoxOcRk3HbyOF7z6HyXPdHRlmzFcVdBXW01MGL5lZaw8QEDjlpqdTFydhvg==}
+  '@pulumi/pulumi@3.197.0':
+    resolution: {integrity: sha512-Pfjg6sluGDw11crvmI8wbi5k4YDBTxZBM1aI7h5Gd2a4DUyVhrSMUE2fFd1XN05wQKEDisahsygBbBZO0lg2zw==}
     engines: {node: '>=20'}
     peerDependencies:
       ts-node: '>= 7.0.1 < 12'
@@ -402,8 +402,8 @@ packages:
   '@types/keyv@3.1.4':
     resolution: {integrity: sha512-BQ5aZNSCpj7D6K2ksrRCTmKRLEpnPvWDiLPfoGyhZ++8YtiK9d/3DBKPJgry359X/P1PfruyYwvnvwFjuEiEIg==}
 
-  '@types/node@24.5.1':
-    resolution: {integrity: sha512-/SQdmUP2xa+1rdx7VwB9yPq8PaKej8TD5cQ+XfKDPWWC+VDJU4rvVVagXqKUzhKjtFoNA8rXDJAkCxQPAe00+Q==}
+  '@types/node@24.5.2':
+    resolution: {integrity: sha512-FYxk1I7wPv3K2XBaoyH2cTnocQEu8AOZ60hPbsyukMPLv5/5qr7V1i8PLHdl6Zf87I+xZXFvPCXYjiTFq+YSDQ==}
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
@@ -2697,7 +2697,7 @@ snapshots:
 
   '@pulumi/aws@6.83.0(typescript@5.9.2)':
     dependencies:
-      '@pulumi/pulumi': 3.196.0(typescript@5.9.2)
+      '@pulumi/pulumi': 3.197.0(typescript@5.9.2)
       mime: 2.6.0
     transitivePeerDependencies:
       - bluebird
@@ -2705,7 +2705,7 @@ snapshots:
       - ts-node
       - typescript
 
-  '@pulumi/pulumi@3.196.0(typescript@5.9.2)':
+  '@pulumi/pulumi@3.197.0(typescript@5.9.2)':
     dependencies:
       '@grpc/grpc-js': 1.14.0
       '@logdna/tail-file': 2.2.0
@@ -2796,7 +2796,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.0.4
       '@types/keyv': 3.1.4
-      '@types/node': 24.5.1
+      '@types/node': 24.5.2
       '@types/responselike': 1.0.3
 
   '@types/estree@1.0.8': {}
@@ -2811,15 +2811,15 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 24.5.1
+      '@types/node': 24.5.2
 
-  '@types/node@24.5.1':
+  '@types/node@24.5.2':
     dependencies:
       undici-types: 7.12.0
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 24.5.1
+      '@types/node': 24.5.2
 
   '@types/semver@7.7.1': {}
 
@@ -4422,7 +4422,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.0
-      '@types/node': 24.5.1
+      '@types/node': 24.5.2
       long: 5.3.2
 
   proxy-addr@2.0.7:
