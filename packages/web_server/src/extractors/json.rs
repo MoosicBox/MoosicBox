@@ -341,6 +341,7 @@ mod tests {
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     use crate::{HttpRequest, Stub};
 
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     use serde::Deserialize;
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     use {super::*, bytes::Bytes};
@@ -349,6 +350,7 @@ mod tests {
     use crate::simulator::{SimulationRequest, SimulationStub};
 
     #[derive(Debug, Deserialize, PartialEq)]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     struct TestUser {
         name: String,
         email: String,
@@ -356,6 +358,7 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize, PartialEq)]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     struct TestSettings {
         theme: String,
         notifications: TestNotifications,
@@ -363,13 +366,13 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize, PartialEq)]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     struct TestNotifications {
         email: bool,
         push: bool,
     }
 
     #[test]
-    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_json_extraction_simple_object() {
         let json_body = r#"{"name": "John Doe", "email": "john@example.com", "age": 30}"#;
@@ -390,7 +393,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     #[cfg(any(feature = "simulator", not(feature = "actix")))]
     fn test_json_extraction_optional_fields() {
         let json_body = r#"{"name": "Jane Doe", "email": "jane@example.com"}"#;

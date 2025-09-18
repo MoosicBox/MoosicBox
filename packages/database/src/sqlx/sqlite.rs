@@ -968,7 +968,7 @@ where
 
 async fn to_rows<'a>(
     column_names: &[String],
-    mut rows: Pin<Box<(dyn Stream<Item = Result<SqliteRow, sqlx::Error>> + Send + 'a)>>,
+    mut rows: Pin<Box<dyn Stream<Item = Result<SqliteRow, sqlx::Error>> + Send + 'a>>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let mut results = vec![];
 

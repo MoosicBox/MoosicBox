@@ -851,82 +851,29 @@ impl FltkRenderer {
 
                 other_element = Some(frame.as_base_widget());
             }
-            Element::Div => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::Aside => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::Header => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::Footer => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::Main => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::Section => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::Form => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::Span => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::Table => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::THead => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::TH => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::TBody => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::TR => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::TD => {
+            Element::Div
+            | Element::Aside
+            | Element::Header
+            | Element::Footer
+            | Element::Main
+            | Element::Section
+            | Element::Form
+            | Element::Span
+            | Element::Table
+            | Element::THead
+            | Element::TH
+            | Element::TBody
+            | Element::TR
+            | Element::TD
+            | Element::Button { .. }
+            | Element::OrderedList
+            | Element::UnorderedList
+            | Element::ListItem => {
                 context = context.with_container(container);
                 flex_element =
                     Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }
             Element::Canvas | Element::Input { .. } => {}
-            Element::Button { .. } => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
             Element::Image { source, .. } => {
                 context = context.with_container(container);
                 let width = container.calculated_width;
@@ -1067,16 +1014,6 @@ impl FltkRenderer {
                     HeaderSize::H5 => 16,
                     HeaderSize::H6 => 12,
                 };
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::OrderedList | Element::UnorderedList => {
-                context = context.with_container(container);
-                flex_element =
-                    Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
-            }
-            Element::ListItem => {
-                context = context.with_container(container);
                 flex_element =
                     Some(self.draw_elements(viewport, container, depth, context, event_sender)?);
             }

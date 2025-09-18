@@ -184,15 +184,18 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     use serde::Deserialize;
 
     #[derive(Debug, Deserialize, PartialEq, Eq)]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     struct SimpleParams {
         name: String,
         age: Option<u32>,
     }
 
     #[derive(Debug, Deserialize, PartialEq, Eq)]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     struct ArrayParams {
         // Note: serde-querystring has limitations with array parsing
         // For now, we'll test with single values that can be parsed as arrays
@@ -201,6 +204,7 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize, PartialEq, Eq)]
+    #[cfg(any(feature = "simulator", not(feature = "actix")))]
     struct OptionalParams {
         page: Option<u32>,
         limit: Option<u32>,

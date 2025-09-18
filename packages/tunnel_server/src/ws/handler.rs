@@ -71,14 +71,16 @@ pub async fn handle_ws(
                     last_heartbeat = switchy_time::instant_now();
                     let text: &str = text.as_ref();
 
-                    #[allow(unused_mut)]
-                    let mut finished = false;
-
                     #[cfg(feature = "base64")]
-                    if let Ok(response) = text.try_into() {
+                    let finished = if let Ok(response) = text.try_into() {
                         ws_server.response(conn_id, response).await;
-                        finished = true;
-                    }
+                        true
+                    } else {
+                        false
+                    };
+
+                    #[cfg(not(feature = "base64"))]
+                    let finished = false;
 
                     if !finished {
                         if sender {

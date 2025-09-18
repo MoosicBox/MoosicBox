@@ -169,7 +169,7 @@ impl OpusEncoder<'_> {
             written.extend_from_slice(&self.write_new_packet_writer_contents());
 
             read += buf_size;
-            if self.time % 1000 == 0 {
+            if self.time.is_multiple_of(1000) {
                 log::debug!(
                     "Info: read={} written len={} input_consumed={} output_size={} len={}",
                     read,
@@ -227,7 +227,7 @@ impl OpusEncoder<'_> {
                 log::debug!("Encoded OPUS chunk to {byte_count} bytes");
                 written.extend_from_slice(&bytes);
                 self.bytes_read += byte_count;
-                if self.time % 1000 == 0 {
+                if self.time.is_multiple_of(1000) {
                     log::debug!("time: {}", self.time / 1000);
                 }
             }

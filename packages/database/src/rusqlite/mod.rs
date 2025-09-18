@@ -2149,18 +2149,6 @@ fn bind_values(
         let mut i = 1 + offset;
         for value in values {
             match &**value {
-                DatabaseValue::String(value) => {
-                    statement.raw_bind_parameter(i, value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
-                }
-                DatabaseValue::StringOpt(Some(value)) => {
-                    statement.raw_bind_parameter(i, value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
-                }
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
@@ -2169,49 +2157,31 @@ fn bind_values(
                 | DatabaseValue::RealOpt(None)
                 | DatabaseValue::Now => (),
                 DatabaseValue::NowAdd(_add) => (),
-                DatabaseValue::Bool(value) => {
+                DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, i32::from(*value))?;
                     if !constant_inc {
                         i += 1;
                     }
                 }
-                DatabaseValue::BoolOpt(Some(value)) => {
+                DatabaseValue::String(value) | DatabaseValue::StringOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, value)?;
                     if !constant_inc {
                         i += 1;
                     }
                 }
-                DatabaseValue::Number(value) => {
+                DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, *value)?;
                     if !constant_inc {
                         i += 1;
                     }
                 }
-                DatabaseValue::NumberOpt(Some(value)) => {
+                DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, *value)?;
                     if !constant_inc {
                         i += 1;
                     }
                 }
-                DatabaseValue::UNumber(value) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
-                }
-                DatabaseValue::UNumberOpt(Some(value)) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
-                }
-                DatabaseValue::Real(value) => {
-                    statement.raw_bind_parameter(i, *value)?;
-                    if !constant_inc {
-                        i += 1;
-                    }
-                }
-                DatabaseValue::RealOpt(Some(value)) => {
+                DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, *value)?;
                     if !constant_inc {
                         i += 1;

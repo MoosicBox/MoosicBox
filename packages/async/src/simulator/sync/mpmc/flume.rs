@@ -549,7 +549,7 @@ fn cooperative_yield_with_backoff(iteration: usize) {
         }
         _ => {
             // Too many iterations: longer sleep and warning
-            if iteration % 1000 == 0 {
+            if iteration.is_multiple_of(1000) {
                 log::warn!("Channel operation spinning excessively: {iteration} iterations");
             }
             std::thread::sleep(Duration::from_micros(1));

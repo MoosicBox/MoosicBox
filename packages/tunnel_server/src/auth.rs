@@ -108,38 +108,6 @@ async fn client_is_authorized(
     Ok(false)
 }
 
-pub struct QueryAuthorized;
-
-impl FromRequest for QueryAuthorized {
-    type Error = actix_web::Error;
-    type Future = Ready<Result<Self, actix_web::Error>>;
-
-    fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
-        log::trace!("QueryAuthorized from_request {}", req.path());
-        if is_query_authorized(req) {
-            ok(Self)
-        } else {
-            log::warn!("Unauthorized QueryAuthorized request to '{}'", req.path());
-            err(ErrorUnauthorized("Unauthorized"))
-        }
-    }
-}
-
-fn is_query_authorized(req: &HttpRequest) -> bool {
-    let query: Vec<_> = QString::from(req.query_string()).into();
-    let query: BTreeMap<_, _> = query.into_iter().collect();
-    let authorization = query
-        .iter()
-        .find(|(key, _)| key.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str()))
-        .map(|(_, value)| value);
-
-    if let Some(token) = authorization {
-        return token == TUNNEL_ACCESS_TOKEN;
-    }
-
-    false
-}
-
 pub struct SignatureAuthorized;
 
 impl FromRequest for SignatureAuthorized {

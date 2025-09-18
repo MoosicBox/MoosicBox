@@ -430,7 +430,7 @@ impl<'a, B: SimBootstrap> Simulation<'a, B> {
                         break;
                     }
 
-                    if step % 1000 == 0 {
+                    if step.is_multiple_of(1000) {
                         print_step(&managed_sim, step);
                     }
 
@@ -681,7 +681,8 @@ impl ManagedSim {
             }
         }
 
-        if current_step() % 1000 == 0 || END_SIM.load(std::sync::atomic::Ordering::SeqCst) {
+        if current_step().is_multiple_of(1000) || END_SIM.load(std::sync::atomic::Ordering::SeqCst)
+        {
             log::debug!("hosts={} clients={}", self.hosts.len(), self.clients.len());
         }
 

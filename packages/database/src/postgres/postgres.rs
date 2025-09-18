@@ -2365,17 +2365,17 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
         log::trace!("to_sql_checked: ty={}, {ty:?}", ty.name());
         Ok(match &self.0 {
             DatabaseValue::Null | DatabaseValue::UNumberOpt(None) => IsNull::Yes,
-            DatabaseValue::String(value) => value.to_sql(ty, out)?,
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
             DatabaseValue::Bool(value) => i64::from(*value).to_sql(ty, out)?,
             DatabaseValue::BoolOpt(value) => value.map(i64::from).to_sql(ty, out)?,
             DatabaseValue::Number(value) => value.to_sql(ty, out)?,
             DatabaseValue::NumberOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::UNumber(value) => i64::try_from(*value)?.to_sql(ty, out)?,
-            DatabaseValue::UNumberOpt(Some(value)) => i64::try_from(*value)?.to_sql(ty, out)?,
+            DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+                i64::try_from(*value)?.to_sql(ty, out)?
+            }
             DatabaseValue::Real(value) => value.to_sql(ty, out)?,
             DatabaseValue::RealOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::NowAdd(value) => value.to_sql(ty, out)?,
+            DatabaseValue::String(value) | DatabaseValue::NowAdd(value) => value.to_sql(ty, out)?,
             DatabaseValue::Now => switchy_time::datetime_utc_now()
                 .naive_utc()
                 .to_sql(ty, out)?,

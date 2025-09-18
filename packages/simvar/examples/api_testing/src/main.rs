@@ -121,7 +121,7 @@ impl SimBootstrap for ApiTestingBootstrap {
 
     fn on_step(&self, _sim: &mut impl Sim) {
         // Log test progress periodically
-        if simvar::switchy::time::simulator::current_step() % 2000 == 0 {
+        if simvar::switchy::time::simulator::current_step().is_multiple_of(2000) {
             let results = self.test_results.lock().unwrap();
             log::info!("Test progress: {}", results.summary());
             drop(results);
@@ -245,12 +245,6 @@ struct User {
 struct CreateUserRequest {
     name: String,
     email: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct UpdateUserRequest {
-    name: Option<String>,
-    email: Option<String>,
 }
 
 /// Start the API server with CRUD endpoints

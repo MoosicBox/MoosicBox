@@ -110,11 +110,13 @@ impl CpalAudioOutput {
                 cpal::SampleFormat::I16 => Box::new(CpalAudioOutputImpl::<i16>::new(&device)?),
                 cpal::SampleFormat::U16 => Box::new(CpalAudioOutputImpl::<u16>::new(&device)?),
                 cpal::SampleFormat::I8 => Box::new(CpalAudioOutputImpl::<i8>::new(&device)?),
-                cpal::SampleFormat::I32 => Box::new(CpalAudioOutputImpl::<i32>::new(&device)?),
-                cpal::SampleFormat::I64 => Box::new(CpalAudioOutputImpl::<i32>::new(&device)?),
+                cpal::SampleFormat::I32 | cpal::SampleFormat::I64 => {
+                    Box::new(CpalAudioOutputImpl::<i32>::new(&device)?)
+                }
                 cpal::SampleFormat::U8 => Box::new(CpalAudioOutputImpl::<u8>::new(&device)?),
-                cpal::SampleFormat::U32 => Box::new(CpalAudioOutputImpl::<u32>::new(&device)?),
-                cpal::SampleFormat::U64 => Box::new(CpalAudioOutputImpl::<u32>::new(&device)?),
+                cpal::SampleFormat::U32 | cpal::SampleFormat::U64 => {
+                    Box::new(CpalAudioOutputImpl::<u32>::new(&device)?)
+                }
                 cpal::SampleFormat::F64 => Box::new(CpalAudioOutputImpl::<f64>::new(&device)?),
                 _ => unreachable!(),
             },

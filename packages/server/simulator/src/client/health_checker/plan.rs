@@ -70,7 +70,7 @@ impl InteractionPlan<Interaction> for HealthCheckInteractionPlan {
         let len = self.plan.len() as u64;
 
         for i in 1..=count {
-            let interaction_type = if (i + len) % 2 == 0 {
+            let interaction_type = if (i + len).is_multiple_of(2) {
                 InteractionType::Sleep
             } else {
                 InteractionType::HealthCheck

@@ -16,29 +16,7 @@ use moosicbox_web_server::{
     HttpResponse, Scope,
     simulator::{SimulationRequest, SimulationResponse, SimulatorWebServer},
 };
-use serde::{Deserialize, Serialize};
 use switchy_http_models::Method;
-
-// Test data structures for extractors
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct SearchParams {
-    q: String,
-    limit: Option<u32>,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct UserData {
-    name: String,
-    email: String,
-    age: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-struct PostData {
-    title: String,
-    content: String,
-    published: bool,
-}
 
 // Helper function to create a test server
 fn create_test_server() -> SimulatorWebServer {

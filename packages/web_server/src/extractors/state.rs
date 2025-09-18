@@ -266,7 +266,7 @@ impl<T: Send + Sync + 'static> FromRequest for State<T> {
                 inner
                     .app_data::<actix_web::web::Data<T>>()
                     .map(|data| Self(Arc::clone(data)))
-                    .ok_or(StateError::NotFound {
+                    .ok_or_else(|| StateError::NotFound {
                         type_name: std::any::type_name::<T>(),
                     })
             }
@@ -276,9 +276,11 @@ impl<T: Send + Sync + 'static> FromRequest for State<T> {
                 }),
                 crate::Stub::Simulator(sim) => {
                     // Extract from custom state container
-                    sim.state::<T>().map(Self::new).ok_or(StateError::NotFound {
-                        type_name: std::any::type_name::<T>(),
-                    })
+                    sim.state::<T>()
+                        .map(Self::new)
+                        .ok_or_else(|| StateError::NotFound {
+                            type_name: std::any::type_name::<T>(),
+                        })
                 }
             },
         }

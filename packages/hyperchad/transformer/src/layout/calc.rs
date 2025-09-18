@@ -1691,10 +1691,11 @@ macro_rules! axis_sum_func {
             impl Container {
                 #[must_use]
                 pub fn [<$prop _ $unit>](&self) -> Option<f32> {
-                    let mut value = None;
-                    if let Some(x) = self.[<calculated_ $prop _ $x>] {
-                        value = Some(x);
-                    }
+                    let mut value = if let Some(x) = self.[<calculated_ $prop _ $x>] {
+                        Some(x)
+                    } else {
+                        None
+                    };
                     if let Some(y) = self.[<calculated_ $prop _ $y>] {
                         value.replace(value.map_or(y, |x| x + y));
                     }
@@ -1713,10 +1714,11 @@ axis_sum_func!(padding, y, top, bottom);
 impl Container {
     #[must_use]
     pub fn border_x(&self) -> Option<f32> {
-        let mut borders = None;
-        if let Some((_, border_left)) = self.calculated_border_left {
-            borders = Some(border_left);
-        }
+        let mut borders = if let Some((_, border_left)) = self.calculated_border_left {
+            Some(border_left)
+        } else {
+            None
+        };
         if let Some((_, border_right)) = self.calculated_border_right {
             borders.replace(borders.map_or(border_right, |x| x + border_right));
         }
@@ -1725,10 +1727,11 @@ impl Container {
 
     #[must_use]
     pub fn border_y(&self) -> Option<f32> {
-        let mut borders = None;
-        if let Some((_, border_top)) = self.calculated_border_top {
-            borders = Some(border_top);
-        }
+        let mut borders = if let Some((_, border_top)) = self.calculated_border_top {
+            Some(border_top)
+        } else {
+            None
+        };
         if let Some((_, border_bottom)) = self.calculated_border_bottom {
             borders.replace(borders.map_or(border_bottom, |x| x + border_bottom));
         }

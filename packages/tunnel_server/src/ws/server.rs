@@ -2,7 +2,6 @@
 
 use std::{
     collections::BTreeMap,
-    fmt,
     sync::{
         Arc, LazyLock,
         atomic::{AtomicUsize, Ordering},
@@ -13,9 +12,8 @@ use moosicbox_tunnel::{
     TunnelAbortRequest, TunnelRequest, TunnelResponse, TunnelWsRequest, TunnelWsResponse,
 };
 use moosicbox_tunnel_server::CANCELLATION_TOKEN;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use strum_macros::{AsRefStr, EnumString};
+use strum_macros::AsRefStr;
 use switchy_async::util::CancellationToken;
 use thiserror::Error;
 use tokio::sync::{
@@ -350,19 +348,6 @@ pub struct WsServer {
     visitor_count: Arc<AtomicUsize>,
 
     ws_requests: BTreeMap<u64, ConnId>,
-}
-
-#[derive(Debug, Serialize, Deserialize, EnumString)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
-pub enum InboundMessageType {
-    Ping,
-}
-
-impl fmt::Display for InboundMessageType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
 }
 
 #[derive(Debug, Error)]
