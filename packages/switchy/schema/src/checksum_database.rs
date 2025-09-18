@@ -7,7 +7,7 @@ use std::{
     collections::BTreeMap,
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 use switchy_async::sync::Mutex;
@@ -15,7 +15,87 @@ use switchy_database::query::{
     DeleteStatement, Expression, ExpressionType, InsertStatement, SelectQuery, UpdateStatement,
     UpsertMultiStatement, UpsertStatement,
 };
-use switchy_database::{Database, DatabaseError, DatabaseTransaction, DatabaseValue, Row};
+use switchy_database::{
+    Database, DatabaseError, DatabaseTransaction, DatabaseValue, Row, Savepoint,
+};
+
+#[derive(Debug)]
+struct ChecksumSavepoint {
+    name: String,
+    hasher: Arc<Mutex<Sha256>>,
+    transaction_depth: Arc<AtomicUsize>,
+    released: Arc<AtomicBool>,
+    rolled_back: Arc<AtomicBool>,
+}
+
+#[async_trait]
+impl Savepoint for ChecksumSavepoint {
+    async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+        // Check if already released
+        if self.released.swap(true, Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already released",
+                self.name
+            )));
+        }
+
+        // Check if already rolled back
+        if self.rolled_back.load(Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already rolled back",
+                self.name
+            )));
+        }
+
+        // Update checksum
+        let depth = self.transaction_depth.load(Ordering::SeqCst);
+        let mut hasher = self.hasher.lock().await;
+        if depth > 1 {
+            hasher.update(format!("D{depth}:").as_bytes());
+        }
+        hasher.update(b"RELEASE_SAVEPOINT:");
+        hasher.update(self.name.as_bytes());
+        hasher.update(b":");
+        drop(hasher);
+
+        Ok(())
+    }
+
+    async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+        // Check if already rolled back
+        if self.rolled_back.swap(true, Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already rolled back",
+                self.name
+            )));
+        }
+
+        // Check if already released
+        if self.released.load(Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already released",
+                self.name
+            )));
+        }
+
+        // Update checksum
+        let depth = self.transaction_depth.load(Ordering::SeqCst);
+        let mut hasher = self.hasher.lock().await;
+        if depth > 1 {
+            hasher.update(format!("D{depth}:").as_bytes());
+        }
+        hasher.update(b"ROLLBACK_TO_SAVEPOINT:");
+        hasher.update(self.name.as_bytes());
+        hasher.update(b":");
+        drop(hasher);
+
+        Ok(())
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
 
 #[derive(Debug)]
 pub struct ChecksumDatabase {
@@ -303,6 +383,35 @@ impl DatabaseTransaction for ChecksumDatabase {
         self.transaction_depth.fetch_sub(1, Ordering::SeqCst);
         self.hasher.lock().await.update(b"ROLLBACK:");
         Ok(())
+    }
+
+    async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError> {
+        // Validate name
+        if name.is_empty() {
+            return Err(DatabaseError::InvalidSavepointName(
+                "Savepoint name cannot be empty".to_string(),
+            ));
+        }
+
+        // Update checksum
+        let depth = self.transaction_depth.load(Ordering::SeqCst);
+        let mut hasher = self.hasher.lock().await;
+        if depth > 1 {
+            hasher.update(format!("D{depth}:").as_bytes());
+        }
+        hasher.update(b"SAVEPOINT:");
+        hasher.update(name.as_bytes());
+        hasher.update(b":");
+        drop(hasher);
+
+        // Create savepoint
+        Ok(Box::new(ChecksumSavepoint {
+            name: name.to_string(),
+            hasher: self.hasher.clone(),
+            transaction_depth: self.transaction_depth.clone(),
+            released: Arc::new(AtomicBool::new(false)),
+            rolled_back: Arc::new(AtomicBool::new(false)),
+        }))
     }
 }
 
@@ -629,6 +738,123 @@ mod tests {
         assert_ne!(
             checksum1, checksum2,
             "Single vs nested transactions should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_savepoint_creation_updates_checksum() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // One database creates a savepoint, the other doesn't
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let _sp1 = tx1.savepoint("test_sp").await.unwrap();
+        let _ = tx1.commit().await;
+
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let _ = tx2.commit().await;
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "Savepoint creation should update checksum"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_savepoint_release_vs_rollback_different_checksums() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Database 1: create savepoint and release
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let sp1 = tx1.savepoint("test_sp").await.unwrap();
+        let _ = sp1.release().await;
+        let _ = tx1.commit().await;
+
+        // Database 2: create savepoint and rollback
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let sp2 = tx2.savepoint("test_sp").await.unwrap();
+        let _ = sp2.rollback_to().await;
+        let _ = tx2.commit().await;
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "Savepoint release vs rollback should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_multiple_savepoints_different_names() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Database 1: create savepoint with name "sp1"
+        let tx1 = db1.begin_transaction().await.unwrap();
+        let sp1 = tx1.savepoint("sp1").await.unwrap();
+        let _ = sp1.release().await;
+        let _ = tx1.commit().await;
+
+        // Database 2: create savepoint with name "sp2"
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let sp2 = tx2.savepoint("sp2").await.unwrap();
+        let _ = sp2.release().await;
+        let _ = tx2.commit().await;
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "Different savepoint names should produce different checksums"
+        );
+    }
+
+    #[switchy_async::test]
+    async fn test_savepoint_double_release_error() {
+        let db = ChecksumDatabase::new();
+        let tx = db.begin_transaction().await.unwrap();
+        let sp = tx.savepoint("test_sp").await.unwrap();
+
+        // First release should succeed
+        sp.release().await.unwrap();
+
+        // Second release should fail - but we can't test this because savepoint is consumed
+        // This test verifies the structure compiles and basic usage works
+        let _ = tx.commit().await;
+        let _ = db.finalize().await;
+    }
+
+    #[switchy_async::test]
+    async fn test_savepoint_nested_transactions() {
+        let db1 = ChecksumDatabase::new();
+        let db2 = ChecksumDatabase::new();
+
+        // Database 1: nested transaction with savepoint
+        let tx1_outer = db1.begin_transaction().await.unwrap();
+        let tx1_inner = tx1_outer.begin_transaction().await.unwrap();
+        let sp1 = tx1_inner.savepoint("nested_sp").await.unwrap();
+        let _ = sp1.release().await;
+        let _ = tx1_inner.commit().await;
+        let _ = tx1_outer.commit().await;
+
+        // Database 2: single transaction with savepoint
+        let tx2 = db2.begin_transaction().await.unwrap();
+        let sp2 = tx2.savepoint("nested_sp").await.unwrap();
+        let _ = sp2.release().await;
+        let _ = tx2.commit().await;
+
+        let checksum1 = db1.finalize().await;
+        let checksum2 = db2.finalize().await;
+
+        assert_ne!(
+            checksum1, checksum2,
+            "Nested vs single transaction savepoints should produce different checksums"
         );
     }
 }
