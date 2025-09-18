@@ -435,8 +435,8 @@ mod tests {
         let db2 = ChecksumDatabase::new();
 
         // Perform identical operations on both
-        let _ = db1.exec_raw("CREATE TABLE test").await;
-        let _ = db2.exec_raw("CREATE TABLE test").await;
+        db1.exec_raw("CREATE TABLE test").await.unwrap();
+        db2.exec_raw("CREATE TABLE test").await.unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
@@ -453,8 +453,8 @@ mod tests {
         let db2 = ChecksumDatabase::new();
 
         // Perform different operations
-        let _ = db1.exec_raw("CREATE TABLE test1").await;
-        let _ = db2.exec_raw("CREATE TABLE test2").await;
+        db1.exec_raw("CREATE TABLE test1").await.unwrap();
+        db2.exec_raw("CREATE TABLE test2").await.unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
@@ -472,11 +472,11 @@ mod tests {
 
         // Transaction with commit
         let tx1 = db1.begin_transaction().await.unwrap();
-        let _ = tx1.commit().await;
+        tx1.commit().await.unwrap();
 
         // Transaction with rollback
         let tx2 = db2.begin_transaction().await.unwrap();
-        let _ = tx2.rollback().await;
+        tx2.rollback().await.unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
@@ -508,27 +508,27 @@ mod tests {
         let db = ChecksumDatabase::new();
 
         // Perform operation on parent
-        let _ = db.exec_raw("PARENT_OP").await;
+        db.exec_raw("PARENT_OP").await.unwrap();
 
         // Begin transaction and perform operation
         let tx = db.begin_transaction().await.unwrap();
-        let _ = tx.exec_raw("TX_OP").await;
-        let _ = tx.commit().await;
+        tx.exec_raw("TX_OP").await.unwrap();
+        tx.commit().await.unwrap();
 
         // Perform another operation on parent
-        let _ = db.exec_raw("PARENT_OP2").await;
+        db.exec_raw("PARENT_OP2").await.unwrap();
 
         let checksum = db.finalize().await;
 
         // Create another database with the same sequence of operations
         let db2 = ChecksumDatabase::new();
-        let _ = db2.exec_raw("PARENT_OP").await;
+        db2.exec_raw("PARENT_OP").await.unwrap();
 
         let tx2 = db2.begin_transaction().await.unwrap();
-        let _ = tx2.exec_raw("TX_OP").await;
-        let _ = tx2.commit().await;
+        tx2.exec_raw("TX_OP").await.unwrap();
+        tx2.commit().await.unwrap();
 
-        let _ = db2.exec_raw("PARENT_OP2").await;
+        db2.exec_raw("PARENT_OP2").await.unwrap();
 
         let checksum2 = db2.finalize().await;
 
@@ -630,13 +630,13 @@ mod tests {
 
         // Test basic query methods
         let query = db.select("test_table");
-        let _ = db.query(&query).await.unwrap();
-        let _ = db.query_first(&query).await.unwrap();
+        db.query(&query).await.unwrap();
+        db.query_first(&query).await.unwrap();
 
         // Test update methods
         let update = db.update("test_table");
-        let _ = db.exec_update(&update).await.unwrap();
-        let _ = db.exec_update_first(&update).await.unwrap();
+        db.exec_update(&update).await.unwrap();
+        db.exec_update_first(&update).await.unwrap();
 
         // Test insert methods
         let insert = db.insert("test_table");
@@ -645,17 +645,17 @@ mod tests {
 
         // Test upsert methods
         let upsert = db.upsert("test_table");
-        let _ = db.exec_upsert(&upsert).await.unwrap();
+        db.exec_upsert(&upsert).await.unwrap();
         let row = db.exec_upsert_first(&upsert).await.unwrap();
         assert_eq!(row.columns.len(), 0, "Upsert should return empty row");
 
         let upsert_multi = db.upsert_multi("test_table");
-        let _ = db.exec_upsert_multi(&upsert_multi).await.unwrap();
+        db.exec_upsert_multi(&upsert_multi).await.unwrap();
 
         // Test delete methods
         let delete = db.delete("test_table");
-        let _ = db.exec_delete(&delete).await.unwrap();
-        let _ = db.exec_delete_first(&delete).await.unwrap();
+        db.exec_delete(&delete).await.unwrap();
+        db.exec_delete_first(&delete).await.unwrap();
 
         // Test raw execution
         db.exec_raw("SELECT 1").await.unwrap();
@@ -749,10 +749,10 @@ mod tests {
         // One database creates a savepoint, the other doesn't
         let tx1 = db1.begin_transaction().await.unwrap();
         let _sp1 = tx1.savepoint("test_sp").await.unwrap();
-        let _ = tx1.commit().await;
+        tx1.commit().await.unwrap();
 
         let tx2 = db2.begin_transaction().await.unwrap();
-        let _ = tx2.commit().await;
+        tx2.commit().await.unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
@@ -771,14 +771,14 @@ mod tests {
         // Database 1: create savepoint and release
         let tx1 = db1.begin_transaction().await.unwrap();
         let sp1 = tx1.savepoint("test_sp").await.unwrap();
-        let _ = sp1.release().await;
-        let _ = tx1.commit().await;
+        sp1.release().await.unwrap();
+        tx1.commit().await.unwrap();
 
         // Database 2: create savepoint and rollback
         let tx2 = db2.begin_transaction().await.unwrap();
         let sp2 = tx2.savepoint("test_sp").await.unwrap();
-        let _ = sp2.rollback_to().await;
-        let _ = tx2.commit().await;
+        sp2.rollback_to().await.unwrap();
+        tx2.commit().await.unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
@@ -797,14 +797,14 @@ mod tests {
         // Database 1: create savepoint with name "sp1"
         let tx1 = db1.begin_transaction().await.unwrap();
         let sp1 = tx1.savepoint("sp1").await.unwrap();
-        let _ = sp1.release().await;
-        let _ = tx1.commit().await;
+        sp1.release().await.unwrap();
+        tx1.commit().await.unwrap();
 
         // Database 2: create savepoint with name "sp2"
         let tx2 = db2.begin_transaction().await.unwrap();
         let sp2 = tx2.savepoint("sp2").await.unwrap();
-        let _ = sp2.release().await;
-        let _ = tx2.commit().await;
+        sp2.release().await.unwrap();
+        tx2.commit().await.unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
@@ -826,7 +826,7 @@ mod tests {
 
         // Second release should fail - but we can't test this because savepoint is consumed
         // This test verifies the structure compiles and basic usage works
-        let _ = tx.commit().await;
+        tx.commit().await.unwrap();
         let _ = db.finalize().await;
     }
 
@@ -839,15 +839,15 @@ mod tests {
         let tx1_outer = db1.begin_transaction().await.unwrap();
         let tx1_inner = tx1_outer.begin_transaction().await.unwrap();
         let sp1 = tx1_inner.savepoint("nested_sp").await.unwrap();
-        let _ = sp1.release().await;
-        let _ = tx1_inner.commit().await;
-        let _ = tx1_outer.commit().await;
+        sp1.release().await.unwrap();
+        tx1_inner.commit().await.unwrap();
+        tx1_outer.commit().await.unwrap();
 
         // Database 2: single transaction with savepoint
         let tx2 = db2.begin_transaction().await.unwrap();
         let sp2 = tx2.savepoint("nested_sp").await.unwrap();
-        let _ = sp2.release().await;
-        let _ = tx2.commit().await;
+        sp2.release().await.unwrap();
+        tx2.commit().await.unwrap();
 
         let checksum1 = db1.finalize().await;
         let checksum2 = db2.finalize().await;
