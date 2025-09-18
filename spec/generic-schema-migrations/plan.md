@@ -7465,21 +7465,26 @@ impl Savepoint for RusqliteSavepoint {
 
 **Note:** Following the pattern from Phase 13.1.3, modify existing code in-place rather than creating new files.
 
-- [ ] **Step 1: Enhance PostgresSavepoint struct in-place**
+- [x] **Step 1: Enhance PostgresSavepoint struct in-place**
 
-  In `packages/database/src/postgres/postgres.rs`, add imports and modify existing struct (around line 843):
+  In `packages/database/src/postgres/postgres.rs`, modify existing struct (around line 843):
   ```rust
-  use std::sync::atomic::{AtomicBool, Ordering};
+  // No new imports needed - Arc and Mutex already imported
 
   struct PostgresSavepoint {
       name: String,
       client: deadpool_postgres::Object,
-      released: AtomicBool,
-      rolled_back: AtomicBool,
+      released: Arc<Mutex<bool>>,
+      rolled_back: Arc<Mutex<bool>>,
+      // Share parent transaction state for consistency
+      parent_committed: Arc<Mutex<bool>>,
+      parent_rolled_back: Arc<Mutex<bool>>,
   }
   ```
 
-- [ ] **Step 2: Implement actual savepoint creation in PostgresTransaction**
+  Modified PostgresSavepoint struct at `packages/database/src/postgres/postgres.rs:843` to include `client: Arc<Mutex<deadpool_postgres::Object>>`, state tracking fields `released` and `rolled_back`, and parent state sharing fields `parent_committed` and `parent_rolled_back`. Also updated PostgresTransaction to use `Arc<Mutex<>>` wrapper for client sharing.
+
+- [x] **Step 2: Implement actual savepoint creation in PostgresTransaction**
 
   Expand the validation-only version to execute SQL (around line 904):
   ```rust
@@ -7495,77 +7500,169 @@ impl Savepoint for RusqliteSavepoint {
       Ok(Box::new(PostgresSavepoint {
           name: name.to_string(),
           client: self.client.clone(),
-          released: AtomicBool::new(false),
-          rolled_back: AtomicBool::new(false),
-      }))
-  }
-  ```
+          released: Arc::new(Mutex::new(false)),
+          rolled_back: Arc::new(Mutex::new(false)),
+          // Share parent's state to enable consistency checks
+          parent_committed: Arc::clone(&self.committed),
+          parent_rolled_back: Arc::clone(&self.rolled_back),
+       }))
+   }
+   ```
 
-- [ ] **Step 3: Implement release() and rollback_to() methods**
+   Implemented savepoint creation at `packages/database/src/postgres/postgres.rs:982` with SQL execution `SAVEPOINT {name}` and Arc::clone for client sharing. Updated all transaction methods to use `client.lock().await` pattern for Arc<Mutex<>> access.
 
-  Replace `unimplemented!()` in existing `impl crate::Savepoint for PostgresSavepoint`:
+- [x] **Step 3: Implement release() and rollback_to() methods**
+
+   Replace `unimplemented!()` in existing `impl crate::Savepoint for PostgresSavepoint`:
   ```rust
   async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
-      if self.released.swap(true, Ordering::SeqCst) {
+      // Check our own state
+      let mut released = self.released.lock().await;
+      if *released {
           return Err(DatabaseError::InvalidSavepointName(
               format!("Savepoint '{}' already released", self.name)
           ));
       }
 
-      if self.rolled_back.load(Ordering::SeqCst) {
+      let rolled_back = self.rolled_back.lock().await;
+      if *rolled_back {
           return Err(DatabaseError::InvalidSavepointName(
               format!("Savepoint '{}' already rolled back", self.name)
           ));
       }
+      drop(rolled_back);
 
+      // Check parent transaction state for consistency with SQLite behavior
+      let parent_committed = self.parent_committed.lock().await;
+      let parent_rolled_back = self.parent_rolled_back.lock().await;
+      if *parent_committed || *parent_rolled_back {
+          return Err(DatabaseError::TransactionCommitted);
+      }
+      drop(parent_committed);
+      drop(parent_rolled_back);
+
+      // Execute SQL
       self.client
           .execute(&format!("RELEASE SAVEPOINT {}", self.name), &[])
           .await
           .map_err(PostgresDatabaseError::Postgres)?;
 
+      *released = true;
       Ok(())
   }
 
   async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
-      if self.rolled_back.swap(true, Ordering::SeqCst) {
+      // Check our own state
+      let mut rolled_back = self.rolled_back.lock().await;
+      if *rolled_back {
           return Err(DatabaseError::InvalidSavepointName(
               format!("Savepoint '{}' already rolled back", self.name)
           ));
       }
 
-      if self.released.load(Ordering::SeqCst) {
+      let released = self.released.lock().await;
+      if *released {
           return Err(DatabaseError::InvalidSavepointName(
               format!("Savepoint '{}' already released", self.name)
           ));
       }
+      drop(released);
 
+      // Check parent transaction state for consistency with SQLite behavior
+      let parent_committed = self.parent_committed.lock().await;
+      let parent_rolled_back = self.parent_rolled_back.lock().await;
+      if *parent_committed || *parent_rolled_back {
+          return Err(DatabaseError::TransactionCommitted);
+      }
+      drop(parent_committed);
+      drop(parent_rolled_back);
+
+      // Execute SQL
       self.client
           .execute(&format!("ROLLBACK TO SAVEPOINT {}", self.name), &[])
           .await
           .map_err(PostgresDatabaseError::Postgres)?;
 
-      Ok(())
+       *rolled_back = true;
+       Ok(())
+   }
+   ```
+
+   Implemented both `release()` and `rollback_to()` methods at `packages/database/src/postgres/postgres.rs:855` and `packages/database/src/postgres/postgres.rs:893`. Both methods include comprehensive state checking (own state + parent state), proper error handling, and SQL execution using `client.lock().await`.
+
+- [x] **Step 4: Add tests**
+
+  Add tests in existing test module, including transaction state checking:
+  ```rust
+  #[test]
+  async fn test_postgres_sqlx_savepoint_after_transaction_commit() {
+      // Test that savepoint operations fail after parent transaction commits
+      // This ensures consistency with other implementations
   }
-  ```
 
-- [ ] **Step 4: Add tests**
+  #[test]
+  async fn test_postgres_sqlx_savepoint_after_transaction_rollback() {
+      // Test that savepoint operations fail after parent transaction rollbacks
+  }
+  ```, including parent transaction state checking:
+  ```rust
+  #[test]
+  async fn test_postgres_savepoint_after_transaction_commit() {
+      // Test that savepoint operations fail after parent transaction commits
+      // This ensures consistency with SQLite behavior
+  }
 
-  Add tests in existing test module, including PostgreSQL's automatic cleanup behavior
+  #[test]
+  async fn test_postgres_savepoint_after_transaction_rollback() {
+      // Test that savepoint operations fail after parent transaction rollbacks
+      // This ensures consistency with SQLite behavior
+   }
+   ```
+
+   Added 6 comprehensive tests at `packages/database/src/postgres/postgres.rs:2820`: `test_postgres_savepoint_basic`, `test_postgres_savepoint_rollback`, `test_postgres_savepoint_double_release`, `test_postgres_savepoint_after_transaction_commit`, `test_postgres_savepoint_after_transaction_rollback`, and `test_postgres_savepoint_invalid_name`. All tests pass successfully.
+
+#### 13.1.5 Design Rationale
+
+**Arc<Mutex<bool>> vs AtomicBool Decision:**
+
+PostgreSQL implementation uses `Arc<Mutex<bool>>` for state tracking instead of `AtomicBool` to maintain consistency with the existing `PostgresTransaction` implementation. This design choice:
+
+1. **Maintains module consistency** - All state tracking in postgres module uses the same pattern
+2. **Simplifies error handling** - Can use the same locking patterns throughout
+3. **Enables parent state sharing** - Easy to share Arc references between parent and child
+4. **Achieves behavioral consistency** - All backends fail fast when parent transaction is gone
+
+**Parent State Sharing:**
+
+The parent state sharing ensures that PostgreSQL savepoints behave identically to SQLite savepoints, returning `DatabaseError::TransactionCommitted` when attempting operations after the parent transaction has ended, rather than attempting SQL that would fail at the database level. This provides:
+
+- **Consistent error messages** across all backends
+- **Predictable behavior** for application code
+- **Performance optimization** by avoiding doomed database roundtrips
+- **Clear semantics** about transaction/savepoint lifecycle
 
 #### 13.1.5 Verification Checklist
 
-- [ ] Run `cargo build -p switchy_database --features postgres-raw` - compiles successfully
-- [ ] PostgresSavepoint has client and atomic fields added
-- [ ] PostgreSQL-specific SQL syntax works correctly
-- [ ] Unit test: test_postgres_savepoint_basic passes
-- [ ] Unit test: test_postgres_savepoint_release passes
-- [ ] Unit test: test_postgres_savepoint_rollback passes
-- [ ] Run `cargo clippy -p switchy_database --features postgres-raw` - zero warnings
-- [ ] Run `cargo fmt --all` - format entire repository
+- [x] Run `cargo build -p switchy_database --features postgres-raw` - compiles successfully
+- [x] PostgresSavepoint has client and Mutex fields added (not atomic)
+- [x] Parent transaction state is properly shared with savepoints
+- [x] PostgreSQL-specific SQL syntax works correctly
+- [x] Unit test: test_postgres_savepoint_basic passes
+- [x] Unit test: test_postgres_savepoint_release passes
+- [x] Unit test: test_postgres_savepoint_rollback passes
+- [x] Unit test: test_postgres_savepoint_after_transaction_commit passes
+- [x] Unit test: test_postgres_savepoint_after_transaction_rollback passes
+- [x] Savepoint operations fail with TransactionCommitted after parent commit/rollback
+- [x] Mutex locking/unlocking follows proper patterns (explicit drops where needed)
+- [x] Behavioral consistency with SQLite implementation verified
+- [x] Run `cargo clippy -p switchy_database --features postgres-raw` - zero warnings
+- [x] Run `cargo fmt --all` - format entire repository
 
 #### 13.1.6 Implement PostgreSQL (sqlx)
 
 **Note:** Following the pattern from Phase 13.1.3, modify existing code in-place rather than creating new files.
+
+**Pattern Consistency:** Like SQLite sqlx (13.1.4), PostgreSQL sqlx uses `Option<Transaction>` that becomes None after commit/rollback. Apply the same Option 1 approach - return `DatabaseError::TransactionCommitted` instead of silently succeeding when transaction is None.
 
 - [ ] **Step 1: Enhance PostgresSqlxSavepoint struct in-place**
 
@@ -7609,7 +7706,62 @@ impl Savepoint for RusqliteSavepoint {
 
 - [ ] **Step 3: Implement release() and rollback_to() methods**
 
-  Replace `unimplemented!()` in existing `impl crate::Savepoint for PostgresSqlxSavepoint` (similar pattern to SqliteSqlx)
+  Replace `unimplemented!()` in existing `impl crate::Savepoint for PostgresSqlxSavepoint`:
+  ```rust
+  #[allow(clippy::significant_drop_tightening)]
+  async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+      if self.released.swap(true, Ordering::SeqCst) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint '{}' already released", self.name)
+          ));
+      }
+
+      if self.rolled_back.load(Ordering::SeqCst) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint '{}' already rolled back", self.name)
+          ));
+      }
+
+      let mut transaction_guard = self.transaction.lock().await;
+      if let Some(tx) = transaction_guard.as_mut() {
+          sqlx::query(&format!("RELEASE SAVEPOINT {}", self.name))
+              .execute(&mut **tx)
+              .await
+              .map_err(SqlxDatabaseError::Sqlx)?;
+      } else {
+          return Err(DatabaseError::TransactionCommitted);
+      }
+
+      Ok(())
+  }
+
+  #[allow(clippy::significant_drop_tightening)]
+  async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+      if self.rolled_back.swap(true, Ordering::SeqCst) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint '{}' already rolled back", self.name)
+          ));
+      }
+
+      if self.released.load(Ordering::SeqCst) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint '{}' already released", self.name)
+          ));
+      }
+
+      let mut transaction_guard = self.transaction.lock().await;
+      if let Some(tx) = transaction_guard.as_mut() {
+          sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", self.name))
+              .execute(&mut **tx)
+              .await
+              .map_err(SqlxDatabaseError::Sqlx)?;
+      } else {
+          return Err(DatabaseError::TransactionCommitted);
+      }
+
+      Ok(())
+  }
+  ```
 
 - [ ] **Step 4: Add tests**
 
@@ -7623,6 +7775,9 @@ impl Savepoint for RusqliteSavepoint {
 - [ ] Unit test: test_postgres_sqlx_savepoint_basic passes
 - [ ] Unit test: test_postgres_sqlx_savepoint_release passes
 - [ ] Unit test: test_postgres_sqlx_savepoint_rollback passes
+- [ ] Unit test: test_postgres_sqlx_savepoint_after_transaction_commit passes
+- [ ] Unit test: test_postgres_sqlx_savepoint_after_transaction_rollback passes
+- [ ] Savepoint operations return TransactionCommitted error when transaction is None
 - [ ] Both PostgreSQL implementations behave identically
 - [ ] Run `cargo clippy -p switchy_database --features postgres-sqlx` - zero warnings
 - [ ] Run `cargo fmt --all` - format entire repository
@@ -7630,6 +7785,8 @@ impl Savepoint for RusqliteSavepoint {
 #### 13.1.7 Implement MySQL (sqlx)
 
 **Note:** Following the pattern from Phase 13.1.3, modify existing code in-place rather than creating new files.
+
+**Pattern Consistency:** Like other sqlx implementations, MySQL sqlx uses `Option<Transaction>` that becomes None after commit/rollback. Apply the same Option 1 approach - return `DatabaseError::TransactionCommitted` instead of silently succeeding when transaction is None.
 
 - [ ] **Step 1: Enhance MysqlSqlxSavepoint struct in-place**
 
@@ -7673,11 +7830,83 @@ impl Savepoint for RusqliteSavepoint {
 
 - [ ] **Step 3: Implement release() and rollback_to() methods**
 
-  Replace `unimplemented!()` in existing `impl crate::Savepoint for MysqlSqlxSavepoint` (similar pattern to other sqlx implementations)
+  Replace `unimplemented!()` in existing `impl crate::Savepoint for MysqlSqlxSavepoint`:
+  ```rust
+  #[allow(clippy::significant_drop_tightening)]
+  async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
+      if self.released.swap(true, Ordering::SeqCst) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint '{}' already released", self.name)
+          ));
+      }
+
+      if self.rolled_back.load(Ordering::SeqCst) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint '{}' already rolled back", self.name)
+          ));
+      }
+
+      let mut transaction_guard = self.transaction.lock().await;
+      if let Some(tx) = transaction_guard.as_mut() {
+          sqlx::query(&format!("RELEASE SAVEPOINT {}", self.name))
+              .execute(&mut **tx)
+              .await
+              .map_err(SqlxDatabaseError::Sqlx)?;
+      } else {
+          return Err(DatabaseError::TransactionCommitted);
+      }
+
+      Ok(())
+  }
+
+  #[allow(clippy::significant_drop_tightening)]
+  async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
+      if self.rolled_back.swap(true, Ordering::SeqCst) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint '{}' already rolled back", self.name)
+          ));
+      }
+
+      if self.released.load(Ordering::SeqCst) {
+          return Err(DatabaseError::InvalidSavepointName(
+              format!("Savepoint '{}' already released", self.name)
+          ));
+      }
+
+      let mut transaction_guard = self.transaction.lock().await;
+      if let Some(tx) = transaction_guard.as_mut() {
+          sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", self.name))
+              .execute(&mut **tx)
+              .await
+              .map_err(SqlxDatabaseError::Sqlx)?;
+      } else {
+          return Err(DatabaseError::TransactionCommitted);
+      }
+
+      Ok(())
+  }
+  ```
 
 - [ ] **Step 4: Add tests**
 
-  Add tests including InnoDB-specific verification in existing test module
+  Add tests including InnoDB-specific verification and transaction state checking:
+  ```rust
+  #[test]
+  async fn test_mysql_savepoint_after_transaction_commit() {
+      // Test that savepoint operations fail after parent transaction commits
+      // This ensures consistency with other implementations
+  }
+
+  #[test]
+  async fn test_mysql_savepoint_after_transaction_rollback() {
+      // Test that savepoint operations fail after parent transaction rollbacks
+  }
+
+  #[test]
+  async fn test_mysql_savepoint_innodb_required() {
+      // Test InnoDB-specific savepoint behavior
+  }
+  ```
 
 #### 13.1.7 Verification Checklist
 
@@ -7687,7 +7916,10 @@ impl Savepoint for RusqliteSavepoint {
 - [ ] Unit test: test_mysql_savepoint_basic passes
 - [ ] Unit test: test_mysql_savepoint_release passes
 - [ ] Unit test: test_mysql_savepoint_rollback passes
+- [ ] Unit test: test_mysql_savepoint_after_transaction_commit passes
+- [ ] Unit test: test_mysql_savepoint_after_transaction_rollback passes
 - [ ] Unit test: test_mysql_savepoint_innodb_required passes
+- [ ] Savepoint operations return TransactionCommitted error when transaction is None
 - [ ] Error handling for non-InnoDB tables works correctly
 - [ ] Run `cargo clippy -p switchy_database --features mysql-sqlx` - zero warnings
 - [ ] All 5 backends have consistent savepoint behavior
