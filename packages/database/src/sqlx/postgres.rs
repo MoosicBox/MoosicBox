@@ -1,7 +1,10 @@
 use std::{
     ops::Deref,
     pin::Pin,
-    sync::{Arc, LazyLock, atomic::AtomicU16},
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicBool, AtomicU16, Ordering},
+    },
 };
 
 use async_trait::async_trait;
@@ -959,16 +962,69 @@ impl Database for PostgresSqlxTransaction {
 
 struct PostgresSqlxSavepoint {
     name: String,
+    transaction: Arc<Mutex<Option<Transaction<'static, Postgres>>>>,
+    released: AtomicBool,
+    rolled_back: AtomicBool,
 }
 
 #[async_trait]
 impl crate::Savepoint for PostgresSqlxSavepoint {
+    #[allow(clippy::significant_drop_tightening)]
     async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
-        unimplemented!("Savepoints not yet implemented")
+        if self.released.swap(true, Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already released",
+                self.name
+            )));
+        }
+
+        if self.rolled_back.load(Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already rolled back",
+                self.name
+            )));
+        }
+
+        let mut transaction_guard = self.transaction.lock().await;
+        if let Some(tx) = transaction_guard.as_mut() {
+            sqlx::query(&format!("RELEASE SAVEPOINT {}", self.name))
+                .execute(&mut **tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+        } else {
+            return Err(DatabaseError::TransactionCommitted);
+        }
+
+        Ok(())
     }
 
+    #[allow(clippy::significant_drop_tightening)]
     async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
-        unimplemented!("Savepoints not yet implemented")
+        if self.rolled_back.swap(true, Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already rolled back",
+                self.name
+            )));
+        }
+
+        if self.released.load(Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already released",
+                self.name
+            )));
+        }
+
+        let mut transaction_guard = self.transaction.lock().await;
+        if let Some(tx) = transaction_guard.as_mut() {
+            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", self.name))
+                .execute(&mut **tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+        } else {
+            return Err(DatabaseError::TransactionCommitted);
+        }
+
+        Ok(())
     }
 
     fn name(&self) -> &str {
@@ -1004,8 +1060,22 @@ impl crate::DatabaseTransaction for PostgresSqlxTransaction {
 
     async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
         crate::validate_savepoint_name(name)?;
+
+        // Execute SAVEPOINT SQL
+        if let Some(tx) = self.transaction.lock().await.as_mut() {
+            sqlx::query(&format!("SAVEPOINT {name}"))
+                .execute(&mut **tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+        } else {
+            return Err(DatabaseError::TransactionCommitted);
+        }
+
         Ok(Box::new(PostgresSqlxSavepoint {
             name: name.to_string(),
+            transaction: Arc::clone(&self.transaction),
+            released: AtomicBool::new(false),
+            rolled_back: AtomicBool::new(false),
         }))
     }
 }
@@ -2758,5 +2828,118 @@ mod tests {
         db.exec_raw("DROP TABLE IF EXISTS test_transaction_iso_sqlx")
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_sqlx_savepoint_basic() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = PostgresSqlxDatabase::new(pool);
+
+        // Start transaction
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Create savepoint
+        let savepoint = tx.savepoint("test_sp").await.unwrap();
+        assert_eq!(savepoint.name(), "test_sp");
+
+        // Release savepoint
+        savepoint.release().await.unwrap();
+
+        // Commit transaction
+        tx.commit().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_sqlx_savepoint_release() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = PostgresSqlxDatabase::new(pool);
+
+        // Start transaction
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Create savepoint
+        let savepoint = tx.savepoint("test_sp").await.unwrap();
+
+        // Release savepoint
+        savepoint.release().await.unwrap();
+
+        // Commit transaction
+        tx.commit().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_sqlx_savepoint_rollback() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = PostgresSqlxDatabase::new(pool);
+
+        // Start transaction
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Create savepoint
+        let savepoint = tx.savepoint("test_sp").await.unwrap();
+
+        // Rollback to savepoint
+        savepoint.rollback_to().await.unwrap();
+
+        // Commit transaction
+        tx.commit().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_sqlx_savepoint_after_transaction_commit() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = PostgresSqlxDatabase::new(pool);
+
+        // Start transaction
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Create savepoint
+        let savepoint = tx.savepoint("test_sp").await.unwrap();
+
+        // Commit transaction (this makes savepoint operations fail)
+        tx.commit().await.unwrap();
+
+        // Try to release savepoint after commit - should fail
+        let result = savepoint.release().await;
+        assert!(matches!(result, Err(DatabaseError::TransactionCommitted)));
+    }
+
+    #[tokio::test]
+    async fn test_postgres_sqlx_savepoint_after_transaction_rollback() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).await.expect("Failed to create pool");
+        let db = PostgresSqlxDatabase::new(pool);
+
+        // Start transaction
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Create savepoint
+        let savepoint = tx.savepoint("test_sp").await.unwrap();
+
+        // Rollback transaction (this makes savepoint operations fail)
+        tx.rollback().await.unwrap();
+
+        // Try to release savepoint after rollback - should fail
+        let result = savepoint.rollback_to().await;
+        assert!(matches!(result, Err(DatabaseError::TransactionCommitted)));
     }
 }

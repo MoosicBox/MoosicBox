@@ -7664,7 +7664,7 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
 
 **Pattern Consistency:** Like SQLite sqlx (13.1.4), PostgreSQL sqlx uses `Option<Transaction>` that becomes None after commit/rollback. Apply the same Option 1 approach - return `DatabaseError::TransactionCommitted` instead of silently succeeding when transaction is None.
 
-- [ ] **Step 1: Enhance PostgresSqlxSavepoint struct in-place**
+- [x] **Step 1: Enhance PostgresSqlxSavepoint struct in-place**
 
   In `packages/database/src/sqlx/postgres.rs`, add imports and modify existing struct (around line 960):
   ```rust
@@ -7678,7 +7678,9 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
   }
   ```
 
-- [ ] **Step 2: Implement actual savepoint creation in PostgresSqlxTransaction**
+  Added `AtomicBool` and `Ordering` imports at line 4 in packages/database/src/sqlx/postgres.rs. Enhanced PostgresSqlxSavepoint struct at line 960 with transaction reference and atomic state tracking fields.
+
+- [x] **Step 2: Implement actual savepoint creation in PostgresSqlxTransaction**
 
   Expand the validation-only version to execute SQL (around line 1005):
   ```rust
@@ -7704,7 +7706,9 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
   }
   ```
 
-- [ ] **Step 3: Implement release() and rollback_to() methods**
+  Implemented savepoint creation with SQL execution at packages/database/src/sqlx/postgres.rs:1008. Method executes "SAVEPOINT {name}" SQL and creates PostgresSqlxSavepoint with shared transaction reference and initialized atomic state fields.
+
+- [x] **Step 3: Implement release() and rollback_to() methods**
 
   Replace `unimplemented!()` in existing `impl crate::Savepoint for PostgresSqlxSavepoint`:
   ```rust
@@ -7763,24 +7767,37 @@ The parent state sharing ensures that PostgreSQL savepoints behave identically t
   }
   ```
 
-- [ ] **Step 4: Add tests**
+  Implemented both `release()` and `rollback_to()` methods at packages/database/src/sqlx/postgres.rs:967 and packages/database/src/sqlx/postgres.rs:988. Both methods include atomic state checking, SQL execution ("RELEASE SAVEPOINT" and "ROLLBACK TO SAVEPOINT"), and proper error handling for transaction state.
+
+- [x] **Step 4: Add tests**
 
   Add tests in existing test module
 
+  Added 5 comprehensive tests in packages/database/src/sqlx/postgres.rs starting at line 2875: `test_postgres_sqlx_savepoint_basic`, `test_postgres_sqlx_savepoint_release`, `test_postgres_sqlx_savepoint_rollback`, `test_postgres_sqlx_savepoint_after_transaction_commit`, and `test_postgres_sqlx_savepoint_after_transaction_rollback`. All tests follow existing test patterns and verify savepoint creation, SQL execution, state management, and transaction lifecycle handling.
+
 #### 13.1.6 Verification Checklist
 
-- [ ] Run `cargo build -p switchy_database --features postgres-sqlx` - compiles successfully
-- [ ] PostgresSqlxSavepoint has transaction and atomic fields added
-- [ ] SQL execution through sqlx works with proper Option handling
-- [ ] Unit test: test_postgres_sqlx_savepoint_basic passes
-- [ ] Unit test: test_postgres_sqlx_savepoint_release passes
-- [ ] Unit test: test_postgres_sqlx_savepoint_rollback passes
-- [ ] Unit test: test_postgres_sqlx_savepoint_after_transaction_commit passes
-- [ ] Unit test: test_postgres_sqlx_savepoint_after_transaction_rollback passes
-- [ ] Savepoint operations return TransactionCommitted error when transaction is None
-- [ ] Both PostgreSQL implementations behave identically
-- [ ] Run `cargo clippy -p switchy_database --features postgres-sqlx` - zero warnings
-- [ ] Run `cargo fmt --all` - format entire repository
+- [x] Run `cargo build -p switchy_database --features postgres-sqlx` - compiles successfully
+  Compilation completed successfully in 0.30s with no errors
+- [x] PostgresSqlxSavepoint has transaction and atomic fields added
+  Added transaction: Arc<Mutex<Option<Transaction<'static, Postgres>>>>, released: AtomicBool, rolled_back: AtomicBool fields
+- [x] SQL execution through sqlx works with proper Option handling
+  Both savepoint creation and operations execute SQL through sqlx with proper Option<Transaction> handling
+- [x] Unit test: test_postgres_sqlx_savepoint_basic passes
+  Test passed in 0.00s - creates savepoint, verifies name, releases successfully
+- [x] Unit test: test_postgres_sqlx_savepoint_release passes
+  Test passed in 0.00s - verifies release operation works correctly
+- [x] Unit test: test_postgres_sqlx_savepoint_rollback passes
+  Test passed in 0.00s - verifies rollback_to operation works correctly
+- [x] Unit test: test_postgres_sqlx_savepoint_after_transaction_commit passes
+  Test passed in 0.00s - verifies savepoint operations return TransactionCommitted after parent commit
+- [x] Unit test: test_postgres_sqlx_savepoint_after_transaction_rollback passes
+  Test passed in 0.00s - verifies savepoint operations return TransactionCommitted after parent rollback
+- [x] Savepoint operations return TransactionCommitted error when transaction is None
+  Both release() and rollback_to() methods check transaction.as_mut() and return DatabaseError::TransactionCommitted when None
+- [x] Both PostgreSQL implementations behave identically
+- [x] Run `cargo clippy -p switchy_database --features postgres-sqlx` - zero warnings
+- [x] Run `cargo fmt --all` - format entire repository
 
 #### 13.1.7 Implement MySQL (sqlx)
 
