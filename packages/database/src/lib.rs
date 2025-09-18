@@ -473,6 +473,7 @@ impl DatabaseError {
 }
 
 /// Validate savepoint name follows SQL identifier rules
+#[allow(unused)]
 pub(crate) fn validate_savepoint_name(name: &str) -> Result<(), DatabaseError> {
     if name.is_empty() {
         return Err(DatabaseError::InvalidSavepointName(
@@ -1073,10 +1074,7 @@ pub trait DatabaseTransaction: Database + Send + Sync {
     /// * If the savepoint creation fails
     /// * If a savepoint with this name already exists
     /// * If the savepoint name is invalid
-    async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError> {
-        validate_savepoint_name(name)?; // Validates before panicking
-        unimplemented!("Savepoints not yet implemented for this backend")
-    }
+    async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError>;
 }
 
 #[async_trait]
