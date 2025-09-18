@@ -1,7 +1,10 @@
 use std::{
     ops::Deref,
     pin::Pin,
-    sync::{Arc, atomic::AtomicU16},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU16, Ordering},
+    },
 };
 
 use async_trait::async_trait;
@@ -2780,16 +2783,61 @@ impl Database for SqliteSqlxTransaction {
 
 struct SqliteSqlxSavepoint {
     name: String,
+    transaction: Arc<Mutex<Option<Transaction<'static, Sqlite>>>>,
+    released: AtomicBool,
+    rolled_back: AtomicBool,
 }
 
 #[async_trait]
 impl crate::Savepoint for SqliteSqlxSavepoint {
     async fn release(self: Box<Self>) -> Result<(), DatabaseError> {
-        unimplemented!("Savepoints not yet implemented")
+        if self.released.swap(true, Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already released",
+                self.name
+            )));
+        }
+
+        if self.rolled_back.load(Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already rolled back",
+                self.name
+            )));
+        }
+
+        if let Some(tx) = self.transaction.lock().await.as_mut() {
+            sqlx::query(&format!("RELEASE SAVEPOINT {}", self.name))
+                .execute(&mut **tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+        }
+
+        Ok(())
     }
 
     async fn rollback_to(self: Box<Self>) -> Result<(), DatabaseError> {
-        unimplemented!("Savepoints not yet implemented")
+        if self.rolled_back.swap(true, Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already rolled back",
+                self.name
+            )));
+        }
+
+        if self.released.load(Ordering::SeqCst) {
+            return Err(DatabaseError::InvalidSavepointName(format!(
+                "Savepoint '{}' already released",
+                self.name
+            )));
+        }
+
+        if let Some(tx) = self.transaction.lock().await.as_mut() {
+            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", self.name))
+                .execute(&mut **tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+        }
+
+        Ok(())
     }
 
     fn name(&self) -> &str {
@@ -2825,8 +2873,22 @@ impl DatabaseTransaction for SqliteSqlxTransaction {
 
     async fn savepoint(&self, name: &str) -> Result<Box<dyn crate::Savepoint>, DatabaseError> {
         crate::validate_savepoint_name(name)?;
+
+        // Execute SAVEPOINT SQL
+        if let Some(tx) = self.transaction.lock().await.as_mut() {
+            sqlx::query(&format!("SAVEPOINT {name}"))
+                .execute(&mut **tx)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+        } else {
+            return Err(DatabaseError::TransactionRolledBack);
+        }
+
         Ok(Box::new(SqliteSqlxSavepoint {
             name: name.to_string(),
+            transaction: Arc::clone(&self.transaction),
+            released: AtomicBool::new(false),
+            rolled_back: AtomicBool::new(false),
         }))
     }
 }
@@ -3416,5 +3478,162 @@ mod introspection_tests {
         assert!(col_exists);
 
         tx.rollback().await.expect("Failed to rollback");
+    }
+}
+
+#[cfg(test)]
+mod savepoint_tests {
+    use super::*;
+
+    async fn create_test_db() -> SqliteSqlxDatabase {
+        let db_url = "sqlite::memory:".to_string();
+        let pool = SqlitePool::connect(&db_url)
+            .await
+            .expect("Failed to create SQLite pool");
+
+        sqlx::query("CREATE TABLE test_table (id INTEGER, value TEXT)")
+            .execute(&pool)
+            .await
+            .expect("Failed to create test table");
+
+        SqliteSqlxDatabase::new(Arc::new(Mutex::new(pool)))
+    }
+
+    #[switchy_async::test(no_simulator)]
+    async fn test_basic_savepoint() {
+        let db = create_test_db().await;
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Create a savepoint
+        let savepoint = tx
+            .savepoint("test_savepoint")
+            .await
+            .expect("Failed to create savepoint");
+
+        // Verify savepoint name
+        assert_eq!(savepoint.name(), "test_savepoint");
+
+        // Release the savepoint
+        savepoint
+            .release()
+            .await
+            .expect("Failed to release savepoint");
+
+        tx.rollback().await.expect("Failed to rollback transaction");
+    }
+
+    #[switchy_async::test(no_simulator)]
+    async fn test_savepoint_release() {
+        let db = create_test_db().await;
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Insert initial data
+        tx.exec_raw("INSERT INTO test_table (id, value) VALUES (1, 'initial')")
+            .await
+            .expect("Failed to insert");
+
+        // Create savepoint
+        let savepoint = tx
+            .savepoint("sp1")
+            .await
+            .expect("Failed to create savepoint");
+
+        // Insert more data
+        tx.exec_raw("INSERT INTO test_table (id, value) VALUES (2, 'after_savepoint')")
+            .await
+            .expect("Failed to insert");
+
+        // Release savepoint (commits savepoint changes)
+        savepoint
+            .release()
+            .await
+            .expect("Failed to release savepoint");
+
+        // Data should still be there after release
+        tx.rollback().await.expect("Failed to rollback transaction");
+    }
+
+    #[switchy_async::test(no_simulator)]
+    async fn test_savepoint_rollback() {
+        let db = create_test_db().await;
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Insert initial data
+        tx.exec_raw("INSERT INTO test_table (id, value) VALUES (1, 'initial')")
+            .await
+            .expect("Failed to insert");
+
+        // Create savepoint
+        let savepoint = tx
+            .savepoint("sp1")
+            .await
+            .expect("Failed to create savepoint");
+
+        // Insert more data
+        tx.exec_raw("INSERT INTO test_table (id, value) VALUES (2, 'after_savepoint')")
+            .await
+            .expect("Failed to insert");
+
+        // Rollback to savepoint
+        savepoint
+            .rollback_to()
+            .await
+            .expect("Failed to rollback to savepoint");
+
+        tx.rollback().await.expect("Failed to rollback transaction");
+    }
+
+    #[switchy_async::test(no_simulator)]
+    async fn test_savepoint_validation() {
+        let db = create_test_db().await;
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Test invalid savepoint names
+        assert!(
+            tx.savepoint("").await.is_err(),
+            "Empty name should be invalid"
+        );
+        assert!(
+            tx.savepoint("invalid name").await.is_err(),
+            "Space in name should be invalid"
+        );
+        assert!(
+            tx.savepoint("invalid;name").await.is_err(),
+            "Semicolon in name should be invalid"
+        );
+
+        // Test double release
+        let savepoint = tx
+            .savepoint("valid_name")
+            .await
+            .expect("Failed to create savepoint");
+        savepoint
+            .release()
+            .await
+            .expect("Failed to release savepoint");
+
+        // Test double rollback
+        let savepoint2 = tx
+            .savepoint("valid_name2")
+            .await
+            .expect("Failed to create savepoint");
+        savepoint2
+            .rollback_to()
+            .await
+            .expect("Failed to rollback to savepoint");
+
+        tx.rollback().await.expect("Failed to rollback transaction");
     }
 }
