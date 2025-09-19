@@ -5,8 +5,7 @@ use switchy_database::{Database, Row, query::FilterableQuery as _};
 #[cfg(any(feature = "sqlite-rusqlite", feature = "sqlite-sqlx"))]
 macro_rules! generate_tests {
     () => {
-        #[switchy_async::test]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator))]
         async fn test_insert() {
             let db = setup_db().await;
             let db = &**db;
@@ -34,8 +33,7 @@ macro_rules! generate_tests {
             );
         }
 
-        #[switchy_async::test]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator))]
         async fn test_update() {
             let db = setup_db().await;
             let db = &**db;
@@ -71,8 +69,7 @@ macro_rules! generate_tests {
             );
         }
 
-        #[switchy_async::test]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator))]
         async fn test_delete() {
             let db = setup_db().await;
             let db = &**db;
@@ -110,8 +107,7 @@ macro_rules! generate_tests {
             assert_eq!(rows.len(), 0);
         }
 
-        #[switchy_async::test]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator))]
         async fn test_delete_with_limit() {
             let db = setup_db().await;
             let db = &**db;
@@ -150,8 +146,7 @@ macro_rules! generate_tests {
             assert_eq!(rows.len(), 0);
         }
 
-        #[switchy_async::test(real_time)]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator, real_time))]
         async fn test_transaction_commit() {
             let db = setup_db().await;
             let db = &**db;
@@ -184,8 +179,7 @@ macro_rules! generate_tests {
             );
         }
 
-        #[switchy_async::test(real_time)]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator, real_time))]
         async fn test_transaction_rollback() {
             let db = setup_db().await;
             let db = &**db;
@@ -214,8 +208,7 @@ macro_rules! generate_tests {
             assert_eq!(rows.len(), 0);
         }
 
-        #[switchy_async::test(real_time)]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator, real_time))]
         async fn test_transaction_isolation() {
             let db = setup_db().await;
             let db = &**db;
@@ -262,8 +255,7 @@ macro_rules! generate_tests {
             assert_eq!(rows.len(), 1, "Committed data should be visible");
         }
 
-        #[switchy_async::test(real_time)]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator, real_time))]
         async fn test_nested_transaction_rejection() {
             let db = setup_db().await;
             let db = &**db;
@@ -288,8 +280,7 @@ macro_rules! generate_tests {
             tx.commit().await.unwrap();
         }
 
-        #[switchy_async::test(real_time)]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator, real_time))]
         async fn test_concurrent_transactions() {
             let db = setup_db().await;
             let db_clone = Arc::clone(&db);
@@ -379,8 +370,7 @@ macro_rules! generate_tests {
             // This demonstrates proper isolation and consistency as specified
         }
 
-        #[switchy_async::test]
-        #[test_log::test]
+        #[test_log::test(switchy_async::test(no_simulator))]
         async fn test_transaction_crud_operations() {
             let db = setup_db().await;
             let db = &**db;

@@ -2,6 +2,7 @@ use std::sync::Arc;
 use switchy_database::Database;
 
 /// Standard test schema for all backends
+#[allow(unused)]
 pub struct StandardTestSchema {
     pub users_table: &'static str,
     pub posts_table: &'static str,
@@ -42,6 +43,7 @@ impl Default for StandardTestSchema {
 }
 
 /// Comprehensive introspection test suite trait
+#[allow(unused)]
 pub trait IntrospectionTestSuite {
     type DatabaseType: Database + Send + Sync;
 

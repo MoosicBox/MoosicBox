@@ -104,8 +104,8 @@ use std::{
 
 use async_trait::async_trait;
 use rusqlite::{Connection, Row, Rows, Statement, types::Value};
+use switchy_async::sync::Mutex;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 use crate::{
     Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,

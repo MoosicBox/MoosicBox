@@ -179,6 +179,60 @@ nix develop .#ci --command cargo fmt
 nix develop .#ci --command cargo clippy
 ```
 
+## Database Backend Differences
+
+MoosicBox supports multiple database backends with some behavior differences to be aware of:
+
+### Transaction Error Handling
+
+| Database   | Savepoint After Error | Recovery Method |
+|------------|----------------------|-----------------|
+| SQLite     | ✅ Supported         | Create savepoint after error |
+| MySQL      | ✅ Supported         | Create savepoint after error |
+| PostgreSQL | ❌ Not Supported     | Must use savepoint BEFORE error, then rollback |
+
+### PostgreSQL Transaction Semantics
+
+PostgreSQL enforces strict transaction semantics. When any error occurs within a transaction, the entire transaction enters an **ABORTED** state:
+
+- **No new operations allowed** (including savepoint creation)
+- **Only ROLLBACK or ROLLBACK TO SAVEPOINT commands work**
+- **Error message**: "current transaction is aborted, commands ignored until end of transaction block"
+
+#### Correct PostgreSQL Error Recovery Pattern
+
+```rust
+// Create savepoint BEFORE risky operation
+let sp = tx.savepoint("safety").await?;
+
+match risky_operation(&tx).await {
+    Ok(result) => {
+        sp.release().await?;  // Success - release savepoint
+        Ok(result)
+    }
+    Err(error) => {
+        sp.rollback().await?; // Must rollback to continue transaction
+        // Transaction is now viable again
+        handle_error(error)
+    }
+}
+```
+
+#### SQLite/MySQL Pattern (for comparison)
+
+```rust
+// Can create savepoint AFTER error occurs
+let _error = risky_operation(&tx).await.unwrap_err();
+let sp = tx.savepoint("recovery").await?; // Works in SQLite/MySQL
+// Continue with recovery operations...
+```
+
+### Testing Implications
+
+Some tests are backend-specific due to these differences:
+- `test_savepoint_after_failed_operation` - Excluded from PostgreSQL test suites
+- Use `nix develop --command cargo test -p switchy_database --test savepoint_integration` to run backend-specific tests
+
 ## Package Building
 
 Build MoosicBox as a Nix package:

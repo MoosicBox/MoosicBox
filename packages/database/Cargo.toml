@@ -103,7 +103,7 @@ postgres-sqlx = [
     "sqlx/postgres",
 ]
 sqlite = ["sqlite-sqlx"]
-sqlite-rusqlite = ["dep:regex", "dep:rusqlite"]
+sqlite-rusqlite = ["dep:regex", "dep:rusqlite", "switchy_async/sync"]
 sqlite-sqlx = ["dep:futures", "dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
 sqlx = []
 
