@@ -1049,6 +1049,69 @@ pub trait Savepoint: Send + Sync {
 ///     // BUG: Never commit or rollback - connections accumulate
 /// }
 /// ```
+///
+/// # Migration Safety with Savepoints
+///
+/// Savepoints are useful for testing migrations safely in production:
+///
+/// ```rust,ignore
+/// async fn safe_migration(db: &Database) -> Result<(), DatabaseError> {
+///     let tx = db.begin_transaction().await?;
+///
+///     // Create savepoint before potentially dangerous schema change
+///     let sp = tx.savepoint("before_migration").await?;
+///
+///     // Apply risky migration
+///     tx.execute("ALTER TABLE users ADD COLUMN new_field TEXT")
+///         .await?;
+///
+///     // Test the migration with sample data
+///     match test_migration(&*tx).await {
+///         Ok(_) => {
+///             // Migration successful, keep changes
+///             sp.release().await?;
+///             tx.commit().await?;
+///         }
+///         Err(e) => {
+///             // Migration failed, rollback to savepoint
+///             sp.rollback_to().await?;
+///
+///             // Could try alternative migration approach
+///             tx.execute("ALTER TABLE users ADD COLUMN new_field VARCHAR(255)")
+///                 .await?;
+///             tx.commit().await?;
+///         }
+///     }
+///     Ok(())
+/// }
+/// ```
+///
+/// # Backend-Specific Behavior
+///
+/// ## PostgreSQL
+/// - After any error in a transaction, `PostgreSQL` enters an "aborted" state
+/// - No further operations (including savepoint creation) are allowed until rollback
+/// - Best practice: Create savepoints BEFORE operations that might fail
+/// - Example:
+/// ```rust,ignore
+/// // PostgreSQL - Create savepoint first
+/// let sp = tx.savepoint("before_risky").await?;
+/// match risky_operation(&*tx).await {
+///     Err(_) => sp.rollback_to().await?, // Can recover
+///     Ok(_) => sp.release().await?,
+/// }
+/// ```
+///
+/// ## `SQLite` & `MySQL`
+/// - Allow savepoint creation after errors within a transaction
+/// - More forgiving error recovery model
+/// - Can create savepoints reactively after errors occur
+///
+/// ## Savepoint Name Restrictions
+/// - All backends: Names must be alphanumeric with underscores only
+/// - Cannot start with numbers
+/// - No spaces or special characters allowed
+/// - Maximum length varies by backend (typically 63-128 characters)
 #[async_trait]
 pub trait DatabaseTransaction: Database + Send + Sync {
     /// Commit the transaction, consuming it

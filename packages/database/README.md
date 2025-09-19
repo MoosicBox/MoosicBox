@@ -221,6 +221,52 @@ async fn transaction_with_rollback(db: &Database) -> Result<(), Box<dyn std::err
 }
 ```
 
+### Savepoints (Nested Transactions)
+
+Savepoints allow partial rollback within a transaction, enabling complex error recovery:
+
+```rust
+async fn batch_import_with_recovery(db: &Database) -> Result<(), DatabaseError> {
+    let tx = db.begin_transaction().await?;
+
+    // Process records in batches with savepoints
+    for (batch_num, batch) in records.chunks(100).enumerate() {
+        let sp = tx.savepoint(&format!("batch_{}", batch_num)).await?;
+
+        match process_batch(&*tx, batch).await {
+            Ok(_) => {
+                // Batch successful, merge into transaction
+                sp.release().await?;
+            }
+            Err(e) => {
+                // Batch failed, rollback this batch only
+                eprintln!("Batch {} failed: {}", batch_num, e);
+                sp.rollback_to().await?;
+                // Transaction continues with other batches
+            }
+        }
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+```
+
+#### Backend Support
+
+| Database | Savepoint Support | Notes |
+|----------|------------------|-------|
+| SQLite | ✅ Full | Can create savepoints after errors |
+| PostgreSQL | ✅ Full | Must create before potential errors |
+| MySQL | ✅ Full (InnoDB) | Requires InnoDB storage engine |
+
+#### Common Use Cases
+
+- **Batch Processing**: Process large datasets with per-batch recovery
+- **Migration Testing**: Test schema changes with rollback capability
+- **Complex Business Logic**: Multi-step operations with conditional rollback
+- **Error Recovery**: Continue transaction after handling specific errors
+
 ### Schema Migrations
 
 ```rust
