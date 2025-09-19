@@ -8897,40 +8897,873 @@ impl RusqliteDatabase {
 
 **Prerequisites:** Phase 10.2.2 (Schema Builder Extensions) must be complete
 
-### 15.1 CASCADE Support for DropTableStatement
+### 15.1 Shared Dependency Infrastructure (Prerequisites for 15.2, 15.3, and 15.4)
 
-- [ ] Add CASCADE support to DropTableStatement ❌ **MINOR**
+- [ ] Create reusable dependency discovery utilities
+  - [ ] Location: `packages/database/src/schema/dependencies.rs` (new module)
+  - [ ] Core types:
+    ```rust
+    use std::collections::{BTreeMap, BTreeSet};
+
+    /// Represents foreign key dependencies between tables
+    #[derive(Debug, Clone)]
+    pub struct DependencyGraph {
+        /// Map from table name to set of tables that depend on it
+        pub dependents: BTreeMap<String, BTreeSet<String>>,
+        /// Map from table name to set of tables it depends on
+        pub dependencies: BTreeMap<String, BTreeSet<String>>,
+    }
+
+    impl DependencyGraph {
+        pub fn new() -> Self {
+            Self {
+                dependents: BTreeMap::new(),
+                dependencies: BTreeMap::new(),
+            }
+        }
+
+        pub fn add_dependency(&mut self, dependent: String, depends_on: String) {
+            self.dependents.entry(depends_on).or_default().insert(dependent.clone());
+            self.dependencies.entry(dependent).or_default().insert(depends_on);
+        }
+
+        pub fn get_dependents(&self, table: &str) -> Option<&BTreeSet<String>> {
+            self.dependents.get(table)
+        }
+
+        pub fn has_dependents(&self, table: &str) -> bool {
+            self.dependents.get(table).map_or(false, |deps| !deps.is_empty())
+        }
+
+        pub fn topological_sort(&self) -> Result<Vec<String>, CycleError> {
+            // Implementation of topological sort with cycle detection
+        }
+    }
+
+    /// Error when circular dependencies are detected
+    #[derive(Debug)]
+    pub struct CycleError {
+        pub tables: Vec<String>,
+    }
+
+    /// Plan for dropping tables
+    #[derive(Debug)]
+    pub enum DropPlan {
+        /// Simple ordered drop (no cycles)
+        Simple(Vec<String>),
+        /// Requires disabling foreign keys due to cycles
+        WithCycles {
+            tables: Vec<String>,
+            requires_fk_disable: bool,
+        },
+    }
+    ```
+
+  - [ ] SQLite dependency discovery:
+    ```rust
+    /// Discover all foreign key dependencies for SQLite
+    pub async fn discover_dependencies_sqlite(
+        tx: &dyn DatabaseTransaction,
+    ) -> Result<DependencyGraph, DatabaseError> {
+        let mut graph = DependencyGraph::new();
+
+        // Get all tables
+        let tables = tx.query(
+            "SELECT name FROM sqlite_master WHERE type='table'",
+            &[]
+        ).await?;
+
+        // For each table, get its foreign keys
+        for table in tables {
+            let fk_list = tx.query(
+                &format!("PRAGMA foreign_key_list({})", table.name),
+                &[]
+            ).await?;
+
+            for fk in fk_list {
+                // fk.table is what this table references
+                graph.add_dependency(table.name.clone(), fk.table);
+            }
+        }
+
+        Ok(graph)
+    }
+
+    /// Get tables that depend on the given table
+    pub async fn get_table_dependencies_sqlite(
+        tx: &dyn DatabaseTransaction,
+        table_name: &str
+    ) -> Result<BTreeSet<String>, DatabaseError> {
+        let graph = discover_dependencies_sqlite(tx).await?;
+        Ok(graph.get_dependents(table_name)
+            .cloned()
+            .unwrap_or_default())
+    }
+    ```
+
+#### 15.1 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features schema` - compiles with dependency utilities
+- [ ] Unit test: DependencyGraph add_dependency() works correctly
+- [ ] Unit test: DependencyGraph get_dependents() returns correct sets
+- [ ] Unit test: DependencyGraph has_dependents() detects dependencies
+- [ ] Unit test: DependencyGraph topological_sort() handles simple cases
+- [ ] Unit test: DependencyGraph topological_sort() detects cycles
+- [ ] SQLite test: discover_dependencies_sqlite() finds all foreign keys
+- [ ] SQLite test: get_table_dependencies_sqlite() returns direct dependents
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Documentation: Dependency utilities documented with examples
+
+### 15.2 CASCADE Support for DropTableStatement (UPDATED)
+
+- [ ] Add CASCADE support to DropTableStatement
   - [ ] Add `cascade: bool` field to `DropTableStatement`
+    - Location: `packages/database/src/schema.rs` in DropTableStatement struct
+    - Default: false (maintain backward compatibility)
+
   - [ ] Add `cascade()` builder method
+    - Location: `packages/database/src/schema.rs` impl block
+    - Returns: `Self` for method chaining
+    - Example: `db.drop_table("users").cascade().execute(&db).await?`
+
   - [ ] PostgreSQL/MySQL: Use native CASCADE keyword in SQL generation
-  - [ ] SQLite: Implement manual CASCADE using transactions:
-    1. Query foreign key dependencies with `PRAGMA foreign_key_list`
-    2. Recursively identify and drop dependent tables
-    3. Drop main table last
-    4. Wrap entire operation in transaction for atomicity
+    - Location: `packages/database/src/schema.rs` in `to_sql()` method
+    - PostgreSQL: Append " CASCADE" when cascade=true
+    - MySQL: Append " CASCADE" when cascade=true
+    - Implementation: Trivial string concatenation
+
+  - [ ] SQLite: Implement manual CASCADE using shared dependency infrastructure
+    **Implementation Strategy:**
+
+    ```rust
+    use crate::schema::dependencies::{
+        discover_dependencies_sqlite,
+        DependencyGraph,
+        DropPlan,
+    };
+
+    async fn execute_cascade_sqlite(
+        tx: &dyn DatabaseTransaction,
+        table_name: &str
+    ) -> Result<()> {
+        // Use shared dependency discovery
+        let graph = discover_dependencies_sqlite(tx).await?;
+
+        // Get all tables that need to be dropped (recursive dependents)
+        let mut to_drop = BTreeSet::new();
+        collect_cascade_tables(&graph, table_name, &mut to_drop);
+
+        // Determine drop order using shared logic
+        let plan = graph.resolve_drop_order(to_drop)?;
+
+        // Execute the plan
+        execute_drop_plan(tx, plan).await
+    }
+
+    fn collect_cascade_tables(
+        graph: &DependencyGraph,
+        table_name: &str,
+        collected: &mut BTreeSet<String>,
+    ) {
+        // Add the table itself
+        collected.insert(table_name.to_string());
+
+        // Recursively add all dependent tables
+        if let Some(dependents) = graph.get_dependents(table_name) {
+            for dependent in dependents {
+                if !collected.contains(dependent) {
+                    collect_cascade_tables(graph, dependent, collected);
+                }
+            }
+        }
+    }
+
+    async fn execute_drop_plan(
+        tx: &dyn DatabaseTransaction,
+        plan: DropPlan,
+    ) -> Result<()> {
+        match plan {
+            DropPlan::Simple(tables) => {
+                // Drop in dependency order (leaves to root)
+                for table in tables.iter().rev() {
+                    tx.execute(&format!("DROP TABLE IF EXISTS {}", table)).await?;
+                }
+            }
+            DropPlan::WithCycles { tables, .. } => {
+                // Temporarily disable foreign keys for cycle resolution
+                tx.execute("PRAGMA foreign_keys = OFF").await?;
+
+                // Drop all tables in the cycle
+                for table in tables {
+                    tx.execute(&format!("DROP TABLE IF EXISTS {}", table)).await?;
+                }
+
+                // Re-enable foreign keys
+                tx.execute("PRAGMA foreign_keys = ON").await?;
+
+                // Verify foreign key integrity
+                let check = tx.query_scalar::<i64>("PRAGMA foreign_key_check").await?;
+                if check > 0 {
+                    return Err(DatabaseError::IntegrityViolation(
+                        "Foreign key constraints violated after CASCADE"
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+    ```
+
+    4. **Integration Point**
+       - Location: `packages/database/src/sqlx/sqlite.rs` and `packages/database/src/rusqlite/mod.rs`
+       - In `execute()` method, detect DropTableStatement with cascade=true
+       - Route to `execute_cascade_sqlite()` instead of direct SQL execution
+       - Ensure operation is within transaction context (required for atomicity)
+
   - [ ] Add comprehensive tests for CASCADE behavior across all backends
+    **Test Scenarios:**
+
+    1. **Simple CASCADE** - Table with single dependent
+       ```sql
+       CREATE TABLE users (id INTEGER PRIMARY KEY);
+       CREATE TABLE posts (
+           id INTEGER PRIMARY KEY,
+           user_id INTEGER REFERENCES users(id)
+       );
+       -- DROP TABLE users CASCADE should drop posts first, then users
+       ```
+
+    2. **Multi-level CASCADE** - Chain of dependencies
+       ```sql
+       CREATE TABLE users (id INTEGER PRIMARY KEY);
+       CREATE TABLE posts (
+           id INTEGER PRIMARY KEY,
+           user_id INTEGER REFERENCES users(id)
+       );
+       CREATE TABLE comments (
+           id INTEGER PRIMARY KEY,
+           post_id INTEGER REFERENCES posts(id)
+       );
+       -- DROP TABLE users CASCADE should drop comments, posts, users (in that order)
+       ```
+
+    3. **Multiple Dependencies** - Table referenced by multiple tables
+       ```sql
+       CREATE TABLE users (id INTEGER PRIMARY KEY);
+       CREATE TABLE posts (
+           id INTEGER PRIMARY KEY,
+           author_id INTEGER REFERENCES users(id)
+       );
+       CREATE TABLE messages (
+           id INTEGER PRIMARY KEY,
+           sender_id INTEGER REFERENCES users(id)
+       );
+       -- DROP TABLE users CASCADE should drop both posts and messages
+       ```
+
+    4. **Circular Dependencies** - Mutual references requiring special handling
+       ```sql
+       CREATE TABLE teams (
+           id INTEGER PRIMARY KEY,
+           leader_id INTEGER
+       );
+       CREATE TABLE users (
+           id INTEGER PRIMARY KEY,
+           team_id INTEGER REFERENCES teams(id)
+       );
+       -- Add foreign key after table creation
+       -- This creates a cycle that requires PRAGMA foreign_keys manipulation
+       ```
+
+    5. **Self-referencing Tables** - Table with foreign key to itself
+       ```sql
+       CREATE TABLE employees (
+           id INTEGER PRIMARY KEY,
+           manager_id INTEGER REFERENCES employees(id)
+       );
+       -- DROP TABLE employees CASCADE should handle self-reference gracefully
+       ```
+
+    6. **No Dependencies** - CASCADE on table with no dependents
+       ```sql
+       CREATE TABLE standalone (id INTEGER PRIMARY KEY);
+       -- DROP TABLE standalone CASCADE should work identically to non-CASCADE
+       ```
+
+    7. **Failed CASCADE** - Verify transaction rollback on error
+       - Create scenario where CASCADE would fail partway through
+       - Verify all tables remain intact after rollback
+
   - [ ] Document CASCADE limitations and workarounds for SQLite
+    **Documentation to add:**
 
-### 15.2 RESTRICT Support
+    ```markdown
+    ## CASCADE Behavior
 
-- [ ] Add RESTRICT support for explicit fail-on-dependencies ❌ **MINOR**
-  - [ ] Add `restrict: bool` field (mutually exclusive with cascade)
-  - [ ] PostgreSQL/MySQL: Use RESTRICT keyword
-  - [ ] SQLite: Query dependencies and return error if any exist
+    ### Native Support (PostgreSQL/MySQL)
+    These databases support CASCADE natively via SQL syntax:
+    - `DROP TABLE table_name CASCADE`
+    - Automatically drops all dependent objects
+    - Handles complex dependency graphs internally
 
-### 15.3 Extended CASCADE Support
+    ### Manual Implementation (SQLite)
+    SQLite lacks native CASCADE support for DROP TABLE, requiring manual implementation:
 
-- [ ] Extend CASCADE to other schema operations ❌ **MINOR**
-  - [ ] Add CASCADE to DropIndexStatement
-  - [ ] Add CASCADE to AlterTableStatement column drops
-  - [ ] Consistent behavior across all schema modification operations
+    **How it works:**
+    1. Discovers dependencies via PRAGMA foreign_key_list
+    2. Builds dependency graph and determines drop order
+    3. Executes drops in correct order within transaction
+    4. Handles circular dependencies by temporarily disabling foreign keys
 
-**Implementation Complexity:** HIGH - SQLite manual CASCADE requires significant transaction logic and dependency graph traversal.
+    **Limitations:**
+    - Requires foreign keys to be defined (no implicit relationships)
+    - Performance: O(n*m) where n=tables, m=foreign keys
+    - Circular dependencies require brief foreign key disable/enable
+
+    **Behavioral Guarantees:**
+    - ✅ Atomicity: All-or-nothing via transactions
+    - ✅ Consistency: Same tables dropped as PostgreSQL/MySQL
+    - ✅ Error handling: Any failure rolls back entire operation
+    - ✅ Circular dependencies: Handled transparently
+
+    **When to use CASCADE:**
+    - Dropping tables with known dependencies
+    - Test database cleanup
+    - Schema migration rollbacks
+
+    **When NOT to use CASCADE:**
+    - Production data without careful review
+    - When you need to preserve some dependent data
+    - High-performance scenarios with many dependencies (consider manual drops)
+    ```
+
+#### 15.2 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features schema` - compiles with CASCADE support
+- [ ] Unit test: DropTableStatement.cascade() builder method works
+- [ ] Unit test: PostgreSQL generates "DROP TABLE x CASCADE" SQL
+- [ ] Unit test: MySQL generates "DROP TABLE x CASCADE" SQL
+- [ ] Unit test: SQLite routes to manual CASCADE implementation
+- [ ] Integration test: Simple CASCADE works identically on all backends
+- [ ] Integration test: Multi-level CASCADE works identically on all backends
+- [ ] Integration test: Multiple dependencies CASCADE correctly
+- [ ] Integration test: Circular dependencies handled on all backends
+- [ ] Integration test: Self-referencing tables CASCADE correctly
+- [ ] Integration test: CASCADE with no dependencies works
+- [ ] Integration test: Failed CASCADE rolls back completely
+- [ ] SQLite-specific test: Foreign keys disabled/enabled for cycles
+- [ ] SQLite-specific test: PRAGMA foreign_key_check passes after CASCADE
+- [ ] Performance test: CASCADE with 10+ dependent tables completes < 1s
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Documentation: CASCADE behavior documented in Database trait
+- [ ] Documentation: SQLite limitations clearly explained
+- [ ] Example: CASCADE usage in migration rollback scenario
+
+### 15.3 RESTRICT Support
+
+- [ ] Add RESTRICT support for explicit fail-on-dependencies
+  - [ ] Design: Use enum for drop behavior
+    ```rust
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum DropBehavior {
+        Default,    // Use backend default behavior
+        Cascade,    // Drop all dependents
+        Restrict,   // Fail if dependencies exist
+    }
+
+    pub struct DropTableStatement {
+        pub table_name: String,
+        pub if_exists: bool,
+        pub behavior: DropBehavior,
+    }
+
+    impl Default for DropTableStatement {
+        fn default() -> Self {
+            Self {
+                table_name: String::new(),
+                if_exists: false,
+                behavior: DropBehavior::Default,
+            }
+        }
+    }
+    ```
+
+  - [ ] Builder methods:
+    ```rust
+    impl DropTableStatement {
+        pub fn cascade(mut self) -> Self {
+            self.behavior = DropBehavior::Cascade;
+            self
+        }
+
+        pub fn restrict(mut self) -> Self {
+            self.behavior = DropBehavior::Restrict;
+            self
+        }
+
+        // Optional: for explicit default behavior
+        pub fn default_behavior(mut self) -> Self {
+            self.behavior = DropBehavior::Default;
+            self
+        }
+    }
+    ```
+
+  - [ ] SQL Generation based on behavior:
+    ```rust
+    impl DropTableStatement {
+        pub fn to_sql(&self, dialect: SqlDialect) -> String {
+            let mut sql = format!("DROP TABLE ");
+
+            if self.if_exists {
+                sql.push_str("IF EXISTS ");
+            }
+
+            sql.push_str(&self.table_name);
+
+            match self.behavior {
+                DropBehavior::Cascade => sql.push_str(" CASCADE"),
+                DropBehavior::Restrict => sql.push_str(" RESTRICT"),
+                DropBehavior::Default => {
+                    // No modifier - use backend default
+                }
+            }
+
+            sql
+        }
+    }
+    ```
+
+  - [ ] PostgreSQL/MySQL: Native RESTRICT support
+    - PostgreSQL: Appends " RESTRICT" when behavior=Restrict
+    - MySQL: Appends " RESTRICT" when behavior=Restrict
+    - Default: No modifier appended (backend decides)
+
+  - [ ] SQLite: Manual dependency checking using shared infrastructure
+    ```rust
+    use crate::schema::dependencies::{
+        get_table_dependencies_sqlite,
+    };
+
+    async fn execute_restrict_sqlite(
+        tx: &dyn DatabaseTransaction,
+        table_name: &str
+    ) -> Result<()> {
+        // Reuse the exact same dependency discovery from CASCADE
+        let dependents = get_table_dependencies_sqlite(tx, table_name).await?;
+
+        if !dependents.is_empty() {
+            return Err(DatabaseError::ForeignKeyConstraintViolation(
+                format!("Cannot drop table '{}': has dependent tables", table_name)
+            ));
+        }
+
+        // No dependencies, safe to drop
+        tx.execute(&format!("DROP TABLE IF EXISTS {}", table_name)).await
+    }
+
+    async fn execute_drop_sqlite(tx: &dyn DatabaseTransaction, stmt: &DropTableStatement) -> Result<()> {
+        match stmt.behavior {
+            DropBehavior::Cascade => {
+                // Use CASCADE implementation from 15.2
+                execute_cascade_sqlite(tx, &stmt.table_name).await
+            }
+            DropBehavior::Restrict => {
+                // Use shared dependency logic for consistency
+                execute_restrict_sqlite(tx, &stmt.table_name).await
+            }
+            DropBehavior::Default => {
+                // Just execute the drop, let SQLite handle it
+                let sql = format!("DROP TABLE IF EXISTS {}", stmt.table_name);
+                tx.execute(&sql).await
+            }
+        }
+    }
+    ```
+
+  - [ ] Backend default behaviors:
+    ```markdown
+    ## Backend Default Drop Behavior
+
+    When DropBehavior::Default is used:
+
+    | Backend | Default Behavior | Notes |
+    |---------|-----------------|-------|
+    | PostgreSQL | RESTRICT | Fails if foreign key dependencies exist |
+    | MySQL | Varies | Depends on foreign_key_checks variable |
+    | SQLite | Allows drop | Unless PRAGMA foreign_keys=ON |
+
+    Best practice: Use explicit CASCADE or RESTRICT for predictable behavior
+    ```
+
+  - [ ] Error handling:
+    - Use existing `DatabaseError::ForeignKeyConstraintViolation`
+    - Keep error messages simple with available information
+    - Format: "Cannot drop table 'tablename': has dependent tables"
+
+#### 15.3 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features schema` - compiles with RESTRICT support
+- [ ] Unit test: DropBehavior enum serialization/deserialization
+- [ ] Unit test: Builder methods set behavior correctly
+- [ ] Unit test: to_sql() generates correct SQL for each behavior
+- [ ] Unit test: CASCADE and RESTRICT are mutually exclusive via enum
+- [ ] Integration test: RESTRICT blocks drop when dependencies exist (all backends)
+- [ ] Integration test: RESTRICT allows drop when no dependencies (all backends)
+- [ ] Integration test: Default behavior works as documented per backend
+- [ ] Integration test: Switching from CASCADE to RESTRICT overwrites (not combines)
+- [ ] SQLite test: RESTRICT reuses get_table_dependencies_sqlite() from CASCADE
+- [ ] SQLite test: RESTRICT with foreign_keys=OFF still checks manually
+- [ ] Error test: ForeignKeyConstraintViolation returned consistently
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Documentation: DropBehavior enum documented with examples
+- [ ] Documentation: Backend default behaviors clearly explained
+
+### 15.4 Extended CASCADE Support - ALTER TABLE DROP COLUMN (LIMITED SCOPE)
+
+**Status:** SIMPLIFIED - Only implement what can be reliably abstracted across all backends
+
+**Native Database Support Analysis:**
+- **PostgreSQL**: Full CASCADE/RESTRICT support (drops indexes, views, triggers, etc.)
+- **MySQL**: No CASCADE/RESTRICT syntax (auto-handles indexes, fails on FKs)
+- **SQLite**: No CASCADE/RESTRICT syntax (auto-updates indexes, fails on FKs)
+
+**Abstractable Scope:**
+Given the significant differences in native support, we limit our abstraction to what can be consistently implemented across all backends.
+
+- [ ] Add DropBehavior support to ALTER TABLE DROP COLUMN
+  - [ ] Create DropColumnStatement:
+    ```rust
+    pub struct DropColumnStatement {
+        pub table_name: String,
+        pub column_name: String,
+        pub behavior: DropBehavior,  // Reuse enum from 15.3
+    }
+
+    impl DropColumnStatement {
+        pub fn new(table: impl Into<String>, column: impl Into<String>) -> Self {
+            Self {
+                table_name: table.into(),
+                column_name: column.into(),
+                behavior: DropBehavior::Default,
+            }
+        }
+
+        pub fn cascade(mut self) -> Self {
+            self.behavior = DropBehavior::Cascade;
+            self
+        }
+
+        pub fn restrict(mut self) -> Self {
+            self.behavior = DropBehavior::Restrict;
+            self
+        }
+    }
+    ```
+
+  - [ ] Dependency detection for columns (limited scope):
+    ```rust
+    use crate::schema::dependencies::DependencyGraph;
+
+    #[derive(Debug, Clone)]
+    pub struct ColumnDependencies {
+        pub indexes: Vec<String>,           // Indexes using this column
+        pub foreign_keys: Vec<String>,      // FKs referencing this column
+        // NOTE: Views, triggers, check constraints NOT included (not portable)
+    }
+
+    async fn get_column_dependencies_sqlite(
+        tx: &dyn DatabaseTransaction,
+        table_name: &str,
+        column_name: &str,
+    ) -> Result<ColumnDependencies, DatabaseError> {
+        let mut deps = ColumnDependencies {
+            indexes: Vec::new(),
+            foreign_keys: Vec::new(),
+        };
+
+        // 1. Find indexes using this column
+        let indexes = tx.query(
+            "SELECT name FROM sqlite_master
+             WHERE type='index' AND tbl_name=? AND sql LIKE '%' || ? || '%'",
+            &[table_name, column_name]
+        ).await?;
+
+        for index in indexes {
+            // Verify column is actually in the index (not just in name)
+            let info = tx.query(
+                "PRAGMA index_info(?)",
+                &[index.name]
+            ).await?;
+
+            if info.iter().any(|col| col.name == column_name) {
+                deps.indexes.push(index.name);
+            }
+        }
+
+        // 2. Check for foreign keys (both directions)
+        // Note: SQLite doesn't provide easy way to check incoming FKs
+        let fks = tx.query(
+            "PRAGMA foreign_key_list(?)",
+            &[table_name]
+        ).await?;
+
+        for fk in fks {
+            if fk.from_column == column_name {
+                deps.foreign_keys.push(format!("FK_{}_{}_{}",
+                    table_name, fk.to_table, column_name));
+            }
+        }
+
+        Ok(deps)
+    }
+    ```
+
+  - [ ] PostgreSQL implementation:
+    ```rust
+    impl DropColumnStatement {
+        pub fn to_sql_postgres(&self) -> String {
+            let mut sql = format!("ALTER TABLE {} DROP COLUMN {}",
+                self.table_name, self.column_name);
+
+            match self.behavior {
+                DropBehavior::Cascade => sql.push_str(" CASCADE"),
+                DropBehavior::Restrict => sql.push_str(" RESTRICT"),
+                DropBehavior::Default => {}, // PostgreSQL defaults to RESTRICT
+            }
+
+            sql
+        }
+    }
+    ```
+
+  - [ ] MySQL implementation:
+    ```rust
+    async fn execute_drop_column_mysql(
+        tx: &dyn DatabaseTransaction,
+        stmt: &DropColumnStatement,
+    ) -> Result<(), DatabaseError> {
+        match stmt.behavior {
+            DropBehavior::Cascade => {
+                // MySQL doesn't support CASCADE, manually drop indexes first
+                let deps = get_column_dependencies_mysql(tx, &stmt.table_name, &stmt.column_name).await?;
+
+                // Drop indexes (MySQL allows this)
+                for index in deps.indexes {
+                    tx.execute(&format!("DROP INDEX {} ON {}", index, stmt.table_name)).await?;
+                }
+
+                // Cannot cascade foreign keys (too dangerous)
+                if !deps.foreign_keys.is_empty() {
+                    return Err(DatabaseError::ForeignKeyConstraintViolation(
+                        format!("Cannot CASCADE DROP COLUMN '{}': has foreign key constraints",
+                            stmt.column_name)
+                    ));
+                }
+
+                // Now drop the column
+                tx.execute(&format!("ALTER TABLE {} DROP COLUMN {}",
+                    stmt.table_name, stmt.column_name)).await?;
+            }
+            DropBehavior::Restrict => {
+                // Check dependencies first
+                let deps = get_column_dependencies_mysql(tx, &stmt.table_name, &stmt.column_name).await?;
+
+                if !deps.indexes.is_empty() || !deps.foreign_keys.is_empty() {
+                    return Err(DatabaseError::ForeignKeyConstraintViolation(
+                        format!("Cannot drop column '{}': has dependencies", stmt.column_name)
+                    ));
+                }
+
+                tx.execute(&format!("ALTER TABLE {} DROP COLUMN {}",
+                    stmt.table_name, stmt.column_name)).await?;
+            }
+            DropBehavior::Default => {
+                // MySQL default: auto-drop indexes, fail on FKs
+                tx.execute(&format!("ALTER TABLE {} DROP COLUMN {}",
+                    stmt.table_name, stmt.column_name)).await?;
+            }
+        }
+
+        Ok(())
+    }
+    ```
+
+  - [ ] SQLite implementation:
+    ```rust
+    async fn execute_drop_column_sqlite(
+        tx: &dyn DatabaseTransaction,
+        stmt: &DropColumnStatement,
+    ) -> Result<(), DatabaseError> {
+        // Note: SQLite 3.35.0+ required for DROP COLUMN support
+
+        match stmt.behavior {
+            DropBehavior::Cascade => {
+                let deps = get_column_dependencies_sqlite(tx, &stmt.table_name, &stmt.column_name).await?;
+
+                // Drop indexes explicitly
+                for index in deps.indexes {
+                    tx.execute(&format!("DROP INDEX IF EXISTS {}", index)).await?;
+                }
+
+                // Cannot cascade foreign keys
+                if !deps.foreign_keys.is_empty() {
+                    return Err(DatabaseError::ForeignKeyConstraintViolation(
+                        format!("Cannot CASCADE DROP COLUMN '{}': has foreign key constraints",
+                            stmt.column_name)
+                    ));
+                }
+
+                // Drop the column
+                tx.execute(&format!("ALTER TABLE {} DROP COLUMN {}",
+                    stmt.table_name, stmt.column_name)).await?;
+            }
+            DropBehavior::Restrict => {
+                let deps = get_column_dependencies_sqlite(tx, &stmt.table_name, &stmt.column_name).await?;
+
+                if !deps.indexes.is_empty() || !deps.foreign_keys.is_empty() {
+                    return Err(DatabaseError::ForeignKeyConstraintViolation(
+                        format!("Cannot drop column '{}': has dependencies", stmt.column_name)
+                    ));
+                }
+
+                tx.execute(&format!("ALTER TABLE {} DROP COLUMN {}",
+                    stmt.table_name, stmt.column_name)).await?;
+            }
+            DropBehavior::Default => {
+                // SQLite default behavior
+                tx.execute(&format!("ALTER TABLE {} DROP COLUMN {}",
+                    stmt.table_name, stmt.column_name)).await?;
+            }
+        }
+
+        Ok(())
+    }
+    ```
+
+  - [ ] Unified behavior guarantees:
+    ```markdown
+    ## DROP COLUMN Behavior Matrix
+
+    | Behavior | PostgreSQL | MySQL | SQLite |
+    |----------|------------|-------|--------|
+    | CASCADE - Indexes | Native CASCADE | Manual drop first | Manual drop first |
+    | CASCADE - Foreign Keys | Native CASCADE | ERROR (unsafe) | ERROR (unsafe) |
+    | CASCADE - Views/Triggers | Native CASCADE | N/A (not tracked) | N/A (not tracked) |
+    | RESTRICT - Any dependency | Native RESTRICT | Manual check & error | Manual check & error |
+    | Default | RESTRICT | Auto-drop indexes, error on FKs | Error on constraints |
+
+    **Portable Guarantees:**
+    - CASCADE will drop indexes but NOT foreign keys (safety)
+    - RESTRICT will fail if any detectable dependencies exist
+    - Foreign keys are never automatically cascaded (too dangerous)
+    ```
+
+- [ ] SKIP: DropIndexStatement CASCADE/RESTRICT
+  - **Rationale:** Indexes have no dependents, just drop normally
+  - No CASCADE/RESTRICT needed or useful
+
+- [ ] SKIP: View/Trigger/Check Constraint Dependencies
+  - **Rationale:** Cannot reliably detect or handle across all backends
+  - Only PostgreSQL tracks these dependencies
+  - Document as known limitation
+
+#### 15.4 Verification Checklist
+
+- [ ] Run `cargo build -p switchy_database --features schema` - compiles with column drop support
+- [ ] Unit test: DropColumnStatement builder methods work
+- [ ] Unit test: Column dependency detection finds indexes
+- [ ] Unit test: Column dependency detection finds foreign keys
+- [ ] Integration test: DROP COLUMN CASCADE drops indexes (all backends)
+- [ ] Integration test: DROP COLUMN CASCADE fails on foreign keys (safety)
+- [ ] Integration test: DROP COLUMN RESTRICT fails with indexes
+- [ ] Integration test: DROP COLUMN RESTRICT fails with foreign keys
+- [ ] Integration test: Default behavior matches documented matrix
+- [ ] SQLite test: Requires SQLite 3.35.0+ for DROP COLUMN
+- [ ] MySQL test: Manual index dropping works before column drop
+- [ ] PostgreSQL test: Native CASCADE works as expected
+- [ ] Error messages consistent across backends
+- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
+- [ ] Run `cargo fmt --all` - format entire repository
+- [ ] Documentation: Behavioral matrix clearly documented
+- [ ] Documentation: Limitations (views, triggers) explained
+- [ ] Documentation: Safety decision on foreign keys explained
+
+#### 15.4 Known Limitations
+
+**What we DON'T abstract (not portable):**
+1. **View dependencies** - Only PostgreSQL tracks these
+2. **Trigger dependencies** - Only PostgreSQL tracks these
+3. **Check constraint dependencies** - Limited detection capability
+4. **Generated column dependencies** - Not consistently trackable
+
+**Safety Decision:**
+- **Foreign keys are NEVER cascaded** even with CASCADE option
+- Dropping columns that foreign keys depend on is too dangerous
+- Users must explicitly drop foreign keys first
+- This prevents accidental data integrity violations
+
+**SQLite Version Requirement:**
+- DROP COLUMN requires SQLite 3.35.0+ (released 2021-03-12)
+- Older versions will return error
+- Consider adding version check
+
+#### 15.4 Benefits of Shared Infrastructure
+
+- **Single Source of Truth** - All dependency logic in one place
+- **Consistent Behavior** - CASCADE/RESTRICT work identically across operations
+- **Maintainable** - Bug fixes and improvements benefit all features
+- **Testable** - Dependency logic can be unit tested independently
+- **Reusable** - Future schema operations can leverage same infrastructure
+- **Performance** - Can cache dependency graph for multiple operations
+
+**Implementation Complexity:** MODERATE - Shared dependency infrastructure reduces complexity through reusable abstractions.
+
+**Key Implementation Details:**
+
+**Why Shared Dependency Infrastructure:**
+- Single implementation serves both CASCADE and RESTRICT
+- Consistent behavior across all schema operations
+- Easier to test, debug, and maintain
+- Foundation for future dependency-aware operations
+
+**Why Transaction Support Was Critical:**
+- Ensures atomicity of multi-table drops
+- Automatic rollback on any failure
+- No partial state possible
+
+**Why Savepoints Aren't Needed:**
+- CASCADE is an all-or-nothing operation
+- No need for partial rollback within CASCADE
+- Transaction boundary is sufficient
+
+**Complexity Management:**
+- Shared dependency discovery utilities (packages/database/src/schema/dependencies.rs)
+- Reusable DependencyGraph and DropPlan types
+- Clear separation between native and manual implementations
+- Abstracted topological sorting and cycle detection
+
+**Testing Strategy:**
+- Dependency utilities unit tested independently
+- Behavioral tests verify identical outcomes across backends
+- Implementation tests verify backend-specific mechanics
+- Performance tests ensure acceptable speed even with complex schemas
+
+**Implementation Order:**
+1. **Phase 15.1**: Build shared dependency infrastructure
+2. **Phase 15.2**: Implement CASCADE using shared utilities
+3. **Phase 15.3**: Implement RESTRICT reusing same logic
+4. **Phase 15.4**: Extend to other operations with consistent patterns
 
 **Benefits:**
 - Consistent CASCADE behavior across all database backends
 - Production-ready foreign key constraint handling
 - Enhanced migration safety for complex schema changes
+- Leverages existing transaction infrastructure optimally
 
 **Production Readiness:** ✅ The migration system is fully functional and production-ready for HyperChad and other projects. All core functionality complete.
 
