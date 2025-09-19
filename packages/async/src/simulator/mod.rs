@@ -26,6 +26,34 @@ macro_rules! select {
 pub use select;
 
 #[cfg(feature = "macros")]
+#[macro_export]
+macro_rules! join {
+    ($($tokens:tt)*) => {
+        $crate::join_internal! {
+            @path = $crate;
+            $($tokens)*
+        }
+    };
+}
+
+#[cfg(feature = "macros")]
+pub use join;
+
+#[cfg(feature = "macros")]
+#[macro_export]
+macro_rules! try_join {
+    ($($tokens:tt)*) => {
+        $crate::try_join_internal! {
+            @path = $crate;
+            $($tokens)*
+        }
+    };
+}
+
+#[cfg(feature = "macros")]
+pub use try_join;
+
+#[cfg(feature = "macros")]
 #[cfg(test)]
 mod test {
     use std::time::Duration;

@@ -154,6 +154,22 @@ pub fn select_internal(input: TokenStream) -> TokenStream {
     simulator::select_internal(input)
 }
 
+/// Internal join! macro that accepts a crate path parameter
+/// This provides 100% `tokio::join!` compatibility for the simulator runtime
+#[cfg(feature = "simulator")]
+#[proc_macro]
+pub fn join_internal(input: TokenStream) -> TokenStream {
+    simulator::join_internal(input)
+}
+
+/// Internal `try_join`! macro that accepts a crate path parameter
+/// This provides 100% `tokio::try_join!` compatibility for the simulator runtime
+#[cfg(feature = "simulator")]
+#[proc_macro]
+pub fn try_join_internal(input: TokenStream) -> TokenStream {
+    simulator::try_join_internal(input)
+}
+
 struct YieldInjector;
 
 impl VisitMut for YieldInjector {

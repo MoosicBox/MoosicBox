@@ -22,6 +22,36 @@ pub mod unsync {
     #[cfg(feature = "async-macros")]
     pub use select;
 
+    // Override the join! macro to use the correct path for switchy::unsync
+    #[cfg(feature = "async-macros")]
+    #[macro_export]
+    macro_rules! join {
+        ($($tokens:tt)*) => {
+            switchy::unsync_macros::join_internal! {
+                @path = switchy::unsync;
+                $($tokens)*
+            }
+        };
+    }
+
+    #[cfg(feature = "async-macros")]
+    pub use join;
+
+    // Override the try_join! macro to use the correct path for switchy::unsync
+    #[cfg(feature = "async-macros")]
+    #[macro_export]
+    macro_rules! try_join {
+        ($($tokens:tt)*) => {
+            switchy::unsync_macros::try_join_internal! {
+                @path = switchy::unsync;
+                $($tokens)*
+            }
+        };
+    }
+
+    #[cfg(feature = "async-macros")]
+    pub use try_join;
+
     // Re-export test attribute macro
     #[cfg(all(test, feature = "async-macros"))]
     pub use crate::unsync_macros::unsync_test as test;
@@ -48,9 +78,47 @@ pub mod unsync_macros {
     #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
     pub use select_internal;
 
+    // For tokio runtime - re-export tokio::join! as join_internal
+    #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
+    #[macro_export]
+    macro_rules! join_internal {
+        // Handle the @path parameter and ignore it for tokio
+        (@path = $path:path; $($tokens:tt)*) => {
+            switchy::unsync::tokio::join! { $($tokens)* }
+        };
+        // Fallback for direct calls without @path
+        ($($tokens:tt)*) => {
+            switchy::unsync::tokio::join! { $($tokens)* }
+        };
+    }
+
+    #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
+    pub use join_internal;
+
+    // For tokio runtime - re-export tokio::try_join! as try_join_internal
+    #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
+    #[macro_export]
+    macro_rules! try_join_internal {
+        // Handle the @path parameter and ignore it for tokio
+        (@path = $path:path; $($tokens:tt)*) => {
+            switchy::unsync::tokio::try_join! { $($tokens)* }
+        };
+        // Fallback for direct calls without @path
+        ($($tokens:tt)*) => {
+            switchy::unsync::tokio::try_join! { $($tokens)* }
+        };
+    }
+
+    #[cfg(all(feature = "async-tokio", not(feature = "simulator")))]
+    pub use try_join_internal;
+
     // For simulator runtime - re-export the procedural macro
     #[cfg(feature = "simulator")]
     pub use switchy_async_macros::select_internal;
+
+    // For simulator runtime - re-export join/try_join procedural macros
+    #[cfg(feature = "simulator")]
+    pub use switchy_async_macros::{join_internal, try_join_internal};
 
     // Default fallback - use simulator when no specific runtime is chosen
     // but async-macros is enabled (which brings in the dependency)
@@ -60,6 +128,14 @@ pub mod unsync_macros {
         not(feature = "simulator")
     ))]
     pub use switchy_async_macros::select_internal;
+
+    // Default fallback - use simulator join/try_join when no specific runtime is chosen
+    #[cfg(all(
+        feature = "async-macros",
+        not(feature = "async-tokio"),
+        not(feature = "simulator")
+    ))]
+    pub use switchy_async_macros::{join_internal, try_join_internal};
 
     // For tokio runtime - re-export tokio::test as test_internal
     #[cfg(all(test, feature = "async-tokio", not(feature = "simulator")))]

@@ -164,3 +164,67 @@ impl Parse for SelectBranch {
         })
     }
 }
+
+// ============================================================================
+// join! and try_join! macro implementations for simulator mode
+// ============================================================================
+
+/// Internal join! macro that accepts a crate path parameter
+/// This provides 100% `tokio::join!` compatibility for the simulator runtime
+pub fn join_internal(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as JoinWithPathInput);
+    let crate_path = input.crate_path;
+    let futures = input.futures;
+
+    // Generate the futures::join! call
+    let output = quote! {
+        #crate_path::futures::join!(#(#futures),*)
+    };
+
+    output.into()
+}
+
+/// Internal `try_join`! macro that accepts a crate path parameter
+/// This provides 100% `tokio::try_join!` compatibility for the simulator runtime
+pub fn try_join_internal(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as JoinWithPathInput);
+    let crate_path = input.crate_path;
+    let futures = input.futures;
+
+    // Generate the futures::try_join! call
+    let output = quote! {
+        #crate_path::futures::try_join!(#(#futures),*)
+    };
+
+    output.into()
+}
+
+/// Represents the parsed input to a `join!/try_join`! macro with crate path
+struct JoinWithPathInput {
+    crate_path: syn::Path,
+    futures: Vec<Expr>,
+}
+
+impl Parse for JoinWithPathInput {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
+        // Parse: (@path ::some::path) future1, future2, ...
+        let _: Token![@] = input.parse()?;
+        let _path_ident: syn::Ident = input.parse()?; // Should be "path"
+        let _: Token![=] = input.parse()?;
+        let crate_path: syn::Path = input.parse()?;
+        let _: Token![;] = input.parse()?;
+
+        let mut futures = Vec::new();
+        while !input.is_empty() {
+            futures.push(input.parse::<Expr>()?);
+            if !input.is_empty() {
+                let _: Token![,] = input.parse()?;
+            }
+        }
+
+        Ok(Self {
+            crate_path,
+            futures,
+        })
+    }
+}

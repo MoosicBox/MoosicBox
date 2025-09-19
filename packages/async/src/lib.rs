@@ -18,6 +18,14 @@ pub use switchy_async_macros::select_internal;
 
 #[cfg(all(feature = "macros", feature = "simulator"))]
 #[doc(hidden)]
+pub use switchy_async_macros::join_internal;
+
+#[cfg(all(feature = "macros", feature = "simulator"))]
+#[doc(hidden)]
+pub use switchy_async_macros::try_join_internal;
+
+#[cfg(all(feature = "macros", feature = "simulator"))]
+#[doc(hidden)]
 pub use switchy_async_macros::test_internal;
 
 #[cfg(all(feature = "macros", feature = "simulator"))]
@@ -37,6 +45,26 @@ pub use switchy_async_macros::tokio_test_wrapper as test;
 macro_rules! select_internal {
     ($($tokens:tt)*) => {
         ::tokio::select! { $($tokens)* }
+    };
+}
+
+/// For tokio runtime - re-export tokio::join! as join_internal
+#[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
+#[macro_export]
+#[doc(hidden)]
+macro_rules! join_internal {
+    ($($tokens:tt)*) => {
+        ::tokio::join! { $($tokens)* }
+    };
+}
+
+/// For tokio runtime - re-export tokio::try_join! as try_join_internal
+#[cfg(all(feature = "macros", feature = "tokio", not(feature = "simulator")))]
+#[macro_export]
+#[doc(hidden)]
+macro_rules! try_join_internal {
+    ($($tokens:tt)*) => {
+        ::tokio::try_join! { $($tokens)* }
     };
 }
 
@@ -127,6 +155,12 @@ macro_rules! impl_async {
 
         #[cfg(all(feature = "macros", not(feature = "simulator")))]
         pub use $module::select;
+
+        #[cfg(all(feature = "macros", not(feature = "simulator")))]
+        pub use $module::join;
+
+        #[cfg(all(feature = "macros", not(feature = "simulator")))]
+        pub use $module::try_join;
 
         impl $module::runtime::Runtime {
             pub fn block_on<F: Future>(&self, f: F) -> F::Output {

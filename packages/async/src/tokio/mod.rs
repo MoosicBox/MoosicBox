@@ -15,3 +15,9 @@ pub use tokio::select;
 
 #[cfg(feature = "macros")]
 pub use tokio::test;
+
+#[cfg(feature = "macros")]
+pub use tokio::join;
+
+#[cfg(feature = "macros")]
+pub use tokio::try_join;
