@@ -43,29 +43,51 @@ Example:
 
 ```yaml
 name: Build and Test
-on: [push, pull_request]
+on: [commit, merge_request]  # Backend-agnostic triggers
+
+actions:
+  checkout:
+    type: file
+    path: ./actions/checkout.yml
+  setup-node:
+    type: github
+    url: actions/setup-node@v3
 
 jobs:
-    build:
-        steps:
-            - uses: checkout
-              with:
-                  depth: 1
+  build:
+    steps:
+      - uses: checkout
+        with:
+          depth: 1
 
-            - name: GitHub-specific step
-              if: ${{ backend == 'github' }}
-              uses: actions/setup-node@v3
+      - name: GitHub-specific step
+        if: ${{ backend == 'github' }}
+        uses: setup-node
 
-            - name: Local-specific step
-              if: ${{ backend == 'local' }}
-              run: nvm use 18
+      - name: Local-specific step
+        if: ${{ backend == 'local' }}
+        run: |
+          nvm use 18
+          echo "node-version=18" >> $PIPELINE_OUTPUT
 
-            - run: npm test
+      - run: npm test
 ```
 
 ### Generic Actions
 
-User-defined YAML files that describe how to execute an action across different backends:
+User-defined YAML files that describe how to execute an action across different backends.
+Actions are resolved from the workflow's `actions:` mapping.
+
+**Resolution:** Actions mapped in workflow file with explicit type:
+- `type: github` - GitHub action reference with `url` property
+- `type: file` - Local file path with `path` property
+- `type: inline` - Embedded definition with `definition` property
+
+**Translation Rules:**
+- Missing backend translation = hard failure (no fallback)
+- Explicit incompatibility can be marked with `unsupported: true`
+
+**Definition Format:**
 
 ```yaml
 # checkout.action.yml
@@ -136,11 +158,13 @@ packages/
 
 GitHub Actions-compatible context variables:
 
-- `${{ backend }}` - Current backend identifier
+- `${{ backend }}` - Current backend identifier (auto-detected or CLI override)
 - `${{ env.* }}` - Environment variables
-- `${{ secrets.* }}` - Secret values
+- `${{ secrets.* }}` - Secret values (from `PIPELINE_SECRET_*` env vars locally)
 - `${{ inputs.* }}` - Action/workflow inputs
-- `${{ steps.*.outputs.* }}` - Step outputs
+- `${{ steps.*.outputs.* }}` - Step outputs (via `$PIPELINE_OUTPUT` file)
+- `${{ needs.*.outputs.* }}` - Job outputs from dependencies
+- `${{ matrix.* }}` - Matrix values (sequential execution locally)
 
 ## Error Handling Strategy
 

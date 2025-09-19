@@ -29,25 +29,114 @@ These items need further investigation or decision during implementation:
 - ✅ **Action pattern**: Follow GitHub's `uses:` and `with:` pattern
 - ✅ **Generic format**: Treated as first-class workflow format alongside GitHub/GitLab
 
-### Generic Format Questions
+### Resolved Decisions (from requirements gathering)
 
-- How should generic action definitions be distributed and versioned?
-- Should we support a central registry for generic actions?
-- How do we handle generic action dependencies?
-- Where should action definition search paths be configured?
+#### Execution Model
+- ✅ **Phase execution**: Sequential - each phase must complete before the next begins
+- ✅ **Local job execution**: Sequential initially, parallel execution as future enhancement
+- ✅ **Matrix execution**: Sequential locally, only current OS supported
+- ✅ **Proof tracking**: Individual proof entries under each checkbox, verification per step
 
-### Local Execution
+#### Action System
+- ✅ **Action resolution**: Top-level `actions:` property maps names to definitions
+- ✅ **Action formats**: `{ type: "github|file|inline", url/path/definition: ... }`
+- ✅ **Translation failures**: Hard fail when backend translation missing (no fallbacks)
+- ✅ **Action distribution**: Standard actions shipped with tool, repo-based actions cached
 
-- How to handle environment setup without containers?
-- Should we support parallel job execution locally?
-- How to manage artifact storage for local runs?
-- What's the strategy for network-dependent actions?
+#### Backend Behavior
+- ✅ **Backend detection**: CLI flag `--backend=` with env auto-detection fallback
+- ✅ **Backend conditionals**: Simple conditions stripped, complex ones become false
+- ✅ **Translation strategy**: Runtime translation, preserve structure across backends
 
-### Backend Translation
+#### Data Flow
+- ✅ **Step outputs**: Via `$PIPELINE_OUTPUT` file (like GitHub's `$GITHUB_OUTPUT`)
+- ✅ **Output types**: All outputs are strings, no type validation
+- ✅ **Secrets**: Environment variables with `PIPELINE_SECRET_` prefix locally
+- ✅ **Artifacts**: Handled via generic actions with backend-specific implementations
 
-- Should actions be translated at runtime or pre-processed?
-- How to handle composite actions vs JavaScript/Docker actions?
-- What's the fallback strategy when translation isn't possible?
+#### Error Handling
+- ✅ **Failure model**: Match GitHub's outcome vs conclusion semantics exactly
+- ✅ **Continue-on-error**: Affects conclusion but not outcome
+- ✅ **DAG validation**: Circular dependency check at parse time
+
+#### Triggers and Events
+- ✅ **Local triggers**: Ignored initially, stubbed event context
+- ✅ **Generic triggers**: Backend-agnostic names that translate to platform-specific
+
+### Newly Resolved Decisions (from specification clarification)
+
+#### Workflow Format
+- ✅ **Top-level structure**: `version`, `name`, `triggers`, `actions`, `jobs`
+- ✅ **Trigger names**: `push` (not commit), `pull_request`, `schedule`, `manual`
+- ✅ **Trigger format**: Support both simple lists and detailed parameters
+- ✅ **Job dependencies**: Use GitHub's `needs:` syntax exactly
+- ✅ **Matrix syntax**: Keep GitHub's exact structure including strategy/matrix/exclude
+- ✅ **File location**: Any location, any YAML file, no special naming required
+
+#### Action System
+- ✅ **Action types**: `github` (repo field), `file` (path field), `inline` (runs field)
+- ✅ **GitHub action format**: `repo: actions/checkout@v4` or `repo: owner/name@ref`
+- ✅ **Custom action format**: GitHub-like with name/inputs/outputs/runs structure
+- ✅ **Action resolution**: ONLY via explicit `actions:` mapping, no search paths
+- ✅ **Action inputs**: Passed at usage level with `with:`, not in action definition
+- ✅ **Built-in actions**: Implemented as standard custom actions, not special syntax
+
+#### Execution Semantics
+- ✅ **Step outputs**: Write to `$PIPELINE_OUTPUT`, same as `$GITHUB_OUTPUT`
+- ✅ **Output storage**: Temp file per step or in-memory representation
+- ✅ **Secrets locally**: `PIPELINE_SECRET_*` env vars OR `--secret KEY=val` CLI args
+- ✅ **Environment contexts**: Support `env`, `vars`, `secrets` (not GitHub-specific)
+- ✅ **Error handling**: Use GitHub's exact keywords (continue-on-error, outcome, conclusion)
+- ✅ **Job failure**: Mark failed but continue other non-dependent jobs
+- ✅ **Matrix locally**: Run only current OS, map ubuntu-latest→linux, etc.
+
+#### Translation Behavior
+- ✅ **Backend conditionals**: Replace with constant true/false during translation
+- ✅ **Translation output**: Write to actual .github/workflows/ directory
+- ✅ **Untranslatable actions**: Generate compatible action for target platform
+- ✅ **AST execution**: Execute directly from AST, don't generate scripts
+- ✅ **Filename preservation**: Keep original filename when translating
+
+#### CLI Design
+- ✅ **Run command**: `gpipe run workflow.yml [options]`
+- ✅ **Run options**: `--backend=local` (default), `--secret`, `--env`, `--dry-run`
+- ✅ **NO run options**: No `--job` or `--matrix-os` selection
+- ✅ **Translate command**: `gpipe translate workflow.yml --target=github [--output=path]`
+- ✅ **Auto-discovery**: No automatic workflow discovery, must specify file
+
+#### Artifact System
+- ✅ **Artifact actions**: Built-in `upload-artifact`/`download-artifact` actions
+- ✅ **Implementation**: Standard custom actions that translate to platform-specific
+- ✅ **Local storage**: Persist artifacts in `.pipeline/artifacts/[run-id]/[name]/`
+- ✅ **Artifact persistence**: Keep between runs, don't auto-cleanup
+- ✅ **Priority**: Later feature, not required for MVP
+
+### Implementation Decisions (from specification refinement)
+
+#### AST Structure
+- ✅ **Core node types**: Workflow, Job, Step with defined fields
+- ✅ **Step representation**: Enum variants (UseAction vs RunScript) not optional fields
+- ✅ **Expression storage**: Parsed Expression trees, not raw strings
+- ✅ **Backend conditionals**: Same storage as regular conditions (no special handling)
+- ✅ **Collections**: Use BTreeMap for deterministic ordering (MoosicBox convention)
+
+#### Expression Language
+- ✅ **MVP functions**: `toJson()`, `fromJson()`, `contains()`, `startsWith()`, `join()`, `format()`
+- ✅ **Operators**: `==`, `!=`, `&&`, `||`, `!`, property access with `.`
+- ✅ **No status functions**: Skip `always()`, `success()`, `failure()` for MVP
+- ✅ **Expression AST**: Complete enum with String, Number, Boolean, Null, Variable, BinaryOp, UnaryOp, FunctionCall, Index
+
+#### Package Structure
+- ✅ **Umbrella crate**: `packages/gpipe/` following switchy/hyperchad pattern
+- ✅ **Sub-crates**: `gpipe_ast`, `gpipe_parser`, `gpipe_runner`, `gpipe_translator`, `gpipe_actions`, `gpipe_cli`
+- ✅ **Binary name**: `gpipe` (not pipeline)
+- ✅ **Naming convention**: All packages use gpipe_ prefix
+
+#### Built-in Actions
+- ✅ **No magic**: Regular file-based actions in `.pipeline/actions/` directory
+- ✅ **No embedded actions**: Not compiled into binary, loaded from repo
+- ✅ **Standard format**: Use same YAML format as user-defined actions
+- ✅ **Initial built-ins**: checkout, setup-*, upload-artifact as regular action files
 
 ## Phase 1: Generic Workflow Format Definition 🔴
 
@@ -58,46 +147,160 @@ These items need further investigation or decision during implementation:
 ### 1.1 Generic Workflow Syntax
 
 - [ ] Define generic workflow YAML schema 🔴 **CRITICAL**
+  - Structure:
+    ```yaml
+    version: 1.0
+    name: string
+    triggers:
+      push:
+        branches: [string]
+      pull_request:
+        types: [string]
+      schedule:
+        cron: string
+      manual:
+    actions:
+      name:
+        type: github|file|inline
+        repo: string  # for github
+        path: string  # for file
+        # inline has full action definition
+    jobs:
+      job-name:
+        needs: [string]
+        env:
+          KEY: value
+        strategy:
+          matrix:
+            os: [ubuntu-latest, windows-latest, macos-latest]
+            exclude:
+              - os: windows-latest
+        steps:
+          - uses: action-name
+            with:
+              param: value
+          - run: shell command
+            id: step-id
+            if: ${{ expression }}
+            continue-on-error: boolean
+    ```
 - [ ] Support backend conditional blocks using `if: ${{ backend == 'name' }}` 🔴 **CRITICAL**
-- [ ] Define standard workflow structure (name, triggers, jobs, steps) 🔴 **CRITICAL**
+  - Translation rules:
+    - `backend == 'github'` → `true` when targeting GitHub
+    - `backend == 'local'` → `false` when targeting GitHub
+    - Complex: `${{ backend == 'github' && matrix.os == 'ubuntu' }}` → `${{ true && matrix.os == 'ubuntu' }}`
+- [ ] Define trigger mappings 🔴 **CRITICAL**
+  - Generic `push` → GitHub `push`, GitLab `push`
+  - Generic `pull_request` → GitHub `pull_request`, GitLab `merge_request`
+  - Generic `schedule` → GitHub `schedule`, GitLab `schedule`
+  - Generic `manual` → GitHub `workflow_dispatch`, GitLab `manual`
 - [ ] Implement GitHub Actions compatible expression syntax 🔴 **CRITICAL**
-- [ ] Support environment variables and contexts 🟡 **IMPORTANT**
+  - Support `${{ }}` expressions exactly as GitHub
+  - Contexts: `env`, `secrets`, `vars`, `steps`, `needs`, `matrix`, `backend`
+- [ ] Support step outputs via `$PIPELINE_OUTPUT` 🟡 **IMPORTANT**
+  - Usage: `echo "name=value" >> $PIPELINE_OUTPUT`
+  - Access: `${{ steps.step-id.outputs.name }}`
+  - Translation: `$PIPELINE_OUTPUT` → `$GITHUB_OUTPUT` for GitHub
 
 #### 1.1 Verification
 
-- [ ] Run `cargo build -p pipeline_parser` - Package compiles
-- [ ] Run `cargo test -p pipeline_parser` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_parser -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_parser` - Package compiles
+- [ ] Run `cargo test -p gpipe_parser` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_parser -- -D warnings` - No clippy warnings
 - [ ] Test parsing generic workflow format with backend conditionals
 
 ### 1.2 Generic Action System
 
-- [ ] Define generic action definition format (YAML-based) 🔴 **CRITICAL**
-- [ ] Create action resolution system with search paths 🔴 **CRITICAL**
-- [ ] Support custom user-defined actions 🔴 **CRITICAL**
-- [ ] Implement action input/output specifications 🟡 **IMPORTANT**
-- [ ] Define action translation format for each backend 🔴 **CRITICAL**
+- [ ] Define generic action definition format 🔴 **CRITICAL**
+  - GitHub type:
+    ```yaml
+    checkout:
+      type: github
+      repo: actions/checkout@v4  # Format: owner/name@ref
+    ```
+  - File type:
+    ```yaml
+    my-action:
+      type: file
+      path: ./.pipeline/actions/my-action/action.yml
+    ```
+  - Inline type:
+    ```yaml
+    echo-message:
+      type: inline
+      name: Echo Message
+      description: Echoes a message
+      inputs:
+        message:
+          description: Message to echo
+          required: true
+          default: "Hello"
+      outputs:
+        result:
+          description: The result
+      runs:
+        steps:
+          - run: |
+              echo "${{ inputs.message }}"
+              echo "result=done" >> $PIPELINE_OUTPUT
+    ```
+- [ ] Action resolution requires explicit declaration 🔴 **CRITICAL**
+  - ALL actions must be in top-level `actions:` mapping
+  - NO implicit search paths or conventions
+  - NO automatic discovery
+- [ ] Custom action file format (GitHub-like) 🔴 **CRITICAL**
+  - Files referenced by `type: file` use this structure:
+    ```yaml
+    name: My Custom Action
+    description: Does something useful
+    inputs:
+      param-name:
+        description: Parameter description
+        required: true|false
+        default: "value"
+    outputs:
+      output-name:
+        description: Output description
+    runs:
+      steps:
+        - run: shell command
+        - uses: another-action  # Can reference other actions
+    ```
+- [ ] Action inputs passed at usage, not definition 🟡 **IMPORTANT**
+  - Use `with:` at step level to pass inputs
+  - Action definition only declares what inputs exist
 
 #### 1.2 Verification
 
-- [ ] Run `cargo build -p pipeline_actions` - Package compiles
-- [ ] Run `cargo test -p pipeline_actions` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_actions` - Package compiles
+- [ ] Run `cargo test -p gpipe_actions` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_actions -- -D warnings` - No clippy warnings
 - [ ] Test loading and resolving generic action definitions
 
 ### 1.3 Backend Context System
 
 - [ ] Define `backend` context variable 🔴 **CRITICAL**
+  - Available in expressions: `${{ backend }}`
+  - Values: `'local'`, `'github'`, `'gitlab'`, etc.
+  - Used for conditional execution
 - [ ] Implement backend-specific step skipping logic 🔴 **CRITICAL**
-- [ ] Create clear error messages for incompatible backends 🟡 **IMPORTANT**
-- [ ] Support backend detection for conditional execution 🔴 **CRITICAL**
-- [ ] Define supported backend identifiers (github, gitlab, local, etc.) 🔴 **CRITICAL**
+  - During translation: Replace `backend == 'target'` with `true`
+  - During translation: Replace `backend != 'target'` with `false`
+  - Keep other expression parts intact
+- [ ] Backend detection for execution 🔴 **CRITICAL**
+  - CLI flag: `--backend=name` (default: `local`)
+  - Environment detection as fallback (CI env vars)
+- [ ] Define supported backend identifiers 🔴 **CRITICAL**
+  - `local`: Direct command execution
+  - `github`: GitHub Actions
+  - `gitlab`: GitLab CI
+  - Future: `jenkins`, `azure`, `circleci`
 
 #### 1.3 Verification
 
-- [ ] Run `cargo build -p pipeline_runner` - Package compiles
-- [ ] Run `cargo test -p pipeline_runner` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_runner` - Package compiles
+- [ ] Run `cargo test -p gpipe_runner` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Test backend conditional execution and skipping
 
 ## Phase 2: Core AST and Workflow Model 🔴
@@ -108,51 +311,140 @@ These items need further investigation or decision during implementation:
 
 ### 2.1 AST Definition
 
-- [ ] Define workflow node types (Job, Step, Action, Script, Conditional) 🔴 **CRITICAL**
-- [ ] Create expression language for conditions and variables 🔴 **CRITICAL**
+- [ ] Define workflow node types 🔴 **CRITICAL**
+  ```rust
+  pub struct Workflow {
+      pub version: String,
+      pub name: String,
+      pub triggers: Vec<Trigger>,
+      pub actions: BTreeMap<String, ActionDef>,
+      pub jobs: BTreeMap<String, Job>,
+  }
+
+  pub struct Job {
+      pub needs: Vec<String>,
+      pub strategy: Option<MatrixStrategy>,
+      pub env: BTreeMap<String, String>,
+      pub steps: Vec<Step>,
+      pub if_condition: Option<Expression>,
+  }
+
+  pub enum Step {
+      UseAction {
+          id: Option<String>,
+          uses: String,
+          with: BTreeMap<String, String>,
+          env: BTreeMap<String, String>,
+          if_condition: Option<Expression>,
+          continue_on_error: bool,
+      },
+      RunScript {
+          id: Option<String>,
+          run: String,
+          env: BTreeMap<String, String>,
+          if_condition: Option<Expression>,
+          continue_on_error: bool,
+          working_directory: Option<String>,
+      },
+  }
+  ```
+- [ ] Create expression language AST 🔴 **CRITICAL**
+  ```rust
+  pub enum Expression {
+      String(String),
+      Number(f64),
+      Boolean(bool),
+      Null,
+      Variable(Vec<String>),  // e.g., ["github", "sha"]
+      BinaryOp {
+          left: Box<Expression>,
+          op: BinaryOperator,
+          right: Box<Expression>,
+      },
+      UnaryOp {
+          op: UnaryOperator,
+          expr: Box<Expression>,
+      },
+      FunctionCall {
+          name: String,
+          args: Vec<Expression>,
+      },
+      Index {
+          expr: Box<Expression>,
+          index: Box<Expression>,
+      },
+  }
+  ```
 - [ ] Define matrix strategy representation 🔴 **CRITICAL**
 - [ ] Support for artifacts and caching abstractions 🟡 **IMPORTANT**
 - [ ] Define secret/credential abstraction 🔴 **CRITICAL**
 
 #### 2.1 Verification
 
-- [ ] Run `cargo build -p pipeline_ast --all-features` - Verify compilation
-- [ ] Run `cargo test -p pipeline_ast` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_ast -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_ast --all-features` - Verify compilation
+- [ ] Run `cargo test -p gpipe_ast` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_ast -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt -- --check` - Code properly formatted
-- [ ] Run `cargo doc -p pipeline_ast --no-deps` - Documentation builds
+- [ ] Run `cargo doc -p gpipe_ast --no-deps` - Documentation builds
 
 ### 2.2 Workflow Model
 
 - [ ] Create Workflow struct with metadata and jobs 🔴 **CRITICAL**
+  - Fields: version, name, triggers, actions map, jobs map
 - [ ] Define Job struct with dependencies and steps 🔴 **CRITICAL**
-- [ ] Create Step variants (uses action, run script, conditional) 🔴 **CRITICAL**
+  - Sequential execution locally (definition order when ready)
+  - DAG validation for circular dependencies at parse time
+  - `needs:` array for dependencies (GitHub syntax)
+  - Failed jobs block dependents from running
+- [ ] Create Step variants 🔴 **CRITICAL**
+  - UseAction: references action from `actions:` map with `with:` params
+  - RunScript: shell command with working dir
+  - Both support: `id`, `if`, `continue-on-error`, `env`
 - [ ] Implement Context struct for variables and state 🔴 **CRITICAL**
-- [ ] Add support for job outputs and step outputs 🟡 **IMPORTANT**
+  - `$PIPELINE_OUTPUT` file for step outputs (or in-memory map)
+  - `PIPELINE_SECRET_*` env vars for secrets
+  - Contexts: `env`, `secrets`, `vars`, `steps`, `needs`, `matrix`, `backend`
+- [ ] Add support for job/step outputs 🟡 **IMPORTANT**
+  - All outputs are strings (no type validation)
+  - GitHub-compatible: outcome vs conclusion semantics
+  - Step outputs via `echo "key=value" >> $PIPELINE_OUTPUT`
+- [ ] Error handling semantics 🟡 **IMPORTANT**
+  - `continue-on-error: true`: Sets conclusion=failure, outcome=success
+  - Without flag: Both conclusion and outcome = failure
+  - Failed job continues other non-dependent jobs
 
 #### 2.2 Verification
 
-- [ ] Run `cargo build -p pipeline_ast` - Package compiles
-- [ ] Run `cargo test -p pipeline_ast` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_ast -- -D warnings` - No clippy warnings
-- [ ] Run `cargo tarpaulin -p pipeline_ast` - Code coverage > 80%
+- [ ] Run `cargo build -p gpipe_ast` - Package compiles
+- [ ] Run `cargo test -p gpipe_ast` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_ast -- -D warnings` - No clippy warnings
+- [ ] Run `cargo tarpaulin -p gpipe_ast` - Code coverage > 80%
 
 ### 2.3 Package Structure
 
-- [ ] Create packages/pipeline_ast package with Rust structures 🔴 **CRITICAL**
+- [ ] Create packages/gpipe umbrella package 🔴 **CRITICAL**
+  - Main Cargo.toml re-exports all sub-crates with features
+  - Follow switchy/hyperchad pattern for organization
+- [ ] Create sub-packages with consistent naming 🔴 **CRITICAL**
+  - `gpipe_ast` - Core AST types and structures
+  - `gpipe_parser` - Parsers for Generic/GitHub/GitLab formats
+  - `gpipe_runner` - Local execution engine
+  - `gpipe_translator` - Format translation logic
+  - `gpipe_actions` - Action loading and resolution
+  - `gpipe_cli` - CLI binary named 'gpipe'
 - [ ] Implement Serialize/Deserialize for all AST nodes 🔴 **CRITICAL**
 - [ ] Add validation methods for workflow correctness 🟡 **IMPORTANT**
 - [ ] Include builder patterns for ergonomic construction 🟡 **IMPORTANT**
 
 #### 2.3 Verification
 
-- [ ] Run `cargo build -p pipeline_ast` - Package compiles
-- [ ] Run `cargo test -p pipeline_ast` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_ast -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_ast` - Package compiles
+- [ ] Run `cargo test -p gpipe_ast` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_ast -- -D warnings` - No clippy warnings
 - [ ] Run `cargo fmt -- --check` - Code properly formatted
-- [ ] Run `cargo doc -p pipeline_ast` - Documentation builds
-    - [ ] Run `cargo test -p pipeline_ast --test builder_patterns_test` - Builder tests pass
-    - [ ] Run `cargo doc -p pipeline_ast` - Builder APIs documented
+- [ ] Run `cargo doc -p gpipe_ast` - Documentation builds
+    - [ ] Run `cargo test -p gpipe_ast --test builder_patterns_test` - Builder tests pass
+    - [ ] Run `cargo doc -p gpipe_ast` - Builder APIs documented
 
 ## Phase 3: Workflow Parsers 🔴
 
@@ -173,23 +465,31 @@ These items need further investigation or decision during implementation:
 
 #### 5.1 Verification
 
-- [ ] Run `cargo build -p pipeline_parser` - Package compiles
-- [ ] Run `cargo test -p pipeline_parser` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_parser -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_parser` - Package compiles
+- [ ] Run `cargo test -p gpipe_parser` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_parser -- -D warnings` - No clippy warnings
 - [ ] Test parsing MoosicBox workflows successfully
 
 ### 5.2 Expression Evaluator
 
 - [ ] Implement GitHub Actions expression syntax parser 🔴 **CRITICAL**
-- [ ] Support context variables (github, env, secrets, etc.) 🔴 **CRITICAL**
-- [ ] Implement built-in functions (contains, startsWith, etc.) 🔴 **CRITICAL**
+- [ ] Support MVP function set 🔴 **CRITICAL**
+  - String functions: `toJson()`, `fromJson()`, `contains()`, `startsWith()`, `join()`, `format()`
+  - No status functions initially (not used in MoosicBox workflows)
+- [ ] Support context variables 🔴 **CRITICAL**
+  - Contexts: `env`, `secrets`, `vars`, `steps`, `needs`, `matrix`, `backend`
+  - Property access with `.` notation (e.g., `github.sha`, `matrix.os`)
+- [ ] Implement operators 🔴 **CRITICAL**
+  - Comparison: `==`, `!=`
+  - Logical: `&&`, `||`, `!`
+  - Property access: `.` for nested objects
 - [ ] Handle string interpolation and type coercion 🟡 **IMPORTANT**
 
 #### 5.2 Verification
 
-- [ ] Run `cargo build -p pipeline_parser` - Package compiles
-- [ ] Run `cargo test -p pipeline_parser` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_parser -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_parser` - Package compiles
+- [ ] Run `cargo test -p gpipe_parser` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_parser -- -D warnings` - No clippy warnings
 - [ ] Test expression evaluation matches GitHub Actions behavior
 
 ### 5.3 Workflow Validation
@@ -201,9 +501,9 @@ These items need further investigation or decision during implementation:
 
 #### 5.3 Verification
 
-- [ ] Run `cargo build -p pipeline_parser` - Package compiles
-- [ ] Run `cargo test -p pipeline_parser` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_parser -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_parser` - Package compiles
+- [ ] Run `cargo test -p gpipe_parser` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_parser -- -D warnings` - No clippy warnings
 - [ ] Test validation provides clear error messages
 
 ## Phase 4: Local Runner Implementation 🔴
@@ -212,19 +512,36 @@ These items need further investigation or decision during implementation:
 
 **Status:** All tasks pending - Execution engine needed
 
-### 5.1 Execution Engine
+### 4.1 Execution Engine
 
 - [ ] Create LocalRunner struct implementing WorkflowBackend trait 🔴 **CRITICAL**
 - [ ] Implement job scheduler with dependency resolution 🔴 **CRITICAL**
+  - Sequential execution (no parallelism initially)
+  - Definition order when multiple jobs ready
+  - Failed jobs prevent dependents from starting
+  - Non-dependent jobs continue despite failures
 - [ ] Execute shell commands via std::process::Command 🔴 **CRITICAL**
+  - Direct AST execution, no script generation
+  - Create temp `$PIPELINE_OUTPUT` file per step
+  - Pass outputs between steps via context
 - [ ] Manage working directories and environment variables 🔴 **CRITICAL**
+  - Map `PIPELINE_SECRET_*` env vars to `${{ secrets.* }}`
+  - Support `--secret KEY=value` CLI arguments
+  - Support `--env KEY=value` CLI overrides
 - [ ] Handle step conditions and continue-on-error 🟡 **IMPORTANT**
+  - Evaluate `if:` expressions before running step
+  - Match GitHub's outcome/conclusion model exactly
+  - Skip steps with false conditions
+- [ ] Matrix execution for local runner 🟡 **IMPORTANT**
+  - Only run current OS combinations
+  - Map OS values: ubuntu-latest→linux, windows-latest→windows, macos-latest→macos
+  - Skip non-matching OS matrix entries
 
 #### 5.1 Verification
 
-- [ ] Run `cargo build -p pipeline_runner` - Package compiles
-- [ ] Run `cargo test -p pipeline_runner` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_runner` - Package compiles
+- [ ] Run `cargo test -p gpipe_runner` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Test basic workflow execution works locally
 
 ### 5.2 Environment Management
@@ -237,23 +554,23 @@ These items need further investigation or decision during implementation:
 
 #### 5.2 Verification
 
-- [ ] Run `cargo build -p pipeline_runner` - Package compiles
-- [ ] Run `cargo test -p pipeline_runner` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_runner` - Package compiles
+- [ ] Run `cargo test -p gpipe_runner` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Test environment isolation between jobs
 
 #### 5.3 Verification
 
-- [ ] Run `cargo build -p pipeline_runner` - Package compiles
-- [ ] Run `cargo test -p pipeline_runner` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_runner` - Package compiles
+- [ ] Run `cargo test -p gpipe_runner` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Test parallel job execution works
 
 #### 5.4 Verification
 
-- [ ] Run `cargo build -p pipeline_runner` - Package compiles
-- [ ] Run `cargo test -p pipeline_runner` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_runner -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_runner` - Package compiles
+- [ ] Run `cargo test -p gpipe_runner` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_runner -- -D warnings` - No clippy warnings
 - [ ] Test error handling and recovery mechanisms
 
 ## Phase 5: Action Translation System 🔴
@@ -265,18 +582,34 @@ These items need further investigation or decision during implementation:
 ### 5.1 Action Registry
 
 - [ ] Define ActionTranslator trait 🔴 **CRITICAL**
-- [ ] Create registry for known action translations 🔴 **CRITICAL**
-- [ ] Implement translations for common actions:
-    - [ ] actions/checkout → git commands 🔴 **CRITICAL**
-    - [ ] actions/setup-\* → tool installation commands 🔴 **CRITICAL**
-    - [ ] actions/cache → local cache operations 🟡 **IMPORTANT**
-    - [ ] actions/upload-artifact → local file operations 🟡 **IMPORTANT**
+- [ ] Load built-in actions from `.pipeline/actions/` 🔴 **CRITICAL**
+  - No embedded actions in binary
+  - Load from repo directory at runtime
+  - Use standard file-based action format
+- [ ] Implement built-in actions as standard YAML files:
+  - [ ] `.pipeline/actions/checkout.yml` 🔴 **CRITICAL**
+    ```yaml
+    name: Checkout
+    description: Checkout repository
+    runs:
+      steps:
+        - if: ${{ backend == 'github' }}
+          uses: actions/checkout@v4
+        - if: ${{ backend == 'local' }}
+          run: |
+            git fetch --depth=1
+            git checkout ${{ github.sha || 'HEAD' }}
+    ```
+  - [ ] `.pipeline/actions/setup-node.yml` 🔴 **CRITICAL**
+  - [ ] `.pipeline/actions/upload-artifact.yml` 🟡 **IMPORTANT** (Later feature)
+  - [ ] `.pipeline/actions/cache.yml` 🟡 **IMPORTANT**
+- [ ] Generate compatible action for untranslatable actions 🔴 **CRITICAL**
 
 #### 5.1 Verification
 
-- [ ] Run `cargo build -p pipeline_actions` - Package compiles
-- [ ] Run `cargo test -p pipeline_actions` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_actions` - Package compiles
+- [ ] Run `cargo test -p gpipe_actions` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_actions -- -D warnings` - No clippy warnings
 - [ ] Test common actions (checkout, setup-\*, cache) translate correctly
 
 ### 5.2 JavaScript Action Support
@@ -288,23 +621,23 @@ These items need further investigation or decision during implementation:
 
 #### 5.2 Verification
 
-- [ ] Run `cargo build -p pipeline_actions` - Package compiles
-- [ ] Run `cargo test -p pipeline_actions` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_actions` - Package compiles
+- [ ] Run `cargo test -p gpipe_actions` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_actions -- -D warnings` - No clippy warnings
 - [ ] Test JavaScript action execution works
 
 #### 5.3 Verification
 
-- [ ] Run `cargo build -p pipeline_actions` - Package compiles
-- [ ] Run `cargo test -p pipeline_actions` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_actions` - Package compiles
+- [ ] Run `cargo test -p gpipe_actions` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_actions -- -D warnings` - No clippy warnings
 - [ ] Test fallback strategies work for untranslatable actions
 
 #### 5.4 Verification
 
-- [ ] Run `cargo build -p pipeline_actions` - Package compiles
-- [ ] Run `cargo test -p pipeline_actions` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_actions -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_actions` - Package compiles
+- [ ] Run `cargo test -p gpipe_actions` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_actions -- -D warnings` - No clippy warnings
 - [ ] Test action metadata system works
 
 ## Phase 6: Backend Abstraction Layer 🟡
@@ -322,30 +655,30 @@ These items need further investigation or decision during implementation:
 
 #### 5.1 Verification
 
-- [ ] Run `cargo build -p pipeline_backends` - Package compiles
-- [ ] Run `cargo test -p pipeline_backends` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_backends -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_translator` - Package compiles
+- [ ] Run `cargo test -p gpipe_translator` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Test backend trait implementations work
 
 #### 5.2 Verification
 
-- [ ] Run `cargo build -p pipeline_backends` - Package compiles
-- [ ] Run `cargo test -p pipeline_backends` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_backends -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_translator` - Package compiles
+- [ ] Run `cargo test -p gpipe_translator` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Test GitHub Actions YAML generation works
 
 #### 5.3 Verification
 
-- [ ] Run `cargo build -p pipeline_backends` - Package compiles
-- [ ] Run `cargo test -p pipeline_backends` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_backends -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_translator` - Package compiles
+- [ ] Run `cargo test -p gpipe_translator` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Test GitLab CI YAML generation works
 
 #### 5.4 Verification
 
-- [ ] Run `cargo build -p pipeline_backends` - Package compiles
-- [ ] Run `cargo test -p pipeline_backends` - All tests pass
-- [ ] Run `cargo clippy -p pipeline_backends -- -D warnings` - No clippy warnings
+- [ ] Run `cargo build -p gpipe_translator` - Package compiles
+- [ ] Run `cargo test -p gpipe_translator` - All tests pass
+- [ ] Run `cargo clippy -p gpipe_translator -- -D warnings` - No clippy warnings
 - [ ] Test Jenkins pipeline generation works
 
 ## Phase 7: CLI Interface 🟡
@@ -354,19 +687,41 @@ These items need further investigation or decision during implementation:
 
 **Status:** All tasks pending - CLI implementation needed
 
-### 5.1 Core Commands
+### 7.1 Core Commands
 
 - [ ] `run` - Execute workflow locally 🔴 **CRITICAL**
+  ```bash
+  gpipe run workflow.yml
+  gpipe run workflow.yml --backend=local  # Default
+  gpipe run workflow.yml --secret API_KEY=xxx --secret TOKEN=yyy
+  gpipe run workflow.yml --env NODE_ENV=test --env DEBUG=true
+  gpipe run workflow.yml --dry-run  # Show execution plan
+  ```
 - [ ] `translate` - Convert between formats 🟡 **IMPORTANT**
+  ```bash
+  gpipe translate workflow.yml --target=github
+  # Writes to .github/workflows/workflow.yml by default
+
+  gpipe translate workflow.yml --target=github --output=custom.yml
+  # Writes to specified path
+
+  gpipe translate workflow.yml --target=gitlab
+  # Writes to .gitlab-ci.yml by default
+  ```
 - [ ] `validate` - Check workflow syntax 🟡 **IMPORTANT**
-- [ ] `dry-run` - Show execution plan 🟡 **IMPORTANT**
-- [ ] `cache-action` - Pre-download action for offline use 🟢 **MINOR**
+  ```bash
+  gpipe validate workflow.yml
+  # Validates syntax and references
+  ```
+- [ ] NO `cache-action` command initially 🟢 **MINOR**
+- [ ] NO auto-discovery of workflows
+- [ ] NO `--job` or `--matrix-os` selection options
 
-#### 5.1 Verification
+#### 7.1 Verification
 
-- [ ] Run `cargo build --bin ci-runner` - Binary builds
-- [ ] Run `cargo test --bin ci-runner` - CLI tests pass
-- [ ] Run `cargo clippy --bin ci-runner -- -D warnings` - No warnings
+- [ ] Run `cargo build --bin gpipe` - Binary builds
+- [ ] Run `cargo test -p gpipe_cli` - CLI tests pass
+- [ ] Run `cargo clippy -p gpipe_cli -- -D warnings` - No warnings
 - [ ] Test CLI commands work with help flags
 
 #### 5.2 Verification
@@ -453,16 +808,243 @@ These items need further investigation or decision during implementation:
 
 The following criteria must be met for the project to be considered successful:
 
-- [ ] Can parse and execute MoosicBox GitHub Actions workflows locally
-- [ ] No containerization required for basic workflows (checkout, build, test)
-- [ ] Supports common GitHub Actions (checkout, setup-\*, cache, upload-artifact)
-- [ ] Can translate workflows to GitLab CI format with functional equivalence
-- [ ] Provides clear error messages for unsupported features
-- [ ] Executes faster locally than GitHub Actions for simple workflows
+- [ ] Can parse Generic workflow format with all defined features
+- [ ] Executes workflows locally without containerization
+- [ ] Supports `$PIPELINE_OUTPUT` for step outputs
+- [ ] Handles `PIPELINE_SECRET_*` environment variables and `--secret` CLI args
+- [ ] Translates backend conditionals to constants correctly
+- [ ] Generates valid GitHub Actions YAML with correct trigger mappings
+- [ ] Matrix execution runs only current OS locally with proper OS mapping
+- [ ] Job dependencies block execution correctly (failed jobs prevent dependents)
+- [ ] Continue-on-error matches GitHub semantics (outcome vs conclusion)
+- [ ] CLI supports --secret and --env flags as specified
+- [ ] Actions must be explicitly declared in workflow `actions:` mapping
+- [ ] Built-in actions (checkout, setup-*, upload-artifact) work across backends
+- [ ] File locations are flexible (any path, any name, any YAML extension)
+- [ ] Translation preserves filenames and writes to correct directories
+- [ ] Can parse and execute existing MoosicBox GitHub Actions workflows locally
 - [ ] Supports offline execution with cached actions and dependencies
-- [ ] Handles matrix strategies and job dependencies correctly
-- [ ] Maintains workflow semantics across different backends
-- [ ] Provides comprehensive CLI with intuitive commands
+- [ ] Provides clear error messages for validation failures
+- [ ] Binary executable named `gpipe` works from command line
+- [ ] Expression evaluator supports MVP function set
+- [ ] Built-in actions loaded from `.pipeline/actions/` directory
+- [ ] Package structure follows MoosicBox umbrella crate pattern
+
+## Concrete Workflow Examples
+
+### Complete Generic Workflow Example
+
+```yaml
+version: 1.0
+name: build-and-test
+triggers:
+  push:
+    branches: [main, develop]
+  pull_request:
+  manual:
+
+actions:
+  checkout:
+    type: github
+    repo: actions/checkout@v4
+
+  setup-rust:
+    type: file
+    path: ./.pipeline/actions/setup-rust.yml
+
+  notify:
+    type: inline
+    name: Send Notification
+    inputs:
+      message:
+        required: true
+    runs:
+      steps:
+        - run: |
+            echo "Notification: ${{ inputs.message }}"
+            echo "status=sent" >> $PIPELINE_OUTPUT
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: checkout
+
+      - uses: setup-rust
+        with:
+          version: stable
+
+      - id: build
+        run: |
+          cargo build --release
+          echo "binary=target/release/app" >> $PIPELINE_OUTPUT
+
+      - uses: upload-artifact
+        if: ${{ backend == 'github' }}
+        with:
+          name: binary-${{ matrix.os }}
+          path: ${{ steps.build.outputs.binary }}
+
+  test:
+    needs: [build]
+    steps:
+      - uses: checkout
+
+      - run: cargo test
+        continue-on-error: true
+        id: test
+
+      - if: ${{ steps.test.outcome == 'failure' }}
+        uses: notify
+        with:
+          message: "Tests failed but continuing"
+
+  deploy:
+    needs: [build, test]
+    if: ${{ backend == 'github' }}
+    steps:
+      - run: echo "Deploying..."
+```
+
+### Translation to GitHub Actions
+
+The above Generic workflow translates to:
+
+```yaml
+# .github/workflows/build-and-test.yml
+name: build-and-test
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.pipeline/actions/setup-rust.yml
+        with:
+          version: stable
+
+      - id: build
+        run: |
+          cargo build --release
+          echo "binary=target/release/app" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v3
+        if: ${{ true }}  # backend == 'github' evaluated to true
+        with:
+          name: binary-${{ matrix.os }}
+          path: ${{ steps.build.outputs.binary }}
+
+  test:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: cargo test
+        continue-on-error: true
+        id: test
+
+      - if: ${{ steps.test.outcome == 'failure' }}
+        run: |
+          echo "Notification: Tests failed but continuing"
+          echo "status=sent" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    if: ${{ true }}  # backend == 'github' evaluated to true
+    steps:
+      - run: echo "Deploying..."
+```
+
+### Translation to GitLab CI
+
+The same Generic workflow translates to:
+
+```yaml
+# .gitlab-ci.yml
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  CARGO_TERM_COLOR: always
+
+.setup_rust: &setup_rust
+  - # Setup Rust commands translated from action
+
+build:
+  stage: build
+  parallel:
+    matrix:
+      - OS: [ubuntu-latest, windows-latest, macos-latest]
+  script:
+    - git clone $CI_REPOSITORY_URL .  # checkout translation
+    - *setup_rust
+    - cargo build --release
+    - echo "binary=target/release/app" > build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+    paths:
+      - target/release/app
+    name: binary-$OS
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop")'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+test:
+  stage: test
+  needs: [build]
+  script:
+    - git clone $CI_REPOSITORY_URL .
+    - cargo test
+    - |
+      if [ $? -ne 0 ]; then
+        echo "Notification: Tests failed but continuing"
+      fi
+  allow_failure: true
+
+deploy:
+  stage: deploy
+  needs: [build, test]
+  script:
+    - echo "Deploying..."
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop")'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+```
+
+### Local Execution Behavior
+
+When running `gpipe run build-and-test.yml --backend=local`:
+
+1. **Matrix handling**: Only runs current OS (e.g., if on Linux, skips windows-latest and macos-latest)
+2. **Backend conditionals**: `backend == 'github'` evaluates to `false`, so upload-artifact and deploy steps are skipped
+3. **Step outputs**: Creates temporary files for `$PIPELINE_OUTPUT`
+4. **Action resolution**:
+   - `checkout` → `git checkout` commands
+   - `setup-rust` → Reads `./.pipeline/actions/setup-rust.yml` and executes
+   - `notify` → Executes inline script
+5. **Job execution**: Sequential in definition order (build → test → deploy), with dependency respect
 
 ## Technical Decisions
 
@@ -473,6 +1055,8 @@ The following criteria must be met for the project to be considered successful:
 - **serde_yaml** for YAML parsing and serialization
 - **clap** for CLI interface with derive macros
 - **reqwest** for downloading actions and dependencies
+- **BTreeMap** for deterministic ordering (not HashMap)
+- **Underscore naming** for all packages (gpipe_ast, gpipe_parser, etc.)
 
 ### Architecture Patterns
 
@@ -508,6 +1092,42 @@ The following criteria must be met for the project to be considered successful:
 - **Action verification** - Validate action sources and integrity
 - **Network isolation** - Optional network restrictions for local runs
 - **File system isolation** - Limit access to specific directories
+
+## Implementation Architecture
+
+### Package Organization
+
+The project follows MoosicBox's umbrella crate pattern:
+
+```
+packages/gpipe/              # Umbrella crate
+├── Cargo.toml              # Re-exports all sub-crates
+├── src/lib.rs              # Public API surface
+├── ast/                    # gpipe_ast - Core types
+├── parser/                 # gpipe_parser - Format parsers
+├── runner/                 # gpipe_runner - Execution
+├── translator/             # gpipe_translator - Conversion
+├── actions/                # gpipe_actions - Action system
+└── cli/                    # gpipe_cli - Binary 'gpipe'
+```
+
+### Built-in Actions Location
+
+```
+.pipeline/actions/          # Built-in actions (repo-level)
+├── checkout.yml
+├── setup-node.yml
+├── setup-python.yml
+├── upload-artifact.yml
+└── download-artifact.yml
+```
+
+### Expression Evaluation Pipeline
+
+1. Parse `${{ }}` expressions into Expression AST
+2. Resolve variables from Context (env, secrets, steps, etc.)
+3. Evaluate functions with MVP set only
+4. Return string result for interpolation
 
 ## Risk Mitigation
 
