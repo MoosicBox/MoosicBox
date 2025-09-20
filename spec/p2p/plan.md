@@ -1009,6 +1009,7 @@ This ensures each phase compiles independently without forward dependencies.
 - Traits MUST match exactly what the simulator already implements
 - No speculative methods or future-proofing
 - Use native async fn in traits (requires Rust 1.75+, NO async-trait dependency)
+- **P2PListener trait EXCLUDED** - simulator has no listener implementation yet (tracked for Phase 5/6)
 
 - [ ] Extract `P2PSystem` traits with zero-cost abstractions 🔴 **CRITICAL**
   - [ ] Create `src/traits.rs` and add to lib.rs: `pub mod traits;`
@@ -1019,25 +1020,30 @@ This ensures each phase compiles independently without forward dependencies.
     // Note: P2PError will be defined in Phase 4, use String for now
     type P2PResult<T> = Result<T, String>; // Temporary until Phase 4
 
-    /// Zero-cost abstraction for P2P systems
-    /// Native async methods require Rust 1.75+ (no Box<dyn Future>)
-    pub trait P2PSystem: Send + Sync + 'static {
-        type NodeId: P2PNodeId;
-        type Connection: P2PConnection<NodeId = Self::NodeId>;
-        type Listener: P2PListener<Connection = Self::Connection>;
+     /// Zero-cost abstraction for P2P systems
+     /// Native async methods require Rust 1.75+ (no Box<dyn Future>)
+     ///
+     /// NOTE: P2PListener trait and listen() method will be added in Phase 5/6
+     /// when SimulatorListener is implemented. Currently excluded because
+     /// the simulator has no listener functionality yet.
+     pub trait P2PSystem: Send + Sync + 'static {
+         type NodeId: P2PNodeId;
+         type Connection: P2PConnection<NodeId = Self::NodeId>;
+         // TODO: Add Listener associated type in Phase 5/6:
+         // type Listener: P2PListener<Connection = Self::Connection>;
 
-        /// Connect to a remote peer by node ID
-        async fn connect(&self, node_id: Self::NodeId) -> P2PResult<Self::Connection>;
+         /// Connect to a remote peer by node ID
+         async fn connect(&self, node_id: Self::NodeId) -> P2PResult<Self::Connection>;
 
-        /// Start listening for incoming connections
-        async fn listen(&self, addr: &str) -> P2PResult<Self::Listener>;
+         /// Discover a peer by name (mock DNS in simulator)
+         async fn discover(&self, name: &str) -> P2PResult<Self::NodeId>;
 
-        /// Discover a peer by name (mock DNS in simulator)
-        async fn discover(&self, name: &str) -> P2PResult<Self::NodeId>;
+         /// Get this node's ID
+         fn local_node_id(&self) -> &Self::NodeId;
 
-        /// Get this node's ID
-        fn local_node_id(&self) -> &Self::NodeId;
-    }
+         // TODO: Add in Phase 5/6 when SimulatorListener exists:
+         // async fn listen(&self, addr: &str) -> P2PResult<Self::Listener>;
+     }
 
     /// Node identity trait matching Iroh's capabilities
     pub trait P2PNodeId: Clone + Debug + Display + Send + Sync + 'static {
@@ -1071,42 +1077,40 @@ This ensures each phase compiles independently without forward dependencies.
         fn close(&mut self) -> P2PResult<()>;
     }
 
-    /// Listener trait for accepting incoming connections
-    pub trait P2PListener: Send + Sync + 'static {
-        type Connection: P2PConnection;
+     // TODO: P2PListener trait will be added in Phase 5/6 when we implement
+     // SimulatorListener functionality. Excluded for now as simulator has no
+     // listener implementation yet.
+     ```
+   - [ ] Implement `P2PNodeId` for `SimulatorNodeId` (in simulator.rs):
+     ```rust
+     use crate::traits::P2PNodeId;
 
-        /// Accept an incoming connection
-        async fn accept(&mut self) -> P2PResult<Self::Connection>;
+     impl P2PNodeId for SimulatorNodeId {
+         fn from_bytes(bytes: &[u8; 32]) -> Result<Self, String> {
+             // Uses existing from_bytes method (takes owned array, not reference)
+             Ok(Self::from_bytes(*bytes))
+         }
 
-        /// Get local listening address
-        fn local_addr(&self) -> &str;
-    }
-    ```
-  - [ ] Implement `P2PNodeId` for `SimulatorNodeId` (in simulator.rs):
-    ```rust
-    use crate::traits::P2PNodeId;
+         fn as_bytes(&self) -> &[u8; 32] {
+             self.as_bytes()
+         }
 
-    impl P2PNodeId for SimulatorNodeId {
-        fn from_bytes(bytes: &[u8; 32]) -> Result<Self, String> {
-            Ok(Self::from_bytes(*bytes))
-        }
-
-        fn as_bytes(&self) -> &[u8; 32] {
-            self.as_bytes()
-        }
-
-        fn fmt_short(&self) -> String {
-            self.fmt_short()
-        }
-    }
-    ```
+         fn fmt_short(&self) -> String {
+             self.fmt_short()
+         }
+     }
+     ```
+     NOTE: The trait uses `&[u8; 32]` parameter while our existing method uses `[u8; 32]` (owned).
+     This is handled by dereferencing `*bytes` in the implementation above.
 
 #### 3.1 Verification Checklist
 - [ ] Traits compile without `async-trait` dependency
 - [ ] Associated types provide zero-cost abstraction
 - [ ] `SimulatorNodeId` implements `P2PNodeId` trait correctly
 - [ ] All trait methods are properly typed (no Box<dyn>)
-- [ ] Traits accurately represent existing simulator functionality
+- [ ] Traits accurately represent existing simulator functionality (excludes P2PListener)
+- [ ] P2PListener exclusion is properly documented with TODO comments
+- [ ] from_bytes compatibility is handled correctly (trait uses &[u8; 32], impl uses [u8; 32])
 - [ ] Run `cargo fmt --check -p switchy_p2p`
 - [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
@@ -1146,29 +1150,32 @@ This ensures each phase compiles independently without forward dependencies.
     ```
   - [ ] Implement `P2PSystem` for `SimulatorP2P`:
     ```rust
-    impl P2PSystem for SimulatorP2P {
-        type NodeId = SimulatorNodeId;
-        type Connection = SimulatorConnection;
-        type Listener = SimulatorListener; // Will implement in Phase 5
+     impl P2PSystem for SimulatorP2P {
+         type NodeId = SimulatorNodeId;
+         type Connection = SimulatorConnection;
+         // TODO: Add Listener type in Phase 5/6:
+         // type Listener = SimulatorListener;
 
-        async fn connect(&self, node_id: Self::NodeId) -> Result<Self::Connection, P2PError> {
-            self.connect(node_id).await
-                .map_err(|e| P2PError::ConnectionFailed(e))
-        }
+         async fn connect(&self, node_id: Self::NodeId) -> Result<Self::Connection, P2PError> {
+             self.connect(node_id).await
+                 .map_err(|e| P2PError::ConnectionFailed(e))
+         }
 
-        async fn discover(&self, name: &str) -> Result<Self::NodeId, P2PError> {
-            self.discover(name).await
-                .map_err(|e| P2PError::NodeNotFound(e))
-        }
+         async fn discover(&self, name: &str) -> Result<Self::NodeId, P2PError> {
+             self.discover(name).await
+                 .map_err(|e| P2PError::NodeNotFound(e))
+         }
 
-        async fn listen(&self, _addr: &str) -> Result<Self::Listener, P2PError> {
-            todo!("Implement in Phase 5")
-        }
+         fn local_node_id(&self) -> &Self::NodeId {
+             self.local_node_id()
+         }
 
-        fn local_node_id(&self) -> &Self::NodeId {
-            self.local_node_id()
-        }
-    }
+         // TODO: Add in Phase 5/6 when SimulatorListener exists:
+         // async fn listen(&self, addr: &str) -> Result<Self::Listener, P2PError> {
+         //     self.listen(addr).await
+         //         .map_err(|e| P2PError::ConnectionFailed(e))
+         // }
+     }
     ```
   - [ ] Add compile-time type aliases for easy usage:
     ```rust
@@ -1197,6 +1204,26 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (no unused dependencies from refactoring)
 - [ ] All tests work through trait interface
+
+## 🔴 **IMPORTANT TRACKING NOTE: P2PListener Implementation**
+
+**The P2PListener trait and associated functionality was intentionally excluded from Phase 3.1** because the simulator has no listener implementation yet. This must be added in a future phase:
+
+### **Required for P2PListener Integration:**
+- [ ] **Phase 5/6**: Implement `SimulatorListener` struct
+  - [ ] Add `listen()` method to `SimulatorP2P`
+  - [ ] Add `accept()` functionality for incoming connections
+  - [ ] Add message queue handling for incoming connections
+- [ ] **Phase 5/6**: Extract `P2PListener` trait from working implementation
+  - [ ] Add `P2PListener` trait definition to `src/traits.rs`
+  - [ ] Add `Listener` associated type to `P2PSystem` trait
+  - [ ] Add `listen()` method to `P2PSystem` trait
+  - [ ] Implement `P2PListener` for `SimulatorListener`
+- [ ] **Phase 5/6**: Update documentation and examples
+  - [ ] Add listener examples to usage documentation
+  - [ ] Update integration tests to cover listener functionality
+
+**This tracking ensures we don't forget to implement the complete P2P system.**
 
 ## Phase 4: Error Handling and Types 🔴 **NOT STARTED**
 
