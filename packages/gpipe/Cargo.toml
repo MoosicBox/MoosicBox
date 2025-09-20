@@ -1,0 +1,21 @@
+[package]
+authors     = { workspace = true }
+categories  = ["command-line-utilities", "development-tools"]
+description = "Generic Pipelines - Universal CI/CD workflow tool"
+edition     = { workspace = true }
+keywords    = ["automation", "cd", "ci", "pipeline", "workflow"]
+license     = { workspace = true }
+name        = "gpipe"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+gpipe_ast = { workspace = true, optional = true }
+
+[features]
+default = ["ast"]
+
+fail-on-warnings = ["gpipe_ast?/fail-on-warnings"]
+
+ast = ["dep:gpipe_ast"]

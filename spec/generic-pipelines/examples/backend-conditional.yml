@@ -1,0 +1,62 @@
+# Backend Conditional Workflow
+# Demonstrates backend-specific behavior using conditional execution
+
+version: 1.0
+name: cross-platform-build
+
+triggers:
+  push:
+    branches: [main]
+  manual:
+
+actions:
+  checkout:
+    type: github
+    repo: actions/checkout@v4
+  
+  setup-rust:
+    type: file
+    path: .pipeline/actions/setup-rust.yml
+
+jobs:
+  build:
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: checkout
+      
+      - uses: setup-rust
+        with:
+          version: stable
+      
+      - run: cargo build --release
+        id: build
+      
+      # GitHub Actions specific behavior
+      - if: ${{ backend == 'github' }}
+        run: |
+          echo "Running in GitHub Actions environment"
+          echo "CI=true"
+          echo "Setting up artifact upload"
+      
+      # Local execution specific behavior  
+      - if: ${{ backend == 'local' }}
+        run: |
+          echo "Running locally"
+          echo "Skipping cloud-specific steps"
+          echo "Local build complete"
+      
+      # GitLab CI specific behavior
+      - if: ${{ backend == 'gitlab' }}
+        run: |
+          echo "Running in GitLab CI"
+          echo "Setting up GitLab artifacts"
+      
+      # Complex conditional with multiple conditions
+      - if: ${{ backend == 'github' && github.event_name == 'push' }}
+        run: echo "GitHub push event detected"
+      
+      # Always run regardless of backend
+      - run: |
+          echo "Build completed on backend: ${{ backend }}"
+          echo "This step runs everywhere"

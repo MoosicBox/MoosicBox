@@ -41,6 +41,8 @@ members = [
     "packages/files",
     "packages/fs",
     "packages/fs/examples/temp_dir",
+    "packages/gpipe",
+    "packages/gpipe/ast",
     "packages/http",
     "packages/http/examples/simple_get",
     "packages/http/models",
@@ -327,6 +329,10 @@ simvar_utils   = { version = "0.1.0", default-features = false, path = "packages
 app-tauri-plugin-player = { version = "0.1.0", default-features = false, path = "packages/app/tauri/tauri-plugin-player" }
 openport                = { version = "0.1.1", default-features = false, path = "packages/openport" }
 
+# Internal gpipe
+gpipe     = { version = "0.1.0", default-features = false, path = "packages/gpipe" }
+gpipe_ast = { version = "0.1.0", default-features = false, path = "packages/gpipe/ast" }
+
 actix = "0.13.5"
 actix-cors = "0.7.1"
 actix-files = "0.6.8"
@@ -487,6 +493,7 @@ serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
 serde_json = "1.0.145"
 serde_urlencoded = "0.7.1"
+serde_yaml = "0.9.34"
 serial_test = "3.2.0"
 sha2 = "0.10.9"
 sha2-const-stable = "0.1.0"

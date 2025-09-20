@@ -1,0 +1,20 @@
+[package]
+authors     = { workspace = true }
+categories  = ["data-structures", "development-tools"]
+description = "Generic Pipelines AST - Abstract syntax tree for workflow definitions"
+edition     = { workspace = true }
+keywords    = ["ast", "cd", "ci", "pipeline", "workflow"]
+license     = { workspace = true }
+name        = "gpipe_ast"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.0"
+
+[dependencies]
+serde      = { workspace = true, features = ["derive"] }
+serde_yaml = { workspace = true }
+
+[features]
+default = []
+
+fail-on-warnings = []

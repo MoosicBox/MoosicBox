@@ -1,0 +1,24 @@
+# Basic Generic Pipeline Workflow
+# Demonstrates simple single-job workflow with basic trigger and action usage
+
+version: 1.0
+name: basic-build
+
+triggers:
+  push:
+    branches: [main]
+
+actions:
+  checkout:
+    type: github
+    repo: actions/checkout@v4
+
+jobs:
+  build:
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: checkout
+      - run: cargo build
+        id: build-step
+      - run: echo "Build completed successfully"

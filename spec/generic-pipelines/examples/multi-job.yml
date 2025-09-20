@@ -1,0 +1,54 @@
+# Multi-Job Workflow with Dependencies
+# Demonstrates job dependencies, step outputs, and sequential execution
+
+version: 1.0
+name: build-test-deploy
+
+triggers:
+  push:
+    branches: [main, develop]
+  pull_request:
+    types: [opened, synchronize]
+
+actions:
+  checkout:
+    type: github
+    repo: actions/checkout@v4
+
+jobs:
+  build:
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: checkout
+      
+      - id: build
+        run: |
+          cargo build --release
+          echo "artifact=target/release/app" >> $PIPELINE_OUTPUT
+          echo "version=$(cargo pkgid | cut -d# -f2)" >> $PIPELINE_OUTPUT
+      
+      - run: |
+          echo "Built artifact: ${{ steps.build.outputs.artifact }}"
+          echo "Version: ${{ steps.build.outputs.version }}"
+
+  test:
+    needs: [build]
+    steps:
+      - uses: checkout
+      
+      - run: cargo test
+        continue-on-error: true
+        id: test-step
+      
+      - if: ${{ steps.test-step.outcome == 'failure' }}
+        run: echo "Tests failed but continuing pipeline"
+
+  deploy:
+    needs: [build, test]
+    if: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - run: |
+          echo "Deploying application..."
+          echo "Would deploy artifact from build job"
+          echo "Deployment complete"
