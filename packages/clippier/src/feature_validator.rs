@@ -239,7 +239,7 @@ impl FeatureValidator {
             .get("features")
             .and_then(|f| f.get(feature_name))
             .and_then(|f| f.as_array())
-            .ok_or_else(|| anyhow!("Feature {} not found", feature_name))?;
+            .ok_or_else(|| anyhow!("Feature {feature_name} not found"))?;
 
         // Get expected propagations
         let expected = self.get_expected_propagations(cargo_value, feature_name);
