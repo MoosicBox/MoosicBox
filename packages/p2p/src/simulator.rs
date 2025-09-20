@@ -624,6 +624,21 @@ impl SimulatorConnection {
     }
 }
 
+impl crate::traits::P2PNodeId for SimulatorNodeId {
+    fn from_bytes(bytes: &[u8; 32]) -> crate::types::P2PResult<Self> {
+        // Uses existing from_bytes method (takes owned array, not reference)
+        Ok(Self::from_bytes(*bytes))
+    }
+
+    fn as_bytes(&self) -> &[u8; 32] {
+        self.as_bytes()
+    }
+
+    fn fmt_short(&self) -> String {
+        self.fmt_short()
+    }
+}
+
 /// Create a deterministic node ID for testing
 #[must_use]
 pub fn test_node_id(name: &str) -> SimulatorNodeId {

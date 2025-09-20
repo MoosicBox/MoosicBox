@@ -18,7 +18,10 @@ group = "switchy"
 switchy_random = { workspace = true, features = ["rand"] }
 # Phase 2.3: Added async support for connections
 switchy_async = { workspace = true, features = ["sync", "time", "tokio"] }
-# - Phase 4.1: thiserror
+# Phase 3.1: Added async-trait for trait Future bounds
+async-trait = { workspace = true }
+# Phase 3.1: Added thiserror for clean error handling (no boilerplate)
+thiserror = { workspace = true }
 # - Phase 7.1: iroh (optional)
 # - Phase 8.1: proptest (dev-dependency)
 

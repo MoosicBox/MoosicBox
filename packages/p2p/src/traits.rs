@@ -1,0 +1,80 @@
+//! P2P system traits
+//!
+//! This module defines the core traits that provide abstractions over different
+//! P2P implementations. These traits are extracted from the working simulator
+//! implementation to ensure they match real functionality.
+
+use crate::types::P2PResult;
+use async_trait::async_trait;
+use std::fmt::{Debug, Display};
+
+/// P2P system abstraction with async-trait for Send + Sync bounds
+/// Using async-trait ensures Future bounds compatibility with async runtimes
+///
+/// NOTE: `P2PListener` trait and `listen()` method will be added in Phase 5/6
+/// when `SimulatorListener` is implemented. Currently excluded because
+/// the simulator has no listener functionality yet.
+#[async_trait]
+pub trait P2PSystem: Send + Sync + 'static {
+    type NodeId: P2PNodeId;
+    type Connection: P2PConnection<NodeId = Self::NodeId>;
+    // TODO: Add Listener associated type in Phase 5/6:
+    // type Listener: P2PListener<Connection = Self::Connection>;
+
+    /// Connect to a remote peer by node ID
+    async fn connect(&self, node_id: Self::NodeId) -> P2PResult<Self::Connection>;
+
+    /// Discover a peer by name (mock DNS in simulator)
+    async fn discover(&self, name: &str) -> P2PResult<Self::NodeId>;
+
+    /// Get this node's ID
+    fn local_node_id(&self) -> &Self::NodeId;
+
+    // TODO: Add in Phase 5/6 when SimulatorListener exists:
+    // async fn listen(&self, addr: &str) -> P2PResult<Self::Listener>;
+}
+
+/// Node identity trait matching Iroh's capabilities
+pub trait P2PNodeId: Clone + Debug + Display + Send + Sync + 'static {
+    /// Create node ID from 32 bytes (ed25519 public key format)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the provided bytes cannot be converted to a valid node ID.
+    fn from_bytes(bytes: &[u8; 32]) -> P2PResult<Self>;
+
+    /// Get the raw bytes of this node ID
+    fn as_bytes(&self) -> &[u8; 32];
+
+    /// Format as short hex string for display
+    fn fmt_short(&self) -> String;
+}
+
+/// Connection trait for reliable message streams
+#[async_trait]
+pub trait P2PConnection: Send + Sync + 'static {
+    type NodeId: P2PNodeId;
+
+    /// Send data to remote peer
+    async fn send(&mut self, data: &[u8]) -> P2PResult<()>;
+
+    /// Receive data from remote peer (non-blocking)
+    async fn recv(&mut self) -> P2PResult<Vec<u8>>;
+
+    /// Get remote peer's node ID
+    fn remote_node_id(&self) -> &Self::NodeId;
+
+    /// Check if connection is still active
+    fn is_connected(&self) -> bool;
+
+    /// Close the connection
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection cannot be closed properly.
+    fn close(&mut self) -> P2PResult<()>;
+}
+
+// TODO: P2PListener trait will be added in Phase 5/6 when we implement
+// SimulatorListener functionality. Excluded for now as simulator has no
+// listener implementation yet.
