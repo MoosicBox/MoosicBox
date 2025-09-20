@@ -396,6 +396,78 @@ impl SimulatorP2P {
 
         Ok(connection)
     }
+
+    /// Register a peer with a discoverable name in the network
+    ///
+    /// Associates a human-readable name with a node ID, enabling discovery through the
+    /// DNS-like lookup system. Names can be used to connect to peers without knowing
+    /// their exact node ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node registration fails
+    pub async fn register_peer(&self, name: &str, node_id: SimulatorNodeId) -> Result<(), String> {
+        let mut graph = self.network_graph.write().await;
+
+        // Add node to graph if not exists
+        if !graph.nodes.contains_key(&node_id) {
+            graph.add_node(node_id.clone());
+        }
+
+        // Register name in the node's info
+        if let Some(node_info) = graph.nodes.get_mut(&node_id) {
+            node_info
+                .registered_names
+                .insert(name.to_string(), node_id.to_string());
+        }
+        drop(graph);
+
+        Ok(())
+    }
+
+    /// Discover a peer by its registered name
+    ///
+    /// Performs a DNS-like lookup to find the node ID associated with a given name.
+    /// Includes simulated network delay to model realistic discovery latency.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// * The name is not registered with any node
+    /// * The discovery service is unavailable
+    pub async fn discover(&self, name: &str) -> Result<SimulatorNodeId, String> {
+        // Simulate DNS lookup delay
+        let delay = discovery_delay();
+        switchy_async::time::sleep(delay).await;
+
+        let graph = self.network_graph.read().await;
+
+        // Search through all nodes for registered name
+        for (node_id, node_info) in &graph.nodes {
+            if node_info.registered_names.contains_key(name) {
+                return Ok(node_id.clone());
+            }
+        }
+        drop(graph);
+
+        Err(format!("Name '{name}' not found"))
+    }
+
+    /// Connect to a peer by its registered name
+    ///
+    /// Convenience method that combines discovery and connection establishment.
+    /// First discovers the node ID associated with the name, then establishes
+    /// a connection to that peer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// * Discovery fails (name not found)
+    /// * Connection establishment fails (no route, etc.)
+    pub async fn connect_by_name(&self, name: &str) -> Result<SimulatorConnection, String> {
+        let node_id = self.discover(name).await?;
+        self.connect(node_id).await
+    }
 }
 
 impl Default for SimulatorP2P {
@@ -556,6 +628,40 @@ impl SimulatorConnection {
 #[must_use]
 pub fn test_node_id(name: &str) -> SimulatorNodeId {
     SimulatorNodeId::from_seed(name)
+}
+
+#[cfg(test)]
+impl SimulatorP2P {
+    /// Create a test setup with two connected peers
+    ///
+    /// Returns a tuple of (`simulator_instance`, `alice_id`, `bob_id`) where Alice and Bob
+    /// are connected in the network graph with low-latency, high-reliability links
+    /// suitable for testing scenarios.
+    #[must_use]
+    pub fn test_setup() -> (Self, SimulatorNodeId, SimulatorNodeId) {
+        let alice = Self::new();
+        let alice_id = alice.local_node_id().clone();
+
+        let bob = Self::new();
+        let bob_id = bob.local_node_id().clone();
+
+        // Connect them in the network graph with default link
+        {
+            let mut graph = alice.network_graph.blocking_write();
+            graph.connect_nodes(
+                alice_id.clone(),
+                bob_id.clone(),
+                LinkInfo {
+                    latency: Duration::from_millis(10),
+                    packet_loss: 0.0,
+                    bandwidth_limit: None,
+                    is_active: true,
+                },
+            );
+        }
+
+        (alice, alice_id, bob_id)
+    }
 }
 
 #[cfg(test)]
