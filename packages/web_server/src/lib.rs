@@ -1002,3 +1002,105 @@ impl_web_server!(simulator);
 
 #[cfg(all(not(feature = "simulator"), feature = "actix"))]
 impl_web_server!(actix);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_with_header() {
+        let response = HttpResponse::ok().with_header("X-Custom-Header", "custom-value");
+
+        assert_eq!(
+            response.headers.get("X-Custom-Header"),
+            Some(&"custom-value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_with_headers() {
+        let mut headers = BTreeMap::new();
+        headers.insert("X-Header-1".to_string(), "value-1".to_string());
+        headers.insert("X-Header-2".to_string(), "value-2".to_string());
+
+        let response = HttpResponse::ok().with_headers(headers);
+
+        assert_eq!(
+            response.headers.get("X-Header-1"),
+            Some(&"value-1".to_string())
+        );
+        assert_eq!(
+            response.headers.get("X-Header-2"),
+            Some(&"value-2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_with_content_type() {
+        let response = HttpResponse::ok().with_content_type("application/json");
+
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn test_json_response() {
+        let data = serde_json::json!({
+            "message": "Hello, World!"
+        });
+
+        let response = HttpResponse::json(&data).unwrap();
+
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(response.status_code, StatusCode::Ok);
+    }
+
+    #[test]
+    fn test_html_response() {
+        let response = HttpResponse::html("<h1>Hello, World!</h1>");
+
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"text/html; charset=utf-8".to_string())
+        );
+        assert_eq!(response.status_code, StatusCode::Ok);
+    }
+
+    #[test]
+    fn test_text_response() {
+        let response = HttpResponse::text("Hello, World!");
+
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"text/plain; charset=utf-8".to_string())
+        );
+        assert_eq!(response.status_code, StatusCode::Ok);
+    }
+
+    #[test]
+    fn test_header_chaining() {
+        let response = HttpResponse::ok()
+            .with_header("X-First", "first-value")
+            .with_content_type("application/json")
+            .with_header("X-Second", "second-value");
+
+        assert_eq!(
+            response.headers.get("X-First"),
+            Some(&"first-value".to_string())
+        );
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(
+            response.headers.get("X-Second"),
+            Some(&"second-value".to_string())
+        );
+    }
+}
