@@ -720,7 +720,7 @@ fn build_and_measure_rlib(
             return Ok(fs::metadata(&path)?.len());
         }
     }
-    Err(anyhow::anyhow!("rlib for {} not found", crate_name))
+    Err(anyhow::anyhow!("rlib for {crate_name} not found"))
 }
 
 fn build_and_measure_binary(
