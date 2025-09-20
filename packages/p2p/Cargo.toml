@@ -16,7 +16,8 @@ group = "switchy"
 [dependencies]
 # Phase 2.1: First dependencies added to package
 switchy_random = { workspace = true, features = ["rand"] }
-# - Phase 2.3: switchy_async (for connections)
+# Phase 2.3: Added async support for connections
+switchy_async = { workspace = true, features = ["sync", "time", "tokio"] }
 # - Phase 4.1: thiserror
 # - Phase 7.1: iroh (optional)
 # - Phase 8.1: proptest (dev-dependency)

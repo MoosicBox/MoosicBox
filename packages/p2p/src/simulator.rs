@@ -1,10 +1,22 @@
+//! P2P Network Simulator
+//!
+//! This module provides a complete P2P network simulation with realistic network conditions,
+//! including latency, packet loss, and network partitions. It supports:
+//!
+//! - Graph-based network topology with configurable links
+//! - Realistic network simulation with latency and packet loss
+//! - Connection management with async message passing
+//! - Network partitions for testing distributed system behavior
+//! - Environment-configurable parameters for testing different conditions
+
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{self, Display};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+use switchy_async::sync::RwLock;
 use switchy_random::{Rng, rng};
 
 /// Get default latency from environment or use 50ms
@@ -42,7 +54,6 @@ fn connection_timeout() -> Duration {
 }
 
 /// Get max message size from environment or use 1MB
-#[allow(dead_code)] // Used in Phase 2.3
 fn max_message_size() -> usize {
     std::env::var("SIMULATOR_MAX_MESSAGE_SIZE")
         .ok()
@@ -50,12 +61,26 @@ fn max_message_size() -> usize {
         .unwrap_or(1024 * 1024) // 1MB default
 }
 
+/// A network topology graph representing nodes and links in the P2P simulation
+///
+/// The `NetworkGraph` maintains the complete network topology including all nodes,
+/// their connections, and link characteristics like latency and packet loss.
+/// It supports dynamic topology changes including network partitions.
+/// A network topology graph representing nodes and links in the P2P simulation
+///
+/// The `NetworkGraph` maintains the complete network topology including all nodes,
+/// their connections, and link characteristics like latency and packet loss.
+/// It supports dynamic topology changes including network partitions.
 #[derive(Debug, Clone)]
 pub struct NetworkGraph {
     nodes: BTreeMap<SimulatorNodeId, NodeInfo>,
     links: BTreeMap<(SimulatorNodeId, SimulatorNodeId), LinkInfo>,
 }
 
+/// Information about a node in the P2P network
+///
+/// Contains node identity, online status, registered names for discovery,
+/// and message queues for each connected peer to maintain FIFO ordering.
 #[derive(Debug, Clone)]
 pub struct NodeInfo {
     #[allow(dead_code)] // Used in Phase 2.4
@@ -64,15 +89,16 @@ pub struct NodeInfo {
     is_online: bool,
     #[allow(dead_code)] // Used in Phase 2.4
     registered_names: BTreeMap<String, String>, // For DNS-like discovery
-    #[allow(dead_code)] // Used in Phase 2.3
     message_queues: BTreeMap<SimulatorNodeId, VecDeque<Vec<u8>>>,
 }
 
+/// Network link characteristics between two nodes
+///
+/// Defines the properties of a network connection including latency, packet loss,
+/// bandwidth limitations, and whether the link is currently active.
 #[derive(Debug, Clone)]
 pub struct LinkInfo {
-    #[allow(dead_code)] // Used in Phase 2.3
     latency: Duration,
-    #[allow(dead_code)] // Used in Phase 2.3
     packet_loss: f64,
     #[allow(dead_code)] // Used in Phase 2.3
     bandwidth_limit: Option<u64>, // bytes per second
@@ -88,6 +114,10 @@ impl NetworkGraph {
         }
     }
 
+    /// Add a new node to the network graph
+    ///
+    /// Creates a new node with default state (online, empty message queues, no registered names).
+    /// If the node already exists, this operation has no effect.
     pub fn add_node(&mut self, node_id: SimulatorNodeId) {
         self.nodes.insert(
             node_id.clone(),
@@ -100,6 +130,10 @@ impl NetworkGraph {
         );
     }
 
+    /// Create a bidirectional connection between two nodes
+    ///
+    /// Establishes a network link with the specified characteristics (latency, packet loss, etc.).
+    /// The connection is automatically bidirectional with identical properties in both directions.
     pub fn connect_nodes(&mut self, a: SimulatorNodeId, b: SimulatorNodeId, link: LinkInfo) {
         self.links.insert((a.clone(), b.clone()), link.clone());
         self.links.insert((b, a), link); // Bidirectional
@@ -117,7 +151,7 @@ impl NetworkGraph {
         }
 
         let mut queue = VecDeque::new();
-        let mut visited = std::collections::HashSet::new();
+        let mut visited = std::collections::BTreeSet::new();
         let mut parent: BTreeMap<SimulatorNodeId, SimulatorNodeId> = BTreeMap::new();
 
         queue.push_back(from.clone());
@@ -151,6 +185,10 @@ impl NetworkGraph {
         None // No path found
     }
 
+    /// Create a network partition between two groups of nodes
+    ///
+    /// Removes all links between nodes in `group_a` and nodes in `group_b`,
+    /// simulating a network partition where the groups cannot communicate.
     pub fn add_partition(&mut self, group_a: &[SimulatorNodeId], group_b: &[SimulatorNodeId]) {
         for a in group_a {
             for b in group_b {
@@ -160,6 +198,10 @@ impl NetworkGraph {
         }
     }
 
+    /// Restore connectivity between two previously partitioned groups
+    ///
+    /// Re-establishes links between all nodes in `group_a` and all nodes in `group_b`
+    /// using default network characteristics (environment-configurable latency and packet loss).
     pub fn heal_partition(&mut self, group_a: &[SimulatorNodeId], group_b: &[SimulatorNodeId]) {
         let default_link = LinkInfo {
             latency: default_latency(),
@@ -192,6 +234,10 @@ impl Default for NetworkGraph {
     }
 }
 
+/// A unique identifier for nodes in the P2P network
+///
+/// 256-bit (32-byte) identifier that uniquely identifies a peer in the network.
+/// Supports deterministic generation from seeds for testing and random generation for production.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SimulatorNodeId([u8; 32]);
 
@@ -251,11 +297,15 @@ impl Display for SimulatorNodeId {
     }
 }
 
+/// Main P2P simulation node
+///
+/// Represents a single peer in the P2P network with its own node identity,
+/// shared network topology view, and active connections to other peers.
+/// Supports async connection establishment and message passing.
 pub struct SimulatorP2P {
     node_id: SimulatorNodeId,
-    #[allow(dead_code)] // Used in Phase 2.3
     network_graph: Arc<RwLock<NetworkGraph>>, // NEW in Phase 2.2
-                                              // TODO: connections will be added in Phase 2.3
+    connections: Arc<RwLock<BTreeMap<SimulatorNodeId, SimulatorConnection>>>, // NEW in Phase 2.3
 }
 
 impl SimulatorP2P {
@@ -264,7 +314,8 @@ impl SimulatorP2P {
     pub fn new() -> Self {
         Self {
             node_id: SimulatorNodeId::generate(),
-            network_graph: Arc::new(RwLock::new(NetworkGraph::new())), // NEW
+            network_graph: Arc::new(RwLock::new(NetworkGraph::new())),
+            connections: Arc::new(RwLock::new(BTreeMap::new())), // NEW
         }
     }
 
@@ -273,7 +324,8 @@ impl SimulatorP2P {
     pub fn with_seed(seed: &str) -> Self {
         Self {
             node_id: SimulatorNodeId::from_seed(seed),
-            network_graph: Arc::new(RwLock::new(NetworkGraph::new())), // NEW
+            network_graph: Arc::new(RwLock::new(NetworkGraph::new())),
+            connections: Arc::new(RwLock::new(BTreeMap::new())), // NEW
         }
     }
 
@@ -282,11 +334,221 @@ impl SimulatorP2P {
     pub const fn local_node_id(&self) -> &SimulatorNodeId {
         &self.node_id
     }
+
+    /// Connect to a remote peer
+    ///
+    /// Establishes a connection to another node in the network, setting up bidirectional
+    /// message queues and verifying network connectivity through the topology graph.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// * No route exists to the destination node (network partition)
+    /// * Connection storage fails
+    pub async fn connect(&self, remote_id: SimulatorNodeId) -> Result<SimulatorConnection, String> {
+        let mut graph = self.network_graph.write().await;
+
+        // 1. Ensure both nodes exist in graph
+        if !graph.nodes.contains_key(&self.node_id) {
+            graph.add_node(self.node_id.clone());
+        }
+        if !graph.nodes.contains_key(&remote_id) {
+            graph.add_node(remote_id.clone());
+        }
+
+        // 2. Create message queues for bidirectional communication
+        if let Some(local_node) = graph.get_node_mut(&self.node_id) {
+            local_node
+                .message_queues
+                .entry(remote_id.clone())
+                .or_insert_with(VecDeque::new);
+        }
+        if let Some(remote_node) = graph.get_node_mut(&remote_id) {
+            remote_node
+                .message_queues
+                .entry(self.node_id.clone())
+                .or_insert_with(VecDeque::new);
+        }
+
+        // 3. Check connectivity
+        let has_path = graph
+            .find_path(self.node_id.clone(), remote_id.clone())
+            .is_some();
+        if !has_path {
+            return Err("No route to destination".to_string());
+        }
+
+        drop(graph);
+
+        // 4. Create connection
+        let connection = SimulatorConnection {
+            local_id: self.node_id.clone(),
+            remote_id: remote_id.clone(),
+            network_graph: Arc::clone(&self.network_graph),
+            is_connected: Arc::new(AtomicBool::new(true)),
+        };
+
+        // 5. Store in connections map
+        {
+            let mut connections = self.connections.write().await;
+            connections.insert(remote_id, connection.clone());
+        }
+
+        Ok(connection)
+    }
 }
 
 impl Default for SimulatorP2P {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// An active connection between two peers in the P2P network
+///
+/// Handles message routing through the network graph with realistic latency
+/// and packet loss simulation. Messages are delivered asynchronously with
+/// FIFO ordering guarantees.
+#[derive(Debug, Clone)]
+pub struct SimulatorConnection {
+    local_id: SimulatorNodeId,
+    remote_id: SimulatorNodeId,
+    network_graph: Arc<RwLock<NetworkGraph>>,
+    is_connected: Arc<AtomicBool>,
+}
+
+impl SimulatorConnection {
+    /// Send data to remote peer through network simulation
+    ///
+    /// Routes the message through the network graph, simulating realistic network conditions
+    /// including latency delays and probabilistic packet loss. Messages are delivered
+    /// asynchronously with FIFO ordering guarantees.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// * Connection is closed
+    /// * Message exceeds maximum size limit (configurable via environment)
+    /// * No route exists to destination (network partition)
+    /// * Network graph access fails
+    pub async fn send(&mut self, data: &[u8]) -> Result<(), String> {
+        if !self.is_connected.load(Ordering::Relaxed) {
+            return Err("Connection closed".to_string());
+        }
+
+        // Check message size limit
+        let max_size = max_message_size();
+        if data.len() > max_size {
+            return Err(format!(
+                "Message too large: {} bytes exceeds max {}",
+                data.len(),
+                max_size
+            ));
+        }
+
+        let graph = self.network_graph.read().await;
+
+        // 1. Find path from local to remote
+        let path = graph
+            .find_path(self.local_id.clone(), self.remote_id.clone())
+            .ok_or_else(|| "No route to destination".to_string())?;
+
+        // 2. Calculate total latency along path
+        let total_latency = Self::calculate_path_latency(&graph, &path);
+
+        // 3. Check packet loss along path
+        if Self::packet_lost(&graph, &path) {
+            return Ok(()); // Packet dropped, but not an error (simulate UDP-like behavior)
+        }
+
+        // 4. Sleep for network latency using switchy_async
+        drop(graph); // Release lock before sleeping
+        switchy_async::time::sleep(total_latency).await;
+
+        // 5. Deliver message to remote's queue
+        {
+            let mut graph = self.network_graph.write().await;
+            if let Some(remote_node) = graph.get_node_mut(&self.remote_id)
+                && let Some(queue) = remote_node.message_queues.get_mut(&self.local_id)
+            {
+                queue.push_back(data.to_vec());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Receive data from remote peer (non-blocking)
+    ///
+    /// Attempts to retrieve the next message from this peer's message queue.
+    /// Returns immediately if no message is available.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// * No message is currently available in the queue
+    /// * Network graph access fails
+    pub async fn recv(&mut self) -> Result<Vec<u8>, String> {
+        {
+            let mut graph = self.network_graph.write().await;
+
+            if let Some(local_node) = graph.get_node_mut(&self.local_id)
+                && let Some(queue) = local_node.message_queues.get_mut(&self.remote_id)
+                && let Some(message) = queue.pop_front()
+            {
+                return Ok(message);
+            }
+        }
+
+        Err("No message available".to_string())
+    }
+
+    /// Check if connection is still active
+    #[must_use]
+    pub fn is_connected(&self) -> bool {
+        self.is_connected.load(Ordering::Relaxed)
+    }
+
+    /// Get remote peer's node ID
+    #[must_use]
+    pub const fn remote_node_id(&self) -> &SimulatorNodeId {
+        &self.remote_id
+    }
+
+    /// Close the connection
+    ///
+    /// Marks the connection as disconnected, preventing further message sending.
+    /// Existing messages in queues remain available for receiving.
+    ///
+    /// # Errors
+    ///
+    /// This method currently always succeeds but returns Result for future extensibility.
+    pub fn close(&mut self) -> Result<(), String> {
+        self.is_connected.store(false, Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// Calculate total latency along a path
+    fn calculate_path_latency(graph: &NetworkGraph, path: &[SimulatorNodeId]) -> Duration {
+        let mut total = Duration::from_millis(0);
+        for window in path.windows(2) {
+            if let Some(link) = graph.links.get(&(window[0].clone(), window[1].clone())) {
+                total += link.latency;
+            }
+        }
+        total
+    }
+
+    /// Check if packet should be lost based on path
+    fn packet_lost(graph: &NetworkGraph, path: &[SimulatorNodeId]) -> bool {
+        for window in path.windows(2) {
+            if let Some(link) = graph.links.get(&(window[0].clone(), window[1].clone()))
+                && rng().gen_range(0.0..1.0) < link.packet_loss
+            {
+                return true;
+            }
+        }
+        false
     }
 }
 
