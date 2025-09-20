@@ -976,7 +976,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] `connect_by_name()` provides convenient discovery + connect
 - [ ] Test helpers create connected network topology
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (all core dependencies should be used workspace-wide)
@@ -1094,7 +1094,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] All trait methods are properly typed (no Box<dyn>)
 - [ ] Traits accurately represent existing simulator functionality
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] No compilation errors with trait definitions
 
@@ -1178,7 +1178,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Error conversion between string errors and P2PError works
 - [ ] Trait-based interface preserves all existing functionality
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (no unused dependencies from refactoring)
@@ -1278,7 +1278,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] All existing code compiles with new error types
 - [ ] Tests work with proper error handling
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Error messages are clear and actionable
@@ -1365,7 +1365,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] All existing functionality preserved
 - [ ] Configuration types match actual usage
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (thiserror and config types should be used)
@@ -1495,7 +1495,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Status codes and convenience methods work
 - [ ] Route matching is case-sensitive and exact
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Router unit tests pass
 
@@ -1570,7 +1570,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Example services demonstrate realistic usage patterns
 - [ ] Route isolation between services works properly
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Service integration tests pass
@@ -1596,7 +1596,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Multiple concurrent connections work
 - [ ] Tests demonstrate full connection lifecycle
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Listener tests pass consistently
@@ -1616,7 +1616,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Provider integration works correctly
 - [ ] All listener functionality preserved
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Trait abstraction doesn't break functionality
@@ -1642,7 +1642,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Tests demonstrate simulation features working
 - [ ] Configuration follows established patterns
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Simulation features are actually tested
 - [ ] Environment integration works correctly
@@ -1670,7 +1670,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Run `cargo fmt --check -p switchy_p2p`
 - [ ] Run `cargo build -p switchy_p2p --features iroh`
 - [ ] Run `cargo build -p switchy_p2p --no-default-features`
-- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo tree -p switchy_p2p --features iroh` (check iroh deps)
 - [ ] Verify iroh 0.91.2 is pulled in with iroh feature
 - [ ] Verify tokio is available transitively through iroh (not as direct dependency)
@@ -1755,7 +1755,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Endpoint configuration is appropriate for use case
 - [ ] Provider works with existing trait interface
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p --features iroh`
 - [ ] Basic Iroh functionality works with existing tests
 - [ ] Peer identity management is secure
@@ -1912,7 +1912,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Connection and listener lifecycle is properly managed
 - [ ] Resource cleanup prevents leaks
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p --features iroh`
 - [ ] Existing tests work with Iroh implementation
 - [ ] Error handling is robust
@@ -1932,7 +1932,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Relay fallback is available when needed
 - [ ] Peer discovery works in test scenarios
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p --features iroh -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p --features iroh`
 - [ ] Iroh integration tests pass consistently
 - [ ] Connection reliability is acceptable
@@ -2067,7 +2067,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Failure scenarios are thoroughly tested
 - [ ] Performance tests provide meaningful metrics
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo test -p switchy_p2p`
 - [ ] Run `cargo machete` (verify proptest is used in tests and dev-dependencies)
 - [ ] Tests pass with all feature combinations
@@ -2232,7 +2232,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Cross-implementation tests ensure compatibility
 - [ ] Failure recovery tests validate robustness
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo test -p switchy_p2p --test integration`
 - [ ] All integration tests pass consistently
 - [ ] Performance metrics are within acceptable ranges
@@ -2278,7 +2278,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Code is well-commented and educational
 - [ ] Examples work with different feature configurations
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p --examples -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p --examples -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p --examples`
 - [ ] Examples execute successfully
 - [ ] Performance examples provide useful metrics
@@ -2530,7 +2530,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Feature flags control compilation correctly
 - [ ] Documentation covers all public APIs
 - [ ] Run `cargo fmt --check -p switchy_p2p`
-- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings`
+- [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p --examples`
 - [ ] Run examples with different feature combinations
 - [ ] Run `cargo machete` (final check - no unused dependencies in workspace)
