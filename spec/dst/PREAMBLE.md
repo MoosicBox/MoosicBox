@@ -22,4 +22,4 @@ The DST system ensures that all tests can run with identical results regardless 
 - Living documents that evolve during implementation
 - After having completed a checkbox, 'check' it and add details under it regarding the file/location updated as PROOF
 
-See `dst/overview.md` for the current status of the DST implementation and what's next to be done.
+See `dst/plan.md` for the current status of the DST implementation and what's next to be done.
