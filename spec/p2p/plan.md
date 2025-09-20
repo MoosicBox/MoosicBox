@@ -1011,14 +1011,62 @@ This ensures each phase compiles independently without forward dependencies.
 - Use native async fn in traits (requires Rust 1.75+, NO async-trait dependency)
 - **P2PListener trait EXCLUDED** - simulator has no listener implementation yet (tracked for Phase 5/6)
 
+- [ ] Create minimal P2P error types 🔴 **CRITICAL**
+  - [ ] Create `src/types.rs` and add to lib.rs: `pub mod types;`
+  - [ ] Add minimal P2PError enum with extension points for future phases:
+    ```rust
+    use std::fmt;
+
+    /// P2P system error types
+    ///
+    /// This enum will be extended with more specific error variants
+    /// as the implementation grows. Currently contains minimal errors
+    /// needed for Phase 3 trait implementations.
+    #[derive(Debug, Clone)]
+    pub enum P2PError {
+        /// Generic network error (will be refined in later phases)
+        NetworkError(String),
+
+        /// Connection-related errors
+        ConnectionFailed(String),
+
+        /// Node not found during discovery
+        NodeNotFound(String),
+
+        /// Generic I/O error
+        IoError(String),
+
+        // TODO: Phase 4 - Add more specific error types:
+        // - Timeout errors
+        // - Invalid node ID errors
+        // - Protocol-specific errors
+        // - Serialization errors
+        // When adding thiserror dependency
+    }
+
+    impl fmt::Display for P2PError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                Self::NetworkError(msg) => write!(f, "Network error: {}", msg),
+                Self::ConnectionFailed(msg) => write!(f, "Connection failed: {}", msg),
+                Self::NodeNotFound(msg) => write!(f, "Node not found: {}", msg),
+                Self::IoError(msg) => write!(f, "I/O error: {}", msg),
+            }
+        }
+    }
+
+    impl std::error::Error for P2PError {}
+
+    /// Convenience type alias for P2P results
+    pub type P2PResult<T> = Result<T, P2PError>;
+    ```
+
 - [ ] Extract `P2PSystem` traits with zero-cost abstractions 🔴 **CRITICAL**
   - [ ] Create `src/traits.rs` and add to lib.rs: `pub mod traits;`
   - [ ] Add COMPLETE trait definitions (NO `async-trait` dependency):
-    ```rust
-    use std::fmt::{Debug, Display};
-
-    // Note: P2PError will be defined in Phase 4, use String for now
-    type P2PResult<T> = Result<T, String>; // Temporary until Phase 4
+     ```rust
+     use std::fmt::{Debug, Display};
+     use crate::types::{P2PError, P2PResult};
 
      /// Zero-cost abstraction for P2P systems
      /// Native async methods require Rust 1.75+ (no Box<dyn Future>)
@@ -1086,7 +1134,7 @@ This ensures each phase compiles independently without forward dependencies.
      use crate::traits::P2PNodeId;
 
      impl P2PNodeId for SimulatorNodeId {
-         fn from_bytes(bytes: &[u8; 32]) -> Result<Self, String> {
+         fn from_bytes(bytes: &[u8; 32]) -> P2PResult<Self> {
              // Uses existing from_bytes method (takes owned array, not reference)
              Ok(Self::from_bytes(*bytes))
          }
@@ -1104,7 +1152,11 @@ This ensures each phase compiles independently without forward dependencies.
      This is handled by dereferencing `*bytes` in the implementation above.
 
 #### 3.1 Verification Checklist
+- [ ] P2PError type compiles and implements std::error::Error correctly
+- [ ] P2PResult type alias is available for use
+- [ ] types module is properly added to lib.rs
 - [ ] Traits compile without `async-trait` dependency
+- [ ] Traits use P2PError instead of String for proper type safety
 - [ ] Associated types provide zero-cost abstraction
 - [ ] `SimulatorNodeId` implements `P2PNodeId` trait correctly
 - [ ] All trait methods are properly typed (no Box<dyn>)
@@ -1114,7 +1166,7 @@ This ensures each phase compiles independently without forward dependencies.
 - [ ] Run `cargo fmt --check -p switchy_p2p`
 - [ ] Run `cargo clippy -p switchy_p2p -- -D warnings` MAKE SURE THERE ARE ZERO CLIPPY ISSUES
 - [ ] Run `cargo build -p switchy_p2p`
-- [ ] No compilation errors with trait definitions
+- [ ] No compilation errors with trait and type definitions
 
 ### 3.2 Implement Traits for Simulator Types
 
@@ -1227,78 +1279,84 @@ This ensures each phase compiles independently without forward dependencies.
 
 ## Phase 4: Error Handling and Types 🔴 **NOT STARTED**
 
-**Goal:** Replace string-based errors with proper error types
+**Goal:** Extend P2PError type with thiserror and additional error variants
 
-**Status:** All tasks pending
+**Status:** All tasks pending (P2PError foundation created in Phase 3.1)
 
-### 4.1 Create Unified P2PError with thiserror
+### 4.1 Extend P2PError with thiserror and additional variants
 
 - [ ] Add thiserror dependency to Cargo.toml 🔴 **CRITICAL**
   - [ ] Add to `[dependencies]`: `thiserror = { workspace = true }`
   - [ ] Verify thiserror dependency exists in workspace (should already be present)
   - [ ] **VERIFICATION**: Run `cargo tree -p switchy_p2p` shows thiserror in dependency tree
 
-- [ ] Create `src/types.rs` with COMPLETE error handling 🔴 **CRITICAL**
-  - [ ] Add `pub mod types;` to `lib.rs`
-  - [ ] Create COMPLETE `P2PError` enum with ALL needed variants:
-    ```rust
-    use thiserror::Error;
-    use std::time::Duration;
+- [ ] Extend existing `src/types.rs` with thiserror and additional variants 🔴 **CRITICAL**
+  - [ ] NOTE: types module and basic P2PError created in Phase 3.1
+  - [ ] Replace `#[derive(Debug, Clone)]` with `#[derive(Debug, Clone, Error)]`
+  - [ ] Replace manual Display impl with thiserror `#[error("...")]` attributes
+  - [ ] Add additional error variants needed for complete P2P functionality:
+     ```rust
+     use thiserror::Error;
+     use std::time::Duration;
 
-    /// All P2P errors in a single flat enum
-    /// Add new variants as needed, but keep flat structure
-    #[derive(Debug, Error)]
-    pub enum P2PError {
-        #[error("Connection failed: {0}")]
-        ConnectionFailed(String),
+     /// All P2P errors in a single flat enum
+     /// Extended from basic variants created in Phase 3.1
+     #[derive(Debug, Clone, Error)]
+     pub enum P2PError {
+         // Existing variants from Phase 3.1 (update with thiserror attributes):
+         #[error("Network error: {0}")]
+         NetworkError(String),
 
-        #[error("Node not found: {0}")]
-        NodeNotFound(String),
+         #[error("Connection failed: {0}")]
+         ConnectionFailed(String),
 
-        #[error("Network error: {0}")]
-        NetworkError(String),
+         #[error("Node not found: {0}")]
+         NodeNotFound(String),
 
-        #[error("Invalid node ID: {0}")]
-        InvalidNodeId(String),
+         #[error("I/O error: {0}")]
+         IoError(String),
 
-        #[error("Operation timed out after {0:?}")]
-        Timeout(Duration),
+         // NEW variants added in Phase 4.1:
+         #[error("Invalid node ID: {0}")]
+         InvalidNodeId(String),
 
-        #[error("Connection closed by {reason}")]
-        ConnectionClosed { reason: String },
+         #[error("Operation timed out after {0:?}")]
+         Timeout(Duration),
 
-        #[error("No route to destination {node_id}")]
-        NoRoute { node_id: String },
+         #[error("Connection closed by {reason}")]
+         ConnectionClosed { reason: String },
 
-        #[error("Discovery failed: {0}")]
-        DiscoveryFailed(String),
+         #[error("No route to destination {node_id}")]
+         NoRoute { node_id: String },
 
-        #[error("Protocol error: {0}")]
-        ProtocolError(String),
+         #[error("Discovery failed: {0}")]
+         DiscoveryFailed(String),
 
-        #[error("Message too large: {size} bytes exceeds max {max}")]
-        MessageTooLarge { size: usize, max: usize },
+         #[error("Protocol error: {0}")]
+         ProtocolError(String),
 
-        #[error("Authentication failed for peer {peer}")]
-        AuthenticationFailed { peer: String },
+         #[error("Message too large: {size} bytes exceeds max {max}")]
+         MessageTooLarge { size: usize, max: usize },
 
-        #[error("Invalid configuration: {0}")]
-        InvalidConfiguration(String),
-    }
+         #[error("Authentication failed for peer {peer}")]
+         AuthenticationFailed { peer: String },
 
-    /// Convenience type alias used throughout the codebase
-    pub type P2PResult<T> = Result<T, P2PError>;
-    ```
+         #[error("Invalid configuration: {0}")]
+         InvalidConfiguration(String),
+     }
 
-- [ ] **MIGRATION**: Replace ALL `Result<T, String>` with `P2PResult<T>` 🔴 **CRITICAL**
-  - [ ] Update `traits.rs`: Replace temporary `type P2PResult<T> = Result<T, String>;` with `use crate::types::P2PResult;`
-  - [ ] Update `SimulatorConnection` methods:
-    - [ ] `send(&mut self, data: &[u8]) -> P2PResult<()>`
-    - [ ] `recv(&mut self) -> P2PResult<Vec<u8>>`
-    - [ ] `close(&mut self) -> P2PResult<()>`
-  - [ ] Update `SimulatorP2P` methods:
-    - [ ] `connect(&self, remote_id: SimulatorNodeId) -> P2PResult<SimulatorConnection>`
-    - [ ] `discover(&self, name: &str) -> P2PResult<SimulatorNodeId>` (when implemented)
+     // P2PResult type alias already exists from Phase 3.1
+     ```
+
+- [ ] **ENHANCEMENT**: Update error creation sites to use new specific variants 🔴 **CRITICAL**
+  - [ ] NOTE: P2PResult<T> already exists and is used from Phase 3.1
+  - [ ] Update error creation in `SimulatorConnection` to use more specific variants:
+    - [ ] Replace generic `NetworkError` with specific types where appropriate
+    - [ ] Add timeout handling with `Timeout` variant
+    - [ ] Use `ConnectionClosed` for proper disconnect handling
+  - [ ] Update error creation in `SimulatorP2P` to use more specific variants:
+    - [ ] Replace `NodeNotFound` with `DiscoveryFailed` where appropriate
+    - [ ] Use `NoRoute` for routing failures
   - [ ] Update error creation sites to use proper variants:
     ```rust
     // OLD: Err("Connection closed".to_string())
