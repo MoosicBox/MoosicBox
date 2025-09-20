@@ -329,7 +329,7 @@ openport                = { version = "0.1.1", default-features = false, path = 
 
 actix = "0.13.5"
 actix-cors = "0.7.1"
-actix-files = "0.6.7"
+actix-files = "0.6.8"
 actix-htmx = "0.3.2"
 actix-http = "3.11.1"
 actix-rt = "2.11.0"
@@ -342,7 +342,7 @@ actix-web-opentelemetry = { version = "0.22.0", features = [
     "prometheus",
 ] }
 actix-ws = "0.3.0"
-anyhow = "1.0.99"
+anyhow = "1.0.100"
 arrayvec = "0.7.6"
 assert_cmd = "2.0.17"
 async-recursion = "1.1.1"
@@ -356,13 +356,13 @@ base64 = "0.22.1"
 btparse = "0.2.0"
 bumpalo = "3.19.0"
 bytes = "1.10.1"
-bytesize = "2.0.1"
+bytesize = "2.1.0"
 cargo_metadata = "0.22.0"
 chrono = { version = "0.4.42", default-features = false, features = [
     "clock",
     "serde",
 ] }
-clap = { version = "4.5.47", features = ["derive"] }
+clap = { version = "4.5.48", features = ["derive"] }
 color-backtrace = { version = "0.7.1", default-features = false, features = [
     "use-btparse-crate",
 ] }
@@ -478,14 +478,14 @@ rubato = "=0.12.0"
 rupnp = { version = "3.0.0", features = ["full_device_spec"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
 rust-embed = "8.7.2"
-rust_decimal = { version = "1.37.2", default-features = false }
-rust_decimal_macros = { version = "1.37.1", default-features = false }
+rust_decimal = { version = "1.38.0", default-features = false }
+rust_decimal_macros = { version = "1.38.0", default-features = false }
 ryu = "1.0.20"
 scoped-tls = "1.0.1"
-serde = { version = "1.0.221", features = ["derive"] }
+serde = { version = "1.0.225", features = ["derive"] }
 serde-aux = "4.7.0"
 serde-querystring = "0.3.0"
-serde_json = "1.0.144"
+serde_json = "1.0.145"
 serde_urlencoded = "0.7.1"
 serial_test = "3.2.0"
 sha2 = "0.10.9"
@@ -505,11 +505,11 @@ static_init = "1.0.4"
 strum = "0.27.2"
 strum_macros = "0.27.2"
 swc_bundler = "31.0.0"
-swc_common = { version = "14.0.3", features = ["tty-emitter"] }
+swc_common = { version = "14.0.4", features = ["tty-emitter"] }
 swc_ecma_ast = "15.0.0"
 swc_ecma_codegen = "17.0.2"
 swc_ecma_loader = { version = "14.0.0", features = ["cache", "node"] }
-swc_ecma_minifier = "32.0.3"
+swc_ecma_minifier = "32.0.4"
 swc_ecma_parser = "24.0.1"
 swc_ecma_transforms_base = "26.0.1"
 swc_ecma_transforms_typescript = "29.0.0"
@@ -538,7 +538,7 @@ tokio-tungstenite = { version = "0.27.0", features = [
     "rustls-tls-webpki-roots",
 ] }
 tokio-util = "0.7.16"
-toml = "0.9.5"
+toml = "0.9.7"
 tracing = "0.1.41"
 tracing-opentelemetry = { version = "0.31.0" }
 tracing-subscriber = "0.3.20"
