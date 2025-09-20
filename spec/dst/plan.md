@@ -1132,6 +1132,32 @@ cargo test --features actix
 cargo test --features simulator
 ```
 
+### Step 5 Verification Checklist
+
+**Web Server Abstraction Completeness:**
+- [ ] SimulatorWebServer handles basic request/response cycle
+- [ ] TestClient works with both backends using same test code
+- [ ] Server can be started/stopped with unified API
+- [ ] At least one example runs without ANY feature gates in example code
+
+**Build & Compilation:**
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - All packages compile
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` - All features compile
+- [ ] Run `cargo build --examples -p moosicbox_web_server` - All examples compile
+- [ ] Run `cargo test --no-run -p moosicbox_web_server` - All tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server` - All existing tests pass
+- [ ] Run `cargo test -p moosicbox_web_server --features actix` - Actix tests pass
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator` - Simulator tests pass
+- [ ] Run `cargo run --example unified_server --features actix` - Works with Actix
+- [ ] Run `cargo run --example unified_server --features simulator` - Works with Simulator
+
 ## Step 6 Detailed Implementation Plan: Advanced Routing and Async Integration
 
 ### 6.1 Advanced Routing Features (6 tasks)
@@ -1187,6 +1213,34 @@ cargo test --features simulator
     - Deterministic async test helpers
     - Concurrent request testing
     - Async assertion utilities
+
+### Step 6 Verification Checklist
+
+**Advanced Routing Features:**
+- [ ] Regex route patterns compile and match correctly
+- [ ] Route guards filter requests as expected
+- [ ] Nested routers maintain proper scope isolation
+- [ ] Route precedence rules documented and tested
+
+**Deterministic Async Integration:**
+- [ ] switchy_async integration complete
+- [ ] Deterministic timer tests pass with fixed seeds
+- [ ] Concurrent requests process in deterministic order (simulator mode)
+- [ ] Async middleware executes in defined order
+
+**Build & Compilation:**
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - All packages compile
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` - All features compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server routing` - Routing tests pass
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator` - Deterministic behavior
+- [ ] Performance benchmarks show acceptable overhead
 
 ## Example Milestone Strategy
 
@@ -3261,6 +3315,31 @@ mod simulator_tests {
 - Files modified: 2 files (simulator.rs, http/models/lib.rs)
 - Lines added: ~50 lines of implementation + comprehensive tests
 
+#### 5.1.1 Verification Checklist
+
+**Route Storage Functionality:**
+- [ ] Routes stored in BTreeMap with (Method, String) keys for deterministic ordering
+- [ ] State storage uses Arc<RwLock<BTreeMap>> for thread-safe concurrent access
+- [ ] register_route() method correctly inserts handlers into storage
+- [ ] Multiple routes can be registered without conflicts
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --features simulator` - Simulator builds
+- [ ] Run `cargo build -p moosicbox_http_models` - HTTP models compile with Ord derives
+- [ ] Run `cargo test --no-run -p moosicbox_web_server --features simulator` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
+- [ ] Run `cargo clippy -p moosicbox_http_models -- -D warnings` - Zero warnings in models
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_route_registration` - Route tests pass
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_multiple_routes` - Multiple route test passes
+- [ ] Verify Method enum implements PartialOrd and Ord traits
+- [ ] Thread safety validated with concurrent registration tests
+
 #### 5.1.2 Path Pattern Parsing (8 tasks) ✅ COMPLETED
 
 **File**: `packages/web_server/src/simulator.rs`
@@ -3297,6 +3376,30 @@ mod simulator_tests {
 - Tests: 5/5 new path parsing tests passing + 2 existing route storage tests = 7/7 total ✅
 - Documentation: Comprehensive doc comments with examples following rustdoc standards
 - Pattern: Uses deterministic Vec<PathSegment> instead of HashMap for consistent ordering
+
+#### 5.1.2 Verification Checklist
+
+**Path Pattern Functionality:**
+- [ ] PathSegment enum correctly identifies Literal vs Parameter segments
+- [ ] parse_path_pattern() handles {param} syntax correctly
+- [ ] Leading slashes handled properly (stripped or normalized)
+- [ ] Empty paths and trailing slashes handled correctly
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --features simulator` - Builds successfully
+- [ ] Run `cargo test --no-run -p moosicbox_web_server --features simulator` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_parse_literal_path` - Literal paths work
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_parse_mixed_literal_and_parameter` - Mixed paths work
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_parse_empty_path` - Edge cases handled
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_parse_path_pattern_without_leading_slash` - No-slash case works
+- [ ] All 5 path parsing tests pass
 
 #### 5.1.3 Route Matching Logic (11 tasks) ✅ COMPLETED
 
@@ -3342,6 +3445,31 @@ mod simulator_tests {
 - Parameter extraction: Validates single and multiple parameter extraction ✅
 - Edge cases: 404 handling, different segment counts, mismatched patterns ✅
 - Removed `#[allow(unused)]` from routes field - now actively used in find_route() ✅
+
+#### 5.1.3 Verification Checklist
+
+**Route Matching Functionality:**
+- [ ] find_route() correctly matches exact literal paths
+- [ ] Dynamic segments {id} match any path segment
+- [ ] Parameters extracted into BTreeMap<String, String>
+- [ ] Returns None for unmatched routes (404 handling)
+- [ ] Deterministic matching order for overlapping patterns
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --features simulator` - Builds successfully
+- [ ] Run `cargo test --no-run -p moosicbox_web_server --features simulator` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_find_route_exact_match` - Exact matches work
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_find_route_with_parameters` - Parameters extracted
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_find_route_no_match` - 404s handled
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_find_route_multiple_parameters` - Multi-param routes work
+- [ ] Performance: 10000 route lookups complete in reasonable time
 
 #### 5.1.4 Request Processing Pipeline (14 tasks) ✅ COMPLETED
 
@@ -3391,6 +3519,31 @@ mod simulator_tests {
 - Error handling: 404 for unmatched routes, 500 for handler errors ✅
 - Path parameters: Full integration with route matching and handler execution ✅
 - Code quality: Modern Rust patterns (let...else, map_or_else, const fn) ✅
+
+#### 5.1.4 Verification Checklist
+
+**Handler Execution Functionality:**
+- [ ] execute_handler() invokes found handlers correctly
+- [ ] SimulationStub passed to handlers with request data
+- [ ] Async handlers execute properly in blocking context
+- [ ] Handler errors propagated correctly
+- [ ] Response returned matches handler output
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --features simulator` - Builds successfully
+- [ ] Run `cargo test --no-run -p moosicbox_web_server --features simulator` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_execute_handler_success` - Successful execution
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_execute_handler_with_extractors` - Extractors work
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_execute_handler_error` - Error handling works
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_async_handler_execution` - Async handlers work
+- [ ] Integration test shows end-to-end request processing
 
 #### 5.1.5 Response Generation (16 tasks)
 
@@ -3486,6 +3639,31 @@ mod simulator_tests {
 - `packages/web_server/src/actix.rs`: Updated to use all headers from BTreeMap
 - `packages/web_server/src/simulator.rs`: Complete response conversion rewrite with comprehensive testing
 
+#### 5.1.5 Verification Checklist
+
+**Response Generation Functionality:**
+- [ ] HttpResponse::json() sets correct content-type header
+- [ ] HttpResponse::html() sets text/html content-type
+- [ ] HttpResponse::text() sets text/plain content-type
+- [ ] Status codes preserved in conversion (200, 404, 500, etc.)
+- [ ] Custom headers preserved without modification
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --features simulator` - Builds successfully
+- [ ] Run `cargo test --no-run -p moosicbox_web_server --features simulator` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_json_response_conversion` - JSON responses work
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_html_response_conversion` - HTML responses work
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_status_codes_are_preserved` - Status codes preserved
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_custom_headers_are_preserved` - Headers preserved
+- [ ] All 6 response generation tests pass
+
 **Next**: Section 5.2.3 ActixTestClient Real Server Integration - implementing real HTTP requests to actual Actix servers, removing mock responses and completing the TestClient abstraction architecture.
 
 #### 5.1.6 State Management (9 tasks)
@@ -3512,6 +3690,31 @@ mod simulator_tests {
 - State<T> extractor seamlessly works with simulator backend via `sim.state::<T>()`
 - All 5 state management tests passing with zero clippy warnings
 
+#### 5.1.6 Verification Checklist
+
+**State Management Functionality:**
+- [ ] insert_state<T>() stores typed state in StateContainer
+- [ ] get_state<T>() retrieves state with correct type
+- [ ] State shared across multiple requests (Arc<RwLock> pattern)
+- [ ] State<T> extractor works with simulator backend
+- [ ] Thread-safe concurrent access to state
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --features simulator` - Builds successfully
+- [ ] Run `cargo test --no-run -p moosicbox_web_server --features simulator` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_insert_and_retrieve_string` - String state works
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_insert_and_retrieve_struct` - Custom struct state works
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_state_shared_across_requests` - State sharing works
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_state_extractor_integration` - State<T> extractor works
+- [ ] All 5 state management tests pass
+
 #### 5.1.7 Scope Processing (8 tasks) ✅ **COMPLETED**
 
 **File**: `packages/web_server/src/simulator.rs`
@@ -3533,6 +3736,31 @@ mod simulator_tests {
 - Existing `find_route()` method works seamlessly with scoped routes
 - 5 comprehensive tests cover single routes, multiple routes, nested scopes, empty prefixes, and deep nesting
 - All 89 tests passing with zero clippy warnings
+
+#### 5.1.7 Verification Checklist
+
+**Scope Processing Functionality:**
+- [ ] register_scope() processes scope prefix correctly
+- [ ] Routes within scope have prefix prepended
+- [ ] Nested scopes combine prefixes properly
+- [ ] Empty prefix scopes handled correctly
+- [ ] Deep nesting (3+ levels) works correctly
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --features simulator` - Builds successfully
+- [ ] Run `cargo test --no-run -p moosicbox_web_server --features simulator` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_scope_with_prefix` - Basic scopes work
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_nested_scopes` - Nested scopes work
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_scope_integration` - Request routing works
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_empty_prefix_scope` - Empty prefixes handled
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator test_deep_nesting` - Deep nesting works
 
 #### 5.1.8 Comprehensive Integration Testing (11 tasks) ✅ **COMPLETED**
 
@@ -3560,6 +3788,32 @@ mod simulator_tests {
 - All tests passing with zero clippy warnings
 - Example `basic_simulation` compiles successfully with simulator feature
 - Complete request/response pipeline validation demonstrates production readiness
+
+#### 5.1.8 Verification Checklist
+
+**Integration Test Coverage:**
+- [ ] Multiple HTTP methods (GET, POST, PUT, DELETE) tested
+- [ ] Complex path parameters work end-to-end
+- [ ] Multiple extractors work together (Query, Json, Path)
+- [ ] State extraction works in real handlers
+- [ ] 404 handling for unmatched routes works
+- [ ] Deterministic execution order validated
+
+**Build & Compilation:**
+- [ ] Run `cargo build --example basic_simulation --features simulator` - Example compiles
+- [ ] Run `cargo test --no-run -p moosicbox_web_server --features simulator` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --features simulator -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator simulator_integration` - All integration tests pass
+- [ ] Performance: 100 route registrations complete quickly
+- [ ] Performance: 1000 request processing operations complete quickly
+- [ ] All 7 integration tests pass
+- [ ] Example runs without errors
 
 ### 5.2 Create Unified TestClient Abstraction (27 tasks) - ⏳ **70% COMPLETE (19/27 tasks)**
 
@@ -3617,6 +3871,32 @@ mod simulator_tests {
 - Test coverage: 6 comprehensive integration tests
 - Feature compatibility: Works with both `--features simulator` and `--features actix`
 - Documentation: Complete with error and panic conditions
+
+#### 5.2.1 Verification Checklist
+
+**TestClient Foundation:**
+- [ ] TestClient trait defines GET, POST, PUT, DELETE methods
+- [ ] TestRequestBuilder provides fluent API for request construction
+- [ ] TestResponse wrapper provides assertion helpers
+- [ ] SimulatorTestClient fully implements TestClient trait
+- [ ] ActixTestClient placeholder maintains interface compatibility
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --features simulator` - Simulator builds
+- [ ] Run `cargo build -p moosicbox_web_server --features actix` - Actix builds
+- [ ] Run `cargo test --no-run -p moosicbox_web_server` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server test_client` - TestClient tests pass
+- [ ] TestRequestBuilder methods work (headers, json, form)
+- [ ] TestResponse assertions work (status, body, headers)
+- [ ] All 6 integration tests pass
+- [ ] Both backends compile without conflicts
 
 #### 5.2.2 Complete ActixTestClient with Real Runtime (6 tasks) - ✅ **FULLY COMPLETED**
 
@@ -5731,6 +6011,31 @@ Each sub-step:
     - Health check endpoints
     - Graceful shutdown with timeout
 
+#### 5.4 Verification Checklist
+
+**Server Builder Functionality:**
+- [ ] Unified ServerBuilder API works for both backends
+- [ ] Fluent API for server setup (bind, routes, middleware)
+- [ ] ActixServerBuilder wraps actix_web::HttpServer properly
+- [ ] SimulatorServerBuilder uses SimulatorWebServer methods
+- [ ] Runtime abstraction handles server lifecycle
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --all-features` - All features build
+- [ ] Run `cargo test --no-run -p moosicbox_web_server` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] ServerBuilder::new() creates appropriate backend
+- [ ] .bind() method works for both backends
+- [ ] .route() method adds routes correctly
+- [ ] .run() starts server properly
+- [ ] Graceful shutdown works
+
 ### 5.5 Update Examples to Remove Feature Gates (3 tasks) - **PROOF OF CONCEPT**
 
 **Files**: `packages/web_server/examples/`
@@ -5750,6 +6055,30 @@ Each sub-step:
     - Explain how to write backend-agnostic code
     - Document feature flag usage for end users
     - Provide troubleshooting guide
+
+#### 5.5 Verification Checklist
+
+**Example Updates:**
+- [ ] Unified server example created without feature gates
+- [ ] Example compiles with --features actix
+- [ ] Example compiles with --features simulator
+- [ ] Example produces identical output with both backends
+- [ ] All #[cfg(feature = "...")] blocks removed
+
+**Build & Compilation:**
+- [ ] Run `cargo build --examples -p moosicbox_web_server --features actix` - Examples build with actix
+- [ ] Run `cargo build --examples -p moosicbox_web_server --features simulator` - Examples build with simulator
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy --examples -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo run --example unified_server --features actix` - Runs with Actix
+- [ ] Run `cargo run --example unified_server --features simulator` - Runs with Simulator
+- [ ] Output identical between backends
+- [ ] No panics or errors during execution
 
 ### Step 5 Success Criteria
 
@@ -5856,6 +6185,36 @@ cargo test --features simulator
 - [ ] Examples demonstrate real improvements (no Box::pin, clean extractors)
 - [ ] Test suite passes for both Actix and Simulator backends
 
+#### Step 6 Verification Checklist
+
+**Example Implementation:**
+- [ ] Basic example demonstrates improvements without Box::pin
+- [ ] Extractor examples show all types and error handling
+- [ ] Migration example compares before/after code
+- [ ] All existing examples updated to new syntax
+
+**Testing Coverage:**
+- [ ] Integration tests work with both backends
+- [ ] Extractor tests cover edge cases and errors
+- [ ] Shared test functions validate identical behavior
+- [ ] Determinism tests pass for simulator
+
+**Build & Compilation:**
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` - All compile
+- [ ] Run `cargo build --examples -p moosicbox_web_server` - Examples compile
+- [ ] Run `cargo test --no-run -p moosicbox_web_server` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server --features actix` - Actix tests pass
+- [ ] Run `cargo test -p moosicbox_web_server --features simulator` - Simulator tests pass
+- [ ] All examples run without panicking
+- [ ] Performance comparisons demonstrate improvements
+
 ## Step 7: Advanced Features
 
 ### 7.1 Middleware System
@@ -5943,6 +6302,39 @@ cargo test --features simulator
 - [ ] Middleware system works with both backends
 - [ ] Advanced features integrate cleanly with existing code
 
+#### Step 7 Verification Checklist
+
+**Middleware System:**
+- [ ] Middleware trait defined and implemented
+- [ ] Middleware chaining works correctly
+- [ ] Execution order deterministic and consistent
+- [ ] Both sync and async middleware supported
+
+**CORS Integration:**
+- [ ] Existing CORS package integrated
+- [ ] Configuration options work correctly
+- [ ] Preflight requests handled properly
+
+**Advanced Features:**
+- [ ] WebSocket connections work with both backends
+- [ ] State management functional across runtimes
+- [ ] Message flow bidirectional and consistent
+
+**Build & Compilation:**
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` - All compile
+- [ ] Run `cargo test --no-run -p moosicbox_web_server` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server middleware` - Middleware tests pass
+- [ ] Run `cargo test -p moosicbox_web_server websocket` - WebSocket tests pass
+- [ ] Run `cargo test -p moosicbox_web_server cors` - CORS tests pass
+- [ ] Run `cargo test -p moosicbox_web_server state` - State tests pass
+
 ## Step 8: Migration
 
 ### 8.1 Migration Documentation
@@ -6007,6 +6399,41 @@ cargo test --features simulator
 - [ ] All existing examples still compile and run
 - [ ] Migration documentation is complete and accurate
 - [ ] Migration tools work correctly on test packages
+
+#### Step 8 Verification Checklist
+
+**Migration Documentation:**
+- [ ] Step-by-step migration guide comprehensive
+- [ ] Common patterns documented with examples
+- [ ] Troubleshooting section covers known issues
+- [ ] Performance benefits quantified
+
+**Migration Tools:**
+- [ ] Compatibility layer preserves old handler functionality
+- [ ] Migration helpers correctly transform code
+- [ ] Automated migration script works on test packages
+- [ ] Deprecation warnings guide users appropriately
+
+**Package Updates:**
+- [ ] Feature flags properly configured
+- [ ] Dependencies correctly specified
+- [ ] Package-by-package plan documented
+- [ ] Rollback procedures tested
+
+**Build & Compilation:**
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` - All compile
+- [ ] Run `cargo test --no-run` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Compatibility layer tests pass
+- [ ] Migration script validation tests pass
+- [ ] No breaking changes for unmigrated packages
+- [ ] Integration tests demonstrate successful migration
 
 ## Step 9: Routing Macro System
 
@@ -6236,6 +6663,38 @@ async fn get_user(Path(id): Path<u32>) -> Result<Json<User>, Error> {
 - [ ] **COMPILATION CHECK**: `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` succeeds
 - [ ] **WARNING CHECK**: `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features` shows ZERO warnings
 
+#### Step 9 Verification Checklist
+
+**Macro Implementation:**
+- [ ] Proc macro crate created at packages/web_server_macros
+- [ ] HTTP method attribute macros work (#[get], #[post], etc.)
+- [ ] Route collection macro groups handlers
+- [ ] Scope builder macro creates nested routes
+
+**Integration:**
+- [ ] Macros work with existing handler system
+- [ ] Type safety maintained
+- [ ] Error messages are helpful
+- [ ] OpenAPI schema generation works
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server_macros` - Macro crate compiles
+- [ ] Run `cargo build -p moosicbox_web_server` - Package compiles with macros
+- [ ] Run `cargo test --no-run -p moosicbox_web_server` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server_macros -- -D warnings` - Zero warnings
+- [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server macro` - Macro tests pass
+- [ ] Example using macros compiles and runs
+- [ ] Macro error cases produce helpful messages
+- [ ] Performance matches manual registration
+- [ ] All ugly numbered methods removed
+
 ## Performance Optimizations
 
 **🎯 GOAL**: Optimize performance bottlenecks identified during implementation, particularly in hot paths like response header handling.
@@ -6280,6 +6739,31 @@ async fn get_user(Path(id): Path<u32>) -> Result<Json<User>, Error> {
 - [ ] Reduced memory allocations in actix response path
 - [ ] Zero performance regression in simulator mode
 - [ ] Maintained API compatibility
+
+#### Performance Optimizations Verification Checklist
+
+**Performance Improvements:**
+- [ ] Alternative header storage strategies investigated
+- [ ] Zero-cost abstraction for headers designed
+- [ ] Optimization implemented and tested
+- [ ] Benchmarks show measurable improvement
+- [ ] Documentation updated with performance tips
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server --all-features` - Builds successfully
+- [ ] Run `cargo bench -p moosicbox_web_server` - Benchmarks compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Response throughput improved for header-heavy responses
+- [ ] Memory allocations reduced in actix path
+- [ ] No performance regression in simulator mode
+- [ ] API compatibility maintained
+- [ ] Criterion benchmarks validate improvements
 
 ## Success Metrics & Validation
 
@@ -6895,3 +7379,259 @@ The critical path remains the web server migration, but early determinism improv
 - Step 8: Migration planning and package updates
 
 The MoosicBox web server abstraction is now ready for the next phase of development, with a solid foundation of extractors, handlers, and comprehensive testing infrastructure.
+
+## Step 7 Verification Checklist
+
+### Step 7 Verification Checklist
+
+**Advanced Examples:**
+- [ ] WebSocket example demonstrates bidirectional communication
+- [ ] Streaming example shows server-sent events
+- [ ] File upload example handles multipart forms
+- [ ] Complex middleware example shows chaining
+
+**Comprehensive Test Suite:**
+- [ ] Cross-backend compatibility tests pass
+- [ ] Performance benchmarks establish baselines
+- [ ] Stress tests handle concurrent load
+- [ ] Determinism tests validate simulator behavior
+
+**Build & Compilation:**
+- [ ] Run `cargo build --examples -p moosicbox_web_server` - All examples compile
+- [ ] Run `cargo test --no-run -p moosicbox_web_server` - All tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Documentation:**
+- [ ] Examples have README explaining patterns
+- [ ] Best practices guide created
+- [ ] Troubleshooting section added
+
+## Step 8 Verification Checklist
+
+### Step 8 Verification Checklist
+
+**Middleware System:**
+- [ ] Middleware trait defined and implemented
+- [ ] Middleware chaining works correctly
+- [ ] Execution order is deterministic
+- [ ] Both sync and async middleware supported
+
+**CORS Integration:**
+- [ ] CORS middleware integrated from existing package
+- [ ] Configuration options work correctly
+- [ ] Preflight requests handled properly
+
+**WebSocket Support:**
+- [ ] WebSocket connections establish correctly
+- [ ] Messages flow bidirectionally
+- [ ] Connection lifecycle managed properly
+- [ ] Works with both Actix and Simulator backends
+
+**Build & Compilation:**
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets` - All compile
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo build --all-targets --all-features` - All features compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `TUNNEL_ACCESS_TOKEN=123 cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server middleware` - Middleware tests pass
+- [ ] Run `cargo test -p moosicbox_web_server websocket` - WebSocket tests pass
+- [ ] Run `cargo test -p moosicbox_web_server cors` - CORS tests pass
+
+## Step 9 Verification Checklist
+
+### Step 9 Verification Checklist
+
+**Migration Guide:**
+- [ ] Step-by-step migration guide from actix-web created
+- [ ] Common patterns documented with examples
+- [ ] Gotchas and edge cases covered
+- [ ] Performance considerations explained
+
+**Package Migration (per package):**
+- [ ] Package compiles after migration
+- [ ] All endpoints work as before
+- [ ] Tests pass without modification
+- [ ] Performance acceptable
+
+**Build & Compilation:**
+- [ ] Run `cargo build --all-targets` - All packages compile
+- [ ] Run `cargo build --all-targets --all-features` - All features compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy --all-targets --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Validation:**
+- [ ] Integration tests pass for migrated packages
+- [ ] No breaking changes to public APIs
+- [ ] Rollback plan documented and tested
+
+## Step 10 Verification Checklist
+
+### Step 10 Verification Checklist
+
+**Macro Implementation:**
+- [ ] Proc macro crate created at packages/web_server_macros
+- [ ] HTTP method attribute macros work (#[get], #[post], etc.)
+- [ ] Route collection macro groups handlers
+- [ ] Scope builder macro creates nested routes
+
+**Integration:**
+- [ ] Macros work with existing handler system
+- [ ] Type safety maintained
+- [ ] Error messages are helpful
+- [ ] OpenAPI schema generation works
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p moosicbox_web_server_macros` - Macro crate compiles
+- [ ] Run `cargo build -p moosicbox_web_server` - Package compiles with macros
+- [ ] Run `cargo test --no-run -p moosicbox_web_server` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p moosicbox_web_server_macros -- -D warnings` - Zero warnings
+- [ ] Run `cargo clippy -p moosicbox_web_server --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p moosicbox_web_server macro` - Macro tests pass
+- [ ] Example using macros compiles and runs
+- [ ] Macro error cases produce helpful messages
+
+## Future Phases Verification Checklists (After Web Server)
+
+### Create switchy_process Package Verification Checklist
+
+**Package Implementation:**
+- [ ] Package structure created at packages/process/
+- [ ] Dual-mode implementation (standard and simulator)
+- [ ] Command builder API mimics std::process::Command
+- [ ] Output captures stdout, stderr, exit code
+- [ ] Deterministic output in simulator mode
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p switchy_process` - Default features build
+- [ ] Run `cargo build -p switchy_process --all-features` - All features build
+- [ ] Run `cargo test --no-run -p switchy_process` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p switchy_process --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p switchy_process` - All tests pass
+- [ ] Standard mode executes real commands
+- [ ] Simulator mode returns predetermined outputs
+- [ ] Migration from std::process demonstrated
+- [ ] Thread safety validated
+
+### Network Operations Migration Verification Checklist
+
+**Migration Completeness:**
+- [ ] tunnel_sender uses switchy_tcp and switchy_http
+- [ ] upnp package uses switchy_tcp
+- [ ] openport uses switchy_tcp for binding
+- [ ] All direct reqwest usage eliminated
+- [ ] All direct TcpListener usage eliminated
+
+**Build & Compilation:**
+- [ ] Run `cargo build --all-targets` - All packages compile
+- [ ] Run `cargo build --all-features` - All features compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy --all-targets -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test` - All tests pass
+- [ ] Network operations deterministic in simulator mode
+- [ ] No real network calls in simulator mode
+- [ ] Performance acceptable
+- [ ] Integration tests demonstrate functionality
+
+### Thread/Task Spawning Verification Checklist
+
+**Scheduler Implementation:**
+- [ ] Task scheduler design documented
+- [ ] Deterministic execution order with same seed
+- [ ] Different seeds produce different orders
+- [ ] Integration with switchy_async complete
+- [ ] Drop-in replacement for tokio::spawn
+
+**Build & Compilation:**
+- [ ] Run `cargo build -p switchy_async` - Package builds
+- [ ] Run `cargo build -p switchy_async --features simulator` - Simulator builds
+- [ ] Run `cargo test --no-run -p switchy_async` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy -p switchy_async --all-features -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test -p switchy_async scheduler` - Scheduler tests pass
+- [ ] Same seed produces identical execution order
+- [ ] Different seeds produce different orders
+- [ ] No deadlocks or race conditions
+- [ ] Performance overhead acceptable
+
+### Async Race Conditions Verification Checklist
+
+**Race Condition Elimination:**
+- [ ] All join_all patterns reviewed
+- [ ] Order-dependent operations sequential
+- [ ] Order-independent operations documented
+- [ ] Critical race conditions eliminated
+- [ ] Synchronization points added
+
+**Build & Compilation:**
+- [ ] Run `cargo build --all-targets` - All compile
+- [ ] Run `cargo test --no-run` - Tests compile
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy --all-targets -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test race` - Race condition tests pass
+- [ ] Same seed produces identical results
+- [ ] Operations deterministic 10 times in row
+- [ ] No data races detected
+- [ ] Stress tests pass consistently
+
+### Lock Ordering Verification Checklist
+
+**Lock Hierarchy Implementation:**
+- [ ] Lock hierarchy documented in docs/lock-ordering.md
+- [ ] Visual diagram shows relationships
+- [ ] Critical paths follow ordering
+- [ ] Deadlock-prone patterns eliminated
+- [ ] Debug builds detect violations
+
+**Build & Compilation:**
+- [ ] Run `cargo build --all-targets` - All compile
+- [ ] Run `cargo build --all-targets --features deadlock-detection` - Detection builds
+
+**Code Quality:**
+- [ ] Run `cargo fmt` - Code properly formatted
+- [ ] Run `cargo clippy --all-targets -- -D warnings` - Zero warnings
+- [ ] Run `cargo machete` - No unused dependencies
+
+**Testing:**
+- [ ] Run `cargo test deadlock` - Deadlock tests timeout (not hang)
+- [ ] No deadlocks under normal operation
+- [ ] Stress tests reveal no contention
+- [ ] Performance impact acceptable
+- [ ] Lock acquisition logging works
