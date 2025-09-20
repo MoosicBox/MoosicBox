@@ -1052,7 +1052,7 @@ Before marking ANY checkbox complete:
 
 - ✅ Create unified WebServer trait (5/5 tasks) - **COMPLETED** (trait exists in web_server_core, both backends implement it)
 - ⏳ Complete SimulatorWebServer basics (84/91 tasks) - **DETAILED BREAKDOWN** (route storage, handler execution, response generation, state management, scope processing, comprehensive testing)
-- ⏳ Create unified TestClient abstraction (34/49 tasks) - **5.2.4.1 & 5.2.4.2 COMPLETE** (5.2.1, 5.2.2, 5.2.3.1-5.2.3.2 done, 5.2.3.3 core complete 4/6 tasks, 5.2.4.1 basic route conversion complete 5/5 tasks, 5.2.4.2 nested scope support complete 7/7 tasks)
+- ⏳ Create unified TestClient abstraction (34/49 tasks) - **5.2.4.1 & 5.2.4.2 COMPLETE, 5.2.4.3 REDESIGNED** (5.2.1, 5.2.2, 5.2.3.1-5.2.3.2 done, 5.2.3.3 core complete 4/6 tasks, 5.2.4.1 basic route conversion complete 5/5 tasks, 5.2.4.2 nested scope support complete 7/7 tasks, 5.2.4.3.1.4 redesigned with separate Params extractor approach)
 - ❌ Create unified server builder/runtime (0/5 tasks) - **ENHANCED WITH 5.1 API USAGE**
 - ❌ Update examples to remove feature gates (0/3 tasks) - **ENHANCED WITH CONCRETE VALIDATION**
 
@@ -5145,33 +5145,89 @@ impl HttpRequest {
 }
 ```
 
-**5.2.4.3.1.4: Create Parameter Extraction Function**
+**5.2.4.3.1.4: Create Params Extractor for Named Route Parameters**
 
-**Purpose**: Extract path parameters from Actix's match_info
-**Philosophy**: Centralize Actix-specific logic, make it reusable
+**Purpose**: Create separate extractor for named route parameters (e.g., `/users/{id}`)
+**Philosophy**: Segments and path parameters are fundamentally different concepts requiring separate extractors
 
-**Tasks**:
+**Key Decision**: Keep `Path<T>` for segment-based extraction, create new `Params<T>` for named parameters
 
-- [ ] Create `extract_actix_path_params(req: &actix_web::HttpRequest) -> PathParams`
-- [ ] Use `req.match_info()` to iterate over all parameters
-- [ ] Convert each parameter to String for storage
-- [ ] Handle URL decoding if needed
-- [ ] Skip internal Actix parameters (those starting with '\_\_')
-- [ ] Add unit tests for various patterns
+**Sub-tasks**:
 
-**Implementation**:
+**5.2.4.3.1.4.1: Create Params Extractor Structure**
+- [ ] Create `packages/web_server/src/extractors/params.rs`
+- [ ] Define `Params<T>` struct with Deref/DerefMut traits
+- [ ] Define `ParamsError` enum with proper error variants
+- [ ] Add comprehensive documentation with examples
+
+**5.2.4.3.1.4.2: Implement FromRequest for Params**
+- [ ] Implement dual-mode FromRequest trait
+- [ ] Handle single String parameters (first value from map)
+- [ ] Handle struct deserialization via JSON conversion
+- [ ] Add proper error handling with field-specific messages
+
+**5.2.4.3.1.4.3: Add Comprehensive Tests**
+- [ ] Test single String parameter extraction
+- [ ] Test struct parameter extraction with multiple fields
+- [ ] Test error cases (no parameters, missing fields, type conversion)
+- [ ] Test edge cases and validation
+
+**5.2.4.3.1.4.4: Export from Extractors Module**
+- [ ] Add module declaration in `extractors/mod.rs`
+- [ ] Export `Params` and `ParamsError` types
+- [ ] Add to prelude for convenient imports
+
+**5.2.4.3.1.4.5: Create Actix Parameter Extraction Function**
+- [ ] Add `extract_actix_path_params()` function to `test_client/actix_impl.rs`
+- [ ] Use `req.match_info()` to iterate over parameters
+- [ ] Skip internal Actix parameters (starting with '__')
+- [ ] Return `PathParams` for use in RequestContext
+
+**Implementation Notes**:
+
+- **Clear Separation**: `Path<T>` remains for segment-based extraction (e.g., last N segments)
+- **New Purpose**: `Params<T>` specifically for named route parameters from patterns like `/users/{id}`
+- **Type Safety**: `Params<T>` can deserialize to structs with named fields matching parameter names
+- **Backward Compatibility**: No changes to existing `Path<T>` behavior
+- **Error Handling**: Specific error types for missing parameters vs deserialization failures
+
+**Example Usage**:
 
 ```rust
-// packages/web_server/src/test_client/actix_impl.rs
+// Single parameter
+// Route: /users/{id}
+async fn get_user(Params(id): Params<String>) -> HttpResponse {
+    // id contains the value from {id}
+}
 
-/// Extract path parameters from Actix request
+// Multiple parameters as struct
+#[derive(Deserialize)]
+struct UserPostParams {
+    user_id: String,
+    post_id: u32,
+}
+
+// Route: /users/{user_id}/posts/{post_id}
+async fn get_post(Params(params): Params<UserPostParams>) -> HttpResponse {
+    // params.user_id and params.post_id contain the values
+}
+
+// Compared to Path extractor (unchanged):
+// Route: /users/anything/posts/anything
+async fn get_segments(Path(segments): Path<(String, String)>) -> HttpResponse {
+    // segments contains the last 2 path segments
+}
+```
+
+**Actix Parameter Extraction**:
+
+```rust
+// In test_client/actix_impl.rs
 fn extract_actix_path_params(req: &actix_web::HttpRequest) -> PathParams {
     let match_info = req.match_info();
     let mut params = PathParams::new();
 
-    // Iterate over all matched parameters
     for (key, value) in match_info.iter() {
-        // Skip internal Actix parameters
         if !key.starts_with("__") {
             params.insert(key.to_string(), value.to_string());
         }
@@ -5238,53 +5294,37 @@ let actix_handler = move |req: actix_web::HttpRequest| {
 
 **Implementation**: Same pattern as 5.2.4.3.1.5
 
-**5.2.4.3.1.7: Update Path Extractor**
+### Architectural Decision: Separate Extractors for Segments vs Parameters
 
-**Purpose**: Modify Path<T> to use pre-extracted parameters
-**Location**: `packages/web_server/src/extractors/path.rs`
+**Decision**: Create separate `Path<T>` and `Params<T>` extractors instead of making Path extractor handle both cases.
 
-**Tasks**:
+**Rationale**:
+- **Conceptual Clarity**: URL segments and named route parameters are fundamentally different concepts
+- **No Ambiguity**: Clear intent - use `Path` for segments, `Params` for named parameters
+- **Backward Compatibility**: Existing `Path<T>` usage remains unchanged
+- **Type Safety**: `Params<T>` can map to structs with named fields matching parameter names
+- **Error Messages**: Each extractor can provide specific, relevant error messages
 
-- [ ] Check for path_params first in from_request_sync
-- [ ] Implement deserialization from PathParams
-- [ ] Handle single values (Path<u64>)
-- [ ] Handle tuples (Path<(String, u64)>)
-- [ ] Handle structs via serde
-- [ ] Remove or deprecate segment-based extraction
-- [ ] Add clear error messages
+**Examples**:
+- `Path<String>` - Extract last segment from `/users/alice/posts` → `"posts"`
+- `Params<String>` - Extract named parameter from `/users/{id}` → value of `{id}`
+- `Path<(String, String)>` - Extract last 2 segments → `("alice", "posts")`
+- `Params<UserParams>` - Extract to struct with `user_id` field from `/users/{user_id}`
 
-**Implementation**:
+**Migration**: No migration needed - new `Params<T>` extractor is additive.
 
-```rust
-impl<T> FromRequest for Path<T>
-where
-    T: DeserializeOwned + Send + 'static,
-{
-    fn from_request_sync(req: &HttpRequest) -> Result<Self, Self::Error> {
-        let params = req.path_params();
+**5.2.4.3.1.7: Update Path Extractor (OBSOLETE - REPLACED BY SEPARATE EXTRACTORS)**
 
-        if params.is_empty() {
-            return Err(PathError::NoParameters);
-        }
+**Status**: ❌ **OBSOLETE** - This approach has been replaced by the separate extractors decision above.
 
-        // Determine extraction strategy based on type
-        let type_name = std::any::type_name::<T>();
+**New Approach**:
+- Keep `Path<T>` unchanged for segment-based extraction
+- Create new `Params<T>` extractor for named route parameters
+- No modifications needed to existing Path extractor
 
-        let value = if type_name.starts_with('(') {
-            // Tuple - extract by position
-            deserialize_tuple_from_params::<T>(params)?
-        } else if /* is struct */ {
-            // Struct - use serde
-            deserialize_struct_from_params::<T>(params)?
-        } else {
-            // Single value - get first parameter
-            deserialize_single_from_params::<T>(params)?
-        };
+**Rationale**: Segments and path parameters are fundamentally different concepts and should have separate extractors.
 
-        Ok(Self(value))
-    }
-}
-```
+**Old Implementation**: (Removed - no longer relevant with separate extractors approach)
 
 **5.2.4.3.1.8: Update State Extractor Documentation**
 
@@ -5304,23 +5344,29 @@ where
 
 **Tasks**:
 
-- [ ] Create test: `/users/{id}` with Path<u64> extractor
-- [ ] Create test: `/items/{category}/{id}` with Path<(String, u64)>
+- [ ] Create test: `/users/{id}` with Params<u64> extractor (NEW)
+- [ ] Create test: `/items/{category}/{id}` with Params<ItemParams> struct (NEW)
 - [ ] Test both flattening and native nesting approaches
 - [ ] Test State extractor still works
-- [ ] Test combining State and Path in same handler
+- [ ] Test combining State and Params in same handler (NEW)
 - [ ] Test error cases (missing params, type mismatch)
+- [ ] Test Path extractor still works for segments (unchanged)
 - [ ] Benchmark performance vs baseline
 - [ ] Document any limitations
 
-**Test Example**:
+**Test Example** (UPDATED):
 
 ```rust
+#[derive(Deserialize)]
+struct UserParams {
+    id: u64,
+}
+
 #[test]
 fn test_path_parameters_with_context() {
-    // Define handler using Path extractor
+    // Define handler using NEW Params extractor
     async fn get_user(
-        Path(user_id): Path<u64>,
+        Params(params): Params<UserParams>,
         State(db): State<Database>,
     ) -> Result<HttpResponse, Error> {
         // Both extractors work!
@@ -5344,9 +5390,10 @@ fn test_path_parameters_with_context() {
 }
 ```
 
-**Success Criteria**:
+**Success Criteria** (UPDATED):
 
-- [ ] Path<T> successfully extracts from route parameters
+- [ ] Params<T> successfully extracts from route parameters (NEW)
+- [ ] Path<T> continues to work for segments (unchanged)
 - [ ] State<T> continues to work unchanged
 - [ ] Both implementation approaches work identically
 - [ ] No use of `Any` type anywhere
