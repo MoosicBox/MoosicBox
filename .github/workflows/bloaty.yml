@@ -112,10 +112,6 @@ jobs:
               run: |
                   cargo install cargo-binutils
 
-            - name: Install winget
-              if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
-              uses: BSteffaniak/install-winget@v1
-
             - name: Setup CI
               if: ${{ matrix.package.ciSteps }}
               run: ${{ matrix.package.ciSteps }}

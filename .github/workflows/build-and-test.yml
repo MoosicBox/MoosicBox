@@ -856,10 +856,6 @@ jobs:
                   toolchain: ${{ matrix.package.nightly && 'nightly' || 'stable' }}
                   components: rustfmt, clippy, llvm-tools-preview
 
-            - name: Install winget
-              if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
-              uses: BSteffaniak/install-winget@v1
-
             - name: Setup CI
               if: ${{ matrix.package.ciSteps }}
               run: ${{ matrix.package.ciSteps }}

@@ -349,17 +349,9 @@ jobs:
               with:
                   cmake-version: '3.x'
 
-            - name: Install winget
-              if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
-              uses: BSteffaniak/install-winget@v1
-
             - name: Setup CI
               if: ${{ matrix.package.ciSteps }}
               run: ${{ matrix.package.ciSteps }}
-
-            - name: Install winget
-              if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
-              uses: BSteffaniak/install-winget@v1
 
             - name: Install dependencies
               if: ${{ matrix.package.dependencies }}
@@ -592,10 +584,6 @@ jobs:
               uses: jwlawson/actions-setup-cmake@v2
               with:
                   cmake-version: '3.x'
-
-            - name: Install winget
-              if: ${{ matrix.package.os == 'windows-latest' && contains(matrix.package.dependencies, 'winget') }}
-              uses: BSteffaniak/install-winget@v1
 
             - name: Setup CI
               if: ${{ matrix.package.ciSteps }}
