@@ -132,15 +132,18 @@ impl<
                     }
                     match content {
                         Content::Html(x) => {
+                            log::debug!("run: sending HTML response type");
                             gz.write_all(x.as_bytes())?;
                             response = response.header(CONTENT_TYPE, "text/html; charset=utf-8");
                         }
                         Content::Raw { data, content_type } => {
+                            log::debug!("run: sending raw response type '{content_type}'");
                             gz.write_all(&data)?;
                             response = response.header(CONTENT_TYPE, content_type);
                         }
                         #[cfg(feature = "json")]
                         Content::Json(x) => {
+                            log::debug!("run: sending JSON response type");
                             gz.write_all(serde_json::to_string(&x)?.as_bytes())?;
                             response = response.header(CONTENT_TYPE, "application/json");
                         }
