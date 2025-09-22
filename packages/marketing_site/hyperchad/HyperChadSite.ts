@@ -28,14 +28,13 @@ export function createHyperChadSite(
     console.log('Using dynamic route paths:', dynamicRoutes);
 
     const lambdaName = `${name}-lambda`;
+    const rustLog = process.env.LAMBDA_RUST_LOG ?? '';
 
     const lambda = new sst.aws.Function(lambdaName, {
         handler: `src/${RENDERERS[renderer].bin}.handler`,
         runtime: 'rust' as 'go', // FIXME: remove this cast once rust is a valid runtime
         timeout: '5 minutes',
-        environment: {
-            RUST_LOG: 'moosicbox=debug,hyperchad=debug',
-        },
+        environment: { RUST_LOG: rustLog },
         transform: {
             function: {
                 runtime: 'provided.al2023',
