@@ -1,6 +1,11 @@
 name: Marketing Website Deploy
 
 on:
+    push:
+        branches: ['master']
+        paths:
+            - packages/marketing_site/**
+            - .github/workflows/marketing-website-deploy-website.yml
     workflow_dispatch:
         inputs:
             stage:
@@ -63,8 +68,22 @@ jobs:
               run: |
                   ../../sst/sst install --verbose --print-logs
 
-            - name: Deploy
+            - name: Get stage name
+              id: stage-name
+              shell: bash
+              run: |
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                      echo "stage=${{ github.event.inputs.stage }}" >> "$GITHUB_OUTPUT"
+                  elif [[ "${{ github.event_name }}" == "push" ]]; then
+                      echo "stage=dev" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "Could not determine stage"
+                      exit 1
+                  fi
+
+            - name: Deploy ${{ steps.stage-name.outputs.stage }}
               working-directory: packages/marketing_site
+              environment: ${{ steps.stage-name.outputs.stage == 'prod' && 'prod' || 'dev' }}
               shell: bash
               env:
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -73,7 +92,21 @@ jobs:
                   AWS_REGION: us-east-1
                   LAMBDA_RUST_LOG: ${{ github.event.inputs.rust-log }}
               run: |
-                  ../../sst/sst deploy --stage ${{ github.event.inputs.stage }} --verbose
+                  ../../sst/sst deploy --stage ${{ steps.stage-name.outputs.stage }} --verbose
+
+            - name: Deploy prod
+              if: ${{ github.event_name == 'push' }}
+              working-directory: packages/marketing_site
+              environment: prod
+              shell: bash
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_REGION: us-east-1
+                  LAMBDA_RUST_LOG: ${{ github.event.inputs.rust-log }}
+              run: |
+                  ../../sst/sst deploy --stage prod --verbose
 
             - name: Upload log
               uses: actions/upload-artifact@v4
