@@ -4,7 +4,6 @@
 //! dependencies between database tables. It supports both forward and backward dependency
 //! tracking with cycle detection for safe CASCADE operations.
 
-use crate::query::FilterableQuery;
 use crate::{DatabaseError, DatabaseTransaction};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -224,12 +223,9 @@ pub enum DropPlan {
 
 /// Discover all foreign key dependencies for `SQLite`
 ///
-/// # Note
-/// This function requires backend-specific PRAGMA support which is not available
-/// through the abstract Database trait. This implementation provides the basic
-/// table discovery but cannot retrieve foreign key information without PRAGMA commands.
-/// In practice, this would need to be implemented at the backend level with access
-/// to the underlying `SQLite` connection.
+/// Uses the generic introspection API to discover foreign key relationships between tables.
+/// This implementation leverages the `list_tables()` method and `get_table_info()` to build
+/// a complete dependency graph without requiring backend-specific PRAGMA commands.
 ///
 /// # Errors
 ///
@@ -239,31 +235,16 @@ pub async fn discover_dependencies_sqlite(
 ) -> Result<DependencyGraph, DatabaseError> {
     let mut graph = DependencyGraph::new();
 
-    // Get all tables from sqlite_master
-    let query = tx
-        .select("sqlite_master")
-        .columns(&["name"])
-        .where_eq("type", "table");
+    // Use new list_tables() method
+    let tables = tx.list_tables().await?;
 
-    let tables = tx.query(&query).await?;
-
-    // For each table, we would need to get its foreign keys using PRAGMA foreign_key_list
-    // However, PRAGMA commands are not supported through the abstract Database interface
-    // This would need backend-specific implementation with access to raw SQLite connection
-    for table in tables {
-        let Some(crate::DatabaseValue::String(table_name)) = table.get("name") else {
-            continue;
-        };
-
-        // TODO: In a real implementation, this would execute:
-        // PRAGMA foreign_key_list(table_name)
-        // and parse the results to add dependencies to the graph
-        //
-        // For now, we just ensure the table exists in the graph
-        // even if it has no dependencies
-        if !graph.table_exists(&table_name) {
-            // Add table to graph structure even if it has no dependencies
-            graph.dependencies.entry(table_name).or_default();
+    // Use existing get_table_info() for foreign keys
+    for table_name in tables {
+        if let Some(table_info) = tx.get_table_info(&table_name).await? {
+            // Iterate over foreign_keys BTreeMap, ignoring the constraint name
+            for (_fk_name, fk) in table_info.foreign_keys {
+                graph.add_dependency(table_name.clone(), fk.referenced_table);
+            }
         }
     }
 

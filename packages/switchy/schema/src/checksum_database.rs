@@ -357,6 +357,11 @@ impl Database for ChecksumDatabase {
         unimplemented!("column_exists not yet implemented for ChecksumDatabase")
     }
 
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        // TODO: Implement checksum tracking for table listing
+        unimplemented!("list_tables not yet implemented for ChecksumDatabase")
+    }
+
     async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
         let depth = self.transaction_depth.fetch_add(1, Ordering::SeqCst);
         let mut hasher = self.hasher.lock().await;

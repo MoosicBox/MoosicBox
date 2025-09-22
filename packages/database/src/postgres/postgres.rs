@@ -15,7 +15,7 @@ use tokio_postgres::{Client, Row, RowStream, types::IsNull};
 #[cfg(feature = "schema")]
 use super::introspection::{
     postgres_column_exists, postgres_get_table_columns, postgres_get_table_info,
-    postgres_table_exists,
+    postgres_list_tables, postgres_table_exists,
 };
 
 use crate::{
@@ -459,6 +459,13 @@ impl Database for PostgresDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let client = self.get_client().await?;
+        let client_ref: &Client = &client;
+        postgres_list_tables(client_ref).await
+    }
+
+    #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
         table_name: &str,
@@ -798,6 +805,12 @@ impl Database for PostgresTransaction {
     async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
         let client_ref: &Client = &*self.client.lock().await;
         postgres_table_exists(client_ref, table_name).await
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let client_ref: &Client = &*self.client.lock().await;
+        postgres_list_tables(client_ref).await
     }
 
     #[cfg(feature = "schema")]

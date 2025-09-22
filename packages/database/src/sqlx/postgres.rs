@@ -22,7 +22,7 @@ use tokio::sync::Mutex;
 #[cfg(feature = "schema")]
 use super::postgres_introspection::{
     postgres_sqlx_column_exists, postgres_sqlx_get_table_columns, postgres_sqlx_get_table_info,
-    postgres_sqlx_table_exists,
+    postgres_sqlx_list_tables, postgres_sqlx_table_exists,
 };
 
 use crate::{
@@ -567,6 +567,14 @@ impl Database for PostgresSqlxDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let mut conn = self.pool.lock().await.acquire().await.map_err(|e| {
+            DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+        })?;
+        postgres_sqlx_list_tables(&mut conn).await
+    }
+
+    #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
         table_name: &str,
@@ -917,6 +925,14 @@ impl Database for PostgresSqlxTransaction {
         let mut lock = self.transaction.lock().await;
         let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
         postgres_sqlx_table_exists(tx, table_name).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let mut lock = self.transaction.lock().await;
+        let tx = lock.as_mut().ok_or(DatabaseError::TransactionCommitted)?;
+        postgres_sqlx_list_tables(tx).await
     }
 
     #[cfg(feature = "schema")]

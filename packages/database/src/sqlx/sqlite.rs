@@ -566,6 +566,13 @@ impl Database for SqliteSqlxDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        sqlx_sqlite_list_tables(self.get_connection().await?.lock().await.as_mut())
+            .await
+            .map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
         table_name: &str,
@@ -2734,6 +2741,17 @@ impl Database for SqliteSqlxTransaction {
 
     #[cfg(feature = "schema")]
     #[allow(clippy::significant_drop_tightening)]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        sqlx_sqlite_list_tables(&mut *tx).await.map_err(Into::into)
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
     async fn get_table_info(
         &self,
         table_name: &str,
@@ -2955,6 +2973,25 @@ async fn sqlx_sqlite_table_exists(
             .await?;
 
     Ok(count > 0)
+}
+
+#[cfg(feature = "schema")]
+async fn sqlx_sqlite_list_tables(
+    executor: &mut SqliteConnection,
+) -> Result<Vec<String>, SqlxDatabaseError> {
+    let rows = sqlx::query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+    )
+    .fetch_all(executor)
+    .await?;
+
+    let mut tables = Vec::new();
+    for row in rows {
+        let table_name: String = row.get("name");
+        tables.push(table_name);
+    }
+
+    Ok(tables)
 }
 
 #[cfg(feature = "schema")]

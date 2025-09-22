@@ -156,6 +156,26 @@ pub async fn postgres_table_exists(
     Ok(exists)
 }
 
+/// List all table names in the 'public' schema of `PostgreSQL`
+#[allow(clippy::future_not_send)]
+pub async fn postgres_list_tables(
+    client: &impl GenericClient,
+) -> Result<Vec<String>, DatabaseError> {
+    let query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
+
+    let rows = client.query(query, &[]).await.map_err(|e| {
+        DatabaseError::Postgres(crate::postgres::postgres::PostgresDatabaseError::from(e))
+    })?;
+
+    let mut tables = Vec::new();
+    for row in rows {
+        let table_name: String = row.get("tablename");
+        tables.push(table_name);
+    }
+
+    Ok(tables)
+}
+
 /// Get column metadata for a table in `PostgreSQL`
 #[allow(clippy::future_not_send)]
 pub async fn postgres_get_table_columns(

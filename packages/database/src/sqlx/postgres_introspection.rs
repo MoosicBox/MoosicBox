@@ -25,6 +25,25 @@ pub async fn postgres_sqlx_table_exists(
     Ok(exists)
 }
 
+/// List all table names in the 'public' schema of `PostgreSQL`
+pub async fn postgres_sqlx_list_tables(
+    conn: &mut PgConnection,
+) -> Result<Vec<String>, DatabaseError> {
+    let query = "SELECT tablename FROM pg_tables WHERE schemaname = 'public'";
+
+    let rows = sqlx::query(query).fetch_all(conn).await.map_err(|e| {
+        DatabaseError::PostgresSqlx(crate::sqlx::postgres::SqlxDatabaseError::from(e))
+    })?;
+
+    let mut tables = Vec::new();
+    for row in rows {
+        let table_name: String = row.get("tablename");
+        tables.push(table_name);
+    }
+
+    Ok(tables)
+}
+
 /// Get column metadata for a table in `PostgreSQL`
 pub async fn postgres_sqlx_get_table_columns(
     conn: &mut PgConnection,

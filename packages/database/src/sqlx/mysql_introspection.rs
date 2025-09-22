@@ -141,7 +141,7 @@ use crate::{
     schema::{ColumnInfo, DataType, ForeignKeyInfo, IndexInfo, TableInfo},
 };
 
-use sqlx::Row;
+use sqlx::{MySqlConnection, Row};
 
 /// Check if a table exists in the current `MySQL` database
 pub async fn mysql_sqlx_table_exists(
@@ -164,6 +164,28 @@ pub async fn mysql_sqlx_table_exists(
         .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
 
     Ok(exists != 0)
+}
+
+/// List all table names in the current `MySQL` database
+pub async fn mysql_sqlx_list_tables(
+    conn: &mut MySqlConnection,
+) -> Result<Vec<String>, DatabaseError> {
+    let query = "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()";
+
+    let rows = sqlx::query(query)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+
+    let mut tables = Vec::new();
+    for row in rows {
+        let table_name: String = row
+            .try_get("table_name")
+            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+        tables.push(table_name);
+    }
+
+    Ok(tables)
 }
 
 /// Get column information for a `MySQL` table

@@ -659,6 +659,24 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     #[cfg(feature = "schema")]
     async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError>;
 
+    /// Get a list of all table names in the database
+    ///
+    /// This method enumerates all user tables in the database, excluding system tables
+    /// and other database objects like views, indexes, or sequences.
+    ///
+    /// # Backend-Specific Behavior
+    ///
+    /// - **`SQLite`**: Queries `sqlite_master` table, excludes tables starting with `sqlite_`
+    /// - **`PostgreSQL`**: Queries `pg_tables` for tables in the 'public' schema
+    /// - **`MySQL`**: Queries `information_schema.tables` for the current database
+    ///
+    /// # Errors
+    ///
+    /// * If the database query fails
+    /// * If there are permission issues accessing system catalogs
+    #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError>;
+
     /// Get complete information about a table including columns, indexes, and foreign keys
     ///
     /// Returns `None` if the table doesn't exist. Provides comprehensive metadata including:

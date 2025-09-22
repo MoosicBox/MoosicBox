@@ -757,6 +757,10 @@ mod tests {
             Ok(false)
         }
 
+        async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+            Ok(vec![])
+        }
+
         async fn begin_transaction(
             &self,
         ) -> Result<Box<dyn switchy_database::DatabaseTransaction>, DatabaseError> {

@@ -317,6 +317,11 @@ impl Database for SimulationDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        self.inner.list_tables().await
+    }
+
+    #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
         table_name: &str,

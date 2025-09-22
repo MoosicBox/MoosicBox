@@ -555,6 +555,12 @@ impl Database for RusqliteDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let connection = self.get_connection();
+        rusqlite_list_tables(&*connection.lock().await)
+    }
+
+    #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
         table_name: &str,
@@ -793,6 +799,11 @@ impl Database for RusqliteTransaction {
     #[cfg(feature = "schema")]
     async fn table_exists(&self, table_name: &str) -> Result<bool, DatabaseError> {
         rusqlite_table_exists(&*self.connection.lock().await, table_name)
+    }
+
+    #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        rusqlite_list_tables(&*self.connection.lock().await)
     }
 
     #[cfg(feature = "schema")]
@@ -2823,6 +2834,29 @@ fn rusqlite_table_exists(connection: &Connection, table_name: &str) -> Result<bo
         .map_err(RusqliteDatabaseError::Rusqlite)?;
 
     Ok(exists)
+}
+
+#[cfg(feature = "schema")]
+fn rusqlite_list_tables(connection: &Connection) -> Result<Vec<String>, DatabaseError> {
+    let query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+    let mut stmt = connection
+        .prepare_cached(query)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let mut tables = Vec::new();
+    let rows = stmt
+        .query_map([], |row| {
+            let name: String = row.get(0)?;
+            Ok(name)
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    for row in rows {
+        let table_name = row.map_err(RusqliteDatabaseError::Rusqlite)?;
+        tables.push(table_name);
+    }
+
+    Ok(tables)
 }
 
 #[cfg(feature = "schema")]

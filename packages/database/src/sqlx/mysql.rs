@@ -511,6 +511,13 @@ impl Database for MySqlSqlxDatabase {
     }
 
     #[cfg(feature = "schema")]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+        super::mysql_introspection::mysql_sqlx_list_tables(&mut connection).await
+    }
+
+    #[cfg(feature = "schema")]
     async fn get_table_info(
         &self,
         table_name: &str,
@@ -865,6 +872,16 @@ impl Database for MysqlSqlxTransaction {
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
         super::mysql_introspection::mysql_sqlx_table_exists(&mut *tx, table_name).await
+    }
+
+    #[cfg(feature = "schema")]
+    #[allow(clippy::significant_drop_tightening)]
+    async fn list_tables(&self) -> Result<Vec<String>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+        super::mysql_introspection::mysql_sqlx_list_tables(&mut *tx).await
     }
 
     #[cfg(feature = "schema")]
