@@ -161,7 +161,7 @@ impl<
         });
 
         self.handle
-            .block_on(async move { lambda_http::run(func).await })
+            .block_on(async move { lambda_http::run_with_streaming_response(func).await })
             .map_err(|e| e as Box<dyn std::error::Error + Send>)?;
 
         log::debug!("run: finished");
