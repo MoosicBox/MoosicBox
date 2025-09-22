@@ -59,7 +59,7 @@
 //! // Get complete table information
 //! if let Some(table_info) = db.get_table_info("users").await? {
 //!     println!("Table: {}", table_info.name);
-//!     
+//!
 //!     // Inspect columns
 //!     for (col_name, col_info) in &table_info.columns {
 //!         println!("  Column: {} {:?} {}",
@@ -67,16 +67,16 @@
 //!             col_info.data_type,
 //!             if col_info.nullable { "NULL" } else { "NOT NULL" }
 //!         );
-//!         
+//!
 //!         if col_info.is_primary_key {
 //!             println!("    (Primary Key)");
 //!         }
-//!         
+//!
 //!         if let Some(default) = &col_info.default_value {
 //!             println!("    Default: {:?}", default);
 //!         }
 //!     }
-//!     
+//!
 //!     // Inspect indexes
 //!     for (idx_name, idx_info) in &table_info.indexes {
 //!         println!("  Index: {} on {:?} {}",
@@ -85,7 +85,7 @@
 //!             if idx_info.unique { "(UNIQUE)" } else { "" }
 //!         );
 //!     }
-//!     
+//!
 //!     // Inspect foreign keys
 //!     for (fk_name, fk_info) in &table_info.foreign_keys {
 //!         println!("  FK: {}.{} -> {}.{}",
@@ -197,7 +197,7 @@
 //!     default: Some(DatabaseValue::Real(0.0)),
 //! };
 //!
-//! // Boolean and date types  
+//! // Boolean and date types
 //! let active = Column {
 //!     name: "active".to_string(),
 //!     data_type: DataType::Bool,
@@ -1064,3 +1064,10 @@ mod tests {
         }
     }
 }
+
+// Dependency management for CASCADE and RESTRICT operations
+#[cfg(feature = "schema")]
+pub mod dependencies;
+
+#[cfg(feature = "schema")]
+pub use dependencies::{CycleError, DependencyGraph, DropPlan};
