@@ -18,8 +18,88 @@ on:
                 default: 'moosicbox=debug,hyperchad=debug,switchy=debug'
 
 jobs:
-    deploy:
+    # Deploy to non-prod environments without approval
+    deploy-non-prod:
+        if: |
+            github.event_name == 'push' ||
+            github.event_name == 'workflow_dispatch' && github.event.inputs.stage != 'prod'
         runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v3
+              name: Install pnpm
+              with:
+                  version: latest
+                  run_install: false
+
+            - name: Checkout sst
+              uses: actions/checkout@v4
+              with:
+                  repository: BSteffaniak/sst
+                  ref: pnpm
+                  path: sst
+
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install SST
+              working-directory: sst
+              shell: bash
+              run: |
+                  bun install
+                  go mod tidy
+                  (cd platform; bun run build)
+                  go build ./cmd/sst
+
+            - uses: goto-bus-stop/setup-zig@v2
+
+            - name: Install cargo-lambda
+              shell: bash
+              run: |
+                  pip3 install cargo-lambda
+
+            - name: pnpm install
+              working-directory: packages/marketing_site
+              shell: bash
+              run: |
+                  pnpm install
+
+            - name: sst install
+              working-directory: packages/marketing_site
+              run: |
+                  ../../sst/sst install --verbose --print-logs
+
+            - name: Deploy to ${{ github.event_name == 'push' && 'dev' || github.event.inputs.stage }}
+              working-directory: packages/marketing_site
+              shell: bash
+              env:
+                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_REGION: us-east-1
+                  LAMBDA_RUST_LOG: ${{ github.event.inputs.rust-log }}
+              run: |
+                  STAGE="${{ github.event_name == 'push' && 'dev' || github.event.inputs.stage }}"
+                  echo "Deploying to stage: $STAGE"
+                  ../../sst/sst deploy --stage $STAGE --verbose
+
+            - name: Upload log
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: log-non-prod
+                  path: packages/marketing_site/.sst/log
+                  if-no-files-found: error
+                  retention-days: 90
+
+    # Deploy to prod with approval
+    deploy-prod:
+        if: |
+            github.event_name != 'workflow_dispatch' || github.event.inputs.stage == 'prod'
+        runs-on: ubuntu-latest
+        environment: prod # This triggers the approval requirement
 
         steps:
             - uses: actions/checkout@v4
@@ -68,22 +148,8 @@ jobs:
               run: |
                   ../../sst/sst install --verbose --print-logs
 
-            - name: Get stage name
-              id: stage-name
-              shell: bash
-              run: |
-                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                      echo "stage=${{ github.event.inputs.stage }}" >> "$GITHUB_OUTPUT"
-                  elif [[ "${{ github.event_name }}" == "push" ]]; then
-                      echo "stage=dev" >> "$GITHUB_OUTPUT"
-                  else
-                      echo "Could not determine stage"
-                      exit 1
-                  fi
-
-            - name: Deploy ${{ steps.stage-name.outputs.stage }}
+            - name: Deploy to prod
               working-directory: packages/marketing_site
-              environment: ${{ steps.stage-name.outputs.stage == 'prod' && 'prod' || 'dev' }}
               shell: bash
               env:
                   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -92,27 +158,14 @@ jobs:
                   AWS_REGION: us-east-1
                   LAMBDA_RUST_LOG: ${{ github.event.inputs.rust-log }}
               run: |
-                  ../../sst/sst deploy --stage ${{ steps.stage-name.outputs.stage }} --verbose
-
-            - name: Deploy prod
-              if: ${{ github.event_name == 'push' }}
-              working-directory: packages/marketing_site
-              environment: prod
-              shell: bash
-              env:
-                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  AWS_REGION: us-east-1
-                  LAMBDA_RUST_LOG: ${{ github.event.inputs.rust-log }}
-              run: |
+                  echo "Deploying to stage: prod"
                   ../../sst/sst deploy --stage prod --verbose
 
             - name: Upload log
               uses: actions/upload-artifact@v4
               if: always()
               with:
-                  name: log
+                  name: log-prod
                   path: packages/marketing_site/.sst/log
                   if-no-files-found: error
                   retention-days: 90
