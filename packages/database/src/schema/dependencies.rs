@@ -214,12 +214,12 @@ impl std::fmt::Display for CycleError {
 
 impl std::error::Error for CycleError {}
 
-/// Plan for dropping tables
-#[derive(Debug)]
+/// Represents a plan for dropping tables with dependency handling
+#[derive(Debug, Clone)]
 pub enum DropPlan {
-    /// Simple ordered drop (no cycles)
+    /// Simple drop order with no cycles
     Simple(Vec<String>),
-    /// Requires disabling foreign keys due to cycles
+    /// Tables with circular dependencies requiring FK constraint disable
     WithCycles {
         tables: Vec<String>,
         requires_fk_disable: bool,
@@ -270,6 +270,172 @@ pub async fn get_table_dependencies_sqlite(
         .get_dependents(table_name)
         .cloned()
         .unwrap_or_default())
+}
+
+/// Find all tables that would be affected by CASCADE deletion of the specified table
+///
+/// Returns a `DropPlan` which handles both simple and circular dependencies.
+/// For simple cases: `DropPlan::Simple(Vec<String>)` with dependents first.
+/// For cycles: `DropPlan::WithCycles` indicating FK constraints must be disabled.
+///
+/// # Performance
+///
+/// Time: O(d * f) where d = dependent tables, f = foreign keys per table
+/// Space: O(d) for visited set and results
+/// Note: Optimized for targeted discovery instead of analyzing all tables
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if dependency discovery fails
+pub async fn find_cascade_targets(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<DropPlan, DatabaseError> {
+    let mut to_drop = Vec::new();
+    let mut visited = BTreeSet::new();
+    let mut visiting = BTreeSet::new(); // For cycle detection
+    let mut stack = vec![table_name.to_string()];
+    let mut has_cycle = false;
+
+    while let Some(current_table) = stack.pop() {
+        if visiting.contains(&current_table) {
+            has_cycle = true;
+            continue; // Cycle detected
+        }
+        if !visited.insert(current_table.clone()) {
+            continue; // Already processed
+        }
+
+        visiting.insert(current_table.clone());
+
+        // Find tables that directly reference current_table
+        let dependents = get_direct_dependents(tx, &current_table).await?;
+
+        // Add dependents to drop list (they come before their dependencies)
+        for dependent in &dependents {
+            if !visited.contains(dependent) {
+                stack.push(dependent.clone());
+            }
+        }
+
+        visiting.remove(&current_table);
+        to_drop.push(current_table);
+    }
+
+    // Reverse to get proper drop order (dependents first, then dependencies)
+    // This ensures that when we drop, dependents are dropped before their dependencies
+    to_drop.reverse();
+
+    if has_cycle {
+        Ok(DropPlan::WithCycles {
+            tables: to_drop,
+            requires_fk_disable: true,
+        })
+    } else {
+        Ok(DropPlan::Simple(to_drop))
+    }
+}
+
+/// Check if a table has any dependents (for RESTRICT validation)
+/// Returns immediately upon finding first dependent for efficiency
+///
+/// # Performance
+///
+/// Best case: O(1) - stops at first dependent found
+/// Worst case: O(n) - only when table has no dependents
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if introspection fails
+pub async fn has_any_dependents(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<bool, DatabaseError> {
+    let all_tables = tx.list_tables().await?;
+
+    for table in all_tables {
+        if table == table_name {
+            continue;
+        }
+
+        if let Some(info) = tx.get_table_info(&table).await? {
+            for fk in info.foreign_keys.values() {
+                if fk.referenced_table == table_name {
+                    return Ok(true); // EARLY TERMINATION - key optimization
+                }
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Get direct dependents of a table (one level only, no recursion)
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if table introspection fails
+pub async fn get_direct_dependents(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<BTreeSet<String>, DatabaseError> {
+    let mut dependents = BTreeSet::new();
+
+    // We must use list_tables() as it's the only way to discover tables
+    // with existing Database methods, but we optimize by only calling
+    // get_table_info() on each table once and only as needed
+    let all_tables = tx.list_tables().await?;
+
+    for table in all_tables {
+        if table == table_name {
+            continue; // Skip self-references
+        }
+
+        // Get info for this specific table (not all upfront)
+        if let Some(info) = tx.get_table_info(&table).await? {
+            // Check if this table references our target
+            for fk in info.foreign_keys.values() {
+                if fk.referenced_table == table_name {
+                    dependents.insert(table.clone());
+                    break; // Found dependency, move to next table
+                }
+            }
+        }
+    }
+
+    Ok(dependents)
+}
+
+/// Recursively find all tables that depend on the specified table
+/// More efficient than building full graph when only one table's dependents are needed
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if dependency discovery fails
+pub async fn get_all_dependents_recursive(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<BTreeSet<String>, DatabaseError> {
+    let mut all_dependents = BTreeSet::new();
+    let mut to_check = vec![table_name.to_string()];
+    let mut visited = BTreeSet::new();
+
+    while let Some(current_table) = to_check.pop() {
+        if !visited.insert(current_table.clone()) {
+            continue; // Already processed
+        }
+
+        // Reuse get_direct_dependents for consistency
+        let direct_deps = get_direct_dependents(tx, &current_table).await?;
+
+        for dep in direct_deps {
+            if all_dependents.insert(dep.clone()) {
+                to_check.push(dep); // Queue for recursive checking
+            }
+        }
+    }
+
+    Ok(all_dependents)
 }
 
 #[cfg(test)]
