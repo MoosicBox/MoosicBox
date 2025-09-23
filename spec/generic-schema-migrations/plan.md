@@ -9211,6 +9211,20 @@ The CASCADE implementation uses a layered trait hierarchy:
 Location: `/packages/database/src/schema/dependencies.rs`
 
 ```rust
+/// Represents a plan for dropping tables with dependency handling
+#[derive(Debug, Clone)]
+pub enum DropPlan {
+    /// Simple drop order with no cycles
+    Simple(Vec<String>),
+    /// Tables with circular dependencies requiring FK constraint disable
+    WithCycles {
+        tables: Vec<String>,
+        requires_fk_disable: bool,
+    },
+}
+```
+
+```rust
 /// Find all tables that would be affected by CASCADE deletion of the specified table
 /// Returns a DropPlan which handles both simple and circular dependencies
 /// For simple cases: DropPlan::Simple(Vec<String>) with dependents first
@@ -9275,6 +9289,29 @@ pub async fn get_all_dependents_recursive(
 3. **Cycle Protection**: Maintain visited set to prevent infinite loops in circular dependencies
 4. **Proper Ordering**: Return results in appropriate order for CASCADE operations (dependents first)
 
+**Optimization Progression Across Phases:**
+
+This phase provides an INTERMEDIATE optimization using existing Database methods:
+
+1. **Current approach (worst)**: Builds complete dependency graph upfront
+   - Calls `list_tables()` then `get_table_info()` on ALL tables
+   - O(n * m) where n = all tables, m = avg foreign keys per table
+
+2. **Phase 15.1.2 (this phase - better)**: Targeted discovery with existing methods
+   - Still uses `list_tables()` but calls `get_table_info()` selectively
+   - Early termination in `has_any_dependents()`
+   - Only traverses relevant dependency chains
+   - O(d * m) where d = dependent tables only
+
+3. **Phase 15.1.3/15.1.4 (best)**: Backend-specific with query_raw
+   - Direct PRAGMA/information_schema access
+   - No `list_tables()` needed
+   - O(d) with optimized queries
+
+**Important:** The implementations below use `list_tables()` which seems inefficient,
+but they're still optimized because they avoid calling `get_table_info()` on
+unrelated tables and support early termination.
+
 **Algorithm for find_cascade_targets:**
 
 ```rust
@@ -9327,6 +9364,98 @@ async fn find_cascade_targets(
     }
 }
 ```
+
+**Complete Implementations Using Existing Database Methods:**
+
+```rust
+/// Get direct dependents of a table (one level only, no recursion)
+/// Uses list_tables() but optimizes by selective get_table_info() calls
+pub async fn get_direct_dependents(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<BTreeSet<String>, DatabaseError> {
+    let mut dependents = BTreeSet::new();
+
+    // We must use list_tables() as it's the only way to discover tables
+    // with existing Database methods, but we optimize by only calling
+    // get_table_info() on each table once and only as needed
+    let all_tables = tx.list_tables().await?;
+
+    for table in all_tables {
+        if table == table_name {
+            continue; // Skip self-references
+        }
+
+        // Get info for this specific table (not all upfront)
+        let info = tx.get_table_info(&table).await?;
+
+        // Check if this table references our target
+        for fk in &info.foreign_keys {
+            if fk.referenced_table == table_name {
+                dependents.insert(table.clone());
+                break; // Found dependency, move to next table
+            }
+        }
+    }
+
+    Ok(dependents)
+}
+
+/// Check if a table has any dependents (optimized for early termination)
+/// Best case O(1) - returns immediately upon finding first dependent
+pub async fn has_any_dependents(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<bool, DatabaseError> {
+    let all_tables = tx.list_tables().await?;
+
+    for table in all_tables {
+        if table == table_name {
+            continue;
+        }
+
+        let info = tx.get_table_info(&table).await?;
+
+        for fk in &info.foreign_keys {
+            if fk.referenced_table == table_name {
+                return Ok(true); // EARLY TERMINATION - key optimization
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Recursively find all dependents - only traverses dependency chains
+pub async fn get_all_dependents_recursive(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<BTreeSet<String>, DatabaseError> {
+    let mut all_dependents = BTreeSet::new();
+    let mut to_check = vec![table_name.to_string()];
+    let mut visited = BTreeSet::new();
+
+    while let Some(current_table) = to_check.pop() {
+        if !visited.insert(current_table.clone()) {
+            continue; // Already processed
+        }
+
+        // Reuse get_direct_dependents for consistency
+        let direct_deps = get_direct_dependents(tx, &current_table).await?;
+
+        for dep in direct_deps {
+            if all_dependents.insert(dep.clone()) {
+                to_check.push(dep); // Queue for recursive checking
+            }
+        }
+    }
+
+    Ok(all_dependents)
+}
+```
+
+**Note:** These implementations will be replaced with optimized versions
+in Phase 15.1.4 when backend-specific overrides using query_raw become available.
 
 **Performance Characteristics:**
 - **Time Complexity**: O(d * f) where d = dependent tables, f = foreign keys per table
@@ -9409,23 +9538,21 @@ pub trait DatabaseTransaction: Database {
        let connection = self.get_connection().await?;
        let connection = connection.lock().await;
 
-       // Note: PRAGMA commands cannot use parameter binding in SQLite
-       // Table names in PRAGMA must be validated if dynamic
        let mut stmt = connection.prepare(query)
            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
-       let column_count = stmt.column_count();
-       let rows = stmt.query_map([], |row| {
-           let mut columns = Vec::new();
-           for i in 0..column_count {
-               let name = stmt.column_name(i)?;
-               let value = // Convert to DatabaseValue
-               columns.push((name.to_string(), value));
-           }
-           Ok(Row { columns })
-       })?;
+       // Get column names from the statement
+       let column_names: Vec<String> = stmt.column_names()
+           .iter()
+           .map(|s| s.to_string())
+           .collect();
 
-       rows.collect::<Result<Vec<_>, _>>()
+       // Execute query and use existing to_rows helper
+       let rows = stmt.query([])
+           .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+       // Use the existing to_rows function from rusqlite/mod.rs
+       to_rows(&column_names, rows)
            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
    }
    ```
@@ -9436,21 +9563,124 @@ pub trait DatabaseTransaction: Database {
        let connection = self.get_connection().await?;
        let mut connection = connection.lock().await;
 
-       let rows = sqlx::query(query).fetch_all(&mut **connection).await?;
+       let result = sqlx::query(query)
+           .fetch_all(&mut **connection)
+           .await
+           .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
-       // Convert sqlx::Row to Vec<Row>
+       if result.is_empty() {
+           return Ok(vec![]);
+       }
+
+       // Get column names from first row
+       let column_names: Vec<String> = result[0].columns()
+           .iter()
+           .map(|c| c.name().to_string())
+           .collect();
+
+       // Use existing from_row helper for each row
+       let mut rows = Vec::new();
+       for row in result {
+           rows.push(from_row(&column_names, &row)
+               .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?);
+       }
+
+       Ok(rows)
    }
    ```
 
 3. **PostgreSQL (native)**: `/packages/database/src/postgres/postgres.rs`
    ```rust
    async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
-       // Use existing query infrastructure, convert results
+       let client = self.client.lock().await;
+
+       let pg_rows = client
+           .query(query, &[])
+           .await
+           .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+       if pg_rows.is_empty() {
+           return Ok(vec![]);
+       }
+
+       // Get column names from first row
+       let column_names: Vec<String> = pg_rows[0].columns()
+           .iter()
+           .map(|c| c.name().to_string())
+           .collect();
+
+       // Use existing from_row helper
+       let mut rows = Vec::new();
+       for row in pg_rows {
+           rows.push(from_row(&column_names, &row)
+               .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?);
+       }
+
+       Ok(rows)
    }
    ```
 
 4. **PostgreSQL (sqlx)**: `/packages/database/src/sqlx/postgres.rs`
+   ```rust
+   async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+       let pool = self.pool.lock().await;
+
+       let result = sqlx::query(query)
+           .fetch_all(&**pool)
+           .await
+           .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+       if result.is_empty() {
+           return Ok(vec![]);
+       }
+
+       // Get column names from first row
+       let column_names: Vec<String> = result[0].columns()
+           .iter()
+           .map(|c| c.name().to_string())
+           .collect();
+
+       // Use existing from_row helper
+       let mut rows = Vec::new();
+       for row in result {
+           rows.push(from_row(&column_names, &row)
+               .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?);
+       }
+
+       Ok(rows)
+   }
+   ```
+
 5. **MySQL (sqlx)**: `/packages/database/src/sqlx/mysql.rs`
+   ```rust
+   async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+       let pool = self.pool.lock().await;
+
+       let result = sqlx::query(query)
+           .fetch_all(&**pool)
+           .await
+           .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+       if result.is_empty() {
+           return Ok(vec![]);
+       }
+
+       // Get column names from first row
+       let column_names: Vec<String> = result[0].columns()
+           .iter()
+           .map(|c| c.name().to_string())
+           .collect();
+
+       // Use existing from_row helper
+       let mut rows = Vec::new();
+       for row in result {
+           rows.push(from_row(&column_names, &row)
+               .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?);
+       }
+
+       Ok(rows)
+   }
+   ```
 6. **Simulator**: `/packages/database/src/simulator/mod.rs`
    ```rust
    async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
@@ -10368,7 +10598,35 @@ pub trait DatabaseTransaction: Database {
 
 **Implementation Requirements:**
 
-1. **SQLite (rusqlite)**:
+**Complete Implementation for exec_raw_params (Rusqlite example):**
+
+```rust
+async fn exec_raw_params(
+    &self,
+    query: &str,
+    params: &[DatabaseValue]
+) -> Result<u64, DatabaseError> {
+    let connection = self.get_connection().await?;
+    let connection = connection.lock().await;
+
+    let mut stmt = connection.prepare(query)
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+    // Convert to RusqliteDatabaseValue using existing From impl
+    let rusqlite_params: Vec<RusqliteDatabaseValue> = params
+        .iter()
+        .map(|p| p.clone().into())
+        .collect();
+
+    let rows_affected = stmt.execute(rusqlite::params_from_iter(&rusqlite_params))
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+    Ok(rows_affected as u64)
+}
+```
+
+**Complete Implementation for query_raw_params (Rusqlite example):**
+
 ```rust
 async fn query_raw_params(
     &self,
@@ -10378,33 +10636,36 @@ async fn query_raw_params(
     let connection = self.get_connection().await?;
     let connection = connection.lock().await;
 
-    let mut stmt = connection.prepare(query)?;
+    let mut stmt = connection.prepare(query)
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
-    // Convert DatabaseValue to rusqlite params
-    let rusqlite_params: Vec<_> = params.iter().map(|p| match p {
-        DatabaseValue::String(s) => rusqlite::types::Value::Text(s.clone()),
-        DatabaseValue::Number(n) => rusqlite::types::Value::Integer(*n as i64),
-        DatabaseValue::Bool(b) => rusqlite::types::Value::Integer(if *b { 1 } else { 0 }),
-        // Add other types as needed
-    }).collect();
+    // Get column names
+    let column_names: Vec<String> = stmt.column_names()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
 
-    let rows = stmt.query_map(&rusqlite_params[..], |row| {
-        let mut columns = Vec::new();
-        for i in 0..stmt.column_count() {
-            let name = stmt.column_name(i)?;
-            let value = // Convert from rusqlite to DatabaseValue
-            columns.push((name.to_string(), value));
-        }
-        Ok(Row { columns })
-    })?;
+    // Convert params using existing conversion
+    let rusqlite_params: Vec<RusqliteDatabaseValue> = params
+        .iter()
+        .map(|p| p.clone().into())
+        .collect();
 
-    rows.collect::<Result<Vec<_>, _>>()
+    // Execute and use existing to_rows helper
+    let rows = stmt.query(rusqlite::params_from_iter(&rusqlite_params))
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+    to_rows(&column_names, rows)
         .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
 }
 ```
 
-2. **PostgreSQL (native/sqlx)**: Similar pattern with proper parameter binding
-3. **MySQL (sqlx)**: Similar pattern with proper parameter binding
+**Note:** PostgreSQL and MySQL implementations follow similar patterns,
+using their respective existing conversion types (PgDatabaseValue, MySqlDatabaseValue).
+
+1. **SQLite implementations**: Use existing RusqliteDatabaseValue conversion
+2. **PostgreSQL (native/sqlx)**: Use existing PgDatabaseValue conversion
+3. **MySQL (sqlx)**: Use existing MySqlDatabaseValue conversion
 4. **Simulator**: Mock parameter binding behavior
 5. **ChecksumDatabase**: Include parameters in checksum calculation
 
