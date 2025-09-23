@@ -42,6 +42,11 @@ impl DependencyGraph {
     }
 
     #[must_use]
+    pub fn get_dependencies(&self, table: &str) -> Option<&BTreeSet<String>> {
+        self.dependencies.get(table)
+    }
+
+    #[must_use]
     pub fn has_dependents(&self, table: &str) -> bool {
         self.dependents
             .get(table)
@@ -265,4 +270,185 @@ pub async fn get_table_dependencies_sqlite(
         .get_dependents(table_name)
         .cloned()
         .unwrap_or_default())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn test_new_graph_is_empty() {
+        let graph = DependencyGraph::new();
+        assert!(graph.dependencies.is_empty());
+    }
+
+    #[test]
+    fn test_add_single_dependency() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+
+        // Posts depends on users
+        assert!(graph.dependencies.contains_key("posts"));
+        assert!(graph.dependencies["posts"].contains("users"));
+
+        // Users has dependents (posts depends on it)
+        assert!(graph.dependents.contains_key("users"));
+        assert!(graph.dependents["users"].contains("posts"));
+
+        // Users has no dependencies (no entry created since it doesn't depend on anything)
+        assert!(!graph.dependencies.contains_key("users"));
+    }
+
+    #[test]
+    fn test_add_multiple_dependencies() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+        graph.add_dependency("comments".to_string(), "posts".to_string());
+        graph.add_dependency("comments".to_string(), "users".to_string());
+
+        assert_eq!(graph.dependencies["comments"].len(), 2);
+        assert!(graph.dependencies["comments"].contains("posts"));
+        assert!(graph.dependencies["comments"].contains("users"));
+    }
+
+    #[test]
+    fn test_topological_sort_linear_chain() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+        graph.add_dependency("comments".to_string(), "posts".to_string());
+
+        // Test sorting all tables - returns roots first, leaves last
+        let result = graph.topological_sort(None).unwrap();
+        assert_eq!(result, vec!["users", "posts", "comments"]);
+
+        // Test sorting with subset that includes only one table
+        let subset = BTreeSet::from(["comments".to_string()]);
+        let result = graph.topological_sort(Some(&subset)).unwrap();
+        assert_eq!(result, vec!["comments"]);
+    }
+
+    #[test]
+    fn test_topological_sort_diamond_dependency() {
+        let mut graph = DependencyGraph::new();
+        // Diamond: D depends on B and C, both depend on A
+        graph.add_dependency("D".to_string(), "B".to_string());
+        graph.add_dependency("D".to_string(), "C".to_string());
+        graph.add_dependency("B".to_string(), "A".to_string());
+        graph.add_dependency("C".to_string(), "A".to_string());
+
+        // Test sorting all tables - roots first (A), leaves last (D)
+        let result = graph.topological_sort(None).unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], "A"); // Root comes first
+        assert_eq!(result[3], "D"); // Leaf comes last
+        // B and C can be in either order at positions 1 and 2
+        assert!(result.contains(&"B".to_string()));
+        assert!(result.contains(&"C".to_string()));
+    }
+
+    #[test]
+    fn test_topological_sort_detects_simple_cycle() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("A".to_string(), "B".to_string());
+        graph.add_dependency("B".to_string(), "A".to_string());
+
+        let result = graph.topological_sort(None);
+        assert!(matches!(result, Err(CycleError { .. })));
+
+        if let Err(CycleError { tables, .. }) = result {
+            assert!(tables.contains(&"A".to_string()));
+            assert!(tables.contains(&"B".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_topological_sort_detects_complex_cycle() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("A".to_string(), "B".to_string());
+        graph.add_dependency("B".to_string(), "C".to_string());
+        graph.add_dependency("C".to_string(), "D".to_string());
+        graph.add_dependency("D".to_string(), "B".to_string()); // Creates cycle B->C->D->B
+
+        let result = graph.topological_sort(None);
+        assert!(matches!(result, Err(CycleError { .. })));
+    }
+
+    #[test]
+    fn test_topological_sort_independent_table() {
+        let mut graph = DependencyGraph::new();
+
+        // Add a table with no dependencies
+        graph.add_dependency("independent".to_string(), String::new());
+        graph.dependencies.get_mut("independent").unwrap().clear(); // Remove the empty dependency
+
+        let subset = BTreeSet::from(["independent".to_string()]);
+        let result = graph.topological_sort(Some(&subset)).unwrap();
+        assert_eq!(result, vec!["independent"]);
+    }
+
+    #[test]
+    fn test_get_dependencies_direct() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+
+        let deps = graph.get_dependencies("posts").unwrap();
+        assert_eq!(*deps, BTreeSet::from(["users".to_string()]));
+    }
+
+    #[test]
+    fn test_get_dependencies_transitive() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("comments".to_string(), "posts".to_string());
+        graph.add_dependency("posts".to_string(), "users".to_string());
+
+        // Direct dependencies only
+        let deps = graph.get_dependencies("comments").unwrap();
+        assert_eq!(*deps, BTreeSet::from(["posts".to_string()]));
+
+        // For transitive dependencies, use topological sort on all tables (roots first)
+        let sorted = graph.topological_sort(None).unwrap();
+        assert_eq!(sorted, vec!["users", "posts", "comments"]);
+    }
+
+    #[test]
+    fn test_get_dependencies_empty() {
+        let graph = DependencyGraph::new();
+        assert!(graph.get_dependencies("nonexistent").is_none());
+
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+
+        // Users has no dependencies
+        let deps = graph.get_dependencies("users");
+        assert!(deps.is_none() || deps.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_get_dependents() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+        graph.add_dependency("comments".to_string(), "users".to_string());
+
+        let dependents = graph.get_dependents("users").unwrap();
+        assert_eq!(dependents.len(), 2);
+        assert!(dependents.contains("posts"));
+        assert!(dependents.contains("comments"));
+
+        // Table with no dependents
+        assert!(
+            graph.get_dependents("posts").is_none()
+                || graph.get_dependents("posts").unwrap().is_empty()
+        );
+    }
+
+    #[test]
+    fn test_has_dependents() {
+        let mut graph = DependencyGraph::new();
+        graph.add_dependency("posts".to_string(), "users".to_string());
+
+        assert!(graph.has_dependents("users"));
+        assert!(!graph.has_dependents("posts"));
+        assert!(!graph.has_dependents("nonexistent"));
+    }
 }

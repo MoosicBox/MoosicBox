@@ -2373,7 +2373,7 @@ mod tests {
             Ok(Arc::new(Mutex::new(pool)))
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_table_exists() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2401,7 +2401,65 @@ mod tests {
                 .unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
+        async fn test_mysql_list_tables() {
+            let Some(url) = get_mysql_test_url() else {
+                return;
+            };
+
+            let pool = create_pool(&url).await.expect("Failed to create pool");
+            let db = MySqlSqlxDatabase::new(pool);
+
+            // Clean up any existing test tables first
+            db.exec_raw("DROP TABLE IF EXISTS test_list_table1")
+                .await
+                .ok();
+            db.exec_raw("DROP TABLE IF EXISTS test_list_table2")
+                .await
+                .ok();
+
+            // Create test tables
+            db.exec_raw("CREATE TABLE test_list_table1 (id INTEGER PRIMARY KEY AUTO_INCREMENT)")
+                .await
+                .expect("Failed to create table1");
+
+            db.exec_raw("CREATE TABLE test_list_table2 (id INTEGER PRIMARY KEY AUTO_INCREMENT, name VARCHAR(255))")
+                .await
+                .expect("Failed to create table2");
+
+            // List tables - should contain our test tables
+            let tables = db.list_tables().await.expect("Failed to list tables");
+            assert!(
+                tables.contains(&"test_list_table1".to_string()),
+                "Should contain test_list_table1"
+            );
+            assert!(
+                tables.contains(&"test_list_table2".to_string()),
+                "Should contain test_list_table2"
+            );
+
+            // Drop one table and verify it's removed from the list
+            db.exec_raw("DROP TABLE test_list_table1")
+                .await
+                .expect("Failed to drop table1");
+
+            let tables = db.list_tables().await.expect("Failed to list tables");
+            assert!(
+                !tables.contains(&"test_list_table1".to_string()),
+                "Should not contain dropped table"
+            );
+            assert!(
+                tables.contains(&"test_list_table2".to_string()),
+                "Should still contain table2"
+            );
+
+            // Clean up
+            db.exec_raw("DROP TABLE IF EXISTS test_list_table2")
+                .await
+                .ok();
+        }
+
+        #[switchy_async::test]
         async fn test_mysql_get_table_columns() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2458,7 +2516,7 @@ mod tests {
                 .unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_column_exists() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2498,7 +2556,7 @@ mod tests {
                 .unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_get_table_info() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2536,7 +2594,7 @@ mod tests {
                 .unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_get_table_info_empty() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2550,7 +2608,7 @@ mod tests {
             assert!(table_info.is_none());
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_get_table_info_with_indexes_and_foreign_keys() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2604,7 +2662,7 @@ mod tests {
                 .unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_varchar_length_preservation() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2662,7 +2720,7 @@ mod tests {
                 .unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_sqlx_savepoint_basic() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2685,7 +2743,7 @@ mod tests {
             tx.commit().await.unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_sqlx_savepoint_release() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2707,7 +2765,7 @@ mod tests {
             tx.commit().await.unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_sqlx_savepoint_rollback() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2729,7 +2787,7 @@ mod tests {
             tx.commit().await.unwrap();
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_sqlx_savepoint_after_transaction_commit() {
             let Some(url) = get_mysql_test_url() else {
                 return;
@@ -2752,7 +2810,7 @@ mod tests {
             assert!(matches!(result, Err(DatabaseError::TransactionCommitted)));
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mysql_sqlx_savepoint_after_transaction_rollback() {
             let Some(url) = get_mysql_test_url() else {
                 return;

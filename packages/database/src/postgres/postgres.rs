@@ -2546,7 +2546,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_table_exists() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2572,7 +2572,65 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
+    async fn test_postgres_list_tables() {
+        let Some(url) = get_postgres_test_url() else {
+            return;
+        };
+
+        let pool = create_pool(&url).expect("Failed to create pool");
+        let db = PostgresDatabase::new(pool);
+
+        // Clean up any existing test tables first
+        db.exec_raw("DROP TABLE IF EXISTS test_list_table1")
+            .await
+            .ok();
+        db.exec_raw("DROP TABLE IF EXISTS test_list_table2")
+            .await
+            .ok();
+
+        // Create test tables
+        db.exec_raw("CREATE TABLE test_list_table1 (id SERIAL PRIMARY KEY)")
+            .await
+            .expect("Failed to create table1");
+
+        db.exec_raw("CREATE TABLE test_list_table2 (id SERIAL PRIMARY KEY, name VARCHAR(255))")
+            .await
+            .expect("Failed to create table2");
+
+        // List tables - should contain our test tables
+        let tables = db.list_tables().await.expect("Failed to list tables");
+        assert!(
+            tables.contains(&"test_list_table1".to_string()),
+            "Should contain test_list_table1"
+        );
+        assert!(
+            tables.contains(&"test_list_table2".to_string()),
+            "Should contain test_list_table2"
+        );
+
+        // Drop one table and verify it's removed from the list
+        db.exec_raw("DROP TABLE test_list_table1")
+            .await
+            .expect("Failed to drop table1");
+
+        let tables = db.list_tables().await.expect("Failed to list tables");
+        assert!(
+            !tables.contains(&"test_list_table1".to_string()),
+            "Should not contain dropped table"
+        );
+        assert!(
+            tables.contains(&"test_list_table2".to_string()),
+            "Should still contain table2"
+        );
+
+        // Clean up
+        db.exec_raw("DROP TABLE IF EXISTS test_list_table2")
+            .await
+            .ok();
+    }
+
+    #[switchy_async::test]
     async fn test_postgres_column_metadata() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2622,7 +2680,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_constraints() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2671,7 +2729,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_type_mapping() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2731,7 +2789,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_default_values() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2782,7 +2840,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_transaction_isolation() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2833,7 +2891,7 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_savepoint_basic() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2856,7 +2914,7 @@ mod tests {
         tx.commit().await.unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_savepoint_rollback() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2879,7 +2937,7 @@ mod tests {
         tx.commit().await.unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_savepoint_double_release() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2912,7 +2970,7 @@ mod tests {
         tx.commit().await.unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_savepoint_after_transaction_commit() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2937,7 +2995,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_savepoint_after_transaction_rollback() {
         let Some(url) = get_postgres_test_url() else {
             return;
@@ -2962,7 +3020,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_postgres_savepoint_invalid_name() {
         let Some(url) = get_postgres_test_url() else {
             return;

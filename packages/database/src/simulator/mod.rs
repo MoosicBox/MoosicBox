@@ -36,7 +36,7 @@
 //! ## Data Type Mappings
 //! Same as `SQLite`:
 //! - `INTEGER` → `BigInt`
-//! - `TEXT` → `Text`  
+//! - `TEXT` → `Text`
 //! - `REAL` → `Double`
 //! - `BOOLEAN` → `Bool`
 //!
@@ -86,7 +86,7 @@
 //! let db_a = SimulationDatabase::new(Some("test_shared.db")).await?;
 //! // Sees the "users" table created above
 //!
-//! // In test component B  
+//! // In test component B
 //! let db_b = SimulationDatabase::new(Some("test_shared.db")).await?;
 //! // Same database instance as db_a
 //! ```
@@ -660,5 +660,120 @@ mod tests {
         assert!(info2.is_some());
         assert!(info1.unwrap().columns.contains_key("name"));
         assert!(info2.unwrap().columns.contains_key("value"));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_list_tables_basic() {
+        let db = SimulationDatabase::new().unwrap();
+
+        // Initially empty
+        let tables = db.list_tables().await.unwrap();
+        assert!(tables.is_empty(), "New database should have no tables");
+
+        // Create some tables
+        db.exec_raw("CREATE TABLE table1 (id INTEGER PRIMARY KEY, name TEXT)")
+            .await
+            .unwrap();
+        db.exec_raw("CREATE TABLE table2 (id INTEGER PRIMARY KEY, value REAL)")
+            .await
+            .unwrap();
+
+        let mut tables = db.list_tables().await.unwrap();
+        tables.sort(); // Sort for deterministic comparison
+        assert_eq!(tables, vec!["table1", "table2"]);
+
+        // Drop one table
+        db.exec_raw("DROP TABLE table1").await.unwrap();
+
+        let tables = db.list_tables().await.unwrap();
+        assert_eq!(tables, vec!["table2"]);
+        assert!(!tables.contains(&"table1".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_list_tables_with_transactions() {
+        let db = SimulationDatabase::new().unwrap();
+
+        // Create a table outside transaction
+        db.exec_raw("CREATE TABLE base_table (id INTEGER)")
+            .await
+            .unwrap();
+
+        let tables = db.list_tables().await.unwrap();
+        assert_eq!(tables.len(), 1);
+        assert!(tables.contains(&"base_table".to_string()));
+
+        // Test with transaction
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Create a table in transaction
+        tx.exec_raw("CREATE TABLE tx_table (id INTEGER)")
+            .await
+            .unwrap();
+
+        let tables_in_tx = tx.list_tables().await.unwrap();
+        assert_eq!(tables_in_tx.len(), 2);
+        assert!(tables_in_tx.contains(&"base_table".to_string()));
+        assert!(tables_in_tx.contains(&"tx_table".to_string()));
+
+        tx.rollback().await.unwrap();
+
+        // After rollback, should be back to 1 table
+        let tables_after_rollback = db.list_tables().await.unwrap();
+        assert_eq!(tables_after_rollback.len(), 1);
+        assert!(tables_after_rollback.contains(&"base_table".to_string()));
+        assert!(!tables_after_rollback.contains(&"tx_table".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_list_tables_isolation() {
+        // Create two databases with different paths
+        let db1 = SimulationDatabase::new_for_path(Some("isolation1.db")).unwrap();
+        let db2 = SimulationDatabase::new_for_path(Some("isolation2.db")).unwrap();
+
+        // Create different tables in each
+        db1.exec_raw("CREATE TABLE db1_table (id INTEGER)")
+            .await
+            .unwrap();
+        db2.exec_raw("CREATE TABLE db2_table (id INTEGER)")
+            .await
+            .unwrap();
+
+        // Each database should only see its own tables
+        let tables1 = db1.list_tables().await.unwrap();
+        let tables2 = db2.list_tables().await.unwrap();
+
+        assert_eq!(tables1.len(), 1);
+        assert_eq!(tables2.len(), 1);
+        assert!(tables1.contains(&"db1_table".to_string()));
+        assert!(tables2.contains(&"db2_table".to_string()));
+        assert!(!tables1.contains(&"db2_table".to_string()));
+        assert!(!tables2.contains(&"db1_table".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_list_tables_after_commit() {
+        let db = SimulationDatabase::new().unwrap();
+
+        // Begin transaction and create table
+        let tx = db.begin_transaction().await.unwrap();
+        tx.exec_raw("CREATE TABLE committed_table (id INTEGER)")
+            .await
+            .unwrap();
+
+        // Table should be visible in transaction
+        let tables_in_tx = tx.list_tables().await.unwrap();
+        assert!(tables_in_tx.contains(&"committed_table".to_string()));
+
+        tx.commit().await.unwrap();
+
+        // Table should still be visible after commit
+        let tables_after_commit = db.list_tables().await.unwrap();
+        assert_eq!(tables_after_commit.len(), 1);
+        assert!(tables_after_commit.contains(&"committed_table".to_string()));
     }
 }

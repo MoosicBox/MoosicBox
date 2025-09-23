@@ -3505,6 +3505,129 @@ mod tests {
 
     #[cfg(feature = "schema")]
     #[switchy_async::test]
+    async fn test_list_tables() {
+        let db = create_introspection_test_db();
+
+        // List all tables in the database
+        let tables = db.list_tables().await.expect("Failed to list tables");
+
+        // Should contain the test tables created in setup
+        assert!(
+            tables.contains(&"users".to_string()),
+            "Should contain users table"
+        );
+        assert!(
+            tables.contains(&"posts".to_string()),
+            "Should contain posts table"
+        );
+
+        // Should not contain SQLite internal tables
+        for table in &tables {
+            assert!(
+                !table.starts_with("sqlite_"),
+                "Should not contain SQLite internal table: {table}"
+            );
+        }
+
+        // Should have exactly 2 tables
+        assert_eq!(tables.len(), 2, "Should have exactly 2 tables");
+
+        // Test with transaction
+        let tx = db
+            .begin_transaction()
+            .await
+            .expect("Failed to begin transaction");
+
+        // Create a table in transaction
+        tx.exec_raw("CREATE TABLE temp_table (id INTEGER)")
+            .await
+            .expect("Failed to create table in transaction");
+
+        let tables_in_tx = tx
+            .list_tables()
+            .await
+            .expect("Failed to list tables in transaction");
+
+        // Should now contain 3 tables
+        assert_eq!(tables_in_tx.len(), 3, "Should have 3 tables in transaction");
+        assert!(tables_in_tx.contains(&"temp_table".to_string()));
+
+        tx.rollback().await.expect("Failed to rollback");
+
+        // After rollback, should be back to 2 tables
+        let tables_after_rollback = db
+            .list_tables()
+            .await
+            .expect("Failed to list tables after rollback");
+        assert_eq!(
+            tables_after_rollback.len(),
+            2,
+            "Should be back to 2 tables after rollback"
+        );
+        assert!(!tables_after_rollback.contains(&"temp_table".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_list_tables_empty_database() {
+        // Create a fresh database without any tables
+        let db = create_test_db(); // This creates a database with test_table
+
+        // Drop the test table to make it empty
+        db.exec_raw("DROP TABLE IF EXISTS test_table")
+            .await
+            .expect("Failed to drop test table");
+
+        let tables = db.list_tables().await.expect("Failed to list tables");
+
+        assert!(tables.is_empty(), "Empty database should have no tables");
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
+    async fn test_list_tables_after_create_drop() {
+        let db = create_test_db();
+
+        // Drop the initial test table
+        db.exec_raw("DROP TABLE IF EXISTS test_table")
+            .await
+            .expect("Failed to drop test table");
+
+        // Initially should be empty
+        let tables = db.list_tables().await.expect("Failed to list tables");
+        assert!(tables.is_empty());
+
+        // Create a table
+        db.exec_raw("CREATE TABLE dynamic_table (id INTEGER, name TEXT)")
+            .await
+            .expect("Failed to create table");
+
+        let tables = db.list_tables().await.expect("Failed to list tables");
+        assert_eq!(tables.len(), 1);
+        assert!(tables.contains(&"dynamic_table".to_string()));
+
+        // Create another table
+        db.exec_raw("CREATE TABLE another_table (value REAL)")
+            .await
+            .expect("Failed to create second table");
+
+        let mut tables = db.list_tables().await.expect("Failed to list tables");
+        tables.sort(); // Sort for deterministic comparison
+        assert_eq!(tables, vec!["another_table", "dynamic_table"]);
+
+        // Drop one table
+        db.exec_raw("DROP TABLE dynamic_table")
+            .await
+            .expect("Failed to drop table");
+
+        let tables = db.list_tables().await.expect("Failed to list tables");
+        assert_eq!(tables.len(), 1);
+        assert!(tables.contains(&"another_table".to_string()));
+        assert!(!tables.contains(&"dynamic_table".to_string()));
+    }
+
+    #[cfg(feature = "schema")]
+    #[switchy_async::test]
     async fn test_column_exists() {
         let db = create_introspection_test_db();
 
@@ -3748,7 +3871,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_savepoint_basic() {
         let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
         let transaction = RusqliteTransaction::new(Arc::clone(&connection));
@@ -3760,7 +3883,7 @@ mod tests {
         savepoint.release().await.unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_savepoint_release() {
         let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
         let transaction = RusqliteTransaction::new(Arc::clone(&connection));
@@ -3769,7 +3892,7 @@ mod tests {
         savepoint.release().await.unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_savepoint_rollback() {
         let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
         let transaction = RusqliteTransaction::new(Arc::clone(&connection));
@@ -3778,7 +3901,7 @@ mod tests {
         savepoint.rollback_to().await.unwrap();
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_savepoint_name_validation() {
         let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
         let transaction = RusqliteTransaction::new(Arc::clone(&connection));
