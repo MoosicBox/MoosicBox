@@ -9175,6 +9175,919 @@ impl RusqliteDatabase {
 - No changes needed to Phase 15.1 infrastructure (DependencyGraph, CycleError, DropPlan)
 - Maintains "no compromises" principle by providing complete functionality
 
+#### 15.1.2 Targeted Dependency Discovery for Performance
+
+**Goal:** Add efficient targeted dependency discovery methods that only examine relevant tables instead of building a complete dependency graph.
+
+**Purpose:** Provide performant methods for CASCADE/RESTRICT operations that avoid the O(n) cost of analyzing all tables in the database.
+
+**Performance Issue:** The current `discover_dependencies_sqlite()` builds a global dependency graph by calling `get_table_info()` on every table in the database. For CASCADE operations, we only need dependencies related to the specific table being dropped.
+
+**New Methods to Add:**
+
+Location: `/packages/database/src/schema/dependencies.rs`
+
+```rust
+/// Find all tables that would be affected by CASCADE deletion of the specified table
+/// Returns tables in drop order (dependents first, target table last)
+///
+/// # Performance
+///
+/// Time: O(d * f) where d = dependent tables, f = foreign keys per table
+/// Space: O(d) for visited set and results
+/// Compare to current O(n * f) where n = all tables in database
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if dependency discovery fails
+/// * Returns `DatabaseError` if circular dependencies detected
+pub async fn find_cascade_targets(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError>
+
+/// Check if a table has any dependents (for RESTRICT validation)
+/// Returns immediately upon finding first dependent for efficiency
+///
+/// # Performance
+///
+/// Best case: O(1) - stops at first dependent found
+/// Worst case: O(n) - only when table has no dependents
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if introspection fails
+pub async fn has_any_dependents(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<bool, DatabaseError>
+
+/// Get direct dependents of a table (one level only, no recursion)
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if table introspection fails
+pub async fn get_direct_dependents(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<BTreeSet<String>, DatabaseError>
+
+/// Recursively find all tables that depend on the specified table
+/// More efficient than building full graph when only one table's dependents are needed
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if dependency discovery fails
+pub async fn get_all_dependents_recursive(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<BTreeSet<String>, DatabaseError>
+```
+
+**Implementation Strategy:**
+
+1. **Targeted Traversal**: Start from target table and traverse only relevant foreign key relationships
+2. **Early Termination**: `has_any_dependents()` returns on first dependent found
+3. **Cycle Protection**: Maintain visited set to prevent infinite loops in circular dependencies
+4. **Proper Ordering**: Return results in appropriate order for CASCADE operations (dependents first)
+
+**Algorithm for find_cascade_targets:**
+
+```rust
+async fn find_cascade_targets(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    let mut to_drop = Vec::new();
+    let mut visited = BTreeSet::new();
+    let mut stack = vec![table_name.to_string()];
+
+    while let Some(current_table) = stack.pop() {
+        if !visited.insert(current_table.clone()) {
+            continue; // Already processed
+        }
+
+        // Find tables that directly reference current_table
+        let dependents = get_direct_dependents(db, &current_table).await?;
+
+        // Add dependents to drop list (they come before their dependencies)
+        for dependent in &dependents {
+            if !visited.contains(dependent) {
+                stack.push(dependent.clone());
+            }
+        }
+
+        // Add current table to drop list
+        to_drop.push(current_table);
+    }
+
+    // Reverse to get proper drop order (dependents first)
+    to_drop.reverse();
+    Ok(to_drop)
+}
+```
+
+**Performance Characteristics:**
+- **Time Complexity**: O(d * f) where d = dependent tables, f = foreign keys per table
+- **Space Complexity**: O(d) for visited set and results
+- **Improvement**: From O(n * f) where n = all tables in database
+
+**Testing Requirements:**
+- [ ] Unit tests for each new targeted method
+- [ ] Performance comparison tests showing improvement over global graph
+- [ ] Edge cases: circular dependencies, self-references, non-existent tables
+- [ ] Benchmark: Large schema (100+ tables) showing performance difference
+
+#### 15.1.2 Verification Checklist
+
+- [ ] `find_cascade_targets()` method implemented with targeted traversal
+- [ ] `has_any_dependents()` method with early termination optimization
+- [ ] `get_direct_dependents()` method for single-level dependency discovery
+- [ ] `get_all_dependents_recursive()` method for complete dependent tree
+- [ ] Unit tests covering all edge cases and performance scenarios
+- [ ] Performance benchmarks demonstrating improvement over global approach
+- [ ] Integration with existing DependencyGraph infrastructure maintained
+
+#### 15.1.3 Add query_raw Method for Raw SQL Optimization
+
+**Goal:** Add `query_raw()` method to Database trait to enable direct execution of PRAGMA commands (SQLite) and information_schema queries (PostgreSQL/MySQL) for maximum introspection performance.
+
+**Purpose:** Enable backend-specific optimizations that can be 10-100x faster than the current `get_table_info()` approach for dependency discovery.
+
+**Performance Opportunity:** Current approach uses generic `get_table_info()` which parses complete table schema including columns, indexes, and foreign keys. For dependency discovery, we only need foreign key information.
+
+**Database Trait Addition:**
+
+Location: `/packages/database/src/lib.rs`
+
+```rust
+pub trait Database {
+    // ... existing methods ...
+
+    /// Execute raw SQL query and return results
+    ///
+    /// # Safety and Scope
+    ///
+    /// This method is intended for internal framework use only for performance optimization.
+    /// It does not provide SQL injection protection and should not be exposed to external APIs.
+    /// Use only with static SQL strings or properly sanitized dynamic queries.
+    ///
+    /// # Backend Support
+    ///
+    /// Not all backends may support this method. Callers should gracefully fall back
+    /// to existing methods when `UnsupportedOperation` is returned.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError::UnsupportedOperation` if backend doesn't support raw queries
+    /// * Returns `DatabaseError::QueryFailed` if query execution fails
+    /// * Returns `DatabaseError::InvalidQuery` for malformed SQL
+    async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+        // Default implementation for backwards compatibility
+        Err(DatabaseError::UnsupportedOperation(
+            "query_raw not implemented for this database backend".to_string()
+        ))
+    }
+}
+```
+
+**Implementation Requirements:**
+
+1. **SQLite (rusqlite)**: `/packages/database/src/rusqlite/mod.rs`
+   ```rust
+   async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+       let connection = self.get_connection().await?;
+       let connection = connection.lock().await;
+
+       let mut stmt = connection.prepare(query)?;
+       let rows = stmt.query_map([], |row| {
+           // Convert rusqlite::Row to Vec<(String, DatabaseValue)>
+       })?;
+
+       // Convert to Vec<Row>
+   }
+   ```
+
+2. **SQLite (sqlx)**: `/packages/database/src/sqlx/sqlite.rs`
+   ```rust
+   async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+       let connection = self.get_connection().await?;
+       let mut connection = connection.lock().await;
+
+       let rows = sqlx::query(query).fetch_all(&mut **connection).await?;
+
+       // Convert sqlx::Row to Vec<Row>
+   }
+   ```
+
+3. **PostgreSQL (native)**: `/packages/database/src/postgres/postgres.rs`
+   ```rust
+   async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+       // Use existing query infrastructure, convert results
+   }
+   ```
+
+4. **PostgreSQL (sqlx)**: `/packages/database/src/sqlx/postgres.rs`
+5. **MySQL (sqlx)**: `/packages/database/src/sqlx/mysql.rs`
+6. **Simulator**: `/packages/database/src/simulator/mod.rs`
+   ```rust
+   async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+       // Return simulated results based on query pattern matching
+       // For PRAGMA foreign_key_list, return mock foreign key data
+       // For information_schema queries, return mock schema data
+   }
+   ```
+
+7. **ChecksumDatabase**: `/packages/switchy/schema/src/checksum_database.rs`
+   ```rust
+   async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError> {
+       let mut hasher = self.hasher.lock().await;
+       hasher.update(b"QUERY_RAW:");
+       hasher.update(query.as_bytes());
+       Ok(vec![])
+   }
+   ```
+
+**Optimized Dependency Discovery Using query_raw:**
+
+Location: `/packages/database/src/schema/dependencies.rs`
+
+```rust
+/// SQLite-optimized dependency discovery using direct PRAGMA access
+async fn find_cascade_targets_sqlite_optimized(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    // Try query_raw first, fall back to get_table_info if not supported
+    match try_pragma_optimization(db, table_name).await {
+        Ok(targets) => Ok(targets),
+        Err(DatabaseError::UnsupportedOperation(_)) => {
+            // Fall back to existing get_table_info approach
+            find_cascade_targets(db, table_name).await
+        }
+        Err(e) => Err(e),
+    }
+}
+
+async fn try_pragma_optimization(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    let mut dependents = BTreeSet::new();
+    let mut to_check = vec![table_name.to_string()];
+    let mut checked = BTreeSet::new();
+
+    while let Some(current_table) = to_check.pop() {
+        if !checked.insert(current_table.clone()) {
+            continue;
+        }
+
+        // Get all tables efficiently
+        let tables_rows = db.query_raw("SELECT name FROM sqlite_master WHERE type='table'").await?;
+
+        for table_row in tables_rows {
+            if let Some((_, DatabaseValue::String(table))) = table_row.columns.get(0) {
+                // Use PRAGMA to check foreign keys for this table
+                let pragma_query = format!("PRAGMA foreign_key_list({})", table);
+                let fk_rows = db.query_raw(&pragma_query).await?;
+
+                for fk_row in fk_rows {
+                    // Check if this FK references our current_table
+                    if let Some((_, DatabaseValue::String(ref_table))) = fk_row.columns.get(2) {
+                        if ref_table == &current_table {
+                            dependents.insert(table.clone());
+                            to_check.push(table.clone());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(dependents.into_iter().collect())
+}
+```
+
+**PostgreSQL/MySQL Information Schema Optimization:**
+
+```rust
+async fn find_cascade_targets_postgres_optimized(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    // Single query instead of N get_table_info calls
+    let query = format!(
+        "WITH RECURSIVE dependent_tables AS (
+            -- Base case: tables directly referencing target
+            SELECT DISTINCT tc.table_name as dependent_table,
+                           kcu.referenced_table_name as referenced_table
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+                AND kcu.referenced_table_name = '{}'
+
+            UNION
+
+            -- Recursive case: tables referencing dependent tables
+            SELECT DISTINCT tc.table_name as dependent_table,
+                           kcu.referenced_table_name as referenced_table
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            JOIN dependent_tables dt ON kcu.referenced_table_name = dt.dependent_table
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+        )
+        SELECT DISTINCT dependent_table FROM dependent_tables
+        ORDER BY dependent_table",
+        table_name
+    );
+
+    let rows = db.query_raw(&query).await?;
+
+    Ok(rows.into_iter()
+        .filter_map(|row| {
+            row.columns.get(0)
+                .and_then(|(_, v)| match v {
+                    DatabaseValue::String(s) => Some(s.clone()),
+                    _ => None
+                })
+        })
+        .collect())
+}
+```
+
+**Performance Benefits:**
+
+- **SQLite**: Direct PRAGMA access instead of parsing full table info
+  - Current: `get_table_info()` parses columns, indexes, AND foreign keys for every table
+  - Optimized: `PRAGMA foreign_key_list()` returns only foreign key data
+  - Speedup: 5-10x for large tables with many columns/indexes
+
+- **PostgreSQL/MySQL**: Single recursive query instead of N queries
+  - Current: One `get_table_info()` call per table in database
+  - Optimized: Single recursive CTE query to information_schema
+  - Speedup: 10-100x for large schemas (100+ tables)
+
+**Safety Considerations:**
+
+```rust
+/// Validate table name to prevent SQL injection
+fn validate_table_name(name: &str) -> Result<(), DatabaseError> {
+    if name.chars().all(|c| c.is_alphanumeric() || c == '_') && !name.is_empty() {
+        Ok(())
+    } else {
+        Err(DatabaseError::InvalidQuery(
+            format!("Invalid table name for query: {}", name)
+        ))
+    }
+}
+```
+
+**Graceful Fallback Strategy:**
+
+```rust
+/// High-level API that uses best available method
+pub async fn prepare_cascade_drop(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    // 1. Try backend-specific optimization using query_raw (15.1.3)
+    // 2. Fall back to targeted discovery using get_table_info (15.1.2)
+    // 3. Maintain compatibility with all Database implementations
+
+    match try_backend_optimization(db, table_name).await {
+        Ok(targets) => Ok(targets),
+        Err(DatabaseError::UnsupportedOperation(_)) => {
+            // Use targeted approach from Phase 15.1.2
+            find_cascade_targets(db, table_name).await
+        }
+        Err(e) => Err(e),
+    }
+}
+```
+
+**Testing Requirements:**
+- [ ] Test query_raw with valid SQL returning data for each backend
+- [ ] Test query_raw with invalid SQL (should return appropriate error)
+- [ ] Test query_raw with DDL statements (behavior backend-specific)
+- [ ] Security tests: Ensure table name validation prevents SQL injection
+- [ ] Performance benchmarks: Compare query_raw approach vs get_table_info
+- [ ] Fallback tests: Verify graceful degradation when query_raw unsupported
+
+#### 15.1.3 Verification Checklist
+
+- [ ] `query_raw()` method added to Database trait with comprehensive documentation
+- [ ] All 7 backend implementations of `query_raw()` complete
+  - [ ] SQLite (rusqlite) - PRAGMA optimization
+  - [ ] SQLite (sqlx) - PRAGMA optimization
+  - [ ] PostgreSQL (native) - information_schema queries
+  - [ ] PostgreSQL (sqlx) - information_schema queries
+  - [ ] MySQL (sqlx) - information_schema queries
+  - [ ] Simulator - mock response generation
+  - [ ] ChecksumDatabase - checksum update with empty results
+- [ ] Optimized dependency discovery functions using query_raw
+- [ ] Table name validation to prevent SQL injection
+- [ ] Graceful fallback when query_raw is not supported
+- [ ] Performance benchmarks demonstrating 10-100x improvement
+- [ ] Security audit ensuring no SQL injection vulnerabilities
+
+**Integration with Phases 15.1.2 and 15.1.3:**
+
+The final CASCADE implementation will use a layered approach:
+1. **Phase 15.1.2**: Provides efficient algorithms using existing Database methods
+2. **Phase 15.1.3**: Optimizes further with query_raw where available
+3. **Graceful Fallback**: If query_raw unavailable, use Phase 15.1.2 targeted approach
+4. **Compatibility**: All existing Database implementations continue to work
+
+This ensures immediate performance improvements with 15.1.2 and maximum performance with 15.1.3 where supported.
+
+#### 15.1.4 Backend-Specific Optimized Dependency Discovery with Feature Gating
+
+**Goal:** Implement the actual optimized dependency discovery methods in each backend's trait implementation using their specific `query_raw` capabilities, with all CASCADE functionality feature-gated behind a `cascade` feature flag.
+
+**Purpose:** Move optimized implementations into the appropriate backend modules where they belong, while keeping CASCADE support optional through feature gating, similar to the existing `schema` feature.
+
+**Feature Gating Strategy:**
+
+CASCADE functionality should be feature-gated to keep the core Database trait lean and allow projects to opt-in to CASCADE support only when needed.
+
+**Cargo.toml Updates:**
+
+Location: `/packages/database/Cargo.toml`
+
+```toml
+[features]
+default = []
+schema = []
+cascade = ["schema"]  # CASCADE depends on schema features
+```
+
+**Database Trait CASCADE Methods:**
+
+Location: `/packages/database/src/lib.rs`
+
+```rust
+pub trait Database {
+    // ... existing methods ...
+
+    /// Find all tables that would be affected by CASCADE deletion
+    /// Backends should override with optimized implementations
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError` if dependency discovery fails
+    #[cfg(feature = "cascade")]
+    async fn find_cascade_targets(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
+        // Default implementation using the generic targeted approach from Phase 15.1.2
+        crate::schema::dependencies::find_cascade_targets(self, table_name).await
+    }
+
+    /// Check if a table has any dependents (optimized for RESTRICT)
+    /// Backends should override with early-termination implementations
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError` if introspection fails
+    #[cfg(feature = "cascade")]
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        // Default implementation using the generic approach from Phase 15.1.2
+        crate::schema::dependencies::has_any_dependents(self, table_name).await
+    }
+
+    /// Get direct dependents of a table (one level only)
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError` if introspection fails
+    #[cfg(feature = "cascade")]
+    async fn get_direct_dependents(&self, table_name: &str) -> Result<BTreeSet<String>, DatabaseError> {
+        // Default implementation
+        crate::schema::dependencies::get_direct_dependents(self, table_name).await
+    }
+}
+```
+
+**SQLite Rusqlite Optimized Implementation:**
+
+Location: `/packages/database/src/rusqlite/mod.rs`
+
+```rust
+impl Database for RusqliteDatabase {
+    // ... existing methods ...
+
+    /// SQLite-optimized CASCADE target discovery using PRAGMA foreign_key_list
+    #[cfg(feature = "cascade")]
+    async fn find_cascade_targets(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
+        let mut all_dependents = BTreeSet::new();
+        let mut to_check = vec![table_name.to_string()];
+        let mut checked = BTreeSet::new();
+
+        while let Some(current_table) = to_check.pop() {
+            if !checked.insert(current_table.clone()) {
+                continue;
+            }
+
+            // Get all tables using query_raw
+            let tables_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+            let tables = self.query_raw(tables_query).await?;
+
+            for table_row in tables {
+                if let Some((_, DatabaseValue::String(check_table))) = table_row.columns.get(0) {
+                    if check_table == &current_table {
+                        continue;
+                    }
+
+                    // Use PRAGMA to check foreign keys
+                    let fk_query = format!("PRAGMA foreign_key_list('{}')", check_table);
+                    let fk_rows = self.query_raw(&fk_query).await?;
+
+                    for fk_row in fk_rows {
+                        // Column 2 is the referenced table
+                        if let Some((_, DatabaseValue::String(ref_table))) = fk_row.columns.get(2) {
+                            if ref_table == &current_table {
+                                all_dependents.insert(check_table.clone());
+                                to_check.push(check_table.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build proper drop order (dependents first)
+        let mut drop_order: Vec<String> = all_dependents.into_iter().collect();
+        drop_order.push(table_name.to_string());
+        Ok(drop_order)
+    }
+
+    /// SQLite-optimized dependency check with early termination
+    #[cfg(feature = "cascade")]
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let tables_query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+        let tables = self.query_raw(tables_query).await?;
+
+        for table_row in tables {
+            if let Some((_, DatabaseValue::String(check_table))) = table_row.columns.get(0) {
+                if check_table == table_name {
+                    continue;
+                }
+
+                let fk_query = format!("PRAGMA foreign_key_list('{}')", check_table);
+                let fk_rows = self.query_raw(&fk_query).await?;
+
+                for fk_row in fk_rows {
+                    if let Some((_, DatabaseValue::String(ref_table))) = fk_row.columns.get(2) {
+                        if ref_table == table_name {
+                            return Ok(true); // Found dependent, stop immediately
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(false)
+    }
+}
+```
+
+**PostgreSQL Native Optimized Implementation:**
+
+Location: `/packages/database/src/postgres/postgres.rs`
+
+```rust
+impl Database for PostgresDatabase {
+    // ... existing methods ...
+
+    /// PostgreSQL-optimized CASCADE discovery using recursive CTE
+    #[cfg(feature = "cascade")]
+    async fn find_cascade_targets(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
+        let query = format!(
+            r#"
+            WITH RECURSIVE dependent_tables AS (
+                -- Base case: direct dependents
+                SELECT DISTINCT
+                    tc.table_name as dependent_table,
+                    1 as level
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                    AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name = $1
+                    AND tc.table_schema = current_schema()
+
+                UNION
+
+                -- Recursive case: indirect dependents
+                SELECT DISTINCT
+                    tc.table_name as dependent_table,
+                    dt.level + 1 as level
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                    AND ccu.table_schema = tc.table_schema
+                JOIN dependent_tables dt ON ccu.table_name = dt.dependent_table
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND tc.table_schema = current_schema()
+            )
+            SELECT dependent_table
+            FROM dependent_tables
+            ORDER BY level DESC, dependent_table
+            "#
+        );
+
+        let rows = self.query_raw(&query).await?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            if let Some((_, DatabaseValue::String(table))) = row.columns.get(0) {
+                result.push(table.clone());
+            }
+        }
+
+        // Add the original table at the end (dropped last)
+        result.push(table_name.to_string());
+
+        Ok(result)
+    }
+
+    /// PostgreSQL-optimized dependency check using EXISTS
+    #[cfg(feature = "cascade")]
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let query = format!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                    AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name = $1
+                    AND tc.table_schema = current_schema()
+                LIMIT 1
+            ) as has_dependents
+            "#
+        );
+
+        let rows = self.query_raw(&query).await?;
+
+        if let Some(row) = rows.first() {
+            if let Some((_, DatabaseValue::Bool(has_deps))) = row.columns.get(0) {
+                return Ok(*has_deps);
+            }
+        }
+
+        Ok(false)
+    }
+}
+```
+
+**MySQL SQLx Optimized Implementation:**
+
+Location: `/packages/database/src/sqlx/mysql.rs`
+
+```rust
+impl Database for MySqlSqlxDatabase {
+    // ... existing methods ...
+
+    /// MySQL-optimized CASCADE discovery with version detection
+    #[cfg(feature = "cascade")]
+    async fn find_cascade_targets(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
+        // Try recursive CTE first (MySQL 8.0+)
+        let recursive_query = format!(
+            r#"
+            WITH RECURSIVE dependent_tables AS (
+                SELECT DISTINCT
+                    kcu.TABLE_NAME as dependent_table,
+                    1 as level
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+                WHERE kcu.REFERENCED_TABLE_NAME = '{}'
+                    AND kcu.TABLE_SCHEMA = DATABASE()
+
+                UNION
+
+                SELECT DISTINCT
+                    kcu.TABLE_NAME as dependent_table,
+                    dt.level + 1 as level
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+                JOIN dependent_tables dt ON kcu.REFERENCED_TABLE_NAME = dt.dependent_table
+                WHERE kcu.TABLE_SCHEMA = DATABASE()
+            )
+            SELECT dependent_table
+            FROM dependent_tables
+            ORDER BY level DESC, dependent_table
+            "#,
+            table_name
+        );
+
+        match self.query_raw(&recursive_query).await {
+            Ok(rows) => {
+                let mut result = Vec::new();
+                for row in rows {
+                    if let Some((_, DatabaseValue::String(table))) = row.columns.get(0) {
+                        result.push(table.clone());
+                    }
+                }
+                result.push(table_name.to_string());
+                Ok(result)
+            }
+            Err(_) => {
+                // Fall back to iterative approach for MySQL < 8.0
+                self.find_cascade_targets_iterative(table_name).await
+            }
+        }
+    }
+
+    /// MySQL-optimized dependency check
+    #[cfg(feature = "cascade")]
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let query = format!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                WHERE REFERENCED_TABLE_NAME = '{}'
+                    AND TABLE_SCHEMA = DATABASE()
+                LIMIT 1
+            ) as has_dependents
+            "#,
+            table_name
+        );
+
+        let rows = self.query_raw(&query).await?;
+
+        if let Some(row) = rows.first() {
+            // MySQL might return as integer (1/0) or boolean
+            match row.columns.get(0) {
+                Some((_, DatabaseValue::Bool(has_deps))) => return Ok(*has_deps),
+                Some((_, DatabaseValue::Number(n))) => return Ok(*n != 0),
+                _ => {}
+            }
+        }
+
+        Ok(false)
+    }
+}
+```
+
+**Feature-Gated Dependencies Module:**
+
+Location: `/packages/database/src/schema/dependencies.rs`
+
+```rust
+//! Dependency discovery and CASCADE/RESTRICT support
+//!
+//! This module is only available when the `cascade` feature is enabled.
+#![cfg(feature = "cascade")]
+
+use super::*;
+use std::collections::{BTreeMap, BTreeSet};
+
+// All existing dependency code here...
+
+/// Public API for CASCADE operations (feature-gated)
+pub async fn find_cascade_targets(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    // Implementation from Phase 15.1.2
+}
+
+pub async fn has_any_dependents(
+    db: &dyn Database,
+    table_name: &str,
+) -> Result<bool, DatabaseError> {
+    // Implementation from Phase 15.1.2
+}
+```
+
+**Feature-Gated DropTableStatement:**
+
+Location: `/packages/database/src/schema/mod.rs`
+
+```rust
+/// DROP behavior for CASCADE/RESTRICT operations
+#[cfg(feature = "cascade")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropBehavior {
+    Default,    // Use backend default behavior
+    Cascade,    // Drop all dependents
+    Restrict,   // Fail if dependencies exist
+}
+
+pub struct DropTableStatement<'a> {
+    pub table_name: &'a str,
+    pub if_exists: bool,
+    #[cfg(feature = "cascade")]
+    pub behavior: DropBehavior,
+}
+
+impl<'a> DropTableStatement<'a> {
+    // ... existing methods ...
+
+    /// Enable CASCADE behavior - drops all dependent tables
+    #[cfg(feature = "cascade")]
+    #[must_use]
+    pub const fn cascade(mut self) -> Self {
+        self.behavior = DropBehavior::Cascade;
+        self
+    }
+
+    /// Enable RESTRICT behavior - fails if dependencies exist
+    #[cfg(feature = "cascade")]
+    #[must_use]
+    pub const fn restrict(mut self) -> Self {
+        self.behavior = DropBehavior::Restrict;
+        self
+    }
+}
+```
+
+**Conditional Module Loading:**
+
+Location: `/packages/database/src/schema/mod.rs`
+
+```rust
+// ... existing schema types ...
+
+#[cfg(feature = "cascade")]
+pub mod dependencies;
+
+#[cfg(feature = "cascade")]
+pub use dependencies::{
+    DependencyGraph,
+    DropPlan,
+    CycleError,
+    find_cascade_targets,
+    has_any_dependents,
+};
+```
+
+**Testing Strategy:**
+
+```bash
+# Test without CASCADE support
+cargo test --features schema
+
+# Test with CASCADE support
+cargo test --features schema,cascade
+
+# Test everything
+cargo test --all-features
+```
+
+#### 15.1.4 Verification Checklist
+
+- [ ] `cascade` feature flag added to Cargo.toml with schema dependency
+- [ ] Database trait CASCADE methods feature-gated with proper documentation
+- [ ] SQLite rusqlite optimized implementation using PRAGMA commands
+- [ ] SQLite sqlx optimized implementation using PRAGMA commands
+- [ ] PostgreSQL native optimized implementation using recursive CTE
+- [ ] PostgreSQL sqlx optimized implementation using recursive CTE
+- [ ] MySQL sqlx optimized implementation with MySQL 8.0+ CTE and fallback
+- [ ] Simulator graceful handling (use defaults or implement mock optimization)
+- [ ] ChecksumDatabase feature-gated implementations with checksum updates
+- [ ] Dependencies module entirely feature-gated behind cascade flag
+- [ ] DropTableStatement CASCADE/RESTRICT functionality feature-gated
+- [ ] Module loading conditionally includes dependencies module
+- [ ] All tests feature-gated and passing with both schema and cascade features
+- [ ] Documentation updated to reflect feature requirements
+- [ ] Performance benchmarks validating 10-100x improvements
+- [ ] Migration path documented for existing projects
+
+**Benefits of Feature-Gated CASCADE Implementation:**
+
+1. **Minimal Core**: Projects not needing CASCADE don't pay for the complexity
+2. **Opt-in Performance**: CASCADE optimizations only compiled when requested
+3. **Clear Dependencies**: CASCADE requires schema features, enforced by Cargo
+4. **Backwards Compatible**: Existing code continues working without changes
+5. **Testing Isolation**: Can test core functionality without CASCADE complexity
+6. **Documentation Clarity**: Separation of basic vs advanced features
+7. **Binary Size**: Smaller binaries for projects not using CASCADE
+8. **Type Safety**: Each backend implements its own optimal approach
+9. **No Backend Detection**: Backend-specific logic stays in backend modules
+10. **Graceful Defaults**: Default trait implementations provide fallback behavior
+
+**Expected Performance Improvements:**
+
+- **SQLite CASCADE Discovery**: 5-10x faster using direct PRAGMA access
+- **PostgreSQL/MySQL CASCADE Discovery**: 10-100x faster using single recursive queries
+- **RESTRICT Checks**: 20-50x faster with early termination optimization
+- **Real-world Impact**: Large schema operations from seconds to milliseconds
+
 ### 15.2 CASCADE Support for DropTableStatement (UPDATED)
 
 - [ ] Add CASCADE support to DropTableStatement
@@ -9193,15 +10106,13 @@ impl RusqliteDatabase {
     - MySQL: Append " CASCADE" when cascade=true
     - Implementation: Trivial string concatenation
 
-  - [ ] SQLite: Implement manual CASCADE using shared dependency infrastructure
-    **Implementation Strategy:**
+  - [ ] SQLite: Implement manual CASCADE using optimized dependency infrastructure
+    **Implementation Strategy (Updated for Phase 15.1.2/15.1.3):**
 
     ```rust
-    use std::collections::BTreeSet;
     use crate::schema::dependencies::{
-        discover_dependencies_sqlite,
-        DependencyGraph,
-        DropPlan,
+        prepare_cascade_drop,  // From Phase 15.1.2/15.1.3
+        find_cascade_targets,  // Fallback from Phase 15.1.2
     };
     use crate::{DatabaseError, DatabaseTransaction};
 
@@ -9209,17 +10120,15 @@ impl RusqliteDatabase {
         tx: &dyn DatabaseTransaction,
         table_name: &str
     ) -> Result<(), DatabaseError> {
-        // Use shared dependency discovery
-        let graph = discover_dependencies_sqlite(tx).await?;
+        // Use optimized targeted dependency discovery (Phase 15.1.2/15.1.3)
+        let tables_to_drop = prepare_cascade_drop(tx, table_name).await?;
 
-        // Get all tables that need to be dropped (recursive dependents)
-        let to_drop = graph.collect_all_dependents(table_name);
+        // Execute drops in dependency order (dependents first)
+        for table in tables_to_drop {
+            tx.exec_raw(&format!("DROP TABLE IF EXISTS {}", table)).await?;
+        }
 
-        // Determine drop order using shared logic
-        let plan = graph.resolve_drop_order(to_drop)?;
-
-        // Execute the plan
-        execute_drop_plan(tx, plan).await
+        Ok(())
     }
 
 
@@ -9487,27 +10396,26 @@ impl RusqliteDatabase {
     - MySQL: Appends " RESTRICT" when behavior=Restrict
     - Default: No modifier appended (backend decides)
 
-  - [ ] SQLite: Manual dependency checking using shared infrastructure
+  - [ ] SQLite: Manual dependency checking using optimized infrastructure
     ```rust
     use crate::schema::dependencies::{
-        get_table_dependencies_sqlite,
+        has_any_dependents,  // Optimized method from Phase 15.1.2
     };
 
     async fn execute_restrict_sqlite(
         tx: &dyn DatabaseTransaction,
         table_name: &str
     ) -> Result<()> {
-        // Reuse the exact same dependency discovery from CASCADE
-        let dependents = get_table_dependencies_sqlite(tx, table_name).await?;
-
-        if !dependents.is_empty() {
+        // Use optimized early-termination check (Phase 15.1.2)
+        // Much faster than full dependency discovery for RESTRICT
+        if has_any_dependents(tx, table_name).await? {
             return Err(DatabaseError::ForeignKeyConstraintViolation(
                 format!("Cannot drop table '{}': has dependent tables", table_name)
             ));
         }
 
         // No dependencies, safe to drop
-        tx.execute(&format!("DROP TABLE IF EXISTS {}", table_name)).await
+        tx.exec_raw(&format!("DROP TABLE IF EXISTS {}", table_name)).await
     }
 
     async fn execute_drop_sqlite(tx: &dyn DatabaseTransaction, stmt: &DropTableStatement) -> Result<()> {
@@ -9899,16 +10807,23 @@ Given the significant differences in native support, we limit our abstraction to
 - Performance tests ensure acceptable speed even with complex schemas
 
 **Implementation Order:**
-1. **Phase 15.1**: Build shared dependency infrastructure
-2. **Phase 15.2**: Implement CASCADE using shared utilities
-3. **Phase 15.3**: Implement RESTRICT reusing same logic
-4. **Phase 15.4**: Extend to other operations with consistent patterns
+1. **Phase 15.1**: Build shared dependency infrastructure ✅ **COMPLETED**
+2. **Phase 15.1.1**: Add missing introspection primitive (list_tables) ✅ **COMPLETED**
+3. **Phase 15.1.2**: Add targeted dependency discovery for performance
+4. **Phase 15.1.3**: Add query_raw method for backend-specific optimizations
+5. **Phase 15.2**: Implement CASCADE using optimized dependency utilities
+6. **Phase 15.3**: Implement RESTRICT reusing same logic
+7. **Phase 15.4**: Extend to other operations with consistent patterns
 
 **Benefits:**
-- Consistent CASCADE behavior across all database backends
-- Production-ready foreign key constraint handling
-- Enhanced migration safety for complex schema changes
-- Leverages existing transaction infrastructure optimally
+- **Performance**: Phases 15.1.2/15.1.3 provide 10-100x faster CASCADE operations on large schemas
+- **Efficiency**: Targeted dependency discovery avoids analyzing unrelated tables
+- **Scalability**: Backend-specific optimizations (PRAGMA, information_schema) maximize performance
+- **Compatibility**: Graceful fallback ensures all Database implementations continue to work
+- **Consistency**: CASCADE behavior works identically across all database backends
+- **Safety**: Production-ready foreign key constraint handling with comprehensive error checking
+- **Migration Safety**: Enhanced safety for complex schema changes in production environments
+- **Infrastructure**: Leverages existing transaction infrastructure optimally with no breaking changes
 
 **Production Readiness:** ✅ The migration system is fully functional and production-ready for HyperChad and other projects. All core functionality complete.
 
