@@ -9375,8 +9375,7 @@ pub trait Database {
     /// # Safety and Scope
     ///
     /// This method is intended for internal framework use only for performance optimization.
-    /// For PostgreSQL/MySQL: Use parameterized queries ($1, ?) for safety.
-    /// For SQLite PRAGMA: Cannot be parameterized - use validation for table names.
+    /// Uses string interpolation for simplicity - parameterized queries added in Phase 15.1.5.
     ///
     /// # Backend Support
     ///
@@ -9551,8 +9550,9 @@ async fn find_cascade_targets_postgres_optimized(
     tx: &dyn DatabaseTransaction,
     table_name: &str,
 ) -> Result<Vec<String>, DatabaseError> {
-    // Use parameterized query for safety ($1 is the parameterized placeholder for table_name)
-    let query = r#"
+    // Use string interpolation for now - parameterized queries in Phase 15.1.5
+    let query = format!(
+        r#"
         WITH RECURSIVE dependent_tables AS (
             -- Base case: tables directly referencing target
             SELECT DISTINCT
@@ -9565,7 +9565,7 @@ async fn find_cascade_targets_postgres_optimized(
                 ON ccu.constraint_name = tc.constraint_name
                 AND ccu.table_schema = tc.table_schema
             WHERE tc.constraint_type = 'FOREIGN KEY'
-                AND ccu.table_name = $1
+                AND ccu.table_name = '{}'
                 AND tc.table_schema = current_schema()
 
             UNION
@@ -9586,11 +9586,11 @@ async fn find_cascade_targets_postgres_optimized(
         )
         SELECT dependent_table FROM dependent_tables
         ORDER BY dependent_table
-    "#;
+        "#,
+        table_name
+    );
 
-    // Note: $1 is the parameterized placeholder for table_name
-    // Backend implementations will bind this parameter appropriately
-    let rows = tx.query_raw(query).await?;
+    let rows = tx.query_raw(&query).await?;
 
     Ok(rows.into_iter()
         .filter_map(|row| {
@@ -9626,8 +9626,8 @@ fn validate_table_name_for_pragma(name: &str) -> Result<(), DatabaseError> {
     }
 }
 
-/// PostgreSQL/MySQL: Use parameterized queries ($1, ?, etc.)
-/// No validation needed as parameters are safely bound
+/// PostgreSQL/MySQL: String interpolation used for simplicity
+/// Parameterized queries will be added in Phase 15.1.5
 ```
 
 **Error Handling Strategy:**
@@ -9667,9 +9667,9 @@ pub async fn prepare_cascade_drop(
 - [ ] All example functions use `&dyn DatabaseTransaction` parameter
 - [ ] No fallback logic - errors returned directly
 - [ ] SQLite implementations use correct PRAGMA syntax (no quotes)
-- [ ] PostgreSQL/MySQL use parameterized queries ($1, ?)
+- [ ] PostgreSQL/MySQL use string interpolation (parameterization in Phase 15.1.5)
 - [ ] Table name validation only for PRAGMA (not parameterizable)
-- [ ] Security audit ensuring no SQL injection vulnerabilities
+- [ ] String interpolation documented as temporary solution
 
 **Integration Strategy:**
 
@@ -9689,6 +9689,21 @@ The CASCADE implementation uses a three-layer approach:
    - Overrides methods in each backend for maximum performance
    - Feature-gated behind `cascade = ["schema"]`
    - Integrates with DropTableStatement for clean API
+
+4. **Phase 15.1.5**: Add parameterized query functions
+   - Adds exec_raw_params and query_raw_params to Database trait
+   - Enables safe parameter binding for SQL injection prevention
+   - Available on both Database and DatabaseTransaction traits
+
+5. **Phase 15.1.6**: Migrate to parameterized queries
+   - Updates all dynamic SQL to use parameterized functions
+   - Eliminates SQL injection vulnerabilities in CASCADE operations
+   - Maintains backward compatibility with static queries
+
+6. **Phase 15.1.7**: Implement proper cycle detection
+   - Replaces simplified cycle detection with robust DFS algorithm
+   - Provides accurate cycle path reporting for debugging
+   - Handles complex dependency scenarios correctly
 
 **Error Handling Strategy:**
 - When query_raw returns UnsupportedOperation: Return error
@@ -9733,13 +9748,16 @@ pub trait Database {
             "query_raw not implemented for this database backend".to_string()
         ))
     }
+}
+
+pub trait DatabaseTransaction: Database {
+    // query_raw is inherited from Database trait
 
     /// CASCADE-specific methods (feature-gated)
     #[cfg(feature = "cascade")]
     async fn find_cascade_targets(&self, table_name: &str) -> Result<DropPlan, DatabaseError> {
         // Default implementation delegates to dependencies module
-        // This works for all backends, optimized or not
-        crate::schema::dependencies::find_cascade_targets(self as &dyn DatabaseTransaction, table_name).await
+        crate::schema::dependencies::find_cascade_targets(self, table_name).await
     }
 
     /// Check if a table has any dependents (optimized for RESTRICT)
@@ -9751,7 +9769,7 @@ pub trait Database {
     #[cfg(feature = "cascade")]
     async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
         // Default implementation delegates to dependencies module
-        crate::schema::dependencies::has_any_dependents(self as &dyn DatabaseTransaction, table_name).await
+        crate::schema::dependencies::has_any_dependents(self, table_name).await
     }
 
     /// Get direct dependents of a table (one level only)
@@ -9762,13 +9780,8 @@ pub trait Database {
     #[cfg(feature = "cascade")]
     async fn get_direct_dependents(&self, table_name: &str) -> Result<BTreeSet<String>, DatabaseError> {
         // Default implementation delegates to dependencies module
-        crate::schema::dependencies::get_direct_dependents(self as &dyn DatabaseTransaction, table_name).await
+        crate::schema::dependencies::get_direct_dependents(self, table_name).await
     }
-}
-
-pub trait DatabaseTransaction: Database {
-    // CASCADE methods are inherited from Database trait
-    // Implementations can override for backend-specific optimizations
 }
 ```
 
@@ -9777,7 +9790,7 @@ pub trait DatabaseTransaction: Database {
 Location: `/packages/database/src/rusqlite/mod.rs`
 
 ```rust
-impl Database for RusqliteDatabase {
+impl DatabaseTransaction for RusqliteTransaction {
     // ... existing methods ...
 
     /// SQLite-optimized CASCADE target discovery using PRAGMA foreign_key_list
@@ -9809,6 +9822,8 @@ impl Database for RusqliteDatabase {
 
                     for fk_row in fk_rows {
                         // Column 2 is the referenced table
+                        // WARNING: This assumes PRAGMA foreign_key_list column order
+                        // which is: id, seq, table, from, to, on_update, on_delete, match
                         if let Some((_, DatabaseValue::String(ref_table))) = fk_row.columns.get(2) {
                             if ref_table == &current_table {
                                 all_dependents.insert(check_table.clone());
@@ -9859,9 +9874,8 @@ impl Database for RusqliteDatabase {
     }
 }
 
-// Note: This implementation would typically be on the transaction type
-// e.g., impl DatabaseTransaction for RusqliteTransaction
-// The Database impl would delegate to transaction when needed
+// Note: CASCADE methods are only available on transaction types
+// This ensures proper transaction context for atomic operations
 ```
 
 **PostgreSQL Native Optimized Implementation:**
@@ -9869,7 +9883,7 @@ impl Database for RusqliteDatabase {
 Location: `/packages/database/src/postgres/postgres.rs`
 
 ```rust
-impl Database for PostgresDatabase {
+impl DatabaseTransaction for PostgresTransaction {
     // ... existing methods ...
 
     /// PostgreSQL-optimized CASCADE discovery using recursive CTE
@@ -9966,9 +9980,8 @@ impl Database for PostgresDatabase {
     }
 }
 
-// Note: This implementation would typically be on the transaction type
-// e.g., impl DatabaseTransaction for PostgresTransaction
-// The Database impl would delegate to transaction when needed
+// Note: CASCADE methods are only available on transaction types
+// This ensures proper transaction context for atomic operations
 ```
 
 **MySQL SQLx Optimized Implementation:**
@@ -9976,7 +9989,7 @@ impl Database for PostgresDatabase {
 Location: `/packages/database/src/sqlx/mysql.rs`
 
 ```rust
-impl Database for MySqlSqlxDatabase {
+impl DatabaseTransaction for MySqlSqlxTransaction {
     // ... existing methods ...
 
     /// MySQL-optimized CASCADE discovery with version detection
@@ -10058,9 +10071,8 @@ impl Database for MySqlSqlxDatabase {
     }
 }
 
-// Note: This implementation would typically be on the transaction type
-// e.g., impl DatabaseTransaction for MySqlTransaction
-// The Database impl would delegate to transaction when needed
+// Note: CASCADE methods are only available on transaction types
+// This ensures proper transaction context for atomic operations
 ```
 
 **Feature-Gated Dependencies Module:**
@@ -10247,10 +10259,10 @@ mod cascade_tests {
 
 #### 15.1.4 Verification Checklist
 
-- [ ] CASCADE methods on both Database (default) and DatabaseTransaction (override) traits
+- [ ] CASCADE methods only on DatabaseTransaction trait (not Database trait)
 - [ ] All methods return `DropPlan` not `Vec<String>`
-- [ ] Database trait CASCADE methods delegate to dependencies module (no UnsupportedOperation)
-- [ ] Backend implementations typically on transaction types
+- [ ] DatabaseTransaction trait CASCADE methods delegate to dependencies module
+- [ ] Backend implementations on transaction types (RusqliteTransaction, PostgresTransaction, etc.)
 - [ ] query_raw remains NOT feature-gated
 - [ ] DropBehavior enum properly integrated with DropTableStatement
 - [ ] ChecksumDatabase tracks CASCADE operations differently
@@ -10258,7 +10270,7 @@ mod cascade_tests {
 - [ ] Real foreign key constraints tested when database available
 - [ ] No backend type enums or detection (only trait implementations)
 - [ ] SQLite implementations use correct PRAGMA syntax (no quotes)
-- [ ] PostgreSQL/MySQL use parameterized queries where possible
+- [ ] PostgreSQL/MySQL use string interpolation (parameterization in Phase 15.1.5)
 - [ ] Feature flag testing: cargo test --features schema vs --features schema,cascade
 - [ ] All CASCADE functionality properly feature-gated
 - [ ] Module loading conditionally includes dependencies module
@@ -10282,10 +10294,312 @@ mod cascade_tests {
 
 **Expected Performance Improvements:**
 
-- **SQLite CASCADE Discovery**: 5-10x faster using direct PRAGMA access
-- **PostgreSQL/MySQL CASCADE Discovery**: 10-100x faster using single recursive queries
-- **RESTRICT Checks**: 20-50x faster with early termination optimization
-- **Real-world Impact**: Large schema operations from seconds to milliseconds
+- **SQLite CASCADE Discovery**: Optimized using direct PRAGMA access
+- **PostgreSQL/MySQL CASCADE Discovery**: Optimized using single recursive queries
+- **RESTRICT Checks**: Early termination optimization
+- **Real-world Impact**: Significant performance improvement for large schemas
+
+#### 15.1.5 Add Parameterized Query Functions
+
+**Goal:** Add parameterized versions of exec_raw and query_raw to prevent SQL injection and improve performance.
+
+**Purpose:** Enable safe parameter binding for dynamic SQL queries without string concatenation.
+
+**New Methods to Add:**
+
+Location: `/packages/database/src/lib.rs`
+
+```rust
+pub trait Database {
+    // ... existing methods ...
+
+    /// Execute raw SQL with parameters
+    /// Parameters are safely bound, preventing SQL injection
+    ///
+    /// # Parameters Format
+    ///
+    /// * SQLite: Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
+    /// * PostgreSQL: Uses $1, $2 placeholders (e.g., "SELECT * FROM users WHERE id = $1")
+    /// * MySQL: Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
+    /// * Returns `DatabaseError::QueryFailed` if execution fails
+    /// * Returns `DatabaseError::InvalidQuery` for parameter count mismatch
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[DatabaseValue]
+    ) -> Result<u64, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "exec_raw_params not implemented for this backend".to_string()
+        ))
+    }
+
+    /// Query raw SQL with parameters and return results
+    ///
+    /// # Safety
+    ///
+    /// Parameters are safely bound by the database driver,
+    /// preventing SQL injection attacks.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
+    /// * Returns `DatabaseError::QueryFailed` if query fails
+    /// * Returns `DatabaseError::InvalidQuery` for parameter count mismatch
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[DatabaseValue]
+    ) -> Result<Vec<Row>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "query_raw_params not implemented for this backend".to_string()
+        ))
+    }
+}
+
+pub trait DatabaseTransaction: Database {
+    // Inherits exec_raw_params and query_raw_params
+    // Implementations can override if needed
+}
+```
+
+**Implementation Requirements:**
+
+1. **SQLite (rusqlite)**:
+```rust
+async fn query_raw_params(
+    &self,
+    query: &str,
+    params: &[DatabaseValue]
+) -> Result<Vec<Row>, DatabaseError> {
+    let connection = self.get_connection().await?;
+    let connection = connection.lock().await;
+
+    let mut stmt = connection.prepare(query)?;
+
+    // Convert DatabaseValue to rusqlite params
+    let rusqlite_params: Vec<_> = params.iter().map(|p| match p {
+        DatabaseValue::String(s) => rusqlite::types::Value::Text(s.clone()),
+        DatabaseValue::Number(n) => rusqlite::types::Value::Integer(*n as i64),
+        DatabaseValue::Bool(b) => rusqlite::types::Value::Integer(if *b { 1 } else { 0 }),
+        // Add other types as needed
+    }).collect();
+
+    let rows = stmt.query_map(&rusqlite_params[..], |row| {
+        let mut columns = Vec::new();
+        for i in 0..stmt.column_count() {
+            let name = stmt.column_name(i)?;
+            let value = // Convert from rusqlite to DatabaseValue
+            columns.push((name.to_string(), value));
+        }
+        Ok(Row { columns })
+    })?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+}
+```
+
+2. **PostgreSQL (native/sqlx)**: Similar pattern with proper parameter binding
+3. **MySQL (sqlx)**: Similar pattern with proper parameter binding
+4. **Simulator**: Mock parameter binding behavior
+5. **ChecksumDatabase**: Include parameters in checksum calculation
+
+**Testing Requirements:**
+- [ ] Test parameter binding for all DatabaseValue types
+- [ ] Test parameter count mismatch errors
+- [ ] Test SQL injection prevention
+- [ ] Test performance vs string concatenation
+
+#### 15.1.5 Verification Checklist
+
+- [ ] `exec_raw_params` added to Database trait
+- [ ] `query_raw_params` added to Database trait
+- [ ] All 7 backend implementations complete
+- [ ] Parameter binding works for all DatabaseValue types
+- [ ] SQL injection tests pass
+- [ ] Parameter count validation implemented
+
+#### 15.1.6 Update Code to Use Parameterized Queries
+
+**Goal:** Update all SQL query code to use the new parameterized functions where appropriate.
+
+**Purpose:** Eliminate SQL injection vulnerabilities and improve code safety.
+
+**Code Updates Required:**
+
+1. **Update Phase 15.1.3 PostgreSQL optimization**:
+```rust
+async fn find_cascade_targets_postgres_optimized(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    let query = r#"
+        WITH RECURSIVE dependent_tables AS (
+            -- Use $1 placeholder
+            WHERE ccu.table_name = $1
+        )
+        SELECT dependent_table FROM dependent_tables
+    "#;
+
+    // Use parameterized version
+    let params = &[DatabaseValue::String(table_name.to_string())];
+    let rows = tx.query_raw_params(query, params).await?;
+
+    // Process results...
+}
+```
+
+2. **Audit existing codebase**:
+- Search for all `exec_raw` calls with string formatting
+- Search for all `query_raw` calls with string formatting
+- Replace with parameterized versions where dynamic values are used
+
+3. **Keep non-parameterized for static queries**:
+- PRAGMA commands that don't support parameters
+- Static queries with no dynamic values
+
+**Migration Strategy:**
+1. Identify all dynamic SQL queries
+2. Prioritize by security risk (user input > internal values)
+3. Update highest risk queries first
+4. Test thoroughly with injection attempts
+
+#### 15.1.6 Verification Checklist
+
+- [ ] PostgreSQL optimization updated to use query_raw_params
+- [ ] MySQL optimization updated where applicable
+- [ ] All user-input SQL properly parameterized
+- [ ] Static queries left as-is for simplicity
+- [ ] SQL injection tests comprehensive
+- [ ] Performance benchmarks show no regression
+
+#### 15.1.7 Implement Proper Cycle Detection
+
+**Goal:** Replace simplified cycle detection with robust algorithm that properly tracks cycles.
+
+**Purpose:** Accurately detect and report circular dependencies in foreign key relationships.
+
+**Current Problem:** Multiple places say "simplified - real implementation would track properly"
+
+**Proper Algorithm:**
+
+Location: `/packages/database/src/schema/dependencies.rs`
+
+```rust
+/// Properly detect cycles during dependency traversal
+pub struct CycleDetector {
+    /// Currently visiting (gray nodes in DFS)
+    visiting: BTreeSet<String>,
+    /// Completed visits (black nodes in DFS)
+    visited: BTreeSet<String>,
+    /// Parent chain for cycle reporting
+    parent_chain: Vec<String>,
+}
+
+impl CycleDetector {
+    pub fn new() -> Self {
+        Self {
+            visiting: BTreeSet::new(),
+            visited: BTreeSet::new(),
+            parent_chain: Vec::new(),
+        }
+    }
+
+    /// Check if node creates a cycle, return cycle path if found
+    pub fn check_cycle(&mut self, node: &str) -> Option<Vec<String>> {
+        if self.visiting.contains(node) {
+            // Found cycle - build cycle path
+            let cycle_start = self.parent_chain.iter()
+                .position(|n| n == node)
+                .unwrap_or(0);
+            let mut cycle = self.parent_chain[cycle_start..].to_vec();
+            cycle.push(node.to_string());
+            return Some(cycle);
+        }
+        None
+    }
+
+    pub fn start_visit(&mut self, node: &str) {
+        self.visiting.insert(node.to_string());
+        self.parent_chain.push(node.to_string());
+    }
+
+    pub fn finish_visit(&mut self, node: &str) {
+        self.visiting.remove(node);
+        self.visited.insert(node.to_string());
+        self.parent_chain.pop();
+    }
+
+    pub fn is_visited(&self, node: &str) -> bool {
+        self.visited.contains(node)
+    }
+}
+```
+
+**Updated find_cascade_targets:**
+```rust
+pub async fn find_cascade_targets(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+) -> Result<DropPlan, DatabaseError> {
+    let mut detector = CycleDetector::new();
+    let mut to_drop = Vec::new();
+    let mut cycles_found = Vec::new();
+
+    async fn traverse(
+        tx: &dyn DatabaseTransaction,
+        table: &str,
+        detector: &mut CycleDetector,
+        to_drop: &mut Vec<String>,
+        cycles_found: &mut Vec<Vec<String>>
+    ) -> Result<(), DatabaseError> {
+        if let Some(cycle) = detector.check_cycle(table) {
+            cycles_found.push(cycle);
+            return Ok(());
+        }
+
+        if detector.is_visited(table) {
+            return Ok(());
+        }
+
+        detector.start_visit(table);
+
+        let dependents = get_direct_dependents(tx, table).await?;
+        for dependent in dependents {
+            Box::pin(traverse(tx, &dependent, detector, to_drop, cycles_found)).await?;
+        }
+
+        detector.finish_visit(table);
+        to_drop.push(table.to_string());
+        Ok(())
+    }
+
+    traverse(tx, table_name, &mut detector, &mut to_drop, &mut cycles_found).await?;
+
+    if !cycles_found.is_empty() {
+        Ok(DropPlan::WithCycles {
+            tables: to_drop,
+            requires_fk_disable: true,
+        })
+    } else {
+        to_drop.reverse(); // Dependents first for dropping
+        Ok(DropPlan::Simple(to_drop))
+    }
+}
+```
+
+#### 15.1.7 Verification Checklist
+
+- [ ] CycleDetector struct implemented
+- [ ] Proper DFS-based cycle detection
+- [ ] Cycle path reporting for debugging
+- [ ] All "simplified" comments removed
+- [ ] Unit tests for complex cycle scenarios
+- [ ] Performance tests for large dependency graphs
 
 ### 15.2 CASCADE Support for DropTableStatement (UPDATED)
 
@@ -11010,9 +11324,13 @@ Given the significant differences in native support, we limit our abstraction to
 2. **Phase 15.1.1**: Add missing introspection primitive (list_tables) ✅ **COMPLETED**
 3. **Phase 15.1.2**: Add targeted dependency discovery for performance
 4. **Phase 15.1.3**: Add query_raw method for backend-specific optimizations
-5. **Phase 15.2**: Implement CASCADE using optimized dependency utilities
-6. **Phase 15.3**: Implement RESTRICT reusing same logic
-7. **Phase 15.4**: Extend to other operations with consistent patterns
+5. **Phase 15.1.4**: Add backend-specific CASCADE implementations
+6. **Phase 15.1.5**: Add parameterized query functions (exec_raw_params, query_raw_params)
+7. **Phase 15.1.6**: Update code to use parameterized queries for security
+8. **Phase 15.1.7**: Implement proper cycle detection algorithm
+9. **Phase 15.2**: Implement CASCADE using optimized dependency utilities
+10. **Phase 15.3**: Implement RESTRICT reusing same logic
+11. **Phase 15.4**: Extend to other operations with consistent patterns
 
 **Benefits:**
 - **Performance**: Phases 15.1.2/15.1.3 provide 10-100x faster CASCADE operations on large schemas
