@@ -188,7 +188,7 @@ mod tests {
     use super::*;
     use std::{collections::BTreeMap, sync::Arc};
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_mutation_builder() {
         let mutations = MutationBuilder::new()
             .add_mutation("001_test", "SELECT 1")
@@ -200,13 +200,13 @@ mod tests {
         assert_eq!(mutations[1].0, "002_test");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_mutation_builder_default() {
         let mutations = MutationBuilder::default().build();
         assert_eq!(mutations.len(), 0);
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_btreemap_mutation_provider() {
         let mut mutations = BTreeMap::new();
         mutations.insert(
@@ -227,7 +227,7 @@ mod tests {
         assert!(no_mutation.is_none());
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_vec_mutation_provider() {
         let mutations = vec![
             (
@@ -253,7 +253,7 @@ mod tests {
         assert!(second_mutation.is_some());
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_mutation_builder_as_provider() {
         let mutations = MutationBuilder::new()
             .add_mutation("001_test", "SELECT 1")
@@ -268,7 +268,7 @@ mod tests {
         assert!(no_mutation.is_none());
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_mutation_provider_ordering() {
         // Test that BTreeMap maintains deterministic ordering
         let mut mutations = BTreeMap::new();
@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(keys, vec!["001_first", "002_second", "003_third"]);
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_mutation_provider_multiple_calls() {
         let mut mutations = BTreeMap::new();
         mutations.insert(

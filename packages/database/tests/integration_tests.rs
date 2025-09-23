@@ -1373,49 +1373,49 @@ mod postgres_introspection_tests {
         }
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_introspection_table_exists() {
         let suite = PostgresIntrospectionTests;
         suite.test_table_exists().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_introspection_column_exists() {
         let suite = PostgresIntrospectionTests;
         suite.test_column_exists().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_introspection_get_table_columns() {
         let suite = PostgresIntrospectionTests;
         suite.test_get_table_columns().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_introspection_get_table_info() {
         let suite = PostgresIntrospectionTests;
         suite.test_get_table_info().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_introspection_unsupported_types() {
         let suite = PostgresIntrospectionTests;
         suite.test_unsupported_types().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_introspection_transaction_context() {
         let suite = PostgresIntrospectionTests;
         suite.test_transaction_context().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_introspection_edge_cases() {
         let suite = PostgresIntrospectionTests;
         suite.test_edge_cases().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_postgres_introspection_all() {
         let suite = PostgresIntrospectionTests;
         suite.run_all_tests().await;
@@ -1446,49 +1446,49 @@ mod sqlx_postgres_introspection_tests {
         }
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_postgres_introspection_table_exists() {
         let suite = SqlxPostgresIntrospectionTests;
         suite.test_table_exists().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_postgres_introspection_column_exists() {
         let suite = SqlxPostgresIntrospectionTests;
         suite.test_column_exists().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_postgres_introspection_get_table_columns() {
         let suite = SqlxPostgresIntrospectionTests;
         suite.test_get_table_columns().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_postgres_introspection_get_table_info() {
         let suite = SqlxPostgresIntrospectionTests;
         suite.test_get_table_info().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_postgres_introspection_unsupported_types() {
         let suite = SqlxPostgresIntrospectionTests;
         suite.test_unsupported_types().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_postgres_introspection_transaction_context() {
         let suite = SqlxPostgresIntrospectionTests;
         suite.test_transaction_context().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_postgres_introspection_edge_cases() {
         let suite = SqlxPostgresIntrospectionTests;
         suite.test_edge_cases().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_postgres_introspection_all() {
         let suite = SqlxPostgresIntrospectionTests;
         suite.run_all_tests().await;
@@ -1519,49 +1519,49 @@ mod sqlx_mysql_introspection_tests {
         }
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_mysql_introspection_table_exists() {
         let suite = SqlxMysqlIntrospectionTests;
         suite.test_table_exists().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_mysql_introspection_column_exists() {
         let suite = SqlxMysqlIntrospectionTests;
         suite.test_column_exists().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_mysql_introspection_get_table_columns() {
         let suite = SqlxMysqlIntrospectionTests;
         suite.test_get_table_columns().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_mysql_introspection_get_table_info() {
         let suite = SqlxMysqlIntrospectionTests;
         suite.test_get_table_info().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_mysql_introspection_unsupported_types() {
         let suite = SqlxMysqlIntrospectionTests;
         suite.test_unsupported_types().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_mysql_introspection_transaction_context() {
         let suite = SqlxMysqlIntrospectionTests;
         suite.test_transaction_context().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_mysql_introspection_edge_cases() {
         let suite = SqlxMysqlIntrospectionTests;
         suite.test_edge_cases().await;
     }
 
-    #[test_log::test(switchy_async::test)]
+    #[test_log::test(switchy_async::test(no_simulator))]
     async fn test_sqlx_mysql_introspection_all() {
         let suite = SqlxMysqlIntrospectionTests;
         suite.run_all_tests().await;

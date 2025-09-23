@@ -222,7 +222,7 @@ async fn main() -> Result<()> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_custom_migration() {
         let migration = CustomMigration::new(
             "test_migration",
@@ -234,7 +234,7 @@ mod tests {
         assert_eq!(migration.description(), Some("Custom migration example"));
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_custom_migration_source() {
         let source = CustomMigrationSource::new();
         let migrations = source.migrations().await.unwrap();
@@ -245,7 +245,7 @@ mod tests {
         assert_eq!(migrations[2].id(), "003_add_indexes");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_code_migration_source() {
         let mut source = CodeMigrationSource::new();
 

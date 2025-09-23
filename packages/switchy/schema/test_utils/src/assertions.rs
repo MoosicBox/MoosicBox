@@ -412,7 +412,7 @@ pub async fn assert_row_count_min(
 ///     .primary_key("id")
 ///     .execute(db)
 ///     .await?;
-///     
+///
 /// db.create_table("posts")
 ///     .column(Column {
 ///         name: "id".to_string(),
@@ -640,7 +640,7 @@ pub async fn assert_migrations_not_applied(
 ///     .primary_key("id")
 ///     .execute(db)
 ///     .await?;
-///     
+///
 /// db.create_table("posts")
 ///     .column(Column {
 ///         name: "id".to_string(),
@@ -717,7 +717,7 @@ mod tests {
 
     #[cfg(feature = "sqlite")]
     use crate::create_empty_in_memory;
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     #[cfg(feature = "sqlite")]
     async fn test_table_existence_assertions() {
         let db = create_empty_in_memory().await.unwrap();
@@ -745,7 +745,7 @@ mod tests {
         assert!(assert_table_not_exists(&*db, "test_table").await.is_err());
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     #[cfg(feature = "sqlite")]
     async fn test_column_existence_assertions() {
         let db = create_empty_in_memory().await.unwrap();
@@ -823,7 +823,7 @@ mod tests {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     #[cfg(feature = "sqlite")]
     async fn test_row_count_assertions() {
         let db = create_empty_in_memory().await.unwrap();
@@ -880,7 +880,7 @@ mod tests {
         assert!(assert_row_count_min(&*db, "items", 4).await.is_err());
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     #[cfg(feature = "sqlite")]
     async fn test_foreign_key_integrity() {
         let db = create_empty_in_memory().await.unwrap();
@@ -946,7 +946,7 @@ mod tests {
         assert!(assert_foreign_key_integrity(&*db).await.is_ok());
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     #[cfg(feature = "sqlite")]
     async fn test_migration_state_assertions() {
         let db = create_empty_in_memory().await.unwrap();
@@ -1026,7 +1026,7 @@ mod tests {
         );
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     #[cfg(feature = "sqlite")]
     async fn test_schema_comparison() {
         use std::collections::BTreeMap;
@@ -1106,7 +1106,7 @@ mod tests {
         assert!(assert_schema_matches(&*db, &expected).await.is_err());
     }
 
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     #[cfg(feature = "sqlite")]
     async fn test_migration_table_missing() {
         let db = create_empty_in_memory().await.unwrap();

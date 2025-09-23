@@ -466,7 +466,7 @@ mod tests {
     use switchy_schema_test_utils::TestError;
     use switchy_schema_test_utils::mutations::MutationProvider;
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_individual_mutations() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 
@@ -488,7 +488,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_foreign_key_constraints() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 
@@ -517,7 +517,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_mutations_with_test_utils() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 
@@ -541,7 +541,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_index_creation_on_populated_tables() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await.unwrap();
 
@@ -575,7 +575,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_btreemap_mutation_provider() {
         let mut mutations: BTreeMap<String, Arc<dyn Executable>> = BTreeMap::new();
         mutations.insert("test_migration".to_string(), Arc::new(InsertTestUsers));

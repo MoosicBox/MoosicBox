@@ -347,7 +347,7 @@ async fn main() -> Result<()> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_config_based_migration() {
         let config = DatabaseConfig::new();
         let migration = ConfigBasedMigration::new("test_migration".to_string(), &config, "users");
@@ -359,7 +359,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_config_based_migration_source() {
         let config = DatabaseConfig::new();
         let source = ConfigBasedMigrationSource::new(&config);

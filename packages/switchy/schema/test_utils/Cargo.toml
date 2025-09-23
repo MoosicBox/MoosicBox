@@ -14,7 +14,7 @@ version     = "0.1.0"
 group = "switchy"
 
 [package.metadata.cargo-machete]
-ignored = ["switchy_fs"]
+ignored = ["switchy_fs", "tokio"]
 
 [dependencies]
 async-trait                 = { workspace = true }

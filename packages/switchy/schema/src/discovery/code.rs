@@ -236,7 +236,7 @@ impl<'a> MigrationSource<'a> for CodeMigrationSource<'a> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_code_migration_creation() {
         let up_sql = Box::new("CREATE TABLE test (id INTEGER PRIMARY KEY);".to_string());
         let down_sql = Some(Box::new("DROP TABLE test;".to_string()) as Box<dyn Executable>);
@@ -246,7 +246,7 @@ mod tests {
         assert_eq!(migration.id(), "001_create_test");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_code_migration_source() {
         let mut source = CodeMigrationSource::new();
 
@@ -264,7 +264,7 @@ mod tests {
         assert_eq!(migrations[0].id(), "001_test");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_code_migration_with_query_builder() {
         // Test using the database query builders
         use switchy_database::schema::{Column, DataType, create_table};
@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(migration.id(), "001_create_users");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_code_migration_source_ordering() {
         let mut source = CodeMigrationSource::new();
 
@@ -320,7 +320,7 @@ mod tests {
         assert_eq!(migrations[2].id(), "003_third");
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_code_migration_source_list() {
         let mut source = CodeMigrationSource::new();
 
@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(list[1].description, None);
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_code_migration_checksums() {
         use sha2::{Digest, Sha256};
 

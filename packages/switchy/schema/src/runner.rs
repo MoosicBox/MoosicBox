@@ -870,7 +870,7 @@ mod tests {
         use crate::version::DEFAULT_MIGRATIONS_TABLE;
         use switchy_database::Executable;
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_migration_runner_creation() {
             let source = CodeMigrationSource::new();
             let runner = MigrationRunner::new(Box::new(source));
@@ -884,7 +884,7 @@ mod tests {
             );
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_execution_strategy_configuration() {
             let source = CodeMigrationSource::new();
             let runner = MigrationRunner::new(Box::new(source))
@@ -895,7 +895,7 @@ mod tests {
             assert!(runner.dry_run);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_custom_table_name() {
             let source = CodeMigrationSource::new();
             let custom_table_name = "my_custom_migrations";
@@ -914,7 +914,7 @@ mod tests {
             assert_eq!(runner2.version_tracker.table_name(), custom_table_name);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_apply_strategy_all() {
             let source = CodeMigrationSource::new();
             let runner = MigrationRunner::new(Box::new(source));
@@ -942,7 +942,7 @@ mod tests {
             assert!(result.contains_key("002_test"));
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_apply_strategy_up_to() {
             let source = CodeMigrationSource::new();
             let runner = MigrationRunner::new(Box::new(source))
@@ -971,7 +971,7 @@ mod tests {
             assert!(!result.contains_key("002_test"));
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_apply_strategy_steps() {
             let source = CodeMigrationSource::new();
             let runner =
@@ -1130,7 +1130,7 @@ mod tests {
             assert_eq!(steps_overflow, applied);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_custom_table_name_integration() {
             use switchy_database_connection;
 
@@ -1181,7 +1181,7 @@ mod tests {
             assert_eq!(test_results.len(), 0); // Empty table is fine
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_list_migrations_empty_source() {
             use switchy_database_connection;
 
@@ -1202,7 +1202,7 @@ mod tests {
             assert_eq!(migrations.len(), 0);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_list_migrations_with_applied_status() {
             use switchy_database_connection;
 
@@ -1296,7 +1296,7 @@ mod tests {
             assert!(!updated_list[2].applied, "003_third should not be applied");
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_dirty_state_check_prevents_migrations() {
             use switchy_database_connection;
 
@@ -1336,7 +1336,7 @@ mod tests {
             }
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_allow_dirty_bypasses_check() {
             use switchy_database_connection;
 
@@ -1368,7 +1368,7 @@ mod tests {
             assert!(result.is_ok(), "Should pass with allow_dirty = true");
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_migration_status_tracking_success() {
             use switchy_database_connection;
 
@@ -1403,7 +1403,7 @@ mod tests {
             assert!(status.failure_reason.is_none());
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_migration_status_tracking_failure() {
             use switchy_database_connection;
 
@@ -1439,7 +1439,7 @@ mod tests {
             assert!(status.failure_reason.is_some());
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_list_failed_migrations() {
             use switchy_database_connection;
 
@@ -1500,7 +1500,7 @@ mod tests {
             assert_eq!(failed_migrations[0].status, MigrationStatus::Failed);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_retry_migration_success() {
             use switchy_database_connection;
 
@@ -1563,7 +1563,7 @@ mod tests {
             assert!(status.failure_reason.is_none());
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_retry_migration_rejects_non_failed() {
             use switchy_database_connection;
 
@@ -1604,7 +1604,7 @@ mod tests {
             }
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_retry_migration_rejects_nonexistent() {
             use switchy_database_connection;
 
@@ -1638,7 +1638,7 @@ mod tests {
             }
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mark_migration_completed_new_record() {
             use switchy_database_connection;
 
@@ -1676,7 +1676,7 @@ mod tests {
             assert_eq!(status.status, MigrationStatus::Completed);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mark_migration_completed_existing_incomplete() {
             use switchy_database_connection;
 
@@ -1732,7 +1732,7 @@ mod tests {
             assert_eq!(status.status, MigrationStatus::Completed);
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_mark_migration_completed_already_complete() {
             use switchy_database_connection;
 
@@ -1767,7 +1767,7 @@ mod tests {
             assert!(message.contains("already completed"));
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_validate_checksums_no_mismatches() {
             use switchy_database_connection;
 
@@ -1799,7 +1799,7 @@ mod tests {
             assert!(mismatches.is_empty(), "Should find no checksum mismatches");
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_validate_checksums_with_mismatches() {
             use switchy_database_connection;
 
@@ -1861,7 +1861,7 @@ mod tests {
             assert_eq!(down_mismatch.unwrap().migration_id, "001_original");
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_validate_checksums_empty_database() {
             use switchy_database_connection;
 
@@ -1899,7 +1899,7 @@ mod tests {
             );
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_validate_checksums_partial_mismatch() {
             use switchy_database_connection;
 
@@ -1946,7 +1946,7 @@ mod tests {
             assert_eq!(mismatch.migration_id, "001_no_down");
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_list_applied_migrations() {
             use switchy_database_connection;
 
@@ -2026,7 +2026,7 @@ mod tests {
             hex::decode(&second.down_checksum).expect("Should be valid hex");
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_strict_mode_prevents_run_on_up_checksum_mismatch() {
             use switchy_database_connection::init_sqlite_sqlx;
 
@@ -2070,7 +2070,7 @@ mod tests {
             }
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_strict_mode_prevents_run_on_down_checksum_mismatch() {
             use switchy_database_connection::init_sqlite_sqlx;
 
@@ -2114,7 +2114,7 @@ mod tests {
             }
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_strict_mode_allows_run_when_checksums_valid() {
             use switchy_database_connection::init_sqlite_sqlx;
 
@@ -2152,7 +2152,7 @@ mod tests {
             );
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_default_config_allows_run_with_mismatches() {
             use switchy_database_connection::init_sqlite_sqlx;
 
@@ -2188,7 +2188,7 @@ mod tests {
             );
         }
 
-        #[tokio::test]
+        #[switchy_async::test]
         async fn test_with_checksum_config_builder() {
             // Test that builder method works correctly
             let config = ChecksumConfig {

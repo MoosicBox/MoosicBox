@@ -306,7 +306,7 @@ mod tests {
         assert!(!info.applied);
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_default_list_implementation() {
         let migrations = vec![
             Arc::new(MockMigration {

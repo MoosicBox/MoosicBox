@@ -407,7 +407,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_vec_migration_source() {
         let migration1 = Arc::new(TestMigration::new(
             "001_create_users",
@@ -432,7 +432,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_verify_migrations_full_cycle() {
         let db = create_empty_in_memory().await.unwrap();
 
@@ -456,7 +456,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_verify_migrations_with_state() {
         let db = create_empty_in_memory().await.unwrap();
 
@@ -491,7 +491,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_verify_migrations_empty_list() {
         let db = create_empty_in_memory().await.unwrap();
         let migrations: Vec<Arc<dyn Migration<'static> + 'static>> = vec![];
@@ -502,7 +502,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_verify_migrations_single_migration() {
         let db = create_empty_in_memory().await.unwrap();
 
@@ -520,7 +520,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_verify_migrations_with_mutations_btreemap() {
         let db = create_empty_in_memory().await.unwrap();
 
@@ -553,7 +553,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_verify_migrations_with_mutations_vec() {
         let db = create_empty_in_memory().await.unwrap();
 
@@ -579,7 +579,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_verify_migrations_with_mutations_builder() {
         let db = create_empty_in_memory().await.unwrap();
 
@@ -606,7 +606,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_verify_migrations_with_no_mutations() {
         let db = create_empty_in_memory().await.unwrap();
 

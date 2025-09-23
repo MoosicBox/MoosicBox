@@ -7,7 +7,7 @@ use switchy_schema::{migration::MigrationStatus, version::VersionTracker};
 use switchy_schema_test_utils::create_empty_in_memory;
 
 #[cfg(feature = "code")]
-#[tokio::test]
+#[switchy_async::test]
 async fn test_migration_failure_tracking() {
     use switchy_schema::{
         discovery::code::{CodeMigration, CodeMigrationSource},
@@ -84,7 +84,7 @@ async fn test_migration_failure_tracking() {
 }
 
 #[cfg(feature = "code")]
-#[tokio::test]
+#[switchy_async::test]
 async fn test_dirty_state_detection() {
     use switchy_schema::{
         MigrationError,
@@ -171,7 +171,7 @@ async fn test_dirty_state_detection() {
 }
 
 #[cfg(feature = "code")]
-#[tokio::test]
+#[switchy_async::test]
 async fn test_recovery_commands() {
     use switchy_schema::{
         MigrationError,
@@ -267,7 +267,7 @@ async fn test_recovery_commands() {
 }
 
 #[cfg(feature = "code")]
-#[tokio::test]
+#[switchy_async::test]
 async fn test_retry_failed_migration() {
     use switchy_schema::{
         discovery::code::{CodeMigration, CodeMigrationSource},
@@ -341,7 +341,7 @@ async fn test_retry_failed_migration() {
 }
 
 #[cfg(feature = "code")]
-#[tokio::test]
+#[switchy_async::test]
 async fn test_schema_upgrade_compatibility() {
     use switchy_schema::{
         discovery::code::{CodeMigration, CodeMigrationSource},
@@ -394,7 +394,7 @@ async fn test_schema_upgrade_compatibility() {
     assert!(schema_check.is_ok());
 }
 
-#[tokio::test]
+#[switchy_async::test]
 async fn test_migration_status_transitions() {
     let db = create_empty_in_memory().await.unwrap();
     let version_tracker = VersionTracker::with_table_name("__test_migrations");

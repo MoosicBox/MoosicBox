@@ -1966,6 +1966,7 @@ name = "borrowed_migrations_example"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "switchy_async",
  "switchy_database",
  "switchy_schema",
  "tokio",
@@ -9125,6 +9126,7 @@ name = "mutation_migration_test"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "switchy_async",
  "switchy_database",
  "switchy_schema",
  "switchy_schema_test_utils",
@@ -13586,6 +13588,7 @@ name = "state_migration_test"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "switchy_async",
  "switchy_database",
  "switchy_schema",
  "switchy_schema_test_utils",
@@ -13631,6 +13634,7 @@ name = "static_migrations_example"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "switchy_async",
  "switchy_database",
  "switchy_schema",
  "tokio",

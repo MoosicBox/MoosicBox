@@ -430,7 +430,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_migration_test_builder_basic() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
@@ -457,7 +457,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_migration_test_builder_default_persistence() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
@@ -484,7 +484,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_migration_test_builder_custom_table_name() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
@@ -512,7 +512,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_with_data_before_breakpoint() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
@@ -561,7 +561,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_with_data_after_breakpoint() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
@@ -611,7 +611,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_multiple_breakpoints_in_sequence() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
@@ -680,7 +680,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_initial_setup_functionality() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
@@ -730,7 +730,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_breakpoint_with_nonexistent_migration_id() {
         let db = crate::create_empty_in_memory().await.unwrap();
 
@@ -752,7 +752,7 @@ mod tests {
     }
 
     #[cfg(feature = "sqlite")]
-    #[test_log::test(tokio::test)]
+    #[test_log::test(switchy_async::test)]
     async fn test_rollback_works_with_breakpoints() {
         let db = crate::create_empty_in_memory().await.unwrap();
 

@@ -203,7 +203,7 @@ mod tests {
     use switchy_database::query::FilterableQuery;
     use switchy_schema_test_utils::TestError;
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_bio_column_migration() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 
@@ -225,7 +225,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_email_index_migration() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 
@@ -245,7 +245,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_state_migrations_with_test_utils() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 
@@ -260,7 +260,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_data_preservation() -> std::result::Result<(), TestError> {
         let db = create_empty_in_memory().await?;
 

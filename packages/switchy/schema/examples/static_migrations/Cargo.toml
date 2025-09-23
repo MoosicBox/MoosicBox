@@ -13,6 +13,7 @@ version     = "0.1.0"
 
 [dependencies]
 async-trait = { workspace = true }
+switchy_async = { workspace = true, features = ["macros", "tokio"] }
 switchy_database = { workspace = true }
 switchy_schema = { workspace = true, features = [
     "code",
@@ -20,7 +21,6 @@ switchy_schema = { workspace = true, features = [
     "embedded",
 ] }
 tokio = { workspace = true, features = ["full"] }
-
 
 [features]
 fail-on-warnings = [

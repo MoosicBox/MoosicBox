@@ -57,7 +57,7 @@
 //! The embedded migration system handles several edge cases gracefully:
 //!
 //! * Missing SQL files are treated as no-ops
-//! * Empty SQL files are treated as no-ops  
+//! * Empty SQL files are treated as no-ops
 //! * Invalid UTF-8 content is converted using lossy conversion
 //! * Directory entries without SQL files are skipped
 
@@ -250,7 +250,7 @@ mod tests {
 
     static TEST_MIGRATIONS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/test_migrations");
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_extract_migrations() {
         let source = EmbeddedMigrationSource::new(&TEST_MIGRATIONS);
         let migration_map = source.extract_migrations();
@@ -265,7 +265,7 @@ mod tests {
         assert!(migration_map.contains_key("2023-10-16-150000_up_only"));
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_migration_content_loading() {
         let source = EmbeddedMigrationSource::new(&TEST_MIGRATIONS);
         let migration_map = source.extract_migrations();
@@ -292,7 +292,7 @@ mod tests {
         assert!(empty.up_content.as_ref().unwrap().is_empty());
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_migrations_source_trait() {
         let source = EmbeddedMigrationSource::new(&TEST_MIGRATIONS);
         let migrations = source.migrations().await.unwrap();
@@ -324,7 +324,7 @@ mod tests {
         assert_eq!(migration.down_content, down_content);
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_embedded_migration_checksums() {
         let migration = EmbeddedMigration::new(
             "test_migration".to_string(),

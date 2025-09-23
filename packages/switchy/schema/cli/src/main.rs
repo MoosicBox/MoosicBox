@@ -1480,7 +1480,7 @@ mod tests {
     }
 
     // CLI command execution tests
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_retry_command_error_handling() {
         // Test retry with invalid database URL should give clear error
         let result = retry_migration(
@@ -1503,7 +1503,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_mark_completed_error_handling() {
         // Test mark_completed with invalid database should fail gracefully
         let result = mark_migration_completed(
@@ -1527,7 +1527,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_migrate_with_force_error_handling() {
         // Test that migrate with force flag handles errors properly
         let result = run_migrations(

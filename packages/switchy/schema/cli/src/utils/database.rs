@@ -48,7 +48,7 @@ async fn connect_postgres(database_url: &str) -> Result<Box<dyn Database>, CliEr
 mod tests {
     use super::*;
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_invalid_database_scheme() {
         let result = connect("mysql://localhost/test").await;
 
@@ -60,7 +60,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[switchy_async::test]
     async fn test_invalid_database_url_format() {
         let result = connect("invalid-url").await;
 
