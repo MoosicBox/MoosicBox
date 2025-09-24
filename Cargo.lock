@@ -1294,9 +1294,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "1.93.0"
+version = "1.94.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb7185a8daf4ca44266e82870e4681afcb5bd7cf2d289666f9240f21300a3468"
+checksum = "165ad7c21f20c91bf1396c6e2f343f31d6e9384753a06250022e594f023a12b7"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1338,9 +1338,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssooidc"
-version = "1.85.0"
+version = "1.86.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67e05f33b6c9026fecfe9b3b6740f34d41bc6ff641a6a32dabaab60209245b75"
+checksum = "9d1cc7fb324aa12eb4404210e6381195c5b5e9d52c2682384f295f38716dd3c7"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -5307,9 +5307,9 @@ dependencies = [
 
 [[package]]
 name = "hstr"
-version = "2.0.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ced1416104790052518d199e753d49a7d8130d476c664bc9e53f40cfecb8e615"
+checksum = "31f11d91d7befd2ffd9d216e9e5ea1fae6174b20a2a1b67a688138003d2f4122"
 dependencies = [
  "hashbrown 0.14.5",
  "new_debug_unreachable",
@@ -6297,9 +6297,9 @@ checksum = "edcd27d72f2f071c64249075f42e205ff93c9a4c5f6c6da53e79ed9f9832c285"
 
 [[package]]
 name = "imgref"
-version = "1.11.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0263a3d970d5c054ed9312c0057b4f3bde9c0b33836d3637361d4a9e6e7a408"
+checksum = "e7c5cedc30da3a610cac6b4ba17597bdf7152cf974e8aab3afb3d54455e371c8"
 
 [[package]]
 name = "impl-more"
@@ -6928,9 +6928,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.175"
+version = "0.2.176"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a82ae493e598baaea5209805c49bbf2ea7de956d50d7da0da1164f9c6d28543"
+checksum = "58f929b4d672ea937a23a1ab494143d968337a5f47e56d0815df1e0890ddf174"
 
 [[package]]
 name = "libfuzzer-sys"
@@ -13987,9 +13987,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_minifier"
-version = "32.0.5"
+version = "32.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80500b64911bb710aed7a0fa97e38abf8b7937426af133c27631c72ce22129ae"
+checksum = "135c816e7ec58952af60a2180b97d779a9c7d7b8ec4c5aea83b5776b96c303eb"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.4",
