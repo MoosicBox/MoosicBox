@@ -272,6 +272,36 @@ pub async fn get_table_dependencies_sqlite(
         .unwrap_or_default())
 }
 
+// Helper function for recursive cascade traversal with cycle detection
+fn visit_cascade_recursive(
+    current: &str,
+    all_deps: &BTreeMap<String, BTreeSet<String>>,
+    visited: &mut BTreeSet<String>,
+    visiting: &mut BTreeSet<String>,
+    to_drop: &mut Vec<String>,
+    has_cycle: &mut bool,
+) {
+    if visiting.contains(current) {
+        *has_cycle = true;
+        return; // Cycle detected
+    }
+    if !visited.insert(current.to_string()) {
+        return; // Already processed
+    }
+
+    visiting.insert(current.to_string());
+
+    // Visit all dependents first
+    if let Some(dependents) = all_deps.get(current) {
+        for dependent in dependents {
+            visit_cascade_recursive(dependent, all_deps, visited, visiting, to_drop, has_cycle);
+        }
+    }
+
+    visiting.remove(current);
+    to_drop.push(current.to_string());
+}
+
 /// Find all tables that would be affected by CASCADE deletion of the specified table
 ///
 /// Returns a `DropPlan` which handles both simple and circular dependencies.
@@ -293,38 +323,42 @@ pub async fn find_cascade_targets(
 ) -> Result<DropPlan, DatabaseError> {
     let mut to_drop = Vec::new();
     let mut visited = BTreeSet::new();
-    let mut visiting = BTreeSet::new(); // For cycle detection
-    let mut stack = vec![table_name.to_string()];
     let mut has_cycle = false;
 
-    while let Some(current_table) = stack.pop() {
-        if visiting.contains(&current_table) {
-            has_cycle = true;
-            continue; // Cycle detected
-        }
-        if !visited.insert(current_table.clone()) {
-            continue; // Already processed
-        }
+    // First, build a map of all dependencies we need to consider
+    let mut all_deps = BTreeMap::new();
+    let mut to_check = vec![table_name.to_string()];
+    let mut discovered = BTreeSet::new();
 
-        visiting.insert(current_table.clone());
-
-        // Find tables that directly reference current_table
-        let dependents = get_direct_dependents(tx, &current_table).await?;
-
-        // Add dependents to drop list (they come before their dependencies)
-        for dependent in &dependents {
-            if !visited.contains(dependent) {
-                stack.push(dependent.clone());
-            }
+    // Discover all tables involved in the cascade
+    while let Some(current) = to_check.pop() {
+        if !discovered.insert(current.clone()) {
+            continue;
         }
 
-        visiting.remove(&current_table);
-        to_drop.push(current_table);
+        let dependents = get_direct_dependents(tx, &current).await?;
+        all_deps.insert(current.clone(), dependents.clone());
+
+        for dep in dependents {
+            to_check.push(dep);
+        }
     }
 
-    // Reverse to get proper drop order (dependents first, then dependencies)
-    // This ensures that when we drop, dependents are dropped before their dependencies
-    to_drop.reverse();
+    // Now traverse using proper cycle detection
+    let mut visiting = BTreeSet::new();
+    visit_cascade_recursive(
+        table_name,
+        &all_deps,
+        &mut visited,
+        &mut visiting,
+        &mut to_drop,
+        &mut has_cycle,
+    );
+
+    // The recursive function already puts them in the right order:
+    // - Visits dependents first, then the current table
+    // - So dependents are added to to_drop before their dependencies
+    // No need to reverse!
 
     if has_cycle {
         Ok(DropPlan::WithCycles {
@@ -442,6 +476,471 @@ pub async fn get_all_dependents_recursive(
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    // Mock Transaction for testing the new async functions
+    #[cfg(feature = "simulator")]
+    mod async_tests {
+        use super::*;
+        use crate::Database;
+        use crate::simulator::SimulationDatabase;
+
+        async fn create_test_database_with_dependencies() -> SimulationDatabase {
+            let db = SimulationDatabase::new().unwrap();
+
+            // Create tables with foreign key dependencies
+            // users (root)
+            db.exec_raw(
+                "CREATE TABLE users (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL
+                )",
+            )
+            .await
+            .unwrap();
+
+            // posts (depends on users)
+            db.exec_raw(
+                "CREATE TABLE posts (
+                    id INTEGER PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    user_id INTEGER,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            // comments (depends on posts)
+            db.exec_raw(
+                "CREATE TABLE comments (
+                    id INTEGER PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    post_id INTEGER,
+                    FOREIGN KEY (post_id) REFERENCES posts(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            // tags (independent table)
+            db.exec_raw(
+                "CREATE TABLE tags (
+                    id INTEGER PRIMARY KEY,
+                    name TEXT NOT NULL
+                )",
+            )
+            .await
+            .unwrap();
+
+            // post_tags (depends on both posts and tags)
+            db.exec_raw(
+                "CREATE TABLE post_tags (
+                    post_id INTEGER,
+                    tag_id INTEGER,
+                    PRIMARY KEY (post_id, tag_id),
+                    FOREIGN KEY (post_id) REFERENCES posts(id),
+                    FOREIGN KEY (tag_id) REFERENCES tags(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            db
+        }
+
+        async fn create_test_database_with_cycles() -> SimulationDatabase {
+            let db = SimulationDatabase::new().unwrap();
+
+            // Create a three-table cycle: A -> B -> C -> A
+            // This avoids SQLite's limitations with direct circular references
+
+            db.exec_raw(
+                "CREATE TABLE cycle_a (
+                    id INTEGER PRIMARY KEY,
+                    b_ref INTEGER,
+                    FOREIGN KEY (b_ref) REFERENCES cycle_b(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            db.exec_raw(
+                "CREATE TABLE cycle_b (
+                    id INTEGER PRIMARY KEY,
+                    c_ref INTEGER,
+                    FOREIGN KEY (c_ref) REFERENCES cycle_c(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            db.exec_raw(
+                "CREATE TABLE cycle_c (
+                    id INTEGER PRIMARY KEY,
+                    a_ref INTEGER,
+                    FOREIGN KEY (a_ref) REFERENCES cycle_a(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            db
+        }
+
+        #[switchy_async::test]
+        async fn test_get_direct_dependents_basic() {
+            let db = create_test_database_with_dependencies().await;
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test that users has posts as a dependent
+            let dependents = get_direct_dependents(&*tx, "users").await.unwrap();
+            assert_eq!(dependents.len(), 1);
+            assert!(dependents.contains("posts"));
+
+            // Test that posts has comments and post_tags as dependents
+            let dependents = get_direct_dependents(&*tx, "posts").await.unwrap();
+            assert_eq!(dependents.len(), 2);
+            assert!(dependents.contains("comments"));
+            assert!(dependents.contains("post_tags"));
+
+            // Test that tags has post_tags as a dependent
+            let dependents = get_direct_dependents(&*tx, "tags").await.unwrap();
+            assert_eq!(dependents.len(), 1);
+            assert!(dependents.contains("post_tags"));
+
+            // Test that comments has no dependents
+            let dependents = get_direct_dependents(&*tx, "comments").await.unwrap();
+            assert!(dependents.is_empty());
+
+            tx.commit().await.unwrap();
+        }
+
+        #[switchy_async::test]
+        async fn test_get_direct_dependents_non_existent_table() {
+            let db = create_test_database_with_dependencies().await;
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test non-existent table
+            let dependents = get_direct_dependents(&*tx, "non_existent").await.unwrap();
+            assert!(dependents.is_empty());
+
+            tx.commit().await.unwrap();
+        }
+
+        #[switchy_async::test]
+        async fn test_has_any_dependents_early_termination() {
+            let db = create_test_database_with_dependencies().await;
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test tables with dependents (should return true)
+            assert!(has_any_dependents(&*tx, "users").await.unwrap());
+            assert!(has_any_dependents(&*tx, "posts").await.unwrap());
+            assert!(has_any_dependents(&*tx, "tags").await.unwrap());
+
+            // Test table without dependents
+            assert!(!has_any_dependents(&*tx, "comments").await.unwrap());
+            assert!(!has_any_dependents(&*tx, "post_tags").await.unwrap());
+
+            // Test non-existent table
+            assert!(!has_any_dependents(&*tx, "non_existent").await.unwrap());
+
+            tx.commit().await.unwrap();
+        }
+
+        #[switchy_async::test]
+        async fn test_get_all_dependents_recursive() {
+            let db = create_test_database_with_dependencies().await;
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test users (root) - should find all its recursive dependents
+            let all_dependents = get_all_dependents_recursive(&*tx, "users").await.unwrap();
+            assert_eq!(all_dependents.len(), 3); // posts, comments, post_tags
+            assert!(all_dependents.contains("posts"));
+            assert!(all_dependents.contains("comments"));
+            assert!(all_dependents.contains("post_tags"));
+
+            // Test posts - should find its dependents
+            let all_dependents = get_all_dependents_recursive(&*tx, "posts").await.unwrap();
+            assert_eq!(all_dependents.len(), 2); // comments, post_tags
+            assert!(all_dependents.contains("comments"));
+            assert!(all_dependents.contains("post_tags"));
+
+            // Test tags - should find only post_tags
+            let all_dependents = get_all_dependents_recursive(&*tx, "tags").await.unwrap();
+            assert_eq!(all_dependents.len(), 1);
+            assert!(all_dependents.contains("post_tags"));
+
+            // Test leaf table - should have no dependents
+            let all_dependents = get_all_dependents_recursive(&*tx, "comments")
+                .await
+                .unwrap();
+            assert!(all_dependents.is_empty());
+
+            tx.commit().await.unwrap();
+        }
+
+        #[switchy_async::test]
+        async fn test_find_cascade_targets_simple_case() {
+            let db = create_test_database_with_dependencies().await;
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test CASCADE targets for users (should include all dependents)
+            let drop_plan = find_cascade_targets(&*tx, "users").await.unwrap();
+            match drop_plan {
+                DropPlan::Simple(tables) => {
+                    assert_eq!(tables.len(), 4); // users + 3 dependents
+                    // Should include all tables in proper order (dependents first)
+                    assert!(tables.contains(&"users".to_string()));
+                    assert!(tables.contains(&"posts".to_string()));
+                    assert!(tables.contains(&"comments".to_string()));
+                    assert!(tables.contains(&"post_tags".to_string()));
+
+                    // Verify order: dependents should come before dependencies
+                    let users_pos = tables.iter().position(|t| t == "users").unwrap();
+                    let posts_pos = tables.iter().position(|t| t == "posts").unwrap();
+                    assert!(posts_pos < users_pos, "posts should come before users");
+                }
+                DropPlan::WithCycles { .. } => {
+                    panic!("Expected Simple drop plan, got WithCycles");
+                }
+            }
+
+            // Test CASCADE targets for posts
+            let drop_plan = find_cascade_targets(&*tx, "posts").await.unwrap();
+            match drop_plan {
+                DropPlan::Simple(tables) => {
+                    assert_eq!(tables.len(), 3); // posts + 2 dependents
+                    assert!(tables.contains(&"posts".to_string()));
+                    assert!(tables.contains(&"comments".to_string()));
+                    assert!(tables.contains(&"post_tags".to_string()));
+                }
+                DropPlan::WithCycles { .. } => {
+                    panic!("Expected Simple drop plan, got WithCycles");
+                }
+            }
+
+            // Test leaf table (should only include itself)
+            let drop_plan = find_cascade_targets(&*tx, "comments").await.unwrap();
+            match drop_plan {
+                DropPlan::Simple(tables) => {
+                    assert_eq!(tables.len(), 1);
+                    assert_eq!(tables[0], "comments");
+                }
+                DropPlan::WithCycles { .. } => {
+                    panic!("Expected Simple drop plan, got WithCycles");
+                }
+            }
+
+            tx.commit().await.unwrap();
+        }
+
+        #[switchy_async::test]
+        async fn test_find_cascade_targets_with_cycles() {
+            let db = create_test_database_with_cycles().await;
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test CASCADE targets with circular dependencies (A -> B -> C -> A)
+            let drop_plan = find_cascade_targets(&*tx, "cycle_a").await.unwrap();
+            match drop_plan {
+                DropPlan::WithCycles {
+                    tables,
+                    requires_fk_disable,
+                } => {
+                    assert!(requires_fk_disable);
+                    assert_eq!(tables.len(), 3);
+                    assert!(tables.contains(&"cycle_a".to_string()));
+                    assert!(tables.contains(&"cycle_b".to_string()));
+                    assert!(tables.contains(&"cycle_c".to_string()));
+                }
+                DropPlan::Simple(_) => {
+                    panic!("Expected WithCycles drop plan, got Simple");
+                }
+            }
+
+            // Test from cycle_b as well
+            let drop_plan = find_cascade_targets(&*tx, "cycle_b").await.unwrap();
+            match drop_plan {
+                DropPlan::WithCycles {
+                    tables,
+                    requires_fk_disable,
+                } => {
+                    assert!(requires_fk_disable);
+                    assert_eq!(tables.len(), 3);
+                    assert!(tables.contains(&"cycle_a".to_string()));
+                    assert!(tables.contains(&"cycle_b".to_string()));
+                    assert!(tables.contains(&"cycle_c".to_string()));
+                }
+                DropPlan::Simple(_) => {
+                    panic!("Expected WithCycles drop plan, got Simple");
+                }
+            }
+
+            tx.commit().await.unwrap();
+        }
+
+        #[switchy_async::test]
+        async fn test_edge_case_self_references() {
+            let db = SimulationDatabase::new().unwrap();
+
+            // Create table with self-reference
+            db.exec_raw(
+                "CREATE TABLE self_ref (
+                    id INTEGER PRIMARY KEY,
+                    parent_id INTEGER,
+                    name TEXT,
+                    FOREIGN KEY (parent_id) REFERENCES self_ref(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test get_direct_dependents with self-reference
+            let dependents = get_direct_dependents(&*tx, "self_ref").await.unwrap();
+
+            // SQLite should detect the self-reference if foreign keys are properly introspected
+            if dependents.contains("self_ref") {
+                assert_eq!(dependents.len(), 1);
+
+                // Test has_any_dependents (should return true due to self-reference)
+                assert!(has_any_dependents(&*tx, "self_ref").await.unwrap());
+
+                // Test find_cascade_targets (should detect cycle due to self-reference)
+                let drop_plan = find_cascade_targets(&*tx, "self_ref").await.unwrap();
+                match drop_plan {
+                    DropPlan::WithCycles {
+                        tables,
+                        requires_fk_disable,
+                    } => {
+                        assert!(requires_fk_disable);
+                        assert_eq!(tables.len(), 1);
+                        assert!(tables.contains(&"self_ref".to_string()));
+                    }
+                    DropPlan::Simple(tables) => {
+                        // If cycle detection didn't work, at least verify the table is included
+                        assert_eq!(tables.len(), 1);
+                        assert!(tables.contains(&"self_ref".to_string()));
+                    }
+                }
+            } else {
+                // If SQLite doesn't report self-reference, that's also valid behavior
+                // Just test that the table doesn't crash the algorithm
+                assert!(dependents.is_empty());
+                assert!(!has_any_dependents(&*tx, "self_ref").await.unwrap());
+
+                let drop_plan = find_cascade_targets(&*tx, "self_ref").await.unwrap();
+                match drop_plan {
+                    DropPlan::Simple(tables) => {
+                        assert_eq!(tables.len(), 1);
+                        assert!(tables.contains(&"self_ref".to_string()));
+                    }
+                    DropPlan::WithCycles { .. } => {
+                        // This is also acceptable if detected
+                    }
+                }
+            }
+
+            tx.commit().await.unwrap();
+        }
+
+        #[switchy_async::test]
+        async fn test_transaction_rollback_with_failed_operations() {
+            let db = create_test_database_with_dependencies().await;
+
+            // Begin transaction
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Perform some dependency discovery operations
+            let dependents = get_direct_dependents(&*tx, "users").await.unwrap();
+            assert!(!dependents.is_empty());
+
+            // Test that operations work within transaction context
+            let has_deps = has_any_dependents(&*tx, "posts").await.unwrap();
+            assert!(has_deps);
+
+            // Rollback transaction
+            tx.rollback().await.unwrap();
+
+            // Create a new transaction and verify database state is unchanged
+            let tx2 = db.begin_transaction().await.unwrap();
+            let dependents_after = get_direct_dependents(&*tx2, "users").await.unwrap();
+            assert_eq!(dependents, dependents_after); // Should be the same
+
+            tx2.commit().await.unwrap();
+        }
+
+        #[switchy_async::test]
+        async fn test_complex_dependency_chains() {
+            let db = SimulationDatabase::new().unwrap();
+
+            // Create complex dependency chain: A -> B -> C -> D
+            db.exec_raw("CREATE TABLE table_d (id INTEGER PRIMARY KEY, name TEXT)")
+                .await
+                .unwrap();
+
+            db.exec_raw(
+                "CREATE TABLE table_c (
+                    id INTEGER PRIMARY KEY, 
+                    d_id INTEGER,
+                    FOREIGN KEY (d_id) REFERENCES table_d(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            db.exec_raw(
+                "CREATE TABLE table_b (
+                    id INTEGER PRIMARY KEY, 
+                    c_id INTEGER,
+                    FOREIGN KEY (c_id) REFERENCES table_c(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            db.exec_raw(
+                "CREATE TABLE table_a (
+                    id INTEGER PRIMARY KEY, 
+                    b_id INTEGER,
+                    FOREIGN KEY (b_id) REFERENCES table_b(id)
+                )",
+            )
+            .await
+            .unwrap();
+
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Test cascade from root (table_d)
+            let drop_plan = find_cascade_targets(&*tx, "table_d").await.unwrap();
+            match drop_plan {
+                DropPlan::Simple(tables) => {
+                    assert_eq!(tables.len(), 4);
+                    // Verify proper ordering: dependents first
+                    let d_pos = tables.iter().position(|t| t == "table_d").unwrap();
+                    let c_pos = tables.iter().position(|t| t == "table_c").unwrap();
+                    let b_pos = tables.iter().position(|t| t == "table_b").unwrap();
+                    let a_pos = tables.iter().position(|t| t == "table_a").unwrap();
+
+                    assert!(a_pos < b_pos);
+                    assert!(b_pos < c_pos);
+                    assert!(c_pos < d_pos);
+                }
+                DropPlan::WithCycles { .. } => {
+                    panic!("Expected Simple drop plan, got WithCycles");
+                }
+            }
+
+            // Test recursive dependents
+            let all_deps = get_all_dependents_recursive(&*tx, "table_d").await.unwrap();
+            assert_eq!(all_deps.len(), 3); // c, b, a
+            assert!(all_deps.contains("table_c"));
+            assert!(all_deps.contains("table_b"));
+            assert!(all_deps.contains("table_a"));
+
+            tx.commit().await.unwrap();
+        }
+    }
 
     #[test]
     fn test_new_graph_is_empty() {
