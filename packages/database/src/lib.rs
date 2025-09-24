@@ -440,6 +440,12 @@ pub enum DatabaseError {
     /// Savepoint not found for rollback/release
     #[error("Savepoint not found: {0}")]
     SavepointNotFound(String),
+    /// Raw SQL query execution failed
+    #[error("Query failed: {0}")]
+    QueryFailed(String),
+    /// Invalid query syntax
+    #[error("Invalid query: {0}")]
+    InvalidQuery(String),
 }
 
 impl DatabaseError {
@@ -773,6 +779,25 @@ pub trait Database: Send + Sync + std::fmt::Debug {
         table_name: &str,
         column_name: &str,
     ) -> Result<bool, DatabaseError>;
+
+    /// Execute raw SQL query and return results
+    /// Available on both Database and `DatabaseTransaction` traits for flexibility
+    ///
+    /// # Safety and Scope
+    ///
+    /// This method is intended for internal framework use only for performance optimization.
+    /// Uses string interpolation for simplicity - parameterized queries added in Phase 15.1.5.
+    ///
+    /// # Backend Support
+    ///
+    /// All backends must implement this method. This is core Database functionality
+    /// without fallback or default behavior.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError::QueryFailed` if query execution fails
+    /// * Returns `DatabaseError::InvalidQuery` for malformed SQL
+    async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError>;
 
     /// Begin a database transaction
     ///

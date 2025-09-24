@@ -362,6 +362,14 @@ impl Database for ChecksumDatabase {
         unimplemented!("list_tables not yet implemented for ChecksumDatabase")
     }
 
+    async fn query_raw(&self, query: &str) -> Result<Vec<switchy_database::Row>, DatabaseError> {
+        let mut hasher = self.hasher.lock().await;
+        hasher.update(b"QUERY_RAW:");
+        hasher.update(query.as_bytes());
+        drop(hasher);
+        Ok(vec![])
+    }
+
     async fn begin_transaction(&self) -> Result<Box<dyn DatabaseTransaction>, DatabaseError> {
         let depth = self.transaction_depth.fetch_add(1, Ordering::SeqCst);
         let mut hasher = self.hasher.lock().await;

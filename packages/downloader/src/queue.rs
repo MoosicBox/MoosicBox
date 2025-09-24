@@ -731,6 +731,10 @@ mod tests {
             Ok(())
         }
 
+        async fn query_raw(&self, _statement: &str) -> Result<Vec<Row>, DatabaseError> {
+            Ok(vec![])
+        }
+
         async fn table_exists(&self, _table_name: &str) -> Result<bool, DatabaseError> {
             Ok(false)
         }

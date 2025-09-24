@@ -588,6 +588,28 @@ impl Database for RusqliteDatabase {
         rusqlite_column_exists(&*connection.lock().await, table_name, column_name)
     }
 
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection = self.get_connection();
+        let connection = connection.lock().await;
+
+        let mut stmt = connection
+            .prepare(query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Get column names from the statement
+        let column_names: Vec<String> =
+            stmt.column_names().iter().map(|&s| s.to_string()).collect();
+
+        // Execute query and use existing to_rows helper
+        let rows = stmt
+            .query([])
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Use the existing to_rows function from rusqlite/mod.rs
+        to_rows(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -829,6 +851,27 @@ impl Database for RusqliteTransaction {
         column_name: &str,
     ) -> Result<bool, DatabaseError> {
         rusqlite_column_exists(&*self.connection.lock().await, table_name, column_name)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection = self.connection.lock().await;
+
+        let mut stmt = connection
+            .prepare(query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Get column names from the statement
+        let column_names: Vec<String> =
+            stmt.column_names().iter().map(|&s| s.to_string()).collect();
+
+        // Execute query and use existing to_rows helper
+        let rows = stmt
+            .query([])
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Use the existing to_rows function from rusqlite/mod.rs
+        to_rows(&column_names, rows).map_err(|e| DatabaseError::QueryFailed(e.to_string()))
     }
 
     async fn begin_transaction(

@@ -594,6 +594,37 @@ impl Database for PostgresDatabase {
         Ok(())
     }
 
+    async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+
+        let pg_rows = client
+            .query(query, &[])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if pg_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = pg_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Use existing from_row helper
+        let mut rows = Vec::new();
+        for row in pg_rows {
+            rows.push(
+                from_row(&column_names, &row)
+                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
+            );
+        }
+
+        Ok(rows)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -849,6 +880,38 @@ impl Database for PostgresTransaction {
             .await
             .map_err(PostgresDatabaseError::Postgres)?;
         Ok(())
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client_ref = self.client.lock().await;
+
+        let pg_rows = client_ref
+            .query(query, &[])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if pg_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = pg_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Use existing from_row helper
+        let mut rows = Vec::new();
+        for row in pg_rows {
+            rows.push(
+                from_row(&column_names, &row)
+                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
+            );
+        }
+
+        Ok(rows)
     }
 
     async fn begin_transaction(

@@ -346,6 +346,11 @@ impl Database for SimulationDatabase {
         self.inner.column_exists(table_name, column_name).await
     }
 
+    async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Delegate to inner database implementation
+        self.inner.query_raw(query).await
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {

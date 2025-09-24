@@ -553,6 +553,39 @@ impl Database for MySqlSqlxDatabase {
         .await
     }
 
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        let result = sqlx::query(query)
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if result.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = result[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Use existing from_row helper
+        let mut rows = Vec::new();
+        for row in result {
+            rows.push(
+                from_row(&column_names, &row)
+                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
+            );
+        }
+
+        Ok(rows)
+    }
+
     async fn begin_transaction(
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
@@ -923,6 +956,41 @@ impl Database for MysqlSqlxTransaction {
             .ok_or(DatabaseError::TransactionCommitted)?;
         super::mysql_introspection::mysql_sqlx_column_exists(&mut *tx, table_name, column_name)
             .await
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw(&self, query: &str) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut transaction_guard = self.transaction.lock().await;
+        let tx = transaction_guard
+            .as_mut()
+            .ok_or(DatabaseError::TransactionCommitted)?;
+
+        let result = sqlx::query(query)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if result.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = result[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Use existing from_row helper
+        let mut rows = Vec::new();
+        for row in result {
+            rows.push(
+                from_row(&column_names, &row)
+                    .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?,
+            );
+        }
+
+        Ok(rows)
     }
 
     async fn begin_transaction(

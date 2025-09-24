@@ -471,6 +471,124 @@ macro_rules! generate_tests {
             assert!(!final_names.contains(&"TxInsertUser".to_string()));
             assert!(!final_names.contains(&"InitialUser".to_string()));
         }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_query_raw_with_valid_sql() {
+            let db = setup_db().await;
+            let db = &**db;
+
+            // Insert test data
+            db.insert("users")
+                .value("name", "QueryTest")
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Test query_raw with valid SQL
+            let rows = db
+                .query_raw("SELECT name FROM users WHERE name = 'QueryTest'")
+                .await
+                .unwrap();
+
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].columns.len(), 1);
+            assert_eq!(rows[0].columns[0].0, "name");
+            match &rows[0].columns[0].1 {
+                switchy_database::DatabaseValue::String(s) => assert_eq!(s, "QueryTest"),
+                switchy_database::DatabaseValue::StringOpt(Some(s)) => assert_eq!(s, "QueryTest"),
+                other => panic!("Unexpected value type: {:?}", other),
+            }
+        }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_query_raw_with_empty_result() {
+            let db = setup_db().await;
+            let db = &**db;
+
+            // Test query_raw that returns no rows
+            let rows = db
+                .query_raw("SELECT name FROM users WHERE name = 'NonExistent'")
+                .await
+                .unwrap();
+
+            assert_eq!(rows.len(), 0);
+        }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_query_raw_with_invalid_sql() {
+            let db = setup_db().await;
+            let db = &**db;
+
+            // Test query_raw with invalid SQL
+            let result = db.query_raw("INVALID SQL STATEMENT").await;
+
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                switchy_database::DatabaseError::QueryFailed(_) => {
+                    // Expected error type
+                }
+                other => panic!("Expected QueryFailed error, got: {:?}", other),
+            }
+        }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_query_raw_with_ddl_statement() {
+            let db = setup_db().await;
+            let db = &**db;
+
+            // Test query_raw with DDL statement (CREATE TABLE)
+            let result = db
+                .query_raw("CREATE TABLE test_query_raw (id INTEGER, name TEXT)")
+                .await;
+
+            // DDL statements typically return empty result set, not error
+            match result {
+                Ok(rows) => {
+                    assert_eq!(
+                        rows.len(),
+                        0,
+                        "DDL statements should return empty result set"
+                    );
+                }
+                Err(_) => {
+                    // Some backends might return error for DDL in query_raw, which is also acceptable
+                }
+            }
+        }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_query_raw_in_transaction() {
+            let db = setup_db().await;
+            let db = &**db;
+
+            // Test query_raw within a transaction
+            let tx = db.begin_transaction().await.unwrap();
+
+            // Insert data in transaction
+            tx.insert("users")
+                .value("name", "TxQueryTest")
+                .execute(&*tx)
+                .await
+                .unwrap();
+
+            // Query using query_raw in transaction
+            let rows = tx
+                .query_raw("SELECT name FROM users WHERE name = 'TxQueryTest'")
+                .await
+                .unwrap();
+
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].columns[0].0, "name");
+
+            tx.commit().await.unwrap();
+
+            // Verify data is still there after commit
+            let rows = db
+                .query_raw("SELECT name FROM users WHERE name = 'TxQueryTest'")
+                .await
+                .unwrap();
+            assert_eq!(rows.len(), 1);
+        }
     };
 }
 
@@ -1170,6 +1288,34 @@ mod simulator {
 
         // Clean up
         db.exec_raw("DROP TABLE recreation_test").await.unwrap();
+    }
+
+    #[test_log::test(switchy_async::test)]
+    async fn test_simulator_query_raw_delegation() {
+        let db = setup_db().await;
+        let db = &**db;
+
+        // Insert test data
+        db.insert("users")
+            .value("name", "SimulatorQuery")
+            .execute(db)
+            .await
+            .unwrap();
+
+        // Test that simulator properly delegates query_raw to inner database
+        let rows = db
+            .query_raw("SELECT name FROM users WHERE name = 'SimulatorQuery'")
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].columns.len(), 1);
+        assert_eq!(rows[0].columns[0].0, "name");
+        match &rows[0].columns[0].1 {
+            switchy_database::DatabaseValue::String(s) => assert_eq!(s, "SimulatorQuery"),
+            switchy_database::DatabaseValue::StringOpt(Some(s)) => assert_eq!(s, "SimulatorQuery"),
+            other => panic!("Unexpected value type: {:?}", other),
+        }
     }
 }
 
