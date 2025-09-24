@@ -1681,16 +1681,43 @@ fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error>
     }
     let owned = sqlx::ValueRef::to_owned(value);
     match value.type_info().name() {
-        "BOOL" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
-        "CHAR" | "SMALLINT" | "SMALLSERIAL" | "INT2" | "INT" | "SERIAL" | "INT4" | "BIGINT"
-        | "BIGSERIAL" | "INT8" => Ok(DatabaseValue::Number(owned.try_decode()?)),
-        "REAL" | "FLOAT4" | "DOUBLE PRECISION" | "FLOAT8" => {
+        // MySQL boolean types (TINYINT(1) is used for booleans)
+        "BOOLEAN" | "BOOL" | "TINYINT" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
+        // MySQL integer types
+        "SMALLINT" | "MEDIUMINT" | "INT" | "INTEGER" | "BIGINT" => {
+            Ok(DatabaseValue::Number(owned.try_decode()?))
+        }
+        // MySQL floating point types
+        "FLOAT" | "DOUBLE" | "REAL" | "DECIMAL" | "NUMERIC" => {
             Ok(DatabaseValue::Real(owned.try_decode()?))
         }
-        "VARCHAR" | "CHAR(N)" | "TEXT" | "NAME" | "CITEXT" => {
+        // MySQL string types
+        "VARCHAR" | "CHAR" | "TEXT" | "TINYTEXT" | "MEDIUMTEXT" | "LONGTEXT" | "BINARY"
+        | "VARBINARY" | "BLOB" | "TINYBLOB" | "MEDIUMBLOB" | "LONGBLOB" => {
             Ok(DatabaseValue::String(owned.try_decode()?))
         }
-        "TIMESTAMP" => Ok(DatabaseValue::DateTime(owned.try_decode()?)),
+        // MySQL date/time types
+        "DATE" | "TIME" | "DATETIME" | "YEAR" => Ok(DatabaseValue::DateTime(owned.try_decode()?)),
+        "TIMESTAMP" => {
+            // MySQL TIMESTAMP is UTC-based, try different datetime types
+            // First try NaiveDateTime directly
+            owned.try_decode::<chrono::NaiveDateTime>().map_or_else(
+                |_| {
+                    owned
+                        .try_decode::<chrono::DateTime<chrono::Utc>>()
+                        .map_or_else(
+                            |_| match owned.try_decode::<chrono::DateTime<chrono::Local>>() {
+                                Ok(dt) => Ok(DatabaseValue::DateTime(dt.naive_local())),
+                                Err(e) => Err(e), // Give up and return the decode error
+                            },
+                            |dt| Ok(DatabaseValue::DateTime(dt.naive_utc())),
+                        )
+                },
+                |dt| Ok(DatabaseValue::DateTime(dt)),
+            )
+        }
+        // MySQL JSON type
+        "JSON" => Ok(DatabaseValue::String(owned.try_decode()?)),
         _ => Err(sqlx::Error::TypeNotFound {
             type_name: value.type_info().name().to_string(),
         }),
