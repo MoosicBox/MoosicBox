@@ -1795,48 +1795,95 @@ async fn update_and_get_rows(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
-    let select_query = limit.map(|_| {
-        format!(
-            "SELECT rowid FROM {table_name} {}",
-            build_where_clause(filters),
-        )
-    });
+    // MySQL doesn't support RETURNING, so we emulate it with SELECT + UPDATE + SELECT
+    use sqlx::Connection;
 
-    let query = format!(
-        "UPDATE {table_name} {} {} ",
-        build_set_clause(values),
-        build_update_where_clause(filters, limit, select_query.as_deref()),
+    // Start a transaction to ensure atomicity
+    let mut tx = connection.begin().await?;
+
+    // Step 1: SELECT the IDs of rows that will be updated (with FOR UPDATE lock)
+    let id_select_query = format!(
+        "SELECT id FROM {table_name} {} {} FOR UPDATE",
+        build_where_clause(filters),
+        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
-    let all_values = values
+    log::trace!(
+        "Running ID select before update query: {id_select_query} with params: {:?}",
+        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
+    );
+
+    let filter_params = bexprs_to_values_opt(filters);
+    let id_select_bound = bind_values(sqlx::query(&id_select_query), filter_params.as_deref())?;
+
+    // Get the IDs of rows to be updated
+    let id_rows: Vec<MySqlRow> = id_select_bound.fetch_all(&mut *tx).await?;
+
+    if id_rows.is_empty() {
+        // No rows to update, commit and return empty
+        tx.commit().await?;
+        return Ok(vec![]);
+    }
+
+    // Extract IDs
+    let ids: Vec<i64> = id_rows
+        .into_iter()
+        .map(|row| row.get::<i64, _>("id"))
+        .collect();
+
+    // Step 2: Perform the UPDATE using the collected IDs
+    let update_query = format!(
+        "UPDATE {table_name} {} WHERE id IN ({})",
+        build_set_clause(values),
+        ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
+    );
+
+    // Prepare parameters: first update values, then IDs
+    let update_values = values
         .iter()
         .flat_map(|(_, value)| value.params().unwrap_or(vec![]).into_iter().cloned())
         .map(std::convert::Into::into)
         .collect::<Vec<MySqlDatabaseValue>>();
-    let mut all_filter_values = filters
-        .map(|filters| {
-            filters
-                .iter()
-                .flat_map(|value| value.params().unwrap_or_default().into_iter().cloned())
-                .map(std::convert::Into::into)
-                .collect::<Vec<MySqlDatabaseValue>>()
-        })
-        .unwrap_or_default();
 
-    if limit.is_some() {
-        all_filter_values.extend(all_filter_values.clone());
+    let id_params: Vec<MySqlDatabaseValue> = ids
+        .iter()
+        .map(|&id| MySqlDatabaseValue::from(crate::DatabaseValue::Number(id)))
+        .collect();
+
+    let all_update_params = [update_values, id_params.clone()].concat();
+
+    log::trace!("Running update query: {update_query} with params: {all_update_params:?}");
+
+    let update_bound = bind_values(sqlx::query(&update_query), Some(&all_update_params))?;
+    update_bound.execute(&mut *tx).await?;
+
+    // Step 3: SELECT the updated rows
+    let final_select_query = format!(
+        "SELECT * FROM {table_name} WHERE id IN ({})",
+        ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
+    );
+
+    let final_select_bound = bind_values(sqlx::query(&final_select_query), Some(&id_params))?;
+    let updated_rows: Vec<MySqlRow> = final_select_bound.fetch_all(&mut *tx).await?;
+
+    // Step 4: Commit the transaction
+    tx.commit().await?;
+
+    // Step 5: Convert MySQL rows to our Row format
+    let mut results = Vec::new();
+    if !updated_rows.is_empty() {
+        let column_names: Vec<String> = updated_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        for row in updated_rows {
+            results.push(from_row(&column_names, &row)?);
+        }
     }
 
-    let all_values = [all_values, all_filter_values].concat();
-
-    log::trace!("Running update query: {query} with params: {all_values:?}");
-
-    let query = bind_values(sqlx::query(&query), Some(&all_values))?;
-    query.execute(connection).await?;
-
-    // MySQL doesn't support RETURNING, so we return empty vec for now
-    // TODO: Implement SELECT after UPDATE for MySQL 8+ support
-    Ok(vec![])
+    Ok(results)
 }
 
 fn build_join_clauses(joins: Option<&[Join]>) -> String {
@@ -2098,24 +2145,68 @@ async fn delete(
     filters: Option<&[Box<dyn BooleanExpression>]>,
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
-    let query = format!(
-        "DELETE FROM {table_name} {}  {}",
+    // MySQL doesn't support RETURNING, so we emulate it with SELECT + DELETE + transaction
+    use sqlx::Connection;
+
+    // Start a transaction to ensure atomicity
+    let mut tx = connection.begin().await?;
+
+    // Step 1: SELECT the rows that will be deleted
+    let select_query = format!(
+        "SELECT * FROM {table_name} {} {} FOR UPDATE",
         build_where_clause(filters),
         limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
 
     log::trace!(
-        "Running delete query: {query} with params: {:?}",
+        "Running select before delete query: {select_query} with params: {:?}",
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let filters = bexprs_to_values_opt(filters);
-    let query = bind_values(sqlx::query(&query), filters.as_deref())?;
-    query.execute(connection).await?;
+    let filter_params = bexprs_to_values_opt(filters);
+    let select_bound = bind_values(sqlx::query(&select_query), filter_params.as_deref())?;
 
-    // MySQL doesn't support RETURNING, so we return empty vec for now
-    // TODO: Implement SELECT before DELETE for MySQL 8+ support
-    Ok(vec![])
+    // Execute SELECT and collect results
+    let selected_rows: Vec<MySqlRow> = select_bound.fetch_all(&mut *tx).await?;
+
+    if selected_rows.is_empty() {
+        // No rows to delete, commit and return empty
+        tx.commit().await?;
+        return Ok(vec![]);
+    }
+
+    // Get column names from first row
+    let column_names: Vec<String> = selected_rows[0]
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+
+    // Step 2: Now delete the rows
+    let delete_query = format!(
+        "DELETE FROM {table_name} {} {}",
+        build_where_clause(filters),
+        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
+    );
+
+    log::trace!(
+        "Running delete query: {delete_query} with params: {:?}",
+        filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
+    );
+
+    let delete_bound = bind_values(sqlx::query(&delete_query), filter_params.as_deref())?;
+    delete_bound.execute(&mut *tx).await?;
+
+    // Step 3: Commit the transaction
+    tx.commit().await?;
+
+    // Step 4: Convert MySQL rows to our Row format
+    let mut results = Vec::new();
+    for row in selected_rows {
+        results.push(from_row(&column_names, &row)?);
+    }
+
+    Ok(results)
 }
 
 async fn find_row(
@@ -2166,6 +2257,12 @@ async fn insert_and_get_row(
     table_name: &str,
     values: &[(&str, Box<dyn Expression>)],
 ) -> Result<crate::Row, SqlxDatabaseError> {
+    // MySQL doesn't support RETURNING, so we emulate it with INSERT + SELECT
+    use sqlx::Connection;
+
+    // Start a transaction to ensure atomicity
+    let mut tx = connection.begin().await?;
+
     let column_names = values
         .iter()
         .map(|(key, _v)| format!("`{key}`"))
@@ -2178,26 +2275,40 @@ async fn insert_and_get_row(
     );
 
     log::trace!(
-        "Running insert_and_get_row query: {query} with params: {:?}",
+        "Running insert query: {query} with params: {:?}",
         values
             .iter()
             .filter_map(|(_, x)| x.params())
             .collect::<Vec<_>>()
     );
 
-    let values = exprs_to_values(values);
-    let query = bind_values(sqlx::query(&query), Some(&values))?;
-    let result = query.execute(connection).await?;
+    let insert_values = exprs_to_values(values);
+    let insert_bound = bind_values(sqlx::query(&query), Some(&insert_values))?;
+    let result = insert_bound.execute(&mut *tx).await?;
 
-    // For INSERT, we can use LAST_INSERT_ID() to get the inserted ID
-    // and then SELECT the row, but for now return a minimal row
-    // TODO: Implement proper INSERT RETURNING for MySQL 8+
-    Ok(crate::Row {
-        columns: vec![(
-            "id".to_string(),
-            crate::DatabaseValue::UNumber(result.last_insert_id()),
-        )],
-    })
+    // Get the ID of the inserted row
+    let inserted_id = result.last_insert_id();
+
+    // Step 2: SELECT the inserted row to get all columns
+    let select_query = format!("SELECT * FROM {table_name} WHERE id = ?");
+
+    log::trace!("Running select after insert query: {select_query} with id: {inserted_id}");
+
+    #[allow(clippy::cast_possible_wrap)]
+    let select_bound = sqlx::query(&select_query).bind(inserted_id as i64);
+    let inserted_row: MySqlRow = select_bound.fetch_one(&mut *tx).await?;
+
+    // Step 3: Commit the transaction
+    tx.commit().await?;
+
+    // Step 4: Convert MySQL row to our Row format
+    let column_names: Vec<String> = inserted_row
+        .columns()
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+
+    from_row(&column_names, &inserted_row)
 }
 
 /// # Errors
