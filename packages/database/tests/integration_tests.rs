@@ -1015,7 +1015,7 @@ mod simulator {
         db.alter_table("alter_modify_test")
             .modify_column(
                 "data".to_string(),
-                switchy_database::schema::DataType::Int,
+                switchy_database::schema::DataType::BigInt,
                 Some(true), // Make it nullable
                 Some(switchy_database::DatabaseValue::Number(0)),
             )
@@ -1786,4 +1786,714 @@ mod simulator_introspection_tests {
         let suite = SimulatorIntrospectionTests;
         suite.run_all_tests().await;
     }
+}
+
+// Backend-agnostic CASCADE tests macro
+#[cfg(feature = "cascade")]
+macro_rules! generate_cascade_tests {
+    () => {
+        use switchy_database::schema::{Column, DataType};
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_cascade_find_targets_linear() {
+            let Some(db) = setup_db().await else {
+                return;
+            };
+            let db = &**db;
+
+            // Generate unique table names for this test
+            let suffix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                % 1_000_000_000;
+            let users_table = format!("linear_users_{suffix}");
+            let posts_table = format!("linear_posts_{suffix}");
+            let comments_table = format!("linear_comments_{suffix}");
+
+            // Drop tables if they exist (cleanup from previous runs)
+            db.drop_table(&users_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&posts_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&comments_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+
+            // Create linear dependency chain: users -> posts -> comments
+            db.create_table(&users_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "name".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&posts_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "user_id".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "title".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("user_id", &users_table))
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&comments_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "post_id".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "content".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("post_id", &posts_table))
+                .execute(db)
+                .await
+                .unwrap();
+
+            let tx = db.begin_transaction().await.unwrap();
+
+            let plan = tx.find_cascade_targets(&users_table).await.unwrap();
+
+            match plan {
+                switchy_database::schema::DropPlan::Simple(tables) => {
+                    assert_eq!(tables.len(), 3);
+                    assert!(tables.contains(&users_table));
+                    assert!(tables.contains(&posts_table));
+                    assert!(tables.contains(&comments_table));
+
+                    // Verify order: dependents before dependencies
+                    let users_pos = tables.iter().position(|t| t == &users_table).unwrap();
+                    let posts_pos = tables.iter().position(|t| t == &posts_table).unwrap();
+                    let comments_pos = tables.iter().position(|t| t == &comments_table).unwrap();
+
+                    assert!(comments_pos < posts_pos);
+                    assert!(posts_pos < users_pos);
+                }
+                switchy_database::schema::DropPlan::WithCycles { .. } => {
+                    panic!("Expected Simple drop plan for linear dependencies");
+                }
+            }
+
+            tx.rollback().await.unwrap();
+
+            // Cleanup
+            db.drop_table(&comments_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&posts_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&users_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+        }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_cascade_has_any_dependents() {
+            let Some(db) = setup_db().await else {
+                return;
+            };
+            let db = &**db;
+
+            // Generate unique table names for this test
+            let suffix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                % 1_000_000_000;
+            let parent_table = format!("deps_parent_{suffix}");
+            let child_table = format!("deps_child_{suffix}");
+            let orphan_table = format!("deps_orphan_{suffix}");
+
+            // Drop tables if they exist (cleanup from previous runs)
+            db.drop_table(&parent_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&child_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&orphan_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+
+            // Create parent -> child, plus orphan table
+            db.create_table(&parent_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "data".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&child_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "parent_id".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("parent_id", &parent_table))
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&orphan_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "data".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db)
+                .await
+                .unwrap();
+
+            let tx = db.begin_transaction().await.unwrap();
+
+            assert!(tx.has_any_dependents(&parent_table).await.unwrap());
+            assert!(!tx.has_any_dependents(&child_table).await.unwrap());
+            assert!(!tx.has_any_dependents(&orphan_table).await.unwrap());
+            assert!(!tx.has_any_dependents("nonexistent").await.unwrap());
+
+            tx.rollback().await.unwrap();
+
+            // Cleanup
+            db.drop_table(&child_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&orphan_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&parent_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+        }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_cascade_get_direct_dependents() {
+            let Some(db) = setup_db().await else {
+                return;
+            };
+            let db = &**db;
+
+            // Generate unique table names for this test
+            let suffix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                % 1_000_000_000;
+            let root_table = format!("diamond_root_{suffix}");
+            let branch1_table = format!("diamond_branch1_{suffix}");
+            let branch2_table = format!("diamond_branch2_{suffix}");
+            let leaf_table = format!("diamond_leaf_{suffix}");
+
+            // Drop tables if they exist (cleanup from previous runs)
+            db.drop_table(&leaf_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&branch1_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&branch2_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&root_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+
+            // Create diamond dependency: root -> (branch1, branch2) -> leaf
+            db.create_table(&root_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&branch1_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "root_id".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("root_id", &root_table))
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&branch2_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "root_id".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("root_id", &root_table))
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Note: CreateTableStatement only supports single column FKs in current API
+            // So we create leaf with FK to branch1 only
+            db.create_table(&leaf_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "branch1_id".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("branch1_id", &branch1_table))
+                .execute(db)
+                .await
+                .unwrap();
+
+            let tx = db.begin_transaction().await.unwrap();
+
+            let root_deps = tx.get_direct_dependents(&root_table).await.unwrap();
+            assert_eq!(root_deps.len(), 2);
+            assert!(root_deps.contains(&branch1_table));
+            assert!(root_deps.contains(&branch2_table));
+
+            let branch1_deps = tx.get_direct_dependents(&branch1_table).await.unwrap();
+            assert_eq!(branch1_deps.len(), 1);
+            assert!(branch1_deps.contains(&leaf_table));
+
+            let branch2_deps = tx.get_direct_dependents(&branch2_table).await.unwrap();
+            assert_eq!(branch2_deps.len(), 0); // No FK to branch2 in simplified test
+
+            let leaf_deps = tx.get_direct_dependents(&leaf_table).await.unwrap();
+            assert!(leaf_deps.is_empty());
+
+            tx.rollback().await.unwrap();
+
+            // Cleanup
+            db.drop_table(&leaf_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&branch1_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&branch2_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&root_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+        }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_cascade_drop_restrict() {
+            let Some(db) = setup_db().await else {
+                return;
+            };
+            let db = &**db;
+
+            // Generate unique table names for this test
+            let suffix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                % 1_000_000_000;
+            let parent_table = format!("restrict_parent_{suffix}");
+            let child_table = format!("restrict_child_{suffix}");
+
+            // Drop tables if they exist (cleanup from previous runs)
+            db.drop_table(&child_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&parent_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+
+            // Create parent -> child
+            db.create_table(&parent_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "name".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&child_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "parent_id".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("parent_id", &parent_table))
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Insert data
+            db.insert(&parent_table)
+                .value("id", 1)
+                .value("name", "Parent1")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.insert(&child_table)
+                .value("id", 1)
+                .value("parent_id", 1)
+                .execute(db)
+                .await
+                .unwrap();
+
+            let tx = db.begin_transaction().await.unwrap();
+
+            // RESTRICT should fail with dependents
+            let restrict_result = tx.drop_table(&parent_table).restrict().execute(&*tx).await;
+
+            assert!(restrict_result.is_err());
+
+            tx.rollback().await.unwrap();
+
+            // Cleanup
+            db.drop_table(&child_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&parent_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+        }
+    };
+}
+
+// Backend-specific CASCADE test modules
+#[cfg(all(feature = "sqlite-rusqlite", feature = "cascade"))]
+mod rusqlite_cascade_tests {
+    use super::*;
+    use ::rusqlite::Connection;
+    use std::sync::Arc;
+    use switchy_async::sync::Mutex;
+    use switchy_database::rusqlite::RusqliteDatabase;
+
+    async fn setup_db() -> Option<Arc<Box<dyn Database>>> {
+        // Use shared cache in-memory database (same pattern as introspection tests)
+        let test_id = std::thread::current().id();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let db_url =
+            format!("file:cascade_test_{test_id:?}_{timestamp}:?mode=memory&cache=shared&uri=true");
+
+        let mut connections = Vec::new();
+        for _ in 0..5 {
+            let conn = Connection::open(&db_url).unwrap();
+            connections.push(Arc::new(Mutex::new(conn)));
+        }
+
+        let db = RusqliteDatabase::new(connections);
+        Some(Arc::new(Box::new(db) as Box<dyn Database>))
+    }
+
+    generate_cascade_tests!();
+}
+
+#[cfg(all(feature = "sqlite-sqlx", feature = "cascade"))]
+mod sqlx_sqlite_cascade_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_async::sync::Mutex;
+    use switchy_database::sqlx::sqlite::SqliteSqlxDatabase;
+
+    async fn setup_db() -> Option<Arc<Box<dyn Database>>> {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        // Use in-memory database with shared cache (same pattern as savepoint tests)
+        let database_url = "sqlite::memory:?cache=shared";
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .min_connections(2)
+            .connect(database_url)
+            .await
+            .unwrap();
+
+        let db = SqliteSqlxDatabase::new(Arc::new(Mutex::new(pool)));
+        Some(Arc::new(Box::new(db) as Box<dyn Database>))
+    }
+
+    generate_cascade_tests!();
+}
+
+#[cfg(all(feature = "simulator", feature = "cascade"))]
+mod simulator_cascade_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::simulator::SimulationDatabase;
+
+    async fn setup_db() -> Option<Arc<Box<dyn Database>>> {
+        let db = SimulationDatabase::new().unwrap();
+        Some(Arc::new(Box::new(db) as Box<dyn Database>))
+    }
+
+    generate_cascade_tests!();
+}
+
+// PostgreSQL postgres-raw backend CASCADE tests
+#[cfg(all(
+    feature = "postgres-raw",
+    feature = "cascade",
+    not(feature = "postgres-sqlx")
+))]
+mod postgres_cascade_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::postgres::postgres::PostgresDatabase;
+
+    async fn setup_db() -> Option<Arc<Box<dyn Database>>> {
+        let url = std::env::var("POSTGRES_TEST_URL").ok()?;
+
+        let mut cfg = deadpool_postgres::Config::new();
+        cfg.url = Some(url.clone());
+
+        let pool = if url.contains("sslmode=require") {
+            let connector = native_tls::TlsConnector::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap();
+            let connector = postgres_native_tls::MakeTlsConnector::new(connector);
+            cfg.create_pool(Some(deadpool_postgres::Runtime::Tokio1), connector)
+                .unwrap()
+        } else {
+            cfg.create_pool(
+                Some(deadpool_postgres::Runtime::Tokio1),
+                tokio_postgres::NoTls,
+            )
+            .unwrap()
+        };
+
+        let db = PostgresDatabase::new(pool);
+        Some(Arc::new(Box::new(db) as Box<dyn Database>))
+    }
+
+    generate_cascade_tests!();
+}
+
+// PostgreSQL sqlx backend CASCADE tests
+#[cfg(all(feature = "postgres-sqlx", feature = "cascade"))]
+mod postgres_sqlx_cascade_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_async::sync::Mutex;
+    use switchy_database::sqlx::postgres::PostgresSqlxDatabase;
+
+    async fn setup_db() -> Option<Arc<Box<dyn Database>>> {
+        use sqlx::PgPool;
+
+        let url = std::env::var("POSTGRES_TEST_URL").ok()?;
+
+        let pool = PgPool::connect(&url).await.ok()?;
+        let pool = Arc::new(Mutex::new(pool));
+        let db = PostgresSqlxDatabase::new(pool);
+        Some(Arc::new(Box::new(db) as Box<dyn Database>))
+    }
+
+    generate_cascade_tests!();
+}
+
+// MySQL sqlx backend CASCADE tests
+#[cfg(all(feature = "mysql-sqlx", feature = "cascade"))]
+mod mysql_sqlx_cascade_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_async::sync::Mutex;
+    use switchy_database::sqlx::mysql::MySqlSqlxDatabase;
+
+    async fn setup_db() -> Option<Arc<Box<dyn Database>>> {
+        use sqlx::MySqlPool;
+
+        let url = std::env::var("MYSQL_TEST_URL").ok()?;
+
+        let pool = MySqlPool::connect(&url).await.ok()?;
+        let pool = Arc::new(Mutex::new(pool));
+        let db = MySqlSqlxDatabase::new(pool);
+        Some(Arc::new(Box::new(db) as Box<dyn Database>))
+    }
+
+    generate_cascade_tests!();
 }
