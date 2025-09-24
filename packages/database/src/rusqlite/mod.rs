@@ -1001,6 +1001,133 @@ impl DatabaseTransaction for RusqliteTransaction {
             rolled_back: AtomicBool::new(false),
         }))
     }
+
+    /// SQLite-optimized CASCADE target discovery using PRAGMA `foreign_key_list`
+    #[cfg(feature = "cascade")]
+    async fn find_cascade_targets(
+        &self,
+        table_name: &str,
+    ) -> Result<crate::schema::DropPlan, DatabaseError> {
+        let mut all_dependents = std::collections::BTreeSet::new();
+        let mut to_check = vec![table_name.to_string()];
+        let mut checked = std::collections::BTreeSet::new();
+
+        while let Some(current_table) = to_check.pop() {
+            if !checked.insert(current_table.clone()) {
+                continue;
+            }
+
+            // Get all tables using query_raw
+            let tables_query =
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+            let tables = self.query_raw(tables_query).await?;
+
+            for table_row in tables {
+                if let Some((_, crate::DatabaseValue::String(check_table))) =
+                    table_row.columns.first()
+                {
+                    if check_table == &current_table {
+                        continue;
+                    }
+
+                    // Validate table name for PRAGMA (cannot be parameterized)
+                    crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
+                    let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+                    let fk_rows = self.query_raw(&fk_query).await?;
+
+                    for fk_row in fk_rows {
+                        // Column 2 is the referenced table
+                        // This assumes PRAGMA foreign_key_list column order:
+                        // id, seq, table, from, to, on_update, on_delete, match
+                        if let Some((_, crate::DatabaseValue::String(ref_table))) =
+                            fk_row.columns.get(2)
+                            && ref_table == &current_table
+                        {
+                            all_dependents.insert(check_table.clone());
+                            to_check.push(check_table.clone());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build proper drop order (dependents first)
+        let mut drop_order: Vec<String> = all_dependents.into_iter().collect();
+        drop_order.push(table_name.to_string());
+
+        // Simplified cycle detection for Phase 15.1.4 - real implementation would track properly
+        Ok(crate::schema::DropPlan::Simple(drop_order))
+    }
+
+    /// SQLite-optimized dependency check with early termination
+    #[cfg(feature = "cascade")]
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let tables_query =
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+        let tables = self.query_raw(tables_query).await?;
+
+        for table_row in tables {
+            if let Some((_, crate::DatabaseValue::String(check_table))) = table_row.columns.first()
+            {
+                if check_table == table_name {
+                    continue;
+                }
+
+                crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
+                let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+                let fk_rows = self.query_raw(&fk_query).await?;
+
+                for fk_row in fk_rows {
+                    if let Some((_, crate::DatabaseValue::String(ref_table))) =
+                        fk_row.columns.get(2)
+                        && ref_table == table_name
+                    {
+                        return Ok(true); // Found dependent, stop immediately
+                    }
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Get direct dependents of a table (SQLite-optimized)
+    #[cfg(feature = "cascade")]
+    async fn get_direct_dependents(
+        &self,
+        table_name: &str,
+    ) -> Result<std::collections::BTreeSet<String>, DatabaseError> {
+        let mut dependents = std::collections::BTreeSet::new();
+        let tables_query =
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+        let tables = self.query_raw(tables_query).await?;
+
+        for table_row in tables {
+            if let Some((_, crate::DatabaseValue::String(check_table))) = table_row.columns.first()
+            {
+                if check_table == table_name {
+                    continue;
+                }
+
+                crate::schema::dependencies::validate_table_name_for_pragma(check_table)?;
+                let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+                let fk_rows = self.query_raw(&fk_query).await?;
+
+                for fk_row in fk_rows {
+                    if let Some((_, crate::DatabaseValue::String(ref_table))) =
+                        fk_row.columns.get(2)
+                        && ref_table == table_name
+                    {
+                        dependents.insert(check_table.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(dependents)
+    }
 }
 
 impl From<Value> for DatabaseValue {

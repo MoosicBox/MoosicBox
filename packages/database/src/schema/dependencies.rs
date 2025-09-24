@@ -472,6 +472,23 @@ pub async fn get_all_dependents_recursive(
     Ok(all_dependents)
 }
 
+/// For `SQLite` `PRAGMA`: Table names cannot be parameterized
+/// Basic validation for PRAGMA syntax - NOT comprehensive security
+///
+/// # Errors
+///
+/// * Returns `DatabaseError::InvalidQuery` if table name contains unsafe characters
+pub fn validate_table_name_for_pragma(name: &str) -> Result<(), DatabaseError> {
+    // Only allow safe characters for PRAGMA usage
+    if name.chars().all(|c| c.is_alphanumeric() || c == '_') && !name.is_empty() {
+        Ok(())
+    } else {
+        Err(DatabaseError::InvalidQuery(format!(
+            "Table name contains unsafe characters for PRAGMA: {name}"
+        )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

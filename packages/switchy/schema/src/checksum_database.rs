@@ -426,6 +426,50 @@ impl DatabaseTransaction for ChecksumDatabase {
             rolled_back: Arc::new(AtomicBool::new(false)),
         }))
     }
+
+    /// CASCADE target discovery (checksum tracking)
+    async fn find_cascade_targets(
+        &self,
+        table_name: &str,
+    ) -> Result<switchy_database::schema::DropPlan, DatabaseError> {
+        let mut hasher = self.hasher.lock().await;
+        hasher.update(b"FIND_CASCADE_TARGETS:");
+        hasher.update(table_name.as_bytes());
+        hasher.update(b":");
+        drop(hasher);
+
+        // Return deterministic result for checksum consistency
+        Ok(switchy_database::schema::DropPlan::Simple(vec![
+            table_name.to_string(),
+        ]))
+    }
+
+    /// Dependency check (checksum tracking)
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let mut hasher = self.hasher.lock().await;
+        hasher.update(b"HAS_ANY_DEPENDENTS:");
+        hasher.update(table_name.as_bytes());
+        hasher.update(b":");
+        drop(hasher);
+
+        // Return deterministic result for checksum consistency
+        Ok(false)
+    }
+
+    /// Direct dependents (checksum tracking)
+    async fn get_direct_dependents(
+        &self,
+        table_name: &str,
+    ) -> Result<std::collections::BTreeSet<String>, DatabaseError> {
+        let mut hasher = self.hasher.lock().await;
+        hasher.update(b"GET_DIRECT_DEPENDENTS:");
+        hasher.update(table_name.as_bytes());
+        hasher.update(b":");
+        drop(hasher);
+
+        // Return deterministic empty result for checksum consistency
+        Ok(std::collections::BTreeSet::new())
+    }
 }
 
 #[must_use]

@@ -1089,6 +1089,136 @@ impl crate::DatabaseTransaction for PostgresTransaction {
             parent_rolled_back: Arc::clone(&self.rolled_back),
         }))
     }
+
+    /// PostgreSQL-optimized CASCADE discovery using recursive CTE
+    #[cfg(feature = "cascade")]
+    async fn find_cascade_targets(
+        &self,
+        table_name: &str,
+    ) -> Result<crate::schema::DropPlan, DatabaseError> {
+        let query = format!(
+            r"
+            WITH RECURSIVE dependent_tables AS (
+                -- Base case: direct dependents
+                SELECT DISTINCT
+                    tc.table_name as dependent_table,
+                    1 as level
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                    AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name = '{table_name}'
+                    AND tc.table_schema = current_schema()
+
+                UNION
+
+                -- Recursive case: indirect dependents
+                SELECT DISTINCT
+                    tc.table_name as dependent_table,
+                    dt.level + 1 as level
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                    AND ccu.table_schema = tc.table_schema
+                JOIN dependent_tables dt ON ccu.table_name = dt.dependent_table
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND tc.table_schema = current_schema()
+            )
+            SELECT dependent_table
+            FROM dependent_tables
+            ORDER BY level DESC, dependent_table
+            "
+        );
+
+        let rows = self.query_raw(&query).await?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            if let Some((_, crate::DatabaseValue::String(table))) = row.columns.first() {
+                result.push(table.clone());
+            }
+        }
+
+        // Add the original table at the end (dropped last)
+        result.push(table_name.to_string());
+
+        // Simplified cycle detection for Phase 15.1.4 - real implementation would track properly
+        Ok(crate::schema::DropPlan::Simple(result))
+    }
+
+    /// PostgreSQL-optimized dependency check using EXISTS
+    #[cfg(feature = "cascade")]
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let query = format!(
+            r"
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                    AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name = '{table_name}'
+                    AND tc.table_schema = current_schema()
+                LIMIT 1
+            ) as has_dependents
+            "
+        );
+
+        let rows = self.query_raw(&query).await?;
+
+        if let Some(row) = rows.first()
+            && let Some((_, crate::DatabaseValue::Bool(has_deps))) = row.columns.first()
+        {
+            return Ok(*has_deps);
+        }
+
+        Ok(false)
+    }
+
+    /// Get direct dependents of a table (PostgreSQL-optimized)
+    #[cfg(feature = "cascade")]
+    async fn get_direct_dependents(
+        &self,
+        table_name: &str,
+    ) -> Result<std::collections::BTreeSet<String>, DatabaseError> {
+        let query = format!(
+            r"
+            SELECT DISTINCT tc.table_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON ccu.constraint_name = tc.constraint_name
+                AND ccu.table_schema = tc.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name = '{table_name}'
+                    AND tc.table_schema = current_schema()
+            "
+        );
+
+        let rows = self.query_raw(&query).await?;
+
+        let mut dependents = std::collections::BTreeSet::new();
+        for row in rows {
+            if let Some((_, crate::DatabaseValue::String(table))) = row.columns.first() {
+                dependents.insert(table.clone());
+            }
+        }
+
+        Ok(dependents)
+    }
 }
 
 fn column_value(row: &Row, index: &str) -> Result<DatabaseValue, PostgresDatabaseError> {

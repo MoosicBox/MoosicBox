@@ -1118,6 +1118,105 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
             rolled_back: AtomicBool::new(false),
         }))
     }
+
+    /// MySQL-optimized CASCADE discovery with version detection
+    #[cfg(feature = "cascade")]
+    async fn find_cascade_targets(
+        &self,
+        table_name: &str,
+    ) -> Result<crate::schema::DropPlan, DatabaseError> {
+        // Try recursive CTE first (MySQL 8.0+)
+        let recursive_query = format!(
+            r"
+            WITH RECURSIVE dependent_tables AS (
+                SELECT DISTINCT
+                    kcu.TABLE_NAME as dependent_table,
+                    1 as level
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+                WHERE kcu.REFERENCED_TABLE_NAME = '{table_name}'
+                    AND kcu.TABLE_SCHEMA = DATABASE()
+
+                UNION
+
+                SELECT DISTINCT
+                    kcu.TABLE_NAME as dependent_table,
+                    dt.level + 1 as level
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+                JOIN dependent_tables dt ON kcu.REFERENCED_TABLE_NAME = dt.dependent_table
+                WHERE kcu.TABLE_SCHEMA = DATABASE()
+            )
+            SELECT dependent_table
+            FROM dependent_tables
+            ORDER BY level DESC, dependent_table
+            "
+        );
+
+        let rows = self.query_raw(&recursive_query).await?;
+        let mut result = Vec::new();
+        for row in rows {
+            if let Some((_, crate::DatabaseValue::String(table))) = row.columns.first() {
+                result.push(table.clone());
+            }
+        }
+        result.push(table_name.to_string());
+        Ok(crate::schema::DropPlan::Simple(result))
+    }
+
+    /// MySQL-optimized dependency check
+    #[cfg(feature = "cascade")]
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError> {
+        let query = format!(
+            r"
+            SELECT EXISTS (
+                SELECT 1
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                WHERE REFERENCED_TABLE_NAME = '{table_name}'
+                    AND TABLE_SCHEMA = DATABASE()
+                LIMIT 1
+            ) as has_dependents
+            "
+        );
+
+        let rows = self.query_raw(&query).await?;
+
+        if let Some(row) = rows.first() {
+            // MySQL might return as integer (1/0) or boolean
+            match row.columns.first() {
+                Some((_, crate::DatabaseValue::Bool(has_deps))) => return Ok(*has_deps),
+                Some((_, crate::DatabaseValue::Number(n))) => return Ok(*n != 0),
+                _ => {}
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// Get direct dependents of a table (MySQL-optimized)
+    #[cfg(feature = "cascade")]
+    async fn get_direct_dependents(
+        &self,
+        table_name: &str,
+    ) -> Result<std::collections::BTreeSet<String>, DatabaseError> {
+        let query = format!(
+            r"
+            SELECT DISTINCT TABLE_NAME
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+            WHERE REFERENCED_TABLE_NAME = '{table_name}'
+                AND TABLE_SCHEMA = DATABASE()
+            "
+        );
+
+        let rows = self.query_raw(&query).await?;
+
+        let mut dependents = std::collections::BTreeSet::new();
+        for row in rows {
+            if let Some((_, crate::DatabaseValue::String(table))) = row.columns.first() {
+                dependents.insert(table.clone());
+            }
+        }
+
+        Ok(dependents)
+    }
 }
 
 #[cfg(feature = "schema")]

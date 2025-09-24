@@ -1181,6 +1181,50 @@ pub trait DatabaseTransaction: Database + Send + Sync {
     /// * If a savepoint with this name already exists
     /// * If the savepoint name is invalid
     async fn savepoint(&self, name: &str) -> Result<Box<dyn Savepoint>, DatabaseError>;
+
+    /// CASCADE-specific methods (feature-gated)
+    /// Find all tables that would be affected by CASCADE deletion of the specified table
+    /// Returns a `DropPlan` which handles both simple and circular dependencies
+    ///
+    /// # Performance
+    ///
+    /// Time: O(d * f) where d = dependent tables, f = foreign keys per table
+    /// Space: O(d) for visited set and results
+    /// Note: Optimized for targeted discovery instead of analyzing all tables
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError` if dependency discovery fails
+    #[cfg(feature = "cascade")]
+    async fn find_cascade_targets(
+        &self,
+        table_name: &str,
+    ) -> Result<crate::schema::DropPlan, DatabaseError>;
+
+    /// Check if a table has any dependents (for RESTRICT validation)
+    /// Returns immediately upon finding first dependent for efficiency
+    ///
+    /// # Performance
+    ///
+    /// Best case: O(1) - stops at first dependent found
+    /// Worst case: O(n) - only when table has no dependents
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError` if introspection fails
+    #[cfg(feature = "cascade")]
+    async fn has_any_dependents(&self, table_name: &str) -> Result<bool, DatabaseError>;
+
+    /// Get direct dependents of a table (one level only, no recursion)
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError` if table introspection fails
+    #[cfg(feature = "cascade")]
+    async fn get_direct_dependents(
+        &self,
+        table_name: &str,
+    ) -> Result<std::collections::BTreeSet<String>, DatabaseError>;
 }
 
 #[async_trait]

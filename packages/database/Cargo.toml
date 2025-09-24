@@ -110,3 +110,4 @@ sqlx = []
 simulator = ["sqlite-rusqlite"]
 
 schema = []
+cascade = ["schema"]

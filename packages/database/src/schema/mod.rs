@@ -340,16 +340,33 @@ impl<'a> CreateTableStatement<'a> {
     }
 }
 
+/// DROP behavior for CASCADE/RESTRICT operations
+#[cfg(feature = "cascade")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropBehavior {
+    /// Use backend default behavior
+    Default,
+    /// Drop all dependents
+    Cascade,
+    /// Fail if dependencies exist
+    Restrict,
+}
+
 pub struct DropTableStatement<'a> {
     pub table_name: &'a str,
     pub if_exists: bool,
+    #[cfg(feature = "cascade")]
+    pub behavior: DropBehavior,
 }
 
 #[must_use]
-pub const fn drop_table(table_name: &str) -> DropTableStatement<'_> {
+#[allow(clippy::missing_const_for_fn)] // Cannot be const due to conditional compilation
+pub fn drop_table(table_name: &str) -> DropTableStatement<'_> {
     DropTableStatement {
         table_name,
         if_exists: false,
+        #[cfg(feature = "cascade")]
+        behavior: DropBehavior::Default,
     }
 }
 
@@ -360,11 +377,113 @@ impl DropTableStatement<'_> {
         self
     }
 
+    /// Set CASCADE behavior
+    #[cfg(feature = "cascade")]
+    #[must_use]
+    pub const fn cascade(mut self) -> Self {
+        self.behavior = DropBehavior::Cascade;
+        self
+    }
+
+    /// Set RESTRICT behavior
+    #[cfg(feature = "cascade")]
+    #[must_use]
+    pub const fn restrict(mut self) -> Self {
+        self.behavior = DropBehavior::Restrict;
+        self
+    }
+
     /// # Errors
     ///
     /// Will return `Err` if the `exec_drop_table` execution failed.
     pub async fn execute(self, db: &dyn Database) -> Result<(), DatabaseError> {
-        db.exec_drop_table(&self).await
+        #[cfg(feature = "cascade")]
+        {
+            match self.behavior {
+                DropBehavior::Cascade => {
+                    // For CASCADE, we need a transaction to perform the multi-table drop
+                    let tx = db.begin_transaction().await?;
+                    let drop_plan = tx.find_cascade_targets(self.table_name).await?;
+
+                    match drop_plan {
+                        crate::schema::DropPlan::Simple(tables) => {
+                            // Drop in order (dependents first)
+                            for table in tables {
+                                tx.exec_drop_table(&DropTableStatement {
+                                    table_name: &table,
+                                    if_exists: self.if_exists,
+                                    behavior: DropBehavior::Default,
+                                })
+                                .await?;
+                            }
+                        }
+                        crate::schema::DropPlan::WithCycles {
+                            tables,
+                            requires_fk_disable,
+                        } => {
+                            if requires_fk_disable {
+                                // Disable foreign key checks temporarily
+                                tx.exec_raw("SET foreign_key_checks = 0").await?;
+                            }
+
+                            // Drop all tables
+                            for table in tables {
+                                tx.exec_drop_table(&DropTableStatement {
+                                    table_name: &table,
+                                    if_exists: self.if_exists,
+                                    behavior: DropBehavior::Default,
+                                })
+                                .await?;
+                            }
+
+                            if requires_fk_disable {
+                                // Re-enable foreign key checks
+                                tx.exec_raw("SET foreign_key_checks = 1").await?;
+                            }
+                        }
+                    }
+
+                    tx.commit().await?;
+                    Ok(())
+                }
+                DropBehavior::Restrict => {
+                    // For RESTRICT, check if any dependents exist
+                    let tx = db.begin_transaction().await?;
+                    if tx.has_any_dependents(self.table_name).await? {
+                        return Err(DatabaseError::InvalidQuery(format!(
+                            "Cannot drop table {}: has dependent tables (use CASCADE to force)",
+                            self.table_name
+                        )));
+                    }
+
+                    // Safe to drop
+                    let result = tx
+                        .exec_drop_table(&DropTableStatement {
+                            table_name: self.table_name,
+                            if_exists: self.if_exists,
+                            behavior: DropBehavior::Default,
+                        })
+                        .await;
+
+                    if result.is_ok() {
+                        tx.commit().await?;
+                    } else {
+                        tx.rollback().await?;
+                    }
+
+                    result
+                }
+                DropBehavior::Default => {
+                    // Use backend default behavior
+                    db.exec_drop_table(&self).await
+                }
+            }
+        }
+
+        #[cfg(not(feature = "cascade"))]
+        {
+            db.exec_drop_table(&self).await
+        }
     }
 }
 
