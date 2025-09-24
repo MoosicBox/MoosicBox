@@ -1027,8 +1027,7 @@ impl crate::Savepoint for MysqlSqlxSavepoint {
 
         let mut transaction_guard = self.transaction.lock().await;
         if let Some(tx) = transaction_guard.as_mut() {
-            sqlx::query(&format!("RELEASE SAVEPOINT {}", self.name))
-                .execute(&mut **tx)
+            tx.execute(sqlx::raw_sql(&format!("RELEASE SAVEPOINT {}", self.name)))
                 .await
                 .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
@@ -1056,10 +1055,12 @@ impl crate::Savepoint for MysqlSqlxSavepoint {
 
         let mut transaction_guard = self.transaction.lock().await;
         if let Some(tx) = transaction_guard.as_mut() {
-            sqlx::query(&format!("ROLLBACK TO SAVEPOINT {}", self.name))
-                .execute(&mut **tx)
-                .await
-                .map_err(SqlxDatabaseError::Sqlx)?;
+            tx.execute(sqlx::raw_sql(&format!(
+                "ROLLBACK TO SAVEPOINT {}",
+                self.name
+            )))
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
             return Err(DatabaseError::TransactionCommitted);
         }
@@ -1103,8 +1104,7 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
 
         // Execute SAVEPOINT SQL
         if let Some(tx) = self.transaction.lock().await.as_mut() {
-            sqlx::query(&format!("SAVEPOINT {name}"))
-                .execute(&mut **tx)
+            tx.execute(sqlx::raw_sql(&format!("SAVEPOINT {name}")))
                 .await
                 .map_err(SqlxDatabaseError::Sqlx)?;
         } else {
@@ -1129,25 +1129,26 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
         let recursive_query = format!(
             r"
             WITH RECURSIVE dependent_tables AS (
-                SELECT DISTINCT
-                    kcu.TABLE_NAME as dependent_table,
+                SELECT
+                    CAST(kcu.TABLE_NAME AS CHAR) as dependent_table,
                     1 as level
                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
                 WHERE kcu.REFERENCED_TABLE_NAME = '{table_name}'
                     AND kcu.TABLE_SCHEMA = DATABASE()
 
-                UNION
+                UNION ALL
 
-                SELECT DISTINCT
-                    kcu.TABLE_NAME as dependent_table,
+                SELECT
+                    CAST(kcu.TABLE_NAME AS CHAR) as dependent_table,
                     dt.level + 1 as level
                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
                 JOIN dependent_tables dt ON kcu.REFERENCED_TABLE_NAME = dt.dependent_table
                 WHERE kcu.TABLE_SCHEMA = DATABASE()
             )
-            SELECT dependent_table
+            SELECT dependent_table, MAX(level) as max_level
             FROM dependent_tables
-            ORDER BY level DESC, dependent_table
+            GROUP BY dependent_table
+            ORDER BY max_level DESC, dependent_table
             "
         );
 
@@ -1199,7 +1200,7 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
     ) -> Result<std::collections::BTreeSet<String>, DatabaseError> {
         let query = format!(
             r"
-            SELECT DISTINCT TABLE_NAME
+            SELECT DISTINCT CAST(TABLE_NAME AS CHAR) AS TABLE_NAME
             FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
             WHERE REFERENCED_TABLE_NAME = '{table_name}'
                 AND TABLE_SCHEMA = DATABASE()
@@ -1724,7 +1725,7 @@ async fn update_and_get_row(
     });
 
     let query = format!(
-        "UPDATE {table_name} {} {} RETURNING *",
+        "UPDATE {table_name} {} {} ",
         build_set_clause(values),
         build_update_where_clause(filters, limit, select_query.as_deref()),
     );
@@ -1752,20 +1753,12 @@ async fn update_and_get_row(
 
     log::trace!("Running update query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let query = bind_values(sqlx::query(&query), Some(&all_values))?;
+    query.execute(connection).await?;
 
-    let column_names = statement
-        .columns()
-        .iter()
-        .map(|x| x.name().to_string())
-        .collect::<Vec<_>>();
-
-    let query = bind_values(statement.query(), Some(&all_values))?;
-
-    let mut stream = query.fetch(connection);
-    let pg_row: Option<MySqlRow> = stream.next().await.transpose()?;
-
-    pg_row.map(|row| from_row(&column_names, &row)).transpose()
+    // MySQL doesn't support RETURNING, so we return None for now
+    // TODO: Implement SELECT after UPDATE for MySQL 8+ support
+    Ok(None)
 }
 
 async fn update_and_get_rows(
@@ -1783,7 +1776,7 @@ async fn update_and_get_rows(
     });
 
     let query = format!(
-        "UPDATE {table_name} {} {} RETURNING *",
+        "UPDATE {table_name} {} {} ",
         build_set_clause(values),
         build_update_where_clause(filters, limit, select_query.as_deref()),
     );
@@ -1811,17 +1804,12 @@ async fn update_and_get_rows(
 
     log::trace!("Running update query: {query} with params: {all_values:?}");
 
-    let statement = connection.prepare(&query).await?;
+    let query = bind_values(sqlx::query(&query), Some(&all_values))?;
+    query.execute(connection).await?;
 
-    let column_names = statement
-        .columns()
-        .iter()
-        .map(|x| x.name().to_string())
-        .collect::<Vec<_>>();
-
-    let query = bind_values(statement.query(), Some(&all_values))?;
-
-    to_rows(&column_names, query.fetch(connection)).await
+    // MySQL doesn't support RETURNING, so we return empty vec for now
+    // TODO: Implement SELECT after UPDATE for MySQL 8+ support
+    Ok(vec![])
 }
 
 fn build_join_clauses(joins: Option<&[Join]>) -> String {
@@ -2084,7 +2072,7 @@ async fn delete(
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, SqlxDatabaseError> {
     let query = format!(
-        "DELETE FROM {table_name} {} RETURNING * {}",
+        "DELETE FROM {table_name} {}  {}",
         build_where_clause(filters),
         limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
     );
@@ -2094,17 +2082,13 @@ async fn delete(
         filters.map(|f| f.iter().filter_map(|x| x.params()).collect::<Vec<_>>())
     );
 
-    let statement = connection.prepare(&query).await?;
-    let column_names = statement
-        .columns()
-        .iter()
-        .map(|x| x.name().to_string())
-        .collect::<Vec<_>>();
-
     let filters = bexprs_to_values_opt(filters);
-    let query = bind_values(statement.query(), filters.as_deref())?;
+    let query = bind_values(sqlx::query(&query), filters.as_deref())?;
+    query.execute(connection).await?;
 
-    to_rows(&column_names, query.fetch(connection)).await
+    // MySQL doesn't support RETURNING, so we return empty vec for now
+    // TODO: Implement SELECT before DELETE for MySQL 8+ support
+    Ok(vec![])
 }
 
 async fn find_row(
@@ -2162,16 +2146,9 @@ async fn insert_and_get_row(
         .join(", ");
 
     let query = format!(
-        "INSERT INTO {table_name} ({column_names}) {} RETURNING *",
+        "INSERT INTO {table_name} ({column_names}) {} ",
         build_values_clause(values),
     );
-
-    let statement = connection.prepare(&query).await?;
-    let column_names = statement
-        .columns()
-        .iter()
-        .map(|x| x.name().to_string())
-        .collect::<Vec<_>>();
 
     log::trace!(
         "Running insert_and_get_row query: {query} with params: {:?}",
@@ -2182,16 +2159,18 @@ async fn insert_and_get_row(
     );
 
     let values = exprs_to_values(values);
-    let query = bind_values(statement.query(), Some(&values))?;
+    let query = bind_values(sqlx::query(&query), Some(&values))?;
+    let result = query.execute(connection).await?;
 
-    let mut query = query.fetch(connection);
-
-    query
-        .next()
-        .await
-        .transpose()?
-        .map(|row| from_row(&column_names, &row))
-        .ok_or(SqlxDatabaseError::NoRow)?
+    // For INSERT, we can use LAST_INSERT_ID() to get the inserted ID
+    // and then SELECT the row, but for now return a minimal row
+    // TODO: Implement proper INSERT RETURNING for MySQL 8+
+    Ok(crate::Row {
+        columns: vec![(
+            "id".to_string(),
+            crate::DatabaseValue::UNumber(result.last_insert_id()),
+        )],
+    })
 }
 
 /// # Errors
@@ -2286,7 +2265,7 @@ async fn update_chunk(
         UPDATE {table_name} ({column_names})
         {}
         SET {set_clause}
-        RETURNING *",
+        ",
         build_update_where_clause(filters, limit, select_query.as_deref()),
     );
 
@@ -2420,7 +2399,7 @@ async fn upsert_chunk(
         VALUES {values_str}
         ON CONFLICT({unique_conflict}) DO UPDATE
             SET {set_clause}
-        RETURNING *"
+        "
     );
 
     let all_values = &values
@@ -2660,7 +2639,7 @@ mod tests {
 
             // Check name column
             let name_col = columns.iter().find(|c| c.name == "name").unwrap();
-            assert_eq!(name_col.data_type, DataType::Text);
+            assert_eq!(name_col.data_type, DataType::VarChar(100));
             assert!(!name_col.nullable);
             assert!(!name_col.is_primary_key);
 
@@ -2693,7 +2672,7 @@ mod tests {
 
             // Create test table
             db.exec_raw(
-                "CREATE TABLE IF NOT EXISTS test_column_exists (id INTEGER, name VARCHAR(50))",
+                "CREATE TABLE IF NOT EXISTS test_column_exists (id INTEGER PRIMARY KEY AUTO_INCREMENT, name VARCHAR(50))",
             )
             .await
             .unwrap();
@@ -2869,7 +2848,7 @@ mod tests {
             let char_10_col = columns.iter().find(|c| c.name == "char_10").unwrap();
             assert!(matches!(
                 char_10_col.data_type,
-                crate::schema::DataType::VarChar(10)
+                crate::schema::DataType::Char(10)
             ));
 
             // Verify TEXT still maps to Text

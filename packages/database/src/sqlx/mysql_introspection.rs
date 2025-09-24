@@ -148,6 +148,11 @@ pub async fn mysql_sqlx_table_exists(
     conn: &mut sqlx::MySqlConnection,
     table_name: &str,
 ) -> Result<bool, DatabaseError> {
+    // Note: We don't use LOWER() here because:
+    // 1. MySQL's table name case-sensitivity depends on the filesystem and lower_case_table_names setting
+    // 2. Using LOWER() with bind parameters can cause issues with collation and query optimization
+    // 3. Most MySQL installations are case-insensitive by default (lower_case_table_names=1 or 2)
+    // 4. The query should match the exact case stored in information_schema
     let query = "SELECT EXISTS (
         SELECT 1 FROM information_schema.tables
         WHERE table_schema = DATABASE() AND table_name = ?
@@ -170,7 +175,7 @@ pub async fn mysql_sqlx_table_exists(
 pub async fn mysql_sqlx_list_tables(
     conn: &mut MySqlConnection,
 ) -> Result<Vec<String>, DatabaseError> {
-    let query = "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()";
+    let query = "SELECT CAST(TABLE_NAME AS CHAR) AS TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY TABLE_NAME";
 
     let rows = sqlx::query(query)
         .fetch_all(&mut *conn)
@@ -180,7 +185,7 @@ pub async fn mysql_sqlx_list_tables(
     let mut tables = Vec::new();
     for row in rows {
         let table_name: String = row
-            .try_get("table_name")
+            .try_get("TABLE_NAME")
             .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
         tables.push(table_name);
     }
@@ -195,12 +200,13 @@ pub async fn mysql_sqlx_get_table_columns(
 ) -> Result<Vec<ColumnInfo>, DatabaseError> {
     let query = "SELECT
         COLUMN_NAME,
-        DATA_TYPE,
+        CAST(DATA_TYPE AS CHAR) AS DATA_TYPE,
+        CAST(COLUMN_TYPE AS CHAR) AS COLUMN_TYPE,
         CHARACTER_MAXIMUM_LENGTH,
-        IS_NULLABLE,
-        COLUMN_DEFAULT,
-        COLUMN_KEY,
-        EXTRA,
+        CAST(IS_NULLABLE AS CHAR) AS IS_NULLABLE,
+        CAST(COLUMN_DEFAULT AS CHAR) AS COLUMN_DEFAULT,
+        CAST(COLUMN_KEY AS CHAR) AS COLUMN_KEY,
+        CAST(EXTRA AS CHAR) AS EXTRA,
         ORDINAL_POSITION
     FROM information_schema.columns
     WHERE table_schema = DATABASE() AND table_name = ?
@@ -241,9 +247,15 @@ pub async fn mysql_sqlx_get_table_columns(
             .try_get("DATA_TYPE")
             .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
 
+        let column_type_str: String = row
+            .try_get("COLUMN_TYPE")
+            .map_err(|e| DatabaseError::MysqlSqlx(super::mysql::SqlxDatabaseError::from(e)))?;
+
         let char_max_length: Option<i64> = row.try_get("CHARACTER_MAXIMUM_LENGTH").ok();
 
-        let data_type = mysql_type_to_data_type(&data_type_str, char_max_length);
+        // Use column_type for more accurate type detection
+        let data_type =
+            mysql_column_type_to_data_type(&column_type_str, &data_type_str, char_max_length);
 
         let is_nullable_str: String = row
             .try_get("IS_NULLABLE")
@@ -282,9 +294,13 @@ pub async fn mysql_sqlx_column_exists(
     table_name: &str,
     column_name: &str,
 ) -> Result<bool, DatabaseError> {
+    // Note: Column names in MySQL are always case-insensitive regardless of platform
+    // However, table names follow the same case-sensitivity rules as table_exists
     let query = "SELECT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+        WHERE table_schema = DATABASE()
+        AND table_name = ?
+        AND column_name = ?
     )";
 
     let row = sqlx::query(query)
@@ -364,12 +380,12 @@ pub async fn mysql_sqlx_get_table_info(
 
     // Get foreign keys
     let fk_query = "SELECT
-        CONSTRAINT_NAME,
-        COLUMN_NAME,
-        REFERENCED_TABLE_NAME,
-        REFERENCED_COLUMN_NAME,
-        UPDATE_RULE,
-        DELETE_RULE
+        CAST(kcu.CONSTRAINT_NAME AS CHAR) AS CONSTRAINT_NAME,
+        kcu.COLUMN_NAME,
+        CAST(kcu.REFERENCED_TABLE_NAME AS CHAR) AS REFERENCED_TABLE_NAME,
+        CAST(kcu.REFERENCED_COLUMN_NAME AS CHAR) AS REFERENCED_COLUMN_NAME,
+        CAST(rc.UPDATE_RULE AS CHAR) AS UPDATE_RULE,
+        CAST(rc.DELETE_RULE AS CHAR) AS DELETE_RULE
     FROM information_schema.KEY_COLUMN_USAGE kcu
     JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
         ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
@@ -458,6 +474,39 @@ fn mysql_type_to_data_type(mysql_type: &str, char_max_length: Option<i64>) -> Da
         "JSON" => DataType::Json,
         _ => DataType::Custom(mysql_type.to_string()),
     }
+}
+
+/// Convert `MySQL` `COLUMN_TYPE` to `DataType` (more accurate than `DATA_TYPE` for boolean and sized types)
+fn mysql_column_type_to_data_type(
+    column_type: &str,
+    data_type: &str,
+    char_max_length: Option<i64>,
+) -> DataType {
+    let column_type_upper = column_type.to_uppercase();
+
+    // Handle BOOLEAN as TINYINT(1)
+    if column_type_upper == "TINYINT(1)" {
+        return DataType::Bool;
+    }
+
+    // Extract length from VARCHAR(n) in COLUMN_TYPE
+    if column_type_upper.starts_with("VARCHAR(")
+        && let Some(end) = column_type.find(')')
+        && let Ok(len) = column_type[8..end].parse::<u16>()
+    {
+        return DataType::VarChar(len);
+    }
+
+    // Extract length from CHAR(n) in COLUMN_TYPE
+    if column_type_upper.starts_with("CHAR(")
+        && let Some(end) = column_type.find(')')
+        && let Ok(len) = column_type[5..end].parse::<u16>()
+    {
+        return DataType::Char(len);
+    }
+
+    // Fall back to original type mapping
+    mysql_type_to_data_type(data_type, char_max_length)
 }
 
 /// Parse `MySQL` default values into `DatabaseValue`

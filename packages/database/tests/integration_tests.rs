@@ -538,7 +538,7 @@ macro_rules! generate_tests {
 
             // Test query_raw with DDL statement (CREATE TABLE)
             let result = db
-                .query_raw("CREATE TABLE test_query_raw (id INTEGER, name TEXT)")
+                .query_raw("CREATE TABLE test_query_raw (id INTEGER PRIMARY KEY AUTO_INCREMENT, name TEXT)")
                 .await;
 
             // DDL statements typically return empty result set, not error
@@ -1872,7 +1872,7 @@ macro_rules! generate_cascade_tests {
                     default: None,
                 })
                 .primary_key("id")
-                .foreign_key(("user_id", &users_table))
+                .foreign_key(("user_id", &format!("{users_table}(id)")))
                 .execute(db)
                 .await
                 .unwrap();
@@ -1900,7 +1900,7 @@ macro_rules! generate_cascade_tests {
                     default: None,
                 })
                 .primary_key("id")
-                .foreign_key(("post_id", &posts_table))
+                .foreign_key(("post_id", &format!("{posts_table}(id)")))
                 .execute(db)
                 .await
                 .unwrap();
@@ -2020,7 +2020,7 @@ macro_rules! generate_cascade_tests {
                     default: None,
                 })
                 .primary_key("id")
-                .foreign_key(("parent_id", &parent_table))
+                .foreign_key(("parent_id", &format!("{parent_table}(id)")))
                 .execute(db)
                 .await
                 .unwrap();
@@ -2142,7 +2142,7 @@ macro_rules! generate_cascade_tests {
                     default: None,
                 })
                 .primary_key("id")
-                .foreign_key(("root_id", &root_table))
+                .foreign_key(("root_id", &format!("{root_table}(id)")))
                 .execute(db)
                 .await
                 .unwrap();
@@ -2163,7 +2163,7 @@ macro_rules! generate_cascade_tests {
                     default: None,
                 })
                 .primary_key("id")
-                .foreign_key(("root_id", &root_table))
+                .foreign_key(("root_id", &format!("{root_table}(id)")))
                 .execute(db)
                 .await
                 .unwrap();
@@ -2186,7 +2186,7 @@ macro_rules! generate_cascade_tests {
                     default: None,
                 })
                 .primary_key("id")
-                .foreign_key(("branch1_id", &branch1_table))
+                .foreign_key(("branch1_id", &format!("{branch1_table}(id)")))
                 .execute(db)
                 .await
                 .unwrap();
@@ -2298,7 +2298,7 @@ macro_rules! generate_cascade_tests {
                     default: None,
                 })
                 .primary_key("id")
-                .foreign_key(("parent_id", &parent_table))
+                .foreign_key(("parent_id", &format!("{parent_table}(id)")))
                 .execute(db)
                 .await
                 .unwrap();

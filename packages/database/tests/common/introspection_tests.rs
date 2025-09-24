@@ -1,45 +1,132 @@
 use std::sync::Arc;
-use switchy_database::Database;
+use switchy_database::schema::{Column, DataType, create_table};
+use switchy_database::{Database, DatabaseValue};
 
-/// Standard test schema for all backends
-#[allow(unused)]
-pub struct StandardTestSchema {
-    pub users_table: &'static str,
-    pub posts_table: &'static str,
-    pub unsupported_table: &'static str,
-}
+/// Create standard test schema using schema builder API for backend compatibility
+pub async fn create_standard_test_schema(
+    db: &dyn Database,
+) -> Result<(), switchy_database::DatabaseError> {
+    // Users table with proper auto-increment and types
+    create_table("users")
+        .if_not_exists(true)
+        .column(Column {
+            name: "id".to_string(),
+            data_type: DataType::Int,
+            nullable: false,
+            auto_increment: true,
+            default: None,
+        })
+        .column(Column {
+            name: "name".to_string(),
+            data_type: DataType::Text,
+            nullable: false,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "email".to_string(),
+            data_type: DataType::Text,
+            nullable: true,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "age".to_string(),
+            data_type: DataType::Int,
+            nullable: true,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "created_at".to_string(),
+            data_type: DataType::Timestamp,
+            nullable: true,
+            auto_increment: false,
+            default: Some(DatabaseValue::Now),
+        })
+        .primary_key("id")
+        .execute(db)
+        .await?;
 
-impl Default for StandardTestSchema {
-    fn default() -> Self {
-        Self {
-            users_table: r#"
-                CREATE TABLE users (
-                    id INTEGER PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    email TEXT UNIQUE,
-                    age INTEGER,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-                )
-            "#,
-            posts_table: r#"
-                CREATE TABLE posts (
-                    id INTEGER PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    content TEXT,
-                    user_id INTEGER,
-                    published INTEGER DEFAULT 0
-                )
-            "#,
-            unsupported_table: r#"
-                CREATE TABLE edge_cases (
-                    id INTEGER PRIMARY KEY,
-                    uuid_col TEXT,
-                    json_col TEXT,
-                    data_col TEXT
-                )
-            "#,
-        }
-    }
+    // Posts table with foreign key
+    create_table("posts")
+        .if_not_exists(true)
+        .column(Column {
+            name: "id".to_string(),
+            data_type: DataType::Int,
+            nullable: false,
+            auto_increment: true,
+            default: None,
+        })
+        .column(Column {
+            name: "title".to_string(),
+            data_type: DataType::Text,
+            nullable: false,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "content".to_string(),
+            data_type: DataType::Text,
+            nullable: true,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "user_id".to_string(),
+            data_type: DataType::Int,
+            nullable: true,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "published".to_string(),
+            data_type: DataType::Bool,
+            nullable: true,
+            auto_increment: false,
+            default: Some(DatabaseValue::Bool(false)),
+        })
+        .primary_key("id")
+        .foreign_key(("user_id", "users(id)"))
+        .execute(db)
+        .await?;
+
+    // Edge cases table with various data types
+    create_table("edge_cases")
+        .if_not_exists(true)
+        .column(Column {
+            name: "id".to_string(),
+            data_type: DataType::Int,
+            nullable: false,
+            auto_increment: true,
+            default: None,
+        })
+        .column(Column {
+            name: "uuid_col".to_string(),
+            data_type: DataType::Text,
+            nullable: true,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "json_col".to_string(),
+            data_type: DataType::Text, // Use Text for cross-backend compatibility
+            nullable: true,
+            auto_increment: false,
+            default: None,
+        })
+        .column(Column {
+            name: "data_col".to_string(),
+            data_type: DataType::Text,
+            nullable: true,
+            auto_increment: false,
+            default: None,
+        })
+        .primary_key("id")
+        .execute(db)
+        .await?;
+
+    Ok(())
 }
 
 /// Comprehensive introspection test suite trait
@@ -50,14 +137,10 @@ pub trait IntrospectionTestSuite {
     /// Get database instance for testing
     async fn get_database(&self) -> Option<Arc<Self::DatabaseType>>;
 
-    /// Create the standard test schema
+    /// Create the standard test schema using schema builder API
     async fn create_test_schema(&self, db: &Self::DatabaseType) {
-        let schema = StandardTestSchema::default();
-
-        // Create tables
-        let _ = db.exec_raw(schema.users_table).await;
-        let _ = db.exec_raw(schema.posts_table).await;
-        let _ = db.exec_raw(schema.unsupported_table).await;
+        // Use schema builder API for backend compatibility
+        let _ = create_standard_test_schema(db).await;
     }
 
     /// Test table existence detection
