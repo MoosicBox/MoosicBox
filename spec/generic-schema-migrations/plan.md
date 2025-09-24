@@ -9523,6 +9523,14 @@ New functions work alongside existing `DependencyGraph`, `CycleError`, and `Drop
 
 **Performance Opportunity:** Current approach uses generic `get_table_info()` which parses complete table schema including columns, indexes, and foreign keys. For dependency discovery, we only need foreign key information.
 
+**Implementation Strategy:** This phase uses a phased approach for clarity:
+1. **Phase 15.1.3**: Implement basic `query_raw` functionality (temporarily uses string interpolation)
+2. **Phase 15.1.4**: Use for performance optimizations (accepts temporary security limitations)
+3. **Phase 15.1.5**: Add parameterized query functions for security
+4. **Phase 15.1.6**: Migrate all code to use secure parameterized versions
+
+This separation allows focus on functionality before security, making the implementation progression clearer.
+
 **Row Type Reference:** Uses the existing Row struct from packages/database/src/lib.rs:502 which has columns: Vec<(String, DatabaseValue)>
 
 **Database Trait Addition:**
@@ -9877,9 +9885,11 @@ async fn find_cascade_targets_postgres_optimized(
 
 **Safety Considerations:**
 
+**IMPORTANT:** This phase intentionally uses unsafe string interpolation for simplicity. This is a temporary limitation that enables rapid prototyping of the optimization approach. Security will be properly addressed in Phase 15.1.5 with parameterized queries, and Phase 15.1.6 will migrate all code to use the secure versions.
+
 ```rust
 /// For SQLite PRAGMA: Table names cannot be parameterized
-/// Validate only when concatenation is required
+/// Basic validation for PRAGMA syntax - NOT comprehensive security
 fn validate_table_name_for_pragma(name: &str) -> Result<(), DatabaseError> {
     // Only allow safe characters for PRAGMA usage
     if name.chars().all(|c| c.is_alphanumeric() || c == '_') && !name.is_empty() {
@@ -9893,6 +9903,7 @@ fn validate_table_name_for_pragma(name: &str) -> Result<(), DatabaseError> {
 
 /// PostgreSQL/MySQL: String interpolation used for simplicity
 /// Parameterized queries will be added in Phase 15.1.5
+/// This temporary approach allows focus on functionality before security
 ```
 
 **Error Handling Strategy:**
@@ -9914,9 +9925,10 @@ pub async fn prepare_cascade_drop(
 - [ ] Test query_raw with valid SQL returning data for each backend
 - [ ] Test query_raw with invalid SQL (should return appropriate error)
 - [ ] Test query_raw with DDL statements (behavior backend-specific)
-- [ ] Security tests: Ensure PRAGMA table name validation prevents SQL injection
 - [ ] Error handling tests: Verify proper errors when query_raw unsupported
-- [ ] Parameterized query tests for PostgreSQL/MySQL
+- [ ] Test that query_raw correctly converts results to Vec<Row>
+
+**Note:** Security testing and parameterized queries are intentionally deferred to Phase 15.1.5. This phase uses string interpolation for simplicity, accepting temporary security limitations that will be properly addressed with parameterized queries.
 
 #### 15.1.3 Verification Checklist
 
@@ -10482,6 +10494,8 @@ cargo test --features schema,cascade
 cargo test --all-features
 ```
 
+**Testing Focus:** This phase focuses on **functional correctness** only. Performance improvements are a beneficial side effect of the optimizations but are not explicitly tested. The goal is to ensure all CASCADE operations work correctly with real database constraints across all supported backends.
+
 **Testing Pattern Example:**
 
 ```rust
@@ -10541,7 +10555,7 @@ mod cascade_tests {
 - [ ] Module loading conditionally includes dependencies module
 - [ ] All tests feature-gated and passing with both schema and cascade features
 - [ ] Documentation updated to reflect feature requirements
-- [ ] Performance benchmarks validating 10-100x improvements
+- [ ] Functional correctness validation (performance improvements are a beneficial side effect)
 - [ ] Migration path documented for existing projects
 
 **Benefits of Feature-Gated CASCADE Implementation:**
@@ -10557,18 +10571,24 @@ mod cascade_tests {
 9. **No Backend Detection**: Backend-specific logic stays in backend modules
 10. **Graceful Defaults**: Default trait implementations provide fallback behavior
 
-**Expected Performance Improvements:**
+**Expected Improvements:**
 
-- **SQLite CASCADE Discovery**: Optimized using direct PRAGMA access
-- **PostgreSQL/MySQL CASCADE Discovery**: Optimized using single recursive queries
-- **RESTRICT Checks**: Early termination optimization
-- **Real-world Impact**: Significant performance improvement for large schemas
+- **SQLite CASCADE Discovery**: Direct PRAGMA access avoids full schema parsing
+- **PostgreSQL/MySQL CASCADE Discovery**: Single recursive queries reduce roundtrips
+- **RESTRICT Checks**: Early termination reduces unnecessary work
+- **Code Safety**: Parameterized queries eliminate SQL injection risks
+- **Maintainability**: Clear separation of concerns between phases
 
 #### 15.1.5 Add Parameterized Query Functions
 
 **Goal:** Add parameterized versions of exec_raw and query_raw to prevent SQL injection and improve performance.
 
 **Purpose:** Enable safe parameter binding for dynamic SQL queries without string concatenation.
+
+**Critical Implementation Note:** Parameter placeholder syntax varies by backend implementation, not just by database type. This is due to the underlying driver libraries:
+- `rusqlite` uses positional `?` placeholders
+- All `sqlx` backends (including `sqlx-sqlite`) use numbered `$1, $2` placeholders
+- This difference must be accounted for in implementation and testing
 
 **New Methods to Add:**
 
@@ -10583,9 +10603,11 @@ pub trait Database {
     ///
     /// # Parameters Format
     ///
-    /// * SQLite: Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
-    /// * PostgreSQL: Uses $1, $2 placeholders (e.g., "SELECT * FROM users WHERE id = $1")
-    /// * MySQL: Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
+    /// Parameter syntax varies by backend implementation, not just database type:
+    /// * rusqlite: Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
+    /// * sqlx-sqlite: Uses $1, $2 placeholders (e.g., "SELECT * FROM users WHERE id = $1")
+    /// * PostgreSQL (both native and sqlx): Uses $1, $2 placeholders (e.g., "SELECT * FROM users WHERE id = $1")
+    /// * MySQL (sqlx): Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
     ///
     /// # Errors
     ///
@@ -10695,6 +10717,52 @@ async fn query_raw_params(
 }
 ```
 
+**SQLite sqlx Implementation (Different Parameter Syntax):**
+
+```rust
+// For sqlx-sqlite - uses $1, $2 syntax instead of ?
+async fn query_raw_params(
+    &self,
+    query: &str,
+    params: &[DatabaseValue]
+) -> Result<Vec<Row>, DatabaseError> {
+    let connection = self.get_connection().await?;
+    let mut connection = connection.lock().await;
+
+    // Note: sqlx automatically handles $1, $2 parameters
+    let mut query_builder = sqlx::query(query);
+
+    // Add parameters in order
+    for param in params {
+        query_builder = match param {
+            DatabaseValue::String(s) => query_builder.bind(s),
+            DatabaseValue::Number(n) => query_builder.bind(*n),
+            DatabaseValue::Bool(b) => query_builder.bind(*b),
+            DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+            // ... handle other DatabaseValue types
+        };
+    }
+
+    let result = query_builder
+        .fetch_all(&mut **connection)
+        .await
+        .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+    // Convert to Row using existing from_row helper
+    let mut rows = Vec::new();
+    for sqlx_row in result {
+        let column_names: Vec<String> = sqlx_row.columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+        rows.push(from_row(&column_names, &sqlx_row)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?);
+    }
+
+    Ok(rows)
+}
+```
+
 **Note:** PostgreSQL and MySQL implementations follow similar patterns,
 using their respective existing conversion types (PgDatabaseValue, MySqlDatabaseValue).
 
@@ -10705,10 +10773,18 @@ using their respective existing conversion types (PgDatabaseValue, MySqlDatabase
 5. **ChecksumDatabase**: Include parameters in checksum calculation
 
 **Testing Requirements:**
+- [ ] Security tests: SQL injection prevention with parameters (moved from 15.1.3)
+- [ ] PRAGMA table name validation tests for SQLite (moved from 15.1.3)
+- [ ] Test parameter binding for each backend with correct syntax:
+  - [ ] rusqlite with ? placeholders
+  - [ ] sqlx-sqlite with $1, $2 placeholders
+  - [ ] postgres-native with $1, $2 placeholders
+  - [ ] postgres-sqlx with $1, $2 placeholders
+  - [ ] mysql-sqlx with ? placeholders
 - [ ] Test parameter binding for all DatabaseValue types
 - [ ] Test parameter count mismatch errors
-- [ ] Test SQL injection prevention
-- [ ] Test performance vs string concatenation
+- [ ] Test NULL parameter handling
+- [ ] Security audit: Verify common injection patterns are blocked
 
 #### 15.1.5 Verification Checklist
 
@@ -10764,6 +10840,14 @@ async fn find_cascade_targets_postgres_optimized(
 3. Update highest risk queries first
 4. Test thoroughly with injection attempts
 
+**Testing Requirements:**
+- [ ] Test all CASCADE operations migrated to use parameterized queries
+- [ ] Test backward compatibility (old query_raw still works for static queries)
+- [ ] Verify NO string concatenation remains in CASCADE operations
+- [ ] Test edge cases: Table names with special characters using parameters
+- [ ] Full security regression test suite
+- [ ] Test transaction isolation with parameterized CASCADE operations
+
 #### 15.1.6 Verification Checklist
 
 - [ ] PostgreSQL optimization updated to use query_raw_params
@@ -10771,7 +10855,7 @@ async fn find_cascade_targets_postgres_optimized(
 - [ ] All user-input SQL properly parameterized
 - [ ] Static queries left as-is for simplicity
 - [ ] SQL injection tests comprehensive
-- [ ] Performance benchmarks show no regression
+- [ ] Backward compatibility maintained (static queries still work)
 
 #### 15.1.7 Implement Proper Cycle Detection
 
