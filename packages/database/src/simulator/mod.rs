@@ -356,6 +356,24 @@ impl Database for SimulationDatabase {
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
         self.inner.begin_transaction().await
     }
+
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        // Delegate to inner database implementation
+        self.inner.exec_raw_params(query, params).await
+    }
+
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Delegate to inner database implementation
+        self.inner.query_raw_params(query, params).await
+    }
 }
 
 #[cfg(test)]

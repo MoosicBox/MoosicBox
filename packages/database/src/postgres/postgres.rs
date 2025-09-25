@@ -632,6 +632,123 @@ impl Database for PostgresDatabase {
         let transaction = PostgresTransaction::new(client).await?;
         Ok(Box::new(transaction))
     }
+
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let client = self.get_client().await?;
+
+        // For now, use string interpolation as specified in the plan
+        // This will be made secure in a later phase
+        let mut query_with_params = query.to_string();
+        for (i, param) in params.iter().enumerate() {
+            let placeholder = format!("${}", i + 1);
+            let value_str = match param {
+                crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
+                    format!("'{}'", s.replace('\'', "''"))
+                }
+                crate::DatabaseValue::Number(n) | crate::DatabaseValue::NumberOpt(Some(n)) => {
+                    n.to_string()
+                }
+                crate::DatabaseValue::UNumber(n) | crate::DatabaseValue::UNumberOpt(Some(n)) => {
+                    n.to_string()
+                }
+                crate::DatabaseValue::Real(r) | crate::DatabaseValue::RealOpt(Some(r)) => {
+                    r.to_string()
+                }
+                crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
+                    b.to_string()
+                }
+                crate::DatabaseValue::StringOpt(None)
+                | crate::DatabaseValue::NumberOpt(None)
+                | crate::DatabaseValue::UNumberOpt(None)
+                | crate::DatabaseValue::RealOpt(None)
+                | crate::DatabaseValue::BoolOpt(None)
+                | crate::DatabaseValue::Null => "NULL".to_string(),
+                crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
+                crate::DatabaseValue::Now => "NOW()".to_string(),
+                crate::DatabaseValue::NowAdd(add) => format!("NOW() + INTERVAL '{add}'"),
+            };
+            query_with_params = query_with_params.replace(&placeholder, &value_str);
+        }
+
+        let rows_affected = client
+            .execute(&query_with_params, &[])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        Ok(rows_affected)
+    }
+
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let client = self.get_client().await?;
+
+        // For now, use string interpolation as specified in the plan
+        // This will be made secure in a later phase
+        let mut query_with_params = query.to_string();
+        for (i, param) in params.iter().enumerate() {
+            let placeholder = format!("${}", i + 1);
+            let value_str = match param {
+                crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
+                    format!("'{}'", s.replace('\'', "''"))
+                }
+                crate::DatabaseValue::Number(n) | crate::DatabaseValue::NumberOpt(Some(n)) => {
+                    n.to_string()
+                }
+                crate::DatabaseValue::UNumber(n) | crate::DatabaseValue::UNumberOpt(Some(n)) => {
+                    n.to_string()
+                }
+                crate::DatabaseValue::Real(r) | crate::DatabaseValue::RealOpt(Some(r)) => {
+                    r.to_string()
+                }
+                crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
+                    b.to_string()
+                }
+                crate::DatabaseValue::StringOpt(None)
+                | crate::DatabaseValue::NumberOpt(None)
+                | crate::DatabaseValue::UNumberOpt(None)
+                | crate::DatabaseValue::RealOpt(None)
+                | crate::DatabaseValue::BoolOpt(None)
+                | crate::DatabaseValue::Null => "NULL".to_string(),
+                crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
+                crate::DatabaseValue::Now => "NOW()".to_string(),
+                crate::DatabaseValue::NowAdd(add) => format!("NOW() + INTERVAL '{add}'"),
+            };
+            query_with_params = query_with_params.replace(&placeholder, &value_str);
+        }
+
+        let pg_rows = client
+            .query(&query_with_params, &[])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if pg_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = pg_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Convert postgres rows to our Row format
+        let mut rows = Vec::new();
+        for pg_row in &pg_rows {
+            let row = from_row(&column_names, pg_row)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            rows.push(row);
+        }
+
+        Ok(rows)
+    }
 }
 
 #[async_trait]
@@ -920,6 +1037,125 @@ impl Database for PostgresTransaction {
         Err(DatabaseError::Postgres(
             PostgresDatabaseError::InvalidRequest,
         ))
+    }
+
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        // For now, use string interpolation as specified in the plan
+        // This will be made secure in a later phase
+        let mut query_with_params = query.to_string();
+        for (i, param) in params.iter().enumerate() {
+            let placeholder = format!("${}", i + 1);
+            let value_str = match param {
+                crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
+                    format!("'{}'", s.replace('\'', "''"))
+                }
+                crate::DatabaseValue::Number(n) | crate::DatabaseValue::NumberOpt(Some(n)) => {
+                    n.to_string()
+                }
+                crate::DatabaseValue::UNumber(n) | crate::DatabaseValue::UNumberOpt(Some(n)) => {
+                    n.to_string()
+                }
+                crate::DatabaseValue::Real(r) | crate::DatabaseValue::RealOpt(Some(r)) => {
+                    r.to_string()
+                }
+                crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
+                    b.to_string()
+                }
+                crate::DatabaseValue::StringOpt(None)
+                | crate::DatabaseValue::NumberOpt(None)
+                | crate::DatabaseValue::UNumberOpt(None)
+                | crate::DatabaseValue::RealOpt(None)
+                | crate::DatabaseValue::BoolOpt(None)
+                | crate::DatabaseValue::Null => "NULL".to_string(),
+                crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
+                crate::DatabaseValue::Now => "NOW()".to_string(),
+                crate::DatabaseValue::NowAdd(add) => format!("NOW() + INTERVAL '{add}'"),
+            };
+            query_with_params = query_with_params.replace(&placeholder, &value_str);
+        }
+
+        let rows_affected = self
+            .client
+            .lock()
+            .await
+            .execute(&query_with_params, &[])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        Ok(rows_affected)
+    }
+
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // For now, use string interpolation as specified in the plan
+        // This will be made secure in a later phase
+        let mut query_with_params = query.to_string();
+        for (i, param) in params.iter().enumerate() {
+            let placeholder = format!("${}", i + 1);
+            let value_str = match param {
+                crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
+                    format!("'{}'", s.replace('\'', "''"))
+                }
+                crate::DatabaseValue::Number(n) | crate::DatabaseValue::NumberOpt(Some(n)) => {
+                    n.to_string()
+                }
+                crate::DatabaseValue::UNumber(n) | crate::DatabaseValue::UNumberOpt(Some(n)) => {
+                    n.to_string()
+                }
+                crate::DatabaseValue::Real(r) | crate::DatabaseValue::RealOpt(Some(r)) => {
+                    r.to_string()
+                }
+                crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
+                    b.to_string()
+                }
+                crate::DatabaseValue::StringOpt(None)
+                | crate::DatabaseValue::NumberOpt(None)
+                | crate::DatabaseValue::UNumberOpt(None)
+                | crate::DatabaseValue::RealOpt(None)
+                | crate::DatabaseValue::BoolOpt(None)
+                | crate::DatabaseValue::Null => "NULL".to_string(),
+                crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
+                crate::DatabaseValue::Now => "NOW()".to_string(),
+                crate::DatabaseValue::NowAdd(add) => format!("NOW() + INTERVAL '{add}'"),
+            };
+            query_with_params = query_with_params.replace(&placeholder, &value_str);
+        }
+
+        let pg_rows = self
+            .client
+            .lock()
+            .await
+            .query(&query_with_params, &[])
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if pg_rows.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = pg_rows[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Convert postgres rows to our Row format
+        let mut rows = Vec::new();
+        for pg_row in &pg_rows {
+            let row = from_row(&column_names, pg_row)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            rows.push(row);
+        }
+
+        Ok(rows)
     }
 }
 

@@ -382,6 +382,40 @@ impl Database for ChecksumDatabase {
         let tx = Self::with_hasher(self.hasher.clone(), self.transaction_depth.clone());
         Ok(Box::new(tx))
     }
+
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[switchy_database::DatabaseValue],
+    ) -> Result<u64, switchy_database::DatabaseError> {
+        let mut hasher = self.hasher.lock().await;
+        hasher.update(b"EXEC_RAW_PARAMS:");
+        hasher.update(query.as_bytes());
+        hasher.update(b":");
+        for param in params {
+            hasher.update(format!("{param:?}").as_bytes());
+            hasher.update(b",");
+        }
+        drop(hasher);
+        Ok(0)
+    }
+
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[switchy_database::DatabaseValue],
+    ) -> Result<Vec<switchy_database::Row>, switchy_database::DatabaseError> {
+        let mut hasher = self.hasher.lock().await;
+        hasher.update(b"QUERY_RAW_PARAMS:");
+        hasher.update(query.as_bytes());
+        hasher.update(b":");
+        for param in params {
+            hasher.update(format!("{param:?}").as_bytes());
+            hasher.update(b",");
+        }
+        drop(hasher);
+        Ok(vec![])
+    }
 }
 
 #[async_trait]

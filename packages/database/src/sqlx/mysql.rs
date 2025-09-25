@@ -596,6 +596,107 @@ impl Database for MySqlSqlxDatabase {
 
         Ok(Box::new(MysqlSqlxTransaction::new(tx)))
     }
+
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(query);
+
+        // Add parameters in order - MySQL uses ? placeholders
+        for param in params {
+            query_builder = match param {
+                crate::DatabaseValue::String(s) => query_builder.bind(s),
+                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
+                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UNumber(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UNumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Real(r) => query_builder.bind(*r),
+                crate::DatabaseValue::RealOpt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
+                crate::DatabaseValue::NowAdd(add) => {
+                    query_builder.bind(format!("NOW() + INTERVAL {add}"))
+                }
+            };
+        }
+
+        let result = query_builder
+            .execute(&mut *connection)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        Ok(result.rows_affected())
+    }
+
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let pool = self.connection.lock().await;
+        let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
+
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(query);
+
+        // Add parameters in order - MySQL uses ? placeholders
+        for param in params {
+            query_builder = match param {
+                crate::DatabaseValue::String(s) => query_builder.bind(s),
+                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
+                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UNumber(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UNumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Real(r) => query_builder.bind(*r),
+                crate::DatabaseValue::RealOpt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
+                crate::DatabaseValue::NowAdd(add) => {
+                    query_builder.bind(format!("NOW() + INTERVAL {add}"))
+                }
+            };
+        }
+
+        let result = query_builder
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        if result.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = result[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Convert sqlx rows to our Row format
+        let mut rows = Vec::new();
+        for sqlx_row in result {
+            let row = from_row(&column_names, &sqlx_row)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            rows.push(row);
+        }
+
+        Ok(rows)
+    }
 }
 
 #[async_trait]
@@ -997,6 +1098,115 @@ impl Database for MysqlSqlxTransaction {
         &self,
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
         Err(DatabaseError::AlreadyInTransaction)
+    }
+
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(query);
+
+        // Add parameters in order - MySQL uses ? placeholders
+        for param in params {
+            query_builder = match param {
+                crate::DatabaseValue::String(s) => query_builder.bind(s),
+                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
+                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UNumber(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UNumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Real(r) => query_builder.bind(*r),
+                crate::DatabaseValue::RealOpt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
+                crate::DatabaseValue::NowAdd(add) => {
+                    query_builder.bind(format!("NOW() + INTERVAL {add}"))
+                }
+            };
+        }
+
+        let result = {
+            let mut transaction_guard = self.transaction.lock().await;
+            query_builder
+                .execute(
+                    &mut **transaction_guard
+                        .as_mut()
+                        .ok_or(DatabaseError::TransactionCommitted)?,
+                )
+                .await
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?
+        };
+
+        Ok(result.rows_affected())
+    }
+
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let mut query_builder: sqlx::query::Query<'_, sqlx::MySql, sqlx::mysql::MySqlArguments> =
+            sqlx::query(query);
+
+        // Add parameters in order - MySQL uses ? placeholders
+        for param in params {
+            query_builder = match param {
+                crate::DatabaseValue::String(s) => query_builder.bind(s),
+                crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
+                crate::DatabaseValue::Number(n) => query_builder.bind(*n),
+                crate::DatabaseValue::NumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::UNumber(n) => query_builder.bind(*n),
+                crate::DatabaseValue::UNumberOpt(n) => query_builder.bind(n),
+                crate::DatabaseValue::Real(r) => query_builder.bind(*r),
+                crate::DatabaseValue::RealOpt(r) => query_builder.bind(r),
+                crate::DatabaseValue::Bool(b) => query_builder.bind(*b),
+                crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
+                crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
+                crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
+                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
+                crate::DatabaseValue::NowAdd(add) => {
+                    query_builder.bind(format!("NOW() + INTERVAL {add}"))
+                }
+            };
+        }
+
+        let result = {
+            let mut transaction_guard = self.transaction.lock().await;
+            query_builder
+                .fetch_all(
+                    &mut **transaction_guard
+                        .as_mut()
+                        .ok_or(DatabaseError::TransactionCommitted)?,
+                )
+                .await
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?
+        };
+
+        if result.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Get column names from first row
+        let column_names: Vec<String> = result[0]
+            .columns()
+            .iter()
+            .map(|c| c.name().to_string())
+            .collect();
+
+        // Convert sqlx rows to our Row format
+        let mut rows = Vec::new();
+        for sqlx_row in result {
+            let row = from_row(&column_names, &sqlx_row)
+                .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+            rows.push(row);
+        }
+
+        Ok(rows)
     }
 }
 

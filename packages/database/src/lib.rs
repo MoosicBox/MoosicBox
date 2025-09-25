@@ -446,6 +446,9 @@ pub enum DatabaseError {
     /// Invalid query syntax
     #[error("Invalid query: {0}")]
     InvalidQuery(String),
+    /// Unsupported operation by backend
+    #[error("Unsupported operation: {0}")]
+    UnsupportedOperation(String),
 }
 
 impl DatabaseError {
@@ -798,6 +801,54 @@ pub trait Database: Send + Sync + std::fmt::Debug {
     /// * Returns `DatabaseError::QueryFailed` if query execution fails
     /// * Returns `DatabaseError::InvalidQuery` for malformed SQL
     async fn query_raw(&self, query: &str) -> Result<Vec<Row>, DatabaseError>;
+
+    /// Execute raw SQL with parameters
+    /// Parameters are safely bound, preventing SQL injection
+    ///
+    /// # Parameters Format
+    ///
+    /// Parameter syntax varies by backend implementation, not just database type:
+    /// * rusqlite: Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
+    /// * sqlx-sqlite: Uses $1, $2 placeholders (e.g., "SELECT * FROM users WHERE id = $1")
+    /// * `PostgreSQL` (both native and sqlx): Uses $1, $2 placeholders (e.g., "SELECT * FROM users WHERE id = $1")
+    /// * `MySQL` (sqlx): Uses ? placeholders (e.g., "SELECT * FROM users WHERE id = ?")
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
+    /// * Returns `DatabaseError::QueryFailed` if execution fails
+    /// * Returns `DatabaseError::InvalidQuery` for parameter count mismatch
+    async fn exec_raw_params(
+        &self,
+        _query: &str,
+        _params: &[DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "exec_raw_params not implemented for this backend".to_string(),
+        ))
+    }
+
+    /// Query raw SQL with parameters and return results
+    ///
+    /// # Safety
+    ///
+    /// Parameters are safely bound by the database driver,
+    /// preventing SQL injection attacks.
+    ///
+    /// # Errors
+    ///
+    /// * Returns `DatabaseError::UnsupportedOperation` if not implemented
+    /// * Returns `DatabaseError::QueryFailed` if query fails
+    /// * Returns `DatabaseError::InvalidQuery` for parameter count mismatch
+    async fn query_raw_params(
+        &self,
+        _query: &str,
+        _params: &[DatabaseValue],
+    ) -> Result<Vec<Row>, DatabaseError> {
+        Err(DatabaseError::UnsupportedOperation(
+            "query_raw_params not implemented for this backend".to_string(),
+        ))
+    }
 
     /// Begin a database transaction
     ///

@@ -626,6 +626,64 @@ impl Database for RusqliteDatabase {
         // Create and return the transaction with dedicated connection
         Ok(Box::new(RusqliteTransaction::new(connection)))
     }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let connection = self.get_connection();
+        let connection_guard = connection.lock().await;
+
+        let mut stmt = connection_guard
+            .prepare(query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Convert to RusqliteDatabaseValue using existing From impl
+        let rusqlite_params: Vec<RusqliteDatabaseValue> =
+            params.iter().map(|p| p.clone().into()).collect();
+
+        // Use existing bind_values function to bind parameters
+        bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        let rows_affected = stmt
+            .raw_execute()
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        Ok(rows_affected as u64)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection = self.get_connection();
+        let connection_guard = connection.lock().await;
+
+        let mut stmt = connection_guard
+            .prepare(query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Get column names
+        let column_names: Vec<String> =
+            stmt.column_names().iter().map(|&s| s.to_string()).collect();
+
+        // Convert params using existing conversion
+        let rusqlite_params: Vec<RusqliteDatabaseValue> =
+            params.iter().map(|p| p.clone().into()).collect();
+
+        // Use existing bind_values function to bind parameters
+        bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Execute and use existing to_rows helper
+        to_rows(&column_names, stmt.raw_query())
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
+    }
 }
 
 #[async_trait]
@@ -879,6 +937,62 @@ impl Database for RusqliteTransaction {
     ) -> Result<Box<dyn crate::DatabaseTransaction>, DatabaseError> {
         // Transactions cannot be nested
         Err(DatabaseError::AlreadyInTransaction)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn exec_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<u64, DatabaseError> {
+        let connection_guard = self.connection.lock().await;
+
+        let mut stmt = connection_guard
+            .prepare(query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Convert to RusqliteDatabaseValue using existing From impl
+        let rusqlite_params: Vec<RusqliteDatabaseValue> =
+            params.iter().map(|p| p.clone().into()).collect();
+
+        // Use existing bind_values function to bind parameters
+        bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        let rows_affected = stmt
+            .raw_execute()
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        Ok(rows_affected as u64)
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    async fn query_raw_params(
+        &self,
+        query: &str,
+        params: &[crate::DatabaseValue],
+    ) -> Result<Vec<crate::Row>, DatabaseError> {
+        let connection_guard = self.connection.lock().await;
+
+        let mut stmt = connection_guard
+            .prepare(query)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Get column names
+        let column_names: Vec<String> =
+            stmt.column_names().iter().map(|&s| s.to_string()).collect();
+
+        // Convert params using existing conversion
+        let rusqlite_params: Vec<RusqliteDatabaseValue> =
+            params.iter().map(|p| p.clone().into()).collect();
+
+        // Use existing bind_values function to bind parameters
+        bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
+
+        // Execute and use existing to_rows helper
+        to_rows(&column_names, stmt.raw_query())
+            .map_err(|e| DatabaseError::QueryFailed(e.to_string()))
     }
 }
 
