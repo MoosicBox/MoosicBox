@@ -2105,11 +2105,17 @@ async fn delete(
     limit: Option<usize>,
 ) -> Result<Vec<crate::Row>, PostgresDatabaseError> {
     let index = AtomicU16::new(0);
-    let query = format!(
-        "DELETE FROM {table_name} {} RETURNING * {}",
-        build_where_clause(filters, &index),
-        limit.map_or_else(String::new, |limit| format!("LIMIT {limit}"))
-    );
+
+    // PostgreSQL doesn't support LIMIT directly in DELETE statements
+    // Use subquery with ctid for LIMIT support
+    let query = limit.map_or_else(|| format!(
+            "DELETE FROM {table_name} {} RETURNING *",
+            build_where_clause(filters, &index)
+        ), |limit| format!(
+            "DELETE FROM {table_name} WHERE ctid IN (SELECT ctid FROM {table_name} {} LIMIT {}) RETURNING *",
+            build_where_clause(filters, &index),
+            limit
+        ));
 
     log::trace!(
         "Running delete query: {query} with params: {:?}",
@@ -2123,8 +2129,18 @@ async fn delete(
         .map(|x| x.name().to_string())
         .collect::<Vec<_>>();
 
+    // For LIMIT queries, we need to duplicate the filter parameters
+    // since they appear twice in the query (main WHERE and subquery WHERE)
     let filters = bexprs_to_params_opt(filters);
-    let rows = client.query_raw(&statement, filters).await?;
+    let all_filters = if limit.is_some() {
+        let mut all = filters.clone();
+        all.extend(filters);
+        all
+    } else {
+        filters
+    };
+
+    let rows = client.query_raw(&statement, all_filters).await?;
 
     to_rows(&column_names, rows).await
 }
