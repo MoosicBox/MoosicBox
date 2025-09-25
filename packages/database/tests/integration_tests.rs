@@ -1324,6 +1324,9 @@ mod common;
 #[cfg(feature = "schema")]
 use common::introspection_tests::IntrospectionTestSuite;
 
+#[cfg(feature = "schema")]
+use common::returning_tests::ReturningTestSuite;
+
 // Rusqlite backend introspection tests
 #[cfg(all(feature = "sqlite-rusqlite", feature = "schema"))]
 mod rusqlite_introspection_tests {
@@ -1785,6 +1788,255 @@ mod simulator_introspection_tests {
     async fn test_simulator_introspection_all() {
         let suite = SimulatorIntrospectionTests;
         suite.run_all_tests().await;
+    }
+}
+
+// MySQL backend returning tests
+#[cfg(all(feature = "mysql-sqlx", feature = "schema"))]
+mod mysql_returning_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::sqlx::mysql::MySqlSqlxDatabase;
+
+    struct MysqlReturningTests;
+
+    impl ReturningTestSuite for MysqlReturningTests {
+        async fn get_database(&self) -> Option<Arc<dyn Database + Send + Sync>> {
+            use sqlx::MySqlPool;
+            use switchy_async::sync::Mutex;
+
+            let url = std::env::var("MYSQL_TEST_URL").ok()?;
+            let pool = MySqlPool::connect(&url).await.ok()?;
+            let pool = Arc::new(Mutex::new(pool));
+            let db = MySqlSqlxDatabase::new(pool);
+            Some(Arc::new(db))
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_insert_returns_complete_row() {
+        let suite = MysqlReturningTests;
+        suite.test_insert_returns_complete_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_update_returns_all_updated_rows() {
+        let suite = MysqlReturningTests;
+        suite.test_update_returns_all_updated_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_update_with_limit_returns_limited_rows() {
+        let suite = MysqlReturningTests;
+        suite.test_update_with_limit_returns_limited_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_delete_returns_deleted_rows() {
+        let suite = MysqlReturningTests;
+        suite.test_delete_returns_deleted_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_delete_with_limit_returns_limited_rows() {
+        let suite = MysqlReturningTests;
+        suite.test_delete_with_limit_returns_limited_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_upsert_returns_correct_row() {
+        let suite = MysqlReturningTests;
+        suite.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_transaction_operations_return_data() {
+        let suite = MysqlReturningTests;
+        suite.test_transaction_operations_return_data().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_empty_operations_return_empty() {
+        let suite = MysqlReturningTests;
+        suite.test_empty_operations_return_empty().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_data_type_preservation_in_returns() {
+        let suite = MysqlReturningTests;
+        suite.test_data_type_preservation_in_returns().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_mysql_complex_filters_return_correct_rows() {
+        let suite = MysqlReturningTests;
+        suite.test_complex_filters_return_correct_rows().await;
+    }
+}
+
+// PostgreSQL backend returning tests
+#[cfg(all(feature = "postgres-sqlx", feature = "schema"))]
+mod postgres_returning_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::sqlx::postgres::PostgresSqlxDatabase;
+
+    struct PostgresReturningTests;
+
+    impl ReturningTestSuite for PostgresReturningTests {
+        async fn get_database(&self) -> Option<Arc<dyn Database + Send + Sync>> {
+            use sqlx::PgPool;
+            use switchy_async::sync::Mutex;
+
+            let url = std::env::var("POSTGRES_TEST_URL").ok()?;
+            let pool = PgPool::connect(&url).await.ok()?;
+            let pool = Arc::new(Mutex::new(pool));
+            let db = PostgresSqlxDatabase::new(pool);
+            Some(Arc::new(db))
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_insert_returns_complete_row() {
+        let suite = PostgresReturningTests;
+        suite.test_insert_returns_complete_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_update_returns_all_updated_rows() {
+        let suite = PostgresReturningTests;
+        suite.test_update_returns_all_updated_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_update_with_limit_returns_limited_rows() {
+        let suite = PostgresReturningTests;
+        suite.test_update_with_limit_returns_limited_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_delete_returns_deleted_rows() {
+        let suite = PostgresReturningTests;
+        suite.test_delete_returns_deleted_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_delete_with_limit_returns_limited_rows() {
+        let suite = PostgresReturningTests;
+        suite.test_delete_with_limit_returns_limited_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_upsert_returns_correct_row() {
+        let suite = PostgresReturningTests;
+        suite.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_transaction_operations_return_data() {
+        let suite = PostgresReturningTests;
+        suite.test_transaction_operations_return_data().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_empty_operations_return_empty() {
+        let suite = PostgresReturningTests;
+        suite.test_empty_operations_return_empty().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_data_type_preservation_in_returns() {
+        let suite = PostgresReturningTests;
+        suite.test_data_type_preservation_in_returns().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_postgres_complex_filters_return_correct_rows() {
+        let suite = PostgresReturningTests;
+        suite.test_complex_filters_return_correct_rows().await;
+    }
+}
+
+// SQLite backend returning tests
+#[cfg(all(feature = "sqlite-sqlx", feature = "schema"))]
+mod sqlite_returning_tests {
+    use super::*;
+    use std::sync::Arc;
+    use switchy_database::sqlx::sqlite::SqliteSqlxDatabase;
+
+    struct SqliteReturningTests;
+
+    impl ReturningTestSuite for SqliteReturningTests {
+        async fn get_database(&self) -> Option<Arc<dyn Database + Send + Sync>> {
+            use sqlx::SqlitePool;
+            use switchy_async::sync::Mutex;
+
+            // Create in-memory database for testing
+            let db_url = "sqlite::memory:";
+            let pool = SqlitePool::connect(db_url).await.ok()?;
+            let db = SqliteSqlxDatabase::new(Arc::new(Mutex::new(pool)));
+            Some(Arc::new(db))
+        }
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_insert_returns_complete_row() {
+        let suite = SqliteReturningTests;
+        suite.test_insert_returns_complete_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_update_returns_all_updated_rows() {
+        let suite = SqliteReturningTests;
+        suite.test_update_returns_all_updated_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_update_with_limit_returns_limited_rows() {
+        let suite = SqliteReturningTests;
+        suite.test_update_with_limit_returns_limited_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_delete_returns_deleted_rows() {
+        let suite = SqliteReturningTests;
+        suite.test_delete_returns_deleted_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_delete_with_limit_returns_limited_rows() {
+        let suite = SqliteReturningTests;
+        suite.test_delete_with_limit_returns_limited_rows().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_upsert_returns_correct_row() {
+        let suite = SqliteReturningTests;
+        suite.test_upsert_returns_correct_row().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_transaction_operations_return_data() {
+        let suite = SqliteReturningTests;
+        suite.test_transaction_operations_return_data().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_empty_operations_return_empty() {
+        let suite = SqliteReturningTests;
+        suite.test_empty_operations_return_empty().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_data_type_preservation_in_returns() {
+        let suite = SqliteReturningTests;
+        suite.test_data_type_preservation_in_returns().await;
+    }
+
+    #[test_log::test(switchy_async::test(no_simulator))]
+    async fn test_sqlite_complex_filters_return_correct_rows() {
+        let suite = SqliteReturningTests;
+        suite.test_complex_filters_return_correct_rows().await;
     }
 }
 
