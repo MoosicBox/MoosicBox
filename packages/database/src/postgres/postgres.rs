@@ -1370,7 +1370,7 @@ async fn postgres_exec_create_table(
                     query.push('\'');
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
-                    query.push_str(if *x { "1" } else { "0" });
+                    query.push_str(if *x { "TRUE" } else { "FALSE" });
                 }
                 DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
                     query.push_str(&x.to_string());
