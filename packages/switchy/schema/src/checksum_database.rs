@@ -693,7 +693,10 @@ mod tests {
         DatabaseValue::RealOpt(Some(std::f64::consts::PI)).update_digest(&mut hasher);
         DatabaseValue::RealOpt(None).update_digest(&mut hasher);
         DatabaseValue::Now.update_digest(&mut hasher);
-        DatabaseValue::NowAdd("1 day".to_string()).update_digest(&mut hasher);
+        DatabaseValue::now()
+            .plus_days(1)
+            .build()
+            .update_digest(&mut hasher);
 
         let checksum = hasher.finalize();
 
@@ -1016,9 +1019,22 @@ impl Digest for DatabaseValue {
                 }
             }
             Self::Now => hasher.update(b"NOW"),
-            Self::NowAdd(s) => {
-                hasher.update(b"NOWADD:");
-                hasher.update(s.as_bytes());
+            Self::NowPlus(interval) => {
+                hasher.update(b"NOWPLUS:");
+                // Hash the interval components for deterministic hashing
+                hasher.update(interval.years.to_le_bytes());
+                hasher.update(b",");
+                hasher.update(interval.months.to_le_bytes());
+                hasher.update(b",");
+                hasher.update(interval.days.to_le_bytes());
+                hasher.update(b",");
+                hasher.update(interval.hours.to_le_bytes());
+                hasher.update(b",");
+                hasher.update(interval.minutes.to_le_bytes());
+                hasher.update(b",");
+                hasher.update(interval.seconds.to_le_bytes());
+                hasher.update(b",");
+                hasher.update(interval.nanos.to_le_bytes());
             }
             Self::DateTime(dt) => {
                 hasher.update(b"DT:");

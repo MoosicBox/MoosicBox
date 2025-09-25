@@ -372,10 +372,7 @@ pub async fn insert_signature_token(
             switchy_database::query::insert("signature_tokens")
                 .value("token_hash", token_hash)
                 .value("client_id", client_id)
-                .value(
-                    "expires",
-                    DatabaseValue::NowAdd("INTERVAL '14 day'".to_string()),
-                )
+                .value("expires", DatabaseValue::now().plus_days(14))
                 .execute(&**DB.lock().await.as_mut().expect("DB not initialized"))
                 .await?;
 

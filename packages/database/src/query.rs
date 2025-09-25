@@ -62,7 +62,7 @@ pub trait Expression: Send + Sync + Debug {
             x.into_iter()
                 .filter(|value| {
                     !value.is_null()
-                        && !matches!(value, DatabaseValue::Now | DatabaseValue::NowAdd(_))
+                        && !matches!(value, DatabaseValue::Now | DatabaseValue::NowPlus(_))
                 })
                 .collect::<Vec<_>>()
         })

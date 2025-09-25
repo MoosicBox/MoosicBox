@@ -22,10 +22,64 @@ use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    sql_interval::SqlInterval,
 };
 
 trait ToSql {
     fn to_sql(&self) -> String;
+}
+
+/// Format `SqlInterval` as `MySQL` INTERVAL expressions
+/// Returns multiple INTERVAL expressions for chaining with `DATE_ADD`
+fn format_mysql_intervals(interval: &SqlInterval) -> Vec<String> {
+    let mut intervals = Vec::new();
+
+    if interval.years != 0 {
+        intervals.push(format!("INTERVAL {} YEAR", interval.years));
+    }
+    if interval.months != 0 {
+        intervals.push(format!("INTERVAL {} MONTH", interval.months));
+    }
+    if interval.days != 0 {
+        intervals.push(format!("INTERVAL {} DAY", interval.days));
+    }
+    if interval.hours != 0 {
+        intervals.push(format!("INTERVAL {} HOUR", interval.hours));
+    }
+    if interval.minutes != 0 {
+        intervals.push(format!("INTERVAL {} MINUTE", interval.minutes));
+    }
+    if interval.seconds != 0 {
+        intervals.push(format!("INTERVAL {} SECOND", interval.seconds));
+    }
+    if interval.nanos != 0 {
+        let microseconds = interval.nanos / 1000; // MySQL supports microsecond precision
+        if microseconds > 0 {
+            intervals.push(format!("INTERVAL {microseconds} MICROSECOND"));
+        }
+    }
+
+    if intervals.is_empty() {
+        vec!["INTERVAL 0 SECOND".to_string()]
+    } else {
+        intervals
+    }
+}
+
+/// Generate `MySQL` expression for `NOW()` + intervals
+fn format_mysql_now_plus(interval: &SqlInterval) -> String {
+    if interval.is_zero() {
+        return "NOW()".to_string();
+    }
+
+    let intervals = format_mysql_intervals(interval);
+    let mut expr = "NOW()".to_string();
+
+    for interval_expr in intervals {
+        expr = format!("DATE_ADD({expr}, {interval_expr})");
+    }
+
+    expr
 }
 
 trait ToParam {
@@ -191,7 +245,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
-                DatabaseValue::NowAdd(add) => format!("DATE_ADD(NOW(), {add}))"),
+                DatabaseValue::NowPlus(interval) => format_mysql_now_plus(interval),
                 _ => "?".to_string(),
             },
         }
@@ -624,8 +678,9 @@ impl Database for MySqlSqlxDatabase {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("NOW() + INTERVAL {add}"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -665,8 +720,9 @@ impl Database for MySqlSqlxDatabase {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("NOW() + INTERVAL {add}"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -1124,8 +1180,9 @@ impl Database for MysqlSqlxTransaction {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("NOW() + INTERVAL {add}"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -1169,8 +1226,9 @@ impl Database for MysqlSqlxTransaction {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("NOW() + INTERVAL {add}"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -1545,9 +1603,8 @@ async fn mysql_sqlx_exec_create_table(
                 DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NowAdd(x) => {
-                    query.push_str("NOW() + ");
-                    query.push_str(x);
+                DatabaseValue::NowPlus(interval) => {
+                    query.push_str(&format_mysql_now_plus(interval));
                 }
                 DatabaseValue::Now => {
                     query.push_str("NOW()");
@@ -2235,7 +2292,7 @@ where
                 DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => {
                     query = query.bind(*value);
                 }
-                DatabaseValue::NowAdd(_add) => (),
+                DatabaseValue::NowPlus(_interval) => (),
                 DatabaseValue::DateTime(value) => {
                     query = query.bind(value);
                 }

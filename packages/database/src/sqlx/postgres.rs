@@ -29,7 +29,71 @@ use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    sql_interval::SqlInterval,
 };
+
+/// Format `SqlInterval` as `PostgreSQL` INTERVAL expression (reuse from main postgres)
+fn format_postgres_interval_sqlx(interval: &SqlInterval) -> String {
+    let mut parts = Vec::new();
+
+    if interval.years != 0 {
+        parts.push(format!(
+            "{} year{}",
+            interval.years,
+            if interval.years.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.months != 0 {
+        parts.push(format!(
+            "{} month{}",
+            interval.months,
+            if interval.months.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.days != 0 {
+        parts.push(format!(
+            "{} day{}",
+            interval.days,
+            if interval.days.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.hours != 0 {
+        parts.push(format!(
+            "{} hour{}",
+            interval.hours,
+            if interval.hours.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.minutes != 0 {
+        parts.push(format!(
+            "{} minute{}",
+            interval.minutes,
+            if interval.minutes.abs() == 1 { "" } else { "s" }
+        ));
+    }
+
+    // Handle seconds with nanoseconds
+    if interval.seconds != 0 || interval.nanos != 0 {
+        if interval.nanos == 0 {
+            parts.push(format!(
+                "{} second{}",
+                interval.seconds,
+                if interval.seconds.abs() == 1 { "" } else { "s" }
+            ));
+        } else {
+            #[allow(clippy::cast_precision_loss)]
+            let fractional =
+                interval.seconds as f64 + (f64::from(interval.nanos) / 1_000_000_000.0);
+            parts.push(format!("{fractional} seconds"));
+        }
+    }
+
+    if parts.is_empty() {
+        "INTERVAL '0'".to_string()
+    } else {
+        format!("INTERVAL '{}'", parts.join(" "))
+    }
+}
 
 trait ToSql {
     fn to_sql(&self, index: &AtomicU16) -> String;
@@ -243,7 +307,13 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
-                DatabaseValue::NowAdd(add) => format!("NOW() + {add}"),
+                DatabaseValue::NowPlus(interval) => {
+                    if interval.is_zero() {
+                        "NOW()".to_string()
+                    } else {
+                        format!("NOW() + {}", format_postgres_interval_sqlx(interval))
+                    }
+                }
                 _ => {
                     let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
                     format!("${pos}")
@@ -685,8 +755,9 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("NOW() + INTERVAL '{add}'"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -732,8 +803,9 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("NOW() + INTERVAL '{add}'"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -1184,8 +1256,9 @@ impl Database for PostgresSqlxTransaction {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("NOW() + INTERVAL '{add}'"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -1233,8 +1306,9 @@ impl Database for PostgresSqlxTransaction {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("NOW() + INTERVAL '{add}'"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -1652,9 +1726,13 @@ async fn postgres_sqlx_exec_create_table(
                 DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NowAdd(x) => {
-                    query.push_str("NOW() + ");
-                    query.push_str(x);
+                DatabaseValue::NowPlus(interval) => {
+                    if interval.is_zero() {
+                        query.push_str("NOW()");
+                    } else {
+                        query.push_str("NOW() + ");
+                        query.push_str(&format_postgres_interval_sqlx(interval));
+                    }
                 }
                 DatabaseValue::Now => {
                     query.push_str("NOW()");
@@ -2354,7 +2432,7 @@ where
                 DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => {
                     query = query.bind(*value);
                 }
-                DatabaseValue::NowAdd(_add) => (),
+                DatabaseValue::NowPlus(_interval) => (),
                 DatabaseValue::DateTime(value) => {
                     query = query.bind(value);
                 }

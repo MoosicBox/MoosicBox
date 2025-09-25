@@ -154,6 +154,8 @@ pub mod simulator;
 pub mod sqlx;
 
 pub mod query;
+pub mod sql_interval;
+pub mod value_builders;
 
 #[cfg(feature = "schema")]
 pub mod schema;
@@ -162,6 +164,8 @@ use std::{num::TryFromIntError, sync::Arc};
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
+
+use crate::sql_interval::SqlInterval;
 use query::{
     DeleteStatement, InsertStatement, SelectQuery, UpdateStatement, UpsertMultiStatement,
     UpsertStatement,
@@ -181,7 +185,7 @@ pub enum DatabaseValue {
     UNumberOpt(Option<u64>),
     Real(f64),
     RealOpt(Option<f64>),
-    NowAdd(String),
+    NowPlus(SqlInterval),
     Now,
     DateTime(NaiveDateTime),
 }

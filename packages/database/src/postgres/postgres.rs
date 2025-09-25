@@ -22,10 +22,74 @@ use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    sql_interval::SqlInterval,
 };
 
 trait ToSql {
     fn to_sql(&self, index: &AtomicU16) -> String;
+}
+
+/// Format `SqlInterval` as `PostgreSQL` INTERVAL expression
+fn format_postgres_interval(interval: &SqlInterval) -> String {
+    let mut parts = Vec::new();
+
+    if interval.years != 0 {
+        parts.push(format!(
+            "{} year{}",
+            interval.years,
+            if interval.years.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.months != 0 {
+        parts.push(format!(
+            "{} month{}",
+            interval.months,
+            if interval.months.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.days != 0 {
+        parts.push(format!(
+            "{} day{}",
+            interval.days,
+            if interval.days.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.hours != 0 {
+        parts.push(format!(
+            "{} hour{}",
+            interval.hours,
+            if interval.hours.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.minutes != 0 {
+        parts.push(format!(
+            "{} minute{}",
+            interval.minutes,
+            if interval.minutes.abs() == 1 { "" } else { "s" }
+        ));
+    }
+
+    // Handle seconds with nanoseconds
+    if interval.seconds != 0 || interval.nanos != 0 {
+        if interval.nanos == 0 {
+            parts.push(format!(
+                "{} second{}",
+                interval.seconds,
+                if interval.seconds.abs() == 1 { "" } else { "s" }
+            ));
+        } else {
+            #[allow(clippy::cast_precision_loss)]
+            let fractional =
+                interval.seconds as f64 + (f64::from(interval.nanos) / 1_000_000_000.0);
+            parts.push(format!("{fractional} seconds"));
+        }
+    }
+
+    if parts.is_empty() {
+        "INTERVAL '0'".to_string()
+    } else {
+        format!("INTERVAL '{}'", parts.join(" "))
+    }
 }
 
 impl<T: Expression + ?Sized> ToSql for T {
@@ -237,7 +301,13 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
-                DatabaseValue::NowAdd(add) => format!("NOW() + {add}"),
+                DatabaseValue::NowPlus(interval) => {
+                    if interval.is_zero() {
+                        "NOW()".to_string()
+                    } else {
+                        format!("NOW() + {}", format_postgres_interval(interval))
+                    }
+                }
                 _ => {
                     let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
                     format!("${pos}")
@@ -324,6 +394,8 @@ pub enum PostgresDatabaseError {
     MissingUnique,
     #[error("Type Not Found: '{type_name}'")]
     TypeNotFound { type_name: String },
+    #[error("Invalid parameter type: {0}")]
+    InvalidParameterType(String),
 }
 
 impl From<PostgresDatabaseError> for DatabaseError {
@@ -669,7 +741,13 @@ impl Database for PostgresDatabase {
                 | crate::DatabaseValue::Null => "NULL".to_string(),
                 crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
                 crate::DatabaseValue::Now => "NOW()".to_string(),
-                crate::DatabaseValue::NowAdd(add) => format!("NOW() + INTERVAL '{add}'"),
+                crate::DatabaseValue::NowPlus(interval) => {
+                    if interval.is_zero() {
+                        "NOW()".to_string()
+                    } else {
+                        format!("NOW() + {}", format_postgres_interval(interval))
+                    }
+                }
             };
             query_with_params = query_with_params.replace(&placeholder, &value_str);
         }
@@ -718,7 +796,13 @@ impl Database for PostgresDatabase {
                 | crate::DatabaseValue::Null => "NULL".to_string(),
                 crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
                 crate::DatabaseValue::Now => "NOW()".to_string(),
-                crate::DatabaseValue::NowAdd(add) => format!("NOW() + INTERVAL '{add}'"),
+                crate::DatabaseValue::NowPlus(interval) => {
+                    if interval.is_zero() {
+                        "NOW()".to_string()
+                    } else {
+                        format!("NOW() + {}", format_postgres_interval(interval))
+                    }
+                }
             };
             query_with_params = query_with_params.replace(&placeholder, &value_str);
         }
@@ -1073,7 +1157,13 @@ impl Database for PostgresTransaction {
                 | crate::DatabaseValue::Null => "NULL".to_string(),
                 crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
                 crate::DatabaseValue::Now => "NOW()".to_string(),
-                crate::DatabaseValue::NowAdd(add) => format!("NOW() + INTERVAL '{add}'"),
+                crate::DatabaseValue::NowPlus(interval) => {
+                    if interval.is_zero() {
+                        "NOW()".to_string()
+                    } else {
+                        format!("NOW() + {}", format_postgres_interval(interval))
+                    }
+                }
             };
             query_with_params = query_with_params.replace(&placeholder, &value_str);
         }
@@ -1123,7 +1213,13 @@ impl Database for PostgresTransaction {
                 | crate::DatabaseValue::Null => "NULL".to_string(),
                 crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
                 crate::DatabaseValue::Now => "NOW()".to_string(),
-                crate::DatabaseValue::NowAdd(add) => format!("NOW() + INTERVAL '{add}'"),
+                crate::DatabaseValue::NowPlus(interval) => {
+                    if interval.is_zero() {
+                        "NOW()".to_string()
+                    } else {
+                        format!("NOW() + {}", format_postgres_interval(interval))
+                    }
+                }
             };
             query_with_params = query_with_params.replace(&placeholder, &value_str);
         }
@@ -1617,9 +1713,13 @@ async fn postgres_exec_create_table(
                 DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NowAdd(x) => {
-                    query.push_str("NOW() + ");
-                    query.push_str(x);
+                DatabaseValue::NowPlus(interval) => {
+                    if interval.is_zero() {
+                        query.push_str("NOW()");
+                    } else {
+                        query.push_str("NOW() + ");
+                        query.push_str(&format_postgres_interval(interval));
+                    }
                 }
                 DatabaseValue::Now => {
                     query.push_str("NOW()");
@@ -2938,7 +3038,15 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             }
             DatabaseValue::Real(value) => value.to_sql(ty, out)?,
             DatabaseValue::RealOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::String(value) | DatabaseValue::NowAdd(value) => value.to_sql(ty, out)?,
+            DatabaseValue::String(value) => value.to_sql(ty, out)?,
+            DatabaseValue::NowPlus(_interval) => {
+                // NowPlus should not be used as a bindable parameter - it should be a SQL expression
+                return Err(PostgresDatabaseError::InvalidParameterType(
+                    "NowPlus cannot be bound as parameter - use in SQL expression instead"
+                        .to_string(),
+                )
+                .into());
+            }
             DatabaseValue::Now => switchy_time::datetime_utc_now()
                 .naive_utc()
                 .to_sql(ty, out)?,

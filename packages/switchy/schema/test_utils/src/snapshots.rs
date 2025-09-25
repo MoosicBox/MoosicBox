@@ -667,7 +667,9 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         | DatabaseValue::UNumberOpt(None)
         | DatabaseValue::RealOpt(None) => serde_json::Value::Null,
         DatabaseValue::DateTime(dt) => serde_json::Value::String(dt.to_string()),
-        DatabaseValue::NowAdd(s) => serde_json::Value::String(format!("NOW + {s}")),
+        DatabaseValue::NowPlus(interval) => {
+            serde_json::Value::String(format!("NOW + {interval:?}"))
+        }
         DatabaseValue::Now => serde_json::Value::String("NOW".to_string()),
     }
 }

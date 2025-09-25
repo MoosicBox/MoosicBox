@@ -23,7 +23,89 @@ use crate::{
     Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
     SelectQuery, UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    sql_interval::SqlInterval,
 };
+
+/// Format `SqlInterval` as `SQLite` datetime modifiers (reuse from rusqlite)
+fn format_sqlite_interval_sqlx(interval: &SqlInterval) -> Vec<String> {
+    let mut modifiers = Vec::new();
+
+    if interval.years != 0 {
+        let sign = if interval.years >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} year{}",
+            sign,
+            interval.years,
+            if interval.years.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.months != 0 {
+        let sign = if interval.months >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} month{}",
+            sign,
+            interval.months,
+            if interval.months.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.days != 0 {
+        let sign = if interval.days >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} day{}",
+            sign,
+            interval.days,
+            if interval.days.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.hours != 0 {
+        let sign = if interval.hours >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} hour{}",
+            sign,
+            interval.hours,
+            if interval.hours.abs() == 1 { "" } else { "s" }
+        ));
+    }
+    if interval.minutes != 0 {
+        let sign = if interval.minutes >= 0 { "+" } else { "" };
+        modifiers.push(format!(
+            "{}{} minute{}",
+            sign,
+            interval.minutes,
+            if interval.minutes.abs() == 1 { "" } else { "s" }
+        ));
+    }
+
+    // Handle seconds with subsecond precision
+    if interval.seconds != 0 || interval.nanos != 0 {
+        let sign = if interval.seconds >= 0 && interval.nanos == 0 {
+            "+"
+        } else if interval.seconds < 0 {
+            ""
+        } else {
+            "+"
+        };
+        if interval.nanos == 0 {
+            modifiers.push(format!(
+                "{}{} second{}",
+                sign,
+                interval.seconds,
+                if interval.seconds.abs() == 1 { "" } else { "s" }
+            ));
+        } else {
+            #[allow(clippy::cast_precision_loss)]
+            let fractional =
+                interval.seconds as f64 + (f64::from(interval.nanos) / 1_000_000_000.0);
+            modifiers.push(format!("{sign}{fractional} seconds"));
+        }
+    }
+
+    if modifiers.is_empty() {
+        vec!["0 seconds".to_string()]
+    } else {
+        modifiers
+    }
+}
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
@@ -252,8 +334,14 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "strftime('%Y-%m-%dT%H:%M:%f', 'now')".to_string(),
-                DatabaseValue::NowAdd(add) => {
-                    format!("strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', {add}))")
+                DatabaseValue::NowPlus(interval) => {
+                    let modifiers = format_sqlite_interval_sqlx(interval);
+                    let modifier_str = modifiers
+                        .iter()
+                        .map(|m| format!("'{m}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("strftime('%Y-%m-%dT%H:%M:%f', datetime('now', {modifier_str}))")
                 }
                 _ => {
                     let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
@@ -685,8 +773,9 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("datetime('now')"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("datetime('now', '{add}')"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -731,8 +820,9 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("datetime('now')"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("datetime('now', '{add}')"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -1107,7 +1197,7 @@ where
                 DatabaseValue::Real(value) | DatabaseValue::RealOpt(Some(value)) => {
                     query = query.bind(*value);
                 }
-                DatabaseValue::NowAdd(_add) => (),
+                DatabaseValue::NowPlus(_interval) => (),
                 DatabaseValue::DateTime(value) => {
                     query = query.bind(value);
                 }
@@ -1239,10 +1329,21 @@ async fn sqlite_sqlx_exec_create_table(
                 DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NowAdd(x) => {
-                    query.push_str("(strftime('%Y-%m-%dT%H:%M:%f', DateTime('now', 'LocalTime', ");
-                    query.push_str(x);
-                    query.push_str(")))");
+                DatabaseValue::NowPlus(interval) => {
+                    let modifiers = format_sqlite_interval_sqlx(interval);
+                    let modifier_str = modifiers
+                        .iter()
+                        .map(|m| format!("'{m}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    {
+                        use std::fmt::Write;
+                        write!(
+                            query,
+                            "(strftime('%Y-%m-%dT%H:%M:%f', datetime('now', {modifier_str})))"
+                        )
+                        .unwrap();
+                    }
                 }
                 DatabaseValue::Now => {
                     query.push_str("(strftime('%Y-%m-%dT%H:%M:%f', 'now'))");
@@ -1777,7 +1878,7 @@ fn sqlite_modify_create_table_sql(
             }
             crate::DatabaseValue::DateTime(dt) => format!("'{}'", dt.format("%Y-%m-%d %H:%M:%S")),
             crate::DatabaseValue::Now => "CURRENT_TIMESTAMP".to_string(),
-            crate::DatabaseValue::NowAdd(_) => return Err(SqlxDatabaseError::InvalidRequest),
+            crate::DatabaseValue::NowPlus(_) => return Err(SqlxDatabaseError::InvalidRequest),
         };
 
         write!(new_column_def, " DEFAULT {default_str}").unwrap();
@@ -3004,8 +3105,9 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("datetime('now')"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("datetime('now', '{add}')"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
@@ -3052,8 +3154,9 @@ impl Database for SqliteSqlxTransaction {
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
                 crate::DatabaseValue::Now => query_builder.bind("datetime('now')"),
-                crate::DatabaseValue::NowAdd(add) => {
-                    query_builder.bind(format!("datetime('now', '{add}')"))
+                crate::DatabaseValue::NowPlus(_interval) => {
+                    // NowPlus should not be bound as parameter - it should be a SQL expression
+                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
                 }
             };
         }
