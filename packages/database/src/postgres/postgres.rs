@@ -24,7 +24,6 @@ use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
-    query_transform::{DollarNumberHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
 
@@ -32,8 +31,9 @@ trait ToSql {
     fn to_sql(&self, index: &AtomicU16) -> String;
 }
 
-/// Format `SqlInterval` as `PostgreSQL` INTERVAL expression
-fn format_postgres_interval(interval: &SqlInterval) -> String {
+/// Format `SqlInterval` as `PostgreSQL` interval string for parameter binding
+/// Returns formats like "1 year 2 days 3 hours" or "0" for zero interval
+fn postgres_interval_to_string(interval: &SqlInterval) -> String {
     let mut parts = Vec::new();
 
     if interval.years != 0 {
@@ -89,9 +89,9 @@ fn format_postgres_interval(interval: &SqlInterval) -> String {
     }
 
     if parts.is_empty() {
-        "INTERVAL '0'".to_string()
+        "0".to_string() // PostgreSQL accepts "0" for zero interval
     } else {
-        format!("INTERVAL '{}'", parts.join(" "))
+        parts.join(" ")
     }
 }
 
@@ -304,12 +304,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
-                DatabaseValue::NowPlus(interval) => {
-                    if interval.is_zero() {
-                        "NOW()".to_string()
-                    } else {
-                        format!("NOW() + {}", format_postgres_interval(interval))
-                    }
+                DatabaseValue::NowPlus(_) => {
+                    // This should never be reached - NowPlus is transformed to (NOW() + $N::interval)
+                    unreachable!(
+                        "NowPlus must be transformed to (NOW() + $N::interval), not used as direct parameter"
+                    )
                 }
                 _ => {
                     let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
@@ -715,7 +714,7 @@ impl Database for PostgresDatabase {
     ) -> Result<u64, DatabaseError> {
         // Transform query to handle Now/NowPlus parameters consistently with other backends
         let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params)?;
+            postgres_transform_query_for_params(query, params);
 
         let client = self.get_client().await?;
 
@@ -747,7 +746,7 @@ impl Database for PostgresDatabase {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         // Transform query to handle Now/NowPlus parameters consistently with other backends
         let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params)?;
+            postgres_transform_query_for_params(query, params);
 
         let client = self.get_client().await?;
 
@@ -1087,7 +1086,7 @@ impl Database for PostgresTransaction {
     ) -> Result<u64, DatabaseError> {
         // Transform query to handle Now/NowPlus parameters consistently with other backends
         let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params)?;
+            postgres_transform_query_for_params(query, params);
 
         // Convert DatabaseValue to PgDatabaseValue for ToSql trait
         let pg_params: Vec<PgDatabaseValue> = filtered_params
@@ -1120,7 +1119,7 @@ impl Database for PostgresTransaction {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         // Transform query to handle Now/NowPlus parameters consistently with other backends
         let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params)?;
+            postgres_transform_query_for_params(query, params);
 
         // Convert DatabaseValue to PgDatabaseValue for ToSql trait
         let pg_params: Vec<PgDatabaseValue> = filtered_params
@@ -1624,13 +1623,11 @@ async fn postgres_exec_create_table(
                 DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NowPlus(interval) => {
-                    if interval.is_zero() {
-                        query.push_str("NOW()");
-                    } else {
-                        query.push_str("NOW() + ");
-                        query.push_str(&format_postgres_interval(interval));
-                    }
+                DatabaseValue::NowPlus(_) => {
+                    // This should never be reached - NowPlus is transformed to (NOW() + $N::interval)
+                    unreachable!(
+                        "NowPlus must be transformed to (NOW() + $N::interval), not used as direct parameter"
+                    )
                 }
                 DatabaseValue::Now => {
                     query.push_str("NOW()");
@@ -2952,12 +2949,24 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
         true
     }
 
+    fn encode_format(&self, ty: &tokio_postgres::types::Type) -> tokio_postgres::types::Format {
+        // Check if we're sending a String to an interval column
+        if ty.name() == "interval"
+            && let DatabaseValue::String(_) = &self.0
+        {
+            // Use text format for interval strings
+            return tokio_postgres::types::Format::Text;
+        }
+        // Default to binary format for everything else
+        tokio_postgres::types::Format::Binary
+    }
+
     fn to_sql_checked(
         &self,
         ty: &tokio_postgres::types::Type,
         out: &mut tokio_util::bytes::BytesMut,
     ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>> {
-        log::trace!("to_sql_checked: ty={}, {ty:?}", ty.name());
+        log::trace!("to_sql_checked: ty={}, {ty:?} {self:?}", ty.name());
         Ok(match &self.0 {
             DatabaseValue::Null | DatabaseValue::UNumberOpt(None) => IsNull::Yes,
             DatabaseValue::StringOpt(value) => value.to_sql(ty, out)?,
@@ -2970,7 +2979,17 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
             }
             DatabaseValue::Real(value) => value.to_sql(ty, out)?,
             DatabaseValue::RealOpt(value) => value.to_sql(ty, out)?,
-            DatabaseValue::String(value) => value.to_sql(ty, out)?,
+            DatabaseValue::String(value) => {
+                if ty.name() == "interval" {
+                    // For interval type, write as text format (UTF-8 bytes)
+                    // No binary encoding needed, just the raw string bytes
+                    out.extend_from_slice(value.as_bytes());
+                    IsNull::No
+                } else {
+                    // For other types, use standard String ToSql
+                    value.to_sql(ty, out)?
+                }
+            }
             DatabaseValue::NowPlus(_interval) => {
                 // NowPlus should not be used as a bindable parameter - it should be a SQL expression
                 return Err(PostgresDatabaseError::InvalidParameterType(
@@ -3002,24 +3021,46 @@ impl tokio_postgres::types::ToSql for PgDatabaseValue {
 fn postgres_transform_query_for_params(
     query: &str,
     params: &[DatabaseValue],
-) -> Result<(String, Vec<DatabaseValue>), DatabaseError> {
-    transform_query_for_params(
-        query,
-        params,
-        &DollarNumberHandler, // Handles $1, $2, etc. renumbering
-        |param| match param {
-            DatabaseValue::Now => Some("NOW()".to_string()),
-            DatabaseValue::NowPlus(interval) => {
-                if interval.is_zero() {
-                    Some("NOW()".to_string())
-                } else {
-                    Some(format!("NOW() + {}", format_postgres_interval(interval)))
-                }
+) -> (String, Vec<DatabaseValue>) {
+    let mut transformed_query = query.to_string();
+    let mut output_params = Vec::new();
+    let mut param_counter = 1;
+
+    for (i, param) in params.iter().enumerate() {
+        let old_placeholder = format!("${}", i + 1);
+
+        match param {
+            DatabaseValue::Now => {
+                // NOW() cannot be parameterized - replace in SQL
+                transformed_query = transformed_query.replace(&old_placeholder, "NOW()");
             }
-            _ => None,
-        },
-    )
-    .map_err(DatabaseError::QueryFailed)
+            DatabaseValue::NowPlus(interval) => {
+                // Transform to (NOW() + $N::interval) with interval as parameter
+                let new_placeholder = format!("${param_counter}");
+                transformed_query = transformed_query.replace(
+                    &old_placeholder,
+                    &format!("(NOW() + {new_placeholder}::interval)"),
+                );
+
+                // Add interval string as regular string parameter
+                let interval_string = postgres_interval_to_string(interval);
+                output_params.push(DatabaseValue::String(interval_string));
+                param_counter += 1;
+            }
+            other => {
+                // Regular parameter - renumber if needed
+                if param_counter != i + 1 {
+                    let new_placeholder = format!("${param_counter}");
+                    transformed_query =
+                        transformed_query.replace(&old_placeholder, &new_placeholder);
+                }
+                output_params.push(other.clone());
+                param_counter += 1;
+            }
+        }
+    }
+
+    (transformed_query, output_params)
 }
 
 #[cfg(all(test, feature = "schema"))]

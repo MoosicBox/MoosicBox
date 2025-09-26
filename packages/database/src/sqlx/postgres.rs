@@ -29,12 +29,11 @@ use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
-    query_transform::{DollarNumberHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
 
-/// Format `SqlInterval` as `PostgreSQL` INTERVAL expression (reuse from main postgres)
-fn format_postgres_interval_sqlx(interval: &SqlInterval) -> String {
+/// Format `SqlInterval` as `PostgreSQL` interval string for parameter binding
+fn postgres_interval_to_string_sqlx(interval: &SqlInterval) -> String {
     let mut parts = Vec::new();
 
     if interval.years != 0 {
@@ -90,9 +89,9 @@ fn format_postgres_interval_sqlx(interval: &SqlInterval) -> String {
     }
 
     if parts.is_empty() {
-        "INTERVAL '0'".to_string()
+        "0".to_string()
     } else {
-        format!("INTERVAL '{}'", parts.join(" "))
+        parts.join(" ")
     }
 }
 
@@ -308,12 +307,11 @@ impl<T: Expression + ?Sized> ToSql for T {
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
                 DatabaseValue::Now => "NOW()".to_string(),
-                DatabaseValue::NowPlus(interval) => {
-                    if interval.is_zero() {
-                        "NOW()".to_string()
-                    } else {
-                        format!("NOW() + {}", format_postgres_interval_sqlx(interval))
-                    }
+                DatabaseValue::NowPlus(_) => {
+                    // This should never be reached - NowPlus is transformed to (NOW() + $N::interval)
+                    unreachable!(
+                        "NowPlus must be transformed to (NOW() + $N::interval), not used as direct parameter"
+                    )
                 }
                 _ => {
                     let pos = index.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
@@ -730,7 +728,7 @@ impl Database for PostgresSqlxDatabase {
     ) -> Result<u64, DatabaseError> {
         // Transform query to handle Now/NowPlus parameters with proper $N renumbering
         let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params)?;
+            postgres_transform_query_for_params(query, params);
 
         let mut connection = {
             let pool = self.pool.lock().await;
@@ -784,7 +782,7 @@ impl Database for PostgresSqlxDatabase {
     ) -> Result<Vec<crate::Row>, DatabaseError> {
         // Transform query to handle Now/NowPlus parameters with proper $N renumbering
         let (transformed_query, filtered_params) =
-            postgres_transform_query_for_params(query, params)?;
+            postgres_transform_query_for_params(query, params);
 
         let mut connection = {
             let pool = self.pool.lock().await;
@@ -1739,13 +1737,11 @@ async fn postgres_sqlx_exec_create_table(
                 DatabaseValue::RealOpt(Some(x)) | DatabaseValue::Real(x) => {
                     query.push_str(&x.to_string());
                 }
-                DatabaseValue::NowPlus(interval) => {
-                    if interval.is_zero() {
-                        query.push_str("NOW()");
-                    } else {
-                        query.push_str("NOW() + ");
-                        query.push_str(&format_postgres_interval_sqlx(interval));
-                    }
+                DatabaseValue::NowPlus(_) => {
+                    // This should never be reached - NowPlus is transformed to (NOW() + $N::interval)
+                    unreachable!(
+                        "NowPlus must be transformed to (NOW() + $N::interval), not used as direct parameter"
+                    )
                 }
                 DatabaseValue::Now => {
                     query.push_str("NOW()");
@@ -3069,27 +3065,42 @@ impl Expression for PgDatabaseValue {
 fn postgres_transform_query_for_params(
     query: &str,
     params: &[DatabaseValue],
-) -> Result<(String, Vec<DatabaseValue>), DatabaseError> {
-    transform_query_for_params(
-        query,
-        params,
-        &DollarNumberHandler, // Handles $1, $2, etc. renumbering
-        |param| match param {
-            DatabaseValue::Now => Some("NOW()".to_string()),
-            DatabaseValue::NowPlus(interval) => {
-                if interval.is_zero() {
-                    Some("NOW()".to_string())
-                } else {
-                    Some(format!(
-                        "NOW() + {}",
-                        format_postgres_interval_sqlx(interval)
-                    ))
-                }
+) -> (String, Vec<DatabaseValue>) {
+    let mut transformed_query = query.to_string();
+    let mut output_params = Vec::new();
+    let mut param_counter = 1;
+
+    for (i, param) in params.iter().enumerate() {
+        let old_placeholder = format!("${}", i + 1);
+
+        match param {
+            DatabaseValue::Now => {
+                transformed_query = transformed_query.replace(&old_placeholder, "NOW()");
             }
-            _ => None,
-        },
-    )
-    .map_err(DatabaseError::QueryFailed)
+            DatabaseValue::NowPlus(interval) => {
+                let new_placeholder = format!("${param_counter}");
+                transformed_query = transformed_query.replace(
+                    &old_placeholder,
+                    &format!("(NOW() + {new_placeholder}::interval)"),
+                );
+
+                let interval_string = postgres_interval_to_string_sqlx(interval);
+                output_params.push(DatabaseValue::String(interval_string));
+                param_counter += 1;
+            }
+            other => {
+                if param_counter != i + 1 {
+                    let new_placeholder = format!("${param_counter}");
+                    transformed_query =
+                        transformed_query.replace(&old_placeholder, &new_placeholder);
+                }
+                output_params.push(other.clone());
+                param_counter += 1;
+            }
+        }
+    }
+
+    (transformed_query, output_params)
 }
 
 #[cfg(all(test, feature = "schema"))]
