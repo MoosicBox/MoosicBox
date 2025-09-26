@@ -782,7 +782,7 @@ pub fn create_map(
 
         if !toolchains.is_empty() {
             map.insert(
-                "toolchains".to_string(),
+                "ciToolchains".to_string(),
                 serde_json::to_value(toolchains.join("\n"))?,
             );
         }

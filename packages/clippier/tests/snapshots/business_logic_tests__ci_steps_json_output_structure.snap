@@ -3,6 +3,7 @@ source: packages/clippier/tests/business_logic_tests.rs
 expression: normalize_paths(parsed)
 ---
 - ciSteps: "mkdir packages/app/tauri/dist\npnpm install\ncargo build"
+  ciToolchains: "free_disk_space\npnpm\nnode"
   dependencies: apt-get update && apt-get install -y build-essential
   features:
     - backend
@@ -14,4 +15,3 @@ expression: normalize_paths(parsed)
   os: ubuntu
   path: packages/test-app
   requiredFeatures: ~
-  toolchains: "free_disk_space\npnpm\nnode"

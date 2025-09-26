@@ -264,9 +264,8 @@ fn test_ci_steps_with_command_and_toolchain() {
 
     let package = &parsed[0];
 
-    // This test captures the bug: ci-steps toolchains are incorrectly placed in "toolchains" instead of "ciToolchains"
+    // Verify both ciSteps and ciToolchains are present when ci-steps have both
     if package.get("ciSteps").is_some() {
-        // Currently this fails due to the bug - toolchains go to "toolchains" field, not "ciToolchains"
         let ci_steps = package["ciSteps"].as_str().unwrap();
 
         // Verify content from our test configuration
@@ -275,21 +274,16 @@ fn test_ci_steps_with_command_and_toolchain() {
             "ciSteps should contain the mkdir command"
         );
 
-        // BUG: Currently toolchains are incorrectly placed in "toolchains" field instead of "ciToolchains"
-        if package.get("toolchains").is_some() {
-            let toolchains = package["toolchains"].as_str().unwrap();
-            assert!(
-                toolchains.contains("free_disk_space"),
-                "toolchains field incorrectly contains ci-steps toolchains (should be in ciToolchains)"
-            );
-        }
-
-        // TODO: After fix, this should pass:
-        // assert!(package.get("ciToolchains").is_some(),
-        //         "ciToolchains should be present when ciSteps exist with toolchains");
-        // let ci_toolchains = package["ciToolchains"].as_str().unwrap();
-        // assert!(ci_toolchains.contains("free_disk_space"),
-        //         "ciToolchains should contain free_disk_space toolchain");
+        // After fix: ciToolchains should be present and contain the toolchains
+        assert!(
+            package.get("ciToolchains").is_some(),
+            "ciToolchains should be present when ciSteps exist with toolchains"
+        );
+        let ci_toolchains = package["ciToolchains"].as_str().unwrap();
+        assert!(
+            ci_toolchains.contains("free_disk_space"),
+            "ciToolchains should contain free_disk_space toolchain"
+        );
     }
 
     insta::assert_yaml_snapshot!(
