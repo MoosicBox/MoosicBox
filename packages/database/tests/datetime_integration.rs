@@ -1238,7 +1238,7 @@ mod postgres_raw_datetime_tests {
             let query = format!(
                 r#"
                 CREATE TABLE IF NOT EXISTS {} (
-                    id SERIAL PRIMARY KEY,
+                    id BIGSERIAL PRIMARY KEY,
                     created_at TIMESTAMP,
                     expires_at TIMESTAMP,
                     scheduled_for TIMESTAMP,

@@ -719,47 +719,21 @@ impl Database for PostgresDatabase {
 
         let client = self.get_client().await?;
 
-        // Use string interpolation for remaining parameters (same as before)
-        // This will be made secure in a later phase
-        let mut query_with_params = transformed_query;
-        for (i, param) in filtered_params.iter().enumerate() {
-            let placeholder = format!("${}", i + 1);
-            let value_str = match param {
-                crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
-                    format!("'{}'", s.replace('\'', "''"))
-                }
-                crate::DatabaseValue::Number(n) | crate::DatabaseValue::NumberOpt(Some(n)) => {
-                    n.to_string()
-                }
-                crate::DatabaseValue::UNumber(n) | crate::DatabaseValue::UNumberOpt(Some(n)) => {
-                    n.to_string()
-                }
-                crate::DatabaseValue::Real(r) | crate::DatabaseValue::RealOpt(Some(r)) => {
-                    r.to_string()
-                }
-                crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
-                    b.to_string()
-                }
-                crate::DatabaseValue::StringOpt(None)
-                | crate::DatabaseValue::NumberOpt(None)
-                | crate::DatabaseValue::UNumberOpt(None)
-                | crate::DatabaseValue::RealOpt(None)
-                | crate::DatabaseValue::BoolOpt(None)
-                | crate::DatabaseValue::Null => "NULL".to_string(),
-                crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
-            query_with_params = query_with_params.replace(&placeholder, &value_str);
-        }
+        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
+        let pg_params: Vec<PgDatabaseValue> = filtered_params
+            .into_iter()
+            .map(PgDatabaseValue::from)
+            .collect();
 
+        // Create references for tokio_postgres (it expects &[&dyn ToSql])
+        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        // Execute with proper parameter binding
         let rows_affected = client
-            .execute(&query_with_params, &[])
+            .execute(&transformed_query, &param_refs[..])
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
@@ -777,47 +751,21 @@ impl Database for PostgresDatabase {
 
         let client = self.get_client().await?;
 
-        // Use string interpolation for remaining parameters (same as before)
-        // This will be made secure in a later phase
-        let mut query_with_params = transformed_query;
-        for (i, param) in filtered_params.iter().enumerate() {
-            let placeholder = format!("${}", i + 1);
-            let value_str = match param {
-                crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
-                    format!("'{}'", s.replace('\'', "''"))
-                }
-                crate::DatabaseValue::Number(n) | crate::DatabaseValue::NumberOpt(Some(n)) => {
-                    n.to_string()
-                }
-                crate::DatabaseValue::UNumber(n) | crate::DatabaseValue::UNumberOpt(Some(n)) => {
-                    n.to_string()
-                }
-                crate::DatabaseValue::Real(r) | crate::DatabaseValue::RealOpt(Some(r)) => {
-                    r.to_string()
-                }
-                crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
-                    b.to_string()
-                }
-                crate::DatabaseValue::StringOpt(None)
-                | crate::DatabaseValue::NumberOpt(None)
-                | crate::DatabaseValue::UNumberOpt(None)
-                | crate::DatabaseValue::RealOpt(None)
-                | crate::DatabaseValue::BoolOpt(None)
-                | crate::DatabaseValue::Null => "NULL".to_string(),
-                crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
-            query_with_params = query_with_params.replace(&placeholder, &value_str);
-        }
+        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
+        let pg_params: Vec<PgDatabaseValue> = filtered_params
+            .into_iter()
+            .map(PgDatabaseValue::from)
+            .collect();
 
+        // Create references for tokio_postgres (it expects &[&dyn ToSql])
+        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        // Execute with proper parameter binding
         let pg_rows = client
-            .query(&query_with_params, &[])
+            .query(&transformed_query, &param_refs[..])
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
@@ -1141,50 +1089,24 @@ impl Database for PostgresTransaction {
         let (transformed_query, filtered_params) =
             postgres_transform_query_for_params(query, params)?;
 
-        // Use string interpolation for remaining parameters (same as before)
-        // This will be made secure in a later phase
-        let mut query_with_params = transformed_query;
-        for (i, param) in filtered_params.iter().enumerate() {
-            let placeholder = format!("${}", i + 1);
-            let value_str = match param {
-                crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
-                    format!("'{}'", s.replace('\'', "''"))
-                }
-                crate::DatabaseValue::Number(n) | crate::DatabaseValue::NumberOpt(Some(n)) => {
-                    n.to_string()
-                }
-                crate::DatabaseValue::UNumber(n) | crate::DatabaseValue::UNumberOpt(Some(n)) => {
-                    n.to_string()
-                }
-                crate::DatabaseValue::Real(r) | crate::DatabaseValue::RealOpt(Some(r)) => {
-                    r.to_string()
-                }
-                crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
-                    b.to_string()
-                }
-                crate::DatabaseValue::StringOpt(None)
-                | crate::DatabaseValue::NumberOpt(None)
-                | crate::DatabaseValue::UNumberOpt(None)
-                | crate::DatabaseValue::RealOpt(None)
-                | crate::DatabaseValue::BoolOpt(None)
-                | crate::DatabaseValue::Null => "NULL".to_string(),
-                crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
-            query_with_params = query_with_params.replace(&placeholder, &value_str);
-        }
+        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
+        let pg_params: Vec<PgDatabaseValue> = filtered_params
+            .into_iter()
+            .map(PgDatabaseValue::from)
+            .collect();
 
+        // Create references for tokio_postgres (it expects &[&dyn ToSql])
+        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        // Execute with proper parameter binding
         let rows_affected = self
             .client
             .lock()
             .await
-            .execute(&query_with_params, &[])
+            .execute(&transformed_query, &param_refs[..])
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
@@ -1200,50 +1122,24 @@ impl Database for PostgresTransaction {
         let (transformed_query, filtered_params) =
             postgres_transform_query_for_params(query, params)?;
 
-        // Use string interpolation for remaining parameters (same as before)
-        // This will be made secure in a later phase
-        let mut query_with_params = transformed_query;
-        for (i, param) in filtered_params.iter().enumerate() {
-            let placeholder = format!("${}", i + 1);
-            let value_str = match param {
-                crate::DatabaseValue::String(s) | crate::DatabaseValue::StringOpt(Some(s)) => {
-                    format!("'{}'", s.replace('\'', "''"))
-                }
-                crate::DatabaseValue::Number(n) | crate::DatabaseValue::NumberOpt(Some(n)) => {
-                    n.to_string()
-                }
-                crate::DatabaseValue::UNumber(n) | crate::DatabaseValue::UNumberOpt(Some(n)) => {
-                    n.to_string()
-                }
-                crate::DatabaseValue::Real(r) | crate::DatabaseValue::RealOpt(Some(r)) => {
-                    r.to_string()
-                }
-                crate::DatabaseValue::Bool(b) | crate::DatabaseValue::BoolOpt(Some(b)) => {
-                    b.to_string()
-                }
-                crate::DatabaseValue::StringOpt(None)
-                | crate::DatabaseValue::NumberOpt(None)
-                | crate::DatabaseValue::UNumberOpt(None)
-                | crate::DatabaseValue::RealOpt(None)
-                | crate::DatabaseValue::BoolOpt(None)
-                | crate::DatabaseValue::Null => "NULL".to_string(),
-                crate::DatabaseValue::DateTime(dt) => format!("'{dt}'"),
-                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
-                    // These should never reach here due to query transformation
-                    return Err(DatabaseError::QueryFailed(
-                        "Now/NowPlus parameters should be handled by query transformation"
-                            .to_string(),
-                    ));
-                }
-            };
-            query_with_params = query_with_params.replace(&placeholder, &value_str);
-        }
+        // Convert DatabaseValue to PgDatabaseValue for ToSql trait
+        let pg_params: Vec<PgDatabaseValue> = filtered_params
+            .into_iter()
+            .map(PgDatabaseValue::from)
+            .collect();
 
+        // Create references for tokio_postgres (it expects &[&dyn ToSql])
+        let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = pg_params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+
+        // Execute with proper parameter binding
         let pg_rows = self
             .client
             .lock()
             .await
-            .query(&query_with_params, &[])
+            .query(&transformed_query, &param_refs[..])
             .await
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
@@ -2944,9 +2840,11 @@ impl<'a> tokio_postgres::types::FromSql<'a> for DatabaseValue {
     ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
         log::trace!("FromSql from_sql: ty={}, {ty:?}", ty.name());
         Ok(match ty.name() {
+            "int2" => Self::Number(int2_from_sql(raw)?.into()),
+            "int4" => Self::Number(int4_from_sql(raw)?.into()),
             "bool" => Self::Bool(bool_from_sql(raw)?),
-            "char" | "smallint" | "smallserial" | "int2" | "int" | "serial" | "int4" | "bigint"
-            | "bigserial" | "int8" => Self::Number(int8_from_sql(raw)?),
+            "char" | "smallint" | "smallserial" | "int" | "serial" | "bigint" | "bigserial"
+            | "int8" => Self::Number(int8_from_sql(raw)?),
             "real" | "float4" | "double precision" | "float8" => Self::Real(float8_from_sql(raw)?),
             "varchar" | "char(n)" | "text" | "name" | "citext" => {
                 Self::String(text_from_sql(raw)?.to_string())
