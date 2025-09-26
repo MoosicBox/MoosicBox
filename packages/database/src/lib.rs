@@ -154,6 +154,7 @@ pub mod simulator;
 pub mod sqlx;
 
 pub mod query;
+pub mod query_transform;
 pub mod sql_interval;
 pub mod value_builders;
 

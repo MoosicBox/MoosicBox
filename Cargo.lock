@@ -14332,6 +14332,7 @@ dependencies = [
  "futures",
  "log 0.4.28",
  "moosicbox_assert",
+ "moosicbox_json_utils",
  "moosicbox_profiles",
  "native-tls",
  "postgres-native-tls",
