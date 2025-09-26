@@ -833,6 +833,10 @@ jobs:
                 package: ${{ fromJson(needs.determine-affected-packages.outputs.matrix) }}
 
         steps:
+            - name: Print matrix
+              shell: bash
+              run: echo '${{ toJson(matrix) }}'
+
             - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
