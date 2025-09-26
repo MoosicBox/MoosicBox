@@ -846,7 +846,12 @@ jobs:
                   git rebase master
 
             - name: Free disk space
-              if: ${{ matrix.package.os == 'ubuntu-latest' && (contains(matrix.package.toolchains, 'free_disk_space') || contains(matrix.package.ciToolchains, 'free_disk_space')) }}
+              if: |
+                  matrix.package.os == 'ubuntu-latest' && (
+                      contains(matrix.package.toolchains, 'free_disk_space') ||
+                      contains(matrix.package.ciToolchains, 'free_disk_space')
+                  )
+
               uses: jlumbroso/free-disk-space@main
               with:
                   tool-cache: true
