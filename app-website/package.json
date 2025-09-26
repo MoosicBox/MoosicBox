@@ -62,7 +62,7 @@
         "@solid-primitives/scheduled": "^1.5.2",
         "@solid-primitives/storage": "^2.1.4",
         "@solid-primitives/utils": "^6.3.2",
-        "astro": "^5.13.11",
+        "astro": "^5.14.0",
         "astro-sst": "^2.45.2",
         "date-fns": "^3.6.0",
         "howler": "^2.2.4",
