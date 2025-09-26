@@ -1,9 +1,9 @@
-[parallelization]
-chunked = 10
-
 [[ci-steps]]
 command   = 'mkdir packages/app/tauri/dist'
 toolchain = "free_disk_space"
+
+[parallelization]
+chunked = 10
 
 [[config]]
 os = "ubuntu"
