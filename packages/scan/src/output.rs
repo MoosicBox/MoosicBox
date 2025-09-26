@@ -931,7 +931,7 @@ mod test {
                         database: Arc::new(db),
                     };
 
-                    MigrationTestBuilder::new(get_sqlite_library_migrations().await.unwrap())
+                    MigrationTestBuilder::new(get_sqlite_library_migrations().await.expect("Failed to get migrations"))
                         .with_table_name("__moosicbox_schema_migrations")
                         .with_data_before("2025-06-03-211603_cache_api_sources_on_tables", |db| Box::pin(async move {
                             db.exec_raw(
@@ -959,7 +959,7 @@ mod test {
                         }))
                         .run(&*db)
                         .await
-                        .unwrap();
+                        .expect("Failed to run migrations");
 
                     db.exec_raw(
                         "
@@ -983,11 +983,11 @@ mod test {
                     ",
                     )
                     .await
-                    .unwrap();
+                    .expect("Failed to insert data");
 
-                    assert_eq!(update_api_sources(&db, "artists").await.unwrap().len(), 4);
-                    assert_eq!(update_api_sources(&db, "albums").await.unwrap().len(), 4);
-                    assert_eq!(update_api_sources(&db, "tracks").await.unwrap().len(), 5);
+                    assert_eq!(update_api_sources(&db, "artists").await.expect("Failed to update artists api sources").len(), 4);
+                    assert_eq!(update_api_sources(&db, "albums").await.expect("Failed to update albums api sources").len(), 4);
+                    assert_eq!(update_api_sources(&db, "tracks").await.expect("Failed to update tracks api sources").len(), 5);
 
                     // Verify artists migration
                     let artists = db
@@ -995,14 +995,14 @@ mod test {
                         .columns(&["api_sources"])
                         .execute(&*db)
                         .await
-                        .unwrap();
+                        .expect("Failed to select artists");
 
                     assert_eq!(artists.len(), 4);
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            artists[0].get("api_sources").unwrap()
+                            artists[0].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default()
                             .with_api_id(ApiId {
                                 source: tidal.clone(),
@@ -1015,9 +1015,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            artists[1].get("api_sources").unwrap()
+                            artists[1].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default().with_api_id(ApiId {
                             source: tidal.clone(),
                             id: Id::String("art789".into())
@@ -1025,9 +1025,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            artists[2].get("api_sources").unwrap()
+                            artists[2].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default().with_api_id(ApiId {
                             source: qobuz.clone(),
                             id: Id::String("art101112".into())
@@ -1035,9 +1035,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            artists[3].get("api_sources").unwrap()
+                            artists[3].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default()
                     );
 
@@ -1047,14 +1047,14 @@ mod test {
                         .columns(&["api_sources"])
                         .execute(&*db)
                         .await
-                        .unwrap();
+                        .expect("Failed to convert api sources");
 
                     assert_eq!(albums.len(), 4);
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            albums[0].get("api_sources").unwrap()
+                            albums[0].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default()
                             .with_api_id(ApiId {
                                 source: tidal.clone(),
@@ -1067,9 +1067,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            albums[1].get("api_sources").unwrap()
+                            albums[1].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default().with_api_id(ApiId {
                             source: tidal.clone(),
                             id: Id::String("alb789".into())
@@ -1077,9 +1077,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            albums[2].get("api_sources").unwrap()
+                            albums[2].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default().with_api_id(ApiId {
                             source: qobuz.clone(),
                             id: Id::String("alb101112".into())
@@ -1087,9 +1087,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            albums[3].get("api_sources").unwrap()
+                            albums[3].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default()
                     );
 
@@ -1100,7 +1100,7 @@ mod test {
                         .sort("id", switchy_database::query::SortDirection::Asc)
                         .execute(&*db)
                         .await
-                        .unwrap();
+                        .expect("Failed to convert api sources");
 
                     assert_eq!(tracks.len(), 5);
                     assert_eq!(
@@ -1112,9 +1112,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            tracks[0].get("api_sources").unwrap()
+                            tracks[0].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default()
                             .with_api_id(ApiId {
                                 source: tidal.clone(),
@@ -1127,9 +1127,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            tracks[1].get("api_sources").unwrap()
+                            tracks[1].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default().with_api_id(ApiId {
                             source: tidal.clone(),
                             id: Id::String("789".into())
@@ -1137,9 +1137,9 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            tracks[2].get("api_sources").unwrap()
+                            tracks[2].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default().with_api_id(ApiId {
                             source: qobuz.clone(),
                             id: Id::String("101112".into())
@@ -1147,16 +1147,16 @@ mod test {
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            tracks[3].get("api_sources").unwrap()
+                            tracks[3].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default()
                     );
                     assert_eq!(
                         <DatabaseValue as ToValueType<ApiSources>>::to_value_type(
-                            tracks[4].get("api_sources").unwrap()
+                            tracks[4].get("api_sources").expect("Failed to get api sources")
                         )
-                        .unwrap(),
+                        .expect("Failed to convert api sources"),
                         ApiSources::default()
                             .with_api_id(ApiId {
                                 source: tidal.clone(),
