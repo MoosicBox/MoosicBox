@@ -60,16 +60,10 @@ pub struct CargoLockPackage {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-pub enum DependencyFilteredByFeatures {
-    Command {
-        command: String,
-        features: Option<Vec<String>>,
-    },
-    Toolchain {
-        toolchain: String,
-        features: Option<Vec<String>>,
-    },
+pub struct Step {
+    command: Option<String>,
+    toolchain: Option<String>,
+    features: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -107,10 +101,10 @@ impl<T> Default for VecOrItem<T> {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ClippierConfiguration {
-    pub ci_steps: Option<VecOrItem<DependencyFilteredByFeatures>>,
+    pub ci_steps: Option<VecOrItem<Step>>,
     pub cargo: Option<VecOrItem<String>>,
     pub env: Option<BTreeMap<String, ClippierEnv>>,
-    pub dependencies: Option<Vec<DependencyFilteredByFeatures>>,
+    pub dependencies: Option<Vec<Step>>,
     pub os: String,
     pub skip_features: Option<Vec<String>>,
     pub required_features: Option<Vec<String>>,
@@ -127,7 +121,7 @@ pub struct ParallelizationConfig {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ClippierConf {
-    pub ci_steps: Option<VecOrItem<DependencyFilteredByFeatures>>,
+    pub ci_steps: Option<VecOrItem<Step>>,
     pub cargo: Option<VecOrItem<String>>,
     pub config: Vec<ClippierConfiguration>,
     pub env: Option<BTreeMap<String, ClippierEnv>>,
@@ -662,12 +656,7 @@ pub fn create_map(
         let matches = dependencies
             .iter()
             .filter(|x| {
-                let target_features = match x {
-                    DependencyFilteredByFeatures::Command { features, .. }
-                    | DependencyFilteredByFeatures::Toolchain { features, .. } => features,
-                };
-
-                target_features.as_ref().is_none_or(|f| {
+                x.features.as_ref().is_none_or(|f| {
                     f.iter()
                         .any(|required| features.iter().any(|x| x == required))
                 })
@@ -677,10 +666,7 @@ pub fn create_map(
         if !matches.is_empty() {
             let dependencies = matches
                 .iter()
-                .filter_map(|x| match x {
-                    DependencyFilteredByFeatures::Command { command, .. } => Some(command),
-                    DependencyFilteredByFeatures::Toolchain { .. } => None,
-                })
+                .filter_map(|x| x.command.as_ref())
                 .map(String::as_str)
                 .collect::<Vec<_>>();
 
@@ -693,10 +679,7 @@ pub fn create_map(
 
             let toolchains = matches
                 .iter()
-                .filter_map(|x| match x {
-                    DependencyFilteredByFeatures::Toolchain { toolchain, .. } => Some(toolchain),
-                    DependencyFilteredByFeatures::Command { .. } => None,
-                })
+                .filter_map(|x| x.toolchain.as_ref())
                 .map(String::as_str)
                 .collect::<Vec<_>>();
 
@@ -770,12 +753,7 @@ pub fn create_map(
     let matches = ci_steps
         .iter()
         .filter(|x| {
-            let target_features = match x {
-                DependencyFilteredByFeatures::Command { features, .. }
-                | DependencyFilteredByFeatures::Toolchain { features, .. } => features,
-            };
-
-            target_features.as_ref().is_none_or(|f| {
+            x.features.as_ref().is_none_or(|f| {
                 f.iter()
                     .any(|required| features.iter().any(|x| x == required))
             })
@@ -785,10 +763,7 @@ pub fn create_map(
     if !matches.is_empty() {
         let commands = matches
             .iter()
-            .filter_map(|x| match x {
-                DependencyFilteredByFeatures::Command { command, .. } => Some(command),
-                DependencyFilteredByFeatures::Toolchain { .. } => None,
-            })
+            .filter_map(|x| x.command.as_ref())
             .map(String::as_str)
             .collect::<Vec<_>>();
 
@@ -801,10 +776,7 @@ pub fn create_map(
 
         let toolchains = matches
             .iter()
-            .filter_map(|x| match x {
-                DependencyFilteredByFeatures::Toolchain { toolchain, .. } => Some(toolchain),
-                DependencyFilteredByFeatures::Command { .. } => None,
-            })
+            .filter_map(|x| x.toolchain.as_ref())
             .map(String::as_str)
             .collect::<Vec<_>>();
 
