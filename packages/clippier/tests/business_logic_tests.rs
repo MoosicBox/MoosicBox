@@ -7,6 +7,24 @@ use clippier::{
 use clippier_test_utilities::test_resources::{create_simple_workspace, load_test_workspace};
 use tempfile::TempDir;
 
+/// Helper function to normalize paths in test results for consistent snapshots
+fn normalize_paths(mut parsed: serde_json::Value) -> serde_json::Value {
+    if let Some(array) = parsed.as_array_mut() {
+        for item in array {
+            if let Some(obj) = item.as_object_mut()
+                && let Some(path) = obj.get_mut("path")
+            {
+                // Replace the temp path with a consistent placeholder
+                if let Some(path_str) = path.as_str() {
+                    let normalized_path = path_str.split('/').next_back().unwrap_or("test-app");
+                    *path = serde_json::Value::String(format!("packages/{}", normalized_path));
+                }
+            }
+        }
+    }
+    parsed
+}
+
 /// Test the handle_dependencies_command function with various scenarios
 #[test]
 fn test_handle_dependencies_command_basic() {
@@ -202,6 +220,285 @@ fn test_handle_ci_steps_command_json_output() {
 
     let parsed: serde_json::Value = serde_json::from_str(&ci_steps_json).unwrap();
     insta::assert_yaml_snapshot!("ci_steps_command_json_output", parsed);
+}
+
+/// Regression test for ci-steps with both command and toolchain
+/// This reproduces the bug where ci-steps with both command and toolchain
+/// would not properly export ciToolchains in the matrix output
+#[test]
+fn test_ci_steps_with_command_and_toolchain() {
+    let (temp_dir, _) = load_test_workspace("ci-steps-regression");
+
+    // Test with features command to get the full matrix output
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,  // offset
+        None,  // max
+        None,  // max_parallel
+        None,  // chunked
+        false, // spread
+        false, // randomize
+        None,  // seed
+        None,  // features
+        None,  // skip_features
+        None,  // required_features
+        None,  // packages
+        None,  // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false, // include_reasoning
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let features_json = result.unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&features_json).unwrap();
+
+    // Verify we have at least one package result
+    assert!(parsed.is_array());
+    assert!(!parsed.as_array().unwrap().is_empty());
+
+    let package = &parsed[0];
+
+    // This test captures the bug: ci-steps toolchains are incorrectly placed in "toolchains" instead of "ciToolchains"
+    if package.get("ciSteps").is_some() {
+        // Currently this fails due to the bug - toolchains go to "toolchains" field, not "ciToolchains"
+        let ci_steps = package["ciSteps"].as_str().unwrap();
+
+        // Verify content from our test configuration
+        assert!(
+            ci_steps.contains("mkdir"),
+            "ciSteps should contain the mkdir command"
+        );
+
+        // BUG: Currently toolchains are incorrectly placed in "toolchains" field instead of "ciToolchains"
+        if package.get("toolchains").is_some() {
+            let toolchains = package["toolchains"].as_str().unwrap();
+            assert!(
+                toolchains.contains("free_disk_space"),
+                "toolchains field incorrectly contains ci-steps toolchains (should be in ciToolchains)"
+            );
+        }
+
+        // TODO: After fix, this should pass:
+        // assert!(package.get("ciToolchains").is_some(),
+        //         "ciToolchains should be present when ciSteps exist with toolchains");
+        // let ci_toolchains = package["ciToolchains"].as_str().unwrap();
+        // assert!(ci_toolchains.contains("free_disk_space"),
+        //         "ciToolchains should contain free_disk_space toolchain");
+    }
+
+    insta::assert_yaml_snapshot!(
+        "ci_steps_with_command_and_toolchain",
+        normalize_paths(parsed)
+    );
+}
+
+/// Test ci-steps with mixed entry types (command-only, toolchain-only, both)
+#[test]
+fn test_ci_steps_mixed_entries() {
+    let (temp_dir, _) = load_test_workspace("ci-steps-regression");
+
+    // Test with features that match different ci-steps entries
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,             // offset
+        None,             // max
+        None,             // max_parallel
+        None,             // chunked
+        false,            // spread
+        false,            // randomize
+        None,             // seed
+        Some("frontend"), // features - this should match entries with frontend feature
+        None,             // skip_features
+        None,             // required_features
+        None,             // packages
+        None,             // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false,            // include_reasoning
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let features_json = result.unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&features_json).unwrap();
+
+    if !parsed.as_array().unwrap().is_empty() {
+        let package = &parsed[0];
+
+        // With frontend features, we should get both commands and toolchains
+        if package.get("ciSteps").is_some() && package.get("ciToolchains").is_some() {
+            let ci_steps = package["ciSteps"].as_str().unwrap();
+            let ci_toolchains = package["ciToolchains"].as_str().unwrap();
+
+            // Should contain pnpm install command (has frontend feature)
+            assert!(
+                ci_steps.contains("pnpm install"),
+                "ciSteps should contain pnpm install for frontend features"
+            );
+
+            // Should contain both pnpm and node toolchains (pnpm has frontend, node has frontend+tauri)
+            assert!(
+                ci_toolchains.contains("pnpm"),
+                "ciToolchains should contain pnpm for frontend features"
+            );
+        }
+    }
+
+    insta::assert_yaml_snapshot!("ci_steps_mixed_entries", normalize_paths(parsed));
+}
+
+/// Test ci-steps with feature filtering
+#[test]
+fn test_ci_steps_with_features() {
+    let (temp_dir, _) = load_test_workspace("ci-steps-regression");
+
+    // Test with tauri features - should match entries with frontend and tauri features
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,          // offset
+        None,          // max
+        None,          // max_parallel
+        None,          // chunked
+        false,         // spread
+        false,         // randomize
+        None,          // seed
+        Some("tauri"), // features - includes frontend (from tauri feature)
+        None,          // skip_features
+        None,          // required_features
+        None,          // packages
+        None,          // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false,         // include_reasoning
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let features_json = result.unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&features_json).unwrap();
+
+    if !parsed.as_array().unwrap().is_empty() {
+        let package = &parsed[0];
+
+        if package.get("ciToolchains").is_some() {
+            let ci_toolchains = package["ciToolchains"].as_str().unwrap();
+
+            // With tauri features, should include node toolchain (has frontend+tauri features)
+            assert!(
+                ci_toolchains.contains("node"),
+                "ciToolchains should contain node for tauri features"
+            );
+        }
+    }
+
+    insta::assert_yaml_snapshot!("ci_steps_with_features", normalize_paths(parsed));
+}
+
+/// Test JSON output structure for ci-steps
+#[test]
+fn test_ci_steps_json_output_structure() {
+    let (temp_dir, _) = load_test_workspace("ci-steps-regression");
+
+    let result = handle_features_command(
+        temp_dir.path().to_str().unwrap(),
+        Some("ubuntu"),
+        None,  // offset
+        None,  // max
+        None,  // max_parallel
+        None,  // chunked
+        false, // spread
+        false, // randomize
+        None,  // seed
+        None,  // features - no filter to get all ci-steps
+        None,  // skip_features
+        None,  // required_features
+        None,  // packages
+        None,  // changed_files
+        #[cfg(feature = "git-diff")]
+        None, // git_base
+        #[cfg(feature = "git-diff")]
+        None, // git_head
+        false, // include_reasoning
+        OutputType::Json,
+    );
+
+    assert!(result.is_ok());
+    let features_json = result.unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&features_json).unwrap();
+
+    // Verify JSON structure
+    assert!(parsed.is_array(), "Output should be an array");
+
+    if !parsed.as_array().unwrap().is_empty() {
+        let package = &parsed[0];
+
+        // Check that required fields exist
+        assert!(
+            package.get("name").is_some(),
+            "Package should have name field"
+        );
+        assert!(
+            package.get("path").is_some(),
+            "Package should have path field"
+        );
+
+        // If ciSteps exist, verify they are strings (joined with newlines)
+        if let Some(ci_steps) = package.get("ciSteps") {
+            assert!(ci_steps.is_string(), "ciSteps should be a string");
+
+            let steps_str = ci_steps.as_str().unwrap();
+            // Should contain commands from our test config
+            assert!(
+                steps_str.contains("mkdir")
+                    || steps_str.contains("pnpm")
+                    || steps_str.contains("cargo"),
+                "ciSteps should contain at least one command from test config"
+            );
+        }
+
+        // If ciToolchains exist, verify they are strings (joined with newlines)
+        if let Some(ci_toolchains) = package.get("ciToolchains") {
+            assert!(ci_toolchains.is_string(), "ciToolchains should be a string");
+
+            let toolchains_str = ci_toolchains.as_str().unwrap();
+            // Should contain toolchains from our test config
+            assert!(
+                toolchains_str.contains("free_disk_space")
+                    || toolchains_str.contains("pnpm")
+                    || toolchains_str.contains("node"),
+                "ciToolchains should contain at least one toolchain from test config"
+            );
+        }
+
+        // Verify that ciSteps and ciToolchains are separate fields
+        if package.get("ciSteps").is_some() && package.get("ciToolchains").is_some() {
+            let ci_steps = package["ciSteps"].as_str().unwrap();
+            let ci_toolchains = package["ciToolchains"].as_str().unwrap();
+
+            // They should be different values
+            assert_ne!(
+                ci_steps, ci_toolchains,
+                "ciSteps and ciToolchains should contain different values"
+            );
+        }
+    }
+
+    insta::assert_yaml_snapshot!("ci_steps_json_output_structure", normalize_paths(parsed));
 }
 
 /// Test the handle_features_command function

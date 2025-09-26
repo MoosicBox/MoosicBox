@@ -1,0 +1,25 @@
+# Test configuration for ci-steps regression
+# This reproduces the bug where ci-steps with both command and toolchain
+# would not properly export ciToolchains in the matrix output
+
+[[ci-steps]]
+command = "mkdir packages/app/tauri/dist"
+toolchain = "free_disk_space"
+
+[[ci-steps]]
+command = "pnpm install"
+toolchain = "pnpm"
+features = ["frontend"]
+
+[[ci-steps]]
+toolchain = "node"
+features = ["frontend", "tauri"]
+
+[[ci-steps]]
+command = "cargo build"
+
+[[config]]
+os = "ubuntu"
+
+[[config.dependencies]]
+command = "apt-get update && apt-get install -y build-essential"

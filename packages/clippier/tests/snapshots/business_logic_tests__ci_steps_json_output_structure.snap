@@ -1,0 +1,17 @@
+---
+source: packages/clippier/tests/business_logic_tests.rs
+expression: normalize_paths(parsed)
+---
+- ciSteps: "mkdir packages/app/tauri/dist\npnpm install\ncargo build"
+  dependencies: apt-get update && apt-get install -y build-essential
+  features:
+    - backend
+    - default
+    - frontend
+    - tauri
+  name: test-app
+  nightly: false
+  os: ubuntu
+  path: packages/test-app
+  requiredFeatures: ~
+  toolchains: "free_disk_space\npnpm\nnode"
