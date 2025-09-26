@@ -47,6 +47,7 @@ tokio       = { workspace = true, features = ["sync"] }
 tokio-util  = { workspace = true, optional = true }
 
 [dev-dependencies]
+moosicbox_json_utils = { workspace = true, features = ["database"] }
 native-tls = { workspace = true }
 postgres-native-tls = { workspace = true }
 pretty_assertions = { workspace = true }
@@ -86,29 +87,69 @@ tls = ["sqlx?/tls-rustls"]
 
 api = ["dep:actix-web", "dep:futures"]
 
-mysql = ["mysql-sqlx", "sqlx"]
-mysql-sqlx = ["dep:futures", "dep:sqlx", "sqlx", "sqlx/mysql"]
-postgres = ["dep:futures", "dep:regex", "dep:tokio-util", "postgres-raw"]
+_any_backend = []
+
+mysql = ["_any_backend", "mysql-sqlx", "sqlx"]
+mysql-sqlx = [
+    "_any_backend",
+    "dep:futures",
+    "dep:sqlx",
+    "placeholder-question-mark",
+    "sqlx",
+    "sqlx/mysql",
+]
+postgres = [
+    "_any_backend",
+    "dep:futures",
+    "dep:regex",
+    "dep:tokio-util",
+    "postgres-raw",
+]
 postgres-raw = [
+    "_any_backend",
     "dep:deadpool-postgres",
     "dep:postgres-protocol",
     "dep:tokio-postgres",
+    "placeholder-dollar-number",
     "postgres",
 ]
 postgres-sqlx = [
+    "_any_backend",
     "dep:sqlx",
     "dep:sqlx-postgres",
+    "placeholder-dollar-number",
     "postgres",
     "sqlx",
     "sqlx-postgres/chrono",
     "sqlx/postgres",
 ]
-sqlite = ["sqlite-sqlx"]
-sqlite-rusqlite = ["dep:regex", "dep:rusqlite", "switchy_async/sync"]
-sqlite-sqlx = ["dep:futures", "dep:regex", "dep:sqlx", "sqlx", "sqlx/sqlite"]
-sqlx = []
+sqlite = ["_any_backend", "sqlite-sqlx"]
+sqlite-rusqlite = [
+    "_any_backend",
+    "dep:regex",
+    "dep:rusqlite",
+    "placeholder-question-mark",
+    "switchy_async/sync",
+]
+sqlite-sqlx = [
+    "_any_backend",
+    "dep:futures",
+    "dep:regex",
+    "dep:sqlx",
+    "placeholder-question-mark",
+    "sqlx",
+    "sqlx/sqlite",
+]
+sqlx = ["_any_backend"]
 
 simulator = ["sqlite-rusqlite"]
+
+# Placeholder handler features
+placeholder-at-number     = ["dep:regex"]
+placeholder-colon-number  = ["dep:regex"]
+placeholder-dollar-number = ["dep:regex"]
+placeholder-named-colon   = ["dep:regex"]
+placeholder-question-mark = []
 
 cascade = ["schema"]
 schema  = []

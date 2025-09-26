@@ -111,6 +111,7 @@ use crate::{
     Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
     SelectQuery, UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    query_transform::{QuestionMarkHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
 
@@ -721,16 +722,30 @@ impl Database for RusqliteDatabase {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
         let connection = self.get_connection();
         let connection_guard = connection.lock().await;
 
         let mut stmt = connection_guard
-            .prepare(query)
+            .prepare(&transformed_query)
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
-        // Convert to RusqliteDatabaseValue using existing From impl
+        // Convert only filtered params to RusqliteDatabaseValue
         let rusqlite_params: Vec<RusqliteDatabaseValue> =
-            params.iter().map(|p| p.clone().into()).collect();
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        log::trace!(
+            "\
+            exec_raw_params: query:\n\
+            '{transformed_query}' (transformed from '{query}')\n\
+            params: {params:?}\n\
+            filtered: {filtered_params:?}\n\
+            raw: {rusqlite_params:?}\
+            "
+        );
 
         // Use existing bind_values function to bind parameters
         bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
@@ -749,20 +764,34 @@ impl Database for RusqliteDatabase {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
         let connection = self.get_connection();
         let connection_guard = connection.lock().await;
 
         let mut stmt = connection_guard
-            .prepare(query)
+            .prepare(&transformed_query)
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
         // Get column names
         let column_names: Vec<String> =
             stmt.column_names().iter().map(|&s| s.to_string()).collect();
 
-        // Convert params using existing conversion
+        // Convert only filtered params using existing conversion
         let rusqlite_params: Vec<RusqliteDatabaseValue> =
-            params.iter().map(|p| p.clone().into()).collect();
+            filtered_params.iter().map(|p| p.clone().into()).collect();
+
+        log::trace!(
+            "\
+            query_raw_params: query:\n\
+            '{transformed_query}' (transformed from '{query}')\n\
+            params: {params:?}\n\
+            filtered: {filtered_params:?}\n\
+            raw: {rusqlite_params:?}\
+            "
+        );
 
         // Use existing bind_values function to bind parameters
         bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
@@ -1033,15 +1062,19 @@ impl Database for RusqliteTransaction {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
         let connection_guard = self.connection.lock().await;
 
         let mut stmt = connection_guard
-            .prepare(query)
+            .prepare(&transformed_query)
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
-        // Convert to RusqliteDatabaseValue using existing From impl
+        // Convert only filtered params to RusqliteDatabaseValue
         let rusqlite_params: Vec<RusqliteDatabaseValue> =
-            params.iter().map(|p| p.clone().into()).collect();
+            filtered_params.iter().map(|p| p.clone().into()).collect();
 
         // Use existing bind_values function to bind parameters
         bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
@@ -1060,19 +1093,23 @@ impl Database for RusqliteTransaction {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
         let connection_guard = self.connection.lock().await;
 
         let mut stmt = connection_guard
-            .prepare(query)
+            .prepare(&transformed_query)
             .map_err(|e| DatabaseError::QueryFailed(e.to_string()))?;
 
         // Get column names
         let column_names: Vec<String> =
             stmt.column_names().iter().map(|&s| s.to_string()).collect();
 
-        // Convert params using existing conversion
+        // Convert only filtered params using existing conversion
         let rusqlite_params: Vec<RusqliteDatabaseValue> =
-            params.iter().map(|p| p.clone().into()).collect();
+            filtered_params.iter().map(|p| p.clone().into()).collect();
 
         // Use existing bind_values function to bind parameters
         bind_values(&mut stmt, Some(&rusqlite_params), false, 0)
@@ -2549,8 +2586,8 @@ fn bind_values(
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None)
-                | DatabaseValue::Now => (),
-                DatabaseValue::NowPlus(_interval) => (),
+                | DatabaseValue::Now
+                | DatabaseValue::NowPlus(..) => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, i32::from(*value))?;
                     if !constant_inc {
@@ -3519,6 +3556,32 @@ fn rusqlite_get_table_info(
         indexes,
         foreign_keys,
     }))
+}
+
+fn sqlite_transform_query_for_params(
+    query: &str,
+    params: &[DatabaseValue],
+) -> Result<(String, Vec<DatabaseValue>), DatabaseError> {
+    transform_query_for_params(query, params, &QuestionMarkHandler, |param| match param {
+        DatabaseValue::Now => Some("datetime('now')".to_string()),
+        DatabaseValue::NowPlus(interval) => {
+            let modifiers = format_sqlite_interval(interval);
+            if modifiers.is_empty() {
+                Some("datetime('now')".to_string())
+            } else {
+                Some(format!(
+                    "datetime('now', {})",
+                    modifiers
+                        .iter()
+                        .map(|m| format!("'{m}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            }
+        }
+        _ => None,
+    })
+    .map_err(DatabaseError::QueryFailed)
 }
 
 #[cfg(test)]

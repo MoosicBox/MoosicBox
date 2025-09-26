@@ -29,6 +29,7 @@ use crate::{
     Database, DatabaseError, DatabaseValue, DeleteStatement, InsertStatement, SelectQuery,
     UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    query_transform::{DollarNumberHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
 
@@ -727,16 +728,20 @@ impl Database for PostgresSqlxDatabase {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters with proper $N renumbering
+        let (transformed_query, filtered_params) =
+            postgres_transform_query_for_params(query, params)?;
+
         let mut connection = {
             let pool = self.pool.lock().await;
             pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?
         };
 
         let mut query_builder: sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments> =
-            sqlx::query(query);
+            sqlx::query(&transformed_query);
 
-        // Add parameters in order - PostgreSQL uses $1, $2 placeholders
-        for param in params {
+        // Add only filtered parameters - Now/NowPlus are already in the SQL
+        for param in &filtered_params {
             query_builder = match param {
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
@@ -754,10 +759,12 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
+                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
+                    // These should never reach here due to query transformation
+                    return Err(DatabaseError::QueryFailed(
+                        "Now/NowPlus parameters should be handled by query transformation"
+                            .to_string(),
+                    ));
                 }
             };
         }
@@ -775,16 +782,20 @@ impl Database for PostgresSqlxDatabase {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters with proper $N renumbering
+        let (transformed_query, filtered_params) =
+            postgres_transform_query_for_params(query, params)?;
+
         let mut connection = {
             let pool = self.pool.lock().await;
             pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?
         };
 
         let mut query_builder: sqlx::query::Query<'_, sqlx::Postgres, sqlx::postgres::PgArguments> =
-            sqlx::query(query);
+            sqlx::query(&transformed_query);
 
-        // Add parameters in order - PostgreSQL uses $1, $2 placeholders
-        for param in params {
+        // Add only filtered parameters - Now/NowPlus are already in the SQL
+        for param in &filtered_params {
             query_builder = match param {
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
@@ -802,10 +813,12 @@ impl Database for PostgresSqlxDatabase {
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(*dt),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("NOW()"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
+                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
+                    // These should never reach here due to query transformation
+                    return Err(DatabaseError::QueryFailed(
+                        "Now/NowPlus parameters should be handled by query transformation"
+                            .to_string(),
+                    ));
                 }
             };
         }
@@ -3051,6 +3064,32 @@ impl Expression for PgDatabaseValue {
     fn expression_type(&self) -> ExpressionType<'_> {
         ExpressionType::DatabaseValue(self)
     }
+}
+
+fn postgres_transform_query_for_params(
+    query: &str,
+    params: &[DatabaseValue],
+) -> Result<(String, Vec<DatabaseValue>), DatabaseError> {
+    transform_query_for_params(
+        query,
+        params,
+        &DollarNumberHandler, // Handles $1, $2, etc. renumbering
+        |param| match param {
+            DatabaseValue::Now => Some("NOW()".to_string()),
+            DatabaseValue::NowPlus(interval) => {
+                if interval.is_zero() {
+                    Some("NOW()".to_string())
+                } else {
+                    Some(format!(
+                        "NOW() + {}",
+                        format_postgres_interval_sqlx(interval)
+                    ))
+                }
+            }
+            _ => None,
+        },
+    )
+    .map_err(DatabaseError::QueryFailed)
 }
 
 #[cfg(all(test, feature = "schema"))]

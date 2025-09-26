@@ -5,3 +5,5 @@ pub mod introspection_tests;
 pub mod returning_tests;
 
 pub mod savepoint_tests;
+
+pub mod datetime_tests;

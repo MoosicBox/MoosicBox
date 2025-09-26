@@ -23,6 +23,7 @@ use crate::{
     Database, DatabaseError, DatabaseTransaction, DatabaseValue, DeleteStatement, InsertStatement,
     SelectQuery, UpdateStatement, UpsertMultiStatement, UpsertStatement,
     query::{BooleanExpression, Expression, ExpressionType, Join, Sort, SortDirection},
+    query_transform::{QuestionMarkHandler, transform_query_for_params},
     sql_interval::SqlInterval,
 };
 
@@ -746,15 +747,19 @@ impl Database for SqliteSqlxDatabase {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<u64, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
         let mut connection = {
             let pool = self.pool.lock().await;
             pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?
         };
 
-        let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(query);
+        let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(&transformed_query);
 
-        // Add parameters in order - sqlx uses $1, $2 placeholders
-        for param in params {
+        // Add only filtered parameters - Now/NowPlus are already in the SQL
+        for param in &filtered_params {
             query_builder = match param {
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
@@ -772,10 +777,12 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("datetime('now')"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
+                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
+                    // These should never reach here due to query transformation
+                    return Err(DatabaseError::QueryFailed(
+                        "Now/NowPlus parameters should be handled by query transformation"
+                            .to_string(),
+                    ));
                 }
             };
         }
@@ -793,15 +800,19 @@ impl Database for SqliteSqlxDatabase {
         query: &str,
         params: &[crate::DatabaseValue],
     ) -> Result<Vec<crate::Row>, DatabaseError> {
+        // Transform query to handle Now/NowPlus parameters
+        let (transformed_query, filtered_params) =
+            sqlite_transform_query_for_params(query, params)?;
+
         let mut connection = {
             let pool = self.pool.lock().await;
             pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?
         };
 
-        let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(query);
+        let mut query_builder: Query<'_, Sqlite, SqliteArguments> = sqlx::query(&transformed_query);
 
-        // Add parameters in order - sqlx uses $1, $2 placeholders
-        for param in params {
+        // Add only filtered parameters - Now/NowPlus are already in the SQL
+        for param in &filtered_params {
             query_builder = match param {
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
@@ -819,10 +830,12 @@ impl Database for SqliteSqlxDatabase {
                 crate::DatabaseValue::BoolOpt(b) => query_builder.bind(b),
                 crate::DatabaseValue::DateTime(dt) => query_builder.bind(dt.to_string()),
                 crate::DatabaseValue::Null => query_builder.bind(Option::<String>::None),
-                crate::DatabaseValue::Now => query_builder.bind("datetime('now')"),
-                crate::DatabaseValue::NowPlus(_interval) => {
-                    // NowPlus should not be bound as parameter - it should be a SQL expression
-                    panic!("NowPlus cannot be bound as parameter - use in SQL expression instead");
+                crate::DatabaseValue::Now | crate::DatabaseValue::NowPlus(_) => {
+                    // These should never reach here due to query transformation
+                    return Err(DatabaseError::QueryFailed(
+                        "Now/NowPlus parameters should be handled by query transformation"
+                            .to_string(),
+                    ));
                 }
             };
         }
@@ -4174,6 +4187,32 @@ mod introspection_tests {
 
         tx.rollback().await.expect("Failed to rollback");
     }
+}
+
+fn sqlite_transform_query_for_params(
+    query: &str,
+    params: &[DatabaseValue],
+) -> Result<(String, Vec<DatabaseValue>), DatabaseError> {
+    transform_query_for_params(query, params, &QuestionMarkHandler, |param| match param {
+        DatabaseValue::Now => Some("datetime('now')".to_string()),
+        DatabaseValue::NowPlus(interval) => {
+            let modifiers = format_sqlite_interval_sqlx(interval);
+            if modifiers.is_empty() {
+                Some("datetime('now')".to_string())
+            } else {
+                Some(format!(
+                    "datetime('now', {})",
+                    modifiers
+                        .iter()
+                        .map(|m| format!("'{m}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            }
+        }
+        _ => None,
+    })
+    .map_err(DatabaseError::QueryFailed)
 }
 
 #[cfg(test)]
