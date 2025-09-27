@@ -1122,7 +1122,8 @@ impl Database for PostgresSqlxTransaction {
                     return postgres_sqlx_exec_drop_table_cascade(&mut *tx, statement).await;
                 }
                 DropBehavior::Restrict => {
-                    return postgres_sqlx_exec_drop_table_restrict(&mut *tx, statement).await;
+                    return postgres_sqlx_exec_drop_table_restrict_native(&mut *tx, statement)
+                        .await;
                 }
                 DropBehavior::Default => {}
             }
@@ -1898,31 +1899,10 @@ async fn postgres_sqlx_exec_drop_table_cascade(
 }
 
 #[cfg(feature = "cascade")]
-async fn postgres_sqlx_exec_drop_table_restrict(
+async fn postgres_sqlx_exec_drop_table_restrict_native(
     connection: &mut PgConnection,
     statement: &crate::schema::DropTableStatement<'_>,
 ) -> Result<(), DatabaseError> {
-    let dependents = postgres_sqlx_get_direct_dependents(connection, statement.table_name)
-        .await
-        .map_err(DatabaseError::PostgresSqlx)?;
-
-    if !dependents.is_empty() {
-        return Err(DatabaseError::InvalidQuery(format!(
-            "Cannot drop table '{}': has dependent tables",
-            statement.table_name
-        )));
-    }
-
-    // Call basic version to avoid recursion
-    postgres_sqlx_exec_drop_table_basic(connection, statement)
-        .await
-        .map_err(Into::into)
-}
-
-async fn postgres_sqlx_exec_drop_table_basic(
-    connection: &mut PgConnection,
-    statement: &crate::schema::DropTableStatement<'_>,
-) -> Result<(), SqlxDatabaseError> {
     let mut query = "DROP TABLE ".to_string();
 
     if statement.if_exists {
@@ -1930,13 +1910,14 @@ async fn postgres_sqlx_exec_drop_table_basic(
     }
 
     query.push_str(statement.table_name);
+    query.push_str(" RESTRICT");
 
-    log::trace!("exec_drop_table: query:\n{query}");
+    log::trace!("exec_drop_table_restrict_native: query:\n{query}");
 
     connection
         .execute(query.as_str())
         .await
-        .map_err(SqlxDatabaseError::Sqlx)?;
+        .map_err(|e| DatabaseError::PostgresSqlx(SqlxDatabaseError::Sqlx(e)))?;
 
     Ok(())
 }
@@ -1960,7 +1941,7 @@ async fn postgres_sqlx_exec_drop_table(
                     });
             }
             DropBehavior::Restrict => {
-                return postgres_sqlx_exec_drop_table_restrict(connection, statement)
+                return postgres_sqlx_exec_drop_table_restrict_native(connection, statement)
                     .await
                     .map_err(|e| match e {
                         DatabaseError::PostgresSqlx(pg_err) => pg_err,

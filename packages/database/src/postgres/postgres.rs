@@ -983,7 +983,7 @@ impl Database for PostgresTransaction {
                 }
                 DropBehavior::Restrict => {
                     let client = self.client.lock().await;
-                    return postgres_exec_drop_table_restrict(&client, statement).await;
+                    return postgres_exec_drop_table_restrict_native(&client, statement).await;
                 }
                 DropBehavior::Default => {}
             }
@@ -1785,32 +1785,10 @@ async fn postgres_exec_drop_table_cascade(
 }
 
 #[cfg(feature = "cascade")]
-async fn postgres_exec_drop_table_restrict(
+async fn postgres_exec_drop_table_restrict_native(
     client: &tokio_postgres::Client,
     statement: &crate::schema::DropTableStatement<'_>,
 ) -> Result<(), DatabaseError> {
-    let dependents = postgres_get_direct_dependents(client, statement.table_name)
-        .await
-        .map_err(DatabaseError::Postgres)?;
-
-    if !dependents.is_empty() {
-        return Err(DatabaseError::InvalidQuery(format!(
-            "Cannot drop table '{}': has dependent tables",
-            statement.table_name
-        )));
-    }
-
-    // Call basic version to avoid recursion
-    postgres_exec_drop_table_basic(client, statement)
-        .await
-        .map_err(Into::into)
-}
-
-#[cfg(feature = "schema")]
-async fn postgres_exec_drop_table_basic(
-    client: &tokio_postgres::Client,
-    statement: &crate::schema::DropTableStatement<'_>,
-) -> Result<(), PostgresDatabaseError> {
     let mut query = "DROP TABLE ".to_string();
 
     if statement.if_exists {
@@ -1818,11 +1796,12 @@ async fn postgres_exec_drop_table_basic(
     }
 
     query.push_str(statement.table_name);
+    query.push_str(" RESTRICT");
 
     client
         .execute_raw(&query, &[] as &[&str])
         .await
-        .map_err(PostgresDatabaseError::Postgres)?;
+        .map_err(|e| DatabaseError::Postgres(PostgresDatabaseError::Postgres(e)))?;
 
     Ok(())
 }
@@ -1845,7 +1824,7 @@ async fn postgres_exec_drop_table(
                     });
             }
             DropBehavior::Restrict => {
-                return postgres_exec_drop_table_restrict(client, statement)
+                return postgres_exec_drop_table_restrict_native(client, statement)
                     .await
                     .map_err(|e| match e {
                         DatabaseError::Postgres(pg_err) => pg_err,

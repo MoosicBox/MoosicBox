@@ -340,15 +340,38 @@ impl<'a> CreateTableStatement<'a> {
     }
 }
 
-/// DROP behavior for CASCADE/RESTRICT operations
+/// Specifies the behavior when dropping database objects that have dependencies.
+///
+/// # Examples
+///
+/// ```rust
+/// use switchy_database::schema::{drop_table, DropBehavior};
+///
+/// // Explicitly fail if dependencies exist
+/// let stmt = drop_table("users").restrict();
+///
+/// // Drop all dependent objects recursively
+/// let stmt = drop_table("users").cascade();
+///
+/// // Use database default behavior
+/// let stmt = drop_table("users"); // Default behavior
+/// ```
 #[cfg(feature = "cascade")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DropBehavior {
-    /// Use backend default behavior
+    /// Use the database backend's default behavior.
+    /// - `PostgreSQL`: RESTRICT (fails on dependencies)
+    /// - `MySQL`: Varies (depends on `foreign_key_checks` setting)
+    /// - `SQLite`: Allows drop (unless `PRAGMA foreign_keys=ON`)
     Default,
-    /// Drop all dependents
+
+    /// Drop all dependent objects recursively.
+    /// All backends use manual dependency discovery for consistent behavior.
     Cascade,
-    /// Fail if dependencies exist
+
+    /// Fail if any dependencies exist.
+    /// - `PostgreSQL`: Uses native RESTRICT for performance
+    /// - `MySQL`/`SQLite`: Uses manual dependency checking
     Restrict,
 }
 
