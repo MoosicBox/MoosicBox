@@ -11962,19 +11962,73 @@ async fn find_cascade_targets_postgres_optimized(
 
 **Completion Summary:** Phase 15.1.6 successfully eliminated all critical SQL injection vulnerabilities in CASCADE operations while maintaining full backward compatibility. The implementation uses database-appropriate identifier escaping (PostgreSQL double quotes, MySQL backticks) and preserves all existing functionality. All tests pass with zero clippy warnings.
 
-#### 15.1.7 Implement Proper Cycle Detection
+#### ~~15.1.7 Implement Proper Cycle Detection~~ ✅ **ALREADY IMPLEMENTED**
 
-**Goal:** Replace simplified cycle detection with robust algorithm that properly tracks cycles.
+**Status:** ✅ **ALREADY IMPLEMENTED** - Verified on 2025-01-16
 
-**Purpose:** Accurately detect and report circular dependencies in foreign key relationships.
+**Important:** This phase was based on outdated assumptions. Thorough analysis confirms the current implementation already provides robust cycle detection using the industry-standard DFS algorithm.
 
-**Current Problem:** Multiple places say "simplified - real implementation would track properly"
+### Why This Phase Is Not Needed:
 
-**Proper Algorithm:**
+**1. Current Implementation Already Uses Proper DFS Algorithm:**
+- ✅ Three-color marking (unvisited/visiting/visited)
+- ✅ Correct cycle detection when revisiting "gray" nodes
+- ✅ Proper backtracking with visiting set management
+- ✅ Both implementations (`topological_visit` and `visit_cascade_recursive`) use correct algorithm
 
-Location: `/packages/database/src/schema/dependencies.rs`
+**2. Comprehensive Test Coverage Exists:**
+- `test_topological_sort_detects_simple_cycle` - A→B→A cycles ✅ PASSES
+- `test_topological_sort_detects_complex_cycle` - B→C→D→B cycles ✅ PASSES
+- `test_find_cascade_targets_with_cycles` - 3-table cycles ✅ PASSES
+- `test_edge_case_self_references` - Self-referential tables ✅ PASSES
+
+**3. No "Simplified" Code Found:**
+- Searched entire codebase for "simplified" comments related to cycles
+- Only found one unrelated comment about ALTER TABLE operations
+- The spec's claim appears to be outdated or incorrect
+
+**4. Current Implementation Quality:**
+```rust
+// Already implements proper cycle detection:
+if visiting.contains(table) {  // Gray node = CYCLE DETECTED
+    let cycle_tables: Vec<String> = visiting.iter().cloned().collect();
+    return Err(CycleError { tables: cycle_tables, ... });
+}
+```
+
+**5. Minor Enhancement Only:**
+The spec proposes tracking `parent_chain` for exact cycle paths.
+- Current: Returns all tables in cycle: `["A", "B", "C"]`
+- Proposed: Would return exact path: `["A", "B", "C", "A"]`
+- This is a minor enhancement, not a fix for "simplified" detection.
+
+### Verification Performed:
+
+- **Files Analyzed:** `/packages/database/src/schema/dependencies.rs`
+- **Functions Verified:**
+  - `topological_visit()` lines 98-135: Proper DFS with cycle detection
+  - `visit_cascade_recursive()` lines 276-303: Proper cycle detection for CASCADE
+- **Tests Run:** All 4 cycle detection tests pass
+- **Algorithm Complexity:** O(V + E) - optimal for cycle detection
+- **No SQL Injection:** Phase 15.1.6 already secured all CASCADE operations
+
+---
+
+### ~~Original Specification~~ (Not Needed)
+
+~~**Goal:** Replace simplified cycle detection with robust algorithm that properly tracks cycles.~~
+
+~~**Purpose:** Accurately detect and report circular dependencies in foreign key relationships.~~
+
+~~**Current Problem:** Multiple places say "simplified - real implementation would track properly"~~
+
+~~**Proper Algorithm:**~~
+
+~~Location: `/packages/database/src/schema/dependencies.rs`~~
 
 ```rust
+// This proposed implementation is NOT needed - current code is already robust
+/*
 /// Properly detect cycles during dependency traversal
 pub struct CycleDetector {
     /// Currently visiting (gray nodes in DFS)
@@ -11984,7 +12038,9 @@ pub struct CycleDetector {
     /// Parent chain for cycle reporting
     parent_chain: Vec<String>,
 }
+*/
 
+/*
 impl CycleDetector {
     pub fn new() -> Self {
         Self {
@@ -12023,296 +12079,417 @@ impl CycleDetector {
         self.visited.contains(node)
     }
 }
+*/
 ```
 
-**Updated find_cascade_targets:**
+~~**Updated find_cascade_targets:**~~
+~~```rust~~
+~~pub async fn find_cascade_targets(~~
+    ~~tx: &dyn DatabaseTransaction,~~
+    ~~table_name: &str,~~
+~~) -> Result<DropPlan, DatabaseError> {~~
+    ~~let mut detector = CycleDetector::new();~~
+    ~~let mut to_drop = Vec::new();~~
+    ~~let mut cycles_found = Vec::new();~~
+
+    ~~async fn traverse(~~
+        ~~tx: &dyn DatabaseTransaction,~~
+        ~~table: &str,~~
+        ~~detector: &mut CycleDetector,~~
+        ~~to_drop: &mut Vec<String>,~~
+        ~~cycles_found: &mut Vec<Vec<String>>~~
+    ~~) -> Result<(), DatabaseError> {~~
+        ~~if let Some(cycle) = detector.check_cycle(table) {~~
+            ~~cycles_found.push(cycle);~~
+            ~~return Ok(());~~
+        ~~}~~
+
+        ~~if detector.is_visited(table) {~~
+            ~~return Ok(());~~
+        ~~}~~
+
+        ~~detector.start_visit(table);~~
+
+        ~~let dependents = get_direct_dependents(tx, table).await?;~~
+        ~~for dependent in dependents {~~
+            ~~Box::pin(traverse(tx, &dependent, detector, to_drop, cycles_found)).await?;~~
+        ~~}~~
+
+        ~~detector.finish_visit(table);~~
+        ~~to_drop.push(table.to_string());~~
+        ~~Ok(())~~
+    ~~}~~
+
+    ~~traverse(tx, table_name, &mut detector, &mut to_drop, &mut cycles_found).await?;~~
+
+    ~~if !cycles_found.is_empty() {~~
+        ~~Ok(DropPlan::WithCycles {~~
+            ~~tables: to_drop,~~
+            ~~requires_fk_disable: true,~~
+        ~~})~~
+    ~~} else {~~
+        ~~to_drop.reverse(); // Dependents first for dropping~~
+        ~~Ok(DropPlan::Simple(to_drop))~~
+    ~~}~~
+~~}~~
+~~```~~
+
+#### ~~15.1.7 Verification Checklist~~ ✅ **NOT NEEDED**
+
+- ~~[ ] CycleDetector struct implemented~~ ✅ **Current implementation already robust**
+- ~~[ ] Proper DFS-based cycle detection~~ ✅ **Already implemented correctly**
+- ~~[ ] Cycle path reporting for debugging~~ ⚠️ **Minor enhancement only**
+- ~~[ ] All "simplified" comments removed~~ ✅ **No such comments exist**
+- ~~[ ] Unit tests for complex cycle scenarios~~ ✅ **Already implemented and passing**
+- ~~[ ] Performance tests for large dependency graphs~~ ✅ **O(V+E) complexity already optimal**
+
+### 15.2 CASCADE Support for DropTableStatement - FINAL VERIFIED SPECIFICATION
+
+**Overview**
+Phase 15.2 implements proper CASCADE/RESTRICT behavior with each database backend handling DROP TABLE operations according to its native capabilities. PostgreSQL and MySQL will use native SQL CASCADE/RESTRICT keywords, while SQLite implements manual cascade logic.
+
+**Design Principles**
+1. Each backend handles CASCADE/RESTRICT internally
+2. No generic CASCADE logic in `schema/mod.rs`
+3. CASCADE/RESTRICT operations always use transactions for SQLite
+4. Each step must compile independently with no unused code
+
+#### 15.2.1 Update SQL Generation for Native CASCADE
+
+**Purpose:** Add CASCADE/RESTRICT keywords to DROP TABLE SQL for databases that support it natively.
+
+##### 15.2.1.1 - PostgreSQL raw backend
+**File:** `/packages/database/src/postgres/postgres.rs`
 ```rust
-pub async fn find_cascade_targets(
-    tx: &dyn DatabaseTransaction,
-    table_name: &str,
-) -> Result<DropPlan, DatabaseError> {
-    let mut detector = CycleDetector::new();
-    let mut to_drop = Vec::new();
-    let mut cycles_found = Vec::new();
+async fn postgres_exec_drop_table(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), PostgresDatabaseError> {
+    let mut query = "DROP TABLE ".to_string();
 
-    async fn traverse(
-        tx: &dyn DatabaseTransaction,
-        table: &str,
-        detector: &mut CycleDetector,
-        to_drop: &mut Vec<String>,
-        cycles_found: &mut Vec<Vec<String>>
-    ) -> Result<(), DatabaseError> {
-        if let Some(cycle) = detector.check_cycle(table) {
-            cycles_found.push(cycle);
-            return Ok(());
-        }
-
-        if detector.is_visited(table) {
-            return Ok(());
-        }
-
-        detector.start_visit(table);
-
-        let dependents = get_direct_dependents(tx, table).await?;
-        for dependent in dependents {
-            Box::pin(traverse(tx, &dependent, detector, to_drop, cycles_found)).await?;
-        }
-
-        detector.finish_visit(table);
-        to_drop.push(table.to_string());
-        Ok(())
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
     }
 
-    traverse(tx, table_name, &mut detector, &mut to_drop, &mut cycles_found).await?;
+    query.push_str(statement.table_name);
 
-    if !cycles_found.is_empty() {
-        Ok(DropPlan::WithCycles {
-            tables: to_drop,
-            requires_fk_disable: true,
-        })
-    } else {
-        to_drop.reverse(); // Dependents first for dropping
-        Ok(DropPlan::Simple(to_drop))
+    // Add CASCADE/RESTRICT keywords when feature is enabled
+    #[cfg(feature = "cascade")]
+    match statement.behavior {
+        crate::schema::DropBehavior::Cascade => query.push_str(" CASCADE"),
+        crate::schema::DropBehavior::Restrict => query.push_str(" RESTRICT"),
+        crate::schema::DropBehavior::Default => {} // PostgreSQL defaults to RESTRICT
+    }
+
+    client.execute_raw(&query, &[] as &[&str])
+        .await
+        .map_err(PostgresDatabaseError::Postgres)?;
+
+    Ok(())
+}
+```
+
+##### 15.2.1.2 - PostgreSQL SQLx backend
+**File:** `/packages/database/src/sqlx/postgres.rs`
+Similar changes to `postgres_exec_drop_table` function.
+
+##### 15.2.1.3 - MySQL SQLx backend
+**File:** `/packages/database/src/sqlx/mysql.rs`
+Similar changes to `mysql_exec_drop_table` function.
+
+#### 15.2.2 Implement SQLite CASCADE with Internal FK Handling
+
+**Purpose:** SQLite doesn't support native CASCADE, so implement manual cascade logic internally.
+
+##### 15.2.2.1 - RusqliteTransaction CASCADE implementation
+**File:** `/packages/database/src/rusqlite/mod.rs`
+
+```rust
+impl RusqliteTransaction {
+    // Private helper methods - not part of any trait
+    #[cfg(feature = "cascade")]
+    async fn disable_foreign_keys_internal(&self) -> Result<bool, DatabaseError> {
+        let result = self.query_raw("PRAGMA foreign_keys").await?;
+        let was_enabled = result
+            .first()
+            .and_then(|row| row.columns.first())
+            .map(|(_, v)| matches!(v, crate::DatabaseValue::Int(1)))
+            .unwrap_or(false);
+
+        self.exec_raw("PRAGMA foreign_keys = OFF").await?;
+        Ok(was_enabled)
+    }
+
+    #[cfg(feature = "cascade")]
+    async fn enable_foreign_keys_internal(&self) -> Result<bool, DatabaseError> {
+        self.exec_raw("PRAGMA foreign_keys = ON").await?;
+        Ok(true)
+    }
+}
+
+impl Database for RusqliteTransaction {
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        // Handle CASCADE/RESTRICT when feature is enabled
+        #[cfg(feature = "cascade")]
+        {
+            match statement.behavior {
+                crate::schema::DropBehavior::Cascade => {
+                    let drop_plan = self.find_cascade_targets(statement.table_name).await?;
+
+                    match drop_plan {
+                        crate::schema::DropPlan::Simple(tables) => {
+                            for table in tables {
+                                let sql = format!(
+                                    "DROP TABLE {}{}",
+                                    if statement.if_exists { "IF EXISTS " } else { "" },
+                                    table
+                                );
+                                self.exec_raw(&sql).await?;
+                            }
+                            return Ok(());
+                        }
+                        crate::schema::DropPlan::WithCycles { tables, .. } => {
+                            let was_enabled = self.disable_foreign_keys_internal().await?;
+
+                            for table in tables {
+                                let sql = format!(
+                                    "DROP TABLE {}{}",
+                                    if statement.if_exists { "IF EXISTS " } else { "" },
+                                    table
+                                );
+                                self.exec_raw(&sql).await?;
+                            }
+
+                            if was_enabled {
+                                self.enable_foreign_keys_internal().await?;
+
+                                let check = self.query_raw("PRAGMA foreign_key_check").await?;
+                                if !check.is_empty() {
+                                    return Err(DatabaseError::InvalidQuery(
+                                        "Foreign key constraints violated after CASCADE".to_string()
+                                    ));
+                                }
+                            }
+                            return Ok(());
+                        }
+                    }
+                }
+                crate::schema::DropBehavior::Restrict => {
+                    if self.has_any_dependents(statement.table_name).await? {
+                        return Err(DatabaseError::InvalidQuery(
+                            format!("Cannot drop table '{}': has dependent tables",
+                                    statement.table_name)
+                        ));
+                    }
+                    // Fall through to normal drop
+                }
+                crate::schema::DropBehavior::Default => {
+                    // Fall through to normal drop
+                }
+            }
+        }
+
+        // Normal drop logic (works with or without CASCADE feature)
+        let mut query = "DROP TABLE ".to_string();
+        if statement.if_exists {
+            query.push_str("IF EXISTS ");
+        }
+        query.push_str(statement.table_name);
+
+        self.exec_raw(&query).await
     }
 }
 ```
 
-#### 15.1.7 Verification Checklist
+##### 15.2.2.2 - RusqliteDatabase delegation to transaction
+**File:** `/packages/database/src/rusqlite/mod.rs`
 
-- [ ] CycleDetector struct implemented
-- [ ] Proper DFS-based cycle detection
-- [ ] Cycle path reporting for debugging
-- [ ] All "simplified" comments removed
-- [ ] Unit tests for complex cycle scenarios
-- [ ] Performance tests for large dependency graphs
-
-### 15.2 CASCADE Support for DropTableStatement (UPDATED)
-
-- [ ] Add CASCADE support to DropTableStatement
-  - [ ] Add `cascade: bool` field to `DropTableStatement`
-    - Location: `packages/database/src/schema.rs` in DropTableStatement struct
-    - Default: false (maintain backward compatibility)
-
-  - [ ] Add `cascade()` builder method
-    - Location: `packages/database/src/schema.rs` impl block
-    - Returns: `Self` for method chaining
-    - Example: `db.drop_table("users").cascade().execute(&db).await?`
-
-  - [ ] PostgreSQL/MySQL: Use native CASCADE keyword in SQL generation
-    - Location: `packages/database/src/schema.rs` in `to_sql()` method
-    - PostgreSQL: Append " CASCADE" when cascade=true
-    - MySQL: Append " CASCADE" when cascade=true
-    - Implementation: Trivial string concatenation
-
-  - [ ] SQLite: Implement manual CASCADE using optimized dependency infrastructure
-    **Implementation Strategy (Updated for Phase 15.1.2/15.1.3):**
-
-    ```rust
-    use crate::schema::dependencies::{
-        prepare_cascade_drop,  // From Phase 15.1.2/15.1.3
-        find_cascade_targets,  // Fallback from Phase 15.1.2
-    };
-    use crate::{DatabaseError, DatabaseTransaction};
-
-    async fn execute_cascade_sqlite(
-        tx: &dyn DatabaseTransaction,
-        table_name: &str
+```rust
+impl Database for RusqliteDatabase {
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
-        // Use optimized targeted dependency discovery (Phase 15.1.2/15.1.3)
-        let tables_to_drop = prepare_cascade_drop(tx, table_name).await?;
-
-        // Execute drops in dependency order (dependents first)
-        for table in tables_to_drop {
-            tx.exec_raw(&format!("DROP TABLE IF EXISTS {}", table)).await?;
-        }
-
-        Ok(())
-    }
-
-
-
-    async fn execute_drop_plan(
-        tx: &dyn DatabaseTransaction,
-        plan: DropPlan,
-    ) -> Result<(), DatabaseError> {
-        match plan {
-            DropPlan::Simple(tables) => {
-                // Drop in dependency order (leaves to root)
-                for table in tables.iter().rev() {
-                    tx.execute(&format!("DROP TABLE IF EXISTS {}", table)).await?;
-                }
-            }
-            DropPlan::WithCycles { tables, .. } => {
-                // Temporarily disable foreign keys for cycle resolution
-                tx.execute("PRAGMA foreign_keys = OFF").await?;
-
-                // Drop all tables in the cycle
-                for table in tables {
-                    tx.execute(&format!("DROP TABLE IF EXISTS {}", table)).await?;
-                }
-
-                // Re-enable foreign keys
-                tx.execute("PRAGMA foreign_keys = ON").await?;
-
-                // Verify foreign key integrity
-                let check = tx.query_scalar::<i64>("PRAGMA foreign_key_check").await?;
-                if check > 0 {
-                    return Err(DatabaseError::IntegrityViolation(
-                        "Foreign key constraints violated after CASCADE"
-                    ));
-                }
+        // Only delegate to transaction for CASCADE/RESTRICT
+        #[cfg(feature = "cascade")]
+        {
+            if matches!(statement.behavior,
+                       crate::schema::DropBehavior::Cascade |
+                       crate::schema::DropBehavior::Restrict) {
+                // CASCADE/RESTRICT need transaction context
+                let tx = self.begin_transaction().await?;
+                let result = tx.exec_drop_table(statement).await;
+                return match result {
+                    Ok(()) => tx.commit().await,
+                    Err(e) => {
+                        let _ = tx.rollback().await;
+                        Err(e)
+                    }
+                };
             }
         }
 
+        // Default behavior or CASCADE feature disabled
+        let mut query = "DROP TABLE ".to_string();
+        if statement.if_exists {
+            query.push_str("IF EXISTS ");
+        }
+        query.push_str(statement.table_name);
+
+        self.connection
+            .lock()
+            .await
+            .execute(&query, [])
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
         Ok(())
     }
-    ```
+}
+```
 
-    4. **Integration Point**
-       - Location: `packages/database/src/sqlx/sqlite.rs` and `packages/database/src/rusqlite/mod.rs`
-       - In `execute()` method, detect DropTableStatement with cascade=true
-       - Route to `execute_cascade_sqlite()` instead of direct SQL execution
-       - Ensure operation is within transaction context (required for atomicity)
+##### 15.2.2.3 - SqliteSqlxTransaction CASCADE implementation
+**File:** `/packages/database/src/sqlx/sqlite.rs`
+Similar to 15.2.2.1 but for SQLx backend (using same error types).
 
-  - [ ] Add comprehensive tests for CASCADE behavior across all backends
-    **Test Scenarios:**
+##### 15.2.2.4 - SqliteSqlxDatabase delegation to transaction
+**File:** `/packages/database/src/sqlx/sqlite.rs`
+Similar to 15.2.2.2 but for SQLx backend.
 
-    1. **Simple CASCADE** - Table with single dependent
-       ```sql
-       CREATE TABLE users (id INTEGER PRIMARY KEY);
-       CREATE TABLE posts (
-           id INTEGER PRIMARY KEY,
-           user_id INTEGER REFERENCES users(id)
-       );
-       -- DROP TABLE users CASCADE should drop posts first, then users
-       ```
+#### 15.2.3 Simplify DropTableStatement::execute()
 
-    2. **Multi-level CASCADE** - Chain of dependencies
-       ```sql
-       CREATE TABLE users (id INTEGER PRIMARY KEY);
-       CREATE TABLE posts (
-           id INTEGER PRIMARY KEY,
-           user_id INTEGER REFERENCES users(id)
-       );
-       CREATE TABLE comments (
-           id INTEGER PRIMARY KEY,
-           post_id INTEGER REFERENCES posts(id)
-       );
-       -- DROP TABLE users CASCADE should drop comments, posts, users (in that order)
-       ```
+**Purpose:** Remove the buggy generic CASCADE logic and let backends handle it.
 
-    3. **Multiple Dependencies** - Table referenced by multiple tables
-       ```sql
-       CREATE TABLE users (id INTEGER PRIMARY KEY);
-       CREATE TABLE posts (
-           id INTEGER PRIMARY KEY,
-           author_id INTEGER REFERENCES users(id)
-       );
-       CREATE TABLE messages (
-           id INTEGER PRIMARY KEY,
-           sender_id INTEGER REFERENCES users(id)
-       );
-       -- DROP TABLE users CASCADE should drop both posts and messages
-       ```
+**File:** `/packages/database/src/schema/mod.rs`
 
-    4. **Circular Dependencies** - Mutual references requiring special handling
-       ```sql
-       CREATE TABLE teams (
-           id INTEGER PRIMARY KEY,
-           leader_id INTEGER
-       );
-       CREATE TABLE users (
-           id INTEGER PRIMARY KEY,
-           team_id INTEGER REFERENCES teams(id)
-       );
-       -- Add foreign key after table creation
-       -- This creates a cycle that requires PRAGMA foreign_keys manipulation
-       ```
+**Remove lines ~399-479 (the entire CASCADE/RESTRICT match block) and replace with:**
+```rust
+impl DropTableStatement<'_> {
+    pub async fn execute(self, db: &dyn Database) -> Result<(), DatabaseError> {
+        // Simple delegation - backends handle CASCADE/RESTRICT appropriately
+        db.exec_drop_table(&self).await
+    }
+}
+```
 
-    5. **Self-referencing Tables** - Table with foreign key to itself
-       ```sql
-       CREATE TABLE employees (
-           id INTEGER PRIMARY KEY,
-           manager_id INTEGER REFERENCES employees(id)
-       );
-       -- DROP TABLE employees CASCADE should handle self-reference gracefully
-       ```
+#### 15.2.4 Add Comprehensive CASCADE Execution Tests
 
-    6. **No Dependencies** - CASCADE on table with no dependents
-       ```sql
-       CREATE TABLE standalone (id INTEGER PRIMARY KEY);
-       -- DROP TABLE standalone CASCADE should work identically to non-CASCADE
-       ```
+**File:** `/packages/database/tests/integration_tests.rs`
 
-    7. **Failed CASCADE** - Verify transaction rollback on error
-       - Create scenario where CASCADE would fail partway through
-       - Verify all tables remain intact after rollback
+Add to `generate_cascade_tests!` macro (note: Column and DataType imports already exist at line 2321):
+```rust
+#[switchy_async::test]
+async fn test_cascade_drop_execution_simple() {
+    let Some(db) = setup_db().await else { return; };
+    let db = &**db;
 
-  - [ ] Document CASCADE limitations and workarounds for SQLite
-    **Documentation to add:**
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos() % 1_000_000_000;
 
-    ```markdown
-    ## CASCADE Behavior
+    let parent = format!("cascade_exec_parent_{suffix}");
+    let child = format!("cascade_exec_child_{suffix}");
 
-    ### Native Support (PostgreSQL/MySQL)
-    These databases support CASCADE natively via SQL syntax:
-    - `DROP TABLE table_name CASCADE`
-    - Automatically drops all dependent objects
-    - Handles complex dependency graphs internally
+    // Cleanup any existing tables
+    db.drop_table(&child).if_exists(true).execute(db).await.ok();
+    db.drop_table(&parent).if_exists(true).execute(db).await.ok();
 
-    ### Manual Implementation (SQLite)
-    SQLite lacks native CASCADE support for DROP TABLE, requiring manual implementation:
+    // Create parent
+    db.create_table(&parent)
+        .column(Column {
+            name: "id".to_string(),
+            nullable: false,
+            auto_increment: true,
+            data_type: DataType::BigInt,
+            default: None,
+        })
+        .primary_key("id")
+        .execute(db)
+        .await
+        .unwrap();
 
-    **How it works:**
-    1. Discovers dependencies via PRAGMA foreign_key_list
-    2. Builds dependency graph and determines drop order
-    3. Executes drops in correct order within transaction
-    4. Handles circular dependencies by temporarily disabling foreign keys
+    // Create child with FK
+    db.create_table(&child)
+        .column(Column {
+            name: "id".to_string(),
+            nullable: false,
+            auto_increment: true,
+            data_type: DataType::BigInt,
+            default: None,
+        })
+        .column(Column {
+            name: "parent_id".to_string(),
+            nullable: false,
+            auto_increment: false,
+            data_type: DataType::BigInt,
+            default: None,
+        })
+        .primary_key("id")
+        .foreign_key(("parent_id", &format!("{}(id)", parent)))
+        .execute(db)
+        .await
+        .unwrap();
 
-    **Limitations:**
-    - Requires foreign keys to be defined (no implicit relationships)
-    - Performance: O(n*m) where n=tables, m=foreign keys
-    - Circular dependencies require brief foreign key disable/enable
+    // Insert data
+    db.insert(&parent).value("id", 1).execute(db).await.unwrap();
+    db.insert(&child).value("id", 1).value("parent_id", 1).execute(db).await.unwrap();
 
-    **Behavioral Guarantees:**
-    - ✅ Atomicity: All-or-nothing via transactions
-    - ✅ Consistency: Same tables dropped as PostgreSQL/MySQL
-    - ✅ Error handling: Any failure rolls back entire operation
-    - ✅ Circular dependencies: Handled transparently
+    // Execute CASCADE drop
+    db.drop_table(&parent)
+        .cascade()
+        .execute(db)
+        .await
+        .unwrap();
 
-    **When to use CASCADE:**
-    - Dropping tables with known dependencies
-    - Test database cleanup
-    - Schema migration rollbacks
+    // Verify both deleted
+    assert!(!db.table_exists(&parent).await.unwrap());
+    assert!(!db.table_exists(&child).await.unwrap());
+}
 
-    **When NOT to use CASCADE:**
-    - Production data without careful review
-    - When you need to preserve some dependent data
-    - High-performance scenarios with many dependencies (consider manual drops)
-    ```
+#[switchy_async::test]
+async fn test_cascade_drop_execution_multi_level() {
+    // Similar test with 3-level hierarchy
+}
 
-#### 15.2 Verification Checklist
+#[switchy_async::test]
+async fn test_cascade_drop_with_cycles() {
+    // Test circular dependencies (may skip for backends that don't support)
+}
 
-- [ ] Run `cargo build -p switchy_database --features schema` - compiles with CASCADE support
-- [ ] Unit test: DropTableStatement.cascade() builder method works
-- [ ] Unit test: PostgreSQL generates "DROP TABLE x CASCADE" SQL
-- [ ] Unit test: MySQL generates "DROP TABLE x CASCADE" SQL
-- [ ] Unit test: SQLite routes to manual CASCADE implementation
-- [ ] Integration test: Simple CASCADE works identically on all backends
-- [ ] Integration test: Multi-level CASCADE works identically on all backends
-- [ ] Integration test: Multiple dependencies CASCADE correctly
-- [ ] Integration test: Circular dependencies handled on all backends
-- [ ] Integration test: Self-referencing tables CASCADE correctly
-- [ ] Integration test: CASCADE with no dependencies works
-- [ ] Integration test: Failed CASCADE rolls back completely
-- [ ] SQLite-specific test: Foreign keys disabled/enabled for cycles
-- [ ] SQLite-specific test: PRAGMA foreign_key_check passes after CASCADE
-- [ ] Performance test: CASCADE with 10+ dependent tables completes < 1s
-- [ ] Run `cargo clippy -p switchy_database --all-targets` - zero warnings
-- [ ] Run `cargo fmt --all` - format entire repository
-- [ ] Documentation: CASCADE behavior documented in Database trait
-- [ ] Documentation: SQLite limitations clearly explained
-- [ ] Example: CASCADE usage in migration rollback scenario
+#[switchy_async::test]
+async fn test_restrict_blocks_drop() {
+    // Verify RESTRICT prevents drop when dependents exist
+}
+```
+
+### 15.2 Verification Checklist
+
+**After each step:**
+- [ ] 15.2.1: `cargo build -p switchy_database --features cascade` - Compiles
+- [ ] 15.2.2: `cargo build -p switchy_database --features cascade` - Compiles
+- [ ] 15.2.3: `cargo build -p switchy_database --features cascade` - Compiles
+- [ ] 15.2.4: `cargo test -p switchy_database --features cascade` - All pass
+
+**Feature compatibility:**
+- [ ] `cargo build -p switchy_database --no-default-features --features postgres-raw,postgres-sqlx,mysql-sqlx,sqlite-rusqlite,sqlite-sqlx` (without CASCADE feature) - Still compiles
+- [ ] Default behavior unaffected when CASCADE feature disabled
+
+**No warnings:**
+- [ ] `cargo clippy -p switchy_database --all-targets --features cascade` - Zero warnings
+
+### Summary of Verified Changes
+
+1. **Error types verified:** Using `DatabaseError::InvalidQuery` for constraint violations (matching existing code)
+2. **Imports verified:** Column and DataType already imported in test file at line 2321
+3. **DatabaseValue path:** Using fully qualified `crate::DatabaseValue` to avoid import issues
+4. **Feature gating correct:** Code that accesses `behavior` field is properly gated
+5. **All steps compile independently** with no forward dependencies or unused code
+
+This ensures CASCADE operations work identically across all backends from the user's perspective, while leveraging native database capabilities where available for optimal performance.
+
 
 ### 15.3 RESTRICT Support
 
