@@ -542,6 +542,8 @@ pub enum AlterOperation {
     },
     DropColumn {
         name: String,
+        #[cfg(feature = "cascade")]
+        behavior: DropBehavior,
     },
     RenameColumn {
         old_name: String,
@@ -588,7 +590,31 @@ impl AlterTableStatement<'_> {
 
     #[must_use]
     pub fn drop_column(mut self, name: String) -> Self {
-        self.operations.push(AlterOperation::DropColumn { name });
+        self.operations.push(AlterOperation::DropColumn {
+            name,
+            #[cfg(feature = "cascade")]
+            behavior: DropBehavior::Default,
+        });
+        self
+    }
+
+    #[cfg(feature = "cascade")]
+    #[must_use]
+    pub fn drop_column_cascade(mut self, name: String) -> Self {
+        self.operations.push(AlterOperation::DropColumn {
+            name,
+            behavior: DropBehavior::Cascade,
+        });
+        self
+    }
+
+    #[cfg(feature = "cascade")]
+    #[must_use]
+    pub fn drop_column_restrict(mut self, name: String) -> Self {
+        self.operations.push(AlterOperation::DropColumn {
+            name,
+            behavior: DropBehavior::Restrict,
+        });
         self
     }
 
@@ -922,8 +948,14 @@ mod tests {
         assert_eq!(statement.table_name, "users");
         assert_eq!(statement.operations.len(), 1);
         match &statement.operations[0] {
-            AlterOperation::DropColumn { name } => {
+            AlterOperation::DropColumn {
+                name,
+                #[cfg(feature = "cascade")]
+                behavior,
+            } => {
                 assert_eq!(name, "old_column");
+                #[cfg(feature = "cascade")]
+                assert_eq!(*behavior, DropBehavior::Default);
             }
             _ => panic!("Expected DropColumn operation"),
         }
@@ -1024,8 +1056,14 @@ mod tests {
 
         // Check DropColumn operation
         match &statement.operations[1] {
-            AlterOperation::DropColumn { name } => {
+            AlterOperation::DropColumn {
+                name,
+                #[cfg(feature = "cascade")]
+                behavior,
+            } => {
                 assert_eq!(name, "old_field");
+                #[cfg(feature = "cascade")]
+                assert_eq!(*behavior, DropBehavior::Default);
             }
             _ => panic!("Expected DropColumn operation at index 1"),
         }
@@ -1127,4 +1165,6 @@ mod tests {
 pub mod dependencies;
 
 #[cfg(feature = "schema")]
-pub use dependencies::{CycleError, DependencyGraph, DropPlan};
+pub use dependencies::{
+    ColumnDependencies, CycleError, DependencyGraph, DropPlan, get_column_dependencies,
+};

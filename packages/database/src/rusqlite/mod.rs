@@ -436,6 +436,73 @@ impl From<RusqliteDatabaseError> for DatabaseError {
     }
 }
 
+/// Get column dependencies (indexes and foreign keys) for a specific column in `SQLite`
+#[cfg(feature = "cascade")]
+fn rusqlite_get_column_dependencies(
+    connection: &Connection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<(Vec<String>, Vec<String>), DatabaseError> {
+    let mut indexes = Vec::new();
+    let mut foreign_keys = Vec::new();
+
+    // Find indexes that use this column
+    let index_list_query = format!("PRAGMA index_list({table_name})");
+    let mut stmt = connection
+        .prepare(&index_list_query)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let index_rows = stmt
+        .query_map([], |row| row.get::<_, String>("name"))
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    for index_result in index_rows {
+        let index_name = index_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        // Check if this index uses the column we're interested in
+        let index_info_query = format!("PRAGMA index_info({index_name})");
+        let mut col_stmt = connection
+            .prepare(&index_info_query)
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+        let column_rows = col_stmt
+            .query_map([], |row| row.get::<_, String>("name"))
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        for col_result in column_rows {
+            let col_name = col_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+            if col_name == column_name {
+                indexes.push(index_name.clone());
+                break;
+            }
+        }
+    }
+
+    // Find foreign key constraints that use this column
+    let fk_list_query = format!("PRAGMA foreign_key_list({table_name})");
+    let mut fk_stmt = connection
+        .prepare(&fk_list_query)
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+    let fk_rows = fk_stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, i64>("id")?,
+                row.get::<_, String>("from")?,
+                row.get::<_, String>("table")?,
+                row.get::<_, String>("to")?,
+            ))
+        })
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    for fk_result in fk_rows {
+        let (id, from_column, to_table, to_column) =
+            fk_result.map_err(RusqliteDatabaseError::Rusqlite)?;
+        if from_column == column_name {
+            foreign_keys.push(format!("FK_{id}_{table_name}_{to_table}_{to_column}"));
+        }
+    }
+
+    Ok((indexes, foreign_keys))
+}
+
 #[async_trait]
 impl Database for RusqliteDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -1918,7 +1985,68 @@ pub(crate) fn rusqlite_exec_alter_table(
                     .execute(&sql, [])
                     .map_err(RusqliteDatabaseError::Rusqlite)?;
             }
-            AlterOperation::DropColumn { name } => {
+            AlterOperation::DropColumn {
+                name,
+                #[cfg(feature = "cascade")]
+                behavior,
+            } => {
+                #[cfg(feature = "cascade")]
+                {
+                    use crate::schema::DropBehavior;
+
+                    match behavior {
+                        DropBehavior::Cascade => {
+                            // Get column dependencies before dropping
+                            let (indexes, foreign_keys) = rusqlite_get_column_dependencies(
+                                connection,
+                                statement.table_name,
+                                name,
+                            )?;
+
+                            // Drop indexes (SQLite can drop indexes individually)
+                            for index_name in indexes {
+                                let drop_index_sql = format!("DROP INDEX IF EXISTS `{index_name}`");
+                                log::trace!("SQLite CASCADE dropping index: {drop_index_sql}");
+                                connection
+                                    .execute(&drop_index_sql, [])
+                                    .map_err(RusqliteDatabaseError::Rusqlite)?;
+                            }
+
+                            // Log warning about FK limitations in SQLite
+                            if !foreign_keys.is_empty() {
+                                log::warn!(
+                                    "SQLite CASCADE: Cannot drop individual foreign key constraints. \
+                                          Column '{}.{}' has {} FK constraint(s) that cannot be automatically dropped",
+                                    statement.table_name,
+                                    name,
+                                    foreign_keys.len()
+                                );
+                            }
+                        }
+                        DropBehavior::Restrict => {
+                            // Check for dependencies and fail if any exist
+                            let (indexes, foreign_keys) = rusqlite_get_column_dependencies(
+                                connection,
+                                statement.table_name,
+                                name,
+                            )?;
+
+                            if !indexes.is_empty() || !foreign_keys.is_empty() {
+                                return Err(DatabaseError::ForeignKeyViolation(format!(
+                                    "Cannot drop column {}.{}: has {} index(es) and {} foreign key(s)",
+                                    statement.table_name,
+                                    name,
+                                    indexes.len(),
+                                    foreign_keys.len()
+                                )));
+                            }
+                        }
+                        DropBehavior::Default => {
+                            // SQLite default behavior (fail on any constraint violations)
+                        }
+                    }
+                }
+
                 let sql = format!(
                     "ALTER TABLE {} DROP COLUMN `{}`",
                     statement.table_name, name

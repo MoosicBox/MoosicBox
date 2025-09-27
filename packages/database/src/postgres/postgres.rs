@@ -1990,11 +1990,25 @@ pub(crate) async fn postgres_exec_alter_table(
                     .await
                     .map_err(PostgresDatabaseError::Postgres)?;
             }
-            AlterOperation::DropColumn { name } => {
-                let sql = format!(
+            AlterOperation::DropColumn {
+                name,
+                #[cfg(feature = "cascade")]
+                behavior,
+            } => {
+                let mut sql = format!(
                     "ALTER TABLE {} DROP COLUMN \"{}\"",
                     statement.table_name, name
                 );
+
+                #[cfg(feature = "cascade")]
+                {
+                    use crate::schema::DropBehavior;
+                    match behavior {
+                        DropBehavior::Cascade => sql.push_str(" CASCADE"),
+                        DropBehavior::Restrict => sql.push_str(" RESTRICT"),
+                        DropBehavior::Default => {} // PostgreSQL defaults to RESTRICT
+                    }
+                }
 
                 client
                     .execute_raw(&sql, &[] as &[&str])

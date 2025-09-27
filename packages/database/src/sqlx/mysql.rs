@@ -305,6 +305,63 @@ impl From<SqlxDatabaseError> for DatabaseError {
     }
 }
 
+/// Get column dependencies (indexes and foreign keys) for a specific column in `MySQL`
+#[cfg(feature = "cascade")]
+async fn mysql_get_column_dependencies(
+    connection: &mut MySqlConnection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<(Vec<String>, Vec<String>), SqlxDatabaseError> {
+    let mut indexes = Vec::new();
+    let mut foreign_keys = Vec::new();
+
+    // Find indexes that use this column
+    let index_query = "
+        SELECT DISTINCT INDEX_NAME
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+        AND INDEX_NAME != 'PRIMARY'";
+
+    let index_rows = sqlx::query(index_query)
+        .bind(table_name)
+        .bind(column_name)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    for row in index_rows {
+        let index_name: String = row.try_get("INDEX_NAME").map_err(SqlxDatabaseError::Sqlx)?;
+        indexes.push(index_name);
+    }
+
+    // Find foreign key constraints that reference this column
+    let fk_query = "
+        SELECT CONSTRAINT_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+        AND REFERENCED_TABLE_NAME IS NOT NULL";
+
+    let fk_rows = sqlx::query(fk_query)
+        .bind(table_name)
+        .bind(column_name)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    for row in fk_rows {
+        let constraint_name: String = row
+            .try_get("CONSTRAINT_NAME")
+            .map_err(SqlxDatabaseError::Sqlx)?;
+        foreign_keys.push(constraint_name);
+    }
+
+    Ok((indexes, foreign_keys))
+}
+
 #[async_trait]
 #[allow(clippy::significant_drop_tightening)]
 impl Database for MySqlSqlxDatabase {
@@ -2033,7 +2090,78 @@ pub(crate) async fn mysql_sqlx_exec_alter_table(
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
-            AlterOperation::DropColumn { name } => {
+            AlterOperation::DropColumn {
+                name,
+                #[cfg(feature = "cascade")]
+                behavior,
+            } => {
+                #[cfg(feature = "cascade")]
+                {
+                    use crate::schema::DropBehavior;
+
+                    match behavior {
+                        DropBehavior::Cascade => {
+                            // Get column dependencies before dropping
+                            let (indexes, foreign_keys) = mysql_get_column_dependencies(
+                                connection,
+                                statement.table_name,
+                                name,
+                            )
+                            .await?;
+
+                            // Drop indexes first (MySQL allows this)
+                            for index_name in indexes {
+                                let drop_index_sql = format!(
+                                    "DROP INDEX `{}` ON `{}`",
+                                    index_name, statement.table_name
+                                );
+                                log::trace!("MySQL CASCADE dropping index: {drop_index_sql}");
+                                connection
+                                    .execute(drop_index_sql.as_str())
+                                    .await
+                                    .map_err(SqlxDatabaseError::Sqlx)?;
+                            }
+
+                            // Drop foreign key constraints
+                            for fk_name in foreign_keys {
+                                let drop_fk_sql = format!(
+                                    "ALTER TABLE `{}` DROP FOREIGN KEY `{}`",
+                                    statement.table_name, fk_name
+                                );
+                                log::trace!("MySQL CASCADE dropping foreign key: {drop_fk_sql}");
+                                connection
+                                    .execute(drop_fk_sql.as_str())
+                                    .await
+                                    .map_err(SqlxDatabaseError::Sqlx)?;
+                            }
+                        }
+                        DropBehavior::Restrict => {
+                            // Check for dependencies and fail if any exist
+                            let (indexes, foreign_keys) = mysql_get_column_dependencies(
+                                connection,
+                                statement.table_name,
+                                name,
+                            )
+                            .await?;
+
+                            if !indexes.is_empty() || !foreign_keys.is_empty() {
+                                return Err(SqlxDatabaseError::Sqlx(sqlx::Error::Protocol(
+                                    format!(
+                                        "Cannot drop column {}.{}: has {} index(es) and {} foreign key(s)",
+                                        statement.table_name,
+                                        name,
+                                        indexes.len(),
+                                        foreign_keys.len()
+                                    ),
+                                )));
+                            }
+                        }
+                        DropBehavior::Default => {
+                            // MySQL default: auto-drop indexes, fail on FKs
+                        }
+                    }
+                }
+
                 let sql = format!(
                     "ALTER TABLE {} DROP COLUMN `{}`",
                     statement.table_name, name

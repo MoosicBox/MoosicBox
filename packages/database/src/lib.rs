@@ -448,6 +448,9 @@ pub enum DatabaseError {
     /// Raw SQL query execution failed
     #[error("Query failed: {0}")]
     QueryFailed(String),
+    /// Foreign key constraint violation
+    #[error("Foreign key violation: {0}")]
+    ForeignKeyViolation(String),
     /// Invalid query syntax
     #[error("Invalid query: {0}")]
     InvalidQuery(String),

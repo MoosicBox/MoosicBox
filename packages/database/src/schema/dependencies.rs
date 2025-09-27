@@ -1134,3 +1134,47 @@ mod tests {
         assert!(!graph.has_dependents("nonexistent"));
     }
 }
+
+/// Column-level dependency information
+#[derive(Debug, Clone)]
+pub struct ColumnDependencies {
+    /// Indexes that use this column
+    pub indexes: Vec<String>,
+    /// Foreign key constraints that reference this column
+    pub foreign_keys: Vec<String>,
+}
+
+/// Get column dependencies using existing table introspection infrastructure
+///
+/// # Errors
+///
+/// * Returns `DatabaseError` if table introspection fails
+pub async fn get_column_dependencies(
+    tx: &dyn DatabaseTransaction,
+    table_name: &str,
+    column_name: &str,
+) -> Result<ColumnDependencies, DatabaseError> {
+    let mut deps = ColumnDependencies {
+        indexes: Vec::new(),
+        foreign_keys: Vec::new(),
+    };
+
+    // Get table info using existing introspection
+    if let Some(table_info) = tx.get_table_info(table_name).await? {
+        // Find indexes that contain this column
+        for (index_name, index_info) in table_info.indexes {
+            if index_info.columns.contains(&column_name.to_string()) {
+                deps.indexes.push(index_name);
+            }
+        }
+
+        // Find foreign keys that reference this column
+        for (fk_name, fk_info) in table_info.foreign_keys {
+            if fk_info.column == column_name {
+                deps.foreign_keys.push(fk_name);
+            }
+        }
+    }
+
+    Ok(deps)
+}

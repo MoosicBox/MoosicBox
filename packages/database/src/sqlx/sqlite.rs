@@ -416,6 +416,62 @@ impl From<SqlxDatabaseError> for DatabaseError {
     }
 }
 
+/// Get column dependencies (indexes and foreign keys) for a specific column in `SQLite`
+#[cfg(feature = "cascade")]
+async fn sqlite_get_column_dependencies(
+    connection: &mut SqliteConnection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<(Vec<String>, Vec<String>), SqlxDatabaseError> {
+    let mut indexes = Vec::new();
+    let mut foreign_keys = Vec::new();
+
+    // Find indexes that use this column
+    let index_list_query = format!("PRAGMA index_list({table_name})");
+    let index_rows = sqlx::query(&index_list_query)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    for row in index_rows {
+        let index_name: String = row.try_get("name").map_err(SqlxDatabaseError::Sqlx)?;
+
+        // Check if this index uses the column we're interested in
+        let index_info_query = format!("PRAGMA index_info({index_name})");
+        let column_rows = sqlx::query(&index_info_query)
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        for col_row in column_rows {
+            let col_name: String = col_row.try_get("name").map_err(SqlxDatabaseError::Sqlx)?;
+            if col_name == column_name {
+                indexes.push(index_name.clone());
+                break;
+            }
+        }
+    }
+
+    // Find foreign key constraints that use this column
+    let fk_list_query = format!("PRAGMA foreign_key_list({table_name})");
+    let fk_rows = sqlx::query(&fk_list_query)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    for row in fk_rows {
+        let from_column: String = row.try_get("from").map_err(SqlxDatabaseError::Sqlx)?;
+        if from_column == column_name {
+            let id: i64 = row.try_get("id").map_err(SqlxDatabaseError::Sqlx)?;
+            let to_table: String = row.try_get("table").map_err(SqlxDatabaseError::Sqlx)?;
+            let to_column: String = row.try_get("to").map_err(SqlxDatabaseError::Sqlx)?;
+            foreign_keys.push(format!("FK_{id}_{table_name}_{to_table}_{to_column}"));
+        }
+    }
+
+    Ok((indexes, foreign_keys))
+}
+
 #[async_trait]
 impl Database for SqliteSqlxDatabase {
     async fn query(&self, query: &SelectQuery<'_>) -> Result<Vec<crate::Row>, DatabaseError> {
@@ -1760,7 +1816,73 @@ pub(crate) async fn sqlite_sqlx_exec_alter_table(
                     .await
                     .map_err(SqlxDatabaseError::Sqlx)?;
             }
-            AlterOperation::DropColumn { name } => {
+            AlterOperation::DropColumn {
+                name,
+                #[cfg(feature = "cascade")]
+                behavior,
+            } => {
+                #[cfg(feature = "cascade")]
+                {
+                    use crate::schema::DropBehavior;
+
+                    match behavior {
+                        DropBehavior::Cascade => {
+                            // Get column dependencies before dropping
+                            let (indexes, foreign_keys) = sqlite_get_column_dependencies(
+                                connection,
+                                statement.table_name,
+                                name,
+                            )
+                            .await?;
+
+                            // Drop indexes (SQLite can drop indexes individually)
+                            for index_name in indexes {
+                                let drop_index_sql = format!("DROP INDEX IF EXISTS `{index_name}`");
+                                log::trace!("SQLite CASCADE dropping index: {drop_index_sql}");
+                                connection
+                                    .execute(sqlx::raw_sql(&drop_index_sql))
+                                    .await
+                                    .map_err(SqlxDatabaseError::Sqlx)?;
+                            }
+
+                            // Log warning about FK limitations in SQLite
+                            if !foreign_keys.is_empty() {
+                                log::warn!(
+                                    "SQLite CASCADE: Cannot drop individual foreign key constraints. \
+                                          Column '{}.{}' has {} FK constraint(s) that cannot be automatically dropped",
+                                    statement.table_name,
+                                    name,
+                                    foreign_keys.len()
+                                );
+                            }
+                        }
+                        DropBehavior::Restrict => {
+                            // Check for dependencies and fail if any exist
+                            let (indexes, foreign_keys) = sqlite_get_column_dependencies(
+                                connection,
+                                statement.table_name,
+                                name,
+                            )
+                            .await?;
+
+                            if !indexes.is_empty() || !foreign_keys.is_empty() {
+                                return Err(SqlxDatabaseError::Sqlx(sqlx::Error::Protocol(
+                                    format!(
+                                        "Cannot drop column {}.{}: has {} index(es) and {} foreign key(s)",
+                                        statement.table_name,
+                                        name,
+                                        indexes.len(),
+                                        foreign_keys.len()
+                                    ),
+                                )));
+                            }
+                        }
+                        DropBehavior::Default => {
+                            // SQLite default behavior (fail on any constraint violations)
+                        }
+                    }
+                }
+
                 let sql = format!(
                     "ALTER TABLE {} DROP COLUMN `{}`",
                     statement.table_name, name
