@@ -12468,17 +12468,35 @@ async fn test_restrict_blocks_drop() {
 ### 15.2 Verification Checklist
 
 **After each step:**
-- [ ] 15.2.1: `cargo build -p switchy_database --features cascade` - Compiles
-- [ ] 15.2.2: `cargo build -p switchy_database --features cascade` - Compiles
-- [ ] 15.2.3: `cargo build -p switchy_database --features cascade` - Compiles
-- [ ] 15.2.4: `cargo test -p switchy_database --features cascade` - All pass
+- [x] 15.2.1: `cargo build -p switchy_database --features cascade` - Compiles
+
+Updated PostgreSQL and MySQL exec_drop_table functions to append CASCADE/RESTRICT SQL keywords based on statement.behavior field.
+
+- [x] 15.2.2: `cargo build -p switchy_database --features cascade` - Compiles
+
+Implemented SQLite manual CASCADE with internal FK helpers in both rusqlite and sqlx sqlite backends using PRAGMA foreign_key_list.
+
+- [x] 15.2.3: `cargo build -p switchy_database --features cascade` - Compiles
+
+Simplified DropTableStatement::execute() from complex generic logic to simple delegation: `db.exec_drop_table(&self).await`.
+
+- [x] 15.2.4: `cargo test -p switchy_database --features cascade` - All pass
+
+Added test_cascade_drop_execution and test_restrict_drop_execution tests that create dependency chains and verify actual CASCADE/RESTRICT execution.
 
 **Feature compatibility:**
-- [ ] `cargo build -p switchy_database --no-default-features --features postgres-raw,postgres-sqlx,mysql-sqlx,sqlite-rusqlite,sqlite-sqlx` (without CASCADE feature) - Still compiles
-- [ ] Default behavior unaffected when CASCADE feature disabled
+- [x] `cargo build -p switchy_database --no-default-features --features postgres-raw,postgres-sqlx,mysql-sqlx,sqlite-rusqlite,sqlite-sqlx` (without CASCADE feature) - Still compiles
+
+Compilation successful with fast profile.
+
+- [x] Default behavior unaffected when CASCADE feature disabled
+
+All changes are properly feature-gated with #[cfg(feature = "cascade")].
 
 **No warnings:**
-- [ ] `cargo clippy -p switchy_database --all-targets --features cascade` - Zero warnings
+- [x] `cargo clippy -p switchy_database --all-targets --features cascade` - Zero warnings
+
+Fixed all clippy issues: doc_markdown backticks, uninlined_format_args, and unnecessary_map_or.
 
 ### Summary of Verified Changes
 

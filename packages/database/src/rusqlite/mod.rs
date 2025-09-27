@@ -1557,6 +1557,21 @@ fn rusqlite_exec_drop_table(
     connection: &Connection,
     statement: &crate::schema::DropTableStatement<'_>,
 ) -> Result<(), DatabaseError> {
+    #[cfg(feature = "cascade")]
+    {
+        use crate::schema::DropBehavior;
+        match statement.behavior {
+            DropBehavior::Cascade => {
+                return rusqlite_exec_drop_table_cascade(connection, statement);
+            }
+            DropBehavior::Restrict => {
+                return rusqlite_exec_drop_table_restrict(connection, statement);
+            }
+            DropBehavior::Default => {} // Fall through to basic DROP TABLE
+        }
+    }
+
+    // Basic DROP TABLE without CASCADE/RESTRICT
     let mut query = "DROP TABLE ".to_string();
 
     if statement.if_exists {
@@ -1567,6 +1582,207 @@ fn rusqlite_exec_drop_table(
 
     connection
         .execute(&query, [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    Ok(())
+}
+
+/// Implement manual CASCADE for `SQLite` using internal FK helpers
+#[cfg(all(feature = "schema", feature = "cascade"))]
+fn rusqlite_exec_drop_table_cascade(
+    connection: &Connection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    // Get all tables that need to be dropped (dependents first, then target)
+    let drop_order = rusqlite_find_cascade_dependents(connection, statement.table_name)?;
+
+    // Enable foreign key enforcement temporarily for consistency
+    let fk_enabled = rusqlite_get_foreign_key_state(connection)?;
+    rusqlite_set_foreign_key_state(connection, true)?;
+
+    let result = (|| -> Result<(), DatabaseError> {
+        // Drop all dependent tables first, then the target table
+        for table_to_drop in &drop_order {
+            let mut query = "DROP TABLE ".to_string();
+            if statement.if_exists {
+                query.push_str("IF EXISTS ");
+            }
+            query.push_str(table_to_drop);
+
+            connection
+                .execute(&query, [])
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+        }
+        Ok(())
+    })();
+
+    // Restore original foreign key state
+    rusqlite_set_foreign_key_state(connection, fk_enabled)?;
+
+    result
+}
+
+/// Implement manual RESTRICT for `SQLite` using internal FK helpers
+#[cfg(all(feature = "schema", feature = "cascade"))]
+fn rusqlite_exec_drop_table_restrict(
+    connection: &Connection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    // Check if table has any dependents - if so, fail
+    if rusqlite_has_dependents(connection, statement.table_name)? {
+        return Err(DatabaseError::InvalidQuery(format!(
+            "Cannot drop table '{}' because other tables depend on it",
+            statement.table_name
+        )));
+    }
+
+    // No dependents, proceed with normal drop
+    let mut query = "DROP TABLE ".to_string();
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+    query.push_str(statement.table_name);
+
+    connection
+        .execute(&query, [])
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    Ok(())
+}
+
+/// Find all tables that depend on the given table (for CASCADE)
+#[cfg(all(feature = "schema", feature = "cascade"))]
+fn rusqlite_find_cascade_dependents(
+    connection: &Connection,
+    table_name: &str,
+) -> Result<Vec<String>, DatabaseError> {
+    let mut all_dependents = std::collections::BTreeSet::new();
+    let mut to_check = vec![table_name.to_string()];
+    let mut checked = std::collections::BTreeSet::new();
+
+    while let Some(current_table) = to_check.pop() {
+        if !checked.insert(current_table.clone()) {
+            continue;
+        }
+
+        // Get all tables using PRAGMA
+        let mut stmt = connection
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+            )
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let table_names: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(RusqliteDatabaseError::Rusqlite)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        for check_table in table_names {
+            if check_table == current_table {
+                continue;
+            }
+
+            // Validate table name for PRAGMA (cannot be parameterized)
+            crate::schema::dependencies::validate_table_name_for_pragma(&check_table)?;
+
+            let mut fk_stmt = connection
+                .prepare(&format!("PRAGMA foreign_key_list({check_table})"))
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+            let fk_rows: Vec<String> = fk_stmt
+                .query_map([], |row| row.get::<_, String>(2)) // Column 2 is referenced table
+                .map_err(RusqliteDatabaseError::Rusqlite)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+            for ref_table in fk_rows {
+                if ref_table == current_table {
+                    all_dependents.insert(check_table.clone());
+                    to_check.push(check_table.clone());
+                    break;
+                }
+            }
+        }
+    }
+
+    // Build proper drop order (dependents first)
+    let mut drop_order: Vec<String> = all_dependents.into_iter().collect();
+    drop_order.push(table_name.to_string());
+
+    Ok(drop_order)
+}
+
+/// Check if a table has any dependents (for RESTRICT)
+#[cfg(all(feature = "schema", feature = "cascade"))]
+fn rusqlite_has_dependents(
+    connection: &Connection,
+    table_name: &str,
+) -> Result<bool, DatabaseError> {
+    let mut stmt = connection
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let table_names: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(RusqliteDatabaseError::Rusqlite)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    for check_table in table_names {
+        if check_table == table_name {
+            continue;
+        }
+
+        crate::schema::dependencies::validate_table_name_for_pragma(&check_table)?;
+
+        let mut fk_stmt = connection
+            .prepare(&format!("PRAGMA foreign_key_list({check_table})"))
+            .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+        let has_dep: bool = fk_stmt
+            .query_map([], |row| row.get::<_, String>(2)) // Column 2 is referenced table
+            .map_err(RusqliteDatabaseError::Rusqlite)?
+            .any(|ref_table_result| {
+                ref_table_result.is_ok_and(|ref_table| ref_table == table_name)
+            });
+
+        if has_dep {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+/// Get current foreign key enforcement state
+#[cfg(all(feature = "schema", feature = "cascade"))]
+fn rusqlite_get_foreign_key_state(connection: &Connection) -> Result<bool, DatabaseError> {
+    let mut stmt = connection
+        .prepare("PRAGMA foreign_keys")
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    let enabled: i64 = stmt
+        .query_row([], |row| row.get(0))
+        .map_err(RusqliteDatabaseError::Rusqlite)?;
+
+    Ok(enabled != 0)
+}
+
+/// Set foreign key enforcement state
+#[cfg(all(feature = "schema", feature = "cascade"))]
+fn rusqlite_set_foreign_key_state(
+    connection: &Connection,
+    enabled: bool,
+) -> Result<(), DatabaseError> {
+    let pragma = if enabled {
+        "PRAGMA foreign_keys = ON"
+    } else {
+        "PRAGMA foreign_keys = OFF"
+    };
+
+    connection
+        .execute(pragma, [])
         .map_err(RusqliteDatabaseError::Rusqlite)?;
 
     Ok(())

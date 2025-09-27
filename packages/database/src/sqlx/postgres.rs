@@ -1798,6 +1798,16 @@ async fn postgres_sqlx_exec_drop_table(
 
     query.push_str(statement.table_name);
 
+    #[cfg(feature = "cascade")]
+    {
+        use crate::schema::DropBehavior;
+        match statement.behavior {
+            DropBehavior::Cascade => query.push_str(" CASCADE"),
+            DropBehavior::Restrict => query.push_str(" RESTRICT"),
+            DropBehavior::Default => {} // No keyword for default behavior
+        }
+    }
+
     log::trace!("exec_drop_table: query:\n{query}");
 
     connection

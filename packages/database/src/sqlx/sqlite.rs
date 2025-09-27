@@ -1400,6 +1400,21 @@ async fn sqlite_sqlx_exec_drop_table(
     connection: &mut SqliteConnection,
     statement: &crate::schema::DropTableStatement<'_>,
 ) -> Result<(), SqlxDatabaseError> {
+    #[cfg(feature = "cascade")]
+    {
+        use crate::schema::DropBehavior;
+        match statement.behavior {
+            DropBehavior::Cascade => {
+                return sqlite_sqlx_exec_drop_table_cascade(connection, statement).await;
+            }
+            DropBehavior::Restrict => {
+                return sqlite_sqlx_exec_drop_table_restrict(connection, statement).await;
+            }
+            DropBehavior::Default => {} // Fall through to basic DROP TABLE
+        }
+    }
+
+    // Basic DROP TABLE without CASCADE/RESTRICT
     let mut query = "DROP TABLE ".to_string();
 
     if statement.if_exists {
@@ -1410,6 +1425,201 @@ async fn sqlite_sqlx_exec_drop_table(
 
     connection
         .execute(sqlx::raw_sql(&query))
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+/// Implement manual CASCADE for `SQLite` using `SQLx` with internal FK helpers
+#[cfg(all(feature = "schema", feature = "cascade"))]
+async fn sqlite_sqlx_exec_drop_table_cascade(
+    connection: &mut SqliteConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    // Get all tables that need to be dropped (dependents first, then target)
+    let drop_order = sqlite_sqlx_find_cascade_dependents(connection, statement.table_name).await?;
+
+    // Enable foreign key enforcement temporarily for consistency
+    let fk_enabled = sqlite_sqlx_get_foreign_key_state(connection).await?;
+    sqlite_sqlx_set_foreign_key_state(connection, true).await?;
+
+    let result = async {
+        // Drop all dependent tables first, then the target table
+        for table_to_drop in &drop_order {
+            let mut query = "DROP TABLE ".to_string();
+            if statement.if_exists {
+                query.push_str("IF EXISTS ");
+            }
+            query.push_str(table_to_drop);
+
+            connection
+                .execute(sqlx::raw_sql(&query))
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+        }
+        Ok::<_, SqlxDatabaseError>(())
+    }
+    .await;
+
+    // Restore original foreign key state
+    sqlite_sqlx_set_foreign_key_state(connection, fk_enabled).await?;
+
+    result
+}
+
+/// Implement manual RESTRICT for `SQLite` using `SQLx` with internal FK helpers
+#[cfg(all(feature = "schema", feature = "cascade"))]
+async fn sqlite_sqlx_exec_drop_table_restrict(
+    connection: &mut SqliteConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
+    // Check if table has any dependents - if so, fail
+    if sqlite_sqlx_has_dependents(connection, statement.table_name).await? {
+        return Err(SqlxDatabaseError::InvalidRequest);
+    }
+
+    // No dependents, proceed with normal drop
+    let mut query = "DROP TABLE ".to_string();
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+    query.push_str(statement.table_name);
+
+    connection
+        .execute(sqlx::raw_sql(&query))
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+/// Find all tables that depend on the given table (for CASCADE)
+#[cfg(all(feature = "schema", feature = "cascade"))]
+async fn sqlite_sqlx_find_cascade_dependents(
+    connection: &mut SqliteConnection,
+    table_name: &str,
+) -> Result<Vec<String>, SqlxDatabaseError> {
+    let mut all_dependents = std::collections::BTreeSet::new();
+    let mut to_check = vec![table_name.to_string()];
+    let mut checked = std::collections::BTreeSet::new();
+
+    while let Some(current_table) = to_check.pop() {
+        if !checked.insert(current_table.clone()) {
+            continue;
+        }
+
+        // Get all tables using query
+        let table_rows = sqlx::query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+        )
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+        for table_row in table_rows {
+            let check_table: String = table_row.get(0);
+
+            if check_table == current_table {
+                continue;
+            }
+
+            // Validate table name for PRAGMA (cannot be parameterized)
+            crate::schema::dependencies::validate_table_name_for_pragma(&check_table)
+                .map_err(|_| SqlxDatabaseError::InvalidRequest)?;
+
+            let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+            let fk_rows = sqlx::query(&fk_query)
+                .fetch_all(&mut *connection)
+                .await
+                .map_err(SqlxDatabaseError::Sqlx)?;
+
+            for fk_row in fk_rows {
+                let ref_table: String = fk_row.get(2); // Column 2 is referenced table
+                if ref_table == current_table {
+                    all_dependents.insert(check_table.clone());
+                    to_check.push(check_table.clone());
+                    break;
+                }
+            }
+        }
+    }
+
+    // Build proper drop order (dependents first)
+    let mut drop_order: Vec<String> = all_dependents.into_iter().collect();
+    drop_order.push(table_name.to_string());
+
+    Ok(drop_order)
+}
+
+/// Check if a table has any dependents (for RESTRICT)
+#[cfg(all(feature = "schema", feature = "cascade"))]
+async fn sqlite_sqlx_has_dependents(
+    connection: &mut SqliteConnection,
+    table_name: &str,
+) -> Result<bool, SqlxDatabaseError> {
+    let table_rows = sqlx::query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+    )
+    .fetch_all(&mut *connection)
+    .await
+    .map_err(SqlxDatabaseError::Sqlx)?;
+
+    for table_row in table_rows {
+        let check_table: String = table_row.get(0);
+
+        if check_table == table_name {
+            continue;
+        }
+
+        crate::schema::dependencies::validate_table_name_for_pragma(&check_table)
+            .map_err(|_| SqlxDatabaseError::InvalidRequest)?;
+
+        let fk_query = format!("PRAGMA foreign_key_list({check_table})");
+        let fk_rows = sqlx::query(&fk_query)
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(SqlxDatabaseError::Sqlx)?;
+
+        for fk_row in fk_rows {
+            let ref_table: String = fk_row.get(2); // Column 2 is referenced table
+            if ref_table == table_name {
+                return Ok(true);
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Get current foreign key enforcement state
+#[cfg(all(feature = "schema", feature = "cascade"))]
+async fn sqlite_sqlx_get_foreign_key_state(
+    connection: &mut SqliteConnection,
+) -> Result<bool, SqlxDatabaseError> {
+    let row = sqlx::query("PRAGMA foreign_keys")
+        .fetch_one(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    let enabled: i64 = row.get(0);
+    Ok(enabled != 0)
+}
+
+/// Set foreign key enforcement state
+#[cfg(all(feature = "schema", feature = "cascade"))]
+async fn sqlite_sqlx_set_foreign_key_state(
+    connection: &mut SqliteConnection,
+    enabled: bool,
+) -> Result<(), SqlxDatabaseError> {
+    let pragma = if enabled {
+        "PRAGMA foreign_keys = ON"
+    } else {
+        "PRAGMA foreign_keys = OFF"
+    };
+
+    sqlx::query(pragma)
+        .execute(&mut *connection)
         .await
         .map_err(SqlxDatabaseError::Sqlx)?;
 

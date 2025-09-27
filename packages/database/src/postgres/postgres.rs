@@ -1681,6 +1681,16 @@ async fn postgres_exec_drop_table(
 
     query.push_str(statement.table_name);
 
+    #[cfg(feature = "cascade")]
+    {
+        use crate::schema::DropBehavior;
+        match statement.behavior {
+            DropBehavior::Cascade => query.push_str(" CASCADE"),
+            DropBehavior::Restrict => query.push_str(" RESTRICT"),
+            DropBehavior::Default => {} // No keyword for default behavior
+        }
+    }
+
     client
         .execute_raw(&query, &[] as &[&str])
         .await

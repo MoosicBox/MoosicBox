@@ -2865,6 +2865,279 @@ macro_rules! generate_cascade_tests {
                 .await
                 .ok();
         }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_cascade_drop_execution() {
+            let Some(db) = setup_db().await else {
+                return;
+            };
+            let db = &**db;
+
+            // Generate unique table names for this test
+            let suffix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                % 1_000_000_000;
+            let users_table = format!("cascade_users_{suffix}");
+            let posts_table = format!("cascade_posts_{suffix}");
+            let comments_table = format!("cascade_comments_{suffix}");
+
+            // Drop tables if they exist (cleanup from previous runs)
+            db.drop_table(&comments_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&posts_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&users_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+
+            // Create dependency chain: users -> posts -> comments
+            db.create_table(&users_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "name".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&posts_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "user_id".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "title".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("user_id", &format!("{users_table}(id)")))
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&comments_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "post_id".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "content".to_string(),
+                    nullable: true,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("post_id", &format!("{posts_table}(id)")))
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Insert test data
+            db.insert(&users_table)
+                .value("id", 1)
+                .value("name", "Alice")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.insert(&posts_table)
+                .value("id", 1)
+                .value("user_id", 1)
+                .value("title", "My Post")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.insert(&comments_table)
+                .value("id", 1)
+                .value("post_id", 1)
+                .value("content", "Great post!")
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Verify all tables exist and have data
+            assert!(db.table_exists(&users_table).await.unwrap());
+            assert!(db.table_exists(&posts_table).await.unwrap());
+            assert!(db.table_exists(&comments_table).await.unwrap());
+
+            let users_count = db.select(&users_table).execute(db).await.unwrap().len();
+            let posts_count = db.select(&posts_table).execute(db).await.unwrap().len();
+            let comments_count = db.select(&comments_table).execute(db).await.unwrap().len();
+
+            assert_eq!(users_count, 1);
+            assert_eq!(posts_count, 1);
+            assert_eq!(comments_count, 1);
+
+            // Execute CASCADE drop on users table - should drop all dependent tables
+            db.drop_table(&users_table)
+                .cascade()
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Verify all tables were dropped
+            assert!(!db.table_exists(&users_table).await.unwrap());
+            assert!(!db.table_exists(&posts_table).await.unwrap());
+            assert!(!db.table_exists(&comments_table).await.unwrap());
+        }
+
+        #[test_log::test(switchy_async::test(no_simulator))]
+        async fn test_restrict_drop_execution() {
+            let Some(db) = setup_db().await else {
+                return;
+            };
+            let db = &**db;
+
+            // Generate unique table names for this test
+            let suffix = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+                % 1_000_000_000;
+            let parent_table = format!("restrict_parent_exec_{suffix}");
+            let child_table = format!("restrict_child_exec_{suffix}");
+
+            // Drop tables if they exist (cleanup from previous runs)
+            db.drop_table(&child_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+            db.drop_table(&parent_table)
+                .if_exists(true)
+                .execute(db)
+                .await
+                .ok();
+
+            // Create parent -> child relationship
+            db.create_table(&parent_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "name".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::Text,
+                    default: None,
+                })
+                .primary_key("id")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.create_table(&child_table)
+                .column(Column {
+                    name: "id".to_string(),
+                    nullable: false,
+                    auto_increment: true,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .column(Column {
+                    name: "parent_id".to_string(),
+                    nullable: false,
+                    auto_increment: false,
+                    data_type: DataType::BigInt,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("parent_id", &format!("{parent_table}(id)")))
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Insert test data
+            db.insert(&parent_table)
+                .value("id", 1)
+                .value("name", "Parent")
+                .execute(db)
+                .await
+                .unwrap();
+
+            db.insert(&child_table)
+                .value("id", 1)
+                .value("parent_id", 1)
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Verify tables exist and have data
+            assert!(db.table_exists(&parent_table).await.unwrap());
+            assert!(db.table_exists(&child_table).await.unwrap());
+
+            // RESTRICT should fail when dependents exist
+            let restrict_result = db.drop_table(&parent_table).restrict().execute(db).await;
+            assert!(restrict_result.is_err());
+
+            // Tables should still exist after failed RESTRICT
+            assert!(db.table_exists(&parent_table).await.unwrap());
+            assert!(db.table_exists(&child_table).await.unwrap());
+
+            // Remove the dependent first
+            db.drop_table(&child_table).execute(db).await.unwrap();
+
+            // Now RESTRICT should succeed
+            db.drop_table(&parent_table)
+                .restrict()
+                .execute(db)
+                .await
+                .unwrap();
+
+            // Verify tables were dropped
+            assert!(!db.table_exists(&parent_table).await.unwrap());
+            assert!(!db.table_exists(&child_table).await.unwrap());
+        }
     };
 }
 
