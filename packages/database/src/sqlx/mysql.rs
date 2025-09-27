@@ -1412,7 +1412,7 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
                     CAST(kcu.TABLE_NAME AS CHAR) as dependent_table,
                     1 as level
                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-                WHERE kcu.REFERENCED_TABLE_NAME = '{table_name}'
+                WHERE kcu.REFERENCED_TABLE_NAME = '{}'
                     AND kcu.TABLE_SCHEMA = DATABASE()
 
                 UNION ALL
@@ -1428,7 +1428,8 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
             FROM dependent_tables
             GROUP BY dependent_table
             ORDER BY max_level DESC, dependent_table
-            "
+            ",
+            sanitize_value(table_name)
         );
 
         let rows = self.query_raw(&recursive_query).await?;
@@ -1450,11 +1451,12 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
             SELECT EXISTS (
                 SELECT 1
                 FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-                WHERE REFERENCED_TABLE_NAME = '{table_name}'
+                WHERE REFERENCED_TABLE_NAME = '{}'
                     AND TABLE_SCHEMA = DATABASE()
                 LIMIT 1
             ) as has_dependents
-            "
+            ",
+            sanitize_value(table_name)
         );
 
         let rows = self.query_raw(&query).await?;
@@ -1481,9 +1483,10 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
             r"
             SELECT DISTINCT CAST(TABLE_NAME AS CHAR) AS TABLE_NAME
             FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-            WHERE REFERENCED_TABLE_NAME = '{table_name}'
+            WHERE REFERENCED_TABLE_NAME = '{}'
                 AND TABLE_SCHEMA = DATABASE()
-            "
+            ",
+            sanitize_value(table_name)
         );
 
         let rows = self.query_raw(&query).await?;
@@ -1497,6 +1500,11 @@ impl crate::DatabaseTransaction for MysqlSqlxTransaction {
 
         Ok(dependents)
     }
+}
+
+#[cfg(feature = "cascade")]
+fn sanitize_value(identifier: &str) -> String {
+    identifier.replace('\'', "''")
 }
 
 #[cfg(feature = "schema")]

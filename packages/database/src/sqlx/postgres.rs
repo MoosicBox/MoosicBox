@@ -1499,7 +1499,7 @@ impl crate::DatabaseTransaction for PostgresSqlxTransaction {
                     ON ccu.constraint_name = tc.constraint_name
                     AND ccu.table_schema = tc.table_schema
                 WHERE tc.constraint_type = 'FOREIGN KEY'
-                    AND ccu.table_name = '{table_name}'
+                    AND ccu.table_name = '{}'
                     AND tc.table_schema = current_schema()
 
                 UNION
@@ -1522,7 +1522,8 @@ impl crate::DatabaseTransaction for PostgresSqlxTransaction {
             SELECT dependent_table
             FROM dependent_tables
             ORDER BY level DESC, dependent_table
-            "
+            ",
+            sanitize_value(table_name)
         );
 
         let rows = self.query_raw(&query).await?;
@@ -1556,11 +1557,12 @@ impl crate::DatabaseTransaction for PostgresSqlxTransaction {
                     ON ccu.constraint_name = tc.constraint_name
                     AND ccu.table_schema = tc.table_schema
                 WHERE tc.constraint_type = 'FOREIGN KEY'
-                    AND ccu.table_name = '{table_name}'
+                    AND ccu.table_name = '{}'
                     AND tc.table_schema = current_schema()
                 LIMIT 1
             ) as has_dependents
-            "
+            ",
+            sanitize_value(table_name)
         );
 
         let rows = self.query_raw(&query).await?;
@@ -1591,9 +1593,10 @@ impl crate::DatabaseTransaction for PostgresSqlxTransaction {
                 ON ccu.constraint_name = tc.constraint_name
                 AND ccu.table_schema = tc.table_schema
                 WHERE tc.constraint_type = 'FOREIGN KEY'
-                    AND ccu.table_name = '{table_name}'
+                    AND ccu.table_name = '{}'
                     AND tc.table_schema = current_schema()
-            "
+            ",
+            sanitize_value(table_name)
         );
 
         let rows = self.query_raw(&query).await?;
@@ -2396,14 +2399,21 @@ fn build_values_props(values: &[(&str, Box<dyn Expression>)], index: &AtomicU16)
         .collect()
 }
 
+#[cfg(feature = "cascade")]
+fn sanitize_value(identifier: &str) -> String {
+    identifier.replace('\'', "''")
+}
+
 fn format_identifier(identifier: &str) -> String {
     static NON_ALPHA_NUMERIC_REGEX: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r"[^A-Za-z0-9_]").expect("Invalid Regex"));
 
-    if NON_ALPHA_NUMERIC_REGEX.is_match(identifier) {
+    if identifier == "*" {
         identifier.to_string()
-    } else {
+    } else if NON_ALPHA_NUMERIC_REGEX.is_match(identifier) {
         format!("\"{identifier}\"")
+    } else {
+        identifier.to_string()
     }
 }
 
