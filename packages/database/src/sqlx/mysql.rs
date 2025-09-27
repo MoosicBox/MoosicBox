@@ -511,6 +511,25 @@ impl Database for MySqlSqlxDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        #[cfg(feature = "cascade")]
+        {
+            use crate::schema::DropBehavior;
+            if matches!(
+                statement.behavior,
+                DropBehavior::Cascade | DropBehavior::Restrict
+            ) {
+                let tx = self.begin_transaction().await?;
+                let result = tx.exec_drop_table(statement).await;
+                return match result {
+                    Ok(()) => tx.commit().await,
+                    Err(e) => {
+                        let _ = tx.rollback().await;
+                        Err(e)
+                    }
+                };
+            }
+        }
+
         let pool = self.connection.lock().await;
         let mut connection = pool.acquire().await.map_err(SqlxDatabaseError::Sqlx)?;
 
@@ -1011,6 +1030,20 @@ impl Database for MysqlSqlxTransaction {
         let tx = transaction_guard
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
+
+        #[cfg(feature = "cascade")]
+        {
+            use crate::schema::DropBehavior;
+            match statement.behavior {
+                DropBehavior::Cascade => {
+                    return mysql_sqlx_exec_drop_table_cascade(&mut *tx, statement).await;
+                }
+                DropBehavior::Restrict => {
+                    return mysql_sqlx_exec_drop_table_restrict(&mut *tx, statement).await;
+                }
+                DropBehavior::Default => {}
+            }
+        }
 
         mysql_sqlx_exec_drop_table(&mut *tx, statement).await?;
 
@@ -1664,8 +1697,112 @@ async fn mysql_sqlx_exec_create_table(
     Ok(())
 }
 
+// Helper functions for CASCADE support using iterative approach and FK disable/enable
+#[cfg(feature = "cascade")]
+async fn mysql_sqlx_get_direct_dependents(
+    connection: &mut MySqlConnection,
+    table_name: &str,
+) -> Result<Vec<String>, SqlxDatabaseError> {
+    let query = r"
+        SELECT DISTINCT CAST(TABLE_NAME AS CHAR) AS TABLE_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE REFERENCED_TABLE_SCHEMA = DATABASE()
+            AND REFERENCED_TABLE_NAME = ?
+    ";
+
+    let rows: Vec<(String,)> = sqlx::query_as(query)
+        .bind(table_name)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[cfg(feature = "cascade")]
+async fn mysql_sqlx_exec_drop_table_cascade(
+    connection: &mut MySqlConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    // Iterative collection
+    let mut to_drop = Vec::new();
+    let mut to_check = vec![statement.table_name.to_string()];
+    let mut visited = std::collections::BTreeSet::new();
+
+    while let Some(table) = to_check.pop() {
+        if !visited.insert(table.clone()) {
+            continue;
+        }
+
+        let dependents = mysql_sqlx_get_direct_dependents(connection, &table)
+            .await
+            .map_err(DatabaseError::MysqlSqlx)?;
+
+        for dependent in dependents {
+            if !visited.contains(&dependent) {
+                to_check.push(dependent);
+            }
+        }
+
+        to_drop.push(table);
+    }
+
+    to_drop.reverse();
+
+    // Always disable FK checks for CASCADE
+    connection
+        .execute("SET FOREIGN_KEY_CHECKS=0")
+        .await
+        .map_err(|e| DatabaseError::MysqlSqlx(SqlxDatabaseError::Sqlx(e)))?;
+
+    for table in to_drop {
+        let sql = format!(
+            "DROP TABLE {}{}",
+            if statement.if_exists {
+                "IF EXISTS "
+            } else {
+                ""
+            },
+            table
+        );
+        connection
+            .execute(sql.as_str())
+            .await
+            .map_err(|e| DatabaseError::MysqlSqlx(SqlxDatabaseError::Sqlx(e)))?;
+    }
+
+    connection
+        .execute("SET FOREIGN_KEY_CHECKS=1")
+        .await
+        .map_err(|e| DatabaseError::MysqlSqlx(SqlxDatabaseError::Sqlx(e)))?;
+
+    Ok(())
+}
+
+#[cfg(feature = "cascade")]
+async fn mysql_sqlx_exec_drop_table_restrict(
+    connection: &mut MySqlConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    let dependents = mysql_sqlx_get_direct_dependents(connection, statement.table_name)
+        .await
+        .map_err(DatabaseError::MysqlSqlx)?;
+
+    if !dependents.is_empty() {
+        return Err(DatabaseError::InvalidQuery(format!(
+            "Cannot drop table '{}': has dependent tables",
+            statement.table_name
+        )));
+    }
+
+    // Call basic version to avoid recursion
+    mysql_sqlx_exec_drop_table_basic(connection, statement)
+        .await
+        .map_err(Into::into)
+}
+
 #[cfg(feature = "schema")]
-async fn mysql_sqlx_exec_drop_table(
+async fn mysql_sqlx_exec_drop_table_basic(
     connection: &mut MySqlConnection,
     statement: &crate::schema::DropTableStatement<'_>,
 ) -> Result<(), SqlxDatabaseError> {
@@ -1677,15 +1814,56 @@ async fn mysql_sqlx_exec_drop_table(
 
     query.push_str(statement.table_name);
 
+    log::trace!("exec_drop_table: query:\n{query}");
+
+    connection
+        .execute(query.as_str())
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn mysql_sqlx_exec_drop_table(
+    connection: &mut MySqlConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
     #[cfg(feature = "cascade")]
     {
         use crate::schema::DropBehavior;
         match statement.behavior {
-            DropBehavior::Cascade => query.push_str(" CASCADE"),
-            DropBehavior::Restrict => query.push_str(" RESTRICT"),
-            DropBehavior::Default => {} // No keyword for default behavior
+            DropBehavior::Cascade => {
+                return mysql_sqlx_exec_drop_table_cascade(connection, statement)
+                    .await
+                    .map_err(|e| match e {
+                        DatabaseError::MysqlSqlx(mysql_err) => mysql_err,
+                        _ => SqlxDatabaseError::Sqlx(sqlx::Error::Protocol(format!(
+                            "CASCADE operation failed: {e}"
+                        ))),
+                    });
+            }
+            DropBehavior::Restrict => {
+                return mysql_sqlx_exec_drop_table_restrict(connection, statement)
+                    .await
+                    .map_err(|e| match e {
+                        DatabaseError::MysqlSqlx(mysql_err) => mysql_err,
+                        _ => SqlxDatabaseError::Sqlx(sqlx::Error::Protocol(format!(
+                            "RESTRICT operation failed: {e}"
+                        ))),
+                    });
+            }
+            DropBehavior::Default => {}
         }
     }
+
+    let mut query = "DROP TABLE ".to_string();
+
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
 
     log::trace!("exec_drop_table: query:\n{query}");
 

@@ -576,6 +576,25 @@ impl Database for PostgresSqlxDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        #[cfg(feature = "cascade")]
+        {
+            use crate::schema::DropBehavior;
+            if matches!(
+                statement.behavior,
+                DropBehavior::Cascade | DropBehavior::Restrict
+            ) {
+                let tx = self.begin_transaction().await?;
+                let result = tx.exec_drop_table(statement).await;
+                return match result {
+                    Ok(()) => tx.commit().await,
+                    Err(e) => {
+                        let _ = tx.rollback().await;
+                        Err(e)
+                    }
+                };
+            }
+        }
+
         postgres_sqlx_exec_drop_table(
             self.get_connection().await?.lock().await.as_mut(),
             statement,
@@ -1094,6 +1113,20 @@ impl Database for PostgresSqlxTransaction {
         let tx = transaction_guard
             .as_mut()
             .ok_or(DatabaseError::TransactionCommitted)?;
+
+        #[cfg(feature = "cascade")]
+        {
+            use crate::schema::DropBehavior;
+            match statement.behavior {
+                DropBehavior::Cascade => {
+                    return postgres_sqlx_exec_drop_table_cascade(&mut *tx, statement).await;
+                }
+                DropBehavior::Restrict => {
+                    return postgres_sqlx_exec_drop_table_restrict(&mut *tx, statement).await;
+                }
+                DropBehavior::Default => {}
+            }
+        }
 
         postgres_sqlx_exec_drop_table(&mut *tx, statement).await?;
 
@@ -1786,7 +1819,107 @@ async fn postgres_sqlx_exec_create_table(
 }
 
 #[cfg(feature = "schema")]
-async fn postgres_sqlx_exec_drop_table(
+// Helper functions for CASCADE support using iterative approach
+#[cfg(feature = "cascade")]
+async fn postgres_sqlx_get_direct_dependents(
+    connection: &mut PgConnection,
+    table_name: &str,
+) -> Result<Vec<String>, SqlxDatabaseError> {
+    let query = r"
+        SELECT DISTINCT tc.table_name
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage AS ccu
+            ON ccu.constraint_name = tc.constraint_name
+            AND ccu.table_schema = tc.table_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND ccu.table_name = $1
+            AND tc.table_schema = 'public'
+    ";
+
+    let rows: Vec<(String,)> = sqlx::query_as(query)
+        .bind(table_name)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[cfg(feature = "cascade")]
+async fn postgres_sqlx_exec_drop_table_cascade(
+    connection: &mut PgConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    // Iterative collection of dependent tables
+    let mut to_drop = Vec::new();
+    let mut to_check = vec![statement.table_name.to_string()];
+    let mut visited = std::collections::BTreeSet::new();
+
+    while let Some(table) = to_check.pop() {
+        if !visited.insert(table.clone()) {
+            continue;
+        }
+
+        let dependents = postgres_sqlx_get_direct_dependents(connection, &table)
+            .await
+            .map_err(DatabaseError::PostgresSqlx)?;
+
+        for dependent in dependents {
+            if !visited.contains(&dependent) {
+                to_check.push(dependent);
+            }
+        }
+
+        to_drop.push(table);
+    }
+
+    // Reverse to get dependents first
+    to_drop.reverse();
+
+    for table in to_drop {
+        let sql = format!(
+            "DROP TABLE {}{}",
+            if statement.if_exists {
+                "IF EXISTS "
+            } else {
+                ""
+            },
+            table
+        );
+        connection
+            .execute(sql.as_str())
+            .await
+            .map_err(|e| DatabaseError::PostgresSqlx(SqlxDatabaseError::Sqlx(e)))?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "cascade")]
+async fn postgres_sqlx_exec_drop_table_restrict(
+    connection: &mut PgConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    let dependents = postgres_sqlx_get_direct_dependents(connection, statement.table_name)
+        .await
+        .map_err(DatabaseError::PostgresSqlx)?;
+
+    if !dependents.is_empty() {
+        return Err(DatabaseError::InvalidQuery(format!(
+            "Cannot drop table '{}': has dependent tables",
+            statement.table_name
+        )));
+    }
+
+    // Call basic version to avoid recursion
+    postgres_sqlx_exec_drop_table_basic(connection, statement)
+        .await
+        .map_err(Into::into)
+}
+
+async fn postgres_sqlx_exec_drop_table_basic(
     connection: &mut PgConnection,
     statement: &crate::schema::DropTableStatement<'_>,
 ) -> Result<(), SqlxDatabaseError> {
@@ -1798,15 +1931,55 @@ async fn postgres_sqlx_exec_drop_table(
 
     query.push_str(statement.table_name);
 
+    log::trace!("exec_drop_table: query:\n{query}");
+
+    connection
+        .execute(query.as_str())
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(())
+}
+
+async fn postgres_sqlx_exec_drop_table(
+    connection: &mut PgConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), SqlxDatabaseError> {
     #[cfg(feature = "cascade")]
     {
         use crate::schema::DropBehavior;
         match statement.behavior {
-            DropBehavior::Cascade => query.push_str(" CASCADE"),
-            DropBehavior::Restrict => query.push_str(" RESTRICT"),
-            DropBehavior::Default => {} // No keyword for default behavior
+            DropBehavior::Cascade => {
+                return postgres_sqlx_exec_drop_table_cascade(connection, statement)
+                    .await
+                    .map_err(|e| match e {
+                        DatabaseError::PostgresSqlx(pg_err) => pg_err,
+                        _ => SqlxDatabaseError::Sqlx(sqlx::Error::Protocol(format!(
+                            "CASCADE operation failed: {e}"
+                        ))),
+                    });
+            }
+            DropBehavior::Restrict => {
+                return postgres_sqlx_exec_drop_table_restrict(connection, statement)
+                    .await
+                    .map_err(|e| match e {
+                        DatabaseError::PostgresSqlx(pg_err) => pg_err,
+                        _ => SqlxDatabaseError::Sqlx(sqlx::Error::Protocol(format!(
+                            "RESTRICT operation failed: {e}"
+                        ))),
+                    });
+            }
+            DropBehavior::Default => {}
         }
     }
+
+    let mut query = "DROP TABLE ".to_string();
+
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
 
     log::trace!("exec_drop_table: query:\n{query}");
 

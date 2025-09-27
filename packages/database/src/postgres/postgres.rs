@@ -486,6 +486,25 @@ impl Database for PostgresDatabase {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        #[cfg(feature = "cascade")]
+        {
+            use crate::schema::DropBehavior;
+            if matches!(
+                statement.behavior,
+                DropBehavior::Cascade | DropBehavior::Restrict
+            ) {
+                let tx = self.begin_transaction().await?;
+                let result = tx.exec_drop_table(statement).await;
+                return match result {
+                    Ok(()) => tx.commit().await,
+                    Err(e) => {
+                        let _ = tx.rollback().await;
+                        Err(e)
+                    }
+                };
+            }
+        }
+
         let client = self.get_client().await?;
         postgres_exec_drop_table(&client, statement)
             .await
@@ -954,6 +973,22 @@ impl Database for PostgresTransaction {
         &self,
         statement: &crate::schema::DropTableStatement<'_>,
     ) -> Result<(), DatabaseError> {
+        #[cfg(feature = "cascade")]
+        {
+            use crate::schema::DropBehavior;
+            match statement.behavior {
+                DropBehavior::Cascade => {
+                    let client = self.client.lock().await;
+                    return postgres_exec_drop_table_cascade(&client, statement).await;
+                }
+                DropBehavior::Restrict => {
+                    let client = self.client.lock().await;
+                    return postgres_exec_drop_table_restrict(&client, statement).await;
+                }
+                DropBehavior::Default => {}
+            }
+        }
+
         postgres_exec_drop_table(&*self.client.lock().await, statement)
             .await
             .map_err(Into::into)
@@ -1668,8 +1703,111 @@ async fn postgres_exec_create_table(
     Ok(())
 }
 
+// Helper functions for CASCADE support - return DatabaseError for flexibility
+#[cfg(feature = "cascade")]
+async fn postgres_get_direct_dependents(
+    client: &tokio_postgres::Client,
+    table_name: &str,
+) -> Result<Vec<String>, PostgresDatabaseError> {
+    let query = r"
+        SELECT DISTINCT tc.table_name
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage AS ccu
+            ON ccu.constraint_name = tc.constraint_name
+            AND ccu.table_schema = tc.table_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND ccu.table_name = $1
+            AND tc.table_schema = 'public'
+    ";
+
+    let rows = client
+        .query(query, &[&table_name])
+        .await
+        .map_err(PostgresDatabaseError::Postgres)?;
+
+    Ok(rows
+        .iter()
+        .filter_map(|row| row.try_get::<_, String>(0).ok())
+        .collect())
+}
+
+#[cfg(feature = "cascade")]
+async fn postgres_exec_drop_table_cascade(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    // Iterative approach to collect all dependent tables
+    let mut to_drop = Vec::new();
+    let mut to_check = vec![statement.table_name.to_string()];
+    let mut visited = std::collections::BTreeSet::new();
+
+    while let Some(table) = to_check.pop() {
+        if !visited.insert(table.clone()) {
+            continue;
+        }
+
+        let dependents = postgres_get_direct_dependents(client, &table)
+            .await
+            .map_err(DatabaseError::Postgres)?;
+
+        for dependent in dependents {
+            if !visited.contains(&dependent) {
+                to_check.push(dependent);
+            }
+        }
+
+        to_drop.push(table);
+    }
+
+    // to_drop is now in order: parent first, dependents after
+    // Reverse to get dependents first for dropping
+    to_drop.reverse();
+
+    for table in to_drop {
+        let sql = format!(
+            "DROP TABLE {}{}",
+            if statement.if_exists {
+                "IF EXISTS "
+            } else {
+                ""
+            },
+            table
+        );
+        client
+            .execute_raw(&sql, &[] as &[&str])
+            .await
+            .map_err(|e| DatabaseError::Postgres(PostgresDatabaseError::Postgres(e)))?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "cascade")]
+async fn postgres_exec_drop_table_restrict(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    let dependents = postgres_get_direct_dependents(client, statement.table_name)
+        .await
+        .map_err(DatabaseError::Postgres)?;
+
+    if !dependents.is_empty() {
+        return Err(DatabaseError::InvalidQuery(format!(
+            "Cannot drop table '{}': has dependent tables",
+            statement.table_name
+        )));
+    }
+
+    // Call basic version to avoid recursion
+    postgres_exec_drop_table_basic(client, statement)
+        .await
+        .map_err(Into::into)
+}
+
 #[cfg(feature = "schema")]
-async fn postgres_exec_drop_table(
+async fn postgres_exec_drop_table_basic(
     client: &tokio_postgres::Client,
     statement: &crate::schema::DropTableStatement<'_>,
 ) -> Result<(), PostgresDatabaseError> {
@@ -1681,15 +1819,50 @@ async fn postgres_exec_drop_table(
 
     query.push_str(statement.table_name);
 
+    client
+        .execute_raw(&query, &[] as &[&str])
+        .await
+        .map_err(PostgresDatabaseError::Postgres)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "schema")]
+async fn postgres_exec_drop_table(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), PostgresDatabaseError> {
     #[cfg(feature = "cascade")]
     {
         use crate::schema::DropBehavior;
         match statement.behavior {
-            DropBehavior::Cascade => query.push_str(" CASCADE"),
-            DropBehavior::Restrict => query.push_str(" RESTRICT"),
-            DropBehavior::Default => {} // No keyword for default behavior
+            DropBehavior::Cascade => {
+                return postgres_exec_drop_table_cascade(client, statement)
+                    .await
+                    .map_err(|e| match e {
+                        DatabaseError::Postgres(pg_err) => pg_err,
+                        _ => PostgresDatabaseError::InvalidRequest,
+                    });
+            }
+            DropBehavior::Restrict => {
+                return postgres_exec_drop_table_restrict(client, statement)
+                    .await
+                    .map_err(|e| match e {
+                        DatabaseError::Postgres(pg_err) => pg_err,
+                        _ => PostgresDatabaseError::InvalidRequest,
+                    });
+            }
+            DropBehavior::Default => {}
         }
     }
+
+    let mut query = "DROP TABLE ".to_string();
+
+    if statement.if_exists {
+        query.push_str("IF EXISTS ");
+    }
+
+    query.push_str(statement.table_name);
 
     client
         .execute_raw(&query, &[] as &[&str])

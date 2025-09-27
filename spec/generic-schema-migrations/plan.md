@@ -12143,16 +12143,20 @@ impl CycleDetector {
 - ~~[ ] Unit tests for complex cycle scenarios~~ ✅ **Already implemented and passing**
 - ~~[ ] Performance tests for large dependency graphs~~ ✅ **O(V+E) complexity already optimal**
 
-### 15.2 CASCADE Support for DropTableStatement - FINAL VERIFIED SPECIFICATION
+### 15.2 CASCADE Support for DropTableStatement ✅ **COMPLETED**
 
 **Overview**
-Phase 15.2 implements proper CASCADE/RESTRICT behavior with each database backend handling DROP TABLE operations according to its native capabilities. PostgreSQL and MySQL will use native SQL CASCADE/RESTRICT keywords, while SQLite implements manual cascade logic.
+Phase 15.2 implements proper CASCADE/RESTRICT behavior with manual dependency discovery for all database backends. Initial plan to use native PostgreSQL/MySQL CASCADE keywords was revised when testing revealed they only drop constraints, not dependent tables. All backends now use manual implementation for consistent behavior.
 
-**Design Principles**
-1. Each backend handles CASCADE/RESTRICT internally
+**Final Design Principles (Revised)**
+1. Each backend handles CASCADE/RESTRICT internally using manual dependency discovery
 2. No generic CASCADE logic in `schema/mod.rs`
-3. CASCADE/RESTRICT operations always use transactions for SQLite
+3. CASCADE/RESTRICT operations always use transactions for atomicity
 4. Each step must compile independently with no unused code
+5. **All backends use manual implementation** - Native CASCADE keywords insufficient
+
+**⚠️ Implementation Note:**
+Original plan to use native PostgreSQL/MySQL CASCADE was revised during Phase 15.2.5 when testing revealed that native CASCADE only drops foreign key constraints, not the dependent tables themselves. Manual implementation was required for all backends to achieve consistent behavior.
 
 #### 15.2.1 Update SQL Generation for Native CASCADE
 
@@ -12484,6 +12488,10 @@ Simplified DropTableStatement::execute() from complex generic logic to simple de
 
 Added test_cascade_drop_execution and test_restrict_drop_execution tests that create dependency chains and verify actual CASCADE/RESTRICT execution.
 
+- [x] 15.2.5: `cargo test -p switchy_database --features cascade,postgres-sqlx,mysql-sqlx test_cascade_drop_execution` - Tests now pass
+
+Fixed PostgreSQL and MySQL CASCADE implementation to actually drop dependent tables (not just constraints) by implementing manual dependency discovery and iterative table dropping. All backends now provide consistent CASCADE behavior.
+
 **Feature compatibility:**
 - [x] `cargo build -p switchy_database --no-default-features --features postgres-raw,postgres-sqlx,mysql-sqlx,sqlite-rusqlite,sqlite-sqlx` (without CASCADE feature) - Still compiles
 
@@ -12506,8 +12514,401 @@ Fixed all clippy issues: doc_markdown backticks, uninlined_format_args, and unne
 4. **Feature gating correct:** Code that accesses `behavior` field is properly gated
 5. **All steps compile independently** with no forward dependencies or unused code
 
-This ensures CASCADE operations work identically across all backends from the user's perspective, while leveraging native database capabilities where available for optimal performance.
+**Phase 15.2 Summary ✅ COMPLETED:**
+Phase 15.2 successfully implements consistent CASCADE behavior across all database backends. While initially planned to use native CASCADE keywords for PostgreSQL/MySQL, testing revealed these only affect foreign key constraints, not table existence. The final implementation uses manual dependency discovery and iterative table dropping for all backends, ensuring that CASCADE operations drop dependent tables consistently regardless of the underlying database.
 
+#### 15.2.5 Manual CASCADE Implementation for PostgreSQL and MySQL ✅ **COMPLETED**
+
+**Purpose:** Native PostgreSQL and MySQL CASCADE keywords don't drop dependent tables (only constraints). Implement manual CASCADE logic for consistent behavior across all databases.
+
+**Root Cause Analysis:**
+- PostgreSQL's `DROP TABLE CASCADE` only drops foreign key constraints, not dependent tables
+- MySQL doesn't support CASCADE for DROP TABLE at all
+- Tests expect full table cascade (dropping all dependent tables)
+- Manual implementation required for both PostgreSQL and MySQL
+
+**Design Principles:**
+1. **All CASCADE/RESTRICT helpers return `DatabaseError`** - Not backend-specific error types
+2. **Use iterative approach instead of recursion** - Avoids borrow checker issues
+3. **Transaction safety** - All CASCADE operations wrapped in transactions
+4. **Consistent error handling** - Direct `DatabaseError` returns for custom messages
+
+##### 15.2.5.1 PostgreSQL Native Transaction CASCADE Implementation ✅ **COMPLETED**
+
+**File:** `/packages/database/src/postgres/postgres.rs`
+
+Added helper functions at MODULE level:
+
+```rust
+// Helper functions for CASCADE support - return DatabaseError for flexibility
+#[cfg(feature = "cascade")]
+async fn postgres_get_direct_dependents(
+    client: &tokio_postgres::Client,
+    table_name: &str,
+) -> Result<Vec<String>, PostgresDatabaseError> {
+    let query = r#"
+        SELECT DISTINCT tc.table_name
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage AS ccu
+            ON ccu.constraint_name = tc.constraint_name
+            AND ccu.table_schema = tc.table_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND ccu.table_name = $1
+            AND tc.table_schema = 'public'
+    "#;
+
+    let rows = client
+        .query(query, &[&table_name])
+        .await
+        .map_err(PostgresDatabaseError::Postgres)?;
+
+    Ok(rows.iter()
+        .filter_map(|row| row.try_get::<_, String>(0).ok())
+        .collect())
+}
+
+#[cfg(feature = "cascade")]
+async fn postgres_exec_drop_table_cascade(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    // Iterative approach to collect all dependent tables
+    let mut to_drop = Vec::new();
+    let mut to_check = vec![statement.table_name.to_string()];
+    let mut visited = std::collections::BTreeSet::new();
+
+    while let Some(table) = to_check.pop() {
+        if !visited.insert(table.clone()) {
+            continue;
+        }
+
+        let dependents = postgres_get_direct_dependents(client, &table)
+            .await
+            .map_err(|e| DatabaseError::Postgres(e))?;
+
+        for dependent in dependents {
+            if !visited.contains(&dependent) {
+                to_check.push(dependent);
+            }
+        }
+
+        to_drop.push(table);
+    }
+
+    // to_drop is now in order: parent first, dependents after
+    // Reverse to get dependents first for dropping
+    to_drop.reverse();
+
+    for table in to_drop {
+        let sql = format!(
+            "DROP TABLE {}{}",
+            if statement.if_exists { "IF EXISTS " } else { "" },
+            table
+        );
+        client.execute_raw(&sql, &[] as &[&str])
+            .await
+            .map_err(|e| DatabaseError::Postgres(PostgresDatabaseError::Postgres(e)))?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "cascade")]
+async fn postgres_exec_drop_table_restrict(
+    client: &tokio_postgres::Client,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    let dependents = postgres_get_direct_dependents(client, statement.table_name)
+        .await
+        .map_err(|e| DatabaseError::Postgres(e))?;
+
+    if !dependents.is_empty() {
+        return Err(DatabaseError::InvalidQuery(
+            format!("Cannot drop table '{}': has dependent tables", statement.table_name)
+        ));
+    }
+
+    postgres_exec_drop_table(client, statement)
+        .await
+        .map_err(Into::into)
+}
+```
+
+Updated PostgresTransaction impl:
+```rust
+impl Database for PostgresTransaction {
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        #[cfg(feature = "cascade")]
+        {
+            use crate::schema::DropBehavior;
+            let client = self.client.lock().await;
+            match statement.behavior {
+                DropBehavior::Cascade => {
+                    return postgres_exec_drop_table_cascade(&*client, statement).await;
+                }
+                DropBehavior::Restrict => {
+                    return postgres_exec_drop_table_restrict(&*client, statement).await;
+                }
+                DropBehavior::Default => {}
+            }
+        }
+
+        postgres_exec_drop_table(&*self.client.lock().await, statement)
+            .await
+            .map_err(Into::into)
+    }
+}
+```
+
+##### 15.2.5.2 PostgreSQL Native Database Delegation ✅ **COMPLETED**
+
+**File:** `/packages/database/src/postgres/postgres.rs`
+
+Updated PostgresDatabase impl:
+```rust
+impl Database for PostgresDatabase {
+    async fn exec_drop_table(
+        &self,
+        statement: &crate::schema::DropTableStatement<'_>,
+    ) -> Result<(), DatabaseError> {
+        #[cfg(feature = "cascade")]
+        {
+            use crate::schema::DropBehavior;
+            if matches!(statement.behavior,
+                       DropBehavior::Cascade | DropBehavior::Restrict) {
+                let tx = self.begin_transaction().await?;
+                let result = tx.exec_drop_table(statement).await;
+                return match result {
+                    Ok(()) => tx.commit().await,
+                    Err(e) => {
+                        let _ = tx.rollback().await;
+                        Err(e)
+                    }
+                };
+            }
+        }
+
+        let client = self.get_client().await?;
+        postgres_exec_drop_table(&client, statement)
+            .await
+            .map_err(Into::into)
+    }
+}
+```
+
+##### 15.2.5.3 PostgreSQL SQLx Transaction CASCADE Implementation ✅ **COMPLETED**
+
+**File:** `/packages/database/src/sqlx/postgres.rs`
+
+Added helpers using iterative approach:
+```rust
+#[cfg(feature = "cascade")]
+async fn postgres_sqlx_get_direct_dependents(
+    connection: &mut PgConnection,
+    table_name: &str,
+) -> Result<Vec<String>, SqlxDatabaseError> {
+    let query = r#"
+        SELECT DISTINCT tc.table_name
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu
+            ON tc.constraint_name = kcu.constraint_name
+            AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage AS ccu
+            ON ccu.constraint_name = tc.constraint_name
+            AND ccu.table_schema = tc.table_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+            AND ccu.table_name = $1
+            AND tc.table_schema = 'public'
+    "#;
+
+    let rows: Vec<(String,)> = sqlx::query_as(query)
+        .bind(table_name)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(SqlxDatabaseError::Sqlx)?;
+
+    Ok(rows.into_iter().map(|(name,)| name).collect())
+}
+
+#[cfg(feature = "cascade")]
+async fn postgres_sqlx_exec_drop_table_cascade(
+    connection: &mut PgConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    // Iterative collection of dependent tables
+    let mut to_drop = Vec::new();
+    let mut to_check = vec![statement.table_name.to_string()];
+    let mut visited = std::collections::BTreeSet::new();
+
+    while let Some(table) = to_check.pop() {
+        if !visited.insert(table.clone()) {
+            continue;
+        }
+
+        let dependents = postgres_sqlx_get_direct_dependents(connection, &table)
+            .await
+            .map_err(|e| DatabaseError::PostgresSqlx(e))?;
+
+        for dependent in dependents {
+            if !visited.contains(&dependent) {
+                to_check.push(dependent);
+            }
+        }
+
+        to_drop.push(table);
+    }
+
+    // Reverse to get dependents first
+    to_drop.reverse();
+
+    for table in to_drop {
+        let sql = format!(
+            "DROP TABLE {}{}",
+            if statement.if_exists { "IF EXISTS " } else { "" },
+            table
+        );
+        connection.execute(sql.as_str())
+            .await
+            .map_err(|e| DatabaseError::PostgresSqlx(SqlxDatabaseError::Sqlx(e)))?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "cascade")]
+async fn postgres_sqlx_exec_drop_table_restrict(
+    connection: &mut PgConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    let dependents = postgres_sqlx_get_direct_dependents(connection, statement.table_name)
+        .await
+        .map_err(|e| DatabaseError::PostgresSqlx(e))?;
+
+    if !dependents.is_empty() {
+        return Err(DatabaseError::InvalidQuery(
+            format!("Cannot drop table '{}': has dependent tables", statement.table_name)
+        ));
+    }
+
+    postgres_sqlx_exec_drop_table(connection, statement)
+        .await
+        .map_err(Into::into)
+}
+```
+
+Updated PostgresSqlxTransaction impl to use these helpers.
+
+##### 15.2.5.4 PostgreSQL SQLx Database Delegation ✅ **COMPLETED**
+
+**File:** `/packages/database/src/sqlx/postgres.rs`
+
+Updated PostgresSqlxDatabase impl to delegate CASCADE/RESTRICT to transactions.
+
+##### 15.2.5.5 MySQL SQLx Transaction CASCADE Implementation ✅ **COMPLETED**
+
+**File:** `/packages/database/src/sqlx/mysql.rs`
+
+Added helpers using iterative approach and proper FK handling:
+```rust
+#[cfg(feature = "cascade")]
+async fn mysql_sqlx_exec_drop_table_cascade(
+    connection: &mut MySqlConnection,
+    statement: &crate::schema::DropTableStatement<'_>,
+) -> Result<(), DatabaseError> {
+    // Iterative collection
+    let mut to_drop = Vec::new();
+    let mut to_check = vec![statement.table_name.to_string()];
+    let mut visited = std::collections::BTreeSet::new();
+
+    while let Some(table) = to_check.pop() {
+        if !visited.insert(table.clone()) {
+            continue;
+        }
+
+        let dependents = mysql_sqlx_get_direct_dependents(connection, &table)
+            .await
+            .map_err(|e| DatabaseError::MysqlSqlx(e))?;
+
+        for dependent in dependents {
+            if !visited.contains(&dependent) {
+                to_check.push(dependent);
+            }
+        }
+
+        to_drop.push(table);
+    }
+
+    to_drop.reverse();
+
+    // Always disable FK checks for CASCADE
+    connection.execute("SET FOREIGN_KEY_CHECKS=0")
+        .await
+        .map_err(|e| DatabaseError::MysqlSqlx(SqlxDatabaseError::Sqlx(e)))?;
+
+    for table in to_drop {
+        let sql = format!(
+            "DROP TABLE {}{}",
+            if statement.if_exists { "IF EXISTS " } else { "" },
+            table
+        );
+        connection.execute(sql.as_str())
+            .await
+            .map_err(|e| DatabaseError::MysqlSqlx(SqlxDatabaseError::Sqlx(e)))?;
+    }
+
+    connection.execute("SET FOREIGN_KEY_CHECKS=1")
+        .await
+        .map_err(|e| DatabaseError::MysqlSqlx(SqlxDatabaseError::Sqlx(e)))?;
+
+    Ok(())
+}
+```
+
+##### 15.2.5.6 MySQL SQLx Database Delegation ✅ **COMPLETED**
+
+**File:** `/packages/database/src/sqlx/mysql.rs`
+
+Updated MySqlSqlxDatabase impl to delegate CASCADE/RESTRICT to transactions.
+
+#### 15.2.5 Verification Checklist ✅ **COMPLETED**
+
+- [x] **Step 15.2.5.1**: `cargo build -p switchy_database --features cascade,postgres` - Compiles with zero warnings
+  Manual CASCADE implementation added to `/packages/database/src/postgres/postgres.rs` with helper functions `postgres_get_direct_dependents`, `postgres_exec_drop_table_cascade`, `postgres_exec_drop_table_restrict`, `postgres_exec_drop_table_basic`
+- [x] **Step 15.2.5.2**: PostgreSQL native database delegation compiles successfully
+  Updated PostgresDatabase and PostgresTransaction `exec_drop_table` methods to handle CASCADE/RESTRICT with transaction delegation pattern
+- [x] **Step 15.2.5.3**: PostgreSQL SQLx transaction CASCADE implementation compiles
+  Manual CASCADE implementation added to `/packages/database/src/sqlx/postgres.rs` with helper functions `postgres_sqlx_get_direct_dependents`, `postgres_sqlx_exec_drop_table_cascade`, `postgres_sqlx_exec_drop_table_restrict`, `postgres_sqlx_exec_drop_table_basic`
+- [x] **Step 15.2.5.4**: PostgreSQL SQLx database delegation compiles
+  Updated PostgresSqlxDatabase and PostgresSqlxTransaction `exec_drop_table` methods to handle CASCADE/RESTRICT with transaction delegation pattern
+- [x] **Step 15.2.5.5**: MySQL SQLx transaction CASCADE implementation compiles
+  Manual CASCADE implementation added to `/packages/database/src/sqlx/mysql.rs` with helper functions `mysql_sqlx_get_direct_dependents`, `mysql_sqlx_exec_drop_table_cascade`, `mysql_sqlx_exec_drop_table_restrict`, `mysql_sqlx_exec_drop_table_basic` including FK disable/enable logic
+- [x] **Step 15.2.5.6**: MySQL SQLx database delegation compiles
+  Updated MySqlSqlxDatabase and MySqlSqlxTransaction `exec_drop_table` methods to handle CASCADE/RESTRICT with transaction delegation pattern
+- [x] **Test Verification**: `cargo test -p switchy_database --features cascade,postgres-sqlx,mysql-sqlx test_cascade_drop_execution` - Tests now pass
+  Implementation compiles with zero warnings and zero clippy issues using iterative dependency discovery approach
+
+**Key Design Achievements:**
+- ✅ **Consistent behavior**: All databases now drop dependent tables with CASCADE
+- ✅ **Transaction safety**: All CASCADE operations are atomic
+- ✅ **Iterative approach**: No recursion, avoids borrow checker issues
+- ✅ **Proper error handling**: Direct `DatabaseError` returns for custom messages
+- ✅ **No unused code**: Every function is used immediately when added
+- ✅ **Compilable at each step**: Every step leaves code in working state
+- ✅ **Zero warnings**: All clippy checks pass
+
+**Technical Summary:**
+PostgreSQL and MySQL now provide true CASCADE behavior (dropping dependent tables) through manual dependency discovery and iterative table dropping. The native CASCADE keywords only affect foreign key constraints, not table existence, so manual implementation was required for consistent cross-database behavior.
+
+**Test Resolution:**
+Phase 15.2.5 was implemented to resolve failing tests:
+- `postgres_sqlx_cascade_tests::test_cascade_drop_execution`
+- `mysql_sqlx_cascade_tests::test_cascade_drop_execution`
+
+These tests were failing because the native CASCADE implementation (Phase 15.2.1) only dropped constraints, not tables. The manual implementation ensures that CASCADE actually drops dependent tables as expected by the test suite.
 
 ### 15.3 RESTRICT Support
 
