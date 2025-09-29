@@ -14983,6 +14983,703 @@ ALTER TABLE implementations also use exhaustive matching:
 
 **Implementation Status**: Database introspection functionality is complete and ready for production use with comprehensive DataType support.
 
+## Phase 17: Automatic Down Migration Generation
+
+**Goal:** Add type-safe automatic generation of Down migrations from certain Up migration operations, using the type system to enforce safety and reduce boilerplate for reversible operations.
+
+**Status:** 🟡 **PLANNED** - Design complete, ready for implementation
+
+**Prerequisites:** Phase 10.2.2 (Schema Builder Extensions) must be complete
+
+### Phase 17.1: Core AutoReversible Trait Infrastructure
+
+**Goal:** Create the foundational trait and module structure for automatic migration reversal
+
+- [ ] Create `packages/database/src/schema/auto_reversible.rs` module
+  - [ ] Location: New file at `packages/database/src/schema/auto_reversible.rs`
+  - [ ] Module registration in `packages/database/src/schema/mod.rs`:
+    ```rust
+    #[cfg(feature = "auto-reverse")]
+    pub mod auto_reversible;
+
+    #[cfg(feature = "auto-reverse")]
+    pub use auto_reversible::AutoReversible;
+    ```
+  - [ ] Core trait definition:
+    ```rust
+    use crate::Executable;
+    use async_trait::async_trait;
+
+    /// Marker trait for schema operations that can be automatically reversed.
+    /// Only implement this for operations where the reverse is deterministic and safe.
+    #[async_trait]
+    pub trait AutoReversible: Executable {
+        /// The type of the reversed operation
+        type Reversed: Executable;
+
+        /// Generate the reverse operation
+        fn reverse(self) -> Self::Reversed;
+    }
+    ```
+
+- [ ] Add feature flag to `packages/database/Cargo.toml`:
+  ```toml
+  [features]
+  auto-reverse = []
+  ```
+
+#### 17.1 Verification Checklist
+
+- [ ] Module properly registered in `packages/database/src/schema/mod.rs`
+- [ ] Types re-exported for public API access
+- [ ] Run `cargo build -p switchy_database --features "schema,auto-reverse"` - compiles successfully
+- [ ] Run `cargo clippy -p switchy_database --all-targets --features "schema,auto-reverse"` - zero warnings
+- [ ] Run `cargo fmt` - format entire workspace
+- [ ] Run `cargo machete` - check for unused dependencies
+- [ ] Documentation: AutoReversible trait documented with safety guarantees
+
+### Phase 17.2: Implement AutoReversible for CreateTableStatement
+
+**Goal:** Enable automatic DROP TABLE generation from CREATE TABLE operations
+
+**Prerequisites:** Phase 17.1 complete
+
+- [ ] Implementation in `packages/database/src/schema/auto_reversible.rs`:
+  ```rust
+  // Add imports at the top of the existing file
+  use super::{CreateTableStatement, DropTableStatement};
+
+  #[cfg(feature = "auto-reverse")]
+  impl<'a> AutoReversible for CreateTableStatement<'a> {
+      type Reversed = DropTableStatement<'a>;
+
+      fn reverse(self) -> Self::Reversed {
+          DropTableStatement {
+              table_name: self.table_name,
+              if_exists: true, // Safe default for rollbacks
+              #[cfg(feature = "cascade")]
+              behavior: super::DropBehavior::Default, // Use fully qualified path
+          }
+      }
+  }
+  ```
+
+- [ ] Unit tests in `packages/database/src/schema/auto_reversible.rs`:
+  ```rust
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+      use crate::schema::{create_table, Column, DataType};
+
+      #[test]
+      fn test_create_table_reversal() {
+          let create = create_table("users")
+              .column(Column {
+                  name: "id".to_string(),
+                  data_type: DataType::Int,
+                  nullable: false,
+                  auto_increment: true,
+                  default: None,
+              });
+
+          let drop = create.reverse();
+          assert_eq!(drop.table_name, "users");
+          assert!(drop.if_exists);
+      }
+
+      #[switchy_async::test]
+      async fn test_reversed_operation_executes() {
+          // Test that reversed operation can execute on a database
+      }
+  }
+  ```
+
+#### 17.2 Verification Checklist
+
+- [ ] CreateTableStatement implements AutoReversible trait
+- [ ] Reversed DropTableStatement has safe defaults (if_exists = true)
+- [ ] Run `cargo build -p switchy_database --features "schema,auto-reverse"` - compiles successfully
+- [ ] Unit test: `test_create_table_reversal` - reversal produces correct DropTableStatement
+- [ ] Unit test: `test_reversed_operation_executes` - reversed operation is executable
+- [ ] Run `cargo test -p switchy_database --features "schema,auto-reverse"` - all tests pass
+- [ ] Run `cargo clippy -p switchy_database --all-targets --features "schema,auto-reverse"` - zero warnings
+- [ ] Run `cargo fmt` - format entire workspace
+- [ ] Run `cargo machete` - check for unused dependencies
+- [ ] Documentation: Safety guarantees documented (data loss warning)
+
+### Phase 17.3: Implement AutoReversible for CreateIndexStatement
+
+**Goal:** Enable automatic DROP INDEX generation from CREATE INDEX operations
+
+**Prerequisites:** Phase 17.2 complete
+
+- [ ] Implementation in `packages/database/src/schema/auto_reversible.rs`:
+  ```rust
+  // Add imports at the top of the existing file
+  use super::{CreateIndexStatement, DropIndexStatement};
+
+  #[cfg(feature = "auto-reverse")]
+  impl<'a> AutoReversible for CreateIndexStatement<'a> {
+      type Reversed = DropIndexStatement<'a>;
+
+      fn reverse(self) -> Self::Reversed {
+          DropIndexStatement {
+              index_name: self.index_name,
+              table_name: self.table_name,
+              if_exists: true, // Safe default for rollbacks
+          }
+      }
+  }
+  ```
+
+- [ ] Unit tests:
+  ```rust
+  #[test]
+  fn test_create_index_reversal() {
+      let create = create_index("idx_users_email")
+          .table("users")
+          .columns(vec!["email"]);
+
+      let drop = create.reverse();
+      assert_eq!(drop.index_name, "idx_users_email");
+      assert_eq!(drop.table_name, "users");
+      assert!(drop.if_exists);
+  }
+
+  #[test]
+  fn test_unique_index_reversal() {
+      let create = create_index("idx_unique_email")
+          .table("users")
+          .unique(true)
+          .columns(vec!["email"]);
+
+      let drop = create.reverse();
+      // Unique constraint info is lost but index is still dropped correctly
+      assert_eq!(drop.index_name, "idx_unique_email");
+  }
+  ```
+
+#### 17.3 Verification Checklist
+
+- [ ] CreateIndexStatement implements AutoReversible trait
+- [ ] Reversed DropIndexStatement has safe defaults (if_exists = true)
+- [ ] Run `cargo build -p switchy_database --features "schema,auto-reverse"` - compiles successfully
+- [ ] Unit test: `test_create_index_reversal` - reversal produces correct DropIndexStatement
+- [ ] Unit test: `test_unique_index_reversal` - handles unique indexes correctly
+- [ ] Run `cargo test -p switchy_database --features "schema,auto-reverse"` - all tests pass
+- [ ] Run `cargo clippy -p switchy_database --all-targets --features "schema,auto-reverse"` - zero warnings
+- [ ] Run `cargo fmt` - format entire workspace
+- [ ] Run `cargo machete` - check for unused dependencies
+- [ ] Documentation: Note that index properties (unique, partial) are not preserved in reversal
+
+### Phase 17.4: Partial Reversibility Support for Column Operations
+
+**Goal:** Support automatic reversal for ADD COLUMN operations only
+
+**Prerequisites:** Phase 17.3 complete
+
+- [ ] Create dedicated operation types in `packages/database/src/schema/auto_reversible.rs`:
+  ```rust
+  // Add imports at the top of the existing file
+  use super::{alter_table, Column};
+  use crate::{Database, DatabaseError};
+
+  /// Represents an ADD COLUMN operation that can be automatically reversed
+  #[cfg(feature = "auto-reverse")]
+  pub struct AddColumnOperation<'a> {
+      pub table_name: &'a str,
+      pub column: Column,
+  }
+
+  #[cfg(feature = "auto-reverse")]
+  impl<'a> crate::Executable for AddColumnOperation<'a> {
+      async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError> {
+          alter_table(self.table_name)
+              .add_column(self.column.clone())
+              .execute(db)
+              .await
+      }
+  }
+
+  /// Represents a DROP COLUMN operation (the reverse of ADD COLUMN)
+  #[cfg(feature = "auto-reverse")]
+  pub struct DropColumnOperation<'a> {
+      pub table_name: &'a str,
+      pub column_name: String,
+  }
+
+  #[cfg(feature = "auto-reverse")]
+  impl<'a> crate::Executable for DropColumnOperation<'a> {
+      async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError> {
+          alter_table(self.table_name)
+              .drop_column(&self.column_name)
+              .execute(db)
+              .await
+      }
+  }
+
+  #[cfg(feature = "auto-reverse")]
+  impl<'a> AutoReversible for AddColumnOperation<'a> {
+      type Reversed = DropColumnOperation<'a>;
+
+      fn reverse(self) -> Self::Reversed {
+          DropColumnOperation {
+              table_name: self.table_name,
+              column_name: self.column.name,
+          }
+      }
+  }
+  ```
+
+- [ ] Helper functions for common patterns:
+  ```rust
+  /// Create an ADD COLUMN operation that can be auto-reversed
+  #[cfg(feature = "auto-reverse")]
+  pub fn add_column<'a>(table: &'a str, column: Column) -> AddColumnOperation<'a> {
+      AddColumnOperation {
+          table_name: table,
+          column,
+      }
+  }
+  ```
+
+- [ ] Unit tests:
+  ```rust
+  #[test]
+  fn test_add_column_reversal() {
+      let add = add_column("users", Column {
+          name: "age".to_string(),
+          data_type: DataType::Int,
+          nullable: true,
+          auto_increment: false,
+          default: None,
+      });
+
+      let drop = add.reverse();
+      assert_eq!(drop.table_name, "users");
+      assert_eq!(drop.column_name, "age");
+  }
+
+  #[test]
+  fn test_drop_column_not_reversible() {
+      // Verify DropColumnOperation does NOT implement AutoReversible
+      // This is a compile-time check - uncommenting should fail:
+      // let drop = DropColumnOperation { table_name: "users", column_name: "age".to_string() };
+      // let _ = drop.reverse(); // SHOULD NOT COMPILE
+  }
+  ```
+
+#### 17.4 Verification Checklist
+
+- [ ] AddColumnOperation struct created with Executable implementation
+- [ ] DropColumnOperation struct created with Executable implementation
+- [ ] AddColumnOperation implements AutoReversible trait
+- [ ] DropColumnOperation does NOT implement AutoReversible (data loss prevention)
+- [ ] Helper function `add_column()` works correctly
+- [ ] Run `cargo build -p switchy_database --features "schema,auto-reverse"` - compiles successfully
+- [ ] Unit test: `test_add_column_reversal` - ADD COLUMN reverses to DROP COLUMN
+- [ ] Compile test: DropColumnOperation cannot be reversed (won't compile)
+- [ ] Run `cargo test -p switchy_database --features "schema,auto-reverse"` - all tests pass
+- [ ] Run `cargo clippy -p switchy_database --all-targets --features "schema,auto-reverse"` - zero warnings
+- [ ] Run `cargo fmt` - format entire workspace
+- [ ] Run `cargo machete` - check for unused dependencies
+- [ ] Documentation: Clear warnings about data loss for DROP COLUMN
+
+### Phase 17.5: ReversibleCodeMigration Wrapper
+
+**Goal:** Create convenient wrapper for auto-reversible code migrations
+
+**Prerequisites:** Phase 17.4 complete
+
+- [ ] Add to `packages/switchy/schema/Cargo.toml`:
+  ```toml
+  [features]
+  auto-reverse = ["switchy_database/auto-reverse"]
+  ```
+
+- [ ] Implementation in `packages/switchy/schema/src/discovery/code.rs`:
+  ```rust
+  /// A code migration that automatically generates its Down migration from a reversible Up operation
+  #[cfg(feature = "auto-reverse")]
+  pub struct ReversibleCodeMigration<'a, T: switchy_database::schema::AutoReversible + 'a> {
+      id: String,
+      up_operation: T,
+      _phantom: std::marker::PhantomData<&'a ()>,
+  }
+
+  #[cfg(feature = "auto-reverse")]
+  impl<'a, T: switchy_database::schema::AutoReversible + 'a> ReversibleCodeMigration<'a, T> {
+      pub fn new(id: impl Into<String>, up_operation: T) -> Self {
+          Self {
+              id: id.into(),
+              up_operation,
+              _phantom: std::marker::PhantomData,
+          }
+      }
+  }
+
+  #[cfg(feature = "auto-reverse")]
+  impl<'a, T> From<ReversibleCodeMigration<'a, T>> for CodeMigration<'a>
+  where
+      T: switchy_database::schema::AutoReversible + 'a,
+      T::Reversed: 'a,
+  {
+      fn from(rev: ReversibleCodeMigration<'a, T>) -> Self {
+          let id = rev.id.clone();
+          let down = rev.up_operation.reverse();
+          CodeMigration::new(
+              id,
+              Box::new(rev.up_operation),
+              Some(Box::new(down)),
+          )
+      }
+  }
+  ```
+
+- [ ] Unit tests:
+  ```rust
+  #[cfg(all(test, feature = "auto-reverse"))]
+  mod auto_reverse_tests {
+      use super::*;
+      use switchy_database::schema::{create_table, Column, DataType};
+
+      #[test]
+      fn test_reversible_migration_conversion() {
+          let create = create_table("posts")
+              .column(Column {
+                  name: "id".to_string(),
+                  data_type: DataType::Int,
+                  nullable: false,
+                  auto_increment: true,
+                  default: None,
+              });
+
+          let reversible = ReversibleCodeMigration::new("001_create_posts", create);
+          let migration: CodeMigration = reversible.into();
+
+          assert_eq!(migration.id(), "001_create_posts");
+          // Down migration should be Some(DropTableStatement)
+      }
+
+      #[test]
+      fn test_type_safety_non_reversible() {
+          // This should NOT compile (uncomment to verify):
+          // let drop = drop_table("users");
+          // let reversible = ReversibleCodeMigration::new("bad", drop);
+          // Compile error: AutoReversible not implemented for DropTableStatement
+      }
+  }
+  ```
+
+#### 17.5 Verification Checklist
+
+- [ ] ReversibleCodeMigration struct properly defined with lifetime and phantom data
+- [ ] Constructor accepts generic string types for ID
+- [ ] From trait implementation converts to CodeMigration correctly
+- [ ] Feature flag properly propagated from switchy_schema to switchy_database
+- [ ] Run `cargo build -p switchy_schema --features "auto-reverse"` - compiles successfully
+- [ ] Unit test: `test_reversible_migration_conversion` - wrapper creates valid CodeMigration
+- [ ] Compile test: Non-reversible operations cannot be used (compilation fails)
+- [ ] Run `cargo test -p switchy_schema --features "auto-reverse"` - all tests pass
+- [ ] Run `cargo clippy -p switchy_schema --all-targets --features "auto-reverse"` - zero warnings
+- [ ] Run `cargo fmt` - format entire workspace
+- [ ] Run `cargo machete` - check for unused dependencies
+- [ ] Documentation: Clear examples of usage and limitations
+
+### Phase 17.6: Integration Tests
+
+**Goal:** Comprehensive testing of auto-reversal with actual database operations
+
+**Prerequisites:** Phase 17.5 complete
+
+- [ ] Create `packages/switchy/schema/tests/auto_reverse_integration.rs`:
+  ```rust
+  #![cfg(feature = "auto-reverse")]
+
+  use switchy_schema::discovery::code::{CodeMigration, CodeMigrationSource, ReversibleCodeMigration};
+  use switchy_schema::{MigrationRunner, MigrationSource};
+  use switchy_database::schema::{create_table, create_index, add_column, Column, DataType};
+  use switchy_schema_test_utils::create_empty_in_memory;
+
+  #[switchy_async::test]
+  async fn test_reversible_table_migration() {
+      let db = create_empty_in_memory().await.unwrap();
+
+      // Create table using auto-reversible migration
+      let create = create_table("users")
+          .column(Column {
+              name: "id".to_string(),
+              data_type: DataType::Int,
+              nullable: false,
+              auto_increment: true,
+              default: None,
+          });
+
+      let migration: CodeMigration = ReversibleCodeMigration::new(
+          "001_create_users",
+          create,
+      ).into();
+
+      // Run UP migration
+      migration.up(&*db).await.unwrap();
+      assert!(db.table_exists("users").await.unwrap());
+
+      // Run DOWN migration (auto-generated)
+      migration.down(&*db).await.unwrap();
+      assert!(!db.table_exists("users").await.unwrap());
+  }
+
+  #[switchy_async::test]
+  async fn test_reversible_index_migration() {
+      let db = create_empty_in_memory().await.unwrap();
+
+      // Setup: create table first
+      db.exec_raw("CREATE TABLE users (id INT, email TEXT)").await.unwrap();
+
+      // Create index using auto-reversible migration
+      let create_idx = create_index("idx_users_email")
+          .table("users")
+          .columns(vec!["email"]);
+
+      let migration: CodeMigration = ReversibleCodeMigration::new(
+          "002_add_email_index",
+          create_idx,
+      ).into();
+
+      // Run UP migration
+      migration.up(&*db).await.unwrap();
+      // Verify index exists (platform-specific check)
+
+      // Run DOWN migration (auto-generated)
+      migration.down(&*db).await.unwrap();
+      // Verify index removed
+  }
+
+  #[switchy_async::test]
+  async fn test_reversible_column_migration() {
+      let db = create_empty_in_memory().await.unwrap();
+
+      // Setup: create table
+      db.exec_raw("CREATE TABLE users (id INT)").await.unwrap();
+
+      // Add column using auto-reversible operation
+      let add = add_column("users", Column {
+          name: "email".to_string(),
+          data_type: DataType::Text,
+          nullable: true,
+          auto_increment: false,
+          default: None,
+      });
+
+      let migration: CodeMigration = ReversibleCodeMigration::new(
+          "003_add_email_column",
+          add,
+      ).into();
+
+      // Run UP migration
+      migration.up(&*db).await.unwrap();
+      assert!(db.column_exists("users", "email").await.unwrap());
+
+      // Run DOWN migration (auto-generated)
+      migration.down(&*db).await.unwrap();
+      assert!(!db.column_exists("users", "email").await.unwrap());
+  }
+
+  #[switchy_async::test]
+  async fn test_migration_runner_with_reversible() {
+      // Test that ReversibleCodeMigration works with MigrationRunner
+      let db = create_empty_in_memory().await.unwrap();
+
+      let mut source = CodeMigrationSource::new();
+
+      let create = create_table("posts")
+          .column(Column {
+              name: "id".to_string(),
+              data_type: DataType::Int,
+              nullable: false,
+              auto_increment: true,
+              default: None,
+          });
+
+      let migration: CodeMigration = ReversibleCodeMigration::new(
+          "001_create_posts",
+          create,
+      ).into();
+
+      source.add_migration(migration);
+
+      let runner = MigrationRunner::new(Box::new(source));
+      runner.run(&*db).await.unwrap();
+
+      assert!(db.table_exists("posts").await.unwrap());
+  }
+  ```
+
+#### 17.6 Verification Checklist
+
+- [ ] Integration test file created with proper feature gating
+- [ ] Test: `test_reversible_table_migration` - CREATE/DROP TABLE works end-to-end
+- [ ] Test: `test_reversible_index_migration` - CREATE/DROP INDEX works end-to-end
+- [ ] Test: `test_reversible_column_migration` - ADD/DROP COLUMN works end-to-end
+- [ ] Test: `test_migration_runner_with_reversible` - Works with MigrationRunner
+- [ ] Run `cargo test -p switchy_schema --features "auto-reverse"` - all integration tests pass
+- [ ] Tests verify database state changes correctly (table/column/index existence)
+- [ ] Tests confirm auto-generated DOWN migrations work correctly
+- [ ] Run `cargo clippy -p switchy_schema --all-targets --features "auto-reverse"` - zero warnings
+- [ ] Run `cargo fmt` - format entire workspace
+- [ ] Run `cargo machete` - check for unused dependencies
+- [ ] All tests use in-memory SQLite for isolation
+- [ ] All async tests use `#[switchy_async::test]` attribute
+
+### Phase 17.7: Documentation and Examples
+
+**Goal:** Comprehensive documentation with clear examples and safety warnings
+
+**Prerequisites:** Phase 17.6 complete
+
+- [ ] Update `packages/database/src/schema/auto_reversible.rs` module docs:
+  ```rust
+  //! Automatic migration reversal support for safe schema operations.
+  //!
+  //! This module provides the `AutoReversible` trait for schema operations
+  //! that can be safely and automatically reversed. Only operations that
+  //! are deterministic and non-destructive should implement this trait.
+  //!
+  //! # Safety Guarantees
+  //!
+  //! The following operations are considered safe to auto-reverse:
+  //! - `CreateTableStatement` → `DropTableStatement` (structure only, no data)
+  //! - `CreateIndexStatement` → `DropIndexStatement` (indexes can be recreated)
+  //! - `AddColumnOperation` → `DropColumnOperation` (new columns start empty)
+  //!
+  //! The following are NOT safe and will never implement `AutoReversible`:
+  //! - `DropTableStatement` - Would lose all table data
+  //! - `DropIndexStatement` - Could lose performance characteristics
+  //! - `DropColumnOperation` - Would lose column data
+  //! - `AlterColumn` operations - May cause data loss or corruption
+  //!
+  //! # Examples
+  //!
+  //! ```rust
+  //! use switchy_database::schema::{create_table, Column, DataType, AutoReversible};
+  //!
+  //! let create = create_table("users")
+  //!     .column(Column { /* ... */ });
+  //!
+  //! // Automatically generate DROP TABLE from CREATE TABLE
+  //! let drop = create.reverse();
+  //! assert_eq!(drop.table_name, "users");
+  //! ```
+  ```
+
+- [ ] Update `packages/switchy/schema/src/discovery/code.rs` docs:
+  ```rust
+  //! ## Auto-Reversible Migrations (requires `auto-reverse` feature)
+  //!
+  //! For operations that support automatic reversal, use `ReversibleCodeMigration`:
+  //!
+  //! ```rust
+  //! # #[cfg(feature = "auto-reverse")]
+  //! use switchy_schema::discovery::code::ReversibleCodeMigration;
+  //! use switchy_database::schema::create_table;
+  //!
+  //! let create = create_table("users")
+  //!     .column(/* ... */);
+  //!
+  //! // Automatically generates both UP and DOWN migrations
+  //! let migration: CodeMigration = ReversibleCodeMigration::new(
+  //!     "001_create_users",
+  //!     create,
+  //! ).into();
+  //! ```
+  //!
+  //! ## Type Safety
+  //!
+  //! The type system prevents using non-reversible operations:
+  //!
+  //! ```compile_fail
+  //! # #[cfg(feature = "auto-reverse")]
+  //! use switchy_schema::discovery::code::ReversibleCodeMigration;
+  //! use switchy_database::schema::drop_table;
+  //!
+  //! let drop = drop_table("users");
+  //!
+  //! // This will NOT compile - DropTableStatement doesn't implement AutoReversible
+  //! let migration = ReversibleCodeMigration::new("bad", drop);
+  //! ```
+  ```
+
+- [ ] Create `packages/switchy/schema/examples/auto_reverse.rs`:
+  ```rust
+  //! Example demonstrating automatic migration reversal
+
+  #[cfg(feature = "auto-reverse")]
+  fn main() {
+      // Complete working example
+  }
+
+  #[cfg(not(feature = "auto-reverse"))]
+  fn main() {
+      println!("This example requires the 'auto-reverse' feature");
+  }
+  ```
+
+- [ ] Update main README with feature documentation
+
+#### 17.7 Verification Checklist
+
+- [ ] Module documentation explains safety guarantees clearly
+- [ ] Module documentation lists all safe and unsafe operations
+- [ ] Code examples compile and run correctly
+- [ ] `compile_fail` doc test properly demonstrates type safety
+- [ ] Example file demonstrates real-world usage
+- [ ] README documents the `auto-reverse` feature flag
+- [ ] Run `cargo doc -p switchy_database --features "schema,auto-reverse"` - docs build correctly
+- [ ] Run `cargo doc -p switchy_schema --features "auto-reverse"` - docs build correctly
+- [ ] Run `cargo test --doc -p switchy_database --features "schema,auto-reverse"` - doc tests pass
+- [ ] Run `cargo test --doc -p switchy_schema --features "auto-reverse"` - doc tests pass
+- [ ] Run `cargo fmt` - format entire workspace
+- [ ] Run `cargo machete` - check for unused dependencies
+- [ ] Clear warnings about data loss risks
+- [ ] Migration guide shows before/after code comparison
+
+### Phase 17 Summary
+
+**Implementation Checklist:**
+- [ ] Phase 17.1: Core trait infrastructure complete
+- [ ] Phase 17.2: CreateTableStatement reversal implemented
+- [ ] Phase 17.3: CreateIndexStatement reversal implemented
+- [ ] Phase 17.4: Partial reversibility for column operations
+- [ ] Phase 17.5: ReversibleCodeMigration wrapper complete
+- [ ] Phase 17.6: Integration tests passing
+- [ ] Phase 17.7: Documentation complete
+
+**Final Verification:**
+- [ ] Run `cargo build --all-features` - entire workspace compiles
+- [ ] Run `cargo test --all-features` - all tests pass
+- [ ] Run `cargo clippy --all-features --all-targets` - zero warnings
+- [ ] Run `cargo fmt` - format entire workspace
+- [ ] Run `cargo machete` - check for unused dependencies across workspace
+- [ ] Feature flag `auto-reverse` properly isolated (no impact when disabled)
+- [ ] Type safety enforced at compile time
+- [ ] No runtime overhead when feature disabled
+- [ ] All async tests use `#[switchy_async::test]` throughout
+
+### Benefits
+
+1. **Type Safety**: Compile-time guarantee that only reversible operations can use auto-reversal
+2. **Reduced Boilerplate**: No need to manually write inverse operations for simple cases
+3. **Consistency**: Automatically generated Down migrations are always correct inverses
+4. **Opt-in**: Developers can still write manual Down migrations when needed
+5. **Clear Intent**: Code explicitly shows which operations are considered reversible
+6. **Zero Runtime Cost**: All logic resolved at compile time
+
+### Implementation Notes
+
+This is a nice-to-have feature that reduces boilerplate for common cases but is not essential for core migration functionality. The existing `CodeMigration` system already provides manual Down migration support.
+
+**Risk Assessment**: Low risk - purely additive feature with feature flag protection.
+
 
 ## Parking Lot
 
