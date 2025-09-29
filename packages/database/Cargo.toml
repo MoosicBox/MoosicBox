@@ -68,6 +68,7 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 default = [
     "all-placeholders",
     "api",
+    "auto-reverse",
     "cascade",
     "mysql",
     "postgres-sqlx",
@@ -161,5 +162,5 @@ placeholder-named-colon   = ["dep:regex"]
 placeholder-question-mark = []
 
 auto-reverse = []
-cascade = ["schema"]
-schema  = []
+cascade      = ["schema"]
+schema       = []
