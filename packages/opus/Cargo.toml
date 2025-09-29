@@ -1,0 +1,18 @@
+[package]
+authors     = { workspace = true }
+categories  = ["codec", "encoding", "multimedia"]
+description = "MoosicBox Opus codec decoder implementation for Symphonia"
+edition     = { workspace = true }
+keywords    = ["audio", "codec", "decoder", "opus", "symphonia"]
+license     = { workspace = true }
+name        = "moosicbox_opus"
+readme      = "README.md"
+repository  = { workspace = true }
+version     = "0.1.1"
+
+[dependencies]
+# No dependencies yet - will be added as needed
+
+[features]
+default          = []
+fail-on-warnings = []
