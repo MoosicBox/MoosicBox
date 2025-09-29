@@ -48,9 +48,9 @@
 use async_trait::async_trait;
 
 use super::alter_table;
+use crate::Executable;
 use crate::schema::{DataType, DatabaseValue};
 use crate::{Database, DatabaseError};
-use crate::Executable;
 
 /// Marker trait for schema operations that can be automatically reversed.
 /// Only implement this for operations where the reverse is deterministic and safe.
@@ -191,343 +191,341 @@ mod tests {
     use crate::DatabaseValue;
     use crate::schema::{Column, DataType, create_index, create_table};
 
-    #[test]
-    fn test_create_table_auto_reverse_basic() {
-        let create = create_table("users");
-        let drop = create.reverse();
+    mod create_table {
+        use super::*;
+        #[test]
+        fn test_create_table_auto_reverse_basic() {
+            let create = create_table("users");
+            let drop = create.reverse();
 
-        assert_eq!(drop.table_name, "users");
-        assert!(drop.if_exists); // Should use IF EXISTS for safety
-    }
+            assert_eq!(drop.table_name, "users");
+            assert!(drop.if_exists); // Should use IF EXISTS for safety
+        }
 
-    #[test]
-    fn test_create_table_auto_reverse_non_consuming() {
-        let create = create_table("users");
+        #[test]
+        fn test_create_table_auto_reverse_non_consuming() {
+            let create = create_table("users");
 
-        // Generate the reverse operation
-        let drop = create.reverse();
-        assert_eq!(drop.table_name, "users");
-        assert!(drop.if_exists);
+            // Generate the reverse operation
+            let drop = create.reverse();
+            assert_eq!(drop.table_name, "users");
+            assert!(drop.if_exists);
 
-        // Original create should still be usable since reverse() doesn't consume it
-        assert_eq!(create.table_name, "users");
+            // Original create should still be usable since reverse() doesn't consume it
+            assert_eq!(create.table_name, "users");
 
-        // We can even call reverse() multiple times
-        let drop2 = create.reverse();
-        assert_eq!(drop2.table_name, "users");
-        assert!(drop2.if_exists);
-    }
+            // We can even call reverse() multiple times
+            let drop2 = create.reverse();
+            assert_eq!(drop2.table_name, "users");
+            assert!(drop2.if_exists);
+        }
 
-    #[test]
-    fn test_create_table_auto_reverse_with_columns() {
-        let create = create_table("products")
-            .column(Column {
-                name: "id".to_string(),
-                data_type: DataType::Int,
-                nullable: false,
-                auto_increment: true,
-                default: None,
-            })
-            .column(Column {
-                name: "name".to_string(),
-                data_type: DataType::Text,
-                nullable: false,
-                auto_increment: false,
-                default: Some(DatabaseValue::String("Unknown".to_string())),
-            });
+        #[test]
+        fn test_create_table_auto_reverse_with_columns() {
+            let create = create_table("products")
+                .column(Column {
+                    name: "id".to_string(),
+                    data_type: DataType::Int,
+                    nullable: false,
+                    auto_increment: true,
+                    default: None,
+                })
+                .column(Column {
+                    name: "name".to_string(),
+                    data_type: DataType::Text,
+                    nullable: false,
+                    auto_increment: false,
+                    default: Some(DatabaseValue::String("Unknown".to_string())),
+                });
 
-        let drop = create.reverse();
+            let drop = create.reverse();
 
-        assert_eq!(drop.table_name, "products");
-        assert!(drop.if_exists);
-    }
+            assert_eq!(drop.table_name, "products");
+            assert!(drop.if_exists);
+        }
 
-    #[test]
-    fn test_create_table_auto_reverse_with_constraints() {
-        let create = create_table("orders")
-            .column(Column {
-                name: "id".to_string(),
-                data_type: DataType::Int,
-                nullable: false,
-                auto_increment: true,
-                default: None,
-            })
-            .primary_key("id")
-            .foreign_key(("user_id", "users.id"));
+        #[test]
+        fn test_create_table_auto_reverse_with_constraints() {
+            let create = create_table("orders")
+                .column(Column {
+                    name: "id".to_string(),
+                    data_type: DataType::Int,
+                    nullable: false,
+                    auto_increment: true,
+                    default: None,
+                })
+                .primary_key("id")
+                .foreign_key(("user_id", "users.id"));
 
-        let drop = create.reverse();
+            let drop = create.reverse();
 
-        assert_eq!(drop.table_name, "orders");
-        assert!(drop.if_exists);
-    }
+            assert_eq!(drop.table_name, "orders");
+            assert!(drop.if_exists);
+        }
 
-    #[test]
-    #[cfg(feature = "cascade")]
-    fn test_create_table_auto_reverse_cascade_behavior() {
-        let create = create_table("test_cascade");
-        let drop = create.reverse();
-
-        assert_eq!(drop.table_name, "test_cascade");
-        assert!(drop.if_exists);
-        assert_eq!(drop.behavior, crate::schema::DropBehavior::Default);
-    }
-
-    #[switchy_async::test]
-    async fn test_create_table_auto_reverse_executable_trait() {
-        let create = create_table("async_test");
-        let drop = create.reverse();
-
-        // This would normally require a database connection, but we're just
-        // testing that the types implement the trait correctly
-        assert_eq!(drop.table_name, "async_test");
-        assert!(drop.if_exists);
-    }
-
-    #[switchy_async::test]
-    async fn test_create_table_auto_reverse_complex_async() {
-        let create = create_table("complex_async")
-            .column(Column {
-                name: "id".to_string(),
-                data_type: DataType::BigInt,
-                nullable: false,
-                auto_increment: true,
-                default: None,
-            })
-            .column(Column {
-                name: "timestamp".to_string(),
-                data_type: DataType::DateTime,
-                nullable: true,
-                auto_increment: false,
-                default: Some(DatabaseValue::String("CURRENT_TIMESTAMP".to_string())),
-            })
-            .primary_key("id");
-
-        let drop = create.reverse();
-
-        assert_eq!(drop.table_name, "complex_async");
-        assert!(drop.if_exists);
-
+        #[test]
         #[cfg(feature = "cascade")]
-        assert_eq!(drop.behavior, crate::schema::DropBehavior::Default);
+        fn test_create_table_auto_reverse_cascade_behavior() {
+            let create = create_table("test_cascade");
+            let drop = create.reverse();
+
+            assert_eq!(drop.table_name, "test_cascade");
+            assert!(drop.if_exists);
+            assert_eq!(drop.behavior, crate::schema::DropBehavior::Default);
+        }
+
+        #[test]
+        fn test_create_table_auto_reverse_executable_trait() {
+            let create = create_table("async_test");
+            let drop = create.reverse();
+
+            // This would normally require a database connection, but we're just
+            // testing that the types implement the trait correctly
+            assert_eq!(drop.table_name, "async_test");
+            assert!(drop.if_exists);
+        }
+
+        #[test]
+        fn test_create_table_auto_reverse_complex_async() {
+            let create = create_table("complex_async")
+                .column(Column {
+                    name: "id".to_string(),
+                    data_type: DataType::BigInt,
+                    nullable: false,
+                    auto_increment: true,
+                    default: None,
+                })
+                .column(Column {
+                    name: "timestamp".to_string(),
+                    data_type: DataType::DateTime,
+                    nullable: true,
+                    auto_increment: false,
+                    default: Some(DatabaseValue::String("CURRENT_TIMESTAMP".to_string())),
+                })
+                .primary_key("id");
+
+            let drop = create.reverse();
+
+            assert_eq!(drop.table_name, "complex_async");
+            assert!(drop.if_exists);
+
+            #[cfg(feature = "cascade")]
+            assert_eq!(drop.behavior, crate::schema::DropBehavior::Default);
+        }
     }
 
-    // ===== CreateIndexStatement Tests =====
+    mod create_index {
+        use super::*;
 
-    #[test]
-    fn test_create_index_auto_reverse_basic() {
-        let create = create_index("idx_users_email")
-            .table("users")
-            .column("email");
+        #[test]
+        fn test_create_index_auto_reverse_basic() {
+            let create = create_index("idx_users_email")
+                .table("users")
+                .column("email");
 
-        let drop = create.reverse();
+            let drop = create.reverse();
 
-        assert_eq!(drop.index_name, "idx_users_email");
-        assert_eq!(drop.table_name, "users");
-        assert!(drop.if_exists); // Should use IF EXISTS for safety
+            assert_eq!(drop.index_name, "idx_users_email");
+            assert_eq!(drop.table_name, "users");
+            assert!(drop.if_exists); // Should use IF EXISTS for safety
+        }
+
+        #[test]
+        fn test_create_index_auto_reverse_non_consuming() {
+            let create = create_index("idx_users_email")
+                .table("users")
+                .column("email");
+
+            // Generate reverse operation
+            let drop = create.reverse();
+            assert_eq!(drop.index_name, "idx_users_email");
+            assert_eq!(drop.table_name, "users");
+            assert!(drop.if_exists);
+
+            // Original create is still usable for CodeMigration
+            assert_eq!(create.index_name, "idx_users_email");
+            assert_eq!(create.table_name, "users");
+
+            // We can even call reverse() multiple times
+            let drop2 = create.reverse();
+            assert_eq!(drop2.index_name, "idx_users_email");
+            assert!(drop2.if_exists);
+        }
+
+        #[test]
+        fn test_create_index_auto_reverse_multi_column() {
+            let create = create_index("idx_users_name")
+                .table("users")
+                .columns(vec!["first_name", "last_name"]);
+
+            let drop = create.reverse();
+
+            assert_eq!(drop.index_name, "idx_users_name");
+            assert_eq!(drop.table_name, "users");
+            assert!(drop.if_exists);
+            // Note: column info is intentionally lost in reversal as per design
+        }
+
+        #[test]
+        fn test_create_index_auto_reverse_unique() {
+            let create = create_index("idx_unique_email")
+                .table("users")
+                .column("email")
+                .unique(true);
+
+            let drop = create.reverse();
+
+            assert_eq!(drop.index_name, "idx_unique_email");
+            assert_eq!(drop.table_name, "users");
+            assert!(drop.if_exists);
+            // Note: unique constraint info is intentionally lost in reversal
+        }
+
+        #[test]
+        fn test_create_index_auto_reverse_if_not_exists() {
+            let create = create_index("idx_conditional")
+                .table("users")
+                .column("email")
+                .if_not_exists(true);
+
+            let drop = create.reverse();
+
+            assert_eq!(drop.index_name, "idx_conditional");
+            assert_eq!(drop.table_name, "users");
+            assert!(drop.if_exists); // Always true for safety in reversals
+        }
+
+        #[test]
+        fn test_create_index_auto_reverse_executable_trait() {
+            let create = create_index("idx_async_test")
+                .table("test_table")
+                .column("test_column");
+
+            let drop = create.reverse();
+
+            // Verify both types implement Executable trait correctly
+            assert_eq!(drop.index_name, "idx_async_test");
+            assert_eq!(drop.table_name, "test_table");
+            assert!(drop.if_exists);
+        }
+
+        #[test]
+        fn test_create_index_auto_reverse_complex_async() {
+            let create = create_index("idx_complex_async")
+                .table("complex_table")
+                .columns(vec!["col1", "col2", "col3"])
+                .unique(true)
+                .if_not_exists(true);
+
+            let drop = create.reverse();
+
+            assert_eq!(drop.index_name, "idx_complex_async");
+            assert_eq!(drop.table_name, "complex_table");
+            assert!(drop.if_exists);
+
+            // Original create should still be accessible
+            assert_eq!(create.index_name, "idx_complex_async");
+            assert_eq!(create.table_name, "complex_table");
+            assert_eq!(create.columns, vec!["col1", "col2", "col3"]);
+            assert!(create.unique);
+            assert!(create.if_not_exists);
+        }
     }
 
-    #[test]
-    fn test_create_index_auto_reverse_non_consuming() {
-        let create = create_index("idx_users_email")
-            .table("users")
-            .column("email");
+    mod add_column {
+        use super::*;
 
-        // Generate reverse operation
-        let drop = create.reverse();
-        assert_eq!(drop.index_name, "idx_users_email");
-        assert_eq!(drop.table_name, "users");
-        assert!(drop.if_exists);
+        #[test]
+        #[cfg(feature = "auto-reverse")]
+        fn test_add_column_reversal() {
+            let add = add_column(
+                "users",
+                "age",
+                DataType::Int,
+                true, // nullable
+                None, // default
+            );
 
-        // Original create is still usable for CodeMigration
-        assert_eq!(create.index_name, "idx_users_email");
-        assert_eq!(create.table_name, "users");
+            let drop = add.reverse();
+            assert_eq!(drop.table_name, "users");
+            assert_eq!(drop.column_name, "age");
+        }
 
-        // We can even call reverse() multiple times
-        let drop2 = create.reverse();
-        assert_eq!(drop2.index_name, "idx_users_email");
-        assert!(drop2.if_exists);
-    }
+        #[test]
+        #[cfg(feature = "auto-reverse")]
+        fn test_add_column_with_default() {
+            let add = add_column(
+                "users",
+                "status",
+                DataType::Text,
+                false, // not nullable
+                Some(DatabaseValue::String("active".to_string())),
+            );
 
-    #[test]
-    fn test_create_index_auto_reverse_multi_column() {
-        let create = create_index("idx_users_name")
-            .table("users")
-            .columns(vec!["first_name", "last_name"]);
+            let drop = add.reverse();
+            assert_eq!(drop.table_name, "users");
+            assert_eq!(drop.column_name, "status");
+        }
 
-        let drop = create.reverse();
+        #[test]
+        #[cfg(feature = "auto-reverse")]
+        fn test_add_column_non_consuming() {
+            let add = add_column(
+                "products",
+                "price",
+                DataType::Real,
+                true,
+                Some(DatabaseValue::Real(0.0)),
+            );
 
-        assert_eq!(drop.index_name, "idx_users_name");
-        assert_eq!(drop.table_name, "users");
-        assert!(drop.if_exists);
-        // Note: column info is intentionally lost in reversal as per design
-    }
+            // Generate reverse operation
+            let drop = add.reverse();
+            assert_eq!(drop.table_name, "products");
+            assert_eq!(drop.column_name, "price");
 
-    #[test]
-    fn test_create_index_auto_reverse_unique() {
-        let create = create_index("idx_unique_email")
-            .table("users")
-            .column("email")
-            .unique(true);
+            // Original add operation is still usable since reverse() doesn't consume it
+            assert_eq!(add.table_name, "products");
+            assert_eq!(add.name, "price");
+            assert_eq!(add.data_type, DataType::Real);
+            assert!(add.nullable);
+        }
 
-        let drop = create.reverse();
+        #[test]
+        #[cfg(feature = "auto-reverse")]
+        fn test_add_column_executable_trait() {
+            let add = add_column(
+                "async_table",
+                "new_column",
+                DataType::BigInt,
+                false,
+                Some(DatabaseValue::Number(42)),
+            );
 
-        assert_eq!(drop.index_name, "idx_unique_email");
-        assert_eq!(drop.table_name, "users");
-        assert!(drop.if_exists);
-        // Note: unique constraint info is intentionally lost in reversal
-    }
+            // Test that AddColumnOperation implements Executable trait correctly
+            assert_eq!(add.table_name, "async_table");
+            assert_eq!(add.name, "new_column");
+            assert_eq!(add.data_type, DataType::BigInt);
+            assert!(!add.nullable);
+        }
 
-    #[test]
-    fn test_create_index_auto_reverse_if_not_exists() {
-        let create = create_index("idx_conditional")
-            .table("users")
-            .column("email")
-            .if_not_exists(true);
+        #[test]
+        #[cfg(feature = "auto-reverse")]
+        fn test_add_column_complex_async() {
+            let add = add_column(
+                "complex_table",
+                "complex_column",
+                DataType::VarChar(255),
+                true,
+                Some(DatabaseValue::String("default_value".to_string())),
+            );
 
-        let drop = create.reverse();
+            let drop = add.reverse();
 
-        assert_eq!(drop.index_name, "idx_conditional");
-        assert_eq!(drop.table_name, "users");
-        assert!(drop.if_exists); // Always true for safety in reversals
-    }
-
-    #[switchy_async::test]
-    async fn test_create_index_auto_reverse_executable_trait() {
-        let create = create_index("idx_async_test")
-            .table("test_table")
-            .column("test_column");
-
-        let drop = create.reverse();
-
-        // Verify both types implement Executable trait correctly
-        assert_eq!(drop.index_name, "idx_async_test");
-        assert_eq!(drop.table_name, "test_table");
-        assert!(drop.if_exists);
-    }
-
-    #[switchy_async::test]
-    async fn test_create_index_auto_reverse_complex_async() {
-        let create = create_index("idx_complex_async")
-            .table("complex_table")
-            .columns(vec!["col1", "col2", "col3"])
-            .unique(true)
-            .if_not_exists(true);
-
-        let drop = create.reverse();
-
-        assert_eq!(drop.index_name, "idx_complex_async");
-        assert_eq!(drop.table_name, "complex_table");
-        assert!(drop.if_exists);
-
-        // Original create should still be accessible
-        assert_eq!(create.index_name, "idx_complex_async");
-        assert_eq!(create.table_name, "complex_table");
-        assert_eq!(create.columns, vec!["col1", "col2", "col3"]);
-        assert!(create.unique);
-        assert!(create.if_not_exists);
-    }
-
-    // ===== AddColumnOperation Tests =====
-
-    #[test]
-    #[cfg(feature = "auto-reverse")]
-    fn test_add_column_reversal() {
-        let add = add_column(
-            "users",
-            "age",
-            DataType::Int,
-            true, // nullable
-            None, // default
-        );
-
-        let drop = add.reverse();
-        assert_eq!(drop.table_name, "users");
-        assert_eq!(drop.column_name, "age");
-    }
-
-    #[test]
-    #[cfg(feature = "auto-reverse")]
-    fn test_add_column_with_default() {
-        let add = add_column(
-            "users",
-            "status",
-            DataType::Text,
-            false, // not nullable
-            Some(DatabaseValue::String("active".to_string())),
-        );
-
-        let drop = add.reverse();
-        assert_eq!(drop.table_name, "users");
-        assert_eq!(drop.column_name, "status");
-    }
-
-    #[test]
-    #[cfg(feature = "auto-reverse")]
-    fn test_add_column_non_consuming() {
-        let add = add_column(
-            "products",
-            "price",
-            DataType::Real,
-            true,
-            Some(DatabaseValue::Real(0.0)),
-        );
-
-        // Generate reverse operation
-        let drop = add.reverse();
-        assert_eq!(drop.table_name, "products");
-        assert_eq!(drop.column_name, "price");
-
-        // Original add operation is still usable since reverse() doesn't consume it
-        assert_eq!(add.table_name, "products");
-        assert_eq!(add.name, "price");
-        assert_eq!(add.data_type, DataType::Real);
-        assert!(add.nullable);
-    }
-
-    #[test]
-    #[cfg(feature = "auto-reverse")]
-    fn test_drop_column_not_reversible() {
-        // Verify DropColumnOperation does NOT implement AutoReversible
-        // This is a compile-time check - uncommenting should fail:
-        // let drop = DropColumnOperation { table_name: "users", column_name: "age".to_string() };
-        // let _ = drop.reverse(); // SHOULD NOT COMPILE
-    }
-
-    #[switchy_async::test]
-    #[cfg(feature = "auto-reverse")]
-    async fn test_add_column_executable_trait() {
-        let add = add_column(
-            "async_table",
-            "new_column",
-            DataType::BigInt,
-            false,
-            Some(DatabaseValue::Number(42)),
-        );
-
-        // Test that AddColumnOperation implements Executable trait correctly
-        assert_eq!(add.table_name, "async_table");
-        assert_eq!(add.name, "new_column");
-        assert_eq!(add.data_type, DataType::BigInt);
-        assert!(!add.nullable);
-    }
-
-    #[switchy_async::test]
-    #[cfg(feature = "auto-reverse")]
-    async fn test_add_column_complex_async() {
-        let add = add_column(
-            "complex_table",
-            "complex_column",
-            DataType::VarChar(255),
-            true,
-            Some(DatabaseValue::String("default_value".to_string())),
-        );
-
-        let drop = add.reverse();
-
-        // Verify both operations maintain correct state
-        assert_eq!(add.table_name, "complex_table");
-        assert_eq!(add.name, "complex_column");
-        assert_eq!(drop.table_name, "complex_table");
-        assert_eq!(drop.column_name, "complex_column");
+            // Verify both operations maintain correct state
+            assert_eq!(add.table_name, "complex_table");
+            assert_eq!(add.name, "complex_column");
+            assert_eq!(drop.table_name, "complex_table");
+            assert_eq!(drop.column_name, "complex_column");
+        }
     }
 }
