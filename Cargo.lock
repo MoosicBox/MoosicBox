@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "ab_glyph"
-version = "0.2.31"
+version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e074464580a518d16a7126262fffaaa47af89d4099d4cb403f8ed938ba12ee7d"
+checksum = "01c0457472c38ea5bd1c3b5ada5e368271cb550be7a4ca4a0b4634e9913f6cc2"
 dependencies = [
  "ab_glyph_rasterizer",
  "owned_ttf_parser",
@@ -664,7 +664,7 @@ dependencies = [
  "serde",
  "tauri",
  "tauri-plugin",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -2273,7 +2273,7 @@ dependencies = [
  "serde",
  "serde-untagged",
  "serde-value",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "toml 0.8.23",
  "unicode-xid",
  "url 2.5.7",
@@ -2290,7 +2290,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -2305,7 +2305,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -4344,7 +4344,7 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "tracing-log",
@@ -5425,7 +5425,7 @@ dependencies = [
  "log 0.4.28",
  "pretty_env_logger",
  "switchy_http",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -5645,7 +5645,7 @@ dependencies = [
  "serde_json",
  "switchy",
  "switchy_env",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5660,7 +5660,7 @@ dependencies = [
  "quickcheck",
  "serde",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5745,7 +5745,7 @@ dependencies = [
  "switchy_async",
  "switchy_env",
  "switchy_http",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -5772,7 +5772,7 @@ dependencies = [
  "serde_json",
  "switchy",
  "switchy_http_models",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "uaparser",
 ]
 
@@ -5825,7 +5825,7 @@ dependencies = [
  "serde_json",
  "switchy_async",
  "switchy_fs",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5909,7 +5909,7 @@ dependencies = [
  "serde_urlencoded",
  "switchy",
  "switchy_async",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -5923,7 +5923,7 @@ dependencies = [
  "serde",
  "serde_json",
  "simvar",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "web_server_simulator",
 ]
@@ -5939,7 +5939,7 @@ dependencies = [
  "serde_json",
  "switchy",
  "switchy_async",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -5994,7 +5994,7 @@ dependencies = [
  "moosicbox_assert",
  "serde",
  "serde_json",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "url 2.5.7",
 ]
 
@@ -6024,7 +6024,7 @@ dependencies = [
  "switchy_time",
  "syntect",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tl",
  "xml",
 ]
@@ -7119,7 +7119,7 @@ checksum = "656b3b27f8893f7bbf9485148ff9a65f019e3f33bd5cdc87c83cab16b3fd9ec8"
 dependencies = [
  "libc",
  "neli",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "windows-sys 0.59.0",
 ]
 
@@ -7553,7 +7553,7 @@ dependencies = [
  "moosicbox_logging",
  "moosicbox_music_api",
  "moosicbox_music_models",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -7620,7 +7620,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-log",
  "tauri-plugin-notification",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -7687,7 +7687,7 @@ dependencies = [
  "switchy",
  "switchy_async",
  "switchy_env",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -7704,7 +7704,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_async",
  "tauri",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -7766,7 +7766,7 @@ dependencies = [
  "switchy_async",
  "switchy_http",
  "switchy_upnp",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -7787,7 +7787,7 @@ dependencies = [
  "switchy_async",
  "switchy_database",
  "tauri",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -7803,7 +7803,7 @@ dependencies = [
  "moosicbox_env_utils",
  "moosicbox_logging",
  "switchy_async",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-tungstenite",
 ]
@@ -7837,7 +7837,7 @@ dependencies = [
  "pretty_assertions",
  "switchy_async",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -7856,7 +7856,7 @@ dependencies = [
  "switchy_http",
  "switchy_time",
  "symphonia",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -7872,7 +7872,7 @@ dependencies = [
  "ogg",
  "opus",
  "switchy_fs",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -7901,7 +7901,7 @@ dependencies = [
  "switchy_async",
  "switchy_time",
  "symphonia",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "utoipa",
 ]
@@ -7964,7 +7964,7 @@ dependencies = [
  "switchy_env",
  "switchy_http",
  "switchy_uuid",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "url 2.5.7",
  "utoipa",
 ]
@@ -7993,7 +7993,7 @@ dependencies = [
  "serde",
  "switchy_database",
  "switchy_random",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "utoipa",
 ]
 
@@ -8038,7 +8038,7 @@ dependencies = [
  "switchy_database",
  "switchy_fs",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "utoipa",
 ]
@@ -8086,7 +8086,7 @@ dependencies = [
  "switchy_http",
  "switchy_time",
  "symphonia",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -8107,7 +8107,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_async",
  "switchy_fs",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "webp",
 ]
@@ -8123,7 +8123,7 @@ dependencies = [
  "serde_json",
  "switchy_database",
  "tantivy",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -8149,7 +8149,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy_database",
  "switchy_time",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "utoipa",
 ]
@@ -8247,7 +8247,7 @@ dependencies = [
  "log 0.4.28",
  "moosicbox_config",
  "moosicbox_env_utils",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -8303,7 +8303,7 @@ dependencies = [
  "serde",
  "switchy_database",
  "switchy_time",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "utoipa",
 ]
@@ -8359,7 +8359,7 @@ dependencies = [
  "pretty_assertions",
  "switchy_async",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -8422,7 +8422,7 @@ dependencies = [
  "switchy_database",
  "tantivy",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "utoipa",
 ]
 
@@ -8441,7 +8441,7 @@ dependencies = [
 name = "moosicbox_parsing_utils"
 version = "0.1.4"
 dependencies = [
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -8478,7 +8478,7 @@ dependencies = [
  "switchy_time",
  "symphonia",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-util",
  "url 2.5.7",
@@ -8525,7 +8525,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "switchy",
  "switchy_async",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "url 2.5.7",
  "utoipa",
@@ -8542,7 +8542,7 @@ dependencies = [
  "moosicbox_music_models",
  "moosicbox_paging",
  "switchy_http",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "urlencoding",
 ]
@@ -8597,7 +8597,7 @@ dependencies = [
  "switchy_schema_test_utils",
  "switchy_time",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "utoipa",
 ]
@@ -8629,7 +8629,7 @@ dependencies = [
  "switchy_schema",
  "switchy_schema_test_utils",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -8653,7 +8653,7 @@ dependencies = [
  "switchy_fs",
  "tantivy",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -8720,7 +8720,7 @@ dependencies = [
  "switchy_telemetry",
  "switchy_time",
  "switchy_upnp",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "throttle",
  "tokio",
  "tokio-util",
@@ -8773,7 +8773,7 @@ dependencies = [
  "serde_json",
  "switchy_async",
  "switchy_database",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "utoipa",
 ]
@@ -8806,7 +8806,7 @@ dependencies = [
  "switchy_async",
  "switchy_http",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -8835,7 +8835,7 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "url 2.5.7",
  "utoipa",
@@ -8857,7 +8857,7 @@ dependencies = [
  "switchy_async",
  "switchy_http",
  "switchy_time",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -8894,7 +8894,7 @@ dependencies = [
  "switchy_http",
  "switchy_random",
  "symphonia",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-tungstenite",
 ]
@@ -8935,7 +8935,7 @@ dependencies = [
  "switchy_telemetry",
  "switchy_time",
  "switchy_uuid",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
 ]
@@ -8963,7 +8963,7 @@ dependencies = [
  "serde-querystring",
  "serde_json",
  "switchy_http_models",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "urlencoding",
  "utoipa",
  "utoipa-rapidoc",
@@ -9003,7 +9003,7 @@ dependencies = [
  "strum 0.27.2",
  "strum_macros 0.27.2",
  "switchy_database",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -9033,7 +9033,7 @@ dependencies = [
  "switchy_database",
  "switchy_http",
  "switchy_time",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "url 2.5.7",
  "utoipa",
@@ -9112,7 +9112,7 @@ dependencies = [
  "once_cell",
  "png 0.17.16",
  "serde",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "windows-sys 0.60.2",
 ]
 
@@ -9155,7 +9155,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "spirv",
  "strum 0.26.3",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "unicode-ident",
 ]
 
@@ -10078,7 +10078,7 @@ dependencies = [
  "futures-sink",
  "js-sys",
  "pin-project-lite",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tracing",
 ]
 
@@ -10092,7 +10092,7 @@ dependencies = [
  "futures-sink",
  "js-sys",
  "pin-project-lite",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tracing",
 ]
 
@@ -10122,7 +10122,7 @@ dependencies = [
  "opentelemetry_sdk 0.30.0",
  "prost",
  "reqwest",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tonic 0.13.1",
  "tracing",
@@ -10170,7 +10170,7 @@ dependencies = [
  "futures-util",
  "glob",
  "opentelemetry 0.29.1",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
 ]
@@ -10188,7 +10188,7 @@ dependencies = [
  "percent-encoding 2.3.2",
  "rand 0.9.2",
  "serde_json",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
 ]
@@ -10425,7 +10425,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21e0a3a33733faeaf8651dfee72dd0f388f0c8e5ad496a3478fa5a922f49cfa8"
 dependencies = [
  "memchr",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "ucd-trie",
 ]
 
@@ -11313,7 +11313,7 @@ dependencies = [
  "memchr",
  "parking_lot",
  "protobuf 3.7.2",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -11565,7 +11565,7 @@ dependencies = [
  "rustc-hash 2.1.1",
  "rustls 0.23.32",
  "socket2 0.6.0",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tracing",
  "web-time",
@@ -11586,7 +11586,7 @@ dependencies = [
  "rustls 0.23.32",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tinyvec",
  "tracing",
  "web-time",
@@ -11608,9 +11608,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.40"
+version = "1.0.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d"
+checksum = "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1"
 dependencies = [
  "proc-macro2",
 ]
@@ -11931,23 +11931,23 @@ checksum = "a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac"
 dependencies = [
  "getrandom 0.2.16",
  "libredox",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
 name = "ref-cast"
-version = "1.0.24"
+version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a0ae411dbe946a674d89546582cea4ba2bb8defac896622d6496f14c23ba5cf"
+checksum = "f354300ae66f76f1c85c5f84693f0ce81d747e2c3f21a45fef496d89c960bf7d"
 dependencies = [
  "ref-cast-impl",
 ]
 
 [[package]]
 name = "ref-cast-impl"
-version = "1.0.24"
+version = "1.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1165225c21bff1f3bbce98f5a1f889949bc902d3575308cc7b0de30b4f6d27c7"
+checksum = "b7186006dcb21920990093f30e3dea63b7d6e977bf1256be20c3563a5db070da"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12433,7 +12433,7 @@ dependencies = [
  "openssl-probe",
  "rustls-pki-types",
  "schannel",
- "security-framework 3.5.0",
+ "security-framework 3.5.1",
 ]
 
 [[package]]
@@ -12641,9 +12641,9 @@ dependencies = [
 
 [[package]]
 name = "security-framework"
-version = "3.5.0"
+version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc198e42d9b7510827939c9a15f5062a0c913f3371d765977e586d2fe6c16f4a"
+checksum = "b3297343eaf830f66ede390ea39da1d462b6b0c1b000f420d0a83f898bbbe6ef"
 dependencies = [
  "bitflags 2.9.4",
  "core-foundation 0.10.1",
@@ -12698,9 +12698,9 @@ checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
 
 [[package]]
 name = "serde"
-version = "1.0.227"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80ece43fc6fbed4eb5392ab50c07334d3e577cbf40997ee896fe7af40bba4245"
+checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
  "serde_derive",
@@ -12752,18 +12752,18 @@ dependencies = [
 
 [[package]]
 name = "serde_core"
-version = "1.0.227"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a576275b607a2c86ea29e410193df32bc680303c82f31e275bbfcafe8b33be5"
+checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.227"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51e694923b8824cf0e9b382adf0f60d4e05f348f357b38833a3fa5ed7c2ede04"
+checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -13160,7 +13160,7 @@ dependencies = [
  "shell-words",
  "simvar_utils",
  "switchy",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -13420,7 +13420,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "smallvec",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -13504,7 +13504,7 @@ dependencies = [
  "smallvec",
  "sqlx-core",
  "stringprep",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tracing",
  "whoami",
 ]
@@ -13542,7 +13542,7 @@ dependencies = [
  "smallvec",
  "sqlx-core",
  "stringprep",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tracing",
  "whoami",
 ]
@@ -13567,7 +13567,7 @@ dependencies = [
  "serde",
  "serde_urlencoded",
  "sqlx-core",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tracing",
  "url 2.5.7",
 ]
@@ -14043,9 +14043,9 @@ dependencies = [
 
 [[package]]
 name = "swc_ecma_parser"
-version = "24.0.1"
+version = "24.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8079e65c43d8f3e64e791321355f5864322425fce3a3ab7fc959bbddb531933"
+checksum = "38cd8f08611d6d4927bcd81501813b304885af064b9704ba8e4a0e0f869364e8"
 dependencies = [
  "either",
  "num-bigint",
@@ -14314,7 +14314,7 @@ dependencies = [
  "switchy_random",
  "switchy_time",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-util",
 ]
@@ -14365,7 +14365,7 @@ dependencies = [
  "switchy_database_connection",
  "switchy_time",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-postgres",
  "tokio-util",
@@ -14387,7 +14387,7 @@ dependencies = [
  "sqlx",
  "switchy_database",
  "switchy_env",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tokio-postgres",
 ]
@@ -14397,7 +14397,7 @@ name = "switchy_env"
 version = "0.1.0"
 dependencies = [
  "log 0.4.28",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -14428,7 +14428,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.2",
  "switchy_http_models",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -14440,7 +14440,7 @@ dependencies = [
  "reqwest",
  "serde",
  "strum 0.27.2",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -14456,7 +14456,7 @@ dependencies = [
  "moosicbox_async_service",
  "strum_macros 0.27.2",
  "switchy_async",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -14466,7 +14466,7 @@ dependencies = [
  "async-trait",
  "switchy_async",
  "switchy_random",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -14496,7 +14496,7 @@ dependencies = [
  "switchy_schema_test_utils",
  "tempfile",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -14521,7 +14521,7 @@ dependencies = [
  "switchy_fs",
  "switchy_schema",
  "tempfile",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -14541,7 +14541,7 @@ dependencies = [
  "switchy_fs",
  "switchy_schema",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -14559,7 +14559,7 @@ dependencies = [
  "serial_test",
  "switchy_async",
  "test-log",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -14623,7 +14623,7 @@ dependencies = [
  "switchy_http",
  "switchy_random",
  "symphonia",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "utoipa",
  "xml",
@@ -14878,12 +14878,11 @@ dependencies = [
 
 [[package]]
 name = "syntect"
-version = "5.2.0"
+version = "5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "874dcfa363995604333cf947ae9f751ca3af4522c60886774c4963943b4746b1"
+checksum = "656b45c05d95a5704399aeef6bd0ddec7b2b3531b7c9e900abbf7c4d2190c925"
 dependencies = [
  "bincode",
- "bitflags 1.3.2",
  "flate2",
  "fnv",
  "once_cell",
@@ -14893,7 +14892,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.17",
  "walkdir",
  "yaml-rust",
 ]
@@ -14957,7 +14956,7 @@ dependencies = [
  "tantivy-stacker",
  "tantivy-tokenizer-api",
  "tempfile",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "time 0.3.44",
  "uuid",
  "winapi",
@@ -15168,7 +15167,7 @@ dependencies = [
  "tauri-runtime",
  "tauri-runtime-wry",
  "tauri-utils",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
  "tray-icon",
  "url 2.5.7",
@@ -15221,7 +15220,7 @@ dependencies = [
  "sha2",
  "syn 2.0.106",
  "tauri-utils",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "time 0.3.44",
  "url 2.5.7",
  "uuid",
@@ -15273,7 +15272,7 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "tauri-plugin-fs",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "url 2.5.7",
 ]
 
@@ -15294,7 +15293,7 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "tauri-utils",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "toml 0.9.7",
  "url 2.5.7",
 ]
@@ -15317,7 +15316,7 @@ dependencies = [
  "swift-rs",
  "tauri",
  "tauri-plugin",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "time 0.3.44",
 ]
 
@@ -15335,7 +15334,7 @@ dependencies = [
  "serde_repr",
  "tauri",
  "tauri-plugin",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "time 0.3.44",
  "url 2.5.7",
 ]
@@ -15358,7 +15357,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tauri-utils",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "url 2.5.7",
  "webkit2gtk",
  "webview2-com",
@@ -15422,7 +15421,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "swift-rs",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "toml 0.9.7",
  "url 2.5.7",
  "urlpattern",
@@ -15447,7 +15446,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b1e66e07de489fe43a46678dd0b8df65e0c973909df1b60ba33874e297ba9b9"
 dependencies = [
  "quick-xml 0.37.5",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "windows 0.61.3",
  "windows-version",
 ]
@@ -15547,11 +15546,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.16"
+version = "2.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3467d614147380f2e4e374161426ff399c91084acd2363eaf549172b3d5e60c0"
+checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
 dependencies = [
- "thiserror-impl 2.0.16",
+ "thiserror-impl 2.0.17",
 ]
 
 [[package]]
@@ -15567,9 +15566,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.16"
+version = "2.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c5e1be1c48b9172ee610da68fd9cd2770e7a4056cb3fc98710ee6906f0c7960"
+checksum = "3ff15c8ecd7de3849db632e14d18d2571fa09dfc5ed93479bc4485c7a517c913"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -16274,7 +16273,7 @@ dependencies = [
  "once_cell",
  "png 0.17.16",
  "serde",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "windows-sys 0.59.0",
 ]
 
@@ -16331,7 +16330,7 @@ dependencies = [
  "rustls 0.23.32",
  "rustls-pki-types",
  "sha1",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "utf-8",
 ]
 
@@ -17122,7 +17121,7 @@ dependencies = [
  "switchy",
  "switchy_async",
  "switchy_http_models",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
@@ -17245,7 +17244,7 @@ version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36695906a1b53a3bf5c4289621efedac12b73eeb0b89e7e1a89b517302d5d75c"
 dependencies = [
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "windows 0.61.3",
  "windows-core 0.61.2",
 ]
@@ -17307,7 +17306,7 @@ dependencies = [
  "raw-window-handle",
  "rustc-hash 1.1.0",
  "smallvec",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
  "wgpu-core-deps-windows-linux-android",
@@ -17381,7 +17380,7 @@ dependencies = [
  "raw-window-handle",
  "renderdoc-sys",
  "smallvec",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "wasm-bindgen",
  "web-sys",
  "wgpu-types",
@@ -17399,7 +17398,7 @@ dependencies = [
  "bytemuck",
  "js-sys",
  "log 0.4.28",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "web-sys",
 ]
 
@@ -18145,7 +18144,7 @@ dependencies = [
  "sha2",
  "soup3",
  "tao-macros",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "url 2.5.7",
  "webkit2gtk",
  "webkit2gtk-sys",
