@@ -279,7 +279,8 @@ Both types re-exported at crate root for easy access
 
 ### 3.1 Create TOC Module
 
-- [ ] Create `src/toc.rs`:
+- [x] Create `src/toc.rs`:
+TOC module created with TocByte struct, OpusMode and Bandwidth enums, all with proper derives and documentation
   ```rust
   use crate::error::{Error, Result};
 
@@ -355,17 +356,31 @@ Both types re-exported at crate root for easy access
   ```
 
 #### 3.1 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] TOC byte parsing functions work correctly
-- [ ] All types have accessible public methods
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with TOC module and all types
+
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features
+
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings after fixing const fn, use_self, and missing_errors_doc issues
+
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used, no unused dependencies
+
+- [x] TOC byte parsing functions work correctly
+TocByte::parse() implements RFC 6716 TOC byte parsing with bit manipulation
+
+- [x] All types have accessible public methods
+All getter methods marked with #[must_use] and made const fn for performance
 
 ### 3.2 Update lib.rs
 
-- [ ] Add to `src/lib.rs`:
+- [x] Add to `src/lib.rs`:
+Added toc module declaration and public exports for TocByte, OpusMode, and Bandwidth types
   ```rust
   pub mod error;
   pub mod toc;
@@ -375,13 +390,26 @@ Both types re-exported at crate root for easy access
   ```
 
 #### 3.2 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] TOC module is exported and accessible
-- [ ] All TOC types are publicly available
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with exported TOC module
+
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles with public TOC exports available
+
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with public API exports
+
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used
+
+- [x] TOC module is exported and accessible
+Module declared as public and available for import
+
+- [x] All TOC types are publicly available
+TocByte, OpusMode, and Bandwidth types re-exported at crate root
 
 ## Phase 4: Frame Structure (No New Dependencies Yet)
 

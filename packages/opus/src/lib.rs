@@ -9,5 +9,7 @@
 //! This crate is under development.
 
 pub mod error;
+pub mod toc;
 
 pub use error::{Error, Result};
+pub use toc::{Bandwidth, OpusMode, TocByte};
