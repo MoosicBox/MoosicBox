@@ -1239,3 +1239,9 @@ pub mod dependencies;
 pub use dependencies::{
     ColumnDependencies, CycleError, DependencyGraph, DropPlan, get_column_dependencies,
 };
+
+#[cfg(feature = "auto-reverse")]
+pub mod auto_reversible;
+
+#[cfg(feature = "auto-reverse")]
+pub use auto_reversible::AutoReversible;

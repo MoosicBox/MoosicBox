@@ -160,5 +160,6 @@ placeholder-dollar-number = ["dep:regex"]
 placeholder-named-colon   = ["dep:regex"]
 placeholder-question-mark = []
 
+auto-reverse = []
 cascade = ["schema"]
 schema  = []
