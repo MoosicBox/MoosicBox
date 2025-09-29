@@ -492,14 +492,6 @@ This plan ensures each phase produces fully compilable code with no warnings. De
       sample_rate: u32,
   }
 
-  impl OpusDecoder {
-      /// Get codec parameters.
-      #[must_use]
-      pub fn codec_params(&self) -> &CodecParameters {
-          &self.params
-      }
-  }
-
   impl Decoder for OpusDecoder {
       fn try_new(params: &CodecParameters, _options: &DecoderOptions) -> Result<Self, Error> {
           debug!("Initializing Opus decoder");
@@ -599,20 +591,11 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   /// Create a codec registry with Opus support.
   #[must_use]
   pub fn create_opus_registry() -> CodecRegistry {
-      let mut registry = CodecRegistry::new();
+      // Start with default Symphonia codecs
+      let mut registry = symphonia::default::get_codecs();
 
-      // Register Opus
+      // Add our Opus codec on top
       register_opus_codec(&mut registry);
-
-      // Register other Symphonia codecs based on features
-      #[cfg(feature = "aac")]
-      symphonia::default::codecs::AacDecoder::register_all(&mut registry);
-
-      #[cfg(feature = "flac")]
-      symphonia::default::codecs::FlacDecoder::register_all(&mut registry);
-
-      #[cfg(feature = "mp3")]
-      symphonia::default::codecs::Mp3Decoder::register_all(&mut registry);
 
       registry
   }
@@ -662,19 +645,26 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   #[cfg(feature = "opus")]
   use moosicbox_opus::create_opus_registry;
 
-  // At module level (not inside a function)
-  #[cfg(feature = "opus")]
-  fn get_codec_registry() -> symphonia::core::codecs::CodecRegistry {
-      moosicbox_opus::create_opus_registry()
-  }
+  // Inside the decode function (around line 495):
+  pub fn decode_file_with_handler(/* params */) -> Result<(), AudioDecodeError> {
+      // ... existing code ...
 
-  #[cfg(not(feature = "opus"))]
-  fn get_codec_registry() -> symphonia::core::codecs::CodecRegistry {
-      symphonia::default::get_codecs()
-  }
+      // Create the codec registry inline where it's used
+      let codec_registry = {
+          #[cfg(feature = "opus")]
+          {
+              moosicbox_opus::create_opus_registry()
+          }
+          #[cfg(not(feature = "opus"))]
+          {
+              symphonia::default::get_codecs()
+          }
+      };
 
-  // Replace the decoder creation line (around line 495):
-  let mut decoder = get_codec_registry().make(&track.codec_params, &decode_opts)?;
+      let mut decoder = codec_registry.make(&track.codec_params, &decode_opts)?;
+
+      // ... rest of function
+  }
   ```
 
 ### 8.3 Similar Update for unsync.rs
@@ -713,7 +703,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 
 ### 9.3 Update Decoder with Real Implementation
 
-- [ ] Replace stub in `src/decoder.rs`:
+- [ ] Replace stub in `src/decoder.rs` (REPLACE entire imports section):
   ```rust
   use audiopus::{coder::Decoder as OpusLibDecoder, Channels, SampleRate};
   use log::{debug, warn};
@@ -728,18 +718,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   };
   use symphonia::support_codec;
 
-  use crate::{
-      error::OpusError,
-      packet::OpusPacket,
-  };
+  use crate::packet::OpusPacket;
 
   pub struct OpusDecoder {
       params: CodecParameters,
       opus_decoder: OpusLibDecoder,  // Add real decoder
       output_buf: AudioBuffer<f32>,
-      sample_rate: u32,
       channel_count: usize,
       frame_size_samples: usize,
+      // Remove sample_rate field - access via params when needed
   }
 
   impl Decoder for OpusDecoder {
@@ -765,9 +752,9 @@ This plan ensures each phase produces fully compilable code with no warnings. De
               params: params.clone(),
               opus_decoder,
               output_buf,
-              sample_rate,
               channel_count: channels,
               frame_size_samples,
+              // Don't store sample_rate - access via params.sample_rate when needed
           })
       }
 
@@ -914,7 +901,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 - [ ] Create `tests/decoder_tests.rs`:
   ```rust
   use symphonia::core::{
-      codecs::{CodecParameters, DecoderOptions, CODEC_TYPE_OPUS},
+      codecs::{CodecParameters, Decoder, DecoderOptions, CODEC_TYPE_OPUS},
       audio::Channels,
   };
   use moosicbox_opus::OpusDecoder;
@@ -991,7 +978,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 
   use std::fs::File;
   use symphonia::core::{
-      codecs::{CodecParameters, DecoderOptions, CODEC_TYPE_OPUS},
+      codecs::{CodecParameters, Decoder, DecoderOptions, CODEC_TYPE_OPUS},
       formats::Packet,
   };
   use moosicbox_opus::OpusDecoder;
@@ -1000,8 +987,8 @@ This plan ensures each phase produces fully compilable code with no warnings. De
       println!("Opus decoder example");
 
       // Would decode a real file here
-      let params = CodecParameters::new()
-          .for_codec(CODEC_TYPE_OPUS);
+      let mut params = CodecParameters::new();
+      params.for_codec(CODEC_TYPE_OPUS);
 
       let decoder = OpusDecoder::try_new(&params, &DecoderOptions::default())?;
       println!("Decoder created successfully");
