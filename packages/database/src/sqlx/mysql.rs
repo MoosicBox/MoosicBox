@@ -1956,7 +1956,7 @@ pub(crate) async fn mysql_sqlx_exec_create_index(
         .join(", ");
 
     let sql = format!(
-        "CREATE {}INDEX {}{}ON {} ({})",
+        "CREATE {}INDEX {}{} ON {} ({})",
         unique_str, if_not_exists_str, statement.index_name, statement.table_name, columns_str
     );
 
