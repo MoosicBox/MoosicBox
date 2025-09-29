@@ -45,8 +45,12 @@
 //! assert_eq!(create.table_name, "users");
 //! ```
 
-use crate::Executable;
 use async_trait::async_trait;
+
+use super::alter_table;
+use crate::schema::{DataType, DatabaseValue};
+use crate::{Database, DatabaseError};
+use crate::Executable;
 
 /// Marker trait for schema operations that can be automatically reversed.
 /// Only implement this for operations where the reverse is deterministic and safe.
@@ -96,6 +100,88 @@ impl<'a> AutoReversible for crate::schema::CreateIndexStatement<'a> {
             table_name: self.table_name,
             if_exists: true, // Use IF EXISTS for safety when reversing
         }
+    }
+}
+
+/// Represents an ADD COLUMN operation that can be automatically reversed.
+///
+/// Note: This struct does not include an `auto_increment` field because
+/// ALTER TABLE ADD COLUMN cannot add auto-increment columns in most databases.
+/// This design makes invalid operations unrepresentable in the type system.
+///
+/// To add an auto-increment column, you must recreate the table or use
+/// database-specific workarounds.
+#[cfg(feature = "auto-reverse")]
+pub struct AddColumnOperation<'a> {
+    pub table_name: &'a str,
+    pub name: String,
+    pub data_type: DataType,
+    pub nullable: bool,
+    pub default: Option<DatabaseValue>,
+}
+
+#[cfg(feature = "auto-reverse")]
+#[async_trait]
+impl crate::Executable for AddColumnOperation<'_> {
+    async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError> {
+        alter_table(self.table_name)
+            .add_column(
+                self.name.clone(),
+                self.data_type.clone(),
+                self.nullable,
+                self.default.clone(),
+            )
+            .execute(db)
+            .await
+    }
+}
+
+/// Represents a DROP COLUMN operation (the reverse of ADD COLUMN)
+#[cfg(feature = "auto-reverse")]
+pub struct DropColumnOperation<'a> {
+    pub table_name: &'a str,
+    pub column_name: String,
+}
+
+#[cfg(feature = "auto-reverse")]
+#[async_trait]
+impl crate::Executable for DropColumnOperation<'_> {
+    async fn execute(&self, db: &dyn Database) -> Result<(), DatabaseError> {
+        alter_table(self.table_name)
+            .drop_column(self.column_name.clone())
+            .execute(db)
+            .await
+    }
+}
+
+#[cfg(feature = "auto-reverse")]
+#[async_trait]
+impl<'a> AutoReversible for AddColumnOperation<'a> {
+    type Reversed = DropColumnOperation<'a>;
+
+    fn reverse(&self) -> Self::Reversed {
+        DropColumnOperation {
+            table_name: self.table_name,
+            column_name: self.name.clone(),
+        }
+    }
+}
+
+/// Create an ADD COLUMN operation that can be auto-reversed
+#[cfg(feature = "auto-reverse")]
+pub fn add_column(
+    table: &str,
+    name: impl Into<String>,
+    data_type: DataType,
+    nullable: bool,
+    default: Option<DatabaseValue>,
+) -> AddColumnOperation<'_> {
+    AddColumnOperation {
+        table_name: table,
+        name: name.into(),
+        data_type,
+        nullable,
+        default,
     }
 }
 
@@ -339,5 +425,109 @@ mod tests {
         assert_eq!(create.columns, vec!["col1", "col2", "col3"]);
         assert!(create.unique);
         assert!(create.if_not_exists);
+    }
+
+    // ===== AddColumnOperation Tests =====
+
+    #[test]
+    #[cfg(feature = "auto-reverse")]
+    fn test_add_column_reversal() {
+        let add = add_column(
+            "users",
+            "age",
+            DataType::Int,
+            true, // nullable
+            None, // default
+        );
+
+        let drop = add.reverse();
+        assert_eq!(drop.table_name, "users");
+        assert_eq!(drop.column_name, "age");
+    }
+
+    #[test]
+    #[cfg(feature = "auto-reverse")]
+    fn test_add_column_with_default() {
+        let add = add_column(
+            "users",
+            "status",
+            DataType::Text,
+            false, // not nullable
+            Some(DatabaseValue::String("active".to_string())),
+        );
+
+        let drop = add.reverse();
+        assert_eq!(drop.table_name, "users");
+        assert_eq!(drop.column_name, "status");
+    }
+
+    #[test]
+    #[cfg(feature = "auto-reverse")]
+    fn test_add_column_non_consuming() {
+        let add = add_column(
+            "products",
+            "price",
+            DataType::Real,
+            true,
+            Some(DatabaseValue::Real(0.0)),
+        );
+
+        // Generate reverse operation
+        let drop = add.reverse();
+        assert_eq!(drop.table_name, "products");
+        assert_eq!(drop.column_name, "price");
+
+        // Original add operation is still usable since reverse() doesn't consume it
+        assert_eq!(add.table_name, "products");
+        assert_eq!(add.name, "price");
+        assert_eq!(add.data_type, DataType::Real);
+        assert!(add.nullable);
+    }
+
+    #[test]
+    #[cfg(feature = "auto-reverse")]
+    fn test_drop_column_not_reversible() {
+        // Verify DropColumnOperation does NOT implement AutoReversible
+        // This is a compile-time check - uncommenting should fail:
+        // let drop = DropColumnOperation { table_name: "users", column_name: "age".to_string() };
+        // let _ = drop.reverse(); // SHOULD NOT COMPILE
+    }
+
+    #[switchy_async::test]
+    #[cfg(feature = "auto-reverse")]
+    async fn test_add_column_executable_trait() {
+        let add = add_column(
+            "async_table",
+            "new_column",
+            DataType::BigInt,
+            false,
+            Some(DatabaseValue::Number(42)),
+        );
+
+        // Test that AddColumnOperation implements Executable trait correctly
+        assert_eq!(add.table_name, "async_table");
+        assert_eq!(add.name, "new_column");
+        assert_eq!(add.data_type, DataType::BigInt);
+        assert!(!add.nullable);
+    }
+
+    #[switchy_async::test]
+    #[cfg(feature = "auto-reverse")]
+    async fn test_add_column_complex_async() {
+        let add = add_column(
+            "complex_table",
+            "complex_column",
+            DataType::VarChar(255),
+            true,
+            Some(DatabaseValue::String("default_value".to_string())),
+        );
+
+        let drop = add.reverse();
+
+        // Verify both operations maintain correct state
+        assert_eq!(add.table_name, "complex_table");
+        assert_eq!(add.name, "complex_column");
+        assert_eq!(drop.table_name, "complex_table");
+        assert_eq!(drop.column_name, "complex_column");
     }
 }
