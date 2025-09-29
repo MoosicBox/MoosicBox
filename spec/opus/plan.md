@@ -116,7 +116,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 
   /// Opus codec errors.
   #[derive(Debug, Error)]
-  pub enum OpusError {
+  pub enum Error {
       /// Placeholder for future packet parsing errors
       #[error("Invalid packet format")]
       InvalidPacket,
@@ -127,7 +127,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
 
   /// Result type for Opus operations.
-  pub type OpusResult<T> = Result<T, OpusError>;
+  pub type Result<T> = Result<T, Error>;
   ```
 
 #### 2.2 Verification Checklist
@@ -145,7 +145,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   ```rust
   pub mod error;
 
-  pub use error::{OpusError, OpusResult};
+  pub use error::{Error, Result};
   ```
 
 #### 2.3 Verification Checklist
@@ -155,7 +155,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 - [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
 - [ ] Run `cargo machete` ✅ no unused dependencies
 - [ ] Error module is exported and accessible
-- [ ] OpusError and OpusResult are publicly available
+- [ ] Error and Result are publicly available
 
 ## Phase 3: TOC and Basic Types
 
@@ -163,7 +163,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 
 - [ ] Create `src/toc.rs`:
   ```rust
-  use crate::error::{OpusError, OpusResult};
+  use crate::error::{Error, Result};
 
   /// TOC byte structure (RFC 6716 Section 3.1).
   #[derive(Debug, Clone, Copy)]
@@ -178,7 +178,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 
   impl TocByte {
       /// Parse a TOC byte.
-      pub fn parse(byte: u8) -> OpusResult<Self> {
+      pub fn parse(byte: u8) -> Result<Self> {
           let config = (byte >> 3) & 0x1F;
           let stereo = (byte & 0x04) != 0;
           let frame_code = byte & 0x03;
@@ -252,7 +252,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub mod error;
   pub mod toc;
 
-  pub use error::{OpusError, OpusResult};
+  pub use error::{Error, Result};
   pub use toc::{Bandwidth, OpusMode, TocByte};
   ```
 
@@ -272,7 +272,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 - [ ] Add to `src/error.rs`:
   ```rust
   #[derive(Debug, Error)]
-  pub enum OpusError {
+  pub enum Error {
       // ... existing variants ...
 
       /// Invalid frame length
@@ -298,7 +298,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 
 - [ ] Create `src/frame.rs`:
   ```rust
-  use crate::error::{OpusError, OpusResult};
+  use crate::error::{Error, Result};
 
   /// Frame packing modes.
   #[derive(Debug, Clone)]
@@ -314,9 +314,9 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
 
   /// Decode frame length from packet data.
-  pub fn decode_frame_length(data: &[u8]) -> OpusResult<(usize, usize)> {
+  pub fn decode_frame_length(data: &[u8]) -> Result<(usize, usize)> {
       if data.is_empty() {
-          return Err(OpusError::PacketTooShort(0));
+          return Err(Error::PacketTooShort(0));
       }
 
       match data[0] {
@@ -324,11 +324,11 @@ This plan ensures each phase produces fully compilable code with no warnings. De
           1..=251 => Ok((data[0] as usize, 1)),
           252..=255 => {
               if data.len() < 2 {
-                  return Err(OpusError::PacketTooShort(data.len()));
+                  return Err(Error::PacketTooShort(data.len()));
               }
               let length = (data[1] as usize * 4) + data[0] as usize;
               if length > 1275 {
-                  return Err(OpusError::InvalidFrameLength(length));
+                  return Err(Error::InvalidFrameLength(length));
               }
               Ok((length, 2))
           }
@@ -362,7 +362,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub mod frame;
   pub mod toc;
 
-  pub use error::{OpusError, OpusResult};
+  pub use error::{Error, Result};
   pub use frame::{decode_frame_length, FramePacking, OpusFrame};
   pub use toc::{Bandwidth, OpusMode, TocByte};
   ```
@@ -404,7 +404,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   use log::debug;
 
   use crate::{
-      error::{OpusError, OpusResult},
+      error::{Error, Result},
       frame::{decode_frame_length, OpusFrame},
       toc::TocByte,
   };
@@ -422,9 +422,9 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 
   impl OpusPacket {
       /// Parse an Opus packet from bytes.
-      pub fn parse(data: &[u8]) -> OpusResult<Self> {
+      pub fn parse(data: &[u8]) -> Result<Self> {
           if data.is_empty() {
-              return Err(OpusError::PacketTooShort(0));
+              return Err(Error::PacketTooShort(0));
           }
 
           debug!("Parsing Opus packet, size: {} bytes", data.len());
@@ -447,7 +447,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
 
   /// Parse code 0 packet (single frame).
-  fn parse_code_0(data: &[u8]) -> OpusResult<Vec<OpusFrame>> {
+  fn parse_code_0(data: &[u8]) -> Result<Vec<OpusFrame>> {
       Ok(vec![OpusFrame {
           data: data.to_vec(),
           is_dtx: data.is_empty(),
@@ -455,9 +455,9 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
 
   /// Parse code 1 packet (two equal frames).
-  fn parse_code_1(data: &[u8]) -> OpusResult<Vec<OpusFrame>> {
+  fn parse_code_1(data: &[u8]) -> Result<Vec<OpusFrame>> {
       if data.len() % 2 != 0 {
-          return Err(OpusError::InvalidPacket);
+          return Err(Error::InvalidPacket);
       }
       let frame_size = data.len() / 2;
       Ok(vec![
@@ -473,10 +473,10 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
 
   /// Parse code 2 packet (two variable frames).
-  fn parse_code_2(data: &[u8]) -> OpusResult<Vec<OpusFrame>> {
+  fn parse_code_2(data: &[u8]) -> Result<Vec<OpusFrame>> {
       let (len1, offset) = decode_frame_length(data)?;
       if offset + len1 > data.len() {
-          return Err(OpusError::PacketTooShort(data.len()));
+          return Err(Error::PacketTooShort(data.len()));
       }
 
       Ok(vec![
@@ -492,14 +492,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
 
   /// Parse code 3 packet (multiple frames).
-  fn parse_code_3(data: &[u8]) -> OpusResult<Vec<OpusFrame>> {
+  fn parse_code_3(data: &[u8]) -> Result<Vec<OpusFrame>> {
       if data.is_empty() {
-          return Err(OpusError::PacketTooShort(0));
+          return Err(Error::PacketTooShort(0));
       }
 
       let frame_count = (data[0] & 0x3F) as usize;
       if frame_count == 0 || frame_count > 48 {
-          return Err(OpusError::InvalidPacket);
+          return Err(Error::InvalidPacket);
       }
 
       // Simplified implementation for now
@@ -519,10 +519,10 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
 
   /// Validate packet according to RFC 6716 constraints.
-  pub fn validate_packet(data: &[u8]) -> OpusResult<()> {
+  pub fn validate_packet(data: &[u8]) -> Result<()> {
       // [R1] At least one byte
       if data.is_empty() {
-          return Err(OpusError::PacketTooShort(0));
+          return Err(Error::PacketTooShort(0));
       }
 
       // Additional validation rules [R2-R7] would go here
@@ -551,7 +551,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub mod packet;
   pub mod toc;
 
-  pub use error::{OpusError, OpusResult};
+  pub use error::{Error, Result};
   pub use frame::{decode_frame_length, FramePacking, OpusFrame};
   pub use packet::{validate_packet, OpusPacket};
   pub use toc::{Bandwidth, OpusMode, TocByte};
@@ -603,10 +603,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   };
   use symphonia::support_codec;
 
-  use crate::{
-      error::OpusError,
-      packet::OpusPacket,
-  };
+   use crate::packet::OpusPacket;
 
   /// Opus decoder implementation.
   pub struct OpusDecoder {
@@ -695,7 +692,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub mod toc;
 
   pub use decoder::OpusDecoder;
-  pub use error::{OpusError, OpusResult};
+  pub use error::{Error, Result};
   pub use frame::{decode_frame_length, FramePacking, OpusFrame};
   pub use packet::{validate_packet, OpusPacket};
   pub use toc::{Bandwidth, OpusMode, TocByte};
@@ -762,7 +759,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub mod toc;
 
   pub use decoder::OpusDecoder;
-  pub use error::{OpusError, OpusResult};
+  pub use error::{Error, Result};
   pub use frame::{decode_frame_length, FramePacking, OpusFrame};
   pub use packet::{validate_packet, OpusPacket};
   pub use registry::{create_opus_registry, register_opus_codec};
@@ -882,7 +879,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 - [ ] Add to `src/error.rs`:
   ```rust
   #[derive(Debug, Error)]
-  pub enum OpusError {
+  pub enum Error {
       // ... existing variants ...
 
       /// Decoder error from libopus
@@ -1287,7 +1284,7 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub mod toc;
 
   pub use decoder::OpusDecoder;
-  pub use error::{OpusError, OpusResult};
+  pub use error::{Error, Result};
   pub use frame::{decode_frame_length, FramePacking, OpusFrame};
   pub use packet::{validate_packet, OpusPacket};
   pub use registry::{create_opus_registry, register_opus_codec};
