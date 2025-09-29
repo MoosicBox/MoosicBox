@@ -198,6 +198,38 @@ impl<'a> Migration<'a> for CodeMigration<'a> {
     }
 }
 
+/// A code migration that automatically generates its Down migration from a reversible Up operation
+#[cfg(feature = "auto-reverse")]
+pub struct ReversibleCodeMigration<'a, T: switchy_database::schema::AutoReversible + 'a> {
+    id: String,
+    up_operation: T,
+    _phantom: std::marker::PhantomData<&'a ()>,
+}
+
+#[cfg(feature = "auto-reverse")]
+impl<'a, T: switchy_database::schema::AutoReversible + 'a> ReversibleCodeMigration<'a, T> {
+    pub fn new(id: impl Into<String>, up_operation: T) -> Self {
+        Self {
+            id: id.into(),
+            up_operation,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "auto-reverse")]
+impl<'a, T> From<ReversibleCodeMigration<'a, T>> for CodeMigration<'a>
+where
+    T: switchy_database::schema::AutoReversible + 'a,
+    T::Reversed: 'a,
+{
+    fn from(rev: ReversibleCodeMigration<'a, T>) -> Self {
+        let id = rev.id.clone();
+        let down = rev.up_operation.reverse();
+        CodeMigration::new(id, Box::new(rev.up_operation), Some(Box::new(down)))
+    }
+}
+
 /// Migration source for code-based migrations with registry
 pub struct CodeMigrationSource<'a> {
     migrations: Vec<Arc<dyn Migration<'a> + 'a>>,
@@ -457,5 +489,36 @@ mod tests {
             checksum1, checksum1_duplicate,
             "Same operation should produce identical checksums"
         );
+    }
+
+    #[cfg(feature = "auto-reverse")]
+    mod auto_reverse_tests {
+        use super::*;
+        use switchy_database::schema::{Column, DataType, create_table};
+
+        #[test]
+        fn test_reversible_migration_conversion() {
+            let create = create_table("posts").column(Column {
+                name: "id".to_string(),
+                data_type: DataType::Int,
+                nullable: false,
+                auto_increment: true,
+                default: None,
+            });
+
+            let reversible = ReversibleCodeMigration::new("001_create_posts", create);
+            let migration: CodeMigration = reversible.into();
+
+            assert_eq!(migration.id(), "001_create_posts");
+            // Down migration should be Some(DropTableStatement)
+        }
+
+        #[test]
+        fn test_type_safety_non_reversible() {
+            // This should NOT compile (uncomment to verify):
+            // let drop = drop_table("users");
+            // let reversible = ReversibleCodeMigration::new("bad", drop);
+            // Compile error: AutoReversible not implemented for DropTableStatement
+        }
     }
 }

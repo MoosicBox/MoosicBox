@@ -57,6 +57,7 @@ fail-on-warnings = [
 ]
 
 all-discovery = ["code", "directory", "embedded"]
+auto-reverse  = ["switchy_database/auto-reverse"]
 code          = []
 directory     = ["dep:switchy_fs"]
 embedded      = ["dep:include_dir"]
