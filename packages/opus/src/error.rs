@@ -10,6 +10,14 @@ pub enum Error {
     /// Placeholder for future decoding errors
     #[error("Decoding failed")]
     DecodingFailed,
+
+    /// Invalid frame length
+    #[error("Invalid frame length: {0} bytes (max 1275)")]
+    InvalidFrameLength(usize),
+
+    /// Packet too short
+    #[error("Packet too short: {0} bytes")]
+    PacketTooShort(usize),
 }
 
 /// Result type for Opus operations.

@@ -9,7 +9,9 @@
 //! This crate is under development.
 
 pub mod error;
+pub mod frame;
 pub mod toc;
 
 pub use error::{Error, Result};
+pub use frame::{FramePacking, OpusFrame, decode_frame_length};
 pub use toc::{Bandwidth, OpusMode, TocByte};

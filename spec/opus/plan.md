@@ -415,7 +415,8 @@ TocByte, OpusMode, and Bandwidth types re-exported at crate root
 
 ### 4.1 Update Error Types
 
-- [ ] Add to `src/error.rs`:
+- [x] Add to `src/error.rs`:
+Added InvalidFrameLength and PacketTooShort error variants for frame parsing
   ```rust
   #[derive(Debug, Error)]
   pub enum Error {
@@ -432,17 +433,31 @@ TocByte, OpusMode, and Bandwidth types re-exported at crate root
   ```
 
 #### 4.1 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] New error variants are properly defined
-- [ ] Error enum still compiles and is usable
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with new error variants
+
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features
+
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with new error types
+
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used
+
+- [x] New error variants are properly defined
+InvalidFrameLength and PacketTooShort variants added with proper error messages
+
+- [x] Error enum still compiles and is usable
+Error enum compiles and works correctly with thiserror derive
 
 ### 4.2 Create Frame Module
 
-- [ ] Create `src/frame.rs`:
+- [x] Create `src/frame.rs`:
+Frame module created with FramePacking enum, decode_frame_length function, and OpusFrame struct
   ```rust
   use crate::error::{Error, Result};
 
@@ -492,17 +507,31 @@ TocByte, OpusMode, and Bandwidth types re-exported at crate root
   ```
 
 #### 4.2 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Frame length decoding functions work correctly
-- [ ] Error variants are properly used in frame parsing
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with frame module
+
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features
+
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings after adding proper # Errors documentation
+
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used
+
+- [x] Frame length decoding functions work correctly
+RFC 6716 compliant frame length decoding: DTX (0), single-byte (1-251), two-byte (252-255)
+
+- [x] Error variants are properly used in frame parsing
+PacketTooShort and InvalidFrameLength errors used correctly in decode_frame_length
 
 ### 4.3 Update lib.rs
 
-- [ ] Add to `src/lib.rs`:
+- [x] Add to `src/lib.rs`:
+Added frame module declaration and public exports for frame types and functions
   ```rust
   pub mod error;
   pub mod frame;
@@ -514,13 +543,26 @@ TocByte, OpusMode, and Bandwidth types re-exported at crate root
   ```
 
 #### 4.3 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Frame module is exported and accessible
-- [ ] All frame types and functions are publicly available
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with exported frame module
+
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles with public frame exports available
+
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with public API exports
+
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used
+
+- [x] Frame module is exported and accessible
+Module declared as public and available for import
+
+- [x] All frame types and functions are publicly available
+FramePacking, OpusFrame, and decode_frame_length re-exported at crate root
 
 ## Phase 5: Packet Parser (Add bytes and log dependencies)
 
