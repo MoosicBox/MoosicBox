@@ -8,4 +8,6 @@
 //!
 //! This crate is under development.
 
-// No modules yet - will be added incrementally
+pub mod error;
+
+pub use error::{Error, Result};

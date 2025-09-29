@@ -11,7 +11,7 @@ repository  = { workspace = true }
 version     = "0.1.1"
 
 [dependencies]
-# No dependencies yet - will be added as needed
+thiserror = { workspace = true }
 
 [features]
 default          = []

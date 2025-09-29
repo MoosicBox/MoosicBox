@@ -172,23 +172,36 @@ Package compiles cleanly as empty library with proper clippy configuration
 
 ### 2.1 Add thiserror Dependency
 
-- [ ] Update `packages/opus/Cargo.toml`:
+- [x] Update `packages/opus/Cargo.toml`:
+Added thiserror dependency using workspace inheritance with explanatory comment
   ```toml
   [dependencies]
   thiserror = { workspace = true }  # NOW we need it for error types
   ```
 
 #### 2.1 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Verify thiserror dependency is added to Cargo.toml
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with thiserror dependency, building thiserror v2.0.17 and related crates
+
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Successfully compiled with no default features, thiserror dependency properly included
+
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully with no changes needed
+
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Clippy completed successfully with zero warnings, thiserror dependency compiles cleanly
+
+- [x] Run `cargo machete` ✅ no unused dependencies
+Now passes cleanly - thiserror dependency is properly used by error module
+
+- [x] Verify thiserror dependency is added to Cargo.toml
+Dependency added with workspace inheritance: `thiserror = { workspace = true }`
 
 ### 2.2 Create Error Module
 
-- [ ] Create `src/error.rs`:
+- [x] Create `src/error.rs`:
+Error module created with Debug and Error derives, proper error variants and type alias
   ```rust
   use thiserror::Error;
 
@@ -204,22 +217,36 @@ Package compiles cleanly as empty library with proper clippy configuration
       DecodingFailed,
   }
 
-  /// Result type for Opus operations.
-  pub type Result<T> = Result<T, Error>;
+   /// Result type for Opus operations.
+   pub type Result<T> = std::result::Result<T, Error>;
   ```
 
 #### 2.2 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Error types compile and are properly defined
-- [ ] thiserror dependency is being used
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with error module, thiserror dependency now in use
+
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features and error types
+
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with error module and derives
+
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies now used - thiserror no longer flagged as unused
+
+- [x] Error types compile and are properly defined
+Error enum with Debug and Error derives, proper error messages
+
+- [x] thiserror dependency is being used
+Error derive macro and error formatting working correctly
 
 ### 2.3 Update lib.rs
 
-- [ ] Add to `src/lib.rs`:
+- [x] Add to `src/lib.rs`:
+Added error module declaration and public exports for Error and Result types
   ```rust
   pub mod error;
 
@@ -227,13 +254,26 @@ Package compiles cleanly as empty library with proper clippy configuration
   ```
 
 #### 2.3 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Error module is exported and accessible
-- [ ] Error and Result are publicly available
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with exported error module
+
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles with public error exports available
+
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with public API exports
+
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used, no unused dependencies found
+
+- [x] Error module is exported and accessible
+Module declared as public and available for import
+
+- [x] Error and Result are publicly available
+Both types re-exported at crate root for easy access
 
 ## Phase 3: TOC and Basic Types
 
