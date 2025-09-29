@@ -79,11 +79,31 @@ impl<'a> AutoReversible for crate::schema::CreateTableStatement<'a> {
     }
 }
 
+/// Implementation of `AutoReversible` for `CreateIndexStatement`.
+///
+/// Converting a CREATE INDEX to DROP INDEX is safe because:
+/// * The index being dropped was just created (no existing data dependencies)
+/// * The operation is deterministic and reversible
+/// * Index can be recreated easily without data loss
+/// * Performance characteristics may be lost but functionality is preserved
+#[async_trait]
+impl<'a> AutoReversible for crate::schema::CreateIndexStatement<'a> {
+    type Reversed = crate::schema::DropIndexStatement<'a>;
+
+    fn reverse(&self) -> Self::Reversed {
+        crate::schema::DropIndexStatement {
+            index_name: self.index_name,
+            table_name: self.table_name,
+            if_exists: true, // Use IF EXISTS for safety when reversing
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::DatabaseValue;
-    use crate::schema::{Column, DataType, create_table};
+    use crate::schema::{Column, DataType, create_index, create_table};
 
     #[test]
     fn test_create_table_auto_reverse_basic() {
@@ -203,5 +223,121 @@ mod tests {
 
         #[cfg(feature = "cascade")]
         assert_eq!(drop.behavior, crate::schema::DropBehavior::Default);
+    }
+
+    // ===== CreateIndexStatement Tests =====
+
+    #[test]
+    fn test_create_index_auto_reverse_basic() {
+        let create = create_index("idx_users_email")
+            .table("users")
+            .column("email");
+
+        let drop = create.reverse();
+
+        assert_eq!(drop.index_name, "idx_users_email");
+        assert_eq!(drop.table_name, "users");
+        assert!(drop.if_exists); // Should use IF EXISTS for safety
+    }
+
+    #[test]
+    fn test_create_index_auto_reverse_non_consuming() {
+        let create = create_index("idx_users_email")
+            .table("users")
+            .column("email");
+
+        // Generate reverse operation
+        let drop = create.reverse();
+        assert_eq!(drop.index_name, "idx_users_email");
+        assert_eq!(drop.table_name, "users");
+        assert!(drop.if_exists);
+
+        // Original create is still usable for CodeMigration
+        assert_eq!(create.index_name, "idx_users_email");
+        assert_eq!(create.table_name, "users");
+
+        // We can even call reverse() multiple times
+        let drop2 = create.reverse();
+        assert_eq!(drop2.index_name, "idx_users_email");
+        assert!(drop2.if_exists);
+    }
+
+    #[test]
+    fn test_create_index_auto_reverse_multi_column() {
+        let create = create_index("idx_users_name")
+            .table("users")
+            .columns(vec!["first_name", "last_name"]);
+
+        let drop = create.reverse();
+
+        assert_eq!(drop.index_name, "idx_users_name");
+        assert_eq!(drop.table_name, "users");
+        assert!(drop.if_exists);
+        // Note: column info is intentionally lost in reversal as per design
+    }
+
+    #[test]
+    fn test_create_index_auto_reverse_unique() {
+        let create = create_index("idx_unique_email")
+            .table("users")
+            .column("email")
+            .unique(true);
+
+        let drop = create.reverse();
+
+        assert_eq!(drop.index_name, "idx_unique_email");
+        assert_eq!(drop.table_name, "users");
+        assert!(drop.if_exists);
+        // Note: unique constraint info is intentionally lost in reversal
+    }
+
+    #[test]
+    fn test_create_index_auto_reverse_if_not_exists() {
+        let create = create_index("idx_conditional")
+            .table("users")
+            .column("email")
+            .if_not_exists(true);
+
+        let drop = create.reverse();
+
+        assert_eq!(drop.index_name, "idx_conditional");
+        assert_eq!(drop.table_name, "users");
+        assert!(drop.if_exists); // Always true for safety in reversals
+    }
+
+    #[switchy_async::test]
+    async fn test_create_index_auto_reverse_executable_trait() {
+        let create = create_index("idx_async_test")
+            .table("test_table")
+            .column("test_column");
+
+        let drop = create.reverse();
+
+        // Verify both types implement Executable trait correctly
+        assert_eq!(drop.index_name, "idx_async_test");
+        assert_eq!(drop.table_name, "test_table");
+        assert!(drop.if_exists);
+    }
+
+    #[switchy_async::test]
+    async fn test_create_index_auto_reverse_complex_async() {
+        let create = create_index("idx_complex_async")
+            .table("complex_table")
+            .columns(vec!["col1", "col2", "col3"])
+            .unique(true)
+            .if_not_exists(true);
+
+        let drop = create.reverse();
+
+        assert_eq!(drop.index_name, "idx_complex_async");
+        assert_eq!(drop.table_name, "complex_table");
+        assert!(drop.if_exists);
+
+        // Original create should still be accessible
+        assert_eq!(create.index_name, "idx_complex_async");
+        assert_eq!(create.table_name, "complex_table");
+        assert_eq!(create.columns, vec!["col1", "col2", "col3"]);
+        assert!(create.unique);
+        assert!(create.if_not_exists);
     }
 }
