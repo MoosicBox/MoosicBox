@@ -116,6 +116,49 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! ## Auto-Reversible Migrations (requires `auto-reverse` feature)
+//!
+//! For operations that support automatic reversal, use `ReversibleCodeMigration`:
+//!
+//! ```rust
+//! # #[cfg(feature = "auto-reverse")]
+//! use switchy_schema::discovery::code::ReversibleCodeMigration;
+//! use switchy_database::schema::create_table;
+//! # use switchy_database::schema::{Column, DataType};
+//!
+//! # #[cfg(feature = "auto-reverse")]
+//! let create = create_table("users")
+//!     .column(Column {
+//!         name: "id".to_string(),
+//!         data_type: DataType::Int,
+//!         nullable: false,
+//!         auto_increment: true,
+//!         default: None,
+//!     });
+//!
+//! # #[cfg(feature = "auto-reverse")]
+//! // Automatically generates both UP and DOWN migrations
+//! let migration = ReversibleCodeMigration::new(
+//!     "001_create_users",
+//!     create,
+//! );
+//! ```
+//!
+//! ## Type Safety
+//!
+//! The type system prevents using non-reversible operations:
+//!
+//! ```compile_fail
+//! # #[cfg(feature = "auto-reverse")]
+//! use switchy_schema::discovery::code::ReversibleCodeMigration;
+//! use switchy_database::schema::drop_table;
+//!
+//! let drop = drop_table("users");
+//!
+//! // This will NOT compile - DropTableStatement doesn't implement AutoReversible
+//! let migration = ReversibleCodeMigration::new("bad", drop);
+//! ```
 
 use std::sync::Arc;
 

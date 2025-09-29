@@ -13,6 +13,7 @@ A comprehensive schema migration system for the Switchy database ecosystem, prov
 - **Recovery System**: Built-in mechanisms for handling failed migrations and dirty states
 - **Feature-Gated**: Modular design with optional discovery methods
 - **Async/Await**: Full async support for database operations
+- **Auto-Reversible Migrations**: Automatic DOWN migration generation for safe operations (requires `auto-reverse` feature)
 
 ## Quick Start
 
@@ -76,6 +77,70 @@ impl Migration<'static> for MyMigration {
     }
 }
 ```
+
+## Auto-Reversible Migrations
+
+The `auto-reverse` feature enables automatic generation of DOWN migrations for safe operations. This reduces boilerplate and ensures consistency between UP and DOWN migrations.
+
+### Enabling the Feature
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+switchy_schema = { version = "0.1.0", features = ["auto-reverse"] }
+switchy_database = { version = "0.1.4", features = ["schema", "auto-reverse"] }
+```
+
+### Usage
+
+Use `ReversibleCodeMigration` to automatically generate DOWN migrations:
+
+```rust
+use switchy_schema::discovery::code::ReversibleCodeMigration;
+use switchy_database::schema::{create_table, Column, DataType};
+
+let create = create_table("users")
+    .column(Column {
+        name: "id".to_string(),
+        data_type: DataType::Int,
+        nullable: false,
+        auto_increment: true,
+        default: None,
+    })
+    .primary_key("id");
+
+// Automatically generates DROP TABLE as the DOWN migration
+let migration = ReversibleCodeMigration::new("001_create_users", create).into();
+```
+
+### Supported Operations
+
+The following operations support automatic reversal:
+
+- **CREATE TABLE** → DROP TABLE
+- **CREATE INDEX** → DROP INDEX
+- **ADD COLUMN** → DROP COLUMN
+
+### Type Safety
+
+The type system prevents using non-reversible operations:
+
+```rust
+// This will NOT compile - DropTableStatement doesn't implement AutoReversible
+let drop = drop_table("users");
+let migration = ReversibleCodeMigration::new("bad", drop); // Compile error!
+```
+
+### Example
+
+Run the complete example:
+
+```bash
+cargo run --example auto_reverse --features auto-reverse
+```
+
+See `examples/auto_reverse.rs` for a full working demonstration.
 
 ## CLI Tool
 

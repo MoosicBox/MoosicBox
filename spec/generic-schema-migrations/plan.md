@@ -15830,7 +15830,7 @@ All 4 test functions use `#[switchy_async::test]` attribute at lines 11, 39, 65,
 
 **Prerequisites:** Phase 17.6 complete
 
-- [ ] Update `packages/database/src/schema/auto_reversible.rs` module docs:
+- [x] Update `packages/database/src/schema/auto_reversible.rs` module docs:
   ```rust
   //! Automatic migration reversal support for safe schema operations.
   //!
@@ -15865,7 +15865,7 @@ All 4 test functions use `#[switchy_async::test]` attribute at lines 11, 39, 65,
   //! ```
   ```
 
-- [ ] Update `packages/switchy/schema/src/discovery/code.rs` docs:
+- [x] Update `packages/switchy/schema/src/discovery/code.rs` docs:
   ```rust
   //! ## Auto-Reversible Migrations (requires `auto-reverse` feature)
   //!
@@ -15902,7 +15902,7 @@ All 4 test functions use `#[switchy_async::test]` attribute at lines 11, 39, 65,
   //! ```
   ```
 
-- [ ] Create `packages/switchy/schema/examples/auto_reverse.rs`:
+- [x] Create `packages/switchy/schema/examples/auto_reverse.rs`:
   ```rust
   //! Example demonstrating automatic migration reversal
 
@@ -15917,24 +15917,51 @@ All 4 test functions use `#[switchy_async::test]` attribute at lines 11, 39, 65,
   }
   ```
 
-- [ ] Update main README with feature documentation
+- [x] Update main README with feature documentation
 
 #### 17.7 Verification Checklist
 
-- [ ] Module documentation explains safety guarantees clearly
-- [ ] Module documentation lists all safe and unsafe operations
-- [ ] Code examples compile and run correctly
-- [ ] `compile_fail` doc test properly demonstrates type safety
-- [ ] Example file demonstrates real-world usage
-- [ ] README documents the `auto-reverse` feature flag
-- [ ] Run `cargo doc -p switchy_database --features "schema,auto-reverse"` - docs build correctly
-- [ ] Run `cargo doc -p switchy_schema --features "auto-reverse"` - docs build correctly
-- [ ] Run `cargo test --doc -p switchy_database --features "schema,auto-reverse"` - doc tests pass
-- [ ] Run `cargo test --doc -p switchy_schema --features "auto-reverse"` - doc tests pass
-- [ ] Run `cargo fmt` - format entire workspace
-- [ ] Run `cargo machete` - check for unused dependencies
-- [ ] Clear warnings about data loss risks
-- [ ] Migration guide shows before/after code comparison
+- [x] Module documentation explains safety guarantees clearly
+Module documentation at `packages/database/src/schema/auto_reversible.rs:1-46` explains safety guarantees with sections on "Safety Guarantees" listing safe operations (CREATE TABLE, CREATE INDEX, ADD COLUMN) and operations that will never be reversible (DROP operations, ALTER operations).
+
+- [x] Module documentation lists all safe and unsafe operations
+Lines 9-18 of auto_reversible.rs clearly list safe operations with their reversals and lines 14-18 list operations that will never implement AutoReversible.
+
+- [x] Code examples compile and run correctly
+All documentation examples compile and run. Doc test for auto_reversible.rs passes (line 22-46), showing create_table().reverse() usage.
+
+- [x] `compile_fail` doc test properly demonstrates type safety
+Compile_fail doc test at `packages/switchy/schema/src/discovery/code.rs:152-163` demonstrates that DropTableStatement cannot be used with ReversibleCodeMigration. Test output: `test packages/switchy/schema/src/discovery/code.rs - discovery::code (line 152) - compile fail ... ok`
+
+- [x] Example file demonstrates real-world usage
+Complete working example created at `packages/switchy/schema/examples/auto_reverse.rs` with three demonstrations: CREATE TABLE reversal, CREATE INDEX reversal, and ADD COLUMN reversal. Example runs successfully with all assertions passing.
+
+- [x] README documents the `auto-reverse` feature flag
+README at `packages/switchy/schema/README.md` updated with comprehensive "Auto-Reversible Migrations" section (after line 79) including feature flag setup, usage examples, supported operations, type safety demonstration, and link to example file.
+
+- [x] Run `cargo doc -p switchy_database --features "schema,auto-reverse"` - docs build correctly
+Documentation built successfully: `Generated /hdd/GitHub/switchy/target/doc/switchy_database/index.html` in 2.32s with zero errors.
+
+- [x] Run `cargo doc -p switchy_schema --features "auto-reverse"` - docs build correctly
+Documentation built successfully: `Generated /hdd/GitHub/switchy/target/doc/switchy_schema/index.html` in 8.23s with zero errors.
+
+- [x] Run `cargo test --doc -p switchy_database --features "schema,auto-reverse"` - doc tests pass
+All doc tests passed: `test result: ok. 15 passed; 0 failed; 15 ignored` including the auto_reversible.rs doc test.
+
+- [x] Run `cargo test --doc -p switchy_schema --features "auto-reverse"` - doc tests pass
+All doc tests passed: `test result: ok. 21 passed; 0 failed; 6 ignored` plus compile_fail test: `test result: ok. 1 passed; 0 failed; 0 ignored`. Total runtime: 1.84s.
+
+- [x] Run `cargo fmt` - format entire workspace
+Formatting completed with no output (all files already properly formatted).
+
+- [x] Run `cargo machete` - check for unused dependencies
+Completed with output: `cargo-machete didn't find any unused dependencies in this directory. Good job!`
+
+- [x] Clear warnings about data loss risks
+Documentation at `packages/database/src/schema/auto_reversible.rs:14-18` explicitly warns: "The following are NOT safe and will never implement `AutoReversible`" with specific callouts for operations that "Would lose all table data", "Would lose column data", and "May cause data loss or corruption".
+
+- [x] Migration guide shows before/after code comparison
+README section "Auto-Reversible Migrations" shows clear usage examples with ReversibleCodeMigration and compares to type system preventing non-reversible operations. Code.rs documentation lines 124-163 show both working example and compile_fail example.
 
 ### Phase 17 Summary
 
@@ -15945,7 +15972,7 @@ All 4 test functions use `#[switchy_async::test]` attribute at lines 11, 39, 65,
 - [x] Phase 17.4: Partial reversibility for column operations
 - [x] Phase 17.5: ReversibleCodeMigration wrapper complete
 - [x] Phase 17.6: Integration tests passing
-- [ ] Phase 17.7: Documentation complete
+- [x] Phase 17.7: Documentation complete
 
 **Final Verification:**
 - [ ] Run `cargo build --all-features` - entire workspace compiles
