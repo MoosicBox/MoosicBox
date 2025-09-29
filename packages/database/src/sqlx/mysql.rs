@@ -1858,7 +1858,7 @@ async fn mysql_sqlx_exec_drop_table_restrict(
         .map_err(Into::into)
 }
 
-#[cfg(feature = "schema")]
+#[cfg(feature = "cascade")]
 async fn mysql_sqlx_exec_drop_table_basic(
     connection: &mut MySqlConnection,
     statement: &crate::schema::DropTableStatement<'_>,

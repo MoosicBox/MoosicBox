@@ -2124,6 +2124,7 @@ pub(crate) async fn postgres_sqlx_exec_alter_table(
                 #[cfg(feature = "cascade")]
                 behavior,
             } => {
+                #[allow(unused_mut)]
                 let mut sql = format!(
                     "ALTER TABLE {} DROP COLUMN \"{}\"",
                     statement.table_name, name
