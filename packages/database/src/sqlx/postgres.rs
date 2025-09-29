@@ -1922,6 +1922,7 @@ async fn postgres_sqlx_exec_drop_table_restrict_native(
     Ok(())
 }
 
+#[cfg(feature = "schema")]
 async fn postgres_sqlx_exec_drop_table(
     connection: &mut PgConnection,
     statement: &crate::schema::DropTableStatement<'_>,
