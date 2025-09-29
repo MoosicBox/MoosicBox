@@ -31,6 +31,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   fail-on-warnings = []
   ```
 
+#### 1.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Verify package directory structure exists at correct paths
+- [ ] Verify Cargo.toml has valid TOML syntax and follows workspace conventions
+
 ### 1.2 Create Minimal lib.rs
 
 - [ ] Create `src/lib.rs`:
@@ -48,6 +57,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   // No modules yet - will be added incrementally
   ```
 
+#### 1.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Verify lib.rs contains only documentation and clippy lints
+- [ ] Verify no modules are declared yet
+
 ### 1.3 Update Workspace
 
 - [ ] Add to root `Cargo.toml` workspace members:
@@ -63,7 +81,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   moosicbox_opus = { version = "0.1.1", default-features = false, path = "packages/opus" }
   ```
 
-**Validation**: `cargo build -p moosicbox_opus` succeeds with empty crate
+#### 1.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Workspace recognizes new package
+- [ ] Package builds but does nothing (empty lib.rs)
 
 ## Phase 2: Error Types Foundation
 
@@ -74,6 +99,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   [dependencies]
   thiserror = { workspace = true }  # NOW we need it for error types
   ```
+
+#### 2.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Verify thiserror dependency is added to Cargo.toml
 
 ### 2.2 Create Error Module
 
@@ -97,6 +130,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub type OpusResult<T> = Result<T, OpusError>;
   ```
 
+#### 2.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Error types compile and are properly defined
+- [ ] thiserror dependency is being used
+
 ### 2.3 Update lib.rs
 
 - [ ] Add to `src/lib.rs`:
@@ -106,7 +148,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub use error::{OpusError, OpusResult};
   ```
 
-**Validation**: `cargo build -p moosicbox_opus` compiles, `cargo clippy` passes
+#### 2.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Error module is exported and accessible
+- [ ] OpusError and OpusResult are publicly available
 
 ## Phase 3: TOC and Basic Types
 
@@ -187,6 +236,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
+#### 3.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] TOC byte parsing functions work correctly
+- [ ] All types have accessible public methods
+
 ### 3.2 Update lib.rs
 
 - [ ] Add to `src/lib.rs`:
@@ -198,7 +256,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub use toc::{Bandwidth, OpusMode, TocByte};
   ```
 
-**Validation**: Compiles with no warnings, all items are exported and used
+#### 3.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] TOC module is exported and accessible
+- [ ] All TOC types are publicly available
 
 ## Phase 4: Frame Structure (No New Dependencies Yet)
 
@@ -219,6 +284,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
       PacketTooShort(usize),
   }
   ```
+
+#### 4.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] New error variants are properly defined
+- [ ] Error enum still compiles and is usable
 
 ### 4.2 Create Frame Module
 
@@ -271,6 +345,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
+#### 4.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Frame length decoding functions work correctly
+- [ ] Error variants are properly used in frame parsing
+
 ### 4.3 Update lib.rs
 
 - [ ] Add to `src/lib.rs`:
@@ -284,7 +367,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub use toc::{Bandwidth, OpusMode, TocByte};
   ```
 
-**Validation**: All functions are used/exported, no warnings
+#### 4.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Frame module is exported and accessible
+- [ ] All frame types and functions are publicly available
 
 ## Phase 5: Packet Parser (Add bytes and log dependencies)
 
@@ -297,6 +387,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   log = { workspace = true }        # For logging
   thiserror = { workspace = true }
   ```
+
+#### 5.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] bytes and log dependencies are added to Cargo.toml
 
 ### 5.2 Create Packet Module
 
@@ -434,6 +532,16 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
+#### 5.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Packet parsing functions work correctly
+- [ ] Logging statements are present and functional
+- [ ] bytes library is being used for padding field
+
 ### 5.3 Update lib.rs
 
 - [ ] Add to `src/lib.rs`:
@@ -449,7 +557,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub use toc::{Bandwidth, OpusMode, TocByte};
   ```
 
-**Validation**: All code is used, logging is active, bytes library utilized
+#### 5.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Packet module is exported and accessible
+- [ ] All packet types and functions are publicly available
 
 ## Phase 6: Symphonia Decoder Stub (Add symphonia dependency)
 
@@ -463,6 +578,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   symphonia = { workspace = true }  # NOW we need Symphonia
   thiserror = { workspace = true }
   ```
+
+#### 6.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] symphonia dependency is added to Cargo.toml
 
 ### 6.2 Create Decoder Stub
 
@@ -551,6 +674,16 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
+#### 6.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Decoder trait is properly implemented
+- [ ] Stub decoder can be instantiated and returns valid empty buffer
+- [ ] support_codec macro is correctly imported and used
+
 ### 6.3 Update lib.rs
 
 - [ ] Add to `src/lib.rs`:
@@ -568,7 +701,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub use toc::{Bandwidth, OpusMode, TocByte};
   ```
 
-**Validation**: Decoder compiles and can be instantiated, no unused warnings
+#### 6.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Decoder module is exported and accessible
+- [ ] OpusDecoder type is publicly available
 
 ## Phase 7: Registry Implementation
 
@@ -601,6 +741,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
+#### 7.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Registry functions work correctly with decoder
+- [ ] create_opus_registry properly combines default codecs with Opus
+
 ### 7.2 Update lib.rs
 
 - [ ] Add to `src/lib.rs`:
@@ -620,7 +769,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub use toc::{Bandwidth, OpusMode, TocByte};
   ```
 
-**Validation**: Registry functions are exported and usable
+#### 7.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Registry module is exported and accessible
+- [ ] Registry functions are publicly available
 
 ## Phase 8: Audio Decoder Integration
 
@@ -636,6 +792,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   # ... existing features ...
   opus = ["dep:moosicbox_opus"]
   ```
+
+#### 8.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_audio_decoder` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_audio_decoder --features opus` ✅ compiles with opus feature
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_audio_decoder -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] opus feature is properly defined
+- [ ] moosicbox_opus dependency is optional and correctly configured
 
 ### 8.2 Update audio_decoder lib.rs
 
@@ -667,11 +832,28 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
+#### 8.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_audio_decoder` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_audio_decoder --features opus` ✅ compiles with opus feature
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_audio_decoder -- -D warnings` ✅ no warnings
+- [ ] Run `cargo clippy --all -- -D warnings` ✅ workspace passes
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Integration compiles with and without opus feature
+- [ ] Codec registry is properly replaced when opus feature is enabled
+
 ### 8.3 Similar Update for unsync.rs
 
 - [ ] Apply same pattern to `packages/audio_decoder/src/unsync.rs` at line 94
 
-**Validation**: Integration compiles, can be tested with feature flag
+#### 8.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_audio_decoder` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_audio_decoder --features opus` ✅ compiles with opus feature
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_audio_decoder -- -D warnings` ✅ no warnings
+- [ ] Run `cargo clippy --all -- -D warnings` ✅ workspace passes
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Both sync and async decoders use opus registry when feature is enabled
 
 ## Phase 9: Real Decoding Implementation (Add audiopus)
 
@@ -687,6 +869,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   thiserror = { workspace = true }
   ```
 
+#### 9.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] audiopus dependency is added to Cargo.toml
+
 ### 9.2 Update Error Types
 
 - [ ] Add to `src/error.rs`:
@@ -700,6 +890,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
       DecoderError(#[from] audiopus::Error),
   }
   ```
+
+#### 9.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Error variant for audiopus::Error is properly defined
+- [ ] audiopus dependency is being used in error module
 
 ### 9.3 Update Decoder with Real Implementation
 
@@ -842,7 +1041,16 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
-**Validation**: Real decoding works, all code paths used
+#### 9.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Real decoder implementation works with libopus
+- [ ] Multi-channel audio handling is properly implemented
+- [ ] All struct fields are used (no unused sample_rate field)
+- [ ] Decoder produces actual audio output instead of silence
 
 ## Phase 10: Testing Infrastructure (Add test dependencies)
 
@@ -856,6 +1064,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pretty_assertions = { workspace = true }
   test-case = { workspace = true }
   ```
+
+#### 10.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Test dependencies are added only as dev-dependencies
+- [ ] No test dependencies leak into runtime dependencies
 
 ### 10.2 Create Unit Tests
 
@@ -896,6 +1113,16 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
+#### 10.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo test -p moosicbox_opus` ✅ all tests pass
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] All test dependencies are being used
+- [ ] Tests validate RFC compliance and packet parsing
+
 ### 10.3 Create Decoder Tests
 
 - [ ] Create `tests/decoder_tests.rs`:
@@ -918,7 +1145,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
-**Validation**: Tests pass, test dependencies only in dev-dependencies
+#### 10.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo test -p moosicbox_opus` ✅ all tests pass
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Decoder trait import is working correctly
+- [ ] Decoder creation tests are functional
 
 ## Phase 11: Benchmarking (Add criterion)
 
@@ -940,6 +1175,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   harness = false
   ```
 
+#### 11.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] criterion dependency is added to workspace
+- [ ] Benchmark configuration is properly set up
+
 ### 11.2 Create Benchmarks
 
 - [ ] Create `benches/opus_benchmarks.rs`:
@@ -960,7 +1204,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   criterion_main!(benches);
   ```
 
-**Validation**: Benchmarks compile and run with `cargo bench`
+#### 11.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo bench -p moosicbox_opus --no-run` ✅ benchmarks compile
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Benchmarks are properly configured and compile
+- [ ] criterion dependency is being used
 
 ## Phase 12: Documentation and Examples
 
@@ -969,6 +1221,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
 - [ ] Update all public items with comprehensive rustdoc
 - [ ] Create README.md with usage examples
 - [ ] Add module-level documentation
+
+#### 12.1 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] All public items have rustdoc documentation
+- [ ] README.md exists and contains usage examples
 
 ### 12.2 Create Examples
 
@@ -997,6 +1258,15 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   }
   ```
 
+#### 12.2 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Examples compile and run successfully
+- [ ] Decoder trait import is working in examples
+
 ### 12.3 Module Organization (`src/lib.rs`)
 
 - [ ] Create final lib.rs:
@@ -1024,7 +1294,14 @@ This plan ensures each phase produces fully compilable code with no warnings. De
   pub use toc::{Bandwidth, OpusMode, TocByte};
   ```
 
-**Validation**: Examples compile and demonstrate usage
+#### 12.3 Verification Checklist
+- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [ ] Run `cargo fmt` (formats entire workspace)
+- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [ ] Run `cargo machete` ✅ no unused dependencies
+- [ ] Final module organization is complete and clean
+- [ ] All public APIs are exported correctly
 
 ## Validation Criteria for Each Phase
 
