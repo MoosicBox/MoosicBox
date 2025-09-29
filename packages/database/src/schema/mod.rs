@@ -1158,6 +1158,77 @@ mod tests {
             _ => panic!("Clone should match original"),
         }
     }
+
+    #[test]
+    #[cfg(feature = "cascade")]
+    fn test_drop_column_cascade() {
+        let statement = alter_table("users").drop_column_cascade("old_column".to_string());
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 1);
+        match &statement.operations[0] {
+            AlterOperation::DropColumn { name, behavior } => {
+                assert_eq!(name, "old_column");
+                assert_eq!(*behavior, DropBehavior::Cascade);
+            }
+            _ => panic!("Expected DropColumn operation with CASCADE behavior"),
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "cascade")]
+    fn test_drop_column_restrict() {
+        let statement = alter_table("users").drop_column_restrict("old_column".to_string());
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 1);
+        match &statement.operations[0] {
+            AlterOperation::DropColumn { name, behavior } => {
+                assert_eq!(name, "old_column");
+                assert_eq!(*behavior, DropBehavior::Restrict);
+            }
+            _ => panic!("Expected DropColumn operation with RESTRICT behavior"),
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "cascade")]
+    fn test_multiple_drop_column_behaviors() {
+        let statement = alter_table("users")
+            .drop_column("default_col".to_string())
+            .drop_column_cascade("cascade_col".to_string())
+            .drop_column_restrict("restrict_col".to_string());
+
+        assert_eq!(statement.table_name, "users");
+        assert_eq!(statement.operations.len(), 3);
+
+        // Check default behavior
+        match &statement.operations[0] {
+            AlterOperation::DropColumn { name, behavior } => {
+                assert_eq!(name, "default_col");
+                assert_eq!(*behavior, DropBehavior::Default);
+            }
+            _ => panic!("Expected DropColumn operation with Default behavior"),
+        }
+
+        // Check CASCADE behavior
+        match &statement.operations[1] {
+            AlterOperation::DropColumn { name, behavior } => {
+                assert_eq!(name, "cascade_col");
+                assert_eq!(*behavior, DropBehavior::Cascade);
+            }
+            _ => panic!("Expected DropColumn operation with CASCADE behavior"),
+        }
+
+        // Check RESTRICT behavior
+        match &statement.operations[2] {
+            AlterOperation::DropColumn { name, behavior } => {
+                assert_eq!(name, "restrict_col");
+                assert_eq!(*behavior, DropBehavior::Restrict);
+            }
+            _ => panic!("Expected DropColumn operation with RESTRICT behavior"),
+        }
+    }
 }
 
 // Dependency management for CASCADE and RESTRICT operations

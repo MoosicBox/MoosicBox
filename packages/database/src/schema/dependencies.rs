@@ -1133,6 +1133,64 @@ mod tests {
         assert!(!graph.has_dependents("posts"));
         assert!(!graph.has_dependents("nonexistent"));
     }
+
+    #[test]
+    fn test_column_dependencies_struct() {
+        let deps = ColumnDependencies {
+            indexes: vec!["idx_email".to_string(), "idx_composite".to_string()],
+            foreign_keys: vec!["fk_user_email".to_string()],
+        };
+
+        assert_eq!(deps.indexes.len(), 2);
+        assert_eq!(deps.foreign_keys.len(), 1);
+        assert!(deps.indexes.contains(&"idx_email".to_string()));
+        assert!(deps.foreign_keys.contains(&"fk_user_email".to_string()));
+    }
+
+    #[cfg(feature = "simulator")]
+    #[switchy_async::test]
+    async fn test_get_column_dependencies_empty_table() {
+        use crate::Database;
+        use crate::simulator::SimulationDatabase;
+
+        let db = SimulationDatabase::new().unwrap();
+
+        // Create a simple table without indexes or foreign keys
+        db.exec_raw(
+            "CREATE TABLE simple_table (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                email TEXT
+            )",
+        )
+        .await
+        .unwrap();
+
+        let tx = db.begin_transaction().await.unwrap();
+
+        // Test column that exists but has no dependencies
+        let deps = super::get_column_dependencies(&*tx, "simple_table", "email")
+            .await
+            .unwrap();
+        assert!(deps.indexes.is_empty());
+        assert!(deps.foreign_keys.is_empty());
+
+        // Test nonexistent column
+        let deps = super::get_column_dependencies(&*tx, "simple_table", "nonexistent")
+            .await
+            .unwrap();
+        assert!(deps.indexes.is_empty());
+        assert!(deps.foreign_keys.is_empty());
+
+        // Test nonexistent table
+        let deps = super::get_column_dependencies(&*tx, "nonexistent_table", "email")
+            .await
+            .unwrap();
+        assert!(deps.indexes.is_empty());
+        assert!(deps.foreign_keys.is_empty());
+
+        tx.commit().await.unwrap();
+    }
 }
 
 /// Column-level dependency information

@@ -2001,7 +2001,7 @@ pub(crate) async fn mysql_sqlx_exec_drop_index(
 }
 
 #[cfg(feature = "schema")]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub(crate) async fn mysql_sqlx_exec_alter_table(
     connection: &mut MySqlConnection,
     statement: &crate::schema::AlterTableStatement<'_>,
