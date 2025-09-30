@@ -25,6 +25,15 @@ fn should_skip_migrations() -> bool {
         == "1"
 }
 
+/// Check if migrations table should be dropped based on environment variable
+#[cfg(any(feature = "postgres", feature = "sqlite"))]
+fn should_drop_migrations_table() -> bool {
+    switchy_env::var("MOOSICBOX_DROP_MIGRATIONS_TABLE")
+        .as_deref()
+        .unwrap_or("0")
+        == "1"
+}
+
 /// Run `PostgreSQL` configuration migrations only
 ///
 /// # Errors
@@ -38,6 +47,11 @@ pub async fn migrate_config_postgres(
     let source = postgres_config_migrations();
     let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
         .with_table_name("__moosicbox_schema_migrations");
+
+    if should_drop_migrations_table() {
+        log::info!("migrate_config_postgres: dropping postgres migration table");
+        runner.drop_tracking_table(db).await?;
+    }
 
     if should_skip_migrations() {
         log::info!(
@@ -74,6 +88,11 @@ pub async fn migrate_config_sqlite(
     let source = sqlite_config_migrations();
     let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
         .with_table_name("__moosicbox_schema_migrations");
+
+    if should_drop_migrations_table() {
+        log::info!("migrate_config_sqlite: dropping sqlite migration table");
+        runner.drop_tracking_table(db).await?;
+    }
 
     if should_skip_migrations() {
         log::info!(
@@ -148,6 +167,11 @@ pub async fn migrate_library_postgres_until(
     let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
         .with_table_name("__moosicbox_schema_migrations");
 
+    if should_drop_migrations_table() {
+        log::info!("migrate_library_postgres_until: dropping postgres migration table");
+        runner.drop_tracking_table(db).await?;
+    }
+
     if should_skip_migrations() {
         log::info!(
             "migrate_library_postgres: populating postgres migration table without execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
@@ -203,6 +227,11 @@ pub async fn migrate_library_sqlite_until(
     let source = sqlite_library_migrations();
     let runner = switchy_schema::runner::MigrationRunner::new(Box::new(source))
         .with_table_name("__moosicbox_schema_migrations");
+
+    if should_drop_migrations_table() {
+        log::info!("migrate_library_sqlite_until: dropping sqlite migration table");
+        runner.drop_tracking_table(db).await?;
+    }
 
     if should_skip_migrations() {
         log::info!(
