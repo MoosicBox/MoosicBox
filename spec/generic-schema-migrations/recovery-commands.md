@@ -129,6 +129,150 @@ Migrations directory: ./migrations
 ✓ Migration '20240103_problematic_migration' marked as completed
 ```
 
+### Mark All Completed Command
+
+```bash
+switchy-migrate mark-all-completed [--force] --database-url <DATABASE_URL>
+```
+
+**Purpose:** Mark ALL migrations as completed without executing them (EXTREMELY dangerous operation).
+
+**Behavior:**
+1. Ensures migration tracking table exists
+2. Discovers all available migrations from source
+3. For each migration:
+   - If already completed: Count as `already_completed`
+   - If in failed/in-progress state: Update to completed (count as `updated`)
+   - If not tracked: Insert as completed (count as `newly_marked`)
+4. Returns summary with statistics
+
+**Interactive Confirmation:**
+Without `--force` flag, requires TWO confirmations:
+1. First confirmation: User must acknowledge the dangers
+2. Second confirmation: "Last chance" prompt
+
+**Example:**
+```bash
+$ switchy-migrate mark-all-completed --database-url sqlite://app.db
+
+⚠️  Marking ALL migrations as completed
+Migrations directory: ./migrations
+
+⚠️  DANGER: THIS IS AN EXTREMELY DANGEROUS OPERATION!
+════════════════════════════════════════════════════════════
+This will mark ALL migrations as completed WITHOUT running them!
+This can lead to:
+  • Database schema inconsistencies
+  • Failed future migrations
+  • Data corruption
+  • Application crashes
+════════════════════════════════════════════════════════════
+
+Only use this if:
+  • You're initializing a tracking table for an existing database
+  • You've manually run all migrations and need to sync
+  • You're recovering from schema table corruption
+
+Are you ABSOLUTELY SURE you want to mark ALL migrations as completed? [y/N] y
+Last chance: Proceed with marking ALL migrations as completed? [y/N] y
+
+✓ Operation completed successfully!
+
+Summary:
+  Total migrations found:       47
+  Already completed:            12
+  Newly marked as completed:    30
+  Updated to completed:         5
+```
+
+**Force Mode:**
+```bash
+$ switchy-migrate mark-all-completed --database-url sqlite://app.db --force
+# Bypasses all confirmations - use with extreme caution
+```
+
+**Use Cases:**
+
+1. **Initializing Existing Database:**
+   ```bash
+   # Database schema already matches migrations
+   switchy-migrate mark-all-completed -d postgres://prod/db --force
+   ```
+
+2. **Recovery from Corruption:**
+   ```bash
+   # Migration table was dropped/corrupted but schema is correct
+   switchy-migrate mark-all-completed -d sqlite://app.db
+   ```
+
+3. **Manual Migration Application:**
+   ```bash
+   # Migrations were manually applied, need to sync tracking
+   switchy-migrate mark-all-completed -d postgres://prod/db
+   ```
+
+**API Usage:**
+
+```rust
+use switchy_schema::runner::MigrationRunner;
+
+let runner = MigrationRunner::new_directory("./migrations")
+    .with_table_name("__my_migrations");
+
+let summary = runner.mark_all_migrations_completed(&*db).await?;
+
+println!("Operation summary:");
+println!("  Total: {}", summary.total);
+println!("  Already completed: {}", summary.already_completed);
+println!("  Newly marked: {}", summary.newly_marked);
+println!("  Updated: {}", summary.updated);
+```
+
+**Return Type:**
+
+```rust
+pub struct MarkAllCompletedSummary {
+    /// Total number of migrations found
+    pub total: usize,
+    /// Number of migrations that were already completed
+    pub already_completed: usize,
+    /// Number of migrations newly marked as completed
+    pub newly_marked: usize,
+    /// Number of migrations updated from failed/in-progress to completed
+    pub updated: usize,
+}
+```
+
+**Related Commands:**
+- `mark-completed <migration_id>` - Mark a single migration
+- `status --show-failed` - Check current migration state
+- `retry <migration_id>` - Retry a failed migration properly
+
+**Warnings:**
+
+🚨 **CRITICAL SAFETY NOTICE** 🚨
+
+This command should ONLY be used in these specific scenarios:
+1. You are absolutely certain the database schema matches all migrations
+2. You are recovering from a corrupted migration tracking table
+3. You are initializing tracking for a manually-managed database
+
+DO NOT use this command if:
+- You are unsure about the current schema state
+- Migrations have not been applied
+- You are trying to "skip" migrations during development
+- You want to avoid running migrations (use MOOSICBOX_SKIP_MIGRATION_EXECUTION instead)
+
+**Consequences of Misuse:**
+- Silent schema inconsistencies
+- Future migrations may fail in unexpected ways
+- Data corruption if migrations expect schema they create
+- Difficult-to-debug application errors
+- May require manual database recovery
+
+**Best Practice:**
+Always backup your database before using this command.
+
 ### Force Migration
 
 ```bash

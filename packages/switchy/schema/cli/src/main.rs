@@ -192,6 +192,30 @@ enum Commands {
         #[arg(long)]
         force: bool,
     },
+    /// Mark all migrations as completed without executing them (VERY dangerous operation)
+    MarkAllCompleted {
+        /// Database connection URL
+        #[arg(short, long, env = "SWITCHY_DATABASE_URL")]
+        database_url: String,
+        /// Directory containing migrations
+        #[arg(
+            short,
+            long,
+            env = "SWITCHY_MIGRATIONS_DIR",
+            default_value = "./migrations"
+        )]
+        migrations_dir: PathBuf,
+        /// Migration table name
+        #[arg(
+            long,
+            env = "SWITCHY_MIGRATION_TABLE",
+            default_value = "__switchy_migrations"
+        )]
+        migration_table: String,
+        /// Force the operation without confirmation
+        #[arg(long)]
+        force: bool,
+    },
     /// Validate checksums of applied migrations
     Validate {
         /// Database connection URL
@@ -221,6 +245,7 @@ enum Commands {
     },
 }
 
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -299,6 +324,15 @@ async fn main() -> Result<()> {
                 force,
             )
             .await
+        }
+        Commands::MarkAllCompleted {
+            database_url,
+            migrations_dir,
+            migration_table,
+            force,
+        } => {
+            mark_all_migrations_completed(database_url, migrations_dir, migration_table, force)
+                .await
         }
         Commands::Validate {
             database_url,
@@ -947,6 +981,119 @@ async fn mark_migration_completed(
         Err(e) => {
             println!(
                 "{} Failed to mark migration '{migration_id}' as completed: {e}",
+                "✗".red()
+            );
+            return Err(CliError::Migration(e));
+        }
+    }
+
+    Ok(())
+}
+
+/// Mark all migrations as completed without executing them
+async fn mark_all_migrations_completed(
+    database_url: String,
+    migrations_dir: PathBuf,
+    migration_table: String,
+    force: bool,
+) -> Result<()> {
+    use colored::Colorize;
+    use dialoguer::Confirm;
+    use switchy_schema::runner::MigrationRunner;
+
+    // Connect to database
+    let db = utils::database::connect(&database_url).await?;
+
+    // Create migration runner with directory source
+    let runner = MigrationRunner::new_directory(&migrations_dir).with_table_name(migration_table);
+
+    println!(
+        "{} Marking ALL migrations as completed",
+        "⚠️".yellow().bold()
+    );
+    println!("Migrations directory: {}", migrations_dir.display());
+    println!();
+
+    // Show warning unless force flag is used
+    if !force {
+        println!(
+            "{}",
+            "⚠️  DANGER: THIS IS AN EXTREMELY DANGEROUS OPERATION!"
+                .red()
+                .bold()
+        );
+        println!("{}", "═".repeat(60).red());
+        println!("This will mark ALL migrations as completed WITHOUT running them!");
+        println!("This can lead to:");
+        println!("  {} Database schema inconsistencies", "•".red());
+        println!("  {} Failed future migrations", "•".red());
+        println!("  {} Data corruption", "•".red());
+        println!("  {} Application crashes", "•".red());
+        println!("{}", "═".repeat(60).red());
+        println!();
+        println!("Only use this if:");
+        println!(
+            "  {} You're initializing a tracking table for an existing database",
+            "•".yellow()
+        );
+        println!(
+            "  {} You've manually run all migrations and need to sync",
+            "•".yellow()
+        );
+        println!(
+            "  {} You're recovering from schema table corruption",
+            "•".yellow()
+        );
+        println!();
+
+        let confirmed = Confirm::new()
+            .with_prompt("Are you ABSOLUTELY SURE you want to mark ALL migrations as completed?")
+            .default(false)
+            .interact()
+            .map_err(|e| CliError::Config(format!("Failed to get user confirmation: {e}")))?;
+
+        if !confirmed {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+
+        // Double confirmation
+        let double_confirmed = Confirm::new()
+            .with_prompt("Last chance: Proceed with marking ALL migrations as completed?")
+            .default(false)
+            .interact()
+            .map_err(|e| CliError::Config(format!("Failed to get user confirmation: {e}")))?;
+
+        if !double_confirmed {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    }
+
+    // Mark all migrations as completed
+    match runner.mark_all_migrations_completed(&*db).await {
+        Ok(summary) => {
+            println!();
+            println!("{} Operation completed successfully!", "✓".green().bold());
+            println!();
+            println!("Summary:");
+            println!("  Total migrations found:       {}", summary.total);
+            println!(
+                "  Already completed:            {}",
+                summary.already_completed
+            );
+            println!(
+                "  Newly marked as completed:    {}",
+                summary.newly_marked.to_string().green()
+            );
+            println!(
+                "  Updated to completed:         {}",
+                summary.updated.to_string().yellow()
+            );
+        }
+        Err(e) => {
+            println!(
+                "{} Failed to mark all migrations as completed: {e}",
                 "✗".red()
             );
             return Err(CliError::Migration(e));

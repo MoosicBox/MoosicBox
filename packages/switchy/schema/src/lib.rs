@@ -165,6 +165,7 @@ use thiserror::Error;
 
 pub use checksum_database::{ChecksumDatabase, calculate_hash};
 pub use digest::Digest;
+pub use runner::MarkAllCompletedSummary;
 
 /// Detailed validation error information
 ///

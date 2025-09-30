@@ -187,6 +187,12 @@ switchy-migrate retry MIGRATION_ID -d DATABASE_URL
 # Mark a migration as completed (use with caution)
 switchy-migrate mark-completed MIGRATION_ID -d DATABASE_URL
 
+# Mark all migrations as completed (VERY dangerous operation)
+switchy-migrate mark-all-completed -d DATABASE_URL
+
+# Force without confirmation
+switchy-migrate mark-all-completed -d DATABASE_URL --force
+
 # Force migration past dirty state (dangerous)
 switchy-migrate migrate --force -d DATABASE_URL
 ```
@@ -200,6 +206,21 @@ export SWITCHY_DATABASE_URL="postgres://localhost/mydb"
 export SWITCHY_MIGRATIONS_DIR="./migrations"
 export SWITCHY_MIGRATION_TABLE="__switchy_migrations"
 ```
+
+#### `MOOSICBOX_SKIP_MIGRATION_EXECUTION`
+
+When set to `1`, skips executing migration SQL but still populates the migration
+tracking table with all migrations marked as completed. This is useful for:
+- Initializing a tracking table for an existing database with matching schema
+- Read-only deployments where schema is managed externally
+- Recovery scenarios where migrations were manually applied
+
+```bash
+export MOOSICBOX_SKIP_MIGRATION_EXECUTION=1
+```
+
+**Note:** Prior behavior completely skipped migrations. New behavior ensures the
+tracking table is populated for proper migration state management.
 
 ### Migration States
 
@@ -261,6 +282,11 @@ for migration in info {
 
 // Retry a specific migration
 runner.retry_migration("001_create_users").await?;
+
+// Mark all migrations as completed without executing them
+let summary = runner.mark_all_migrations_completed(&*db).await?;
+println!("Marked {} new migrations, updated {} failed migrations",
+         summary.newly_marked, summary.updated);
 ```
 
 ## Discovery Methods
@@ -625,6 +651,9 @@ switchy-migrate retry 001_add_users_table -d postgres://localhost/mydb
 switchy-migrate migrate --dry-run -d postgres://localhost/mydb
 switchy-migrate rollback --steps 2 -d postgres://localhost/mydb
 switchy-migrate mark-completed 002_add_indexes -d postgres://localhost/mydb --force
+
+# Mark all migrations as completed (recovery/initialization)
+switchy-migrate mark-all-completed -d postgres://localhost/mydb --force
 ```
 
 ### Library Examples
