@@ -1,4 +1,4 @@
-#![cfg(feature = "auto-reverse")]
+#![cfg(all(feature = "auto-reverse", feature = "code"))]
 
 use switchy_database::schema::auto_reversible::add_column;
 use switchy_database::schema::{Column, DataType, create_index, create_table};

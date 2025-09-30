@@ -1,6 +1,6 @@
 //! Example demonstrating automatic migration reversal
 
-#[cfg(feature = "auto-reverse")]
+#[cfg(all(feature = "auto-reverse", feature = "code"))]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use switchy_database::schema::auto_reversible::add_column;
@@ -105,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(not(feature = "auto-reverse"))]
+#[cfg(not(all(feature = "auto-reverse", feature = "code")))]
 fn main() {
     println!("This example requires the 'auto-reverse' feature");
     println!("Run with: cargo run --example auto_reverse --features auto-reverse");

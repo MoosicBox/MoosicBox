@@ -49,7 +49,7 @@ test-log = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
-default = ["all-discovery"]
+default = ["all-discovery", "auto-reverse"]
 
 fail-on-warnings = [
     "switchy_database/fail-on-warnings",
