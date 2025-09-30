@@ -224,6 +224,34 @@ impl VersionTracker {
         Ok(())
     }
 
+    /// Drop the migrations tracking table
+    ///
+    /// This is a destructive operation that removes all migration history including:
+    /// * Migration execution status (completed, failed, in-progress)
+    /// * Execution timestamps (`run_on`, `finished_on`)
+    /// * Failure reasons and error messages
+    /// * Stored checksums for validation
+    ///
+    /// # Use Cases
+    ///
+    /// * Recovering from a corrupted migration tracking table
+    /// * Fixing schema mismatches between table structure and code
+    /// * Completely resetting migration history (combined with `mark_all_migrations_completed`)
+    ///
+    /// # Errors
+    ///
+    /// * If the table drop operation fails
+    pub async fn drop_table(&self, db: &dyn Database) -> Result<()> {
+        use switchy_database::schema::drop_table;
+
+        drop_table(&self.table_name)
+            .if_exists(true)
+            .execute(db)
+            .await?;
+
+        Ok(())
+    }
+
     /// Check if a migration has been applied successfully
     ///
     /// Returns true only if the migration has completed successfully (status = 'completed').
