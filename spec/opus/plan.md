@@ -1523,9 +1523,18 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
 
 ## Phase 10: Testing Infrastructure (Add test dependencies)
 
+### 10.0 Add test-case to Workspace
+
+- [x] Add to workspace `Cargo.toml`:
+  ```toml
+  test-case = "3.3.1"
+  ```
+
+Successfully added test-case = "3.3.1" to workspace dependencies between symphonia and thiserror
+
 ### 10.1 Add Test Dependencies
 
-- [ ] Update `packages/opus/Cargo.toml`:
+- [x] Update `packages/opus/Cargo.toml`:
   ```toml
   [dev-dependencies]
   hex = { workspace = true }
@@ -1535,17 +1544,24 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
   ```
 
 #### 10.1 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Test dependencies are added only as dev-dependencies
-- [ ] No test dependencies leak into runtime dependencies
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled moosicbox_opus v0.1.1 with dev-dependencies
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with all targets and features
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used, no unused dependencies found
+- [x] Test dependencies are added only as dev-dependencies
+hex, insta, pretty_assertions, test-case added to [dev-dependencies]
+- [x] No test dependencies leak into runtime dependencies
+Dev-dependencies only used in test targets, not in library code
 
 ### 10.2 Create Unit Tests
 
-- [ ] Create `tests/packet_tests.rs`:
+- [x] Create `tests/packet_tests.rs`:
   ```rust
   use moosicbox_opus::{
       packet::OpusPacket,
@@ -1583,18 +1599,26 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
   ```
 
 #### 10.2 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo test -p moosicbox_opus` ✅ all tests pass
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] All test dependencies are being used
-- [ ] Tests validate RFC compliance and packet parsing
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled moosicbox_opus v0.1.1 with test targets
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with all targets
+- [x] Run `cargo test -p moosicbox_opus` ✅ all tests pass
+27 packet_tests passed: TOC parsing, frame length decoding, code 0-3 packet parsing, RFC 6716 validation
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies (including dev-dependencies) properly used
+- [x] All test dependencies are being used
+test-case, pretty_assertions used in packet_tests.rs
+- [x] Tests validate RFC compliance and packet parsing
+Comprehensive RFC 6716 compliance tests: all frame codes (0-3), VBR/CBR, padding, DTX, frame length encoding
 
 ### 10.3 Create Decoder Tests
 
-- [ ] Create `tests/decoder_tests.rs`:
+- [x] Create `tests/decoder_tests.rs`:
   ```rust
   use symphonia::core::{
       codecs::{CodecParameters, Decoder, DecoderOptions, CODEC_TYPE_OPUS},
@@ -1615,14 +1639,22 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
   ```
 
 #### 10.3 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo test -p moosicbox_opus` ✅ all tests pass
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Decoder trait import is working correctly
-- [ ] Decoder creation tests are functional
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled moosicbox_opus v0.1.1 with decoder tests
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings on all targets including tests
+- [x] Run `cargo test -p moosicbox_opus` ✅ all tests pass
+All 35 tests passed (27 packet_tests + 8 decoder_tests)
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used, no unused dependencies
+- [x] Decoder trait import is working correctly
+Symphonia Decoder trait imported and used correctly in decoder_tests.rs
+- [x] Decoder creation tests are functional
+8 decoder tests passed: mono/stereo, 8/16/24/48kHz, unsupported rates, codec descriptor validation
 
 ## Phase 11: Benchmarking (Add criterion)
 

@@ -31,7 +31,7 @@ pub fn decode_frame_length(data: &[u8]) -> Result<(usize, usize)> {
             if data.len() < 2 {
                 return Err(Error::PacketTooShort(data.len()));
             }
-            let length = (data[1] as usize * 4) + data[0] as usize;
+            let length = 4 * (data[1] as usize) + (data[0] as usize);
             if length > 1275 {
                 return Err(Error::InvalidFrameLength(length));
             }

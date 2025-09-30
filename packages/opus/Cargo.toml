@@ -17,6 +17,10 @@ log       = { workspace = true }
 symphonia = { workspace = true }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-case         = { workspace = true }
+
 [features]
 default          = []
 fail-on-warnings = []
