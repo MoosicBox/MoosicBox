@@ -615,9 +615,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.11"
+version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "862ed96ca487e809f1c8e5a8447f6ee2cf102f846893800b20cebdf541fc6bbd"
+checksum = "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78"
 
 [[package]]
 name = "anstyle-parse"
@@ -2238,9 +2238,9 @@ dependencies = [
 
 [[package]]
 name = "camino"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1de8bc0aa9e9385ceb3bf0c152e3a9b9544f6c4a912c8ae504e80c1f0368603"
+checksum = "276a59bf2b2c967788139340c9f0c5b12d7fd6630315c15c217e559de85d2609"
 dependencies = [
  "serde_core",
 ]
@@ -4228,9 +4228,9 @@ dependencies = [
 
 [[package]]
 name = "fltk"
-version = "1.5.14"
+version = "1.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49cb74feeaf2bf406501988414bd9bf97e8f96032cbae52f510f4f2b78f00ccb"
+checksum = "63dd23a2258d02211ba0d8e683744cae44187fde389e3430ce2a3bc484d64e36"
 dependencies = [
  "bitflags 2.9.4",
  "crossbeam-channel",
@@ -4242,9 +4242,9 @@ dependencies = [
 
 [[package]]
 name = "fltk-sys"
-version = "1.5.14"
+version = "1.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52f5c692656119a40155d6c0df3af12b004aa9385325164bf50002ad4e0bab7b"
+checksum = "4b630a800757b2be016ccdd9e8d80f9c30c97422e21230b18d78b5befecd48fd"
 dependencies = [
  "cmake",
  "cmk",
@@ -18455,9 +18455,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.8.1"
+version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ced3678a2879b30306d323f4542626697a464a97c0a07c9aebf7ebca65cd4dde"
+checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
 
 [[package]]
 name = "zerotrie"
