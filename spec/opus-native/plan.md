@@ -2065,6 +2065,94 @@ No unused dependencies reported
   }
   ```
 
+- [ ] **Add ilog utility function (RFC lines 368-375):**
+  ```rust
+  /// Integer base-2 logarithm: floor(log2(n)) + 1 for n > 0, or 0 for n <= 0
+  fn ilog(n: u32) -> i32 {
+      if n == 0 {
+          0
+      } else {
+          32 - n.leading_zeros() as i32
+      }
+  }
+  ```
+
+- [ ] **Implement stability check using Levinson recursion (RFC lines 3983-4105):**
+  ```rust
+  impl SilkDecoder {
+      fn is_stable_q17(&self, a32_q17: &[i32]) -> bool {
+          let d_lpc = a32_q17.len();
+
+          // Convert Q17 to Q12 coefficients (RFC line 4004)
+          let a32_q12: Vec<i32> = a32_q17.iter()
+              .map(|&a| ((a + 16) >> 5))
+              .collect();
+
+          // Step 1: DC response check (RFC lines 4007-4016)
+          let dc_resp: i32 = a32_q12.iter().sum();
+          if dc_resp > 4096 {
+              return false;  // Unstable
+          }
+
+          // Step 2: Initialize Q24 coefficients (RFC lines 4018-4026)
+          let mut a32_q24 = vec![vec![0i64; d_lpc]; d_lpc];
+          for n in 0..d_lpc {
+              a32_q24[d_lpc - 1][n] = i64::from(a32_q12[n]) << 12;
+          }
+
+          let mut inv_gain_q30 = vec![0i64; d_lpc + 1];
+          inv_gain_q30[d_lpc] = 1i64 << 30;
+
+          // Step 3: Levinson recurrence (RFC lines 4039-4097)
+          for k in (0..d_lpc).rev() {
+              // Check coefficient magnitude (RFC lines 4040-4041)
+              let abs_coeff = a32_q24[k][k].abs();
+              if abs_coeff > 16773022 {
+                  return false;  // Unstable (coefficient too large, ~0.99975 in Q24)
+              }
+
+              // Compute reflection coefficient (RFC line 4045)
+              let rc_q31 = -a32_q24[k][k] << 7;
+
+              // Compute denominator (RFC line 4047)
+              let rc_sq = (rc_q31 * rc_q31) >> 32;
+              let div_q30 = (1i64 << 30) - rc_sq;
+
+              // Update inverse prediction gain (RFC line 4049)
+              inv_gain_q30[k] = ((inv_gain_q30[k + 1] * div_q30) >> 32) << 2;
+
+              // Check inverse gain (RFC lines 4051-4053)
+              if inv_gain_q30[k] < 107374 {
+                  return false;  // Unstable (prediction gain too high, ~1/10000 in Q30)
+              }
+
+              // If k > 0, compute next row (RFC lines 4054-4074)
+              if k > 0 {
+                  // Compute precision for division (RFC lines 4056-4058)
+                  let b1 = ilog(div_q30 as u32);
+                  let b2 = b1 - 16;
+
+                  // Compute inverse with error correction (RFC lines 4060-4068)
+                  let inv_qb2 = ((1i64 << 29) - 1) / (div_q30 >> (b2 + 1));
+                  let err_q29 = (1i64 << 29)
+                      - ((div_q30 << (15 - b2)) * inv_qb2 >> 16);
+                  let gain_qb1 = (inv_qb2 << 16) + (err_q29 * inv_qb2 >> 13);
+
+                  // Compute row k-1 from row k (RFC lines 4070-4074)
+                  for n in 0..k {
+                      let num_q24 = a32_q24[k][n]
+                          - ((a32_q24[k][k - n - 1] * rc_q31 + (1i64 << 30)) >> 31);
+                      a32_q24[k - 1][n] = (num_q24 * gain_qb1 + (1i64 << (b1 - 1))) >> b1;
+                  }
+              }
+          }
+
+          // If we reach here, filter is stable (RFC lines 4099-4100)
+          true
+      }
+  }
+  ```
+
 - [ ] **Implement prediction gain limiting (RFC lines 3964-4118):**
   ```rust
   impl SilkDecoder {
@@ -2093,20 +2181,21 @@ No unused dependencies reported
 
           a32_q17.iter().map(|&x| ((x + 16) >> 5) as i16).collect()
       }
-
-      fn is_stable_q17(&self, a32_q17: &[i32]) -> bool {
-          // Compute reflection coefficients via Levinson recursion
-          // Check if all |rc[k]| < 0.99 (approximately)
-          // RFC lines 3986-4105 for fixed-point implementation
-
-          // Full implementation required
-          todo!("Implement stability check via reflection coefficients")
-      }
   }
   ```
 
 - [ ] **Add LPC limiting tests:**
   ```rust
+  #[test]
+  fn test_ilog_function() {
+      assert_eq!(ilog(0), 0);
+      assert_eq!(ilog(1), 1);      // floor(log2(1))+1 = 0+1 = 1
+      assert_eq!(ilog(2), 2);      // floor(log2(2))+1 = 1+1 = 2
+      assert_eq!(ilog(4), 3);      // floor(log2(4))+1 = 2+1 = 3
+      assert_eq!(ilog(255), 8);
+      assert_eq!(ilog(256), 9);
+  }
+
   #[test]
   fn test_coefficient_magnitude_limiting() { /* test 10-round bandwidth expansion */ }
 
@@ -2115,6 +2204,26 @@ No unused dependencies reported
 
   #[test]
   fn test_bandwidth_expansion() { /* verify chirp factor formula */ }
+
+  #[test]
+  fn test_stability_dc_response() {
+      // Test DC response > 4096 triggers instability
+  }
+
+  #[test]
+  fn test_stability_coefficient_magnitude() {
+      // Test abs(a32_Q24[k][k]) > 16773022 triggers instability
+  }
+
+  #[test]
+  fn test_stability_inverse_gain() {
+      // Test inv_gain_Q30[k] < 107374 triggers instability
+  }
+
+  #[test]
+  fn test_stability_levinson_recursion() {
+      // Test full Levinson recurrence with known stable coefficients
+  }
   ```
 
 #### 3.5 Verification Checklist
@@ -2129,7 +2238,14 @@ No unused dependencies reported
 - [ ] Prediction gain limiting uses up to 16 rounds
 - [ ] Round 15 sets coefficients to 0 (guaranteed stable)
 - [ ] Saturation performed after 10th round of magnitude limiting
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3854-4118 - confirm bandwidth expansion formulas, Q17 arithmetic, stability checks
+- [ ] ilog function matches RFC lines 368-375: `floor(log2(n))+1`
+- [ ] DC response check matches RFC line 4016: `DC_resp > 4096 → unstable`
+- [ ] Coefficient magnitude check matches RFC line 4041: `abs(a32_Q24[k][k]) > 16773022 → unstable` (≈0.99975 in Q24)
+- [ ] Inverse gain check matches RFC line 4051: `inv_gain_Q30[k] < 107374 → unstable` (≈1/10000 in Q30)
+- [ ] Levinson recurrence formulas match RFC lines 4045-4074 exactly
+- [ ] All Q-format arithmetic uses correct bit shifts (Q12, Q17, Q24, Q29, Q30, Q31)
+- [ ] 64-bit intermediate values used where needed (RFC line 4086)
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3854-4118 - confirm bandwidth expansion formulas, Q17 arithmetic, stability checks, Levinson recursion
 
 ---
 
