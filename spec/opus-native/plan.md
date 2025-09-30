@@ -510,68 +510,866 @@ All tests pass: 26 passed; 0 failed
 
 ## Phase 2: SILK Decoder - Basic Structure
 
-**Goal:** Implement SILK decoder framework and basic decoding stages.
+**Goal:** Implement SILK decoder framework and basic decoding stages through subframe gains.
 
-**Scope:** RFC 6716 Section 4.2.1 through 4.2.7.4 (partial)
+**Scope:** RFC 6716 Section 4.2.1 through 4.2.7.4
 
 **Feature:** `silk`
 
 **Additional Resources:**
-- See `research/silk-overview.md` for complete SILK architecture overview
-- Review decoder pipeline, LP/LTP concepts, and major components
+- `research/silk-overview.md` - Complete SILK architecture overview
+- `spec/opus-native/rfc6716.txt` - Primary specification reference
+
+---
 
 ### 2.1: SILK Decoder Framework
 
-**Reference:** RFC 6716 Section 4.2
+**Reference:** RFC 6716 Section 4.2 (lines 1743-1810), Section 4.2.1 (lines 1752-1810)
 
-- [ ] Add SILK module declaration to `src/lib.rs`:
+**RFC Deep Check:** Lines 1752-1810 describe the SILK decoder module pipeline and data flow
+
+#### Implementation Steps
+
+- [ ] **Add SILK module declaration to `src/lib.rs`:**
   ```rust
   #[cfg(feature = "silk")]
   pub mod silk;
   ```
-- [ ] Create `src/silk/mod.rs`:
+
+- [ ] **Create `src/silk/mod.rs`:**
   ```rust
   mod decoder;
+  mod frame;
 
   pub use decoder::SilkDecoder;
+  pub use frame::SilkFrame;
   ```
-- [ ] Create `src/silk/decoder.rs` with `SilkDecoder` struct
-- [ ] Define SILK state structures
-- [ ] Implement decoder initialization
-- [ ] Add basic tests
+
+- [ ] **Create `src/silk/decoder.rs` with `SilkDecoder` struct:**
+
+  **RFC Reference:** Lines 1754-1786 (Figure 14: SILK Decoder pipeline)
+
+  ```rust
+  use crate::error::{Error, Result};
+  use crate::range::RangeDecoder;
+
+  pub struct SilkDecoder {
+      sample_rate: SampleRate,
+      channels: Channels,
+      frame_size_ms: u8,
+      num_silk_frames: usize,
+      previous_stereo_weights: Option<(i16, i16)>,
+      previous_gain_indices: [Option<u8>; 2],
+  }
+
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  pub enum SampleRate {
+      Hz8000,
+      Hz12000,
+      Hz16000,
+      Hz24000,
+  }
+
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  pub enum Channels {
+      Mono,
+      Stereo,
+  }
+  ```
+
+  **State fields explanation (from RFC lines 1756-1782):**
+  * `sample_rate`: SILK internal sample rate (8/12/16/24 kHz per RFC line 1749)
+  * `channels`: Mono or stereo mode
+  * `frame_size_ms`: 10, 20, 40, or 60 ms per configuration
+  * `num_silk_frames`: 1-3 regular frames (per RFC lines 1813-1825)
+  * `previous_stereo_weights`: Stereo prediction from previous frame (RFC lines 2196-2205)
+  * `previous_gain_indices`: Gain state per channel for delta coding (RFC lines 2508-2529)
+
+- [ ] **Create `src/silk/frame.rs` with frame state:**
+
+  **RFC Reference:** Lines 2062-2179 (Table 5: SILK Frame Contents)
+
+  ```rust
+  use crate::error::{Error, Result};
+
+  pub struct SilkFrame {
+      pub frame_type: FrameType,
+      pub vad_flag: bool,
+      pub subframe_count: usize,
+      pub subframe_gains: Vec<u8>,
+  }
+
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  pub enum FrameType {
+      Inactive,
+      Unvoiced,
+      Voiced,
+  }
+
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  pub enum QuantizationOffsetType {
+      Low,
+      High,
+  }
+  ```
+
+- [ ] **Implement decoder initialization:**
+
+  ```rust
+  impl SilkDecoder {
+      #[must_use]
+      pub fn new(sample_rate: SampleRate, channels: Channels, frame_size_ms: u8) -> Result<Self> {
+          if !matches!(frame_size_ms, 10 | 20 | 40 | 60) {
+              return Err(Error::SilkDecoder(format!(
+                  "invalid frame size: {} ms (must be 10, 20, 40, or 60)",
+                  frame_size_ms
+              )));
+          }
+
+          let num_silk_frames = match frame_size_ms {
+              10 => 1,
+              20 => 1,
+              40 => 2,
+              60 => 3,
+              _ => unreachable!(),
+          };
+
+          Ok(Self {
+              sample_rate,
+              channels,
+              frame_size_ms,
+              num_silk_frames,
+              previous_stereo_weights: None,
+              previous_gain_indices: [None, None],
+          })
+      }
+  }
+  ```
+
+- [ ] **Add basic tests:**
+
+  ```rust
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+
+      #[test]
+      fn test_silk_decoder_creation_valid() {
+          let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20);
+          assert!(decoder.is_ok());
+      }
+
+      #[test]
+      fn test_silk_decoder_invalid_frame_size() {
+          let result = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 15);
+          assert!(result.is_err());
+      }
+
+      #[test]
+      fn test_num_silk_frames_calculation() {
+          assert_eq!(SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 10).unwrap().num_silk_frames, 1);
+          assert_eq!(SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap().num_silk_frames, 1);
+          assert_eq!(SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 40).unwrap().num_silk_frames, 2);
+          assert_eq!(SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 60).unwrap().num_silk_frames, 3);
+      }
+  }
+  ```
+
+#### 2.1 Verification Checklist
+
+- [ ] All implementation steps completed
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles with SILK feature)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] `SilkDecoder` struct contains all RFC-required state fields
+- [ ] Initialization validates frame sizes per RFC (10/20/40/60 ms only)
+- [ ] `num_silk_frames` calculated correctly per RFC lines 1813-1825
+- [ ] **RFC DEEP CHECK:** Compare implementation against RFC lines 1752-1810 - verify all decoder modules from Figure 14 are represented in struct design
+
+---
 
 ### 2.2: LP Layer Organization
 
-**Reference:** RFC 6716 Section 4.2.2
+**Reference:** RFC 6716 Section 4.2.2 (lines 1811-1950), Section 4.2.3 (lines 1951-1973), Section 4.2.4 (lines 1974-1998)
 
-- [ ] Implement LP layer detection from TOC
-- [ ] Parse voice activity detection flags
-- [ ] Parse per-frame LBRR flags (RFC 4.2.4)
-- [ ] Add tests for layer organization
+**RFC Deep Check:** Lines 1811-1950 explain LP layer structure, VAD/LBRR organization, stereo interleaving
+
+#### Implementation Steps
+
+- [ ] **Add TOC parsing helper to `src/silk/decoder.rs`:**
+
+  **RFC Reference:** Lines 712-846 (Section 3.1 TOC Byte), Lines 790-814 (Table 2)
+
+  ```rust
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  pub struct TocInfo {
+      pub config: u8,
+      pub is_stereo: bool,
+      pub frame_count_code: u8,
+  }
+
+  impl TocInfo {
+      pub fn parse(toc_byte: u8) -> Self {
+          Self {
+              config: toc_byte >> 3,
+              is_stereo: (toc_byte >> 2) & 0x1 == 1,
+              frame_count_code: toc_byte & 0x3,
+          }
+      }
+
+      pub fn uses_silk(&self) -> bool {
+          self.config < 16
+      }
+
+      pub fn is_hybrid(&self) -> bool {
+          (12..=15).contains(&self.config)
+      }
+
+      pub fn bandwidth(&self) -> Bandwidth {
+          match self.config {
+              0..=3 => Bandwidth::Narrowband,
+              4..=7 => Bandwidth::Mediumband,
+              8..=11 => Bandwidth::Wideband,
+              12..=13 => Bandwidth::SuperWideband,
+              14..=15 => Bandwidth::Fullband,
+              16..=19 => Bandwidth::Narrowband,
+              20..=23 => Bandwidth::Wideband,
+              24..=27 => Bandwidth::SuperWideband,
+              28..=31 => Bandwidth::Fullband,
+              _ => unreachable!(),
+          }
+      }
+
+      pub fn frame_size_ms(&self) -> u8 {
+          let index = self.config % 4;
+          match self.config {
+              0..=11 => [10, 20, 40, 60][index as usize],
+              12..=15 => [10, 20, 10, 20][index as usize],
+              16..=31 => {
+                  let base = [2.5, 5.0, 10.0, 20.0][index as usize];
+                  (base * 10.0) as u8 / 10
+              }
+              _ => unreachable!(),
+          }
+      }
+  }
+
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  pub enum Bandwidth {
+      Narrowband,
+      Mediumband,
+      Wideband,
+      SuperWideband,
+      Fullband,
+  }
+  ```
+
+- [ ] **Implement VAD flags parsing:**
+
+  **RFC Reference:** Lines 1867-1873 (Table 3), Lines 1953-1972 (Section 4.2.3)
+
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_vad_flags(
+          &self,
+          range_decoder: &mut RangeDecoder,
+      ) -> Result<Vec<bool>> {
+          let mut vad_flags = Vec::with_capacity(self.num_silk_frames);
+
+          for _ in 0..self.num_silk_frames {
+              let vad_flag = range_decoder.ec_dec_bit_logp(1)?;
+              vad_flags.push(vad_flag);
+          }
+
+          Ok(vad_flags)
+      }
+  }
+  ```
+
+  **Note:** Per RFC lines 1867-1873, VAD flags use uniform probability `{1, 1}/2`, which is `ec_dec_bit_logp(1)`
+
+- [ ] **Implement LBRR flag parsing:**
+
+  **RFC Reference:** Lines 1870-1873 (Table 3), Lines 1974-1998 (Section 4.2.4)
+
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_lbrr_flag(
+          &self,
+          range_decoder: &mut RangeDecoder,
+      ) -> Result<bool> {
+          range_decoder.ec_dec_bit_logp(1)
+      }
+
+      pub fn decode_per_frame_lbrr_flags(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          frame_size_ms: u8,
+      ) -> Result<Vec<bool>> {
+          let flags_value = match frame_size_ms {
+              10 | 20 => return Ok(vec![true]),
+              40 => {
+                  const PDF_40MS: &[u8] = &[0, 53, 53, 150];
+                  range_decoder.ec_dec_icdf(PDF_40MS, 8)?
+              }
+              60 => {
+                  const PDF_60MS: &[u8] = &[0, 41, 20, 29, 41, 15, 28, 82];
+                  range_decoder.ec_dec_icdf(PDF_60MS, 8)?
+              }
+              _ => return Err(Error::SilkDecoder("invalid frame size".to_string())),
+          };
+
+          let num_frames = (frame_size_ms / 20) as usize;
+          let mut flags = Vec::with_capacity(num_frames);
+          for i in 0..num_frames {
+              flags.push((flags_value >> i) & 1 == 1);
+          }
+
+          Ok(flags)
+      }
+  }
+  ```
+
+  **Note:** Per RFC lines 1979-1982, flags are packed LSB to MSB
+
+- [ ] **Add tests for LP layer organization:**
+
+  ```rust
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+
+      #[test]
+      fn test_toc_parsing_silk_nb() {
+          let toc = TocInfo::parse(0b00000_0_00);
+          assert_eq!(toc.config, 0);
+          assert!(!toc.is_stereo);
+          assert_eq!(toc.frame_count_code, 0);
+          assert!(toc.uses_silk());
+          assert!(!toc.is_hybrid());
+          assert_eq!(toc.bandwidth(), Bandwidth::Narrowband);
+          assert_eq!(toc.frame_size_ms(), 10);
+      }
+
+      #[test]
+      fn test_toc_parsing_hybrid_swb() {
+          let toc = TocInfo::parse(0b01100_1_01);
+          assert_eq!(toc.config, 12);
+          assert!(toc.is_stereo);
+          assert!(toc.uses_silk());
+          assert!(toc.is_hybrid());
+          assert_eq!(toc.bandwidth(), Bandwidth::SuperWideband);
+      }
+
+      #[test]
+      fn test_vad_flags_decoding() {
+          let data = vec![0xFF, 0xFF, 0xFF, 0xFF];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 60).unwrap();
+
+          let vad_flags = decoder.decode_vad_flags(&mut range_decoder).unwrap();
+          assert_eq!(vad_flags.len(), 3);
+      }
+
+      #[test]
+      fn test_lbrr_flag_decoding() {
+          let data = vec![0xFF, 0xFF, 0xFF, 0xFF];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+          let lbrr_flag = decoder.decode_lbrr_flag(&mut range_decoder).unwrap();
+          assert!(lbrr_flag || !lbrr_flag);
+      }
+  }
+  ```
+
+#### 2.2 Verification Checklist
+
+- [ ] All implementation steps completed
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles with SILK feature)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] TOC parsing correctly identifies SILK vs CELT vs Hybrid modes
+- [ ] TOC parsing extracts bandwidth per Table 2 (RFC lines 790-814)
+- [ ] TOC parsing calculates frame sizes correctly
+- [ ] VAD flags decoded with correct probability (uniform 50/50)
+- [ ] LBRR flag decoded correctly
+- [ ] Per-frame LBRR flags use correct PDFs from Table 4 (RFC lines 1984-1992)
+- [ ] LBRR flag bit packing matches RFC (LSB to MSB)
+- [ ] **RFC DEEP CHECK:** Compare against RFC lines 1811-1950 - verify frame organization matches Figures 15 and 16, stereo interleaving handled correctly
+
+---
 
 ### 2.3: Header Bits Parsing
 
-**Reference:** RFC 6716 Section 4.2.3
+**Reference:** RFC 6716 Section 4.2.3 (lines 1951-1973)
 
-- [ ] Implement header bits decoding
-- [ ] Parse frame-level parameters
-- [ ] Add tests for header parsing
+**RFC Deep Check:** Lines 1951-1973 describe header bit extraction without range decoder overhead
+
+#### Implementation Steps
+
+- [ ] **Implement header bits decoder:**
+
+  **RFC Reference:** Lines 1953-1972
+
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_header_bits(
+          &mut self,
+          range_decoder: &mut RangeDecoder,
+          is_stereo: bool,
+      ) -> Result<HeaderBits> {
+          let mid_vad_flags = self.decode_vad_flags(range_decoder)?;
+          let mid_lbrr_flag = self.decode_lbrr_flag(range_decoder)?;
+
+          let (side_vad_flags, side_lbrr_flag) = if is_stereo {
+              let vad = self.decode_vad_flags(range_decoder)?;
+              let lbrr = self.decode_lbrr_flag(range_decoder)?;
+              (Some(vad), Some(lbrr))
+          } else {
+              (None, None)
+          };
+
+          Ok(HeaderBits {
+              mid_vad_flags,
+              mid_lbrr_flag,
+              side_vad_flags,
+              side_lbrr_flag,
+          })
+      }
+  }
+
+  #[derive(Debug, Clone)]
+  pub struct HeaderBits {
+      pub mid_vad_flags: Vec<bool>,
+      pub mid_lbrr_flag: bool,
+      pub side_vad_flags: Option<Vec<bool>>,
+      pub side_lbrr_flag: Option<bool>,
+  }
+  ```
+
+  **Note:** Per RFC lines 1955-1958, stereo packets decode mid channel flags first, then side channel flags
+
+- [ ] **Add header bits tests:**
+
+  ```rust
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+
+      #[test]
+      fn test_header_bits_mono() {
+          let data = vec![0b10101010, 0xFF, 0xFF, 0xFF];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+          let header = decoder.decode_header_bits(&mut range_decoder, false).unwrap();
+          assert_eq!(header.mid_vad_flags.len(), 1);
+          assert!(header.side_vad_flags.is_none());
+          assert!(header.side_lbrr_flag.is_none());
+      }
+
+      #[test]
+      fn test_header_bits_stereo() {
+          let data = vec![0b10101010, 0xFF, 0xFF, 0xFF, 0xFF];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+          let header = decoder.decode_header_bits(&mut range_decoder, true).unwrap();
+          assert_eq!(header.mid_vad_flags.len(), 1);
+          assert!(header.side_vad_flags.is_some());
+          assert_eq!(header.side_vad_flags.unwrap().len(), 1);
+          assert!(header.side_lbrr_flag.is_some());
+      }
+  }
+  ```
+
+#### 2.3 Verification Checklist
+
+- [ ] All implementation steps completed
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles with SILK feature)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Header bits decode VAD flags correctly
+- [ ] Header bits decode LBRR flags correctly
+- [ ] Stereo packets decode both mid and side flags
+- [ ] Mono packets only decode mid flags
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 1951-1973 - confirm binary values use uniform probability, extraction order matches specification
+
+---
 
 ### 2.4: Stereo Prediction Weights
 
-**Reference:** RFC 6716 Section 4.2.7.1
+**Reference:** RFC 6716 Section 4.2.7.1 (lines 2191-2340)
 
-- [ ] Implement stereo prediction weight decoding
-- [ ] Handle mid/side coding detection
-- [ ] Add tests for stereo prediction
+**RFC Deep Check:** Lines 2191-2340 describe three-stage stereo weight decoding with interpolation
+
+#### Implementation Steps
+
+- [ ] **Add stereo weight constants:**
+
+  **RFC Reference:** Lines 2225-2238 (Table 6: PDFs), Lines 2303-2339 (Table 7: Weight Table)
+
+  ```rust
+  const STEREO_WEIGHT_PDF_STAGE1: &[u8] = &[
+      7, 2, 1, 1, 1, 10, 24, 8, 1, 1, 3, 23, 92, 23, 3, 1, 1,
+      8, 24, 10, 1, 1, 1, 2, 7,
+  ];
+
+  const STEREO_WEIGHT_PDF_STAGE2: &[u8] = &[85, 86, 85];
+
+  const STEREO_WEIGHT_PDF_STAGE3: &[u8] = &[51, 51, 52, 51, 51];
+
+  const STEREO_WEIGHT_TABLE_Q13: &[i16] = &[
+      -13732, -10050, -8266, -7526, -6500, -5000, -2950, -820,
+      820, 2950, 5000, 6500, 7526, 8266, 10050, 13732,
+  ];
+  ```
+
+- [ ] **Implement stereo weight decoding:**
+
+  **RFC Reference:** Lines 2213-2262 (decoding algorithm)
+
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_stereo_weights(
+          &mut self,
+          range_decoder: &mut RangeDecoder,
+      ) -> Result<(i16, i16)> {
+          let n = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE1, 8)?;
+          let i0 = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE2, 8)?;
+          let i1 = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE3, 8)?;
+          let i2 = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE2, 8)?;
+          let i3 = range_decoder.ec_dec_icdf(STEREO_WEIGHT_PDF_STAGE3, 8)?;
+
+          let wi0 = (i0 + 3 * (n / 5)) as usize;
+          let wi1 = (i2 + 3 * (n % 5)) as usize;
+
+          let w1_q13 = STEREO_WEIGHT_TABLE_Q13[wi1]
+              + (((i32::from(STEREO_WEIGHT_TABLE_Q13[wi1 + 1])
+                  - i32::from(STEREO_WEIGHT_TABLE_Q13[wi1]))
+                  * 6554)
+                  >> 16)
+                  * i32::from(2 * i3 + 1);
+
+          let w0_q13 = STEREO_WEIGHT_TABLE_Q13[wi0]
+              + (((i32::from(STEREO_WEIGHT_TABLE_Q13[wi0 + 1])
+                  - i32::from(STEREO_WEIGHT_TABLE_Q13[wi0]))
+                  * 6554)
+                  >> 16)
+                  * i32::from(2 * i1 + 1)
+              - w1_q13;
+
+          let weights = (w0_q13 as i16, w1_q13 as i16);
+          self.previous_stereo_weights = Some(weights);
+
+          Ok(weights)
+      }
+  }
+  ```
+
+  **Note:** Per RFC line 2264, w1_Q13 is computed first because w0_Q13 depends on it
+
+- [ ] **Add stereo weight tests:**
+
+  ```rust
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+
+      #[test]
+      fn test_stereo_weight_decoding() {
+          let data = vec![0x80, 0x00, 0x00, 0x00, 0x00, 0x00];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+          let weights = decoder.decode_stereo_weights(&mut range_decoder).unwrap();
+          assert!(weights.0 >= -13732 && weights.0 <= 13732);
+          assert!(weights.1 >= -13732 && weights.1 <= 13732);
+      }
+
+      #[test]
+      fn test_stereo_weights_stored() {
+          let data = vec![0x80, 0x00, 0x00, 0x00, 0x00, 0x00];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+          assert!(decoder.previous_stereo_weights.is_none());
+          let _ = decoder.decode_stereo_weights(&mut range_decoder).unwrap();
+          assert!(decoder.previous_stereo_weights.is_some());
+      }
+  }
+  ```
+
+#### 2.4 Verification Checklist
+
+- [ ] All implementation steps completed
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles with SILK feature)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Stereo weight PDFs match Table 6 exactly (RFC lines 2225-2238)
+- [ ] Weight table matches Table 7 exactly (RFC lines 2303-2339)
+- [ ] Three-stage decoding implements RFC algorithm (lines 2220-2262)
+- [ ] Table indices wi0 and wi1 calculated correctly (lines 2250-2251)
+- [ ] Interpolation uses constant 6554 (≈0.1 in Q16, line 2265)
+- [ ] w1_Q13 computed before w0_Q13 (line 2264)
+- [ ] Previous weights stored for next frame
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 2191-2340 - confirm weight computation matches exact formulas, interpolation correct, zero substitution logic for unavailable previous weights
+
+---
 
 ### 2.5: Subframe Gains
 
-**Reference:** RFC 6716 Section 4.2.7.4
+**Reference:** RFC 6716 Section 4.2.7.4 (lines 2447-2568)
 
-- [ ] Implement subframe gain decoding
-- [ ] Handle gain quantization
-- [ ] Add tests for gain decoding
+**RFC Deep Check:** Lines 2447-2568 describe independent and delta gain coding with log-scale quantization
+
+#### Implementation Steps
+
+- [ ] **Add gain coding constants:**
+
+  **RFC Reference:** Lines 2485-2505 (Tables 11-13)
+
+  ```rust
+  const GAIN_PDF_INACTIVE: &[u8] = &[32, 112, 68, 29, 12, 1, 1, 1];
+  const GAIN_PDF_UNVOICED: &[u8] = &[2, 17, 45, 60, 62, 47, 19, 4];
+  const GAIN_PDF_VOICED: &[u8] = &[1, 3, 26, 71, 94, 50, 9, 2];
+  const GAIN_PDF_LSB: &[u8] = &[32, 32, 32, 32, 32, 32, 32, 32];
+  const GAIN_PDF_DELTA: &[u8] = &[
+      6, 5, 11, 31, 132, 21, 8, 4, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1,
+      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  ];
+  ```
+
+- [ ] **Implement frame type decoding:**
+
+  **RFC Reference:** Lines 2399-2445 (Section 4.2.7.3, Tables 9-10)
+
+  ```rust
+  const FRAME_TYPE_PDF_INACTIVE: &[u8] = &[26, 230, 0, 0, 0, 0];
+  const FRAME_TYPE_PDF_ACTIVE: &[u8] = &[0, 0, 24, 74, 148, 10];
+
+  impl SilkDecoder {
+      pub fn decode_frame_type(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          vad_flag: bool,
+      ) -> Result<(FrameType, QuantizationOffsetType)> {
+          let pdf = if vad_flag {
+              FRAME_TYPE_PDF_ACTIVE
+          } else {
+              FRAME_TYPE_PDF_INACTIVE
+          };
+
+          let frame_type_value = range_decoder.ec_dec_icdf(pdf, 8)?;
+
+          let (signal_type, quant_offset) = match frame_type_value {
+              0 => (FrameType::Inactive, QuantizationOffsetType::Low),
+              1 => (FrameType::Inactive, QuantizationOffsetType::High),
+              2 => (FrameType::Unvoiced, QuantizationOffsetType::Low),
+              3 => (FrameType::Unvoiced, QuantizationOffsetType::High),
+              4 => (FrameType::Voiced, QuantizationOffsetType::Low),
+              5 => (FrameType::Voiced, QuantizationOffsetType::High),
+              _ => return Err(Error::SilkDecoder("invalid frame type".to_string())),
+          };
+
+          Ok((signal_type, quant_offset))
+      }
+  }
+  ```
+
+- [ ] **Implement subframe gain decoding:**
+
+  **RFC Reference:** Lines 2449-2567 (independent and delta coding)
+
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_subframe_gains(
+          &mut self,
+          range_decoder: &mut RangeDecoder,
+          frame_type: FrameType,
+          num_subframes: usize,
+          channel: usize,
+          is_first_frame: bool,
+      ) -> Result<Vec<u8>> {
+          let mut gain_indices = Vec::with_capacity(num_subframes);
+          let mut previous_log_gain: Option<u8> = self.previous_gain_indices[channel];
+
+          for subframe_idx in 0..num_subframes {
+              let use_independent_coding = subframe_idx == 0
+                  && (is_first_frame || previous_log_gain.is_none());
+
+              let log_gain = if use_independent_coding {
+                  let pdf_msb = match frame_type {
+                      FrameType::Inactive => GAIN_PDF_INACTIVE,
+                      FrameType::Unvoiced => GAIN_PDF_UNVOICED,
+                      FrameType::Voiced => GAIN_PDF_VOICED,
+                  };
+
+                  let gain_msb = range_decoder.ec_dec_icdf(pdf_msb, 8)?;
+                  let gain_lsb = range_decoder.ec_dec_icdf(GAIN_PDF_LSB, 8)?;
+                  let gain_index = (gain_msb << 3) | gain_lsb;
+
+                  if let Some(prev) = previous_log_gain {
+                      gain_index.max(prev.saturating_sub(16))
+                  } else {
+                      gain_index
+                  }
+              } else {
+                  let delta_gain_index = range_decoder.ec_dec_icdf(GAIN_PDF_DELTA, 8)?;
+                  let prev = previous_log_gain.unwrap();
+
+                  let unclamped = if delta_gain_index < 16 {
+                      prev.saturating_add(delta_gain_index).saturating_sub(4)
+                  } else {
+                      prev.saturating_add(2u8.saturating_mul(delta_gain_index).saturating_sub(16))
+                  };
+
+                  unclamped.clamp(0, 63)
+              };
+
+              gain_indices.push(log_gain);
+              previous_log_gain = Some(log_gain);
+          }
+
+          self.previous_gain_indices[channel] = previous_log_gain;
+          Ok(gain_indices)
+      }
+  }
+  ```
+
+  **Note:** Per RFC lines 2511-2516, clamping uses `max(gain_index, previous_log_gain - 16)`
+  **Note:** Per RFC lines 2550-2551, delta formula is `clamp(0, max(2*delta_gain_index - 16, previous_log_gain + delta_gain_index - 4), 63)`
+
+- [ ] **Add gain decoding tests:**
+
+  ```rust
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+
+      #[test]
+      fn test_frame_type_inactive() {
+          let data = vec![0x00, 0xFF, 0xFF, 0xFF];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+          let (frame_type, quant_offset) = decoder
+              .decode_frame_type(&mut range_decoder, false)
+              .unwrap();
+
+          assert!(matches!(frame_type, FrameType::Inactive));
+      }
+
+      #[test]
+      fn test_frame_type_active() {
+          let data = vec![0x80, 0xFF, 0xFF, 0xFF];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+          let (frame_type, _) = decoder
+              .decode_frame_type(&mut range_decoder, true)
+              .unwrap();
+
+          assert!(!matches!(frame_type, FrameType::Inactive));
+      }
+
+      #[test]
+      fn test_independent_gain_decoding() {
+          let data = vec![0x80, 0x00, 0x00, 0x00, 0x00];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+          let gains = decoder
+              .decode_subframe_gains(
+                  &mut range_decoder,
+                  FrameType::Voiced,
+                  4,
+                  0,
+                  true,
+              )
+              .unwrap();
+
+          assert_eq!(gains.len(), 4);
+          for gain in gains {
+              assert!(gain <= 63);
+          }
+      }
+
+      #[test]
+      fn test_gain_indices_stored() {
+          let data = vec![0x80, 0x00, 0x00, 0x00, 0x00];
+          let mut range_decoder = RangeDecoder::new(&data).unwrap();
+          let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+          assert!(decoder.previous_gain_indices[0].is_none());
+          let _ = decoder.decode_subframe_gains(
+              &mut range_decoder,
+              FrameType::Voiced,
+              2,
+              0,
+              true,
+          );
+          assert!(decoder.previous_gain_indices[0].is_some());
+      }
+  }
+  ```
+
+#### 2.5 Verification Checklist
+
+- [ ] All implementation steps completed
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles with SILK feature)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Frame type PDFs match Tables 9-10 exactly (RFC lines 2419-2445)
+- [ ] Frame type decoding selects correct PDF based on VAD flag
+- [ ] Independent gain PDFs match Tables 11-12 exactly (RFC lines 2485-2505)
+- [ ] Delta gain PDF matches Table 13 exactly (RFC lines 2537-2545)
+- [ ] Independent coding used only when specified (RFC lines 2460-2479)
+- [ ] Independent gain combines MSB and LSB correctly (6 bits total)
+- [ ] Independent gain clamping implements RFC formula (line 2511)
+- [ ] Delta gain formula matches RFC exactly (lines 2550-2551)
+- [ ] Delta gain clamping to [0, 63] range applied
+- [ ] Previous gain state stored per channel
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 2447-2568 - confirm gain quantization is log-scale (6 bits, 1.369 dB resolution), formulas match exactly, state management correct for both independent and delta coding paths
+
+---
+
+## Phase 2 Overall Verification Checklist
+
+- [ ] All Phase 2 subtasks (2.1-2.5) completed with checkboxes marked
+- [ ] All individual verification checklists passed
+- [ ] Run `cargo fmt` (format entire workspace)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles with SILK feature)
+- [ ] Run `cargo build -p moosicbox_opus_native --no-default-features --features silk` (compiles with only SILK, no defaults)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --no-default-features --features silk` (tests pass without defaults)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features silk -- -D warnings` (zero warnings without defaults)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] **RFC COMPLETE DEEP CHECK:** Read RFC lines 1743-2568 in full and verify EVERY algorithm, table, and formula is implemented exactly as specified with NO compromises
+
+---
+
+## Phase 2 Implementation Notes
+
+* Use `#[cfg(feature = "silk")]` guards for all SILK-specific code
+* All PDFs and tables from RFC must be embedded as constants
+* State management is critical - previous weights and gains must persist across frames
+* Stereo handling requires careful interleaving per RFC Figures 15-16
+* Test with both mono and stereo configurations
+* Test all frame sizes (10, 20, 40, 60 ms)
+* All arithmetic must use exact RFC formulas (watch for Q13, Q16 fixed-point)
 
 [Continue with detailed breakdown for remaining phases 2.6-2.9, Phase 3-11...]
 
