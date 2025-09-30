@@ -158,71 +158,67 @@ fn parse_code_3(data: &[u8]) -> Result<(Vec<OpusFrame>, Vec<u8>)> {
         return Err(Error::PacketTooShort(0));
     }
 
-    // Parse header byte (RFC 6716 Section 3.2.5)
     let header = data[0];
-    let frame_count = (header & 0x3F) as usize; // Bits 0-5: frame count
-    let vbr = (header & 0x40) != 0; // Bit 6: VBR flag
-    let has_padding = (header & 0x80) != 0; // Bit 7: padding flag
+    let frame_count = (header & 0x3F) as usize;
+    let vbr = (header & 0x40) != 0;
+    let has_padding = (header & 0x80) != 0;
 
-    // Validate frame count (1-48)
     if frame_count == 0 || frame_count > 48 {
         return Err(Error::InvalidPacket);
     }
 
-    // Validate minimum packet size for frame count
-    if data.len() < 1 + frame_count {
+    let mut offset = 1;
+
+    let (padding_size_bytes, padding_data_bytes) = if has_padding {
+        let mut padding_indicator_bytes = 0;
+        let mut total_padding_data = 0;
+
+        loop {
+            if offset >= data.len() {
+                return Err(Error::PacketTooShort(data.len()));
+            }
+
+            let padding_byte = data[offset];
+            offset += 1;
+            padding_indicator_bytes += 1;
+
+            if padding_byte == 255 {
+                total_padding_data += 254;
+            } else {
+                total_padding_data += padding_byte as usize;
+                break;
+            }
+        }
+
+        (padding_indicator_bytes, total_padding_data)
+    } else {
+        (0, 0)
+    };
+
+    let total_padding = padding_size_bytes + padding_data_bytes;
+
+    if data.len() < 1 + total_padding {
         return Err(Error::PacketTooShort(data.len()));
     }
 
-    // Calculate padding length if present
-    let padding_len = if has_padding {
-        // Padding length is encoded at the end of the packet
-        if data.len() < 2 {
+    let available_frame_data_len = data.len() - 1 - total_padding;
+
+    let padding_bytes = if padding_data_bytes > 0 {
+        if data.len() < padding_data_bytes {
             return Err(Error::PacketTooShort(data.len()));
         }
-
-        // Find padding length by reading backwards
-        let last_byte = data[data.len() - 1];
-        let padding_length = if last_byte == 0 {
-            // Zero means read another byte
-            if data.len() < 3 {
-                return Err(Error::PacketTooShort(data.len()));
-            }
-            data[data.len() - 2] as usize
-        } else {
-            last_byte as usize
-        };
-
-        // Padding includes the length bytes themselves
-        if last_byte == 0 {
-            padding_length + 2
-        } else {
-            padding_length + 1
-        }
-    } else {
-        0
-    };
-
-    // Available data is everything except header and padding
-    let available_data_len = data.len() - 1 - padding_len;
-
-    // Extract padding bytes if present
-    let padding_bytes = if padding_len > 0 {
-        data[data.len() - padding_len..].to_vec()
+        data[data.len() - padding_data_bytes..].to_vec()
     } else {
         Vec::new()
     };
 
     if vbr {
-        // VBR mode: each frame (except last) has length prefix
         let mut frames = Vec::with_capacity(frame_count);
-        let mut offset = 1; // Start after header byte
         let mut total_frame_data = 0;
 
-        // Decode lengths for first M-1 frames
         let mut frame_lengths = Vec::with_capacity(frame_count);
         for _ in 0..frame_count - 1 {
-            if offset >= data.len() - padding_len {
+            if offset >= data.len() - padding_data_bytes {
                 return Err(Error::PacketTooShort(data.len()));
             }
 
@@ -232,16 +228,15 @@ fn parse_code_3(data: &[u8]) -> Result<(Vec<OpusFrame>, Vec<u8>)> {
             frame_lengths.push(length);
         }
 
-        // Last frame gets remaining data
-        if total_frame_data > available_data_len - (offset - 1) {
+        if total_frame_data > available_frame_data_len - (offset - 1 - padding_size_bytes) {
             return Err(Error::PacketTooShort(data.len()));
         }
-        let last_frame_length = available_data_len - (offset - 1) - total_frame_data;
+        let last_frame_length =
+            available_frame_data_len - (offset - 1 - padding_size_bytes) - total_frame_data;
         frame_lengths.push(last_frame_length);
 
-        // Now extract frame data
         for length in frame_lengths {
-            if offset + length > data.len() - padding_len {
+            if offset + length > data.len() - padding_data_bytes {
                 return Err(Error::PacketTooShort(data.len()));
             }
 
@@ -254,19 +249,22 @@ fn parse_code_3(data: &[u8]) -> Result<(Vec<OpusFrame>, Vec<u8>)> {
 
         Ok((frames, padding_bytes))
     } else {
-        // CBR mode: all frames equal size
-        if !available_data_len.is_multiple_of(frame_count) {
+        if available_frame_data_len == 0 && frame_count > 0 {
+            return Err(Error::PacketTooShort(data.len()));
+        }
+
+        if !available_frame_data_len.is_multiple_of(frame_count) {
             return Err(Error::InvalidPacket);
         }
 
-        let frame_size = available_data_len / frame_count;
+        let frame_size = available_frame_data_len / frame_count;
         let mut frames = Vec::with_capacity(frame_count);
 
         for i in 0..frame_count {
-            let start = 1 + i * frame_size;
+            let start = offset + i * frame_size;
             let end = start + frame_size;
 
-            if end > data.len() - padding_len {
+            if end > data.len() - padding_data_bytes {
                 return Err(Error::PacketTooShort(data.len()));
             }
 

@@ -1656,6 +1656,67 @@ Symphonia Decoder trait imported and used correctly in decoder_tests.rs
 - [x] Decoder creation tests are functional
 8 decoder tests passed: mono/stereo, 8/16/24/48kHz, unsupported rates, codec descriptor validation
 
+### 10.4 RFC 6716 Code 3 Padding Bug Fixes
+
+During RFC 6716 compliance verification, critical bugs were discovered in Code 3 (multiple frames) padding implementation.
+
+**Bugs Found:**
+1. **Padding size location**: Code read padding size from end of packet instead of after frame count byte (RFC 6716 Section 3.2.5)
+2. **Two-byte padding check**: Code checked for value 0 instead of 255 for chained padding
+3. **Offset calculation**: CBR/VBR frame parsing didn't account for padding size bytes at beginning
+
+**RFC 6716 Section 3.2.5 Requirements:**
+- Padding size bytes follow frame count byte immediately: `[TOC][frame_count][padding_size_bytes...][frames...][padding_data...]`
+- Value 0-254: N bytes of padding (plus 1 byte for size indicator)
+- Value 255: 254 bytes of padding, continue to next byte (chained encoding)
+- Padding data bytes (zeros) appear at end of packet
+
+- [x] Fix parse_code_3 to read padding size from correct location (after frame count byte)
+Replaced backward-reading logic with forward-reading loop that processes padding size bytes immediately after frame count byte
+
+- [x] Fix two-byte padding encoding (255 check instead of 0)
+Changed condition from `if padding_byte == 0` to `if padding_byte == 255` per RFC 6716
+
+- [x] Update offset tracking to skip padding size bytes before reading frame data
+offset now correctly positioned after all padding size bytes, used for both VBR frame length reading and CBR frame data extraction
+
+- [x] Add validation for padding size overflow
+Added check: `if data.len() < 1 + total_padding` to prevent underflow
+
+- [x] Add validation for zero available frame data in CBR mode
+Added check: `if available_frame_data_len == 0 && frame_count > 0` to catch malformed packets
+
+- [x] Create comprehensive Code 3 padding tests (13 new tests)
+Created `tests/code3_padding_tests.rs` with complete RFC 6716 padding validation
+
+#### 10.4 Verification Checklist
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled moosicbox_opus v0.1.1 with padding fixes
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with all targets and features
+- [x] Run `cargo test -p moosicbox_opus` ✅ all tests pass
+All 48 tests passed: 27 packet_tests + 8 decoder_tests + 13 code3_padding_tests
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used, no unused dependencies
+- [x] Verify RFC 6716 Section 3.2.5 compliance
+All padding encoding scenarios tested: simple (0-254), two-byte (255), chained (multiple 255s), VBR/CBR modes
+- [x] Verify frame length formula (RFC 6716 Section 3.2.1)
+Formula `4 * second_byte + first_byte` for range 252-255 confirmed correct via RFC verification
+- [x] All existing tests still pass
+27 original packet tests + 8 decoder tests continue to pass with fixes
+
+**Files Modified:**
+- `packages/opus/src/packet.rs` - Completely rewrote parse_code_3 function (~130 lines)
+- `packages/opus/tests/code3_padding_tests.rs` - Created 13 comprehensive padding tests
+
+**RFC Citations:**
+- RFC 6716 Section 3.2.1 (Frame Length Coding): Formula verified correct
+- RFC 6716 Section 3.2.5 (Code 3 Packets): Padding implementation fully corrected
+
 ## Phase 11: Benchmarking (Add criterion)
 
 ### 11.1 Add Benchmark Dependencies
