@@ -141,6 +141,15 @@ impl RangeDecoder {
 
     /// Decodes a symbol using an inverse CDF table per RFC 6716 Section 4.1.3.3.
     ///
+    /// ICDF tables MUST be terminated with a value of 0, as specified in RFC 6716
+    /// Section 4.1.3.3 (line 1534): "the table is terminated by a value of 0
+    /// (where fh[k] == ft)." This terminating zero represents the point where the
+    /// cumulative distribution reaches ft.
+    ///
+    /// The RFC documents provide probability distribution functions (PDFs). To use
+    /// them with `ec_dec_icdf`, they must be converted to ICDF format with the
+    /// mandatory terminating zero appended.
+    ///
     /// # Errors
     ///
     /// Returns an error if decoding or state update fails.
@@ -163,7 +172,11 @@ impl RangeDecoder {
         } else {
             ft - u32::from(icdf[(k - 1) as usize])
         };
-        let fh = ft - u32::from(icdf[k as usize]);
+        let fh = if k >= len {
+            0
+        } else {
+            ft - u32::from(icdf[k as usize])
+        };
 
         self.ec_dec_update(fl, fh, ft)?;
 
@@ -564,5 +577,32 @@ mod tests {
         let bits_used_frac = decoder.ec_tell_frac();
 
         assert_eq!(bits_used, bits_used_frac.div_ceil(8));
+    }
+
+    #[test]
+    fn test_ec_dec_icdf_with_terminating_zero() {
+        // RFC 6716 Section 4.1.3.3 (line 1534) requires ICDF tables to be
+        // "terminated by a value of 0 (where fh[k] == ft)."
+        // This test verifies correct handling of the mandatory terminating zero.
+        let data = vec![0xFF, 0xFF, 0xFF, 0xFF];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let icdf_with_terminator = &[100, 50, 25, 0]; // Terminating 0 is RFC-mandated
+        let result = decoder.ec_dec_icdf(icdf_with_terminator, 8);
+        assert!(result.is_ok());
+        let k = result.unwrap();
+        assert!(k < u32::try_from(icdf_with_terminator.len()).unwrap());
+    }
+
+    #[test]
+    fn test_ec_dec_icdf_last_symbol() {
+        let data = vec![0x00, 0x00, 0x00, 0x00];
+        let mut decoder = RangeDecoder::new(&data).unwrap();
+
+        let icdf = &[200, 150, 100, 50, 0];
+        let result = decoder.ec_dec_icdf(icdf, 8);
+        assert!(result.is_ok());
+        let k = result.unwrap();
+        assert_eq!(k, 0);
     }
 }
