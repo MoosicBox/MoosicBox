@@ -1000,10 +1000,16 @@ impl<'a> MigrationRunner<'a> {
                     }
                 }
                 None => {
-                    // Doesn't exist - always insert new record as completed
+                    let up_checksum = migration.up_checksum().await?;
+                    let down_checksum = migration.down_checksum().await?;
+
                     self.version_tracker
-                        .record_migration(db, migration_id)
+                        .record_migration_started(db, migration_id, &up_checksum, &down_checksum)
                         .await?;
+                    self.version_tracker
+                        .update_migration_status(db, migration_id, MigrationStatus::Completed, None)
+                        .await?;
+
                     summary.newly_marked += 1;
                 }
             }
@@ -2273,6 +2279,13 @@ mod tests {
                 .expect("Should get status")
                 .expect("Migration should exist");
             assert_eq!(status2.status, MigrationStatus::Completed);
+
+            // Verify checksums are not all zeros (stored as hex strings)
+            let zero_checksum = hex::encode(vec![0u8; 32]);
+            assert_ne!(status1.up_checksum, zero_checksum);
+            assert_ne!(status1.down_checksum, zero_checksum);
+            assert_ne!(status2.up_checksum, zero_checksum);
+            assert_ne!(status2.down_checksum, zero_checksum);
         }
 
         #[switchy_async::test]
