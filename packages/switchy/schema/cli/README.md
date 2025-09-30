@@ -51,6 +51,28 @@ switchy-migrate rollback --database-url sqlite:./database.db --steps 3
 switchy-migrate rollback --database-url sqlite:./database.db --to 2025-01-01-120000_initial_schema
 ```
 
+### Mark migrations as completed (dangerous operations)
+
+```bash
+# Mark a single migration as completed
+switchy-migrate mark-completed 2025-09-01-151110_create_users_table --database-url sqlite:./app.db
+
+# Mark ALL migrations as completed (VERY dangerous)
+switchy-migrate mark-all-completed --database-url sqlite:./app.db
+```
+
+**⚠️ WARNING:** These operations bypass migration execution and can cause:
+- Database schema inconsistencies
+- Failed future migrations
+- Data corruption
+
+Only use these commands when:
+- Initializing a tracking table for an existing database
+- Recovering from migration tracking corruption
+- Schema was manually applied and needs synchronization
+
+Both commands require interactive confirmation unless `--force` is used.
+
 ## Supported Databases
 
 - **SQLite**: `sqlite:./database.db` or `sqlite:` for in-memory
@@ -118,6 +140,8 @@ switchy-migrate migrate --database-url sqlite:./app.db --up-to 2025-09-01-151120
 ## Safety Features
 
 - Rollback operations require user confirmation
+- Mark-completed operations require double confirmation for mark-all-completed
+- Comprehensive warnings displayed before dangerous operations
 - Database connections are validated before operations
 - Migration ordering is deterministic (alphabetical by ID)
 - Comprehensive error reporting

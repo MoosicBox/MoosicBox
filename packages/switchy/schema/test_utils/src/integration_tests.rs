@@ -167,8 +167,8 @@ pub async fn demonstrate_complex_breakpoint_patterns() -> Result<(), crate::Test
 /// Demonstrates environment variable integration with `moosicbox_schema`
 ///
 /// This test verifies that the `MOOSICBOX_SKIP_MIGRATION_EXECUTION` environment
-/// variable works correctly to skip migration execution while still allowing
-/// the migration functions to complete successfully.
+/// variable works correctly to skip migration execution while still populating
+/// the migration tracking table with all migrations marked as completed.
 ///
 /// Note: This function is only available in test builds since it requires
 /// the `moosicbox_schema` crate which is a dev-dependency.
@@ -195,6 +195,7 @@ pub async fn demonstrate_environment_variable_integration() -> Result<(), crate:
 
     // Call the actual moosicbox_schema migration functions
     // These should complete successfully but not actually run migrations
+    // They should instead populate the migration table with all migrations marked as completed
     let result = moosicbox_schema::migrate_library(&*db).await;
 
     // Clean up environment variable
@@ -208,7 +209,7 @@ pub async fn demonstrate_environment_variable_integration() -> Result<(), crate:
         "Migration should succeed when skipped via env var"
     );
 
-    // Verify no migration tracking table was created (since migrations were skipped)
+    // Verify migration tracking table WAS created (even though migrations were skipped)
     let tables = db
         .select("sqlite_master")
         .columns(&["name"])
@@ -217,11 +218,38 @@ pub async fn demonstrate_environment_variable_integration() -> Result<(), crate:
         .execute(&*db)
         .await?;
 
-    // No migration table should exist since migrations were skipped
+    // Migration table should exist since we now populate it even when skipping
     assert!(
-        tables.is_empty(),
-        "Migration table should not exist when migrations are skipped"
+        !tables.is_empty(),
+        "Migration table should exist when migrations are skipped"
     );
+
+    // Verify that migrations were recorded in the table
+    let migration_records = db
+        .select("__moosicbox_schema_migrations")
+        .columns(&["id", "status"])
+        .execute(&*db)
+        .await?;
+
+    // Should have migration records
+    assert!(
+        !migration_records.is_empty(),
+        "Migration records should exist when skipped via env var"
+    );
+
+    // All migrations should be marked as completed
+    for record in &migration_records {
+        if let Some(status_value) = record.get("status") {
+            let status = status_value.as_str();
+            assert_eq!(
+                status,
+                Some("completed"),
+                "All migrations should be marked as completed when skipped"
+            );
+        } else {
+            panic!("Migration record missing status field");
+        }
+    }
 
     Ok(())
 }

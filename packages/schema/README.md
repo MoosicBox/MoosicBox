@@ -65,13 +65,40 @@ migrate_library_until(&*db, Some("2023-10-14-031701_create_tracks")).await?;
 
 ### Environment Variables
 
-Skip migration execution entirely (useful for read-only deployments):
+#### Skip Migration Execution
 
 ```bash
 export MOOSICBOX_SKIP_MIGRATION_EXECUTION=1
 ```
 
-When this environment variable is set to "1", migration functions will succeed without executing any SQL, allowing applications to start without requiring migration privileges.
+When this environment variable is set to "1", migration functions will populate
+the migration tracking table (`__moosicbox_schema_migrations`) with all migrations
+marked as completed WITHOUT executing their SQL. This is useful for:
+
+- **Initialization**: Setting up tracking for existing databases with matching schema
+- **Read-only deployments**: Applications that shouldn't modify schema
+- **Recovery**: When schema table needs to be rebuilt after corruption
+
+**Behavior:**
+- ✅ Creates the migration tracking table if it doesn't exist
+- ✅ Records all migrations as completed with timestamps
+- ✅ Logs summary of marked migrations (newly marked, updated, already completed)
+- ❌ Does NOT execute any migration SQL
+
+**Previous Behavior:** Completely skipped all migration operations. The new behavior
+ensures proper migration state tracking even when SQL execution is skipped.
+
+**Example:**
+```rust
+use moosicbox_schema::migrate_library;
+
+// Set environment variable
+std::env::set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "1");
+
+// This will populate the table without executing SQL
+migrate_library(&*db).await?;
+// Logs: "marked 45 migrations as completed (45 newly marked, 0 updated)"
+```
 
 ### Migration Testing
 
