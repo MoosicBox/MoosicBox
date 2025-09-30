@@ -96,24 +96,26 @@ impl Decoder {
 - [ ] Backend selection works correctly (native/libopus/stub)
 - [ ] Zero runtime overhead from backend abstraction
 
-## Dependencies on Current Work
+## Architecture Components
 
-**Reusable from spec/opus (moosicbox_opus package):**
-- ✅ Packet parser (RFC Section 3) - Complete and tested
-- ✅ TOC byte parsing
-- ✅ Frame length decoding
-- ✅ Frame packing (Code 0-3)
-- ✅ Padding handling
-- ✅ Error types
-- ✅ Test infrastructure (48 tests)
-- ✅ Symphonia integration layer
+**Reusable from moosicbox_opus package:**
+- Packet parser (RFC Section 3)
+- TOC byte parsing
+- Frame length decoding
+- Frame packing (Code 0-3)
+- Padding handling
+- Error types
+- Test infrastructure
+- Symphonia integration layer
 
-**New implementation in moosicbox_opus_native:**
-- ❌ Range decoder (RFC Section 4.1)
-- ❌ SILK decoder (RFC Section 4.2)
-- ❌ CELT decoder (RFC Section 4.3)
-- ❌ Packet Loss Concealment (RFC Section 4.4)
-- ❌ Mode integration (RFC Section 4.5)
+**Native decoder implementation (moosicbox_opus_native):**
+- Range decoder (RFC Section 4.1)
+- SILK decoder (RFC Section 4.2)
+- CELT decoder (RFC Section 4.3)
+- Packet Loss Concealment (RFC Section 4.4)
+- Mode integration (RFC Section 4.5)
+
+**See `plan.md` for current implementation status.**
 
 ## CRITICAL!!! Context
 

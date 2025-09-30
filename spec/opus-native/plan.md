@@ -552,6 +552,7 @@ All tests pass: 26 passed; 0 failed
   ```rust
   use crate::error::{Error, Result};
   use crate::range::RangeDecoder;
+  use crate::{Channels, SampleRate};
 
   pub struct SilkDecoder {
       sample_rate: SampleRate,
@@ -561,29 +562,17 @@ All tests pass: 26 passed; 0 failed
       previous_stereo_weights: Option<(i16, i16)>,
       previous_gain_indices: [Option<u8>; 2],
   }
-
-  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-  pub enum SampleRate {
-      Hz8000,
-      Hz12000,
-      Hz16000,
-      Hz24000,
-  }
-
-  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-  pub enum Channels {
-      Mono,
-      Stereo,
-  }
   ```
 
   **State fields explanation (from RFC lines 1756-1782):**
-  * `sample_rate`: SILK internal sample rate (8/12/16/24 kHz per RFC line 1749)
-  * `channels`: Mono or stereo mode
+  * `sample_rate`: SILK internal sample rate (8/12/16/24 kHz per RFC line 1749) - uses crate-level `SampleRate` enum
+  * `channels`: Mono or stereo mode - uses crate-level `Channels` enum
   * `frame_size_ms`: 10, 20, 40, or 60 ms per configuration
   * `num_silk_frames`: 1-3 regular frames (per RFC lines 1813-1825)
   * `previous_stereo_weights`: Stereo prediction from previous frame (RFC lines 2196-2205)
   * `previous_gain_indices`: Gain state per channel for delta coding (RFC lines 2508-2529)
+
+  **Note:** `Channels` and `SampleRate` are imported from crate root (`src/lib.rs`) to maintain API consistency across all decoder components.
 
 - [ ] **Create `src/silk/frame.rs` with frame state:**
 
