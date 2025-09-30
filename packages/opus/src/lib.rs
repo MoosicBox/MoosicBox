@@ -10,8 +10,10 @@
 
 pub mod error;
 pub mod frame;
+pub mod packet;
 pub mod toc;
 
 pub use error::{Error, Result};
 pub use frame::{FramePacking, OpusFrame, decode_frame_length};
+pub use packet::OpusPacket;
 pub use toc::{Bandwidth, OpusMode, TocByte};
