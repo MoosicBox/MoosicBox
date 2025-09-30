@@ -82,6 +82,8 @@ Created with build target-dir, http timeout, and git-fetch-with-cli settings
 
   [dependencies]
   thiserror = { workspace = true }
+  moosicbox_resampler = { workspace = true, optional = true }
+  symphonia = { workspace = true, optional = true }
 
   [dev-dependencies]
   # Test dependencies will be added in Phase 1.3 when first tests are created
@@ -91,9 +93,11 @@ Created with build target-dir, http timeout, and git-fetch-with-cli settings
   silk = []
   celt = []
   hybrid = ["silk", "celt"]
+  resampling = ["dep:moosicbox_resampler", "dep:symphonia"]
   fail-on-warnings = []
   ```
 Created with thiserror dependency and silk/celt/hybrid features
+**Note:** Added optional resampling feature in Phase 3 (Section 3.8.5)
 
 - [x] Create minimal `README.md`
 Created README.md with package description and feature documentation
@@ -3710,22 +3714,109 @@ However, we still follow the RFC algorithms exactly for correctness.
   }
   ```
 
-- [ ] **Implement simple resampler (reference only, not required):**
+- [ ] **Add optional resampling dependency to `Cargo.toml`:**
+  ```toml
+  [dependencies]
+  moosicbox_resampler = { workspace = true, optional = true }
+  symphonia = { workspace = true, optional = true }
+
+  [features]
+  resampling = ["dep:moosicbox_resampler", "dep:symphonia"]
+  ```
+
+- [ ] **Implement resampling using moosicbox_resampler (optional feature):**
   ```rust
+  #[cfg(feature = "resampling")]
+  use moosicbox_resampler::Resampler;
+  #[cfg(feature = "resampling")]
+  use symphonia::core::audio::{AudioBuffer, SignalSpec};
+
   impl SilkDecoder {
+      /// Resample SILK output to target sample rate
+      ///
+      /// RFC line 5732: Resampling is NON-NORMATIVE - any method allowed
+      /// This implementation uses moosicbox_resampler with rubato (high-quality FFT-based)
+      #[cfg(feature = "resampling")]
       pub fn resample(
           &self,
-          input: &[f32],
+          samples: &[f32],
           input_rate: u32,
           output_rate: u32,
-      ) -> Vec<f32> {
-          // RFC line 5732: Non-normative
-          // Implementation can use any resampling method
-          // Example: linear interpolation (low quality but simple)
+          num_channels: usize,
+      ) -> Result<Vec<f32>> {
+          if input_rate == output_rate {
+              return Ok(samples.to_vec());
+          }
 
-          todo!("Implement resampling or use external library")
+          let samples_per_channel = samples.len() / num_channels;
+          let spec = SignalSpec::new(input_rate, num_channels.try_into()?);
+
+          // Convert interleaved samples to planar AudioBuffer
+          let mut audio_buffer = AudioBuffer::new(samples_per_channel as u64, spec);
+          audio_buffer.render_reserved(Some(samples_per_channel));
+
+          for ch in 0..num_channels {
+              let channel_buf = audio_buffer.chan_mut(ch);
+              for (i, sample) in samples.iter().skip(ch).step_by(num_channels).enumerate() {
+                  channel_buf[i] = *sample;
+              }
+          }
+
+          // Create resampler and process
+          let mut resampler = Resampler::new(
+              spec,
+              output_rate as usize,
+              samples_per_channel as u64,
+          );
+
+          let resampled = resampler.resample(&audio_buffer)
+              .ok_or_else(|| Error::SilkDecoder("resampling failed".to_string()))?;
+
+          Ok(resampled.to_vec())
+      }
+
+      /// Resample without resampling feature - returns error
+      #[cfg(not(feature = "resampling"))]
+      pub fn resample(
+          &self,
+          _samples: &[f32],
+          _input_rate: u32,
+          _output_rate: u32,
+          _num_channels: usize,
+      ) -> Result<Vec<f32>> {
+          Err(Error::SilkDecoder(
+              "Resampling not available - enable 'resampling' feature".to_string()
+          ))
       }
   }
+  ```
+
+- [ ] **Document usage in module docs:**
+  ```rust
+  /// # Resampling to 48 kHz (Optional)
+  ///
+  /// SILK outputs at 8/12/16 kHz (NB/MB/WB). To convert to 48 kHz or other rates,
+  /// enable the `resampling` feature which uses `moosicbox_resampler`:
+  ///
+  /// ```toml
+  /// [dependencies]
+  /// moosicbox_opus_native = { version = "0.1", features = ["silk", "resampling"] }
+  /// ```
+  ///
+  /// ```rust
+  /// use moosicbox_opus_native::SilkDecoder;
+  ///
+  /// let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20)?;
+  /// let silk_samples = decoder.decode(packet)?; // 16 kHz stereo
+  ///
+  /// // Resample to 48 kHz
+  /// let samples_48k = decoder.resample(&silk_samples, 16000, 48000, 2)?;
+  /// ```
+  ///
+  /// **Note:** Resampling is non-normative per RFC 6716 line 5732. You can also:
+  /// - Use the SILK output directly at 8/12/16 kHz
+  /// - Use any other resampling library
+  /// - Implement custom resampling
   ```
 
 - [ ] **Document reset behavior (RFC lines 5793-5795):**
@@ -3735,16 +3826,58 @@ However, we still follow the RFC algorithms exactly for correctness.
   // - Resampler re-initialized with silence
   ```
 
+- [ ] **Add resampling tests:**
+  ```rust
+  #[cfg(feature = "resampling")]
+  #[test]
+  fn test_resampling_16khz_to_48khz() {
+      // Test upsampling from WB (16 kHz) to 48 kHz
+  }
+
+  #[cfg(feature = "resampling")]
+  #[test]
+  fn test_resampling_8khz_to_48khz() {
+      // Test upsampling from NB (8 kHz) to 48 kHz
+  }
+
+  #[cfg(feature = "resampling")]
+  #[test]
+  fn test_resampling_same_rate() {
+      // Test that same rate returns input unchanged
+  }
+
+  #[cfg(feature = "resampling")]
+  #[test]
+  fn test_resampling_stereo() {
+      // Test stereo resampling maintains channel separation
+  }
+
+  #[cfg(not(feature = "resampling"))]
+  #[test]
+  fn test_resampling_without_feature_errors() {
+      // Test that resampling without feature returns error
+      let decoder = SilkDecoder::new(...);
+      let result = decoder.resample(&[0.0; 160], 16000, 48000, 1);
+      assert!(result.is_err());
+  }
+  ```
+
 ##### 3.8.5 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles without resampling)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk,resampling` (compiles with resampling)
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk,resampling` (resampling tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk,resampling -- -D warnings` (zero warnings with resampling)
 - [ ] Run `cargo machete` (no unused dependencies)
 - [ ] Delay values match Table 54 exactly
 - [ ] Resampler documented as non-normative (RFC line 5732)
 - [ ] Reset behavior documented (RFC lines 5793-5795)
+- [ ] `resampling` feature is optional - builds work without it
+- [ ] moosicbox_resampler integration works correctly with planar/interleaved conversion
+- [ ] Error message returned when resampling called without feature enabled
 - [ ] **RFC DEEP CHECK:** Verify against RFC lines 5724-5795 - confirm delay values, reset handling
 
 ---
@@ -3810,6 +3943,8 @@ After ALL subsections (3.1-3.8) are complete:
 * Test with real SILK frames from conformance suite after each subsection
 * Maintain backwards prediction state for LSF coefficients
 * LPC stability is critical - follow RFC bandwidth expansion exactly
+* **Resampling is optional** - Enable with `features = ["silk", "resampling"]` to use moosicbox_resampler
+* SILK decoder is RFC compliant without resampling (outputs at 8/12/16 kHz)
 
 ---
 
