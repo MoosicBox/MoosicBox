@@ -167,14 +167,48 @@ switchy-migrate mark-all-completed --all --database-url <DATABASE_URL>
 
 Marks all migrations as completed regardless of state. Use for complete tracking table reset/sync.
 
+**Drop and Recreate Table (CRITICAL)**
+```bash
+switchy-migrate mark-all-completed --drop --database-url <DATABASE_URL>
+```
+
+**CRITICAL OPERATION** - Drops the entire migration tracking table before marking. This permanently deletes all migration history.
+
+**What happens:**
+1. Drops `__switchy_migrations` table
+2. Recreates fresh table with current schema
+3. Marks all source migrations as completed with new checksums
+
+**What you lose:**
+- All migration execution timestamps
+- Failure reasons and error messages
+- Old checksums for validation
+- All status history (completed/failed/in-progress)
+
+**Use when:**
+- ✅ Migration tracking table is corrupted
+- ✅ Table schema is incompatible with code
+- ✅ Need complete history reset
+- ❌ **NOT** for normal recovery (use scopes instead)
+
+**Can be combined with scopes:**
+```bash
+# Drop table, then mark only pending migrations
+switchy-migrate mark-all-completed --drop --database-url <DATABASE_URL>
+
+# Drop table, then mark including failed migrations
+switchy-migrate mark-all-completed --drop --include-failed --database-url <DATABASE_URL>
+```
+
 #### Behavior Matrix
 
-| Scope | Untracked | Completed | Failed | InProgress |
-|-------|-----------|-----------|--------|------------|
-| **Default** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) |
-| **--include-failed** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⏭️ Skip (unchanged) |
-| **--include-in-progress** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | ⚠️ Update → Completed |
-| **--all** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⚠️ Update → Completed |
+| Scope | Untracked | Completed | Failed | InProgress | Special |
+|-------|-----------|-----------|--------|------------|---------|
+| **Default** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | - |
+| **--include-failed** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⏭️ Skip (unchanged) | - |
+| **--include-in-progress** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | - |
+| **--all** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⚠️ Update → Completed | - |
+| **--drop** | ✅ Mark → Completed | N/A (table dropped) | N/A (table dropped) | N/A (table dropped) | 🗑️ Deletes all history first |
 
 #### Interactive Confirmation
 
@@ -195,11 +229,18 @@ The confirmation process adapts to the danger level:
 - Double confirmation required
 - Comprehensive warnings about consequences
 
+**Drop Flag (--drop):**
+- CRITICAL danger warning
+- Triple confirmation required
+- Explicit warnings about permanent data loss
+- Lists exactly what will be deleted
+
 **Force Mode:**
 ```bash
 switchy-migrate mark-all-completed --all --force --database-url <DATABASE_URL>
+switchy-migrate mark-all-completed --drop --force --database-url <DATABASE_URL>
 ```
-Bypasses all confirmations. Use with extreme caution.
+Bypasses all confirmations. Use with extreme caution, especially with `--drop`.
 
 #### Example: Default Scope (Pending Only)
 
@@ -323,6 +364,60 @@ Summary:
   In-Progress → Completed:             2
 ```
 
+#### Example: Drop Flag (CRITICAL)
+
+```bash
+$ switchy-migrate mark-all-completed --drop --database-url sqlite://app.db
+
+⚠️  Marking migrations as completed
+Migrations directory: ./migrations
+Scope: PendingOnly
+Drop table: YES (CRITICAL)
+Danger level: CRITICAL
+
+🔥 CRITICAL: THIS WILL DELETE ALL MIGRATION HISTORY! 🔥
+██████████████████████████████████████████████████████████████████████
+
+⚠️  ALL DATA IN THE MIGRATION TABLE WILL BE PERMANENTLY DELETED:
+  ✗ Migration execution status (completed/failed/in-progress)
+  ✗ Execution timestamps (when migrations ran)
+  ✗ Failure reasons and error messages
+  ✗ Stored checksums for validation
+
+This operation will:
+  1️⃣  DROP the entire '__switchy_migrations' table
+  2️⃣  CREATE a fresh migration tracking table
+  3️⃣  MARK all source migrations as completed with new checksums
+██████████████████████████████████████████████████████████████████████
+
+⚠️  THIS CANNOT BE UNDONE!
+
+Only use this if:
+  • The migration tracking table is corrupted
+  • The table schema is incompatible with the current code
+  • You need to completely reset migration history
+
+⚠️ Type 'yes' if you want to DELETE ALL HISTORY and start fresh [y/N] yes
+
+⚠️ Are you ABSOLUTELY sure? This will PERMANENTLY DELETE all migration history! [y/N] y
+
+⚙ Dropping migration tracking table...
+✓ Table dropped successfully
+⚙ Creating fresh migration tracking table...
+✓ Fresh table created
+
+✓ Operation completed successfully!
+
+Summary:
+  Total migrations found:              47
+  Already completed:                   0
+  Newly marked as completed:           47
+  Failed → Completed:                  0
+  In-Progress → Completed:             0
+```
+
+Note: After `--drop`, all migrations are "newly marked" because the table was recreated from scratch.
+
 #### API Usage
 
 ```rust
@@ -354,6 +449,14 @@ let summary = runner
 println!("Total: {}, New: {}, Failed: {}, InProgress: {}",
          summary.total, summary.newly_marked,
          summary.failed_marked, summary.in_progress_marked);
+
+// Drop and recreate table (CRITICAL - use with extreme caution)
+runner.drop_tracking_table(&*db).await?;
+runner.ensure_tracking_table_exists(&*db).await?;
+let summary = runner
+    .mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly)
+    .await?;
+println!("Fresh table created with {} migrations", summary.newly_marked);
 ```
 
 #### Return Type

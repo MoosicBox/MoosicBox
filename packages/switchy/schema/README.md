@@ -299,7 +299,41 @@ Marks all migrations regardless of state:
 
 **Use When:** Complete reset/sync of migration tracking table
 
-⚠️ **WARNING**: Each scope level increases danger. Always backup before using flags.
+#### With `--drop` (CRITICAL - DESTROYS HISTORY)
+```bash
+switchy-migrate mark-all-completed --drop -d DATABASE_URL
+```
+
+**CRITICAL OPERATION** - Drops the entire migration tracking table before marking:
+
+**Steps:**
+1. 🗑️ DROP entire `__switchy_migrations` table
+2. 🆕 CREATE fresh tracking table with current schema
+3. ✅ MARK all source migrations as completed with new checksums
+
+**What You Lose:**
+- All migration execution history
+- Timestamps of when migrations ran
+- Failure reasons and error messages
+- Old checksums for validation
+- All status tracking (completed/failed/in-progress)
+
+**Use When:**
+- ✅ Migration tracking table is corrupted or unreadable
+- ✅ Table schema is incompatible with current code
+- ✅ Need to completely reset migration history
+- ❌ **NOT** for normal recovery - use scopes instead
+
+**Example:**
+```bash
+# Most common: drop and recreate with default scope (pending only)
+switchy-migrate mark-all-completed --drop -d DATABASE_URL
+
+# With scope control (marks even failed migrations after drop)
+switchy-migrate mark-all-completed --drop --include-failed -d DATABASE_URL
+```
+
+⚠️ **WARNING**: Each scope level increases danger. The `--drop` flag is CRITICAL level. Always backup before using flags.
 
 ### Migration States
 

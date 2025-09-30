@@ -68,6 +68,9 @@ switchy-migrate mark-all-completed --include-in-progress --database-url sqlite:.
 
 # Mark ALL migrations as completed (VERY dangerous)
 switchy-migrate mark-all-completed --all --database-url sqlite:./app.db
+
+# Drop migration table and start fresh (CRITICAL)
+switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
 ```
 
 **⚠️ WARNING:** These operations bypass migration execution and can cause:
@@ -85,7 +88,15 @@ switchy-migrate mark-all-completed --all --database-url sqlite:./app.db
 - 🔄 Updates: Failed/in-progress migrations to completed
 - 💡 Use for: Recovery scenarios only
 
-All commands require interactive confirmation unless `--force` is used. Dangerous scopes require double confirmation.
+**With `--drop` flag** (CRITICAL):
+- 🔥 **DESTROYS ALL MIGRATION HISTORY**
+- 🗑️ Drops the entire migration tracking table
+- 🆕 Recreates fresh tracking table
+- ✅ Marks all migrations as completed with new checksums
+- 💡 Use for: Corrupted tracking table, schema incompatibility
+- ⚠️ **PERMANENT DATA LOSS** - Cannot be undone
+
+All commands require interactive confirmation unless `--force` is used. Dangerous scopes require double confirmation. The `--drop` flag requires triple confirmation.
 
 ## Supported Databases
 
@@ -169,6 +180,44 @@ switchy-migrate mark-all-completed --include-in-progress --database-url sqlite:.
 # Scenario 4: Complete reset of tracking table
 # Marks everything as completed (most dangerous)
 switchy-migrate mark-all-completed --all --force --database-url sqlite:./app.db
+
+# Scenario 5: Corrupted migration tracking table
+# CRITICAL - Drops table, recreates, marks all completed
+switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
+```
+
+#### `--drop` Flag Details (CRITICAL)
+
+The `--drop` flag is the most destructive operation and should only be used in extreme recovery scenarios.
+
+**What it does:**
+1. Drops the entire migration tracking table (`__switchy_migrations`)
+2. Recreates the table with fresh schema
+3. Marks all migrations from source as completed with new checksums
+
+**What you lose:**
+- All migration execution history
+- Timestamps of when migrations ran
+- Failure reasons and error messages
+- Old checksums for validation
+- Migration status tracking (completed/failed/in-progress)
+
+**When to use:**
+- ✅ Migration tracking table is corrupted or unreadable
+- ✅ Table schema is incompatible with current code version
+- ✅ Need to completely reset migration history
+- ❌ **NOT** for normal recovery scenarios - use scopes instead
+
+**Examples:**
+```bash
+# Drop and recreate tracking table (requires triple confirmation)
+switchy-migrate mark-all-completed --drop --database-url sqlite:./app.db
+
+# With specific scope to control what gets marked after drop
+switchy-migrate mark-all-completed --drop --include-failed --database-url sqlite:./app.db
+
+# Skip confirmations (use with extreme caution in automation)
+switchy-migrate mark-all-completed --drop --force --database-url sqlite:./app.db
 ```
 
 ## Safety Features
@@ -178,6 +227,7 @@ switchy-migrate mark-all-completed --all --force --database-url sqlite:./app.db
   - Default scope (pending only): Single confirmation
   - Dangerous scopes (include-failed/in-progress): Double confirmation
   - All scope: Double confirmation with extreme warnings
+  - **Drop flag: Triple confirmation with CRITICAL warnings**
 - Danger-level-aware warnings adapt to selected scope
 - Database connections are validated before operations
 - Migration ordering is deterministic (alphabetical by ID)

@@ -1018,6 +1018,36 @@ impl<'a> MigrationRunner<'a> {
         Ok(summary)
     }
 
+    /// Drop the migration tracking table
+    ///
+    /// This is a destructive operation that removes all migration history.
+    /// After calling this, you should call `ensure_tracking_table_exists()` to recreate
+    /// the table before marking migrations.
+    ///
+    /// # Use Cases
+    ///
+    /// * Recovering from a corrupted migration tracking table
+    /// * Fixing schema mismatches between table structure and code
+    /// * Completely resetting migration history (when combined with `mark_all_migrations_completed`)
+    ///
+    /// # Errors
+    ///
+    /// * If the table drop operation fails
+    pub async fn drop_tracking_table(&self, db: &dyn Database) -> Result<()> {
+        self.version_tracker.drop_table(db).await
+    }
+
+    /// Ensure the migration tracking table exists with the correct schema
+    ///
+    /// Creates the tracking table if it doesn't exist. Safe to call multiple times.
+    ///
+    /// # Errors
+    ///
+    /// * If the table creation fails
+    pub async fn ensure_tracking_table_exists(&self, db: &dyn Database) -> Result<()> {
+        self.version_tracker.ensure_table_exists(db).await
+    }
+
     /// Validate checksums of applied migrations against current migration content
     ///
     /// Compares stored checksums in the database with current migration content to detect
@@ -2645,6 +2675,87 @@ mod tests {
                     .expect("Migration should exist");
                 assert_eq!(status.status, MigrationStatus::Completed);
             }
+        }
+
+        #[switchy_async::test]
+        async fn test_drop_tracking_table_and_recreate() {
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_test".to_string(),
+                Box::new("CREATE TABLE test1 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "002_test".to_string(),
+                Box::new("CREATE TABLE test2 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Create table and mark migrations
+            runner
+                .ensure_tracking_table_exists(&*db)
+                .await
+                .expect("Should create table");
+            let summary = runner
+                .mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly)
+                .await
+                .expect("Should succeed");
+            assert_eq!(summary.newly_marked, 2);
+
+            // Verify migrations exist
+            let migrations_before = runner
+                .version_tracker
+                .get_applied_migration_ids(&*db, None)
+                .await
+                .expect("Should get migrations");
+            assert_eq!(migrations_before.len(), 2);
+
+            // Drop the table
+            runner
+                .drop_tracking_table(&*db)
+                .await
+                .expect("Should drop table");
+
+            // Verify table is gone (should return empty list)
+            let migrations_after_drop = runner
+                .version_tracker
+                .get_applied_migration_ids(&*db, None)
+                .await
+                .expect("Should handle missing table");
+            assert_eq!(migrations_after_drop.len(), 0);
+
+            // Recreate table and mark again
+            runner
+                .ensure_tracking_table_exists(&*db)
+                .await
+                .expect("Should create table");
+            let summary2 = runner
+                .mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly)
+                .await
+                .expect("Should succeed");
+            assert_eq!(summary2.newly_marked, 2); // Both are new again
+
+            // Verify migrations exist with new checksums
+            let status1 = runner
+                .version_tracker
+                .get_migration_status(&*db, "001_test")
+                .await
+                .expect("Should get status")
+                .expect("Migration should exist");
+            assert_eq!(status1.status, MigrationStatus::Completed);
+
+            // Verify checksums are not all zeros
+            let zero_checksum = hex::encode(vec![0u8; 32]);
+            assert_ne!(status1.up_checksum, zero_checksum);
+            assert_ne!(status1.down_checksum, zero_checksum);
         }
 
         #[switchy_async::test]
