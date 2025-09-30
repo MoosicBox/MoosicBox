@@ -18,6 +18,10 @@ pub enum Error {
     /// Packet too short
     #[error("Packet too short: {0} bytes")]
     PacketTooShort(usize),
+
+    /// Decoder error from libopus
+    #[error("Opus decoder error: {0}")]
+    DecoderError(#[from] audiopus::Error),
 }
 
 /// Result type for Opus operations.

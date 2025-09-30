@@ -1204,10 +1204,10 @@ Added imports and updated decoder creation to use single registry pattern with c
   let codec_registry = {
       let mut registry = CodecRegistry::new();
       symphonia::default::register_enabled_codecs(&mut registry);
-      
+
       #[cfg(feature = "opus")]
       register_opus_codec(&mut registry);
-      
+
       registry
   };
 
@@ -1248,10 +1248,10 @@ Added imports and updated decoder creation to use single registry pattern with c
   let codec_registry = {
       let mut registry = CodecRegistry::new();
       symphonia::default::register_enabled_codecs(&mut registry);
-      
+
       #[cfg(feature = "opus")]
       register_opus_codec(&mut registry);
-      
+
       registry
   };
 
@@ -1278,7 +1278,7 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
 
 ### 9.1 Add audiopus Dependency
 
-- [ ] Update `packages/opus/Cargo.toml`:
+- [x] Update `packages/opus/Cargo.toml`:
   ```toml
   [dependencies]
   audiopus = { workspace = true }   # NOW we implement real decoding
@@ -1289,16 +1289,16 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
   ```
 
 #### 9.1 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] audiopus dependency is added to Cargo.toml
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [x] Run `cargo fmt` (formats entire workspace)
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] audiopus dependency is added to Cargo.toml
 
 ### 9.2 Update Error Types
 
-- [ ] Add to `src/error.rs`:
+- [x] Add to `src/error.rs`:
   ```rust
   #[derive(Debug, Error)]
   pub enum Error {
@@ -1311,89 +1311,140 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
   ```
 
 #### 9.2 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Error variant for audiopus::Error is properly defined
-- [ ] audiopus dependency is being used in error module
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [x] Run `cargo fmt` (formats entire workspace)
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Error variant for audiopus::Error is properly defined
+- [x] audiopus dependency is being used in error module
 
 ### 9.3 Update Decoder with Real Implementation
 
-- [ ] Replace stub in `src/decoder.rs` (REPLACE entire imports section):
+- [x] Replace stub in `src/decoder.rs` (REPLACE entire file):
   ```rust
-  use audiopus::{coder::Decoder as OpusLibDecoder, Channels, SampleRate};
+  use std::sync::Mutex;
+
+  use audiopus::{
+      coder::{Decoder as OpusLibDecoder, GenericCtl},
+      Channels,
+      SampleRate,
+  };
   use log::{debug, warn};
   use symphonia::core::{
-      audio::{AudioBuffer, AudioBufferRef, SignalSpec},
+      audio::{AsAudioBufferRef, AudioBuffer, AudioBufferRef, Signal, SignalSpec},
       codecs::{
-          CodecDescriptor, CodecParameters, Decoder, DecoderOptions,
-          FinalizeResult, CODEC_TYPE_OPUS,
+          CODEC_TYPE_OPUS, CodecDescriptor, CodecParameters, Decoder, DecoderOptions,
+          FinalizeResult,
       },
-      errors::Error,
+      errors::{Error, Result},
       formats::Packet,
+      support_codec,
   };
-  use symphonia::support_codec;
 
   use crate::packet::OpusPacket;
 
   pub struct OpusDecoder {
       params: CodecParameters,
-      opus_decoder: OpusLibDecoder,  // Add real decoder
+      opus_decoder: Mutex<OpusLibDecoder>,
       output_buf: AudioBuffer<f32>,
+      temp_decode_buf: Vec<i16>,
       channel_count: usize,
       frame_size_samples: usize,
-      // Remove sample_rate field - access via params when needed
   }
 
   impl Decoder for OpusDecoder {
-      fn try_new(params: &CodecParameters, _options: &DecoderOptions) -> Result<Self, Error> {
+      fn try_new(params: &CodecParameters, _options: &DecoderOptions) -> Result<Self> {
           debug!("Initializing Opus decoder with libopus");
 
           let sample_rate = params.sample_rate.unwrap_or(48000);
-          let channels = params.channels.map(|c| c.count()).unwrap_or(2);
+          let channels = params.channels.unwrap_or(
+              symphonia::core::audio::Channels::FRONT_LEFT
+                  | symphonia::core::audio::Channels::FRONT_RIGHT,
+          );
+          let channel_count = channels.count();
 
-          // Create libopus decoder
-          let opus_decoder = OpusLibDecoder::new(
-              SampleRate::try_from(sample_rate as i32)
-                  .map_err(|e| Error::Unsupported(&format!("sample rate: {}", e)))?,
-              Channels::try_from(channels as i32)
-                  .map_err(|e| Error::Unsupported(&format!("channels: {}", e)))?,
-          ).map_err(|e| Error::DecodeError(e.to_string()))?;
+          let sample_rate_enum = match sample_rate {
+              8000 => SampleRate::Hz8000,
+              12000 => SampleRate::Hz12000,
+              16000 => SampleRate::Hz16000,
+              24000 => SampleRate::Hz24000,
+              48000 => SampleRate::Hz48000,
+              _ => return Err(Error::Unsupported("unsupported sample rate")),
+          };
 
-          let frame_size_samples = 960; // Default, can be calculated from params
-          let spec = SignalSpec::new(sample_rate, channels.into());
+          let channels_enum = match channel_count {
+              1 => Channels::Mono,
+              2 => Channels::Stereo,
+              _ => return Err(Error::Unsupported("unsupported channel count")),
+          };
+
+          let opus_decoder = OpusLibDecoder::new(sample_rate_enum, channels_enum)
+              .map_err(|_| Error::DecodeError("failed to create opus decoder"))?;
+
+          let frame_size_samples = 960;
+          let spec = SignalSpec::new(sample_rate, channels);
           let output_buf = AudioBuffer::new(frame_size_samples as u64, spec);
+          let temp_decode_buf = vec![0i16; frame_size_samples * channel_count];
 
           Ok(Self {
               params: params.clone(),
-              opus_decoder,
+              opus_decoder: Mutex::new(opus_decoder),
               output_buf,
-              channel_count: channels,
+              temp_decode_buf,
+              channel_count,
               frame_size_samples,
-              // Don't store sample_rate - access via params.sample_rate when needed
           })
       }
 
-      fn decode(&mut self, packet: &Packet) -> Result<AudioBufferRef<'_>, Error> {
-          // Clear previous buffer
+      fn decode(&mut self, packet: &Packet) -> Result<AudioBufferRef<'_>> {
           self.output_buf.clear();
 
-          // Parse packet
           let opus_packet = OpusPacket::parse(&packet.data)
-              .map_err(|e| Error::DecodeError(e.to_string()))?;
+              .map_err(|_| Error::DecodeError("invalid opus packet"))?;
 
           debug!("Decoding {} frames", opus_packet.frames.len());
 
-          // Decode each frame
           let mut output_offset = 0;
           for frame in &opus_packet.frames {
               if frame.is_dtx {
-                  // Handle DTX - generate silence
                   debug!("DTX frame, generating silence");
                   continue;
               }
+
+              let required_size = self.frame_size_samples * self.channel_count;
+              if self.temp_decode_buf.len() < required_size {
+                  self.temp_decode_buf.resize(required_size, 0);
+              }
+
+              let decoded_samples = self
+                  .opus_decoder
+                  .lock()
+                  .unwrap()
+                  .decode(Some(&frame.data), &mut self.temp_decode_buf[..required_size], false)
+                  .map_err(|_| Error::DecodeError("opus decode failed"))?;
+
+              if self.channel_count == 1 {
+                  let output = self.output_buf.chan_mut(0);
+                  for i in 0..decoded_samples {
+                      output[output_offset + i] = self.temp_decode_buf[i] as f32 / 32768.0;
+                  }
+                  output_offset += decoded_samples;
+              } else {
+                  for i in 0..decoded_samples {
+                      for ch in 0..self.channel_count {
+                          let sample_i16 = self.temp_decode_buf[i * self.channel_count + ch];
+                          let sample_f32 = sample_i16 as f32 / 32768.0;
+                          self.output_buf.chan_mut(ch)[i + output_offset] = sample_f32;
+                      }
+                  }
+                  output_offset += decoded_samples;
+              }
+          }
+
+          self.output_buf.truncate(output_offset);
+          Ok(self.output_buf.as_audio_buffer_ref())
+      }
 
               if self.channel_count == 1 {
                   // Mono: decode directly to output buffer
@@ -1402,7 +1453,7 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
 
                   let decoded_samples = self.opus_decoder
                       .decode(&frame.data, out_slice, false)
-                      .map_err(|e| Error::DecodeError(e.to_string()))?;
+                      .map_err(Error::DecoderError)?;
 
                   output_offset += decoded_samples;
               } else {
@@ -1411,7 +1462,7 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
 
                   let decoded_samples = self.opus_decoder
                       .decode(&frame.data, &mut interleaved, false)
-                      .map_err(|e| Error::DecodeError(e.to_string()))?;
+                      .map_err(Error::DecoderError)?;
 
                   // Deinterleave into planar format
                   for i in 0..decoded_samples {
@@ -1429,15 +1480,6 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
           Ok(self.output_buf.as_audio_buffer_ref())
       }
 
-      fn reset(&mut self) {
-          debug!("Resetting Opus decoder state");
-          if let Err(e) = self.opus_decoder.reset_state() {
-              warn!("Failed to reset decoder state: {}", e);
-          }
-          self.output_buf.clear();
-      }
-
-      // ... other methods remain the same ...
       fn supported_codecs() -> &'static [CodecDescriptor] {
           &[support_codec!(
               CODEC_TYPE_OPUS,
@@ -1457,19 +1499,27 @@ Both lib.rs and unsync.rs use identical pattern: create registry, add defaults, 
       fn last_decoded(&self) -> AudioBufferRef<'_> {
           self.output_buf.as_audio_buffer_ref()
       }
+
+      fn reset(&mut self) {
+          debug!("Resetting Opus decoder state");
+          if let Err(e) = self.opus_decoder.lock().unwrap().reset_state() {
+              warn!("Failed to reset decoder state: {e}");
+          }
+          self.output_buf.clear()
+      }
   }
   ```
 
 #### 9.3 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Real decoder implementation works with libopus
-- [ ] Multi-channel audio handling is properly implemented
-- [ ] All struct fields are used (no unused sample_rate field)
-- [ ] Decoder produces actual audio output instead of silence
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+- [x] Run `cargo fmt` (formats entire workspace)
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+- [x] Run `cargo machete` ✅ no unused dependencies
+- [x] Real decoder implementation works with libopus
+- [x] Multi-channel audio handling is properly implemented
+- [x] All struct fields are used (no unused sample_rate field)
+- [x] Decoder produces actual audio output instead of silence
 
 ## Phase 10: Testing Infrastructure (Add test dependencies)
 
