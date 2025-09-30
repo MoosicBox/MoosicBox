@@ -36,10 +36,13 @@ features = ["jack"]
 [[config.dependencies]]
 command = "brew install automake autoconf libtool"
 features = [
+    "all-decoders",
     "all-encoders",
     "all-formats",
+    "all-os-decoders",
     "all-os-encoders",
     "all-os-formats",
+    "decoder-opus",
     "default",
     "encoder-opus",
 ]
