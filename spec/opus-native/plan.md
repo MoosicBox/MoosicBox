@@ -60,14 +60,10 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   repository = { workspace = true }
 
   [dependencies]
-  bytes = { workspace = true }
-  log = { workspace = true }
   thiserror = { workspace = true }
 
   [dev-dependencies]
-  hex = { workspace = true }
-  pretty_assertions = { workspace = true }
-  test-case = { workspace = true }
+  # Test dependencies will be added in Phase 1.9 when tests are created
 
   [features]
   default = ["silk", "celt", "hybrid"]
@@ -95,7 +91,7 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
   pub mod error;
-  mod range;
+  // Note: 'mod range;' will be added in Phase 1.3 when the module is created
 
   pub use error::{Error, Result};
   ```
@@ -136,8 +132,9 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
           output: &mut [i16],
           fec: bool,
       ) -> Result<usize> {
-          let _ = (input, output, fec);
-          todo!("Implement in later phases")
+          let _ = (self, input, output, fec);
+          // TODO: Phase 6 - Implement mode detection and dispatch to SILK/CELT/Hybrid
+          todo!("Implement in Phase 6")
       }
 
       pub fn decode_float(
@@ -146,12 +143,15 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
           output: &mut [f32],
           fec: bool,
       ) -> Result<usize> {
-          let _ = (input, output, fec);
-          todo!("Implement in later phases")
+          let _ = (self, input, output, fec);
+          // TODO: Phase 6 - Implement mode detection and dispatch to SILK/CELT/Hybrid
+          todo!("Implement in Phase 6")
       }
 
       pub fn reset_state(&mut self) -> Result<()> {
-          todo!("Implement in later phases")
+          let _ = self;
+          // TODO: Phase 6 - Reset decoder state for all active modes
+          todo!("Implement in Phase 6")
       }
   }
   ```
@@ -197,6 +197,14 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 
 **Reference:** RFC 6716 Section 4.1
 
+- [ ] Add `mod range;` declaration to `src/lib.rs`
+- [ ] Add dependencies if needed for range decoder:
+  ```toml
+  [dependencies]
+  bytes = { workspace = true }  # If needed for efficient buffer handling
+  log = { workspace = true }    # If needed for debug logging
+  thiserror = { workspace = true }
+  ```
 - [ ] Create `src/range/mod.rs`
 - [ ] Create `src/range/decoder.rs`:
   ```rust
@@ -318,6 +326,13 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 
 ### 1.9: Range Decoder Integration Tests
 
+- [ ] Add test dependencies to Cargo.toml:
+  ```toml
+  [dev-dependencies]
+  hex = { workspace = true }
+  pretty_assertions = { workspace = true }
+  test-case = { workspace = true }
+  ```
 - [ ] Create `tests/range_decoder_tests.rs`
 - [ ] Test complete decode sequences
 - [ ] Test error recovery
