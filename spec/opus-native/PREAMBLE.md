@@ -65,43 +65,6 @@ The native implementation supports feature-gated modes:
 
 **Binary size optimization:** Users can disable unused modes to reduce binary size.
 
-### Package Structure
-
-```
-packages/
-├── opus/                    # Backend selector & Symphonia integration
-│   ├── src/
-│   │   ├── lib.rs          # Zero-cost backend re-exports
-│   │   └── stub_backend.rs # Fallback (panics at runtime)
-│   └── Cargo.toml          # Features: native (default), libopus
-│
-└── opus_native/            # Pure Rust decoder implementation
-    ├── src/
-    │   ├── lib.rs          # Main API matching audiopus
-    │   ├── range/          # Range decoder (RFC 4.1)
-    │   ├── silk/           # SILK decoder (RFC 4.2) [feature: silk]
-    │   ├── celt/           # CELT decoder (RFC 4.3) [feature: celt]
-    │   ├── modes/          # Mode integration (RFC 4.5) [feature: hybrid]
-    │   └── plc/            # Packet Loss Concealment (RFC 4.4)
-    └── Cargo.toml          # Features: silk, celt, hybrid (all default)
-```
-
-## Dependencies Strategy
-
-**moosicbox_opus dependencies:**
-- bytes - byte buffer manipulation
-- log - logging
-- symphonia - codec trait integration
-- thiserror - error handling
-- moosicbox_opus_native (optional, default)
-- audiopus (optional)
-
-**moosicbox_opus_native dependencies:**
-- bytes - byte buffer manipulation
-- thiserror - error handling
-- log - logging
-- (ONLY workspace dependencies, add as needed)
-
 ## API Compatibility
 
 The native implementation matches the audiopus API exactly:
@@ -122,7 +85,7 @@ impl Decoder {
 
 **Constraint:** Type signatures must match audiopus exactly for zero-cost re-export to work.
 
-## Success Criteria
+## CRITICAL!!! Success Criteria
 
 - [ ] Decode all RFC 6716 test vectors correctly
 - [ ] Pass Opus conformance test suite
@@ -152,7 +115,7 @@ impl Decoder {
 - ❌ Packet Loss Concealment (RFC Section 4.4)
 - ❌ Mode integration (RFC Section 4.5)
 
-## Context
+## CRITICAL!!! Context
 
 - Specs use checkboxes (`- [ ]`) to track progress
 - Four-phase workflow: preliminary check → deep analysis → execution → verification
