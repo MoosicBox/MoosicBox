@@ -121,6 +121,63 @@ pub struct ChecksumConfig {
     pub require_validation: bool,
 }
 
+/// Controls which migration states should be marked as completed
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkCompletedScope {
+    /// Only mark migrations that have not been tracked yet (safest, default)
+    ///
+    /// * Pending → Completed
+    /// * Already Completed → Unchanged
+    /// * Failed → Unchanged
+    /// * In-Progress → Unchanged
+    PendingOnly,
+
+    /// Mark pending and failed migrations
+    ///
+    /// * Pending → Completed
+    /// * Failed → Completed
+    /// * Already Completed → Unchanged
+    /// * In-Progress → Unchanged
+    IncludeFailed,
+
+    /// Mark pending and in-progress migrations
+    ///
+    /// * Pending → Completed
+    /// * In-Progress → Completed
+    /// * Already Completed → Unchanged
+    /// * Failed → Unchanged
+    IncludeInProgress,
+
+    /// Mark all migrations regardless of current state (most dangerous)
+    ///
+    /// * Pending → Completed
+    /// * Failed → Completed
+    /// * In-Progress → Completed
+    /// * Already Completed → Unchanged
+    All,
+}
+
+impl Default for MarkCompletedScope {
+    fn default() -> Self {
+        Self::PendingOnly
+    }
+}
+
+impl MarkCompletedScope {
+    /// Check if this scope should mark a migration in the given status
+    #[must_use]
+    pub const fn should_mark(&self, current_status: Option<&MigrationStatus>) -> bool {
+        match current_status {
+            None => true,
+            Some(MigrationStatus::Completed) => false,
+            Some(MigrationStatus::Failed) => matches!(self, Self::IncludeFailed | Self::All),
+            Some(MigrationStatus::InProgress) => {
+                matches!(self, Self::IncludeInProgress | Self::All)
+            }
+        }
+    }
+}
+
 /// Summary of mark all migrations completed operation
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MarkAllCompletedSummary {
@@ -128,10 +185,16 @@ pub struct MarkAllCompletedSummary {
     pub total: usize,
     /// Number of migrations that were already completed
     pub already_completed: usize,
-    /// Number of migrations newly marked as completed
+    /// Number of migrations newly marked as completed (were untracked)
     pub newly_marked: usize,
-    /// Number of migrations updated from failed/in-progress to completed
-    pub updated: usize,
+    /// Number of failed migrations updated to completed
+    pub failed_marked: usize,
+    /// Number of in-progress migrations updated to completed
+    pub in_progress_marked: usize,
+    /// Number of failed migrations that were skipped (not included in scope)
+    pub failed_skipped: usize,
+    /// Number of in-progress migrations that were skipped (not included in scope)
+    pub in_progress_skipped: usize,
 }
 
 /// Migration hooks for customizing execution behavior
@@ -774,12 +837,55 @@ impl<'a> MigrationRunner<'a> {
 
     /// Mark all available migrations as completed without executing them (dangerous operation)
     ///
-    /// This method records all migrations from the source as completed in the database
-    /// without actually running their SQL. This is useful for scenarios where:
+    /// This method records migrations from the source as completed in the database
+    /// without actually running their SQL. The `scope` parameter controls which
+    /// migration states are affected.
     ///
-    /// * You're initializing a migrations table for an existing database
-    /// * You've manually applied migrations and need to sync the tracking table
-    /// * You're recovering from a corrupted migrations table
+    /// # Arguments
+    ///
+    /// * `db` - Database connection
+    /// * `scope` - Controls which migration states to mark as completed (default: `PendingOnly`)
+    ///
+    /// # Behavior by Scope
+    ///
+    /// ## `PendingOnly` (Default - Safest)
+    /// Only marks migrations that haven't been tracked yet:
+    ///
+    /// * ✅ Untracked migrations → Marked as Completed
+    /// * ⏭️ Already Completed → Unchanged
+    /// * ⏭️ Failed → Unchanged (counted as `failed_skipped`)
+    /// * ⏭️ In-Progress → Unchanged (counted as `in_progress_skipped`)
+    ///
+    /// ## `IncludeFailed`
+    /// Marks pending and failed migrations:
+    ///
+    /// * ✅ Untracked migrations → Marked as Completed
+    /// * ✅ Failed → Updated to Completed (counted as `failed_marked`)
+    /// * ⏭️ Already Completed → Unchanged
+    /// * ⏭️ In-Progress → Unchanged (counted as `in_progress_skipped`)
+    ///
+    /// ## `IncludeInProgress`
+    /// Marks pending and in-progress migrations:
+    ///
+    /// * ✅ Untracked migrations → Marked as Completed
+    /// * ✅ In-Progress → Updated to Completed (counted as `in_progress_marked`)
+    /// * ⏭️ Already Completed → Unchanged
+    /// * ⏭️ Failed → Unchanged (counted as `failed_skipped`)
+    ///
+    /// ## `All` (Most Dangerous)
+    /// Marks all migrations regardless of state:
+    ///
+    /// * ✅ Untracked migrations → Marked as Completed
+    /// * ✅ Failed → Updated to Completed (counted as `failed_marked`)
+    /// * ✅ In-Progress → Updated to Completed (counted as `in_progress_marked`)
+    /// * ⏭️ Already Completed → Unchanged
+    ///
+    /// # Use Cases
+    ///
+    /// * **`PendingOnly`**: Initializing tracking for an existing database
+    /// * **`IncludeFailed`**: Recovering from multiple failed migrations after manual fixes
+    /// * **`IncludeInProgress`**: Recovering from crashed migration process
+    /// * **All**: Complete reset/sync of migration tracking table
     ///
     /// # Errors
     ///
@@ -795,18 +901,27 @@ impl<'a> MigrationRunner<'a> {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use switchy_schema::runner::MigrationRunner;
+    /// use switchy_schema::runner::{MigrationRunner, MarkCompletedScope};
     /// use switchy_database::Database;
     ///
     /// # async fn example(runner: &MigrationRunner<'_>, db: &dyn Database) -> switchy_schema::Result<()> {
-    /// let summary = runner.mark_all_migrations_completed(db).await?;
-    /// println!("Marked {} migrations as completed", summary.total);
+    /// // Default: Only mark pending (safest)
+    /// let summary = runner.mark_all_migrations_completed(db, MarkCompletedScope::PendingOnly).await?;
+    /// println!("Marked {} new migrations", summary.newly_marked);
+    ///
+    /// // Include failed migrations
+    /// let summary = runner.mark_all_migrations_completed(db, MarkCompletedScope::IncludeFailed).await?;
+    /// println!("Marked {} failed migrations", summary.failed_marked);
+    ///
+    /// // All migrations (dangerous)
+    /// let summary = runner.mark_all_migrations_completed(db, MarkCompletedScope::All).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn mark_all_migrations_completed(
         &self,
         db: &dyn Database,
+        scope: MarkCompletedScope,
     ) -> Result<MarkAllCompletedSummary> {
         // Ensure the version tracking table exists
         self.version_tracker.ensure_table_exists(db).await?;
@@ -818,10 +933,13 @@ impl<'a> MigrationRunner<'a> {
             total: migrations.len(),
             already_completed: 0,
             newly_marked: 0,
-            updated: 0,
+            failed_marked: 0,
+            in_progress_marked: 0,
+            failed_skipped: 0,
+            in_progress_skipped: 0,
         };
 
-        // Mark each migration as completed
+        // Mark each migration as completed based on scope
         for migration in migrations {
             let migration_id = migration.id();
 
@@ -835,15 +953,54 @@ impl<'a> MigrationRunner<'a> {
                 Some(record) if record.status == MigrationStatus::Completed => {
                     summary.already_completed += 1;
                 }
-                Some(_) => {
-                    // Exists but not completed - update status
-                    self.version_tracker
-                        .update_migration_status(db, migration_id, MigrationStatus::Completed, None)
-                        .await?;
-                    summary.updated += 1;
+                Some(record) if record.status == MigrationStatus::Failed => {
+                    if scope.should_mark(Some(&record.status)) {
+                        self.version_tracker
+                            .update_migration_status(
+                                db,
+                                migration_id,
+                                MigrationStatus::Completed,
+                                None,
+                            )
+                            .await?;
+                        summary.failed_marked += 1;
+                    } else {
+                        summary.failed_skipped += 1;
+                    }
+                }
+                Some(record) if record.status == MigrationStatus::InProgress => {
+                    if scope.should_mark(Some(&record.status)) {
+                        self.version_tracker
+                            .update_migration_status(
+                                db,
+                                migration_id,
+                                MigrationStatus::Completed,
+                                None,
+                            )
+                            .await?;
+                        summary.in_progress_marked += 1;
+                    } else {
+                        summary.in_progress_skipped += 1;
+                    }
+                }
+                Some(_record) => {
+                    // Other unknown states - treat as in-progress for scope check
+                    if scope.should_mark(Some(&MigrationStatus::InProgress)) {
+                        self.version_tracker
+                            .update_migration_status(
+                                db,
+                                migration_id,
+                                MigrationStatus::Completed,
+                                None,
+                            )
+                            .await?;
+                        summary.in_progress_marked += 1;
+                    } else {
+                        summary.in_progress_skipped += 1;
+                    }
                 }
                 None => {
-                    // Doesn't exist - insert new record as completed
+                    // Doesn't exist - always insert new record as completed
                     self.version_tracker
                         .record_migration(db, migration_id)
                         .await?;
@@ -2054,14 +2211,17 @@ mod tests {
             let runner = MigrationRunner::new(Box::new(source));
 
             let summary = runner
-                .mark_all_migrations_completed(&*db)
+                .mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly)
                 .await
                 .expect("Should succeed");
 
             assert_eq!(summary.total, 0);
             assert_eq!(summary.already_completed, 0);
             assert_eq!(summary.newly_marked, 0);
-            assert_eq!(summary.updated, 0);
+            assert_eq!(summary.failed_marked, 0);
+            assert_eq!(summary.in_progress_marked, 0);
+            assert_eq!(summary.failed_skipped, 0);
+            assert_eq!(summary.in_progress_skipped, 0);
         }
 
         #[switchy_async::test]
@@ -2087,14 +2247,15 @@ mod tests {
             let runner = MigrationRunner::new(Box::new(source));
 
             let summary = runner
-                .mark_all_migrations_completed(&*db)
+                .mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly)
                 .await
                 .expect("Should succeed");
 
             assert_eq!(summary.total, 2);
             assert_eq!(summary.already_completed, 0);
             assert_eq!(summary.newly_marked, 2);
-            assert_eq!(summary.updated, 0);
+            assert_eq!(summary.failed_marked, 0);
+            assert_eq!(summary.in_progress_marked, 0);
 
             // Verify migrations were recorded
             let status1 = runner
@@ -2170,18 +2331,104 @@ mod tests {
                 .await
                 .expect("Should update");
 
-            // Mark all as completed
+            // Mark with PendingOnly scope - should skip failed
             let summary = runner
-                .mark_all_migrations_completed(&*db)
+                .mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly)
                 .await
                 .expect("Should succeed");
 
             assert_eq!(summary.total, 3);
             assert_eq!(summary.already_completed, 1);
-            assert_eq!(summary.newly_marked, 1);
-            assert_eq!(summary.updated, 1);
+            assert_eq!(summary.newly_marked, 1); // Only 003_new
+            assert_eq!(summary.failed_marked, 0);
+            assert_eq!(summary.failed_skipped, 1); // 002_failed was skipped
 
-            // Verify all are now completed
+            // Verify 002_failed is STILL failed
+            let status2 = runner
+                .version_tracker
+                .get_migration_status(&*db, "002_failed")
+                .await
+                .expect("Should get status")
+                .expect("Migration should exist");
+            assert_eq!(status2.status, MigrationStatus::Failed);
+        }
+
+        #[switchy_async::test]
+        async fn test_mark_all_migrations_completed_include_failed() {
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_completed".to_string(),
+                Box::new("CREATE TABLE test1 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "002_failed".to_string(),
+                Box::new("CREATE TABLE test2 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "003_in_progress".to_string(),
+                Box::new("CREATE TABLE test3 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Pre-populate
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Should create table");
+            runner
+                .version_tracker
+                .record_migration(&*db, "001_completed")
+                .await
+                .expect("Should record");
+
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "002_failed", &checksum, &checksum)
+                .await
+                .expect("Should record");
+            runner
+                .version_tracker
+                .update_migration_status(
+                    &*db,
+                    "002_failed",
+                    MigrationStatus::Failed,
+                    Some("Test".to_string()),
+                )
+                .await
+                .expect("Should update");
+
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "003_in_progress", &checksum, &checksum)
+                .await
+                .expect("Should record");
+
+            // Mark with IncludeFailed scope
+            let summary = runner
+                .mark_all_migrations_completed(&*db, MarkCompletedScope::IncludeFailed)
+                .await
+                .expect("Should succeed");
+
+            assert_eq!(summary.total, 3);
+            assert_eq!(summary.already_completed, 1);
+            assert_eq!(summary.newly_marked, 0);
+            assert_eq!(summary.failed_marked, 1); // 002_failed was marked
+            assert_eq!(summary.in_progress_marked, 0);
+            assert_eq!(summary.in_progress_skipped, 1); // 003_in_progress was skipped
+
+            // Verify 002_failed is now completed
             let status2 = runner
                 .version_tracker
                 .get_migration_status(&*db, "002_failed")
@@ -2189,6 +2436,202 @@ mod tests {
                 .expect("Should get status")
                 .expect("Migration should exist");
             assert_eq!(status2.status, MigrationStatus::Completed);
+
+            // Verify 003_in_progress is still in progress
+            let status3 = runner
+                .version_tracker
+                .get_migration_status(&*db, "003_in_progress")
+                .await
+                .expect("Should get status")
+                .expect("Migration should exist");
+            assert_eq!(status3.status, MigrationStatus::InProgress);
+        }
+
+        #[switchy_async::test]
+        async fn test_mark_all_migrations_completed_include_in_progress() {
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_completed".to_string(),
+                Box::new("CREATE TABLE test1 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "002_failed".to_string(),
+                Box::new("CREATE TABLE test2 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "003_in_progress".to_string(),
+                Box::new("CREATE TABLE test3 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Pre-populate
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Should create table");
+            runner
+                .version_tracker
+                .record_migration(&*db, "001_completed")
+                .await
+                .expect("Should record");
+
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "002_failed", &checksum, &checksum)
+                .await
+                .expect("Should record");
+            runner
+                .version_tracker
+                .update_migration_status(
+                    &*db,
+                    "002_failed",
+                    MigrationStatus::Failed,
+                    Some("Test".to_string()),
+                )
+                .await
+                .expect("Should update");
+
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "003_in_progress", &checksum, &checksum)
+                .await
+                .expect("Should record");
+
+            // Mark with IncludeInProgress scope
+            let summary = runner
+                .mark_all_migrations_completed(&*db, MarkCompletedScope::IncludeInProgress)
+                .await
+                .expect("Should succeed");
+
+            assert_eq!(summary.total, 3);
+            assert_eq!(summary.already_completed, 1);
+            assert_eq!(summary.newly_marked, 0);
+            assert_eq!(summary.failed_marked, 0);
+            assert_eq!(summary.in_progress_marked, 1); // 003_in_progress was marked
+            assert_eq!(summary.failed_skipped, 1); // 002_failed was skipped
+
+            // Verify 002_failed is still failed
+            let status2 = runner
+                .version_tracker
+                .get_migration_status(&*db, "002_failed")
+                .await
+                .expect("Should get status")
+                .expect("Migration should exist");
+            assert_eq!(status2.status, MigrationStatus::Failed);
+
+            // Verify 003_in_progress is now completed
+            let status3 = runner
+                .version_tracker
+                .get_migration_status(&*db, "003_in_progress")
+                .await
+                .expect("Should get status")
+                .expect("Migration should exist");
+            assert_eq!(status3.status, MigrationStatus::Completed);
+        }
+
+        #[switchy_async::test]
+        async fn test_mark_all_migrations_completed_all_scope() {
+            use switchy_database_connection;
+
+            let db = switchy_database_connection::init_sqlite_sqlx(None)
+                .await
+                .expect("Failed to create test database");
+
+            let mut source = CodeMigrationSource::new();
+            source.add_migration(CodeMigration::new(
+                "001_completed".to_string(),
+                Box::new("CREATE TABLE test1 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "002_failed".to_string(),
+                Box::new("CREATE TABLE test2 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "003_in_progress".to_string(),
+                Box::new("CREATE TABLE test3 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+            source.add_migration(CodeMigration::new(
+                "004_new".to_string(),
+                Box::new("CREATE TABLE test4 (id INTEGER);".to_string()) as Box<dyn Executable>,
+                None,
+            ));
+
+            let runner = MigrationRunner::new(Box::new(source));
+
+            // Pre-populate
+            runner
+                .version_tracker
+                .ensure_table_exists(&*db)
+                .await
+                .expect("Should create table");
+            runner
+                .version_tracker
+                .record_migration(&*db, "001_completed")
+                .await
+                .expect("Should record");
+
+            let checksum = bytes::Bytes::from(vec![0u8; 32]);
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "002_failed", &checksum, &checksum)
+                .await
+                .expect("Should record");
+            runner
+                .version_tracker
+                .update_migration_status(
+                    &*db,
+                    "002_failed",
+                    MigrationStatus::Failed,
+                    Some("Test".to_string()),
+                )
+                .await
+                .expect("Should update");
+
+            runner
+                .version_tracker
+                .record_migration_started(&*db, "003_in_progress", &checksum, &checksum)
+                .await
+                .expect("Should record");
+
+            // Mark with All scope
+            let summary = runner
+                .mark_all_migrations_completed(&*db, MarkCompletedScope::All)
+                .await
+                .expect("Should succeed");
+
+            assert_eq!(summary.total, 4);
+            assert_eq!(summary.already_completed, 1);
+            assert_eq!(summary.newly_marked, 1); // 004_new
+            assert_eq!(summary.failed_marked, 1); // 002_failed
+            assert_eq!(summary.in_progress_marked, 1); // 003_in_progress
+            assert_eq!(summary.failed_skipped, 0);
+            assert_eq!(summary.in_progress_skipped, 0);
+
+            // Verify all are now completed
+            for id in &["002_failed", "003_in_progress", "004_new"] {
+                let status = runner
+                    .version_tracker
+                    .get_migration_status(&*db, id)
+                    .await
+                    .expect("Should get status")
+                    .expect("Migration should exist");
+                assert_eq!(status.status, MigrationStatus::Completed);
+            }
         }
 
         #[switchy_async::test]

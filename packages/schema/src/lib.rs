@@ -43,12 +43,15 @@ pub async fn migrate_config_postgres(
         log::info!(
             "migrate_config_postgres: populating postgres migration table without execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
         );
-        let summary = runner.mark_all_migrations_completed(db).await?;
+        let summary = runner
+            .mark_all_migrations_completed(db, switchy_schema::MarkCompletedScope::PendingOnly)
+            .await?;
         log::info!(
-            "migrate_config_postgres: marked {} migrations as completed ({} newly marked, {} updated)",
+            "migrate_config_postgres: marked {} migrations as completed ({} newly marked, {} failed skipped, {} in-progress skipped)",
             summary.total,
             summary.newly_marked,
-            summary.updated
+            summary.failed_skipped,
+            summary.in_progress_skipped
         );
     } else {
         runner.run(db).await?;
@@ -76,12 +79,15 @@ pub async fn migrate_config_sqlite(
         log::info!(
             "migrate_config_sqlite: populating sqlite migration table without execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
         );
-        let summary = runner.mark_all_migrations_completed(db).await?;
+        let summary = runner
+            .mark_all_migrations_completed(db, switchy_schema::MarkCompletedScope::PendingOnly)
+            .await?;
         log::info!(
-            "migrate_config_sqlite: marked {} migrations as completed ({} newly marked, {} updated)",
+            "migrate_config_sqlite: marked {} migrations as completed ({} newly marked, {} failed skipped, {} in-progress skipped)",
             summary.total,
             summary.newly_marked,
-            summary.updated
+            summary.failed_skipped,
+            summary.in_progress_skipped
         );
     } else {
         runner.run(db).await?;
@@ -146,12 +152,15 @@ pub async fn migrate_library_postgres_until(
         log::info!(
             "migrate_library_postgres: populating postgres migration table without execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
         );
-        let summary = runner.mark_all_migrations_completed(db).await?;
+        let summary = runner
+            .mark_all_migrations_completed(db, switchy_schema::MarkCompletedScope::PendingOnly)
+            .await?;
         log::info!(
-            "migrate_library_postgres: marked {} migrations as completed ({} newly marked, {} updated)",
+            "migrate_library_postgres: marked {} migrations as completed ({} newly marked, {} failed skipped, {} in-progress skipped)",
             summary.total,
             summary.newly_marked,
-            summary.updated
+            summary.failed_skipped,
+            summary.in_progress_skipped
         );
     } else {
         let runner = if let Some(migration_name) = migration_name {
@@ -199,12 +208,15 @@ pub async fn migrate_library_sqlite_until(
         log::info!(
             "migrate_library_sqlite: populating sqlite migration table without execution due to MOOSICBOX_SKIP_MIGRATION_EXECUTION"
         );
-        let summary = runner.mark_all_migrations_completed(db).await?;
+        let summary = runner
+            .mark_all_migrations_completed(db, switchy_schema::MarkCompletedScope::PendingOnly)
+            .await?;
         log::info!(
-            "migrate_library_sqlite: marked {} migrations as completed ({} newly marked, {} updated)",
+            "migrate_library_sqlite: marked {} migrations as completed ({} newly marked, {} failed skipped, {} in-progress skipped)",
             summary.total,
             summary.newly_marked,
-            summary.updated
+            summary.failed_skipped,
+            summary.in_progress_skipped
         );
     } else {
         let runner = if let Some(migration_name) = migration_name {

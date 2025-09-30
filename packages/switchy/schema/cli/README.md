@@ -57,8 +57,17 @@ switchy-migrate rollback --database-url sqlite:./database.db --to 2025-01-01-120
 # Mark a single migration as completed
 switchy-migrate mark-completed 2025-09-01-151110_create_users_table --database-url sqlite:./app.db
 
-# Mark ALL migrations as completed (VERY dangerous)
+# Mark untracked migrations as completed (default, safest)
 switchy-migrate mark-all-completed --database-url sqlite:./app.db
+
+# Also mark failed migrations as completed
+switchy-migrate mark-all-completed --include-failed --database-url sqlite:./app.db
+
+# Also mark in-progress migrations as completed
+switchy-migrate mark-all-completed --include-in-progress --database-url sqlite:./app.db
+
+# Mark ALL migrations as completed (VERY dangerous)
+switchy-migrate mark-all-completed --all --database-url sqlite:./app.db
 ```
 
 **⚠️ WARNING:** These operations bypass migration execution and can cause:
@@ -66,12 +75,17 @@ switchy-migrate mark-all-completed --database-url sqlite:./app.db
 - Failed future migrations
 - Data corruption
 
-Only use these commands when:
-- Initializing a tracking table for an existing database
-- Recovering from migration tracking corruption
-- Schema was manually applied and needs synchronization
+**Default behavior** (`mark-all-completed` without flags):
+- ✅ Safe: Only marks untracked migrations as completed
+- ⏭️ Preserves: Failed and in-progress migration states
+- 💡 Use for: Initializing tracking for existing databases
 
-Both commands require interactive confirmation unless `--force` is used.
+**With flags** (`--include-failed`, `--include-in-progress`, `--all`):
+- ⚠️ Dangerous: Changes migration states
+- 🔄 Updates: Failed/in-progress migrations to completed
+- 💡 Use for: Recovery scenarios only
+
+All commands require interactive confirmation unless `--force` is used. Dangerous scopes require double confirmation.
 
 ## Supported Databases
 
@@ -137,12 +151,36 @@ switchy-migrate migrate --database-url sqlite:./app.db --steps 2
 switchy-migrate migrate --database-url sqlite:./app.db --up-to 2025-09-01-151120_add_user_email
 ```
 
+### Marking Migrations with Different Scopes
+
+```bash
+# Scenario 1: Initialize tracking for existing database
+# Safe - only marks new migrations
+switchy-migrate mark-all-completed --database-url sqlite:./app.db
+
+# Scenario 2: Multiple migrations failed, you fixed them manually
+# Marks failed migrations as completed
+switchy-migrate mark-all-completed --include-failed --database-url sqlite:./app.db
+
+# Scenario 3: Migration process crashed, but migrations actually completed
+# Marks in-progress migrations as completed
+switchy-migrate mark-all-completed --include-in-progress --database-url sqlite:./app.db
+
+# Scenario 4: Complete reset of tracking table
+# Marks everything as completed (most dangerous)
+switchy-migrate mark-all-completed --all --force --database-url sqlite:./app.db
+```
+
 ## Safety Features
 
 - Rollback operations require user confirmation
-- Mark-completed operations require double confirmation for mark-all-completed
-- Comprehensive warnings displayed before dangerous operations
+- Mark-completed operations have progressive confirmation levels:
+  - Default scope (pending only): Single confirmation
+  - Dangerous scopes (include-failed/in-progress): Double confirmation
+  - All scope: Double confirmation with extreme warnings
+- Danger-level-aware warnings adapt to selected scope
 - Database connections are validated before operations
 - Migration ordering is deterministic (alphabetical by ID)
-- Comprehensive error reporting
+- Comprehensive error reporting with detailed summaries
 - Support for dry-run operations
+- Failed and in-progress states preserved by default

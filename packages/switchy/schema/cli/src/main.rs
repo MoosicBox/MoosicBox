@@ -212,6 +212,15 @@ enum Commands {
             default_value = "__switchy_migrations"
         )]
         migration_table: String,
+        /// Also mark failed migrations as completed
+        #[arg(long)]
+        include_failed: bool,
+        /// Also mark in-progress migrations as completed
+        #[arg(long)]
+        include_in_progress: bool,
+        /// Mark ALL migrations regardless of state (most dangerous, implies --include-failed and --include-in-progress)
+        #[arg(long)]
+        all: bool,
         /// Force the operation without confirmation
         #[arg(long)]
         force: bool,
@@ -329,10 +338,21 @@ async fn main() -> Result<()> {
             database_url,
             migrations_dir,
             migration_table,
+            include_failed,
+            include_in_progress,
+            all,
             force,
         } => {
-            mark_all_migrations_completed(database_url, migrations_dir, migration_table, force)
-                .await
+            mark_all_migrations_completed(
+                database_url,
+                migrations_dir,
+                migration_table,
+                include_failed,
+                include_in_progress,
+                all,
+                force,
+            )
+            .await
         }
         Commands::Validate {
             database_url,
@@ -991,15 +1011,19 @@ async fn mark_migration_completed(
 }
 
 /// Mark all migrations as completed without executing them
+#[allow(clippy::fn_params_excessive_bools, clippy::too_many_lines)]
 async fn mark_all_migrations_completed(
     database_url: String,
     migrations_dir: PathBuf,
     migration_table: String,
+    include_failed: bool,
+    include_in_progress: bool,
+    all: bool,
     force: bool,
 ) -> Result<()> {
     use colored::Colorize;
     use dialoguer::Confirm;
-    use switchy_schema::runner::MigrationRunner;
+    use switchy_schema::runner::{MarkCompletedScope, MigrationRunner};
 
     // Connect to database
     let db = utils::database::connect(&database_url).await?;
@@ -1007,47 +1031,159 @@ async fn mark_all_migrations_completed(
     // Create migration runner with directory source
     let runner = MigrationRunner::new_directory(&migrations_dir).with_table_name(migration_table);
 
-    println!(
-        "{} Marking ALL migrations as completed",
-        "⚠️".yellow().bold()
-    );
+    // Determine scope based on flags
+    let scope = if all || include_failed && include_in_progress {
+        MarkCompletedScope::All
+    } else if include_failed {
+        MarkCompletedScope::IncludeFailed
+    } else if include_in_progress {
+        MarkCompletedScope::IncludeInProgress
+    } else {
+        MarkCompletedScope::PendingOnly
+    };
+
+    // Determine danger level for warnings
+    let danger_level = match scope {
+        MarkCompletedScope::PendingOnly => "MODERATE",
+        MarkCompletedScope::IncludeFailed | MarkCompletedScope::IncludeInProgress => "HIGH",
+        MarkCompletedScope::All => "EXTREME",
+    };
+
+    println!("{} Marking migrations as completed", "⚠️".yellow().bold());
     println!("Migrations directory: {}", migrations_dir.display());
+    println!("Scope: {scope:?}");
+    println!("Danger level: {}", danger_level.red().bold());
     println!();
 
-    // Show warning unless force flag is used
+    // Show warnings unless force flag is used
     if !force {
-        println!(
-            "{}",
-            "⚠️  DANGER: THIS IS AN EXTREMELY DANGEROUS OPERATION!"
-                .red()
-                .bold()
-        );
-        println!("{}", "═".repeat(60).red());
-        println!("This will mark ALL migrations as completed WITHOUT running them!");
-        println!("This can lead to:");
-        println!("  {} Database schema inconsistencies", "•".red());
-        println!("  {} Failed future migrations", "•".red());
-        println!("  {} Data corruption", "•".red());
-        println!("  {} Application crashes", "•".red());
-        println!("{}", "═".repeat(60).red());
+        match scope {
+            MarkCompletedScope::PendingOnly => {
+                println!(
+                    "{}",
+                    "⚠️  WARNING: This will mark untracked migrations as completed!"
+                        .yellow()
+                        .bold()
+                );
+                println!("This is relatively safe but can still lead to issues if:");
+                println!(
+                    "  {} Database schema doesn't match migrations",
+                    "•".yellow()
+                );
+                println!(
+                    "  {} Migrations haven't been manually applied",
+                    "•".yellow()
+                );
+                println!();
+                println!("This operation will:");
+                println!("  {} Mark untracked migrations as completed", "✓".green());
+                println!("  {} Leave completed migrations unchanged", "⏭".blue());
+                println!("  {} Leave failed migrations unchanged", "⏭".blue());
+                println!("  {} Leave in-progress migrations unchanged", "⏭".blue());
+            }
+            MarkCompletedScope::IncludeFailed => {
+                println!(
+                    "{}",
+                    "⚠️  DANGER: This will mark untracked AND FAILED migrations as completed!"
+                        .red()
+                        .bold()
+                );
+                println!("{}", "═".repeat(70).red());
+                println!("This operation will:");
+                println!("  {} Mark untracked migrations as completed", "✓".green());
+                println!("  {} Mark FAILED migrations as completed", "⚠".yellow());
+                println!("  {} Leave completed migrations unchanged", "⏭".blue());
+                println!("  {} Leave in-progress migrations unchanged", "⏭".blue());
+                println!("{}", "═".repeat(70).red());
+                println!();
+                println!("Use this only if:");
+                println!("  {} Failed migrations were manually fixed", "•".yellow());
+                println!(
+                    "  {} You want to skip multiple failed migrations",
+                    "•".yellow()
+                );
+            }
+            MarkCompletedScope::IncludeInProgress => {
+                println!(
+                    "{}",
+                    "⚠️  DANGER: This will mark untracked AND IN-PROGRESS migrations as completed!"
+                        .red()
+                        .bold()
+                );
+                println!("{}", "═".repeat(70).red());
+                println!("This operation will:");
+                println!("  {} Mark untracked migrations as completed", "✓".green());
+                println!(
+                    "  {} Mark IN-PROGRESS migrations as completed",
+                    "⚠".yellow()
+                );
+                println!("  {} Leave completed migrations unchanged", "⏭".blue());
+                println!("  {} Leave failed migrations unchanged", "⏭".blue());
+                println!("{}", "═".repeat(70).red());
+                println!();
+                println!("Use this only if:");
+                println!(
+                    "  {} A migration process was interrupted/crashed",
+                    "•".yellow()
+                );
+                println!(
+                    "  {} In-progress migrations actually completed",
+                    "•".yellow()
+                );
+            }
+            MarkCompletedScope::All => {
+                println!(
+                    "{}",
+                    "🚨 EXTREME DANGER: THIS WILL MARK ALL MIGRATIONS AS COMPLETED! 🚨"
+                        .red()
+                        .bold()
+                );
+                println!("{}", "═".repeat(70).red());
+                println!("This operation will:");
+                println!("  {} Mark untracked migrations as completed", "✓".green());
+                println!("  {} Mark FAILED migrations as completed", "⚠".red());
+                println!("  {} Mark IN-PROGRESS migrations as completed", "⚠".red());
+                println!("  {} Leave completed migrations unchanged", "⏭".blue());
+                println!("{}", "═".repeat(70).red());
+                println!();
+                println!("This can lead to:");
+                println!("  {} Database schema inconsistencies", "✗".red());
+                println!("  {} Failed future migrations", "✗".red());
+                println!("  {} Data corruption", "✗".red());
+                println!("  {} Application crashes", "✗".red());
+            }
+        }
+
         println!();
         println!("Only use this if:");
         println!(
             "  {} You're initializing a tracking table for an existing database",
-            "•".yellow()
+            "•".cyan()
         );
         println!(
-            "  {} You've manually run all migrations and need to sync",
-            "•".yellow()
+            "  {} You've manually applied migrations and need to sync",
+            "•".cyan()
         );
         println!(
             "  {} You're recovering from schema table corruption",
-            "•".yellow()
+            "•".cyan()
         );
         println!();
 
+        let prompt = match scope {
+            MarkCompletedScope::PendingOnly => {
+                "Are you sure you want to mark untracked migrations as completed?"
+            }
+            MarkCompletedScope::IncludeFailed | MarkCompletedScope::IncludeInProgress => {
+                "Are you SURE you want to proceed with this dangerous operation?"
+            }
+            MarkCompletedScope::All => {
+                "Are you ABSOLUTELY CERTAIN you want to mark ALL migrations as completed?"
+            }
+        };
+
         let confirmed = Confirm::new()
-            .with_prompt("Are you ABSOLUTELY SURE you want to mark ALL migrations as completed?")
+            .with_prompt(prompt)
             .default(false)
             .interact()
             .map_err(|e| CliError::Config(format!("Failed to get user confirmation: {e}")))?;
@@ -1057,45 +1193,70 @@ async fn mark_all_migrations_completed(
             return Ok(());
         }
 
-        // Double confirmation
-        let double_confirmed = Confirm::new()
-            .with_prompt("Last chance: Proceed with marking ALL migrations as completed?")
-            .default(false)
-            .interact()
-            .map_err(|e| CliError::Config(format!("Failed to get user confirmation: {e}")))?;
+        // Double confirmation for dangerous scopes
+        if matches!(
+            scope,
+            MarkCompletedScope::All
+                | MarkCompletedScope::IncludeFailed
+                | MarkCompletedScope::IncludeInProgress
+        ) {
+            let double_confirmed = Confirm::new()
+                .with_prompt("Last chance: Proceed?")
+                .default(false)
+                .interact()
+                .map_err(|e| CliError::Config(format!("Failed to get user confirmation: {e}")))?;
 
-        if !double_confirmed {
-            println!("Operation cancelled.");
-            return Ok(());
+            if !double_confirmed {
+                println!("Operation cancelled.");
+                return Ok(());
+            }
         }
     }
 
-    // Mark all migrations as completed
-    match runner.mark_all_migrations_completed(&*db).await {
+    // Mark migrations as completed
+    match runner.mark_all_migrations_completed(&*db, scope).await {
         Ok(summary) => {
             println!();
             println!("{} Operation completed successfully!", "✓".green().bold());
             println!();
             println!("Summary:");
-            println!("  Total migrations found:       {}", summary.total);
+            println!("  Total migrations found:              {}", summary.total);
             println!(
-                "  Already completed:            {}",
+                "  Already completed:                   {}",
                 summary.already_completed
             );
             println!(
-                "  Newly marked as completed:    {}",
+                "  Newly marked as completed:           {}",
                 summary.newly_marked.to_string().green()
             );
-            println!(
-                "  Updated to completed:         {}",
-                summary.updated.to_string().yellow()
-            );
+
+            if summary.failed_marked > 0 {
+                println!(
+                    "  Failed → Completed:                  {}",
+                    summary.failed_marked.to_string().yellow().bold()
+                );
+            }
+            if summary.in_progress_marked > 0 {
+                println!(
+                    "  In-Progress → Completed:             {}",
+                    summary.in_progress_marked.to_string().yellow().bold()
+                );
+            }
+            if summary.failed_skipped > 0 {
+                println!(
+                    "  Failed migrations skipped:           {}",
+                    summary.failed_skipped.to_string().blue()
+                );
+            }
+            if summary.in_progress_skipped > 0 {
+                println!(
+                    "  In-Progress migrations skipped:      {}",
+                    summary.in_progress_skipped.to_string().blue()
+                );
+            }
         }
         Err(e) => {
-            println!(
-                "{} Failed to mark all migrations as completed: {e}",
-                "✗".red()
-            );
+            println!("{} Failed to mark migrations as completed: {e}", "✗".red());
             return Err(CliError::Migration(e));
         }
     }

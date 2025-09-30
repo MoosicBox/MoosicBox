@@ -97,7 +97,21 @@ std::env::set_var("MOOSICBOX_SKIP_MIGRATION_EXECUTION", "1");
 
 // This will populate the table without executing SQL
 migrate_library(&*db).await?;
-// Logs: "marked 45 migrations as completed (45 newly marked, 0 updated)"
+// Logs: "marked 45 migrations as completed (45 newly marked, 0 failed skipped, 0 in-progress skipped)"
+```
+
+**Scope Behavior:**
+
+The `MOOSICBOX_SKIP_MIGRATION_EXECUTION` environment variable uses the safest scope (`PendingOnly`):
+- ✅ Only marks untracked migrations as completed
+- ⏭️ Preserves failed migration states (they remain failed)
+- ⏭️ Preserves in-progress migration states (they remain in-progress)
+
+This ensures that if you have failed migrations tracked, they won't be incorrectly marked as completed. The environment variable is designed for initialization scenarios, not recovery from failed migrations.
+
+**If you need to mark failed migrations as completed**, use the CLI instead:
+```bash
+switchy-migrate mark-all-completed --include-failed -d DATABASE_URL
 ```
 
 ### Migration Testing
