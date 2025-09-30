@@ -93,6 +93,7 @@ members = [
     "packages/music_api/models",
     "packages/openport",
     "packages/opus",
+    "packages/opus_native",
     "packages/p2p",
     "packages/paging",
     "packages/parsing_utils",
