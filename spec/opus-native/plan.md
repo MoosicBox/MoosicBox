@@ -63,7 +63,7 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   thiserror = { workspace = true }
 
   [dev-dependencies]
-  # Test dependencies will be added in Phase 1.9 when tests are created
+  # Test dependencies will be added in Phase 1.3 when first tests are created
 
   [features]
   default = ["silk", "celt", "hybrid"]
@@ -198,14 +198,19 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 **Reference:** RFC 6716 Section 4.1
 
 - [ ] Add `mod range;` declaration to `src/lib.rs`
-- [ ] Add dependencies if needed for range decoder:
+- [ ] Add test dependencies to Cargo.toml:
   ```toml
-  [dependencies]
-  bytes = { workspace = true }  # If needed for efficient buffer handling
-  log = { workspace = true }    # If needed for debug logging
-  thiserror = { workspace = true }
+  [dev-dependencies]
+  hex = { workspace = true }
+  pretty_assertions = { workspace = true }
+  test-case = { workspace = true }
   ```
-- [ ] Create `src/range/mod.rs`
+- [ ] Create `src/range/mod.rs`:
+  ```rust
+  mod decoder;
+
+  pub use decoder::RangeDecoder;
+  ```
 - [ ] Create `src/range/decoder.rs`:
   ```rust
   use crate::error::{Error, Result};
@@ -219,6 +224,7 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   }
 
   impl RangeDecoder {
+      #[must_use]
       pub fn new(data: &[u8]) -> Result<Self> {
           if data.is_empty() {
               return Err(Error::RangeDecoder("empty buffer".to_string()));
@@ -242,7 +248,7 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 - [ ] Data structures defined per RFC 4.1
 - [ ] Module organization clear
 - [ ] Initial tests pass
-- [ ] No clippy warnings
+- [ ] No clippy warnings (unused fields acceptable until used in later steps)
 
 ### 1.4: Range Decoder Initialization
 
@@ -266,6 +272,8 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 ### 1.5: Symbol Decoding (ec_decode)
 
 **Reference:** RFC 6716 Section 4.1.2
+
+**Note:** Functions in this step may call each other. Use `todo!()` stubs for any functions not yet fully implemented to maintain compilation. All stubs will be replaced with actual implementations within this step.
 
 - [ ] Implement `ec_decode()` function
 - [ ] Implement `ec_decode_bin()` for binary symbols (RFC 4.1.3.1)
@@ -326,13 +334,6 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 
 ### 1.9: Range Decoder Integration Tests
 
-- [ ] Add test dependencies to Cargo.toml:
-  ```toml
-  [dev-dependencies]
-  hex = { workspace = true }
-  pretty_assertions = { workspace = true }
-  test-case = { workspace = true }
-  ```
 - [ ] Create `tests/range_decoder_tests.rs`
 - [ ] Test complete decode sequences
 - [ ] Test error recovery
@@ -370,7 +371,17 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 
 **Reference:** RFC 6716 Section 4.2
 
-- [ ] Create `src/silk/mod.rs` with `#[cfg(feature = "silk")]`
+- [ ] Add SILK module declaration to `src/lib.rs`:
+  ```rust
+  #[cfg(feature = "silk")]
+  pub mod silk;
+  ```
+- [ ] Create `src/silk/mod.rs`:
+  ```rust
+  mod decoder;
+
+  pub use decoder::SilkDecoder;
+  ```
 - [ ] Create `src/silk/decoder.rs` with `SilkDecoder` struct
 - [ ] Define SILK state structures
 - [ ] Implement decoder initialization
@@ -442,7 +453,27 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 - See `research/celt-overview.md` for complete CELT architecture overview
 - Review MDCT/PVQ concepts, decoder pipeline, and major components
 
-[Detailed breakdown of Phase 4 tasks...]
+### 4.1: CELT Decoder Framework
+
+**Reference:** RFC 6716 Section 4.3
+
+- [ ] Add CELT module declaration to `src/lib.rs`:
+  ```rust
+  #[cfg(feature = "celt")]
+  pub mod celt;
+  ```
+- [ ] Create `src/celt/mod.rs`:
+  ```rust
+  mod decoder;
+
+  pub use decoder::CeltDecoder;
+  ```
+- [ ] Create `src/celt/decoder.rs` with `CeltDecoder` struct
+- [ ] Define CELT state structures
+- [ ] Implement decoder initialization
+- [ ] Add basic tests
+
+[Detailed breakdown of remaining Phase 4 tasks...]
 
 ---
 
