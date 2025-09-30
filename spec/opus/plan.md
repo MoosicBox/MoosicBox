@@ -1,5 +1,32 @@
 # Opus Codec Implementation Plan
 
+## Scope Clarification
+
+**This spec (opus) covers:**
+- ✅ RFC 6716 Section 3: Packet parsing and framing
+- ✅ Symphonia integration layer
+- ✅ Backend selection (native vs libopus via zero-cost re-exports)
+- ✅ Stub backend with runtime panics
+
+**This spec does NOT cover:**
+- ❌ Native decoder implementation (see `spec/opus-native`)
+- ❌ Range decoder, SILK decoder, CELT decoder
+- ❌ Packet Loss Concealment algorithms
+
+The current implementation wraps libopus (via audiopus crate) for actual decoding. The native decoder implementation is tracked separately in `spec/opus-native/`.
+
+## Architecture
+
+```
+moosicbox_opus (this spec)
+├── Packet parser (RFC Section 3) ✅ Complete
+├── Backend selector (zero-cost re-exports)
+│   ├── Stub backend ✅ Complete
+│   ├── Libopus wrapper → audiopus (C library)
+│   └── Native wrapper → moosicbox_opus_native (see opus-native spec)
+└── Symphonia integration ✅ Complete
+```
+
 ## Executive Summary
 
 This plan ensures each phase produces fully compilable code with no warnings. Dependencies are added only when first used. Each phase builds upon the previous, maintaining all RFC 6716 compliance requirements while ensuring clean compilation at every step.
