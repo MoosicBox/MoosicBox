@@ -1454,18 +1454,1601 @@ No unused dependencies reported
 
 ## Phase 3: SILK Decoder - Synthesis
 
-**Goal:** Complete SILK decoder with LTP/LPC synthesis.
+**Goal:** Complete SILK decoder with LSF/LPC decoding, LTP parameter decoding, excitation/residual decoding, and synthesis filters.
 
 **Scope:** RFC 6716 Section 4.2.7.5 through 4.2.9
 
 **Feature:** `silk`
 
-**Test Vector Usage:**
-- Create SILK test vectors in `test-vectors/silk/` directory
-- Test all sample rates (8/12/16/24 kHz) and stereo modes
-- Reference `test-vectors/README.md` for format specification
+**Prerequisites:**
+* Phase 1 complete (Range decoder fully functional)
+* Phase 2 complete (SILK basic structure, gains, stereo weights)
 
-[Detailed breakdown of Phase 3 tasks...]
+**Test Vector Usage:**
+* Create SILK test vectors in `test-vectors/silk/` directory
+* Test all sample rates (8/12/16/24 kHz) and stereo modes
+* Reference `test-vectors/README.md` for format specification
+
+**Success Criteria:**
+* All LSF/LPC codebooks embedded and tested
+* LTP parameters decoded correctly
+* Excitation signal reconstructed per RFC
+* LTP and LPC synthesis filters working
+* Zero clippy warnings
+* Comprehensive test coverage
+
+---
+
+### 3.1: LSF Stage 1 Decoding
+
+**Reference:** RFC 6716 Section 4.2.7.5.1 (lines 2605-2661)
+
+**Goal:** Decode first-stage LSF index and select codebooks for stage 2
+
+#### Implementation Steps
+
+- [ ] **Add LSF constants module:**
+  Create `src/silk/lsf_constants.rs` with all LSF PDFs and codebooks
+
+- [ ] **Add Stage 1 PDFs from Table 14 (RFC lines 2639-2660):**
+  ```rust
+  pub const LSF_STAGE1_PDF_NB_MB_INACTIVE: &[u8] = &[
+      44, 34, 30, 19, 21, 12, 11, 3, 3, 2, 16,
+      2, 2, 1, 5, 2, 1, 3, 3, 1, 1, 2, 2, 2, 3,
+      1, 9, 9, 2, 7, 2, 1, 0  // terminating zero
+  ];
+
+  pub const LSF_STAGE1_PDF_NB_MB_VOICED: &[u8] = &[
+      1, 10, 1, 8, 3, 8, 8, 14, 13, 14, 1, 14,
+      12, 13, 11, 11, 12, 11, 10, 10, 11, 8, 9,
+      8, 7, 8, 1, 1, 6, 1, 6, 5, 0  // terminating zero
+  ];
+
+  pub const LSF_STAGE1_PDF_WB_INACTIVE: &[u8] = &[
+      31, 21, 3, 17, 1, 8, 17, 4, 1, 18, 16, 4,
+      2, 3, 1, 10, 1, 3, 16, 11, 16, 2, 2, 3, 2,
+      11, 1, 4, 9, 8, 7, 3, 0  // terminating zero
+  ];
+
+  pub const LSF_STAGE1_PDF_WB_VOICED: &[u8] = &[
+      1, 4, 16, 5, 18, 11, 5, 14, 15, 1, 3, 12,
+      13, 14, 14, 6, 14, 12, 2, 6, 1, 12, 12,
+      11, 10, 3, 10, 5, 1, 1, 1, 3, 0  // terminating zero
+  ];
+  ```
+
+- [ ] **Implement LSF Stage 1 decoder in `decoder.rs`:**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_lsf_stage1(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          bandwidth: Bandwidth,
+          frame_type: FrameType,
+      ) -> Result<u8> {
+          let pdf = match (bandwidth, frame_type) {
+              (Bandwidth::Narrowband | Bandwidth::Mediumband, FrameType::Inactive | FrameType::Unvoiced) =>
+                  LSF_STAGE1_PDF_NB_MB_INACTIVE,
+              (Bandwidth::Narrowband | Bandwidth::Mediumband, FrameType::Voiced) =>
+                  LSF_STAGE1_PDF_NB_MB_VOICED,
+              (Bandwidth::Wideband, FrameType::Inactive | FrameType::Unvoiced) =>
+                  LSF_STAGE1_PDF_WB_INACTIVE,
+              (Bandwidth::Wideband, FrameType::Voiced) =>
+                  LSF_STAGE1_PDF_WB_VOICED,
+              _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF decoding".to_string())),
+          };
+
+          range_decoder.ec_dec_icdf(pdf, 8)
+      }
+  }
+  ```
+
+- [ ] **Add LSF module declaration to `silk/mod.rs`:**
+  ```rust
+  mod lsf_constants;
+  pub use lsf_constants::*;
+  ```
+
+- [ ] **Add unit tests for Stage 1 decoding:**
+  ```rust
+  #[test]
+  fn test_lsf_stage1_nb_inactive() { /* test with specific buffer */ }
+
+  #[test]
+  fn test_lsf_stage1_wb_voiced() { /* test with specific buffer */ }
+  ```
+
+#### 3.1 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] LSF Stage 1 PDFs match Table 14 exactly (RFC lines 2639-2660)
+- [ ] PDF selection logic matches RFC bandwidth/signal-type mapping
+- [ ] All PDFs include terminating zeros for ICDF decoding
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 2605-2661 - confirm index range 0-31, PDF selection correct, codebook size matches
+
+---
+
+### 3.2: LSF Stage 2 Decoding
+
+**Reference:** RFC 6716 Section 4.2.7.5.2 (lines 2662-2934)
+
+**Goal:** Decode second-stage residual indices with PDF selection driven by Stage 1 index
+
+#### Implementation Steps
+
+- [ ] **Add Stage 2 PDFs from Tables 15-16 (RFC lines 2695-2737):**
+  ```rust
+  // NB/MB PDFs (Table 15)
+  pub const LSF_STAGE2_PDF_NB_A: &[u8] = &[1, 1, 1, 15, 224, 11, 1, 1, 1, 0];
+  pub const LSF_STAGE2_PDF_NB_B: &[u8] = &[1, 1, 2, 34, 183, 32, 1, 1, 1, 0];
+  // ... (all 8 PDFs a-h)
+
+  // WB PDFs (Table 16)
+  pub const LSF_STAGE2_PDF_WB_I: &[u8] = &[1, 1, 1, 9, 232, 9, 1, 1, 1, 0];
+  // ... (all 8 PDFs i-p)
+  ```
+
+- [ ] **Add codebook selection tables from Tables 17-18 (RFC lines 2751-2909):**
+  ```rust
+  // Table 17: NB/MB codebook selection (10 coefficients × 32 indices)
+  pub const LSF_CB_SELECT_NB: &[[char; 10]; 32] = &[
+      ['a','a','a','a','a','a','a','a','a','a'],  // I1=0
+      ['b','d','b','c','c','b','c','b','b','b'],  // I1=1
+      // ... all 32 rows
+  ];
+
+  // Table 18: WB codebook selection (16 coefficients × 32 indices)
+  pub const LSF_CB_SELECT_WB: &[[char; 16]; 32] = &[
+      ['i','i','i','i','i','i','i','i','i','i','i','i','i','i','i','i'],  // I1=0
+      // ... all 32 rows
+  ];
+  ```
+
+- [ ] **Add extension PDF from Table 19 (RFC lines 2928-2934):**
+  ```rust
+  pub const LSF_EXTENSION_PDF: &[u8] = &[156, 60, 24, 9, 4, 2, 1, 0];
+  ```
+
+- [ ] **Implement Stage 2 residual decoding:**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_lsf_stage2(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          stage1_index: u8,
+          bandwidth: Bandwidth,
+      ) -> Result<Vec<i8>> {
+          let d_lpc = match bandwidth {
+              Bandwidth::Narrowband | Bandwidth::Mediumband => 10,
+              Bandwidth::Wideband => 16,
+              _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF".to_string())),
+          };
+
+          let cb_select = match bandwidth {
+              Bandwidth::Narrowband | Bandwidth::Mediumband => LSF_CB_SELECT_NB[stage1_index as usize],
+              Bandwidth::Wideband => LSF_CB_SELECT_WB[stage1_index as usize],
+              _ => unreachable!(),
+          };
+
+          let mut indices = Vec::with_capacity(d_lpc);
+
+          for k in 0..d_lpc {
+              let pdf = self.get_lsf_stage2_pdf(cb_select[k], bandwidth)?;
+              let mut index = range_decoder.ec_dec_icdf(pdf, 8)? as i8 - 4;
+
+              // Extension decoding (RFC lines 2923-2926)
+              if index.abs() == 4 {
+                  let extension = range_decoder.ec_dec_icdf(LSF_EXTENSION_PDF, 8)? as i8;
+                  index += extension * index.signum();
+              }
+
+              indices.push(index);
+          }
+
+          Ok(indices)
+      }
+
+      fn get_lsf_stage2_pdf(&self, codebook: char, bandwidth: Bandwidth) -> Result<&'static [u8]> {
+          match (bandwidth, codebook) {
+              (Bandwidth::Narrowband | Bandwidth::Mediumband, 'a') => Ok(LSF_STAGE2_PDF_NB_A),
+              (Bandwidth::Narrowband | Bandwidth::Mediumband, 'b') => Ok(LSF_STAGE2_PDF_NB_B),
+              // ... all mappings
+              _ => Err(Error::SilkDecoder(format!("invalid LSF codebook: {}", codebook))),
+          }
+      }
+  }
+  ```
+
+- [ ] **Add Stage 2 tests:**
+  ```rust
+  #[test]
+  fn test_lsf_stage2_decoding_nb() { /* test 10-coefficient case */ }
+
+  #[test]
+  fn test_lsf_stage2_decoding_wb() { /* test 16-coefficient case */ }
+
+  #[test]
+  fn test_lsf_stage2_extension() { /* test index extension for ±4 */ }
+  ```
+
+#### 3.2 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Stage 2 PDFs match Tables 15-16 exactly (a-h for NB/MB, i-p for WB)
+- [ ] Codebook selection tables match Tables 17-18 exactly
+- [ ] Extension PDF matches Table 19 exactly
+- [ ] Index range is -10 to 10 inclusive after extension
+- [ ] Codebook selection driven by Stage 1 index I1
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 2662-2934 - confirm PDF mapping, extension logic, index subtraction of 4
+
+---
+
+### 3.3: LSF Reconstruction and Stabilization
+
+**Reference:** RFC 6716 Sections 4.2.7.5.3-4.2.7.5.4 (lines 3207-3599)
+
+**Goal:** Reconstruct normalized LSF coefficients with backwards prediction and stabilization
+
+#### Implementation Steps
+
+- [ ] **Add prediction weight tables from Table 20 (RFC lines 2975-3009):**
+  ```rust
+  // Q8 prediction weights for NB/MB
+  pub const LSF_PRED_WEIGHTS_NB_A: &[u8] = &[179, 138, 140, 148, 151, 149, 153, 151, 163];
+  pub const LSF_PRED_WEIGHTS_NB_B: &[u8] = &[116, 67, 82, 59, 92, 72, 100, 89, 92];
+
+  // Q8 prediction weights for WB
+  pub const LSF_PRED_WEIGHTS_WB_C: &[u8] = &[175, 148, 160, 176, 178, 173, 174, 164, 177, 174, 196, 182, 198, 192, 182];
+  pub const LSF_PRED_WEIGHTS_WB_D: &[u8] = &[68, 62, 66, 60, 72, 117, 85, 90, 118, 136, 151, 142, 160, 142, 155];
+  ```
+
+- [ ] **Add prediction weight selection tables from Tables 21-22 (RFC lines 3035-3205):**
+  ```rust
+  // NB/MB: which weight list (A or B) for each coefficient at each I1
+  pub const LSF_PRED_SELECT_NB: &[[char; 9]; 32] = &[
+      ['A','B','A','A','A','A','A','A','A'],  // I1=0
+      ['B','A','A','A','A','A','A','A','A'],  // I1=1
+      // ... all 32 rows
+  ];
+
+  // WB: which weight list (C or D) for each coefficient at each I1
+  pub const LSF_PRED_SELECT_WB: &[[char; 15]; 32] = &[/* ... */];
+  ```
+
+- [ ] **Add Stage 1 codebook tables from Tables 23-24 (RFC lines 3255-3599):**
+  ```rust
+  // Table 23: NB/MB Stage-1 codebook (Q8)
+  pub const LSF_CB1_NB: &[[u8; 10]; 32] = &[
+      [12, 35, 60, 83, 108, 132, 157, 180, 206, 228],  // I1=0
+      [15, 32, 55, 77, 101, 125, 151, 175, 201, 225],  // I1=1
+      // ... all 32 vectors
+  ];
+
+  // Table 24: WB Stage-1 codebook (Q8)
+  pub const LSF_CB1_WB: &[[u8; 16]; 32] = &[/* ... */];
+  ```
+
+- [ ] **Implement backwards prediction undoing (RFC lines 3011-3033):**
+  ```rust
+  impl SilkDecoder {
+      pub fn undo_lsf_prediction(
+          &self,
+          stage2_indices: &[i8],
+          stage1_index: u8,
+          bandwidth: Bandwidth,
+      ) -> Result<Vec<i16>> {
+          let d_lpc = stage2_indices.len();
+          let qstep = match bandwidth {
+              Bandwidth::Narrowband | Bandwidth::Mediumband => 11796,  // Q16
+              Bandwidth::Wideband => 9830,  // Q16
+              _ => return Err(Error::SilkDecoder("invalid bandwidth".to_string())),
+          };
+
+          let pred_weights = self.get_pred_weights(stage1_index, bandwidth)?;
+          let mut res_q10 = vec![0i16; d_lpc];
+
+          // Backwards prediction (RFC lines 3021-3022)
+          for k in (0..d_lpc).rev() {
+              let pred_q10 = if k + 1 < d_lpc {
+                  (i32::from(res_q10[k + 1]) * i32::from(pred_weights[k])) >> 8
+              } else {
+                  0
+              };
+
+              let i2 = i32::from(stage2_indices[k]);
+              let dequant = ((i2 << 10) - i2.signum() * 102) * i32::from(qstep);
+              res_q10[k] = (pred_q10 + (dequant >> 16)) as i16;
+          }
+
+          Ok(res_q10)
+      }
+  }
+  ```
+
+- [ ] **Implement IHMW weighting (RFC lines 3213-3244):**
+  ```rust
+  impl SilkDecoder {
+      pub fn compute_ihmw_weights(&self, cb1_q8: &[u8]) -> Vec<u16> {
+          let d_lpc = cb1_q8.len();
+          let mut w_q9 = Vec::with_capacity(d_lpc);
+
+          for k in 0..d_lpc {
+              let prev = if k > 0 { cb1_q8[k - 1] } else { 0 };
+              let next = if k + 1 < d_lpc { cb1_q8[k + 1] } else { 256 };
+
+              // RFC lines 3223-3224: w2_Q18 computation
+              let w2_q18 = ((1024 / (cb1_q8[k] - prev) + 1024 / (next - cb1_q8[k])) as u32) << 16;
+
+              // RFC lines 3231-3234: square root approximation
+              let i = ilog(w2_q18);
+              let f = ((w2_q18 >> (i - 8)) & 127) as u16;
+              let y = if i & 1 != 0 { 32768 } else { 46214 } >> ((32 - i) >> 1);
+              let weight = y + ((213 * u32::from(f) * u32::from(y)) >> 16) as u16;
+
+              w_q9.push(weight);
+          }
+
+          w_q9
+      }
+  }
+  ```
+
+- [ ] **Implement LSF reconstruction (RFC lines 3207-3254):**
+  ```rust
+  impl SilkDecoder {
+      pub fn reconstruct_lsf(
+          &self,
+          stage1_index: u8,
+          res_q10: &[i16],
+          bandwidth: Bandwidth,
+      ) -> Result<Vec<i16>> {
+          let cb1_q8 = match bandwidth {
+              Bandwidth::Narrowband | Bandwidth::Mediumband => LSF_CB1_NB[stage1_index as usize],
+              Bandwidth::Wideband => LSF_CB1_WB[stage1_index as usize],
+              _ => return Err(Error::SilkDecoder("invalid bandwidth".to_string())),
+          };
+
+          let weights = self.compute_ihmw_weights(cb1_q8);
+          let d_lpc = cb1_q8.len();
+          let mut nlsf_q15 = Vec::with_capacity(d_lpc);
+
+          for k in 0..d_lpc {
+              // RFC line 3248: weighted reconstruction
+              let value = i32::from(cb1_q8[k]) << 7  // Q8 to Q15
+                        + (i32::from(res_q10[k]) * i32::from(weights[k]) >> 10);
+              nlsf_q15.push(value.clamp(0, 32767) as i16);
+          }
+
+          Ok(nlsf_q15)
+      }
+  }
+  ```
+
+- [ ] **Implement LSF stabilization (RFC Section 4.2.7.5.4):**
+  ```rust
+  impl SilkDecoder {
+      pub fn stabilize_lsf(&self, nlsf_q15: &mut [i16], bandwidth: Bandwidth) {
+          let d_lpc = nlsf_q15.len();
+          let min_delta = 250;  // Minimum spacing in Q15
+
+          // Enforce monotonicity
+          for k in 0..d_lpc {
+              let min_val = if k > 0 { nlsf_q15[k - 1] + min_delta } else { min_delta };
+              let max_val = if k + 1 < d_lpc { nlsf_q15[k + 1] - min_delta } else { 32767 - min_delta };
+
+              nlsf_q15[k] = nlsf_q15[k].clamp(min_val, max_val);
+          }
+      }
+  }
+  ```
+
+- [ ] **Add reconstruction tests:**
+  ```rust
+  #[test]
+  fn test_lsf_backwards_prediction() { /* verify prediction formula */ }
+
+  #[test]
+  fn test_ihmw_weights() { /* test weight computation */ }
+
+  #[test]
+  fn test_lsf_reconstruction() { /* test full reconstruction */ }
+
+  #[test]
+  fn test_lsf_stabilization() { /* verify monotonicity enforcement */ }
+  ```
+
+#### 3.3 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Prediction weights match Table 20 exactly
+- [ ] Prediction weight selection matches Tables 21-22
+- [ ] Stage-1 codebooks match Tables 23-24 exactly (all 32 vectors)
+- [ ] Backwards prediction formula matches RFC line 3021 exactly
+- [ ] IHMW weight computation uses square root approximation from RFC lines 3231-3234
+- [ ] Stabilization enforces minimum spacing and monotonicity
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3207-3599 - confirm all Q-format arithmetic, weight formulas, stabilization logic
+
+---
+
+### 3.4: LSF Interpolation and LSF-to-LPC Conversion
+
+**Reference:** RFC 6716 Sections 4.2.7.5.5-4.2.7.5.6 (lines 3577-3900)
+
+**Goal:** Interpolate LSFs for 20ms frames and convert to LPC coefficients
+
+#### Implementation Steps
+
+- [ ] **Add interpolation PDF from Table 26 (RFC lines 3609-3615):**
+  ```rust
+  pub const LSF_INTERP_PDF: &[u8] = &[13, 22, 29, 11, 181, 0];
+  ```
+
+- [ ] **Implement LSF interpolation (RFC lines 3617-3626):**
+  ```rust
+  impl SilkDecoder {
+      pub fn interpolate_lsf(
+          &mut self,
+          range_decoder: &mut RangeDecoder,
+          n2_q15: &[i16],
+          frame_size_ms: u8,
+      ) -> Result<Option<Vec<i16>>> {
+          if frame_size_ms != 20 {
+              return Ok(None);
+          }
+
+          let w_q2 = range_decoder.ec_dec_icdf(LSF_INTERP_PDF, 8)?;
+
+          if let Some(n0_q15) = &self.previous_lsf {
+              let n1_q15: Vec<i16> = n0_q15.iter().zip(n2_q15.iter())
+                  .map(|(n0, n2)| {
+                      n0 + ((i32::from(w_q2) * (i32::from(*n2) - i32::from(*n0))) >> 2) as i16
+                  })
+                  .collect();
+              Ok(Some(n1_q15))
+          } else {
+              Ok(None)
+          }
+      }
+  }
+  ```
+
+- [ ] **Add cosine approximation table for LSF-to-LPC:**
+  ```rust
+  // Piecewise linear approximation of cos(pi*x) for x in [0,1] (Q15)
+  pub const LSF_COS_TABLE: &[i16] = &[/* 128 entries from RFC */];
+  ```
+
+- [ ] **Implement LSF-to-LPC conversion (RFC lines 3628-3900):**
+  ```rust
+  impl SilkDecoder {
+      pub fn lsf_to_lpc(&self, nlsf_q15: &[i16]) -> Result<Vec<i16>> {
+          let d_lpc = nlsf_q15.len();
+
+          // Step 1: Cosine approximation with reordering
+          let mut cos_q12 = vec![0i16; d_lpc];
+          for k in 0..d_lpc {
+              cos_q12[k] = self.approximate_cos(nlsf_q15[k]);
+          }
+
+          // Step 2: Construct P(z) and Q(z) polynomials
+          let mut p_poly = vec![0i32; d_lpc / 2 + 1];
+          let mut q_poly = vec![0i32; d_lpc / 2 + 1];
+
+          // P(z) has root at pi, Q(z) has root at 0
+          p_poly[0] = 1 << 12;  // Q12
+          q_poly[0] = 1 << 12;
+
+          for k in 0..(d_lpc / 2) {
+              // Multiply by (1 - 2*cos*z^-1 + z^-2)
+              // P uses even LSF indices, Q uses odd
+              self.multiply_biquad(&mut p_poly, cos_q12[2 * k]);
+              self.multiply_biquad(&mut q_poly, cos_q12[2 * k + 1]);
+          }
+
+          // Step 3: Extract LPC coefficients: a[k] = -(P[k] + Q[k])/2
+          let mut a_q12 = vec![0i16; d_lpc];
+          for k in 0..d_lpc {
+              a_q12[k] = (-(p_poly[k + 1] + q_poly[k + 1]) >> 13) as i16;
+          }
+
+          Ok(a_q12)
+      }
+
+      fn approximate_cos(&self, nlsf_q15: i16) -> i16 {
+          // Linear interpolation in cosine table
+          let index = (nlsf_q15 >> 7) as usize;
+          let frac = nlsf_q15 & 0x7F;
+          let v0 = LSF_COS_TABLE[index];
+          let v1 = LSF_COS_TABLE[index + 1];
+          (v0 + ((i32::from(v1 - v0) * i32::from(frac)) >> 7)) as i16
+      }
+
+      fn multiply_biquad(&self, poly: &mut [i32], cos_q12: i16) {
+          // Multiply polynomial by (1 - 2*cos_q12*z^-1 + z^-2)
+          let len = poly.len();
+          for k in (2..len).rev() {
+              poly[k] = poly[k - 2] - ((2 * i64::from(poly[k - 1]) * i64::from(cos_q12)) >> 12) as i32;
+          }
+          poly[1] = -((2 * i64::from(poly[0]) * i64::from(cos_q12)) >> 12) as i32;
+      }
+  }
+  ```
+
+- [ ] **Add interpolation and conversion tests:**
+  ```rust
+  #[test]
+  fn test_lsf_interpolation_20ms() { /* test w_Q2 weighting */ }
+
+  #[test]
+  fn test_lsf_to_lpc_conversion() { /* verify polynomial construction */ }
+
+  #[test]
+  fn test_cos_approximation() { /* test table lookup */ }
+  ```
+
+#### 3.4 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Interpolation PDF matches Table 26
+- [ ] Interpolation formula matches RFC line 3623
+- [ ] Cosine table implements piecewise linear approximation
+- [ ] P(z) and Q(z) polynomial construction correct
+- [ ] LPC coefficient extraction uses -(P+Q)/2 formula
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3577-3900 - confirm polynomial math, Q-format conversions, cosine approximation
+
+---
+
+### 3.5: LPC Coefficient Limiting
+
+**Reference:** RFC 6716 Sections 4.2.7.5.7-4.2.7.5.8 (lines 3854-4118)
+
+**Goal:** Apply bandwidth expansion to limit coefficient magnitude and prediction gain
+
+#### Implementation Steps
+
+- [ ] **Implement coefficient magnitude limiting (RFC lines 3854-3962):**
+  ```rust
+  impl SilkDecoder {
+      pub fn limit_lpc_coefficients(&self, a_q12: &[i16]) -> Vec<i16> {
+          let mut a32_q17: Vec<i32> = a_q12.iter().map(|&x| i32::from(x) << 5).collect();
+
+          for round in 0..10 {
+              // Find max absolute value
+              let (max_idx, maxabs_q17) = a32_q17.iter().enumerate()
+                  .map(|(i, &v)| (i, v.abs()))
+                  .max_by_key(|&(_, v)| v)
+                  .unwrap();
+
+              let maxabs_q12 = ((maxabs_q17 + 16) >> 5).min(163838);
+
+              if maxabs_q12 <= 32767 {
+                  break;
+              }
+
+              // Compute chirp factor
+              let sc_q16_0 = 65470 - (((maxabs_q12 - 32767) << 14) /
+                                      ((maxabs_q12 * (max_idx as i32 + 1)) >> 2));
+
+              // Apply bandwidth expansion
+              let mut sc_q16 = sc_q16_0;
+              for k in 0..a32_q17.len() {
+                  a32_q17[k] = (i64::from(a32_q17[k]) * i64::from(sc_q16) >> 16) as i32;
+                  sc_q16 = ((i64::from(sc_q16_0) * i64::from(sc_q16) + 32768) >> 16) as i32;
+              }
+
+              if round == 9 {
+                  // Final saturation after 10th round
+                  for k in 0..a32_q17.len() {
+                      a32_q17[k] = ((a32_q17[k] + 16) >> 5).clamp(-32768, 32767) << 5;
+                  }
+              }
+          }
+
+          a32_q17.iter().map(|&x| ((x + 16) >> 5) as i16).collect()
+      }
+  }
+  ```
+
+- [ ] **Implement prediction gain limiting (RFC lines 3964-4118):**
+  ```rust
+  impl SilkDecoder {
+      pub fn limit_prediction_gain(&self, a_q12: &[i16]) -> Vec<i16> {
+          let mut a32_q17: Vec<i32> = a_q12.iter().map(|&x| i32::from(x) << 5).collect();
+
+          for round in 0..16 {
+              if self.is_stable_q17(&a32_q17) {
+                  break;
+              }
+
+              // Bandwidth expansion with progressively stronger chirp
+              let sc_q16_0 = 65536 - (2 << round);
+
+              let mut sc_q16 = sc_q16_0;
+              for k in 0..a32_q17.len() {
+                  a32_q17[k] = (i64::from(a32_q17[k]) * i64::from(sc_q16) >> 16) as i32;
+                  sc_q16 = ((i64::from(sc_q16_0) * i64::from(sc_q16) + 32768) >> 16) as i32;
+              }
+
+              if round == 15 {
+                  // Final round: set all to 0 (guaranteed stable)
+                  return vec![0; a32_q17.len()];
+              }
+          }
+
+          a32_q17.iter().map(|&x| ((x + 16) >> 5) as i16).collect()
+      }
+
+      fn is_stable_q17(&self, a32_q17: &[i32]) -> bool {
+          // Compute reflection coefficients via Levinson recursion
+          // Check if all |rc[k]| < 0.99 (approximately)
+          // RFC lines 3986-4105 for fixed-point implementation
+
+          // Full implementation required
+          todo!("Implement stability check via reflection coefficients")
+      }
+  }
+  ```
+
+- [ ] **Add LPC limiting tests:**
+  ```rust
+  #[test]
+  fn test_coefficient_magnitude_limiting() { /* test 10-round bandwidth expansion */ }
+
+  #[test]
+  fn test_prediction_gain_limiting() { /* test stability enforcement */ }
+
+  #[test]
+  fn test_bandwidth_expansion() { /* verify chirp factor formula */ }
+  ```
+
+#### 3.5 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Magnitude limiting uses exactly 10 rounds maximum
+- [ ] Chirp factor formula matches RFC line 3915
+- [ ] Prediction gain limiting uses up to 16 rounds
+- [ ] Round 15 sets coefficients to 0 (guaranteed stable)
+- [ ] Saturation performed after 10th round of magnitude limiting
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3854-4118 - confirm bandwidth expansion formulas, Q17 arithmetic, stability checks
+
+---
+
+### 3.6: LTP Parameters Decoding
+
+**Reference:** RFC 6716 Section 4.2.7.6 (lines 4121-4754)
+
+**Goal:** Decode pitch lag and LTP filter coefficients
+
+#### Implementation Steps
+
+- [ ] **Add LTP constant PDFs and tables:**
+  ```rust
+  // Table 29: Primary pitch lag high part
+  pub const LTP_LAG_HIGH_PDF: &[u8] = &[
+      3, 3, 6, 11, 21, 30, 32, 19, 11, 10, 12, 13, 13, 12, 11, 9, 8,
+      7, 6, 4, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
+  ];
+
+  // Table 30: Low part PDFs per bandwidth
+  pub const LTP_LAG_LOW_PDF_NB: &[u8] = &[64, 64, 64, 64, 0];
+  pub const LTP_LAG_LOW_PDF_MB: &[u8] = &[43, 42, 43, 43, 42, 43, 0];
+  pub const LTP_LAG_LOW_PDF_WB: &[u8] = &[32, 32, 32, 32, 32, 32, 32, 32, 0];
+
+  // Table 31: Relative coding delta (21 entries)
+  pub const LTP_LAG_DELTA_PDF: &[u8] = &[/* RFC Table 31 */];
+
+  // Tables 32-37: Pitch contour PDFs and codebooks (to be added)
+  // Tables 38-42: LTP filter PDFs and codebooks (to be added)
+  ```
+
+- [ ] **Implement pitch lag decoding (RFC lines 4130-4250):**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_pitch_lag(
+          &mut self,
+          range_decoder: &mut RangeDecoder,
+          bandwidth: Bandwidth,
+          use_absolute: bool,
+      ) -> Result<i16> {
+          if use_absolute {
+              let lag_high = range_decoder.ec_dec_icdf(LTP_LAG_HIGH_PDF, 8)?;
+              let (pdf_low, scale, min_lag) = match bandwidth {
+                  Bandwidth::Narrowband => (LTP_LAG_LOW_PDF_NB, 4, 16),
+                  Bandwidth::Mediumband => (LTP_LAG_LOW_PDF_MB, 6, 24),
+                  Bandwidth::Wideband => (LTP_LAG_LOW_PDF_WB, 8, 32),
+                  _ => return Err(Error::SilkDecoder("invalid bandwidth for LTP".to_string())),
+              };
+              let lag_low = range_decoder.ec_dec_icdf(pdf_low, 8)?;
+
+              let lag = (lag_high * scale + lag_low + min_lag) as i16;
+              self.previous_pitch_lag = Some(lag);
+              Ok(lag)
+          } else {
+              let delta_index = range_decoder.ec_dec_icdf(LTP_LAG_DELTA_PDF, 8)?;
+              if delta_index == 0 {
+                  // Fallback to absolute coding
+                  self.decode_pitch_lag(range_decoder, bandwidth, true)
+              } else {
+                  let lag = self.previous_pitch_lag.unwrap() + (delta_index as i16 - 9);
+                  self.previous_pitch_lag = Some(lag);
+                  Ok(lag)
+              }
+          }
+      }
+  }
+  ```
+
+- [ ] **Implement subframe pitch contour (RFC lines 4209-4370):**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_pitch_contour(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          primary_lag: i16,
+          bandwidth: Bandwidth,
+          frame_size_ms: u8,
+      ) -> Result<Vec<i16>> {
+          let num_subframes = (frame_size_ms / 5) as usize;
+
+          let (pdf, codebook) = self.get_pitch_contour_tables(bandwidth, frame_size_ms)?;
+          let contour_index = range_decoder.ec_dec_icdf(pdf, 8)?;
+          let offsets = codebook[contour_index as usize];
+
+          let lags: Vec<i16> = offsets.iter()
+              .map(|&offset| primary_lag + offset)
+              .collect();
+
+          Ok(lags)
+      }
+  }
+  ```
+
+- [ ] **Implement LTP filter decoding (RFC lines 4444-4754):**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_ltp_filters(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          num_subframes: usize,
+      ) -> Result<(u8, Vec<[i8; 5]>)> {
+          // Decode periodicity index
+          let periodicity_pdf = &[/* Table 37 */];
+          let periodicity = range_decoder.ec_dec_icdf(periodicity_pdf, 8)?;
+
+          // Get filter PDF and codebook based on periodicity
+          let (pdf, codebook) = match periodicity {
+              0 => (LTP_FILTER_PDF_0, LTP_FILTER_CB_0),  // 8 filters
+              1 => (LTP_FILTER_PDF_1, LTP_FILTER_CB_1),  // 16 filters
+              2 => (LTP_FILTER_PDF_2, LTP_FILTER_CB_2),  // 32 filters
+              _ => unreachable!(),
+          };
+
+          let mut filters = Vec::with_capacity(num_subframes);
+          for _ in 0..num_subframes {
+              let filter_index = range_decoder.ec_dec_icdf(pdf, 8)?;
+              filters.push(codebook[filter_index as usize]);
+          }
+
+          Ok((periodicity, filters))
+      }
+  }
+  ```
+
+- [ ] **Implement LTP scaling (RFC lines 4747-4754):**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_ltp_scaling(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          frame_size_ms: u8,
+      ) -> Result<i16> {
+          if frame_size_ms == 10 {
+              return Ok(15565);  // Default Q14 scale factor (~0.95)
+          }
+
+          let scale_pdf = &[128, 64, 64, 0];  // Table 42
+          let scale_index = range_decoder.ec_dec_icdf(scale_pdf, 8)?;
+
+          Ok(match scale_index {
+              0 => 15565,  // ~0.95
+              1 => 12288,  // ~0.75
+              2 => 8192,   // ~0.5
+              _ => unreachable!(),
+          })
+      }
+  }
+  ```
+
+- [ ] **Add LTP decoding tests:**
+  ```rust
+  #[test]
+  fn test_pitch_lag_absolute() { /* test all bandwidths */ }
+
+  #[test]
+  fn test_pitch_lag_relative() { /* test delta coding */ }
+
+  #[test]
+  fn test_pitch_contour() { /* verify subframe offsets */ }
+
+  #[test]
+  fn test_ltp_filter_selection() { /* test periodicity-based selection */ }
+
+  #[test]
+  fn test_ltp_scaling() { /* verify 3 scale factors */ }
+  ```
+
+#### 3.6 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Pitch lag PDFs match Tables 29-31 exactly
+- [ ] Pitch contour codebooks match Tables 33-36
+- [ ] LTP filter PDFs and codebooks match Tables 38-41
+- [ ] Scaling PDF matches Table 42 exactly
+- [ ] Absolute/relative coding logic correct per RFC
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4121-4754 - confirm lag calculation formulas, contour mapping, filter selection
+
+---
+
+### 3.7: Excitation Decoding
+
+**Reference:** RFC 6716 Section 4.2.7.7-4.2.7.8 (lines 4775-5478)
+
+**Goal:** Decode LCG seed and excitation pulses using modified PVQ with hierarchical pulse placement, LSB enhancement, and noise injection
+
+**Critical Constraints:**
+* N = 16 samples per shell block (fixed dimension)
+* Pulse count range: 0-16 per shell block
+* LSB depth: 0-10 bits per coefficient
+* Sign decoding uses skewed PDFs based on quantization offset
+* LCG-based pseudorandom noise injection required
+
+---
+
+#### 3.7.1: LCG Seed Decoding
+
+**Reference:** RFC 6716 Section 4.2.7.7 (lines 4775-4793)
+
+**Goal:** Decode 2-bit Linear Congruential Generator seed for noise injection
+
+##### Implementation Steps
+
+- [ ] **Add LCG seed PDF from Table 43 (RFC lines 4787-4793):**
+  ```rust
+  // Table 43: Uniform PDF for LCG seed (2 bits, 4 values)
+  pub const LCG_SEED_PDF: &[u8] = &[64, 64, 64, 64, 0];
+  ```
+
+- [ ] **Implement LCG seed decoding:**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_lcg_seed(
+          &self,
+          range_decoder: &mut RangeDecoder,
+      ) -> Result<u32> {
+          let seed_index = range_decoder.ec_dec_icdf(LCG_SEED_PDF, 8)?;
+          Ok(u32::from(seed_index))
+      }
+  }
+  ```
+
+- [ ] **Add LCG seed state to decoder:**
+  ```rust
+  pub struct SilkDecoder {
+      // ... existing fields
+      lcg_seed: u32,  // Current LCG state for noise injection
+  }
+  ```
+
+- [ ] **Add tests:**
+  ```rust
+  #[test]
+  fn test_lcg_seed_decoding() { /* Test all 4 possible seed values (0-3) */ }
+
+  #[test]
+  fn test_lcg_seed_uniform_distribution() { /* Verify PDF is uniform */ }
+  ```
+
+##### 3.7.1 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] LCG seed PDF matches Table 43 exactly (uniform distribution)
+- [ ] Seed value range is 0-3 inclusive
+- [ ] Seed stored in decoder state for later use
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4775-4793 - confirm PDF is uniform, seed initialization correct
+
+---
+
+#### 3.7.2: Shell Block Count Determination
+
+**Reference:** RFC 6716 Section 4.2.7.8 intro + Table 44 (lines 4828-4855)
+
+**Goal:** Calculate number of 16-sample shell blocks based on bandwidth and frame size
+
+##### Implementation Steps
+
+- [ ] **Add shell block count table from Table 44 (RFC lines 4839-4855):**
+  ```rust
+  // Table 44: Number of shell blocks per SILK frame
+  pub fn get_shell_block_count(bandwidth: Bandwidth, frame_size_ms: u8) -> Result<usize> {
+      match (bandwidth, frame_size_ms) {
+          (Bandwidth::Narrowband, 10) => Ok(5),
+          (Bandwidth::Narrowband, 20) => Ok(10),
+          (Bandwidth::Mediumband, 10) => Ok(8),   // Special: 128 samples, discard last 8
+          (Bandwidth::Mediumband, 20) => Ok(15),
+          (Bandwidth::Wideband, 10) => Ok(10),
+          (Bandwidth::Wideband, 20) => Ok(20),
+          _ => Err(Error::SilkDecoder(format!(
+              "invalid bandwidth/frame size combination: {:?}/{}ms",
+              bandwidth, frame_size_ms
+          ))),
+      }
+  }
+  ```
+
+- [ ] **Document special case for 10ms MB frames (RFC lines 4831-4837):**
+  ```rust
+  // 10ms MB frames code 8 shell blocks (128 samples) but only use 120 samples
+  // (10ms at 12kHz). Last 8 samples of final block are parsed but discarded.
+  // Encoder MAY place pulses there - decoder must parse correctly.
+  ```
+
+- [ ] **Add shell block tracking to frame structure:**
+  ```rust
+  pub struct SilkFrame {
+      // ... existing fields
+      pub num_shell_blocks: usize,
+      pub shell_block_pulse_counts: Vec<u8>,     // Pulse count per block
+      pub shell_block_lsb_counts: Vec<u8>,       // LSB depth per block
+  }
+  ```
+
+- [ ] **Add tests:**
+  ```rust
+  #[test]
+  fn test_shell_block_count_nb() { /* NB: 5 blocks (10ms), 10 blocks (20ms) */ }
+
+  #[test]
+  fn test_shell_block_count_mb_special() { /* MB 10ms: 8 blocks, discard last 8 */ }
+
+  #[test]
+  fn test_shell_block_count_wb() { /* WB: 10 blocks (10ms), 20 blocks (20ms) */ }
+  ```
+
+##### 3.7.2 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Shell block counts match Table 44 exactly
+- [ ] Special case for 10ms MB documented (8 blocks, discard last 8 samples)
+- [ ] All bandwidth/frame size combinations covered
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4828-4855 - confirm block counts, special MB case
+
+---
+
+#### 3.7.3: Rate Level and Pulse Count Decoding
+
+**Reference:** RFC 6716 Sections 4.2.7.8.1-4.2.7.8.2 (lines 4857-4974)
+
+**Goal:** Decode rate level and pulse counts for all shell blocks
+
+##### Implementation Steps
+
+- [ ] **Add rate level PDFs from Table 45 (RFC lines 4883-4891):**
+  ```rust
+  pub const RATE_LEVEL_PDF_INACTIVE: &[u8] = &[15, 51, 12, 46, 45, 13, 33, 27, 14, 0];
+  pub const RATE_LEVEL_PDF_VOICED: &[u8] = &[33, 30, 36, 17, 34, 49, 18, 21, 18, 0];
+  ```
+
+- [ ] **Add pulse count PDFs from Table 46 (RFC lines 4935-4973) - all 11 levels:**
+  ```rust
+  pub const PULSE_COUNT_PDF_LEVEL_0: &[u8] = &[
+      131, 74, 25, 8, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
+  ];
+  // ... (levels 1-9)
+  pub const PULSE_COUNT_PDF_LEVEL_10: &[u8] = &[
+      2, 1, 6, 27, 58, 56, 39, 25, 14, 10, 6, 3, 3, 2, 1, 1, 2, 0, 0  // Last entry 0, not terminator
+  ];
+  ```
+
+- [ ] **Implement rate level decoding:**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_rate_level(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          frame_type: FrameType,
+      ) -> Result<u8> {
+          let pdf = match frame_type {
+              FrameType::Inactive | FrameType::Unvoiced => RATE_LEVEL_PDF_INACTIVE,
+              FrameType::Voiced => RATE_LEVEL_PDF_VOICED,
+          };
+          range_decoder.ec_dec_icdf(pdf, 8)
+      }
+  }
+  ```
+
+- [ ] **Implement pulse count decoding with LSB handling (RFC lines 4893-4913):**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_pulse_counts(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          num_shell_blocks: usize,
+          rate_level: u8,
+      ) -> Result<(Vec<u8>, Vec<u8>)> {
+          let mut pulse_counts = Vec::with_capacity(num_shell_blocks);
+          let mut lsb_counts = Vec::with_capacity(num_shell_blocks);
+
+          for _ in 0..num_shell_blocks {
+              let (pulse_count, lsb_count) = self.decode_block_pulse_count(range_decoder, rate_level)?;
+              pulse_counts.push(pulse_count);
+              lsb_counts.push(lsb_count);
+          }
+
+          Ok((pulse_counts, lsb_counts))
+      }
+
+      fn decode_block_pulse_count(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          initial_rate_level: u8,
+      ) -> Result<(u8, u8)> {
+          let mut lsb_count = 0u8;
+          let mut rate_level = initial_rate_level;
+
+          loop {
+              let pdf = self.get_pulse_count_pdf(rate_level)?;
+              let value = range_decoder.ec_dec_icdf(pdf, 8)?;
+
+              if value < 17 {
+                  return Ok((value, lsb_count));
+              }
+
+              // value == 17: one more LSB level
+              lsb_count += 1;
+
+              // Switch to special rate level 9, then 10
+              if lsb_count >= 10 {
+                  rate_level = 10;
+              } else if rate_level < 9 {
+                  rate_level = 9;
+              }
+          }
+      }
+  }
+  ```
+
+- [ ] **Add tests:**
+  ```rust
+  #[test]
+  fn test_rate_level_decoding() { /* Test both inactive and voiced PDFs */ }
+
+  #[test]
+  fn test_pulse_count_no_lsb() { /* Test pulse count < 17 */ }
+
+  #[test]
+  fn test_pulse_count_with_lsb() { /* Test value 17 triggers LSB */ }
+
+  #[test]
+  fn test_pulse_count_max_lsb() { /* Test LSB count reaches 10 max */ }
+
+  #[test]
+  fn test_rate_level_switching() { /* Verify 9→10 after 10 LSB iterations */ }
+  ```
+
+##### 3.7.3 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Rate level PDFs match Table 45 exactly
+- [ ] Pulse count PDFs match Table 46 exactly (all 11 levels)
+- [ ] Value 17 triggers LSB extension correctly
+- [ ] Rate level switches to 9, then 10 after 10 iterations
+- [ ] LSB count capped at 10 maximum
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4857-4974 - confirm rate level selection, LSB extension logic
+
+---
+
+#### 3.7.4: Pulse Position Decoding (Hierarchical Split)
+
+**Reference:** RFC 6716 Section 4.2.7.8.3 (lines 4975-5256)
+
+**Goal:** Decode pulse positions using recursive binary splitting with combinatorial encoding
+
+##### Implementation Steps
+
+- [ ] **Add pulse split PDFs from Tables 47-50 (RFC lines 5047-5256) - 64 total PDFs:**
+  ```rust
+  // Table 47: 16-sample partition (pulse count 1-16)
+  pub const PULSE_SPLIT_16_PDF_1: &[u8] = &[126, 130, 0];
+  pub const PULSE_SPLIT_16_PDF_2: &[u8] = &[56, 142, 58, 0];
+  // ... (all 16 PDFs for 16-sample partitions)
+
+  // Table 48: 8-sample partition (pulse count 1-16)
+  // Table 49: 4-sample partition (pulse count 1-16)
+  // Table 50: 2-sample partition (pulse count 1-16)
+  ```
+
+- [ ] **Implement hierarchical pulse position decoding:**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_pulse_positions(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          pulse_count: u8,
+      ) -> Result<[u8; 16]> {
+          let mut positions = [0u8; 16];
+
+          if pulse_count == 0 {
+              return Ok(positions);
+          }
+
+          self.decode_split_recursive(range_decoder, &mut positions, 0, 16, pulse_count)?;
+          Ok(positions)
+      }
+
+      fn decode_split_recursive(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          positions: &mut [u8; 16],
+          offset: usize,
+          partition_size: usize,
+          pulse_count: u8,
+      ) -> Result<()> {
+          if pulse_count == 0 || partition_size == 1 {
+              if partition_size == 1 && pulse_count > 0 {
+                  positions[offset] = pulse_count;
+              }
+              return Ok(());
+          }
+
+          let pdf = self.get_pulse_split_pdf(partition_size, pulse_count)?;
+          let left_pulses = range_decoder.ec_dec_icdf(pdf, 8)?;
+          let right_pulses = pulse_count - left_pulses;
+
+          let half_size = partition_size / 2;
+
+          // Preorder traversal: left then right
+          self.decode_split_recursive(range_decoder, positions, offset, half_size, left_pulses)?;
+          self.decode_split_recursive(range_decoder, positions, offset + half_size, half_size, right_pulses)?;
+
+          Ok(())
+      }
+  }
+  ```
+
+- [ ] **Add tests:**
+  ```rust
+  #[test]
+  fn test_pulse_position_single_pulse() { /* Single pulse, any position */ }
+
+  #[test]
+  fn test_pulse_position_all_in_one() { /* All pulses at same location */ }
+
+  #[test]
+  fn test_pulse_position_distributed() { /* Pulses across multiple locations */ }
+
+  #[test]
+  fn test_hierarchical_split_16_8_4_2() { /* Verify split sequence */ }
+
+  #[test]
+  fn test_preorder_traversal() { /* Left before right */ }
+  ```
+
+##### 3.7.4 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Pulse split PDFs match Tables 47-50 exactly (64 PDFs total)
+- [ ] Hierarchical split follows 16→8→4→2→1 recursion
+- [ ] Preorder traversal (left before right) per RFC line 4998
+- [ ] Zero-pulse partitions skipped (RFC lines 5003-5007)
+- [ ] All pulses can be at same location (no restriction per RFC lines 4991-4993)
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4975-5256 - confirm split algorithm, PDF selection
+
+---
+
+#### 3.7.5: LSB Decoding
+
+**Reference:** RFC 6716 Section 4.2.7.8.4 (lines 5258-5289)
+
+**Goal:** Decode least significant bits for each coefficient to enhance precision
+
+##### Implementation Steps
+
+- [ ] **Add LSB PDF from Table 51 (RFC lines 5276-5282):**
+  ```rust
+  pub const EXCITATION_LSB_PDF: &[u8] = &[136, 120, 0];
+  ```
+
+- [ ] **Implement LSB decoding (RFC lines 5260-5289):**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_lsbs(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          pulse_positions: &[u8; 16],
+          lsb_count: u8,
+      ) -> Result<[u16; 16]> {
+          let mut magnitudes = [0u16; 16];
+
+          for i in 0..16 {
+              magnitudes[i] = u16::from(pulse_positions[i]);
+          }
+
+          if lsb_count == 0 {
+              return Ok(magnitudes);
+          }
+
+          // MSB to LSB, all 16 coefficients per level
+          for _ in (0..lsb_count).rev() {
+              for i in 0..16 {
+                  let lsb_bit = range_decoder.ec_dec_icdf(EXCITATION_LSB_PDF, 8)?;
+                  magnitudes[i] = (magnitudes[i] << 1) | u16::from(lsb_bit);
+              }
+          }
+
+          Ok(magnitudes)
+      }
+  }
+  ```
+
+- [ ] **Document 10ms MB special case:**
+  ```rust
+  // RFC lines 5271-5273: For 10ms MB, decode LSBs even for extra 8 samples
+  // in last block (samples 120-127). These are parsed but discarded.
+  ```
+
+- [ ] **Add tests:**
+  ```rust
+  #[test]
+  fn test_lsb_decoding_no_lsb() { /* lsb_count == 0 */ }
+
+  #[test]
+  fn test_lsb_decoding_single_lsb() { /* lsb_count == 1 */ }
+
+  #[test]
+  fn test_lsb_decoding_multiple_lsb() { /* lsb_count > 1 */ }
+
+  #[test]
+  fn test_lsb_decoding_msb_first() { /* MSB decoded first */ }
+
+  #[test]
+  fn test_lsb_all_coefficients() { /* All 16 coefficients get LSBs */ }
+  ```
+
+##### 3.7.5 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] LSB PDF matches Table 51 exactly
+- [ ] LSBs decoded MSB to LSB
+- [ ] All 16 coefficients get LSBs (even zeros per RFC lines 5262-5263)
+- [ ] Magnitude formula: `magnitude = (magnitude << 1) | lsb` (RFC lines 5286-5289)
+- [ ] 10ms MB special case documented
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5258-5289 - confirm LSB order, magnitude update
+
+---
+
+#### 3.7.6: Sign Decoding
+
+**Reference:** RFC 6716 Section 4.2.7.8.5 (lines 5291-5420)
+
+**Goal:** Decode sign bits for non-zero coefficients using skewed PDFs
+
+##### Implementation Steps
+
+- [ ] **Add sign PDFs from Table 52 (RFC lines 5310-5420) - 42 total PDFs:**
+  ```rust
+  // Table 52: 3 signal types × 2 quant offsets × 7 pulse categories
+  pub const SIGN_PDF_INACTIVE_LOW_0: &[u8] = &[2, 254, 0];
+  pub const SIGN_PDF_INACTIVE_LOW_1: &[u8] = &[207, 49, 0];
+  // ... (all 42 sign PDFs)
+  pub const SIGN_PDF_VOICED_HIGH_6PLUS: &[u8] = &[154, 102, 0];
+  ```
+
+- [ ] **Implement sign decoding:**
+  ```rust
+  impl SilkDecoder {
+      pub fn decode_signs(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          magnitudes: &[u16; 16],
+          frame_type: FrameType,
+          quant_offset_type: QuantizationOffsetType,
+          pulse_count: u8,  // WITHOUT LSBs
+      ) -> Result<[i32; 16]> {
+          let mut excitation = [0i32; 16];
+          let sign_pdf = self.get_sign_pdf(frame_type, quant_offset_type, pulse_count)?;
+
+          for i in 0..16 {
+              if magnitudes[i] == 0 {
+                  excitation[i] = 0;
+                  continue;
+              }
+
+              let sign_bit = range_decoder.ec_dec_icdf(sign_pdf, 8)?;
+              excitation[i] = if sign_bit == 0 {
+                  -(magnitudes[i] as i32)
+              } else {
+                  magnitudes[i] as i32
+              };
+          }
+
+          Ok(excitation)
+      }
+
+      fn get_sign_pdf(
+          &self,
+          frame_type: FrameType,
+          quant_offset_type: QuantizationOffsetType,
+          pulse_count: u8,
+      ) -> Result<&'static [u8]> {
+          let pulse_category = pulse_count.min(6);
+          // Match all 42 combinations
+          match (frame_type, quant_offset_type, pulse_category) {
+              (FrameType::Inactive, QuantizationOffsetType::Low, 0) => Ok(SIGN_PDF_INACTIVE_LOW_0),
+              // ... all 42 cases
+              _ => Err(Error::SilkDecoder("invalid sign PDF parameters".to_string())),
+          }
+      }
+  }
+  ```
+
+- [ ] **Document PDF skewing (RFC lines 5302-5308):**
+  ```rust
+  // Most PDFs skewed towards negative (due to quant offset)
+  // Zero-pulse PDFs highly skewed towards POSITIVE (encoder optimization)
+  ```
+
+- [ ] **Add tests:**
+  ```rust
+  #[test]
+  fn test_sign_decoding_zero_magnitude() { /* Zero stays zero */ }
+
+  #[test]
+  fn test_sign_decoding_negative() { /* sign_bit == 0 → negative */ }
+
+  #[test]
+  fn test_sign_decoding_positive() { /* sign_bit == 1 → positive */ }
+
+  #[test]
+  fn test_sign_pdf_selection() { /* Correct PDF for each combo */ }
+
+  #[test]
+  fn test_sign_pdf_pulse_count_capping() { /* >= 6 uses same PDF */ }
+  ```
+
+##### 3.7.6 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Sign PDFs match Table 52 exactly (all 42 PDFs)
+- [ ] PDF selection uses pulse count WITHOUT LSBs (RFC line 5301)
+- [ ] Pulse count capped at 6+ for PDF selection
+- [ ] Sign bit 0 = negative, 1 = positive
+- [ ] Zero magnitudes produce zero excitation
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5291-5420 - confirm all 42 PDFs, selection logic
+
+---
+
+#### 3.7.7: Noise Injection and Excitation Reconstruction
+
+**Reference:** RFC 6716 Section 4.2.7.8.6 (lines 5422-5478)
+
+**Goal:** Apply quantization offset and pseudorandom noise to reconstruct final excitation
+
+##### Implementation Steps
+
+- [ ] **Add quantization offset table from Table 53 (RFC lines 5439-5456):**
+  ```rust
+  pub fn get_quantization_offset(
+      frame_type: FrameType,
+      quant_offset_type: QuantizationOffsetType,
+  ) -> i32 {
+      match (frame_type, quant_offset_type) {
+          (FrameType::Inactive, QuantizationOffsetType::Low) => 25,
+          (FrameType::Inactive, QuantizationOffsetType::High) => 60,
+          (FrameType::Unvoiced, QuantizationOffsetType::Low) => 25,
+          (FrameType::Unvoiced, QuantizationOffsetType::High) => 60,
+          (FrameType::Voiced, QuantizationOffsetType::Low) => 8,
+          (FrameType::Voiced, QuantizationOffsetType::High) => 25,
+      }
+  }
+  ```
+
+- [ ] **Implement LCG and excitation reconstruction (RFC lines 5458-5478):**
+  ```rust
+  impl SilkDecoder {
+      pub fn reconstruct_excitation(
+          &mut self,
+          e_raw: &[i32; 16],
+          frame_type: FrameType,
+          quant_offset_type: QuantizationOffsetType,
+      ) -> Result<[i32; 16]> {
+          let offset_q23 = get_quantization_offset(frame_type, quant_offset_type);
+          let mut e_q23 = [0i32; 16];
+
+          for i in 0..16 {
+              // Scale to Q23 and apply offset (RFC line 5470)
+              let mut value = (e_raw[i] << 8) - e_raw[i].signum() * 20 + offset_q23;
+
+              // Update LCG seed (RFC line 5471)
+              self.lcg_seed = self.lcg_seed.wrapping_mul(196314165).wrapping_add(907633515);
+
+              // Pseudorandom inversion (RFC line 5472)
+              if (self.lcg_seed & 0x80000000) != 0 {
+                  value = -value;
+              }
+
+              // Update seed with raw value (RFC line 5473)
+              self.lcg_seed = self.lcg_seed.wrapping_add(e_raw[i] as u32);
+
+              e_q23[i] = value;
+          }
+
+          Ok(e_q23)
+      }
+  }
+  ```
+
+- [ ] **Document sign() behavior:**
+  ```rust
+  // RFC lines 5475-5476: sign(x) returns 0 when x == 0
+  // i32::signum() returns 0 for zero, so factor of 20 not subtracted for zeros
+  ```
+
+- [ ] **Add tests:**
+  ```rust
+  #[test]
+  fn test_quantization_offset_values() { /* All 6 offset values */ }
+
+  #[test]
+  fn test_lcg_sequence() { /* LCG formula */ }
+
+  #[test]
+  fn test_excitation_reconstruction_zero() { /* Zero input */ }
+
+  #[test]
+  fn test_excitation_reconstruction_nonzero() { /* Non-zero input */ }
+
+  #[test]
+  fn test_pseudorandom_inversion() { /* Sign inversion based on LCG MSB */ }
+
+  #[test]
+  fn test_excitation_q23_range() { /* ≤23 bits */ }
+  ```
+
+##### 3.7.7 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Quantization offsets match Table 53 exactly
+- [ ] LCG formula: `seed = (196314165 * seed + 907633515) & 0xFFFFFFFF` (RFC line 5471)
+- [ ] Excitation formula: `(e_raw << 8) - sign(e_raw)*20 + offset_q23` (RFC line 5470)
+- [ ] Pseudorandom inversion uses MSB of seed (RFC line 5472)
+- [ ] Seed update includes raw excitation (RFC line 5473)
+- [ ] Zero values don't subtract factor of 20
+- [ ] Output fits in 23 bits
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5422-5478 - confirm LCG constants, formulas, bit precision
+
+---
+
+## Section 3.7 Overall Verification
+
+After ALL subsections (3.7.1-3.7.7) are complete:
+
+- [ ] Run `cargo fmt` (format entire workspace)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] All excitation test vectors pass (if available)
+- [ ] Excitation reconstruction produces valid Q23 values
+- [ ] LCG sequence matches reference implementation
+- [ ] **RFC COMPLETE DEEP CHECK:** Read RFC lines 4775-5478 and verify EVERY table, formula, algorithm exactly
+
+**Total Section 3.7 Artifacts:**
+* 1 LCG seed PDF (Table 43)
+* 1 shell block count table (Table 44)
+* 2 rate level PDFs (Table 45)
+* 11 pulse count PDFs (Table 46)
+* 64 pulse split PDFs (Tables 47-50)
+* 1 LSB PDF (Table 51)
+* 42 sign PDFs (Table 52)
+* 6 quantization offsets (Table 53)
+
+---
+
+### 3.8: Synthesis Filters
+
+**Reference:** RFC 6716 Section 4.2.9 (lines ~5500-5700)
+
+**Goal:** Apply LTP and LPC synthesis filters to reconstruct audio
+
+**Note:** This section will be detailed after excitation decoding (3.7) is complete.
+
+High-level components:
+- [ ] **LTP Synthesis Filter** - Apply long-term prediction using decoded pitch lags and filter coefficients
+- [ ] **LPC Synthesis Filter** - Apply short-term prediction using LPC coefficients from LSF conversion
+- [ ] **Subframe Processing** - Process each subframe with its specific parameters
+- [ ] **Stereo Unmixing** - Apply stereo prediction weights for stereo frames (if applicable)
+
+**Detailed breakdown will be added when 3.7 is complete.**
+
+---
+
+## Phase 3 Overall Verification Checklist
+
+After ALL subsections (3.1-3.8) are complete:
+
+- [ ] Run `cargo fmt` (format entire workspace)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+- [ ] Run `cargo build -p moosicbox_opus_native --no-default-features --features silk` (compiles without defaults)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --no-default-features --features silk` (tests pass without defaults)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features silk -- -D warnings` (zero warnings without defaults)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] **RFC COMPLETE DEEP CHECK:** Read RFC lines 2568-5700 and verify EVERY table, formula, and algorithm implemented exactly as specified with NO compromises
+
+---
+
+## Phase 3 Implementation Notes
+
+* LSF/LPC decoding has the largest codebooks (~2000 lines of constants)
+* All fixed-point arithmetic must use exact Q-format per RFC
+* LTP and excitation decoding are interdependent - careful state management required
+* Excitation decoding (3.7) uses combinatorial coding - mathematically complex
+* Test with real SILK frames from conformance suite after each subsection
+* Maintain backwards prediction state for LSF coefficients
+* LPC stability is critical - follow RFC bandwidth expansion exactly
 
 ---
 
