@@ -1082,45 +1082,48 @@ OpusDecoder re-exported at crate root for easy access
 
 ### 7.1 Create Registry Module
 
-- [ ] Create `src/registry.rs`:
+- [x] Create `src/registry.rs`:
+Created registry module with proper Symphonia API usage (CodecRegistry::new + register_enabled_codecs)
   ```rust
-  use symphonia::core::codecs::{CodecRegistry, Decoder};
+  use symphonia::core::codecs::CodecRegistry;
 
   use crate::decoder::OpusDecoder;
 
   /// Register Opus codec with the provided registry.
   pub fn register_opus_codec(registry: &mut CodecRegistry) {
-      // Get descriptors from the decoder and register each one
-      for descriptor in OpusDecoder::supported_codecs() {
-          registry.register(descriptor);
-      }
+      registry.register_all::<OpusDecoder>();
   }
 
   /// Create a codec registry with Opus support.
   #[must_use]
   pub fn create_opus_registry() -> CodecRegistry {
-      // Start with default Symphonia codecs
-      let mut registry = symphonia::default::get_codecs();
-
-      // Add our Opus codec on top
+      let mut registry = CodecRegistry::new();
+      symphonia::default::register_enabled_codecs(&mut registry);
       register_opus_codec(&mut registry);
-
       registry
   }
   ```
 
 #### 7.1 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Registry functions work correctly with decoder
-- [ ] create_opus_registry properly combines default codecs with Opus
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled moosicbox_opus v0.1.1 with registry module
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles successfully with no default features
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with registry implementation
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used, no unused dependencies found
+- [x] Registry functions work correctly with decoder
+register_all::<OpusDecoder>() calls OpusDecoder::supported_codecs() and registers descriptors
+- [x] create_opus_registry properly combines default codecs with Opus
+Creates new registry, adds all default codecs via register_enabled_codecs, then adds Opus codec
 
 ### 7.2 Update lib.rs
 
-- [ ] Add to `src/lib.rs`:
+- [x] Add to `src/lib.rs`:
+Added registry module declaration and public exports for registry functions
   ```rust
   pub mod decoder;
   pub mod error;
@@ -1138,13 +1141,20 @@ OpusDecoder re-exported at crate root for easy access
   ```
 
 #### 7.2 Verification Checklist
-- [ ] Run `cargo build -p moosicbox_opus` ✅ compiles
-- [ ] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
-- [ ] Run `cargo fmt` (formats entire workspace)
-- [ ] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
-- [ ] Run `cargo machete` ✅ no unused dependencies
-- [ ] Registry module is exported and accessible
-- [ ] Registry functions are publicly available
+- [x] Run `cargo build -p moosicbox_opus` ✅ compiles
+Successfully compiled with exported registry module
+- [x] Run `cargo build -p moosicbox_opus --no-default-features` ✅ compiles
+Compiles with public registry exports available
+- [x] Run `cargo fmt` (formats entire workspace)
+Workspace formatting completed successfully
+- [x] Run `cargo clippy -p moosicbox_opus -- -D warnings` ✅ no warnings
+Zero clippy warnings with public API exports
+- [x] Run `cargo machete` ✅ no unused dependencies
+All dependencies properly used
+- [x] Registry module is exported and accessible
+Module declared as public and available for import
+- [x] Registry functions are publicly available
+create_opus_registry and register_opus_codec re-exported at crate root
 
 ## Phase 8: Audio Decoder Integration
 
