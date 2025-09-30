@@ -10,7 +10,7 @@ use std::path::Path;
 use switchy_async::task::JoinError;
 use switchy_async::util::CancellationToken;
 use symphonia::core::audio::{AudioBuffer, SignalSpec};
-use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions, FinalizeResult};
+use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecRegistry, DecoderOptions, FinalizeResult};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatOptions, FormatReader, Packet, SeekMode, SeekTo, Track};
 use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -18,6 +18,9 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use symphonia::core::units::{Duration, Time};
 use thiserror::Error;
+
+#[cfg(feature = "opus")]
+use moosicbox_opus::register_opus_codec;
 
 pub mod media_sources;
 pub mod unsync;
@@ -492,7 +495,17 @@ fn play_track(
     .clone();
 
     // Create a decoder for the track.
-    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &decode_opts)?;
+    let codec_registry = {
+        let mut registry = CodecRegistry::new();
+        symphonia::default::register_enabled_codecs(&mut registry);
+
+        #[cfg(feature = "opus")]
+        register_opus_codec(&mut registry);
+
+        registry
+    };
+
+    let mut decoder = codec_registry.make(&track.codec_params, &decode_opts)?;
 
     log::debug!(
         "Starting packet decode loop with verification={}",

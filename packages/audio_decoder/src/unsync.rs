@@ -1,9 +1,12 @@
 use flume::Receiver;
 use symphonia::core::audio::AudioBuffer;
-use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
+use symphonia::core::codecs::{CODEC_TYPE_NULL, CodecRegistry, DecoderOptions};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::{FormatReader, SeekMode, SeekTo, Track};
 use symphonia::core::units::Time;
+
+#[cfg(feature = "opus")]
+use moosicbox_opus::register_opus_codec;
 
 use crate::{AudioDecodeError, DecodeError};
 
@@ -91,7 +94,17 @@ fn decode_track(
         .clone();
 
     // Create a decoder for the track.
-    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &decode_opts)?;
+    let codec_registry = {
+        let mut registry = CodecRegistry::new();
+        symphonia::default::register_enabled_codecs(&mut registry);
+
+        #[cfg(feature = "opus")]
+        register_opus_codec(&mut registry);
+
+        registry
+    };
+
+    let mut decoder = codec_registry.make(&track.codec_params, &decode_opts)?;
 
     log::trace!("Spawning decoder loop");
 

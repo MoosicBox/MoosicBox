@@ -7849,6 +7849,7 @@ dependencies = [
  "flume",
  "futures",
  "log 0.4.28",
+ "moosicbox_opus",
  "moosicbox_stream_utils",
  "profiling",
  "rangemap",
