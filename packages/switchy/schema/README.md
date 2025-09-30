@@ -187,11 +187,20 @@ switchy-migrate retry MIGRATION_ID -d DATABASE_URL
 # Mark a migration as completed (use with caution)
 switchy-migrate mark-completed MIGRATION_ID -d DATABASE_URL
 
-# Mark all migrations as completed (VERY dangerous operation)
+# Mark untracked migrations as completed (default, safest)
 switchy-migrate mark-all-completed -d DATABASE_URL
 
+# Also mark failed migrations as completed
+switchy-migrate mark-all-completed --include-failed -d DATABASE_URL
+
+# Also mark in-progress migrations as completed
+switchy-migrate mark-all-completed --include-in-progress -d DATABASE_URL
+
+# Mark ALL migrations as completed (most dangerous)
+switchy-migrate mark-all-completed --all -d DATABASE_URL
+
 # Force without confirmation
-switchy-migrate mark-all-completed -d DATABASE_URL --force
+switchy-migrate mark-all-completed --all --force -d DATABASE_URL
 
 # Force migration past dirty state (dangerous)
 switchy-migrate migrate --force -d DATABASE_URL
@@ -221,6 +230,76 @@ export MOOSICBOX_SKIP_MIGRATION_EXECUTION=1
 
 **Note:** Prior behavior completely skipped migrations. New behavior ensures the
 tracking table is populated for proper migration state management.
+
+### Migration Marking Scopes
+
+When using `mark-all-completed`, you can control which migration states are affected:
+
+#### Default Behavior (Safest)
+```bash
+switchy-migrate mark-all-completed -d DATABASE_URL
+```
+
+Only marks untracked (pending) migrations as completed:
+
+| Current State | Action | Result |
+|---------------|--------|--------|
+| Not Tracked   | ✅ Mark | Completed |
+| Completed     | ⏭️ Skip | Completed |
+| Failed        | ⏭️ Skip | Failed |
+| InProgress    | ⏭️ Skip | InProgress |
+
+**Use When:** Initializing tracking for an existing database
+
+#### With `--include-failed`
+```bash
+switchy-migrate mark-all-completed --include-failed -d DATABASE_URL
+```
+
+Marks pending and failed migrations:
+
+| Current State | Action | Result |
+|---------------|--------|--------|
+| Not Tracked   | ✅ Mark | Completed |
+| Completed     | ⏭️ Skip | Completed |
+| Failed        | ⚠️ Update | Completed |
+| InProgress    | ⏭️ Skip | InProgress |
+
+**Use When:** Multiple failed migrations were manually fixed
+
+#### With `--include-in-progress`
+```bash
+switchy-migrate mark-all-completed --include-in-progress -d DATABASE_URL
+```
+
+Marks pending and in-progress migrations:
+
+| Current State | Action | Result |
+|---------------|--------|--------|
+| Not Tracked   | ✅ Mark | Completed |
+| Completed     | ⏭️ Skip | Completed |
+| Failed        | ⏭️ Skip | Failed |
+| InProgress    | ⚠️ Update | Completed |
+
+**Use When:** Migration process was interrupted/crashed
+
+#### With `--all` (Most Dangerous)
+```bash
+switchy-migrate mark-all-completed --all -d DATABASE_URL
+```
+
+Marks all migrations regardless of state:
+
+| Current State | Action | Result |
+|---------------|--------|--------|
+| Not Tracked   | ✅ Mark | Completed |
+| Completed     | ⏭️ Skip | Completed |
+| Failed        | ⚠️ Update | Completed |
+| InProgress    | ⚠️ Update | Completed |
+
+**Use When:** Complete reset/sync of migration tracking table
+
+⚠️ **WARNING**: Each scope level increases danger. Always backup before using flags.
 
 ### Migration States
 
@@ -283,10 +362,18 @@ for migration in info {
 // Retry a specific migration
 runner.retry_migration("001_create_users").await?;
 
-// Mark all migrations as completed without executing them
-let summary = runner.mark_all_migrations_completed(&*db).await?;
-println!("Marked {} new migrations, updated {} failed migrations",
-         summary.newly_marked, summary.updated);
+// Mark untracked migrations as completed (default, safest)
+let summary = runner.mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly).await?;
+println!("Marked {} new migrations", summary.newly_marked);
+
+// Mark failed migrations as completed too
+let summary = runner.mark_all_migrations_completed(&*db, MarkCompletedScope::IncludeFailed).await?;
+println!("Marked {} failed migrations", summary.failed_marked);
+
+// Mark ALL migrations as completed (dangerous)
+let summary = runner.mark_all_migrations_completed(&*db, MarkCompletedScope::All).await?;
+println!("Total: {}, New: {}, Failed: {}, InProgress: {}",
+         summary.total, summary.newly_marked, summary.failed_marked, summary.in_progress_marked);
 ```
 
 ## Discovery Methods
@@ -652,8 +739,17 @@ switchy-migrate migrate --dry-run -d postgres://localhost/mydb
 switchy-migrate rollback --steps 2 -d postgres://localhost/mydb
 switchy-migrate mark-completed 002_add_indexes -d postgres://localhost/mydb --force
 
-# Mark all migrations as completed (recovery/initialization)
-switchy-migrate mark-all-completed -d postgres://localhost/mydb --force
+# Mark untracked migrations as completed (safest)
+switchy-migrate mark-all-completed -d postgres://localhost/mydb
+
+# Mark failed migrations too (recovery scenario)
+switchy-migrate mark-all-completed --include-failed -d postgres://localhost/mydb
+
+# Mark in-progress migrations too (crash recovery)
+switchy-migrate mark-all-completed --include-in-progress -d postgres://localhost/mydb
+
+# Mark ALL migrations (initialization/force sync)
+switchy-migrate mark-all-completed --all --force -d postgres://localhost/mydb
 ```
 
 ### Library Examples

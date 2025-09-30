@@ -132,103 +132,231 @@ Migrations directory: ./migrations
 ### Mark All Completed Command
 
 ```bash
-switchy-migrate mark-all-completed [--force] --database-url <DATABASE_URL>
+switchy-migrate mark-all-completed [OPTIONS] --database-url <DATABASE_URL>
 ```
 
-**Purpose:** Mark ALL migrations as completed without executing them (EXTREMELY dangerous operation).
+**Purpose:** Mark migrations as completed without executing them. The scope of affected migrations is controlled by flags.
 
-**Behavior:**
-1. Ensures migration tracking table exists
-2. Discovers all available migrations from source
-3. For each migration:
-   - If already completed: Count as `already_completed`
-   - If in failed/in-progress state: Update to completed (count as `updated`)
-   - If not tracked: Insert as completed (count as `newly_marked`)
-4. Returns summary with statistics
+#### Available Scopes
 
-**Interactive Confirmation:**
-Without `--force` flag, requires TWO confirmations:
-1. First confirmation: User must acknowledge the dangers
-2. Second confirmation: "Last chance" prompt
+**Default: Pending Only (Safest)**
+```bash
+switchy-migrate mark-all-completed --database-url <DATABASE_URL>
+```
 
-**Example:**
+Only marks untracked migrations as completed. This is the safest option and recommended for initialization scenarios.
+
+**Include Failed Migrations**
+```bash
+switchy-migrate mark-all-completed --include-failed --database-url <DATABASE_URL>
+```
+
+Marks both untracked and failed migrations as completed. Use when failed migrations were manually fixed.
+
+**Include In-Progress Migrations**
+```bash
+switchy-migrate mark-all-completed --include-in-progress --database-url <DATABASE_URL>
+```
+
+Marks both untracked and in-progress migrations as completed. Use when migration process crashed but migrations actually completed.
+
+**All Migrations (Most Dangerous)**
+```bash
+switchy-migrate mark-all-completed --all --database-url <DATABASE_URL>
+```
+
+Marks all migrations as completed regardless of state. Use for complete tracking table reset/sync.
+
+#### Behavior Matrix
+
+| Scope | Untracked | Completed | Failed | InProgress |
+|-------|-----------|-----------|--------|------------|
+| **Default** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) |
+| **--include-failed** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⏭️ Skip (unchanged) |
+| **--include-in-progress** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⏭️ Skip (unchanged) | ⚠️ Update → Completed |
+| **--all** | ✅ Mark → Completed | ⏭️ Skip (unchanged) | ⚠️ Update → Completed | ⚠️ Update → Completed |
+
+#### Interactive Confirmation
+
+The confirmation process adapts to the danger level:
+
+**Default Scope:**
+- Moderate danger warning
+- Single confirmation required
+- Shows what will be marked vs preserved
+
+**Dangerous Scopes (--include-failed, --include-in-progress):**
+- High danger warning
+- Double confirmation required
+- Detailed breakdown of state changes
+
+**All Scope (--all):**
+- Extreme danger warning
+- Double confirmation required
+- Comprehensive warnings about consequences
+
+**Force Mode:**
+```bash
+switchy-migrate mark-all-completed --all --force --database-url <DATABASE_URL>
+```
+Bypasses all confirmations. Use with extreme caution.
+
+#### Example: Default Scope (Pending Only)
+
 ```bash
 $ switchy-migrate mark-all-completed --database-url sqlite://app.db
 
-⚠️  Marking ALL migrations as completed
+⚠️  Marking migrations as completed
 Migrations directory: ./migrations
+Scope: PendingOnly
+Danger level: MODERATE
 
-⚠️  DANGER: THIS IS AN EXTREMELY DANGEROUS OPERATION!
-════════════════════════════════════════════════════════════
-This will mark ALL migrations as completed WITHOUT running them!
-This can lead to:
-  • Database schema inconsistencies
-  • Failed future migrations
-  • Data corruption
-  • Application crashes
-════════════════════════════════════════════════════════════
+⚠️  WARNING: This will mark untracked migrations as completed!
+This is relatively safe but can still lead to issues if:
+  • Database schema doesn't match migrations
+  • Migrations haven't been manually applied
+
+This operation will:
+  ✓ Mark untracked migrations as completed
+  ⏭ Leave completed migrations unchanged
+  ⏭ Leave failed migrations unchanged
+  ⏭ Leave in-progress migrations unchanged
 
 Only use this if:
   • You're initializing a tracking table for an existing database
-  • You've manually run all migrations and need to sync
+  • You've manually applied migrations and need to sync
   • You're recovering from schema table corruption
 
-Are you ABSOLUTELY SURE you want to mark ALL migrations as completed? [y/N] y
-Last chance: Proceed with marking ALL migrations as completed? [y/N] y
+Are you sure you want to mark untracked migrations as completed? [y/N] y
 
 ✓ Operation completed successfully!
 
 Summary:
-  Total migrations found:       47
-  Already completed:            12
-  Newly marked as completed:    30
-  Updated to completed:         5
+  Total migrations found:              47
+  Already completed:                   12
+  Newly marked as completed:           30
+  Failed migrations skipped:           3
+  In-Progress migrations skipped:      2
 ```
 
-**Force Mode:**
+#### Example: Include Failed Scope
+
 ```bash
-$ switchy-migrate mark-all-completed --database-url sqlite://app.db --force
-# Bypasses all confirmations - use with extreme caution
+$ switchy-migrate mark-all-completed --include-failed --database-url sqlite://app.db
+
+⚠️  Marking migrations as completed
+Migrations directory: ./migrations
+Scope: IncludeFailed
+Danger level: HIGH
+
+⚠️  DANGER: This will mark untracked AND FAILED migrations as completed!
+══════════════════════════════════════════════════════════════════════
+This operation will:
+  ✓ Mark untracked migrations as completed
+  ⚠ Mark FAILED migrations as completed
+  ⏭ Leave completed migrations unchanged
+  ⏭ Leave in-progress migrations unchanged
+══════════════════════════════════════════════════════════════════════
+
+Use this only if:
+  • Failed migrations were manually fixed
+  • You want to skip multiple failed migrations
+
+Only use this if:
+  • You're initializing a tracking table for an existing database
+  • You've manually applied migrations and need to sync
+  • You're recovering from schema table corruption
+
+Are you SURE you want to proceed with this dangerous operation? [y/N] y
+Last chance: Proceed? [y/N] y
+
+✓ Operation completed successfully!
+
+Summary:
+  Total migrations found:              47
+  Already completed:                   12
+  Newly marked as completed:           30
+  Failed → Completed:                  3
+  In-Progress migrations skipped:      2
 ```
 
-**Use Cases:**
+#### Example: All Scope
 
-1. **Initializing Existing Database:**
-   ```bash
-   # Database schema already matches migrations
-   switchy-migrate mark-all-completed -d postgres://prod/db --force
-   ```
+```bash
+$ switchy-migrate mark-all-completed --all --database-url sqlite://app.db
 
-2. **Recovery from Corruption:**
-   ```bash
-   # Migration table was dropped/corrupted but schema is correct
-   switchy-migrate mark-all-completed -d sqlite://app.db
-   ```
+⚠️  Marking migrations as completed
+Migrations directory: ./migrations
+Scope: All
+Danger level: EXTREME
 
-3. **Manual Migration Application:**
-   ```bash
-   # Migrations were manually applied, need to sync tracking
-   switchy-migrate mark-all-completed -d postgres://prod/db
-   ```
+🚨 EXTREME DANGER: THIS WILL MARK ALL MIGRATIONS AS COMPLETED! 🚨
+══════════════════════════════════════════════════════════════════════
+This operation will:
+  ✓ Mark untracked migrations as completed
+  ⚠ Mark FAILED migrations as completed
+  ⚠ Mark IN-PROGRESS migrations as completed
+  ⏭ Leave completed migrations unchanged
+══════════════════════════════════════════════════════════════════════
 
-**API Usage:**
+This can lead to:
+  ✗ Database schema inconsistencies
+  ✗ Failed future migrations
+  ✗ Data corruption
+  ✗ Application crashes
+
+Only use this if:
+  • You're initializing a tracking table for an existing database
+  • You've manually applied migrations and need to sync
+  • You're recovering from schema table corruption
+
+Are you ABSOLUTELY CERTAIN you want to mark ALL migrations as completed? [y/N] y
+Last chance: Proceed? [y/N] y
+
+✓ Operation completed successfully!
+
+Summary:
+  Total migrations found:              47
+  Already completed:                   12
+  Newly marked as completed:           30
+  Failed → Completed:                  3
+  In-Progress → Completed:             2
+```
+
+#### API Usage
 
 ```rust
-use switchy_schema::runner::MigrationRunner;
+use switchy_schema::runner::{MigrationRunner, MarkCompletedScope};
 
-let runner = MigrationRunner::new_directory("./migrations")
-    .with_table_name("__my_migrations");
+// Default: Only mark pending (safest)
+let summary = runner
+    .mark_all_migrations_completed(&*db, MarkCompletedScope::PendingOnly)
+    .await?;
+println!("Marked {} new migrations", summary.newly_marked);
+println!("Skipped {} failed migrations", summary.failed_skipped);
 
-let summary = runner.mark_all_migrations_completed(&*db).await?;
+// Include failed migrations
+let summary = runner
+    .mark_all_migrations_completed(&*db, MarkCompletedScope::IncludeFailed)
+    .await?;
+println!("Marked {} failed migrations", summary.failed_marked);
 
-println!("Operation summary:");
-println!("  Total: {}", summary.total);
-println!("  Already completed: {}", summary.already_completed);
-println!("  Newly marked: {}", summary.newly_marked);
-println!("  Updated: {}", summary.updated);
+// Include in-progress migrations
+let summary = runner
+    .mark_all_migrations_completed(&*db, MarkCompletedScope::IncludeInProgress)
+    .await?;
+println!("Marked {} in-progress migrations", summary.in_progress_marked);
+
+// All migrations (dangerous)
+let summary = runner
+    .mark_all_migrations_completed(&*db, MarkCompletedScope::All)
+    .await?;
+println!("Total: {}, New: {}, Failed: {}, InProgress: {}",
+         summary.total, summary.newly_marked,
+         summary.failed_marked, summary.in_progress_marked);
 ```
 
-**Return Type:**
+#### Return Type
 
 ```rust
 pub struct MarkAllCompletedSummary {
@@ -236,42 +364,81 @@ pub struct MarkAllCompletedSummary {
     pub total: usize,
     /// Number of migrations that were already completed
     pub already_completed: usize,
-    /// Number of migrations newly marked as completed
+    /// Number of migrations newly marked as completed (were untracked)
     pub newly_marked: usize,
-    /// Number of migrations updated from failed/in-progress to completed
-    pub updated: usize,
+    /// Number of failed migrations updated to completed
+    pub failed_marked: usize,
+    /// Number of in-progress migrations updated to completed
+    pub in_progress_marked: usize,
+    /// Number of failed migrations that were skipped (not included in scope)
+    pub failed_skipped: usize,
+    /// Number of in-progress migrations that were skipped (not included in scope)
+    pub in_progress_skipped: usize,
 }
 ```
 
-**Related Commands:**
-- `mark-completed <migration_id>` - Mark a single migration
-- `status --show-failed` - Check current migration state
-- `retry <migration_id>` - Retry a failed migration properly
+The summary provides detailed statistics showing:
+- What was marked as completed
+- What was updated from a different state
+- What was explicitly skipped due to scope constraints
 
-**Warnings:**
+#### Use Case Guide
+
+**When to use each scope:**
+
+| Scenario | Recommended Scope | Reasoning |
+|----------|-------------------|-----------|
+| Initialize tracking for existing database | Default (no flags) | Only marks new migrations, preserves any existing state |
+| Multiple failed migrations manually fixed | `--include-failed` | Marks failed migrations as complete after manual fixes |
+| Migration process crashed mid-execution | `--include-in-progress` | Marks stuck in-progress migrations as complete |
+| Complete tracking table rebuild | `--all` | Nuclear option - marks everything as complete |
+| Read-only deployment initialization | Use env var instead | `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1` |
+
+**When NOT to use:**
+
+❌ **Don't use `--all` if:**
+- You're unsure about the current schema state
+- Migrations haven't been applied
+- You're trying to "skip" migrations during development
+- Any migrations are legitimately failed (fix them first!)
+
+✅ **Instead:**
+- Use default scope for initialization
+- Fix failed migrations and retry them
+- Use `MOOSICBOX_SKIP_MIGRATION_EXECUTION=1` for read-only deployments
+
+#### Safety Best Practices
+
+1. **Always backup before using any scope**
+2. **Start with default scope** - it's the safest
+3. **Check what will be affected** - review the summary before confirming
+4. **Use force sparingly** - confirmations exist for a reason
+5. **Verify after operation** - run `status --show-failed` to check results
+6. **Document your actions** - note why you used a particular scope
+
+#### Related Commands
+
+- `status --show-failed` - Check current migration state before marking
+- `mark-completed <id>` - Mark a single migration (more targeted)
+- `retry <id>` - Properly retry a failed migration (preferred over marking)
+- `validate` - Check migration checksums after marking
+
+#### Warnings
 
 🚨 **CRITICAL SAFETY NOTICE** 🚨
 
-This command should ONLY be used in these specific scenarios:
-1. You are absolutely certain the database schema matches all migrations
-2. You are recovering from a corrupted migration tracking table
-3. You are initializing tracking for a manually-managed database
+**Default scope (no flags):**
+- ✅ Safe for initialization
+- ✅ Preserves failed/in-progress states
+- ⚠️ Still dangerous if schema doesn't match
 
-DO NOT use this command if:
-- You are unsure about the current schema state
-- Migrations have not been applied
-- You are trying to "skip" migrations during development
-- You want to avoid running migrations (use MOOSICBOX_SKIP_MIGRATION_EXECUTION instead)
-
-**Consequences of Misuse:**
-- Silent schema inconsistencies
-- Future migrations may fail in unexpected ways
-- Data corruption if migrations expect schema they create
-- Difficult-to-debug application errors
-- May require manual database recovery
+**With flags:**
+- ⚠️ Dangerous: Changes migration states
+- ⚠️ Information loss: Failure reasons remain but state changes
+- ⚠️ May hide real problems: Failed migrations marked as complete
 
 **Best Practice:**
-Always backup your database before using this command.
+Always backup your database before using this command with any scope.
 
 ### Force Migration
 
