@@ -8432,6 +8432,7 @@ version = "0.1.1"
 dependencies = [
  "bytes",
  "log 0.4.28",
+ "symphonia",
  "thiserror 2.0.17",
 ]
 

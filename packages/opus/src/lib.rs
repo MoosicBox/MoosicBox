@@ -8,11 +8,13 @@
 //!
 //! This crate is under development.
 
+pub mod decoder;
 pub mod error;
 pub mod frame;
 pub mod packet;
 pub mod toc;
 
+pub use decoder::OpusDecoder;
 pub use error::{Error, Result};
 pub use frame::{FramePacking, OpusFrame, decode_frame_length};
 pub use packet::OpusPacket;
