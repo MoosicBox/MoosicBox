@@ -1945,7 +1945,7 @@ Verified: 20-iteration gentle adjustment phase + fallback sorting/clamping per R
 Implement LSF interpolation for 20ms frames and conversion of normalized LSF coefficients to LPC (Linear Prediction Coefficients) using fixed-point polynomial construction.
 
 **Status:**
-🔴 **NOT STARTED**
+✅ **COMPLETE** (All tests passing, zero clippy warnings)
 
 ---
 
@@ -2615,28 +2615,80 @@ fn test_lsf_ordering_values_in_bounds() {
 
 #### 3.4 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass, including 3 new special case tests)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Interpolation PDF matches Table 26 exactly: `[13, 22, 29, 11, 181, 0]`
-- [ ] LSF ordering tables match Table 27 exactly (NB: 10 entries, WB: 16 entries)
-- [ ] Cosine table matches Table 28 exactly (129 Q12 values from i=0 to i=128)
-- [ ] Cosine table boundaries correct: `LSF_COS_TABLE_Q12[0] == 4096`, `LSF_COS_TABLE_Q12[128] == -4096`
-- [ ] Interpolation formula matches RFC line 3623 exactly
-- [ ] Cosine approximation matches RFC lines 3747-3748 (with reordering)
-- [ ] Polynomial recurrence matches RFC lines 3855-3859 (48-bit precision via i64)
-- [ ] LPC extraction matches RFC lines 3882-3886 (P and Q combination with proper signs)
-- [ ] Previous LSF state tracking works for both NB/MB (10 coeffs) and WB (16 coeffs)
-- [ ] **CRITICAL**: Decoder reset flag tracked and forces w_Q2=4 (RFC line 3603)
-- [ ] **CRITICAL**: Uncoded side channel flag tracked and forces w_Q2=4 (RFC lines 3601-3602)
-- [ ] **CRITICAL**: w_Q2 still decoded from bitstream even when overridden to 4
-- [ ] **CRITICAL**: Reset and uncoded side channel flags are cleared after use (one-shot behavior)
-- [ ] 10ms frames skip interpolation, 20ms frames interpolate
-- [ ] First frame (no previous LSF) returns None for interpolation
-- [ ] All 16 unit tests pass (including 3 special case tests)
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3591-3892 - confirm all Q-format arithmetic (Q2, Q12, Q15, Q16, Q17), polynomial symmetry, cosine interpolation, LSF storage, boundary conditions, and special case w_Q2 override logic
+- [x] Run `cargo fmt` (format code)
+Formatted successfully without errors
+
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+```
+Compiling moosicbox_opus_native v0.1.0
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.45s
+```
+
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass, including 3 new special case tests)
+```
+running 85 tests
+test result: ok. 85 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+```
+
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+```
+Checking moosicbox_opus_native v0.1.0
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 3m 24s
+```
+
+- [x] Run `cargo machete` (no unused dependencies)
+Not applicable - no new dependencies added
+
+- [x] Interpolation PDF matches Table 26 exactly: `[13, 22, 29, 11, 181, 0]`
+Verified in `lsf_constants.rs` lines: `pub const LSF_INTERP_PDF: &[u8] = &[13, 22, 29, 11, 181, 0];`
+
+- [x] LSF ordering tables match Table 27 exactly (NB: 10 entries, WB: 16 entries)
+NB: `&[0, 9, 6, 3, 4, 5, 8, 1, 2, 7]`, WB: `&[0, 15, 8, 7, 4, 11, 12, 3, 2, 13, 10, 5, 6, 9, 14, 1]`
+
+- [x] Cosine table matches Table 28 exactly (129 Q12 values from i=0 to i=128)
+All 129 values verified against RFC Table 28
+
+- [x] Cosine table boundaries correct: `LSF_COS_TABLE_Q12[0] == 4096`, `LSF_COS_TABLE_Q12[128] == -4096`
+Test `test_cosine_table_bounds` passes, verifies both boundary values
+
+- [x] Interpolation formula matches RFC line 3623 exactly
+Implementation: `let weighted = (i32::from(effective_w_q2) * diff) >> 2; (i32::from(n0_val) + weighted) as i16`
+
+- [x] Cosine approximation matches RFC lines 3747-3748 (with reordering)
+Implementation: `c_q17[ordering[k]] = ((cos_i * 256) + ((cos_i_plus_1 - cos_i) * f) + 4) >> 3;`
+
+- [x] Polynomial recurrence matches RFC lines 3855-3859 (48-bit precision via i64)
+Uses `i64` for p_q16 and q_q16, formula: `p_q16[k][j] = p_prev_j + p_prev_j_minus_2 - ((i64::from(c_q17[2 * k]) * p_prev_j_minus_1 + 32768) >> 16);`
+
+- [x] LPC extraction matches RFC lines 3882-3886 (P and Q combination with proper signs)
+Implementation: `a32_q17[k] = (-(q_diff + p_sum)) as i32; a32_q17[d_lpc - k - 1] = (q_diff - p_sum) as i32;`
+
+- [x] Previous LSF state tracking works for both NB/MB (10 coeffs) and WB (16 coeffs)
+Tests `test_store_previous_lsf_nb` and `test_store_previous_lsf_wb` verify storage for both bandwidths
+
+- [x] **CRITICAL**: Decoder reset flag tracked and forces w_Q2=4 (RFC line 3603)
+Test `test_lsf_interpolation_decoder_reset_forces_w_q2_4` verifies behavior, flag initialized to `true` in constructor
+
+- [x] **CRITICAL**: Uncoded side channel flag tracked and forces w_Q2=4 (RFC lines 3601-3602)
+Test `test_lsf_interpolation_uncoded_side_channel_forces_w_q2_4` verifies behavior
+
+- [x] **CRITICAL**: w_Q2 still decoded from bitstream even when overridden to 4
+Implementation decodes `w_q2` first, then overrides to `effective_w_q2 = 4` in special cases
+
+- [x] **CRITICAL**: Reset and uncoded side channel flags are cleared after use (one-shot behavior)
+Both tests verify flags are cleared: `assert!(!decoder.decoder_reset); assert!(!decoder.uncoded_side_channel);`
+
+- [x] 10ms frames skip interpolation, 20ms frames interpolate
+Test `test_lsf_interpolation_10ms_returns_none` verifies 10ms returns None
+
+- [x] First frame (no previous LSF) returns None for interpolation
+Test `test_lsf_interpolation_no_previous_returns_none` verifies behavior
+
+- [x] All 16 unit tests pass (including 3 special case tests)
+85 total tests pass (added 16 new tests for Section 3.4)
+
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 3591-3892 - confirm all Q-format arithmetic (Q2, Q12, Q15, Q16, Q17), polynomial symmetry, cosine interpolation, LSF storage, boundary conditions, and special case w_Q2 override logic
+All formulas verified against RFC, all Q-format conversions correct, special case w_Q2 override logic matches RFC lines 3601-3607 exactly
 
 ---
 

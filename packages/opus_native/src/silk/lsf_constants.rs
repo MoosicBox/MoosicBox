@@ -519,3 +519,56 @@ pub const LSF_MIN_SPACING_WB: &[u16] =
 // Q16 format: 11796 ≈ 0.18, 9830 ≈ 0.15
 pub const LSF_QSTEP_NB: u16 = 11796;
 pub const LSF_QSTEP_WB: u16 = 9830;
+
+// RFC 6716 Table 26: PDF for Normalized LSF Interpolation Index (lines 3609-3615)
+// NOTE: All ICDF tables MUST end with 0 per RFC 6716 Section 4.1.3.3 (line 1534):
+//       "the table is terminated by a value of 0 (where fh[k] == ft)."
+//       The RFC table shows PDF values {13, 22, 29, 11, 181}/256
+pub const LSF_INTERP_PDF: &[u8] = &[13, 22, 29, 11, 181, 0];
+
+// RFC 6716 Table 27: LSF Ordering for Polynomial Evaluation (lines 3703-3739)
+// Reordering improves numerical accuracy during polynomial construction
+// NB/MB: 10 coefficients, WB: 16 coefficients
+pub const LSF_ORDERING_NB: &[usize; 10] = &[0, 9, 6, 3, 4, 5, 8, 1, 2, 7];
+pub const LSF_ORDERING_WB: &[usize; 16] = &[0, 15, 8, 7, 4, 11, 12, 3, 2, 13, 10, 5, 6, 9, 14, 1];
+
+// RFC 6716 Table 28: Q12 Cosine Table for LSF Conversion (lines 3763-3841)
+// Piecewise linear approximation of cos(pi*x) for x in [0,1]
+// 129 values (i=0 to i=128) in Q12 format
+// Monotonically decreasing from cos(0)=4096 to cos(π)=-4096
+pub const LSF_COS_TABLE_Q12: &[i16; 129] = &[
+    // i=0..3 (RFC lines 3766)
+    4096, 4095, 4091, 4085, // i=4..7 (RFC lines 3768)
+    4076, 4065, 4052, 4036, // i=8..11 (RFC lines 3770)
+    4017, 3997, 3973, 3948, // i=12..15 (RFC lines 3772)
+    3920, 3889, 3857, 3822, // i=16..19 (RFC lines 3774)
+    3784, 3745, 3703, 3659, // i=20..23 (RFC lines 3776)
+    3613, 3564, 3513, 3461, // i=24..27 (RFC lines 3778)
+    3406, 3349, 3290, 3229, // i=28..31 (RFC lines 3780)
+    3166, 3102, 3035, 2967, // i=32..35 (RFC lines 3782)
+    2896, 2824, 2751, 2676, // i=36..39 (RFC lines 3784)
+    2599, 2520, 2440, 2359, // i=40..43 (RFC lines 3786)
+    2276, 2191, 2106, 2019, // i=44..47 (RFC lines 3788)
+    1931, 1842, 1751, 1660, // i=48..51 (RFC lines 3790)
+    1568, 1474, 1380, 1285, // i=52..55 (RFC lines 3792)
+    1189, 1093, 995, 897, // i=56..59 (RFC lines 3794)
+    799, 700, 601, 501, // i=60..63 (RFC lines 3796)
+    401, 301, 201, 101, // i=64..67 (RFC lines 3798)
+    0, -101, -201, -301, // i=68..71 (RFC lines 3800)
+    -401, -501, -601, -700, // i=72..75 (RFC lines 3802)
+    -799, -897, -995, -1093, // i=76..79 (RFC lines 3804)
+    -1189, -1285, -1380, -1474, // i=80..83 (RFC lines 3806-3810)
+    -1568, -1660, -1751, -1842, // i=84..87 (RFC lines 3816)
+    -1931, -2019, -2106, -2191, // i=88..91 (RFC lines 3818)
+    -2276, -2359, -2440, -2520, // i=92..95 (RFC lines 3820)
+    -2599, -2676, -2751, -2824, // i=96..99 (RFC lines 3822)
+    -2896, -2967, -3035, -3102, // i=100..103 (RFC lines 3824)
+    -3166, -3229, -3290, -3349, // i=104..107 (RFC lines 3826)
+    -3406, -3461, -3513, -3564, // i=108..111 (RFC lines 3828)
+    -3613, -3659, -3703, -3745, // i=112..115 (RFC lines 3830)
+    -3784, -3822, -3857, -3889, // i=116..119 (RFC lines 3832)
+    -3920, -3948, -3973, -3997, // i=120..123 (RFC lines 3834)
+    -4017, -4036, -4052, -4065, // i=124..127 (RFC lines 3836)
+    -4076, -4085, -4091, -4095, // i=128 (RFC line 3838)
+    -4096,
+];
