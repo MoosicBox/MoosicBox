@@ -4,6 +4,7 @@ pub mod error;
 pub mod range;
 #[cfg(feature = "silk")]
 pub mod silk;
+mod util;
 
 pub use error::{Error, Result};
 

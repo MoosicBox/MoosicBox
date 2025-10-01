@@ -1,5 +1,6 @@
 use crate::error::{Error, Result};
 use crate::range::RangeDecoder;
+use crate::util::ilog;
 use crate::{Channels, SampleRate};
 
 use super::frame::{FrameType, QuantizationOffsetType};
@@ -1178,26 +1179,6 @@ impl SilkDecoder {
     }
 }
 
-/// Integer base-2 logarithm of x
-///
-/// Returns `floor(log2(x)) + 1` for x > 0, or 0 for x == 0
-///
-/// # Examples
-/// * `ilog(0)` = 0
-/// * `ilog(1)` = 1 (floor(log2(1)) + 1 = 0 + 1)
-/// * `ilog(2)` = 2 (floor(log2(2)) + 1 = 1 + 1)
-/// * `ilog(4)` = 3 (floor(log2(4)) + 1 = 2 + 1)
-///
-/// RFC 6716 lines 368-375
-#[allow(clippy::cast_possible_wrap)]
-const fn ilog(x: u32) -> i32 {
-    if x == 0 {
-        0
-    } else {
-        32 - x.leading_zeros() as i32
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1895,30 +1876,6 @@ mod tests {
         for &idx in LSF_ORDERING_WB {
             assert!(idx < 16);
         }
-    }
-
-    #[test]
-    fn test_ilog_zero() {
-        assert_eq!(ilog(0), 0);
-    }
-
-    #[test]
-    fn test_ilog_powers_of_two() {
-        assert_eq!(ilog(1), 1); // floor(log2(1)) + 1 = 0 + 1
-        assert_eq!(ilog(2), 2); // floor(log2(2)) + 1 = 1 + 1
-        assert_eq!(ilog(4), 3); // floor(log2(4)) + 1 = 2 + 1
-        assert_eq!(ilog(8), 4);
-        assert_eq!(ilog(16), 5);
-        assert_eq!(ilog(256), 9);
-        assert_eq!(ilog(1024), 11);
-    }
-
-    #[test]
-    fn test_ilog_non_powers() {
-        assert_eq!(ilog(3), 2); // floor(log2(3)) + 1 = 1 + 1
-        assert_eq!(ilog(5), 3); // floor(log2(5)) + 1 = 2 + 1
-        assert_eq!(ilog(255), 8);
-        assert_eq!(ilog(257), 9);
     }
 
     #[test]

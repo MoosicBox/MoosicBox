@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::util::ilog;
 
 #[derive(Debug)]
 pub struct RangeDecoder {
@@ -275,13 +276,6 @@ impl RangeDecoder {
     }
 }
 
-const fn ilog(x: u32) -> u32 {
-    if x == 0 {
-        return 0;
-    }
-    32 - x.leading_zeros()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -534,17 +528,6 @@ mod tests {
 
         let result = decoder.ec_dec_uint(0);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_ilog() {
-        assert_eq!(ilog(0), 0);
-        assert_eq!(ilog(1), 1);
-        assert_eq!(ilog(2), 2);
-        assert_eq!(ilog(3), 2);
-        assert_eq!(ilog(4), 3);
-        assert_eq!(ilog(255), 8);
-        assert_eq!(ilog(256), 9);
     }
 
     #[test]
