@@ -182,6 +182,9 @@ pub struct SilkDecoder {
     // TODO(Section 3.7+): Remove dead_code when used in LTP decoding
     #[allow(dead_code)]
     previous_pitch_lag: Option<i16>,
+    // TODO(Section 3.7.7): Remove dead_code when used in noise injection
+    #[allow(dead_code)]
+    lcg_seed: u32,
 }
 
 impl SilkDecoder {
@@ -216,6 +219,7 @@ impl SilkDecoder {
             decoder_reset: true,
             uncoded_side_channel: false,
             previous_pitch_lag: None,
+            lcg_seed: 0,
         })
     }
 
@@ -1463,6 +1467,41 @@ impl SilkDecoder {
             Ok(15565)
         }
     }
+
+    /// Decodes LCG seed for pseudorandom noise injection (RFC 6716 Section 4.2.7.7, lines 4775-4793).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    // TODO(Section 3.7.7): Remove dead_code when used in noise injection
+    #[allow(dead_code)]
+    pub fn decode_lcg_seed(&mut self, range_decoder: &mut RangeDecoder) -> Result<u32> {
+        use super::excitation_constants::LCG_SEED_PDF;
+
+        let seed = range_decoder.ec_dec_icdf(LCG_SEED_PDF, 8)?;
+        self.lcg_seed = seed;
+        Ok(seed)
+    }
+
+    /// Gets the number of 16-sample shell blocks for excitation coding (RFC 6716 Section 4.2.7.8 + Table 44, lines 4828-4855).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if bandwidth/frame size combination is invalid
+    // TODO(Section 3.7.3): Remove dead_code when used in pulse count decoding
+    #[allow(dead_code)]
+    pub fn get_shell_block_count(bandwidth: Bandwidth, frame_size_ms: u8) -> Result<usize> {
+        use super::excitation_constants::get_shell_block_count;
+
+        get_shell_block_count(bandwidth, frame_size_ms).map_or_else(
+            || {
+                Err(Error::SilkDecoder(format!(
+                    "invalid bandwidth/frame size for shell blocks: {bandwidth:?}/{frame_size_ms}ms"
+                )))
+            },
+            Ok,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -2508,5 +2547,80 @@ mod tests {
         let scaling = SilkDecoder::decode_ltp_scaling(&mut range_decoder, false).unwrap();
 
         assert_eq!(scaling, 15565);
+    }
+
+    #[test]
+    fn test_lcg_seed_decoding() {
+        let data = vec![0x00, 0xFF, 0xFF, 0xFF];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let seed = decoder.decode_lcg_seed(&mut range_decoder).unwrap();
+
+        assert!(seed <= 3);
+        assert_eq!(decoder.lcg_seed, seed);
+    }
+
+    #[test]
+    fn test_lcg_seed_uniform_distribution() {
+        for seed_value in 0..4 {
+            let data = if seed_value == 0 {
+                vec![0x00, 0xFF, 0xFF, 0xFF]
+            } else if seed_value == 1 {
+                vec![0x55, 0xFF, 0xFF, 0xFF]
+            } else if seed_value == 2 {
+                vec![0xAA, 0xFF, 0xFF, 0xFF]
+            } else {
+                vec![0xFF, 0xFF, 0xFF, 0xFF]
+            };
+
+            let mut range_decoder = RangeDecoder::new(&data).unwrap();
+            let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+            let seed = decoder.decode_lcg_seed(&mut range_decoder).unwrap();
+            assert!(seed <= 3);
+        }
+    }
+
+    #[test]
+    fn test_shell_block_count_nb() {
+        assert_eq!(
+            SilkDecoder::get_shell_block_count(Bandwidth::Narrowband, 10).unwrap(),
+            5
+        );
+        assert_eq!(
+            SilkDecoder::get_shell_block_count(Bandwidth::Narrowband, 20).unwrap(),
+            10
+        );
+    }
+
+    #[test]
+    fn test_shell_block_count_mb_special() {
+        assert_eq!(
+            SilkDecoder::get_shell_block_count(Bandwidth::Mediumband, 10).unwrap(),
+            8
+        );
+        assert_eq!(
+            SilkDecoder::get_shell_block_count(Bandwidth::Mediumband, 20).unwrap(),
+            15
+        );
+    }
+
+    #[test]
+    fn test_shell_block_count_wb() {
+        assert_eq!(
+            SilkDecoder::get_shell_block_count(Bandwidth::Wideband, 10).unwrap(),
+            10
+        );
+        assert_eq!(
+            SilkDecoder::get_shell_block_count(Bandwidth::Wideband, 20).unwrap(),
+            20
+        );
+    }
+
+    #[test]
+    fn test_shell_block_count_invalid() {
+        assert!(SilkDecoder::get_shell_block_count(Bandwidth::SuperWideband, 10).is_err());
+        assert!(SilkDecoder::get_shell_block_count(Bandwidth::Narrowband, 40).is_err());
     }
 }
