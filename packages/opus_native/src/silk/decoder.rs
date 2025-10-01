@@ -504,6 +504,247 @@ impl SilkDecoder {
             ))),
         }
     }
+
+    /// Dequantizes LSF Stage 2 residuals using backward prediction (RFC 6716 Section 4.2.7.5.3, lines 3011-3033).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if bandwidth is invalid
+    #[allow(
+        dead_code,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
+    fn dequantize_lsf_residuals(
+        stage1_index: u8,
+        stage2_indices: &[i8],
+        bandwidth: Bandwidth,
+    ) -> Result<Vec<i16>> {
+        use super::lsf_constants::{
+            LSF_PRED_WEIGHT_SEL_NB, LSF_PRED_WEIGHT_SEL_WB, LSF_PRED_WEIGHTS_NB_A,
+            LSF_PRED_WEIGHTS_NB_B, LSF_PRED_WEIGHTS_WB_C, LSF_PRED_WEIGHTS_WB_D, LSF_QSTEP_NB,
+            LSF_QSTEP_WB,
+        };
+
+        let (d_lpc, qstep) = match bandwidth {
+            Bandwidth::Narrowband | Bandwidth::Mediumband => (10, i32::from(LSF_QSTEP_NB)),
+            Bandwidth::Wideband => (16, i32::from(LSF_QSTEP_WB)),
+            _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF".to_string())),
+        };
+
+        let mut res_q10 = vec![0_i16; d_lpc];
+
+        // Process backward from k = d_LPC-1 down to 0 (RFC line 3021)
+        for k in (0..d_lpc).rev() {
+            // Prediction weights are only defined for k < d_LPC-1 (RFC line 3018)
+            let prediction = if k + 1 < d_lpc {
+                let pred_weight = match bandwidth {
+                    Bandwidth::Narrowband | Bandwidth::Mediumband => {
+                        let sel = LSF_PRED_WEIGHT_SEL_NB[stage1_index as usize][k];
+                        if sel == b'A' {
+                            LSF_PRED_WEIGHTS_NB_A[k]
+                        } else {
+                            LSF_PRED_WEIGHTS_NB_B[k]
+                        }
+                    }
+                    Bandwidth::Wideband => {
+                        let sel = LSF_PRED_WEIGHT_SEL_WB[stage1_index as usize][k];
+                        if sel == b'C' {
+                            LSF_PRED_WEIGHTS_WB_C[k]
+                        } else {
+                            LSF_PRED_WEIGHTS_WB_D[k]
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+                (i32::from(res_q10[k + 1]) * i32::from(pred_weight)) >> 8
+            } else {
+                0
+            };
+
+            let i2 = i32::from(stage2_indices[k]);
+            let quantized = (((i2 << 10) - i2.signum() * 102) * qstep) >> 16;
+
+            res_q10[k] = (prediction + quantized) as i16;
+        }
+
+        Ok(res_q10)
+    }
+
+    /// Computes IHMW (Inverse Harmonic Mean Weighting) weights from Stage-1 codebook (RFC 6716 Section 4.2.7.5.3, lines 3207-3244).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if bandwidth is invalid
+    #[allow(dead_code, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    fn compute_ihmw_weights(stage1_index: u8, bandwidth: Bandwidth) -> Result<Vec<u16>> {
+        use super::lsf_constants::{LSF_CODEBOOK_NB, LSF_CODEBOOK_WB};
+
+        let (d_lpc, cb1_q8) = match bandwidth {
+            Bandwidth::Narrowband | Bandwidth::Mediumband => {
+                (10, &LSF_CODEBOOK_NB[stage1_index as usize][..])
+            }
+            Bandwidth::Wideband => (16, &LSF_CODEBOOK_WB[stage1_index as usize][..]),
+            _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF".to_string())),
+        };
+
+        let mut w_q9 = Vec::with_capacity(d_lpc);
+
+        for k in 0..d_lpc {
+            let cb1_prev = if k > 0 { i32::from(cb1_q8[k - 1]) } else { 0 };
+            let cb1_curr = i32::from(cb1_q8[k]);
+            let cb1_next = if k + 1 < d_lpc {
+                i32::from(cb1_q8[k + 1])
+            } else {
+                256
+            };
+
+            let w2_q18 = ((1024 / (cb1_curr - cb1_prev)) + (1024 / (cb1_next - cb1_curr))) << 16;
+
+            // Square root approximation (RFC lines 3231-3234)
+            let i = 32 - w2_q18.leading_zeros();
+            let f = ((w2_q18 >> (i.saturating_sub(8))) & 127) as u32;
+            let y = if (i & 1) != 0 { 32768 } else { 46214 } >> ((32 - i) >> 1);
+            let w = y + ((213 * f * y) >> 16);
+
+            w_q9.push(w as u16);
+        }
+
+        Ok(w_q9)
+    }
+
+    /// Reconstructs normalized LSF coefficients from Stage-1/Stage-2 data (RFC 6716 Section 4.2.7.5.3, lines 3423-3436).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if bandwidth is invalid
+    /// * Returns error if computation fails
+    #[allow(dead_code, clippy::cast_sign_loss)]
+    fn reconstruct_lsf(
+        stage1_index: u8,
+        stage2_indices: &[i8],
+        bandwidth: Bandwidth,
+    ) -> Result<Vec<i16>> {
+        use super::lsf_constants::{LSF_CODEBOOK_NB, LSF_CODEBOOK_WB};
+
+        let res_q10 = Self::dequantize_lsf_residuals(stage1_index, stage2_indices, bandwidth)?;
+        let w_q9 = Self::compute_ihmw_weights(stage1_index, bandwidth)?;
+
+        let cb1_q8 = match bandwidth {
+            Bandwidth::Narrowband | Bandwidth::Mediumband => {
+                &LSF_CODEBOOK_NB[stage1_index as usize][..]
+            }
+            Bandwidth::Wideband => &LSF_CODEBOOK_WB[stage1_index as usize][..],
+            _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF".to_string())),
+        };
+
+        let d_lpc = res_q10.len();
+        let mut nlsf_q15 = Vec::with_capacity(d_lpc);
+
+        for k in 0..d_lpc {
+            let cb1_term = i32::from(cb1_q8[k]) << 7;
+            let res_term = (i32::from(res_q10[k]) << 14) / i32::from(w_q9[k]);
+            let reconstructed = cb1_term + res_term;
+
+            nlsf_q15.push(reconstructed.clamp(0, 32767) as i16);
+        }
+
+        Ok(nlsf_q15)
+    }
+
+    /// Stabilizes normalized LSF coefficients to ensure monotonicity (RFC 6716 Section 4.2.7.5.4, lines 3438-3582).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if bandwidth is invalid
+    #[allow(
+        dead_code,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap,
+        clippy::cast_possible_truncation,
+        clippy::needless_range_loop
+    )]
+    fn stabilize_lsf(mut nlsf_q15: Vec<i16>, bandwidth: Bandwidth) -> Result<Vec<i16>> {
+        use super::lsf_constants::{LSF_MIN_SPACING_NB, LSF_MIN_SPACING_WB};
+
+        let ndelta_min_q15 = match bandwidth {
+            Bandwidth::Narrowband | Bandwidth::Mediumband => LSF_MIN_SPACING_NB,
+            Bandwidth::Wideband => LSF_MIN_SPACING_WB,
+            _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF".to_string())),
+        };
+
+        let d_lpc = nlsf_q15.len();
+
+        // Phase 1: Up to 20 iterations of gentle adjustments (RFC lines 3519-3566)
+        for _ in 0..20 {
+            let mut min_diff = i32::MAX;
+            let mut min_idx = 0;
+
+            for i in 0..=d_lpc {
+                let prev = if i > 0 { i32::from(nlsf_q15[i - 1]) } else { 0 };
+                let curr = if i < d_lpc {
+                    i32::from(nlsf_q15[i])
+                } else {
+                    32768
+                };
+                let diff = curr - prev - i32::from(ndelta_min_q15[i]);
+
+                if diff < min_diff {
+                    min_diff = diff;
+                    min_idx = i;
+                }
+            }
+
+            if min_diff >= 0 {
+                break;
+            }
+
+            // Apply adjustment (RFC lines 3540-3562)
+            if min_idx == 0 {
+                nlsf_q15[0] = ndelta_min_q15[0] as i16;
+            } else if min_idx == d_lpc {
+                nlsf_q15[d_lpc - 1] = (32768 - i32::from(ndelta_min_q15[d_lpc])) as i16;
+            } else {
+                let mut min_center = i32::from(ndelta_min_q15[min_idx]) >> 1;
+                for k in 0..min_idx {
+                    min_center += i32::from(ndelta_min_q15[k]);
+                }
+
+                let mut max_center = 32768 - (i32::from(ndelta_min_q15[min_idx]) >> 1);
+                for k in (min_idx + 1)..=d_lpc {
+                    max_center -= i32::from(ndelta_min_q15[k]);
+                }
+
+                let center_freq =
+                    ((i32::from(nlsf_q15[min_idx - 1]) + i32::from(nlsf_q15[min_idx]) + 1) >> 1)
+                        .clamp(min_center, max_center);
+
+                nlsf_q15[min_idx - 1] =
+                    (center_freq - (i32::from(ndelta_min_q15[min_idx]) >> 1)) as i16;
+                nlsf_q15[min_idx] =
+                    (i32::from(nlsf_q15[min_idx - 1]) + i32::from(ndelta_min_q15[min_idx])) as i16;
+            }
+        }
+
+        // Phase 2: Fallback procedure (RFC lines 3568-3582)
+        nlsf_q15.sort_unstable();
+
+        for k in 0..d_lpc {
+            let prev = if k > 0 { nlsf_q15[k - 1] } else { 0 };
+            nlsf_q15[k] = nlsf_q15[k].max(prev + ndelta_min_q15[k] as i16);
+        }
+
+        for k in (0..d_lpc).rev() {
+            let next = if k + 1 < d_lpc {
+                i32::from(nlsf_q15[k + 1])
+            } else {
+                32768
+            };
+            nlsf_q15[k] = nlsf_q15[k].min((next - i32::from(ndelta_min_q15[k + 1])) as i16);
+        }
+
+        Ok(nlsf_q15)
+    }
 }
 
 #[cfg(test)]
@@ -737,5 +978,252 @@ mod tests {
             .decode_lsf_stage2(&mut range_decoder, 0, Bandwidth::Narrowband)
             .unwrap();
         assert_eq!(indices.len(), 10);
+    }
+
+    #[test]
+    fn test_residual_dequantization_nb() {
+        let stage1_index = 0;
+        let stage2_indices = vec![0, 1, -1, 2, -2, 0, 1, 0, -1, 0];
+
+        let result = SilkDecoder::dequantize_lsf_residuals(
+            stage1_index,
+            &stage2_indices,
+            Bandwidth::Narrowband,
+        );
+        assert!(result.is_ok());
+
+        let residuals = result.unwrap();
+        assert_eq!(residuals.len(), 10);
+    }
+
+    #[test]
+    fn test_residual_dequantization_wb() {
+        let stage1_index = 0;
+        let stage2_indices = vec![0, 1, -1, 2, -2, 0, 1, 0, -1, 0, 1, -1, 0, 1, -1, 0];
+
+        let result = SilkDecoder::dequantize_lsf_residuals(
+            stage1_index,
+            &stage2_indices,
+            Bandwidth::Wideband,
+        );
+        assert!(result.is_ok());
+
+        let residuals = result.unwrap();
+        assert_eq!(residuals.len(), 16);
+    }
+
+    #[test]
+    fn test_residual_dequantization_invalid_bandwidth() {
+        let stage1_index = 0;
+        let stage2_indices = vec![0; 10];
+
+        let result = SilkDecoder::dequantize_lsf_residuals(
+            stage1_index,
+            &stage2_indices,
+            Bandwidth::SuperWideband,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ihmw_weights_nb() {
+        let result = SilkDecoder::compute_ihmw_weights(0, Bandwidth::Narrowband);
+        assert!(result.is_ok());
+
+        let weights = result.unwrap();
+        assert_eq!(weights.len(), 10);
+        for weight in weights {
+            assert!((1819..=5227).contains(&weight));
+        }
+    }
+
+    #[test]
+    fn test_ihmw_weights_wb() {
+        let result = SilkDecoder::compute_ihmw_weights(0, Bandwidth::Wideband);
+        assert!(result.is_ok());
+
+        let weights = result.unwrap();
+        assert_eq!(weights.len(), 16);
+        for weight in weights {
+            assert!((1819..=5227).contains(&weight));
+        }
+    }
+
+    #[test]
+    fn test_ihmw_weights_invalid_bandwidth() {
+        let result = SilkDecoder::compute_ihmw_weights(0, Bandwidth::SuperWideband);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_lsf_reconstruction_nb() {
+        let stage1_index = 10;
+        let stage2_indices = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        let result =
+            SilkDecoder::reconstruct_lsf(stage1_index, &stage2_indices, Bandwidth::Narrowband);
+        assert!(result.is_ok());
+
+        let nlsf = result.unwrap();
+        assert_eq!(nlsf.len(), 10);
+        for coeff in nlsf {
+            assert!((0..=32767).contains(&coeff));
+        }
+    }
+
+    #[test]
+    fn test_lsf_reconstruction_wb() {
+        let stage1_index = 5;
+        let stage2_indices = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        let result =
+            SilkDecoder::reconstruct_lsf(stage1_index, &stage2_indices, Bandwidth::Wideband);
+        assert!(result.is_ok());
+
+        let nlsf = result.unwrap();
+        assert_eq!(nlsf.len(), 16);
+        for coeff in nlsf {
+            assert!((0..=32767).contains(&coeff));
+        }
+    }
+
+    #[test]
+    fn test_lsf_reconstruction_monotonic_before_stabilization() {
+        let stage1_index = 0;
+        let stage2_indices = vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        let nlsf =
+            SilkDecoder::reconstruct_lsf(stage1_index, &stage2_indices, Bandwidth::Narrowband)
+                .unwrap();
+
+        for i in 1..nlsf.len() {
+            assert!(nlsf[i] >= nlsf[i - 1]);
+        }
+    }
+
+    #[test]
+    fn test_lsf_stabilization_nb() {
+        let nlsf = vec![100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+        let result = SilkDecoder::stabilize_lsf(nlsf, Bandwidth::Narrowband);
+        assert!(result.is_ok());
+
+        let stabilized = result.unwrap();
+        assert_eq!(stabilized.len(), 10);
+    }
+
+    #[test]
+    fn test_lsf_stabilization_wb() {
+        let nlsf = vec![
+            100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100, 1200, 1300, 1400, 1500, 1600,
+        ];
+        let result = SilkDecoder::stabilize_lsf(nlsf, Bandwidth::Wideband);
+        assert!(result.is_ok());
+
+        let stabilized = result.unwrap();
+        assert_eq!(stabilized.len(), 16);
+    }
+
+    #[test]
+    fn test_lsf_stabilization_enforces_minimum_spacing_nb() {
+        use super::super::lsf_constants::LSF_MIN_SPACING_NB;
+
+        let nlsf = vec![250, 251, 252, 253, 254, 255, 256, 257, 258, 259];
+        let stabilized = SilkDecoder::stabilize_lsf(nlsf, Bandwidth::Narrowband).unwrap();
+
+        let mut prev = 0;
+        for (i, &curr) in stabilized.iter().enumerate() {
+            let spacing = i32::from(curr) - prev;
+            assert!(
+                spacing >= i32::from(LSF_MIN_SPACING_NB[i]),
+                "Spacing violation at index {i}: {spacing} < {}",
+                LSF_MIN_SPACING_NB[i]
+            );
+            prev = i32::from(curr);
+        }
+
+        let final_spacing = 32768 - i32::from(stabilized[9]);
+        assert!(
+            final_spacing >= i32::from(LSF_MIN_SPACING_NB[10]),
+            "Final spacing violation: {final_spacing} < {}",
+            LSF_MIN_SPACING_NB[10]
+        );
+    }
+
+    #[test]
+    fn test_lsf_stabilization_enforces_minimum_spacing_wb() {
+        use super::super::lsf_constants::LSF_MIN_SPACING_WB;
+
+        let nlsf = vec![
+            100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+        ];
+        let stabilized = SilkDecoder::stabilize_lsf(nlsf, Bandwidth::Wideband).unwrap();
+
+        let mut prev = 0;
+        for (i, &curr) in stabilized.iter().enumerate() {
+            let spacing = i32::from(curr) - prev;
+            assert!(
+                spacing >= i32::from(LSF_MIN_SPACING_WB[i]),
+                "Spacing violation at index {i}: {spacing} < {}",
+                LSF_MIN_SPACING_WB[i]
+            );
+            prev = i32::from(curr);
+        }
+
+        let final_spacing = 32768 - i32::from(stabilized[15]);
+        assert!(
+            final_spacing >= i32::from(LSF_MIN_SPACING_WB[16]),
+            "Final spacing violation: {final_spacing} < {}",
+            LSF_MIN_SPACING_WB[16]
+        );
+    }
+
+    #[test]
+    fn test_lsf_stabilization_maintains_monotonicity() {
+        let nlsf = vec![5000, 4000, 6000, 3000, 7000, 2000, 8000, 1000, 9000, 500];
+        let stabilized = SilkDecoder::stabilize_lsf(nlsf, Bandwidth::Narrowband).unwrap();
+
+        for i in 1..stabilized.len() {
+            assert!(
+                stabilized[i] >= stabilized[i - 1],
+                "Monotonicity violation at index {i}: {} < {}",
+                stabilized[i],
+                stabilized[i - 1]
+            );
+        }
+    }
+
+    #[test]
+    fn test_full_lsf_pipeline_nb() {
+        let stage1_index = 15;
+        let stage2_indices = vec![1, -1, 0, 2, -2, 1, -1, 0, 1, -1];
+
+        let nlsf =
+            SilkDecoder::reconstruct_lsf(stage1_index, &stage2_indices, Bandwidth::Narrowband)
+                .unwrap();
+        let stabilized = SilkDecoder::stabilize_lsf(nlsf, Bandwidth::Narrowband).unwrap();
+
+        assert_eq!(stabilized.len(), 10);
+        assert!(stabilized[0] >= 0);
+
+        for i in 1..stabilized.len() {
+            assert!(stabilized[i] >= stabilized[i - 1]);
+        }
+    }
+
+    #[test]
+    fn test_full_lsf_pipeline_wb() {
+        let stage1_index = 8;
+        let stage2_indices = vec![0, 1, -1, 2, -2, 0, 1, 0, -1, 1, 0, -1, 2, -1, 0, 1];
+
+        let nlsf = SilkDecoder::reconstruct_lsf(stage1_index, &stage2_indices, Bandwidth::Wideband)
+            .unwrap();
+        let stabilized = SilkDecoder::stabilize_lsf(nlsf, Bandwidth::Wideband).unwrap();
+
+        assert_eq!(stabilized.len(), 16);
+        assert!(stabilized[0] >= 0);
+
+        for i in 1..stabilized.len() {
+            assert!(stabilized[i] >= stabilized[i - 1]);
+        }
     }
 }
