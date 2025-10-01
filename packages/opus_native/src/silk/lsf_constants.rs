@@ -1,49 +1,94 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+// ============================================================================
+// PDF to ICDF Conversion Notice
+// ============================================================================
+//
+// Per RFC 6716 Section 4.1.3.3 (lines 1548-1552):
+//
+// "Although icdf[k] is more convenient for the code, the frequency counts,
+//  f[k], are a more natural representation of the probability distribution
+//  function (PDF) for a given symbol. Therefore, this document lists the
+//  latter, not the former, when describing the context..."
+//
+// The RFC tables show PDF (Probability Distribution Function) values for
+// human readability, but the ec_dec_icdf() function requires ICDF (Inverse
+// Cumulative Distribution Function) format.
+//
+// Conversion formula:
+//   Given PDF: [p₀, p₁, p₂, ..., pₙ] where sum(pᵢ) = 256
+//   Calculate cumsum: [p₀, p₀+p₁, p₀+p₁+p₂, ..., 256]
+//   ICDF: [256-p₀, 256-(p₀+p₁), ..., 256-256] = [..., 0]
+//
+// All constants below are stored in ICDF format with RFC PDF values
+// documented in comments for reference.
+// ============================================================================
+
 // RFC 6716 Table 14: PDFs for Normalized LSF Stage-1 Index Decoding (lines 2639-2660)
-// NOTE: All ICDF tables MUST end with 0 per RFC 6716 Section 4.1.3.3 (line 1534):
-//       "the table is terminated by a value of 0 (where fh[k] == ft)."
-//       The RFC tables show PDF values; ICDF format requires this terminating zero.
-
+// RFC shows PDF NB/MB INACTIVE: {44, 34, 30, 19, 21, 12, 11, 3, 3, 2, 16, 2, 2, 1, 5, 2, 1, 3, 3, 1, 1, 2, 2, 2, 3, 1, 9, 9, 2, 7, 2, 1}/256
+// Converted to ICDF for ec_dec_icdf()
 pub const LSF_STAGE1_PDF_NB_MB_INACTIVE: &[u8] = &[
-    44, 34, 30, 19, 21, 12, 11, 3, 3, 2, 16, 2, 2, 1, 5, 2, 1, 3, 3, 1, 1, 2, 2, 2, 3, 1, 9, 9, 2,
-    7, 2, 1, 0,
+    212, 178, 148, 129, 108, 96, 85, 82, 79, 77, 61, 59, 57, 56, 51, 49, 48, 45, 42, 41, 40, 38,
+    36, 34, 31, 30, 21, 12, 10, 3, 1, 0,
 ];
 
+// RFC shows PDF NB/MB VOICED: {1, 10, 1, 8, 3, 8, 8, 14, 13, 14, 1, 14, 12, 13, 11, 11, 12, 11, 10, 10, 11, 8, 9, 8, 7, 8, 1, 1, 6, 1, 6, 5}/256
+// Converted to ICDF for ec_dec_icdf()
 pub const LSF_STAGE1_PDF_NB_MB_VOICED: &[u8] = &[
-    1, 10, 1, 8, 3, 8, 8, 14, 13, 14, 1, 14, 12, 13, 11, 11, 12, 11, 10, 10, 11, 8, 9, 8, 7, 8, 1,
-    1, 6, 1, 6, 5, 0,
+    255, 245, 244, 236, 233, 225, 217, 203, 190, 176, 175, 161, 149, 136, 125, 114, 102, 91, 81,
+    71, 60, 52, 43, 35, 28, 20, 19, 18, 12, 11, 5, 0,
 ];
 
+// RFC shows PDF WB INACTIVE: {31, 21, 3, 17, 1, 8, 17, 4, 1, 18, 16, 4, 2, 3, 1, 10, 1, 3, 16, 11, 16, 2, 2, 3, 2, 11, 1, 4, 9, 8, 7, 3}/256
+// Converted to ICDF for ec_dec_icdf()
 pub const LSF_STAGE1_PDF_WB_INACTIVE: &[u8] = &[
-    31, 21, 3, 17, 1, 8, 17, 4, 1, 18, 16, 4, 2, 3, 1, 10, 1, 3, 16, 11, 16, 2, 2, 3, 2, 11, 1, 4,
-    9, 8, 7, 3, 0,
+    225, 204, 201, 184, 183, 175, 158, 154, 153, 135, 119, 115, 113, 110, 109, 99, 98, 95, 79, 68,
+    52, 50, 48, 45, 43, 32, 31, 27, 18, 10, 3, 0,
 ];
 
+// RFC shows PDF WB VOICED: {1, 4, 16, 5, 18, 11, 5, 14, 15, 1, 3, 12, 13, 14, 14, 6, 14, 12, 2, 6, 1, 12, 12, 11, 10, 3, 10, 5, 1, 1, 1, 3}/256
+// Converted to ICDF for ec_dec_icdf()
 pub const LSF_STAGE1_PDF_WB_VOICED: &[u8] = &[
-    1, 4, 16, 5, 18, 11, 5, 14, 15, 1, 3, 12, 13, 14, 14, 6, 14, 12, 2, 6, 1, 12, 12, 11, 10, 3,
-    10, 5, 1, 1, 1, 3, 0,
+    255, 251, 235, 230, 212, 201, 196, 182, 167, 166, 163, 151, 138, 124, 110, 104, 90, 78, 76, 70,
+    69, 57, 45, 34, 24, 21, 11, 6, 5, 4, 3, 0,
 ];
 
 // RFC 6716 Table 15: PDFs for NB/MB Normalized LSF Stage-2 Index Decoding (lines 2695-2715)
-pub const LSF_STAGE2_PDF_NB_A: &[u8] = &[1, 1, 1, 15, 224, 11, 1, 1, 1, 0];
-pub const LSF_STAGE2_PDF_NB_B: &[u8] = &[1, 1, 2, 34, 183, 32, 1, 1, 1, 0];
-pub const LSF_STAGE2_PDF_NB_C: &[u8] = &[1, 1, 4, 42, 149, 55, 2, 1, 1, 0];
-pub const LSF_STAGE2_PDF_NB_D: &[u8] = &[1, 1, 8, 52, 123, 61, 8, 1, 1, 0];
-pub const LSF_STAGE2_PDF_NB_E: &[u8] = &[1, 3, 16, 53, 101, 74, 6, 1, 1, 0];
-pub const LSF_STAGE2_PDF_NB_F: &[u8] = &[1, 3, 17, 55, 90, 73, 15, 1, 1, 0];
-pub const LSF_STAGE2_PDF_NB_G: &[u8] = &[1, 7, 24, 53, 74, 67, 26, 3, 1, 0];
-pub const LSF_STAGE2_PDF_NB_H: &[u8] = &[1, 1, 18, 63, 78, 58, 30, 6, 1, 0];
+// RFC shows PDF A: {1, 1, 1, 15, 224, 11, 1, 1, 1}/256
+// Converted to ICDF for ec_dec_icdf()
+pub const LSF_STAGE2_PDF_NB_A: &[u8] = &[255, 254, 253, 238, 14, 3, 2, 1, 0];
+// RFC shows PDF B: {1, 1, 2, 34, 183, 32, 1, 1, 1}/256
+pub const LSF_STAGE2_PDF_NB_B: &[u8] = &[255, 254, 252, 218, 35, 3, 2, 1, 0];
+// RFC shows PDF C: {1, 1, 4, 42, 149, 55, 2, 1, 1}/256
+pub const LSF_STAGE2_PDF_NB_C: &[u8] = &[255, 254, 250, 208, 59, 4, 2, 1, 0];
+// RFC shows PDF D: {1, 1, 8, 52, 123, 61, 8, 1, 1}/256
+pub const LSF_STAGE2_PDF_NB_D: &[u8] = &[255, 254, 246, 194, 71, 10, 2, 1, 0];
+// RFC shows PDF E: {1, 3, 16, 53, 101, 74, 6, 1, 1}/256
+pub const LSF_STAGE2_PDF_NB_E: &[u8] = &[255, 252, 236, 183, 82, 8, 2, 1, 0];
+// RFC shows PDF F: {1, 3, 17, 55, 90, 73, 15, 1, 1}/256
+pub const LSF_STAGE2_PDF_NB_F: &[u8] = &[255, 252, 235, 180, 90, 17, 2, 1, 0];
+// RFC shows PDF G: {1, 7, 24, 53, 74, 67, 26, 3, 1}/256
+pub const LSF_STAGE2_PDF_NB_G: &[u8] = &[255, 248, 224, 171, 97, 30, 4, 1, 0];
+// RFC shows PDF H: {1, 1, 18, 63, 78, 58, 30, 6, 1}/256
+pub const LSF_STAGE2_PDF_NB_H: &[u8] = &[255, 254, 236, 173, 95, 37, 7, 1, 0];
 
-// RFC 6716 Table 16: PDFs for WB Normalized LSF Stage-2 Index Decoding (lines 2718-2737)
-pub const LSF_STAGE2_PDF_WB_I: &[u8] = &[1, 1, 1, 9, 232, 9, 1, 1, 1, 0];
-pub const LSF_STAGE2_PDF_WB_J: &[u8] = &[1, 1, 2, 28, 186, 35, 1, 1, 1, 0];
-pub const LSF_STAGE2_PDF_WB_K: &[u8] = &[1, 1, 3, 42, 152, 53, 2, 1, 1, 0];
-pub const LSF_STAGE2_PDF_WB_L: &[u8] = &[1, 1, 10, 49, 126, 65, 2, 1, 1, 0];
-pub const LSF_STAGE2_PDF_WB_M: &[u8] = &[1, 4, 19, 48, 100, 77, 5, 1, 1, 0];
-pub const LSF_STAGE2_PDF_WB_N: &[u8] = &[1, 1, 14, 54, 100, 72, 12, 1, 1, 0];
-pub const LSF_STAGE2_PDF_WB_O: &[u8] = &[1, 1, 15, 61, 87, 61, 25, 4, 1, 0];
-pub const LSF_STAGE2_PDF_WB_P: &[u8] = &[1, 7, 21, 50, 77, 81, 17, 1, 1, 0];
+// RFC 6716 Table 16: PDFs for WB Normalized LSF Stage-2 Index Decoding (lines 2750-2768)
+// RFC shows PDF I: {1, 1, 1, 9, 232, 9, 1, 1, 1}/256
+pub const LSF_STAGE2_PDF_WB_I: &[u8] = &[255, 254, 253, 244, 12, 3, 2, 1, 0];
+// RFC shows PDF J: {1, 1, 2, 28, 186, 35, 1, 1, 1}/256
+pub const LSF_STAGE2_PDF_WB_J: &[u8] = &[255, 254, 252, 224, 38, 3, 2, 1, 0];
+// RFC shows PDF K: {1, 1, 3, 42, 152, 53, 2, 1, 1}/256
+pub const LSF_STAGE2_PDF_WB_K: &[u8] = &[255, 254, 251, 209, 57, 4, 2, 1, 0];
+// RFC shows PDF L: {1, 1, 10, 49, 126, 65, 2, 1, 1}/256
+pub const LSF_STAGE2_PDF_WB_L: &[u8] = &[255, 254, 244, 195, 69, 4, 2, 1, 0];
+// RFC shows PDF M: {1, 4, 19, 48, 100, 77, 5, 1, 1}/256
+pub const LSF_STAGE2_PDF_WB_M: &[u8] = &[255, 251, 232, 184, 84, 7, 2, 1, 0];
+// RFC shows PDF N: {1, 1, 14, 54, 100, 72, 12, 1, 1}/256
+pub const LSF_STAGE2_PDF_WB_N: &[u8] = &[255, 254, 240, 186, 86, 14, 2, 1, 0];
+// RFC shows PDF O: {1, 1, 15, 61, 87, 61, 25, 4, 1}/256
+pub const LSF_STAGE2_PDF_WB_O: &[u8] = &[255, 254, 239, 178, 91, 30, 5, 1, 0];
+// RFC shows PDF P: {1, 7, 21, 50, 77, 81, 17, 1, 1}/256
+pub const LSF_STAGE2_PDF_WB_P: &[u8] = &[255, 248, 227, 177, 100, 19, 2, 1, 0];
 
 // RFC 6716 Table 17: Codebook Selection for NB/MB Normalized LSF Stage-2 Index Decoding (lines 2751-2849)
 pub const LSF_CB_SELECT_NB: &[[u8; 10]; 32] = &[
@@ -214,7 +259,9 @@ pub const LSF_CB_SELECT_WB: &[[u8; 16]; 32] = &[
 ];
 
 // RFC 6716 Table 19: PDF for Normalized LSF Index Extension Decoding (lines 2928-2934)
-pub const LSF_EXTENSION_PDF: &[u8] = &[156, 60, 24, 9, 4, 2, 1, 0];
+// RFC shows PDF: {156, 60, 24, 9, 4, 2, 1}/256
+// Converted to ICDF for ec_dec_icdf()
+pub const LSF_EXTENSION_PDF: &[u8] = &[100, 40, 16, 7, 3, 1, 0];
 
 // RFC 6716 Table 20: Prediction Weights for Normalized LSF Decoding (lines 2975-3009)
 // These are Q8 values used for backward prediction in residual dequantization
@@ -521,10 +568,9 @@ pub const LSF_QSTEP_NB: u16 = 11796;
 pub const LSF_QSTEP_WB: u16 = 9830;
 
 // RFC 6716 Table 26: PDF for Normalized LSF Interpolation Index (lines 3609-3615)
-// NOTE: All ICDF tables MUST end with 0 per RFC 6716 Section 4.1.3.3 (line 1534):
-//       "the table is terminated by a value of 0 (where fh[k] == ft)."
-//       The RFC table shows PDF values {13, 22, 29, 11, 181}/256
-pub const LSF_INTERP_PDF: &[u8] = &[13, 22, 29, 11, 181, 0];
+// RFC shows PDF: {13, 22, 29, 11, 181}/256
+// Converted to ICDF for ec_dec_icdf()
+pub const LSF_INTERP_PDF: &[u8] = &[243, 221, 192, 181, 0];
 
 // RFC 6716 Table 27: LSF Ordering for Polynomial Evaluation (lines 3703-3739)
 // Reordering improves numerical accuracy during polynomial construction
