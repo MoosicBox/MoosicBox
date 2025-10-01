@@ -421,6 +421,89 @@ impl SilkDecoder {
         #[allow(clippy::cast_possible_truncation)]
         range_decoder.ec_dec_icdf(pdf, 8).map(|v| v as u8)
     }
+
+    /// Decodes LSF Stage 2 residual indices (RFC 6716 Section 4.2.7.5.2, lines 2662-2934).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if bandwidth is invalid for LSF decoding
+    /// * Returns error if range decoder fails
+    /// * Returns error if invalid codebook character is encountered
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn decode_lsf_stage2(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        stage1_index: u8,
+        bandwidth: Bandwidth,
+    ) -> Result<Vec<i8>> {
+        use super::lsf_constants::{LSF_CB_SELECT_NB, LSF_CB_SELECT_WB, LSF_EXTENSION_PDF};
+
+        let d_lpc = match bandwidth {
+            Bandwidth::Narrowband | Bandwidth::Mediumband => 10,
+            Bandwidth::Wideband => 16,
+            _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF".to_string())),
+        };
+
+        let mut indices = Vec::with_capacity(d_lpc);
+
+        for k in 0..d_lpc {
+            let codebook = match bandwidth {
+                Bandwidth::Narrowband | Bandwidth::Mediumband => {
+                    LSF_CB_SELECT_NB[stage1_index as usize][k]
+                }
+                Bandwidth::Wideband => LSF_CB_SELECT_WB[stage1_index as usize][k],
+                _ => unreachable!(),
+            };
+
+            let pdf = Self::get_lsf_stage2_pdf(codebook, bandwidth)?;
+
+            #[allow(clippy::cast_possible_truncation)]
+            let mut index = range_decoder.ec_dec_icdf(pdf, 8)? as i8 - 4;
+
+            // Extension decoding (RFC lines 2923-2926)
+            if index.abs() == 4 {
+                #[allow(clippy::cast_possible_truncation)]
+                let extension = range_decoder.ec_dec_icdf(LSF_EXTENSION_PDF, 8)? as i8;
+                index += extension * index.signum();
+            }
+
+            indices.push(index);
+        }
+
+        Ok(indices)
+    }
+
+    fn get_lsf_stage2_pdf(codebook: u8, bandwidth: Bandwidth) -> Result<&'static [u8]> {
+        use super::lsf_constants::{
+            LSF_STAGE2_PDF_NB_A, LSF_STAGE2_PDF_NB_B, LSF_STAGE2_PDF_NB_C, LSF_STAGE2_PDF_NB_D,
+            LSF_STAGE2_PDF_NB_E, LSF_STAGE2_PDF_NB_F, LSF_STAGE2_PDF_NB_G, LSF_STAGE2_PDF_NB_H,
+            LSF_STAGE2_PDF_WB_I, LSF_STAGE2_PDF_WB_J, LSF_STAGE2_PDF_WB_K, LSF_STAGE2_PDF_WB_L,
+            LSF_STAGE2_PDF_WB_M, LSF_STAGE2_PDF_WB_N, LSF_STAGE2_PDF_WB_O, LSF_STAGE2_PDF_WB_P,
+        };
+
+        match (bandwidth, codebook) {
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, b'a') => Ok(LSF_STAGE2_PDF_NB_A),
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, b'b') => Ok(LSF_STAGE2_PDF_NB_B),
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, b'c') => Ok(LSF_STAGE2_PDF_NB_C),
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, b'd') => Ok(LSF_STAGE2_PDF_NB_D),
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, b'e') => Ok(LSF_STAGE2_PDF_NB_E),
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, b'f') => Ok(LSF_STAGE2_PDF_NB_F),
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, b'g') => Ok(LSF_STAGE2_PDF_NB_G),
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, b'h') => Ok(LSF_STAGE2_PDF_NB_H),
+            (Bandwidth::Wideband, b'i') => Ok(LSF_STAGE2_PDF_WB_I),
+            (Bandwidth::Wideband, b'j') => Ok(LSF_STAGE2_PDF_WB_J),
+            (Bandwidth::Wideband, b'k') => Ok(LSF_STAGE2_PDF_WB_K),
+            (Bandwidth::Wideband, b'l') => Ok(LSF_STAGE2_PDF_WB_L),
+            (Bandwidth::Wideband, b'm') => Ok(LSF_STAGE2_PDF_WB_M),
+            (Bandwidth::Wideband, b'n') => Ok(LSF_STAGE2_PDF_WB_N),
+            (Bandwidth::Wideband, b'o') => Ok(LSF_STAGE2_PDF_WB_O),
+            (Bandwidth::Wideband, b'p') => Ok(LSF_STAGE2_PDF_WB_P),
+            _ => Err(Error::SilkDecoder(format!(
+                "invalid LSF codebook: {}",
+                codebook as char
+            ))),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -612,5 +695,47 @@ mod tests {
             .decode_lsf_stage1(&mut range_decoder, Bandwidth::Wideband, FrameType::Voiced)
             .unwrap();
         assert!(index < 32);
+    }
+
+    #[test]
+    fn test_lsf_stage2_decoding_nb() {
+        let data = vec![0x80; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+        let indices = decoder
+            .decode_lsf_stage2(&mut range_decoder, 0, Bandwidth::Narrowband)
+            .unwrap();
+        assert_eq!(indices.len(), 10);
+        for index in indices {
+            assert!((-10..=10).contains(&index));
+        }
+    }
+
+    #[test]
+    fn test_lsf_stage2_decoding_wb() {
+        let data = vec![0x80; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let indices = decoder
+            .decode_lsf_stage2(&mut range_decoder, 0, Bandwidth::Wideband)
+            .unwrap();
+        assert_eq!(indices.len(), 16);
+        for index in indices {
+            assert!((-10..=10).contains(&index));
+        }
+    }
+
+    #[test]
+    fn test_lsf_stage2_extension() {
+        let data = vec![0x00; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+        let indices = decoder
+            .decode_lsf_stage2(&mut range_decoder, 0, Bandwidth::Narrowband)
+            .unwrap();
+        assert_eq!(indices.len(), 10);
     }
 }

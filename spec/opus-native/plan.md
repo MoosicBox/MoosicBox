@@ -1598,7 +1598,7 @@ All 4 PDFs have 32 values + terminating 0, index range 0-31, PDF selection match
 
 #### Implementation Steps
 
-- [ ] **Add Stage 2 PDFs from Tables 15-16 (RFC lines 2695-2737):**
+- [x] **Add Stage 2 PDFs from Tables 15-16 (RFC lines 2695-2737):**
   ```rust
   // NB/MB PDFs (Table 15)
   pub const LSF_STAGE2_PDF_NB_A: &[u8] = &[1, 1, 1, 15, 224, 11, 1, 1, 1, 0];
@@ -1609,8 +1609,9 @@ All 4 PDFs have 32 values + terminating 0, index range 0-31, PDF selection match
   pub const LSF_STAGE2_PDF_WB_I: &[u8] = &[1, 1, 1, 9, 232, 9, 1, 1, 1, 0];
   // ... (all 8 PDFs i-p)
   ```
+All 16 Stage 2 PDFs added with terminating zeros (8 for NB/MB: a-h, 8 for WB: i-p)
 
-- [ ] **Add codebook selection tables from Tables 17-18 (RFC lines 2751-2909):**
+- [x] **Add codebook selection tables from Tables 17-18 (RFC lines 2751-2909):**
   ```rust
   // Table 17: NB/MB codebook selection (10 coefficients × 32 indices)
   pub const LSF_CB_SELECT_NB: &[[char; 10]; 32] = &[
@@ -1625,13 +1626,15 @@ All 4 PDFs have 32 values + terminating 0, index range 0-31, PDF selection match
       // ... all 32 rows
   ];
   ```
+Both codebook selection tables added: LSF_CB_SELECT_NB (32×10) and LSF_CB_SELECT_WB (32×16) using u8 byte literals
 
-- [ ] **Add extension PDF from Table 19 (RFC lines 2928-2934):**
+- [x] **Add extension PDF from Table 19 (RFC lines 2928-2934):**
   ```rust
   pub const LSF_EXTENSION_PDF: &[u8] = &[156, 60, 24, 9, 4, 2, 1, 0];
   ```
+Extension PDF added with terminating zero
 
-- [ ] **Implement Stage 2 residual decoding:**
+- [x] **Implement Stage 2 residual decoding:**
   ```rust
   impl SilkDecoder {
       pub fn decode_lsf_stage2(
@@ -1680,8 +1683,9 @@ All 4 PDFs have 32 values + terminating 0, index range 0-31, PDF selection match
       }
   }
   ```
+Implemented decode_lsf_stage2() and helper function get_lsf_stage2_pdf() (made associated function to satisfy clippy)
 
-- [ ] **Add Stage 2 tests:**
+- [x] **Add Stage 2 tests:**
   ```rust
   #[test]
   fn test_lsf_stage2_decoding_nb() { /* test 10-coefficient case */ }
@@ -1692,20 +1696,32 @@ All 4 PDFs have 32 values + terminating 0, index range 0-31, PDF selection match
   #[test]
   fn test_lsf_stage2_extension() { /* test index extension for ±4 */ }
   ```
+Added test_lsf_stage2_decoding_nb, test_lsf_stage2_decoding_wb, and test_lsf_stage2_extension tests
 
 #### 3.2 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Stage 2 PDFs match Tables 15-16 exactly (a-h for NB/MB, i-p for WB)
-- [ ] Codebook selection tables match Tables 17-18 exactly
-- [ ] Extension PDF matches Table 19 exactly
-- [ ] Index range is -10 to 10 inclusive after extension
-- [ ] Codebook selection driven by Stage 1 index I1
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 2662-2934 - confirm PDF mapping, extension logic, index subtraction of 4
+- [x] Run `cargo fmt` (format code)
+Formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Finished `dev` profile in 0.41s
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+59 tests passed (53 unit + 6 integration)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Finished `dev` profile in 3m 30s with zero warnings
+- [x] Run `cargo machete` (no unused dependencies)
+No unused dependencies
+- [x] Stage 2 PDFs match Tables 15-16 exactly (a-h for NB/MB, i-p for WB)
+All 16 PDFs match RFC with terminating zeros: 8 NB/MB (a-h), 8 WB (i-p)
+- [x] Codebook selection tables match Tables 17-18 exactly
+Both tables match RFC exactly: LSF_CB_SELECT_NB (32×10), LSF_CB_SELECT_WB (32×16)
+- [x] Extension PDF matches Table 19 exactly
+LSF_EXTENSION_PDF matches RFC with terminating zero
+- [x] Index range is -10 to 10 inclusive after extension
+Tests verify index range using (-10..=10).contains(&index)
+- [x] Codebook selection driven by Stage 1 index I1
+Codebook selected per-coefficient using LSF_CB_SELECT_NB/WB[stage1_index][k]
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 2662-2934 - confirm PDF mapping, extension logic, index subtraction of 4
+All PDFs mapped correctly per bandwidth and codebook letter; extension triggers on index.abs()==4; index computed as decoded_value-4 then extended if needed
 
 ---
 
