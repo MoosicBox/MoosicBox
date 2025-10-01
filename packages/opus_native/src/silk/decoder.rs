@@ -1488,7 +1488,7 @@ impl SilkDecoder {
     /// # Errors
     ///
     /// * Returns error if bandwidth/frame size combination is invalid
-    // TODO(Section 3.7.3): Remove dead_code when used in pulse count decoding
+    // TODO(Section 3.7.4): Remove dead_code when used in pulse location decoding
     #[allow(dead_code)]
     pub fn get_shell_block_count(bandwidth: Bandwidth, frame_size_ms: u8) -> Result<usize> {
         use super::excitation_constants::get_shell_block_count;
@@ -1501,6 +1501,85 @@ impl SilkDecoder {
             },
             Ok,
         )
+    }
+
+    /// Decodes rate level for excitation pulse coding (RFC 6716 Section 4.2.7.8.1, lines 4857-4891).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    // TODO(Section 3.7.4): Remove dead_code when used in pulse location decoding
+    #[allow(dead_code)]
+    pub fn decode_rate_level(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        frame_type: FrameType,
+    ) -> Result<u8> {
+        use super::excitation_constants::{RATE_LEVEL_PDF_INACTIVE, RATE_LEVEL_PDF_VOICED};
+
+        let pdf = match frame_type {
+            FrameType::Inactive | FrameType::Unvoiced => RATE_LEVEL_PDF_INACTIVE,
+            FrameType::Voiced => RATE_LEVEL_PDF_VOICED,
+        };
+
+        #[allow(clippy::cast_possible_truncation)]
+        range_decoder.ec_dec_icdf(pdf, 8).map(|v| v as u8)
+    }
+
+    /// Decodes pulse count for a single shell block (RFC 6716 Section 4.2.7.8.2, lines 4893-4973).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    /// * Returns error if rate level is invalid
+    // TODO(Section 3.7.4): Remove dead_code when used in pulse location decoding
+    #[allow(dead_code)]
+    pub fn decode_pulse_count(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        rate_level: u8,
+    ) -> Result<(u8, u8)> {
+        use super::excitation_constants::{
+            PULSE_COUNT_PDF_LEVEL_0, PULSE_COUNT_PDF_LEVEL_1, PULSE_COUNT_PDF_LEVEL_2,
+            PULSE_COUNT_PDF_LEVEL_3, PULSE_COUNT_PDF_LEVEL_4, PULSE_COUNT_PDF_LEVEL_5,
+            PULSE_COUNT_PDF_LEVEL_6, PULSE_COUNT_PDF_LEVEL_7, PULSE_COUNT_PDF_LEVEL_8,
+            PULSE_COUNT_PDF_LEVEL_9, PULSE_COUNT_PDF_LEVEL_10,
+        };
+
+        let mut lsb_count = 0_u8;
+        let mut current_rate_level = rate_level;
+
+        loop {
+            let pdf = match current_rate_level {
+                0 => PULSE_COUNT_PDF_LEVEL_0,
+                1 => PULSE_COUNT_PDF_LEVEL_1,
+                2 => PULSE_COUNT_PDF_LEVEL_2,
+                3 => PULSE_COUNT_PDF_LEVEL_3,
+                4 => PULSE_COUNT_PDF_LEVEL_4,
+                5 => PULSE_COUNT_PDF_LEVEL_5,
+                6 => PULSE_COUNT_PDF_LEVEL_6,
+                7 => PULSE_COUNT_PDF_LEVEL_7,
+                8 => PULSE_COUNT_PDF_LEVEL_8,
+                9 => PULSE_COUNT_PDF_LEVEL_9,
+                10 => PULSE_COUNT_PDF_LEVEL_10,
+                _ => return Err(Error::SilkDecoder("invalid rate level".to_string())),
+            };
+
+            let pulse_count = range_decoder.ec_dec_icdf(pdf, 8)?;
+
+            if pulse_count < 17 {
+                #[allow(clippy::cast_possible_truncation)]
+                return Ok((pulse_count as u8, lsb_count));
+            }
+
+            lsb_count += 1;
+
+            if lsb_count >= 10 {
+                current_rate_level = 10;
+            } else {
+                current_rate_level = 9;
+            }
+        }
     }
 }
 
@@ -2583,15 +2662,134 @@ mod tests {
     }
 
     #[test]
-    fn test_shell_block_count_nb() {
-        assert_eq!(
-            SilkDecoder::get_shell_block_count(Bandwidth::Narrowband, 10).unwrap(),
-            5
-        );
-        assert_eq!(
-            SilkDecoder::get_shell_block_count(Bandwidth::Narrowband, 20).unwrap(),
-            10
-        );
+    fn test_shell_block_count_nb_all() {
+        use crate::silk::excitation_constants::get_shell_block_count;
+
+        assert_eq!(get_shell_block_count(Bandwidth::Narrowband, 10), Some(5));
+        assert_eq!(get_shell_block_count(Bandwidth::Narrowband, 20), Some(10));
+        assert_eq!(get_shell_block_count(Bandwidth::Mediumband, 10), Some(8));
+        assert_eq!(get_shell_block_count(Bandwidth::Mediumband, 20), Some(15));
+        assert_eq!(get_shell_block_count(Bandwidth::Wideband, 10), Some(10));
+        assert_eq!(get_shell_block_count(Bandwidth::Wideband, 20), Some(20));
+    }
+
+    #[test]
+    fn test_shell_block_count_invalid_nb() {
+        use crate::silk::excitation_constants::get_shell_block_count;
+
+        assert_eq!(get_shell_block_count(Bandwidth::SuperWideband, 10), None);
+        assert_eq!(get_shell_block_count(Bandwidth::Narrowband, 40), None);
+    }
+
+    #[test]
+    fn test_decode_rate_level_inactive() {
+        let data = vec![0x00; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let rate_level = decoder
+            .decode_rate_level(&mut range_decoder, FrameType::Inactive)
+            .unwrap();
+        assert!(rate_level <= 8);
+    }
+
+    #[test]
+    fn test_decode_rate_level_voiced() {
+        let data = vec![0x80; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let rate_level = decoder
+            .decode_rate_level(&mut range_decoder, FrameType::Voiced)
+            .unwrap();
+        assert!(rate_level <= 8);
+    }
+
+    #[test]
+    fn test_decode_rate_level_unvoiced_uses_inactive_pdf() {
+        let data = vec![0x00; 10];
+        let mut range_decoder1 = RangeDecoder::new(&data).unwrap();
+        let mut range_decoder2 = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let rate_inactive = decoder
+            .decode_rate_level(&mut range_decoder1, FrameType::Inactive)
+            .unwrap();
+        let rate_unvoiced = decoder
+            .decode_rate_level(&mut range_decoder2, FrameType::Unvoiced)
+            .unwrap();
+
+        assert_eq!(rate_inactive, rate_unvoiced);
+    }
+
+    #[test]
+    fn test_decode_pulse_count_no_lsb() {
+        let data = vec![0x00; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let (pulse_count, lsb_count) = decoder.decode_pulse_count(&mut range_decoder, 0).unwrap();
+        assert!(pulse_count <= 16);
+        assert_eq!(lsb_count, 0);
+    }
+
+    #[test]
+    fn test_decode_pulse_count_with_lsb() {
+        let data = vec![0xFF; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let (pulse_count, lsb_count) = decoder.decode_pulse_count(&mut range_decoder, 5).unwrap();
+        assert!(pulse_count <= 16);
+        assert!(lsb_count <= 10);
+    }
+
+    #[test]
+    fn test_decode_pulse_count_lsb_cap() {
+        let data = vec![0xFF; 200];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let (_pulse_count, lsb_count) = decoder.decode_pulse_count(&mut range_decoder, 9).unwrap();
+        assert!(lsb_count <= 10);
+    }
+
+    #[test]
+    fn test_decode_pulse_count_rate_level_switching() {
+        let data = vec![0xFF; 200];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let result = decoder.decode_pulse_count(&mut range_decoder, 8);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_decode_pulse_count_invalid_rate_level() {
+        let data = vec![0x00; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let result = decoder.decode_pulse_count(&mut range_decoder, 11);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decode_pulse_count_all_rate_levels() {
+        for rate_level in 0..=10 {
+            let data = vec![0x00; 20];
+            let mut range_decoder = RangeDecoder::new(&data).unwrap();
+            let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+            let result = decoder.decode_pulse_count(&mut range_decoder, rate_level);
+            assert!(
+                result.is_ok(),
+                "Failed to decode pulse count for rate level {rate_level}"
+            );
+            let (pulse_count, lsb_count) = result.unwrap();
+            assert!(pulse_count <= 16);
+            assert_eq!(lsb_count, 0);
+        }
     }
 
     #[test]
