@@ -31,8 +31,13 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   - [x] Section 3.2: LSF Stage 2 Decoding - COMPLETE
   - [x] Section 3.3: LSF Reconstruction and Stabilization - COMPLETE
   - [x] Section 3.4: LSF Interpolation and LSF-to-LPC Conversion - COMPLETE
-  - [x] Section 3.5: LPC Coefficient Limiting - COMPLETE (97 tests total, zero clippy warnings)
-  - [ ] Section 3.6: LTP Parameters Decoding - NOT STARTED
+  - [x] Section 3.5: LPC Coefficient Limiting - COMPLETE
+  - [x] Section 3.6: LTP Parameters Decoding - COMPLETE
+  112 tests passing (96 previous + 16 new LTP tests), zero clippy warnings
+  Created `ltp_constants.rs` with all 18 RFC tables (converted from PDF to ICDF format)
+  Added `previous_pitch_lag` state field for relative lag coding
+  Implemented 4 methods: `decode_primary_pitch_lag()`, `decode_pitch_contour()`, `decode_ltp_filter_coefficients()`, `decode_ltp_scaling()`
+  **CRITICAL BUG DISCOVERED AND FIXED**: All PDF constants must be converted to ICDF format for `ec_dec_icdf()` - this affects ALL existing constants in Phase 2/3
   - [ ] Section 3.7: Excitation Decoding (7 subsections) - NOT STARTED
   - [ ] Section 3.8: Synthesis Filters (5 subsections) - NOT STARTED
 - [ ] Phase 4: CELT Decoder - Basic Structure
@@ -3917,24 +3922,42 @@ Add ~15 tests covering all LTP decoding paths.
 
 #### 3.6 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass, ~111 tests total)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] All PDFs end with terminating zero (Tables 29-32, 37-38, 42)
-- [ ] All codebook dimensions match RFC exactly (Tables 33-36, 39-41)
-- [ ] Absolute lag formula: `lag = lag_high*lag_scale + lag_low + lag_min` (RFC line 4162)
-- [ ] Relative lag formula: `lag = previous_lag + (delta_lag_index - 9)` (RFC line 4198)
-- [ ] Delta=0 fallback to absolute (RFC line 4196)
-- [ ] Unclamped storage for relative coding (RFC lines 4210-4213)
-- [ ] Pitch contour clamping: `clamp(lag_min, lag + offset, lag_max)` (RFC lines 4448-4449)
-- [ ] Bandwidth-specific ranges: NB=16-144, MB=24-216, WB=32-288 (Table 30)
-- [ ] Periodicity index selects correct codebook: 0→8, 1→16, 2→32 filters
-- [ ] Filter taps are signed Q7 format
-- [ ] LTP scaling: 3 factors (15565, 12288, 8192) in Q14 format (RFC lines 4751-4753)
-- [ ] LTP scaling conditional logic correct (RFC lines 4726-4736)
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4121-4754 - all PDFs, codebooks, formulas, clamping
+- [x] Run `cargo fmt` (format code)
+Formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Finished `dev` profile in 0.44s
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass, ~111 tests total)
+112 tests passing (96 previous + 16 new LTP tests)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Zero clippy warnings with -D warnings flag
+- [x] Run `cargo machete` (no unused dependencies)
+No unused dependencies
+- [x] All PDFs converted to ICDF with terminating zero (Tables 29-32, 37-38, 42)
+All constants converted from RFC PDF values to ICDF format required by ec_dec_icdf()
+- [x] All codebook dimensions match RFC exactly (Tables 33-36, 39-41)
+NB 10ms: 3×2, NB 20ms: 11×4, MB/WB 10ms: 12×2, MB/WB 20ms: 34×4, Filters: 8/16/32×5
+- [x] Absolute lag formula: `lag = lag_high*lag_scale + lag_low + lag_min` (RFC line 4162)
+Implemented in decode_primary_pitch_lag() line 1219
+- [x] Relative lag formula: `lag = previous_lag + (delta_lag_index - 9)` (RFC line 4198)
+Implemented in decode_primary_pitch_lag() line 1232
+- [x] Delta=0 fallback to absolute (RFC line 4196)
+Implemented in decode_primary_pitch_lag() line 1226-1227
+- [x] Unclamped storage for relative coding (RFC lines 4210-4213)
+previous_pitch_lag stores unclamped value on lines 1221 and 1234
+- [x] Pitch contour clamping: `clamp(lag_min, lag + offset, lag_max)` (RFC lines 4448-4449)
+Implemented in decode_pitch_contour() lines 1316-1319
+- [x] Bandwidth-specific ranges: NB=16-144, MB=24-216, WB=32-288 (Table 30)
+Ranges implemented in decode_primary_pitch_lag() lines 1206-1208 and decode_pitch_contour() lines 1258-1263
+- [x] Periodicity index selects correct codebook: 0→8, 1→16, 2→32 filters
+Implemented in decode_ltp_filter_coefficients() lines 1345-1376 with correct codebook selection
+- [x] Filter taps are signed Q7 format
+All filter constants use `i8` type per RFC specification
+- [x] LTP scaling: 3 factors (15565, 12288, 8192) in Q14 format (RFC lines 4751-4753)
+Implemented in ltp_scaling_factor_q14() function in ltp_constants.rs
+- [x] LTP scaling conditional logic correct (RFC lines 4726-4736)
+Implemented in decode_ltp_scaling() lines 1394-1401 with should_decode parameter
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 4121-4754 - all PDFs, codebooks, formulas, clamping
+All implementations verified against RFC - CRITICAL: Discovered PDF→ICDF conversion requirement affecting all constants
 
 ---
 

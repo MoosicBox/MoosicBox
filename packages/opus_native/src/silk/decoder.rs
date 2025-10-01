@@ -138,6 +138,9 @@ pub struct SilkDecoder {
     decoder_reset: bool,
     #[allow(dead_code)]
     uncoded_side_channel: bool,
+    // TODO(Section 3.7+): Remove dead_code when used in LTP decoding
+    #[allow(dead_code)]
+    previous_pitch_lag: Option<i16>,
 }
 
 impl SilkDecoder {
@@ -171,6 +174,7 @@ impl SilkDecoder {
             previous_lsf_wb: None,
             decoder_reset: true,
             uncoded_side_channel: false,
+            previous_pitch_lag: None,
         })
     }
 
@@ -1177,6 +1181,247 @@ impl SilkDecoder {
         // If we reach here, all checks passed (RFC lines 4099-4100)
         true
     }
+
+    /// Decodes primary pitch lag (RFC 6716 Section 4.2.7.6.1, lines 4130-4216).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails or bandwidth is invalid
+    ///
+    /// # Panics
+    ///
+    /// Panics if integer conversions cannot be performed.
+    // TODO(Section 3.7+): Remove dead_code when integrated into frame decoder
+    #[allow(dead_code)]
+    fn decode_primary_pitch_lag(
+        &mut self,
+        range_decoder: &mut RangeDecoder,
+        bandwidth: Bandwidth,
+        use_absolute: bool,
+    ) -> Result<i16> {
+        use super::ltp_constants::{
+            LTP_LAG_DELTA_PDF, LTP_LAG_HIGH_PDF, LTP_LAG_LOW_PDF_MB, LTP_LAG_LOW_PDF_NB,
+            LTP_LAG_LOW_PDF_WB,
+        };
+
+        if use_absolute {
+            let lag_high = i16::try_from(range_decoder.ec_dec_icdf(LTP_LAG_HIGH_PDF, 8)?)
+                .expect("lag_high must fin in i16");
+
+            let (pdf_low, lag_scale, lag_min) = match bandwidth {
+                Bandwidth::Narrowband => (LTP_LAG_LOW_PDF_NB, 4, 16),
+                Bandwidth::Mediumband => (LTP_LAG_LOW_PDF_MB, 6, 24),
+                Bandwidth::Wideband => (LTP_LAG_LOW_PDF_WB, 8, 32),
+                _ => return Err(Error::SilkDecoder("invalid bandwidth for LTP".to_string())),
+            };
+
+            let lag_low = i16::try_from(range_decoder.ec_dec_icdf(pdf_low, 8)?)
+                .expect("lag_low must fin in i16");
+
+            let lag = lag_high * lag_scale + lag_low + lag_min;
+
+            self.previous_pitch_lag = Some(lag);
+            Ok(lag)
+        } else {
+            let delta_lag_index = i16::try_from(range_decoder.ec_dec_icdf(LTP_LAG_DELTA_PDF, 8)?)
+                .expect("delta_lag_index must fin in i16");
+
+            if delta_lag_index == 0 {
+                self.decode_primary_pitch_lag(range_decoder, bandwidth, true)
+            } else {
+                let previous_lag = self
+                    .previous_pitch_lag
+                    .ok_or_else(|| Error::SilkDecoder("no previous pitch lag".to_string()))?;
+                let lag = previous_lag + (delta_lag_index - 9);
+
+                self.previous_pitch_lag = Some(lag);
+                Ok(lag)
+            }
+        }
+    }
+
+    /// Decodes pitch contour (RFC 6716 Section 4.2.7.6.1, lines 4226-4452).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails or parameters invalid
+    // TODO(Section 3.7+): Remove dead_code when integrated into frame decoder
+    #[allow(dead_code)]
+    fn decode_pitch_contour(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        primary_lag: i16,
+        bandwidth: Bandwidth,
+    ) -> Result<Vec<i16>> {
+        use super::ltp_constants::{
+            PITCH_CONTOUR_CB_MBWB_10MS, PITCH_CONTOUR_CB_MBWB_20MS, PITCH_CONTOUR_CB_NB_10MS,
+            PITCH_CONTOUR_CB_NB_20MS, PITCH_CONTOUR_PDF_MBWB_10MS, PITCH_CONTOUR_PDF_MBWB_20MS,
+            PITCH_CONTOUR_PDF_NB_10MS, PITCH_CONTOUR_PDF_NB_20MS,
+        };
+
+        let silk_frame_size_ms = if self.frame_size_ms <= 20 {
+            self.frame_size_ms
+        } else {
+            20
+        };
+
+        let (pdf, lag_min, lag_max) = match (bandwidth, silk_frame_size_ms) {
+            (Bandwidth::Narrowband, 10) => (PITCH_CONTOUR_PDF_NB_10MS, 16, 144),
+            (Bandwidth::Narrowband, 20) => (PITCH_CONTOUR_PDF_NB_20MS, 16, 144),
+            (Bandwidth::Mediumband, 10) => (PITCH_CONTOUR_PDF_MBWB_10MS, 24, 216),
+            (Bandwidth::Wideband, 10) => (PITCH_CONTOUR_PDF_MBWB_10MS, 32, 288),
+            (Bandwidth::Mediumband, 20) => (PITCH_CONTOUR_PDF_MBWB_20MS, 24, 216),
+            (Bandwidth::Wideband, 20) => (PITCH_CONTOUR_PDF_MBWB_20MS, 32, 288),
+            _ => {
+                return Err(Error::SilkDecoder(
+                    "invalid bandwidth/frame size".to_string(),
+                ));
+            }
+        };
+
+        let contour_index = range_decoder.ec_dec_icdf(pdf, 8)? as usize;
+
+        let offsets: &[i8] = match (bandwidth, silk_frame_size_ms) {
+            (Bandwidth::Narrowband, 10) => {
+                if contour_index >= PITCH_CONTOUR_CB_NB_10MS.len() {
+                    return Err(Error::SilkDecoder(
+                        "invalid pitch contour index".to_string(),
+                    ));
+                }
+                &PITCH_CONTOUR_CB_NB_10MS[contour_index]
+            }
+            (Bandwidth::Narrowband, 20) => {
+                if contour_index >= PITCH_CONTOUR_CB_NB_20MS.len() {
+                    return Err(Error::SilkDecoder(
+                        "invalid pitch contour index".to_string(),
+                    ));
+                }
+                &PITCH_CONTOUR_CB_NB_20MS[contour_index]
+            }
+            (Bandwidth::Mediumband | Bandwidth::Wideband, 10) => {
+                if contour_index >= PITCH_CONTOUR_CB_MBWB_10MS.len() {
+                    return Err(Error::SilkDecoder(
+                        "invalid pitch contour index".to_string(),
+                    ));
+                }
+                &PITCH_CONTOUR_CB_MBWB_10MS[contour_index]
+            }
+            (Bandwidth::Mediumband | Bandwidth::Wideband, 20) => {
+                if contour_index >= PITCH_CONTOUR_CB_MBWB_20MS.len() {
+                    return Err(Error::SilkDecoder(
+                        "invalid pitch contour index".to_string(),
+                    ));
+                }
+                &PITCH_CONTOUR_CB_MBWB_20MS[contour_index]
+            }
+            _ => {
+                return Err(Error::SilkDecoder(
+                    "invalid bandwidth/frame size".to_string(),
+                ));
+            }
+        };
+
+        let pitch_lags = offsets
+            .iter()
+            .map(|&offset| {
+                let lag = primary_lag + i16::from(offset);
+                lag.clamp(lag_min, lag_max)
+            })
+            .collect();
+
+        Ok(pitch_lags)
+    }
+
+    /// Decodes LTP filter coefficients (RFC 6716 Section 4.2.7.6.2, lines 4454-4721).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    // TODO(Section 3.7+): Remove dead_code when integrated into frame decoder
+    #[allow(dead_code)]
+    fn decode_ltp_filter_coefficients(
+        &self,
+        range_decoder: &mut RangeDecoder,
+    ) -> Result<Vec<[i8; 5]>> {
+        use super::ltp_constants::{
+            LTP_FILTER_CB_0, LTP_FILTER_CB_1, LTP_FILTER_CB_2, LTP_FILTER_PDF_0, LTP_FILTER_PDF_1,
+            LTP_FILTER_PDF_2, LTP_PERIODICITY_PDF,
+        };
+
+        let silk_frame_size_ms = if self.frame_size_ms <= 20 {
+            self.frame_size_ms
+        } else {
+            20
+        };
+
+        let num_subframes = match silk_frame_size_ms {
+            10 => 2,
+            20 => 4,
+            _ => {
+                return Err(Error::SilkDecoder(
+                    "invalid SILK frame size for LTP".to_string(),
+                ));
+            }
+        };
+
+        let periodicity_index = range_decoder.ec_dec_icdf(LTP_PERIODICITY_PDF, 8)?;
+
+        let pdf = match periodicity_index {
+            0 => LTP_FILTER_PDF_0,
+            1 => LTP_FILTER_PDF_1,
+            2 => LTP_FILTER_PDF_2,
+            _ => return Err(Error::SilkDecoder("invalid periodicity index".to_string())),
+        };
+
+        let mut filters = Vec::with_capacity(num_subframes);
+        for _ in 0..num_subframes {
+            let filter_index = range_decoder.ec_dec_icdf(pdf, 8)? as usize;
+
+            let filter = match periodicity_index {
+                0 => {
+                    if filter_index >= LTP_FILTER_CB_0.len() {
+                        return Err(Error::SilkDecoder("invalid LTP filter index".to_string()));
+                    }
+                    LTP_FILTER_CB_0[filter_index]
+                }
+                1 => {
+                    if filter_index >= LTP_FILTER_CB_1.len() {
+                        return Err(Error::SilkDecoder("invalid LTP filter index".to_string()));
+                    }
+                    LTP_FILTER_CB_1[filter_index]
+                }
+                2 => {
+                    if filter_index >= LTP_FILTER_CB_2.len() {
+                        return Err(Error::SilkDecoder("invalid LTP filter index".to_string()));
+                    }
+                    LTP_FILTER_CB_2[filter_index]
+                }
+                _ => unreachable!(),
+            };
+
+            filters.push(filter);
+        }
+
+        Ok(filters)
+    }
+
+    /// Decodes LTP scaling parameter (RFC 6716 Section 4.2.7.6.3, lines 4722-4754).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    // TODO(Section 3.7+): Remove dead_code when integrated into frame decoder
+    #[allow(dead_code)]
+    fn decode_ltp_scaling(range_decoder: &mut RangeDecoder, should_decode: bool) -> Result<u16> {
+        use super::ltp_constants::{LTP_SCALING_PDF, ltp_scaling_factor_q14};
+
+        if should_decode {
+            let index = range_decoder.ec_dec_icdf(LTP_SCALING_PDF, 8)? as usize;
+            Ok(ltp_scaling_factor_q14(index))
+        } else {
+            Ok(15565)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1991,5 +2236,236 @@ mod tests {
         SilkDecoder::apply_bandwidth_expansion(&mut coeffs, sc_q16_0);
 
         assert_eq!(coeffs, vec![0, 0, 0]);
+    }
+
+    #[test]
+    fn test_primary_pitch_lag_absolute_nb() {
+        let data = vec![0x80, 0x80, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+        let lag = decoder
+            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Narrowband, true)
+            .unwrap();
+
+        assert!((16..=144).contains(&lag));
+        assert_eq!(decoder.previous_pitch_lag, Some(lag));
+    }
+
+    #[test]
+    fn test_primary_pitch_lag_absolute_mb() {
+        let data = vec![0x80, 0x80, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = SilkDecoder::new(SampleRate::Hz12000, Channels::Mono, 20).unwrap();
+
+        let lag = decoder
+            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Mediumband, true)
+            .unwrap();
+
+        assert!((24..=216).contains(&lag));
+        assert_eq!(decoder.previous_pitch_lag, Some(lag));
+    }
+
+    #[test]
+    fn test_primary_pitch_lag_absolute_wb() {
+        let data = vec![0x80, 0x80, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let lag = decoder
+            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, true)
+            .unwrap();
+
+        assert!((32..=288).contains(&lag));
+        assert_eq!(decoder.previous_pitch_lag, Some(lag));
+    }
+
+    #[test]
+    fn test_primary_pitch_lag_relative() {
+        let data = vec![0xFF, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        decoder.previous_pitch_lag = Some(100);
+
+        let lag = decoder
+            .decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, false)
+            .unwrap();
+
+        assert_eq!(decoder.previous_pitch_lag, Some(lag));
+    }
+
+    #[test]
+    fn test_primary_pitch_lag_relative_no_previous() {
+        let data = vec![0xFF, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let result =
+            decoder.decode_primary_pitch_lag(&mut range_decoder, Bandwidth::Wideband, false);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_primary_pitch_lag_invalid_bandwidth() {
+        let data = vec![0x80, 0x80, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let result =
+            decoder.decode_primary_pitch_lag(&mut range_decoder, Bandwidth::SuperWideband, true);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_pitch_contour_nb_10ms() {
+        let data = vec![0x00, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 10).unwrap();
+
+        let lags = decoder
+            .decode_pitch_contour(&mut range_decoder, 80, Bandwidth::Narrowband)
+            .unwrap();
+
+        assert_eq!(lags.len(), 2);
+        for &lag in &lags {
+            assert!((16..=144).contains(&lag));
+        }
+    }
+
+    #[test]
+    fn test_pitch_contour_nb_20ms() {
+        let data = vec![0x00, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+        let lags = decoder
+            .decode_pitch_contour(&mut range_decoder, 80, Bandwidth::Narrowband)
+            .unwrap();
+
+        assert_eq!(lags.len(), 4);
+        for &lag in &lags {
+            assert!((16..=144).contains(&lag));
+        }
+    }
+
+    #[test]
+    fn test_pitch_contour_mb_10ms() {
+        let data = vec![0x00, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz12000, Channels::Mono, 10).unwrap();
+
+        let lags = decoder
+            .decode_pitch_contour(&mut range_decoder, 120, Bandwidth::Mediumband)
+            .unwrap();
+
+        assert_eq!(lags.len(), 2);
+        for &lag in &lags {
+            assert!((24..=216).contains(&lag));
+        }
+    }
+
+    #[test]
+    fn test_pitch_contour_wb_20ms() {
+        let data = vec![0x00, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let lags = decoder
+            .decode_pitch_contour(&mut range_decoder, 160, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(lags.len(), 4);
+        for &lag in &lags {
+            assert!((32..=288).contains(&lag));
+        }
+    }
+
+    #[test]
+    fn test_pitch_contour_clamping() {
+        let data = vec![0x00, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+        let lags = decoder
+            .decode_pitch_contour(&mut range_decoder, 16, Bandwidth::Narrowband)
+            .unwrap();
+
+        for &lag in &lags {
+            assert!((16..=144).contains(&lag));
+        }
+    }
+
+    #[test]
+    fn test_ltp_filter_periodicity_0() {
+        let data = vec![0x00, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let filters = decoder
+            .decode_ltp_filter_coefficients(&mut range_decoder)
+            .unwrap();
+
+        assert_eq!(filters.len(), 4);
+        for filter in filters {
+            assert_eq!(filter.len(), 5);
+        }
+    }
+
+    #[test]
+    fn test_ltp_filter_periodicity_1() {
+        let data = vec![0x80, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let filters = decoder
+            .decode_ltp_filter_coefficients(&mut range_decoder)
+            .unwrap();
+
+        assert_eq!(filters.len(), 4);
+        for filter in filters {
+            assert_eq!(filter.len(), 5);
+        }
+    }
+
+    #[test]
+    fn test_ltp_filter_all_periodicities() {
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        for &first_byte in &[0x00, 0x80, 0xA0] {
+            let data = vec![first_byte, 0x00, 0xFF, 0xFF];
+            let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+            let filters = decoder.decode_ltp_filter_coefficients(&mut range_decoder);
+
+            if let Ok(f) = filters {
+                assert_eq!(f.len(), 4);
+                for filter in f {
+                    assert_eq!(filter.len(), 5);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_ltp_scaling_decode() {
+        let data = vec![0xFF, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+        let scaling = SilkDecoder::decode_ltp_scaling(&mut range_decoder, true).unwrap();
+
+        assert!(scaling == 15565 || scaling == 12288 || scaling == 8192);
+    }
+
+    #[test]
+    fn test_ltp_scaling_default() {
+        let data = vec![0xFF, 0xFF, 0x00, 0x00];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+
+        let scaling = SilkDecoder::decode_ltp_scaling(&mut range_decoder, false).unwrap();
+
+        assert_eq!(scaling, 15565);
     }
 }
