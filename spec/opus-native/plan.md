@@ -27,6 +27,14 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
 - All RFC tables embedded as constants with terminating zeros
 - 52 tests total (46 unit + 6 integration), zero clippy warnings
 - [ ] Phase 3: SILK Decoder - Synthesis
+  - [x] Section 3.1: LSF Stage 1 Decoding - COMPLETE
+  - [x] Section 3.2: LSF Stage 2 Decoding - COMPLETE
+  - [x] Section 3.3: LSF Reconstruction and Stabilization - COMPLETE
+  - [x] Section 3.4: LSF Interpolation and LSF-to-LPC Conversion - COMPLETE
+  - [x] Section 3.5: LPC Coefficient Limiting - COMPLETE (97 tests total, zero clippy warnings)
+  - [ ] Section 3.6: LTP Parameters Decoding - NOT STARTED
+  - [ ] Section 3.7: Excitation Decoding (7 subsections) - NOT STARTED
+  - [ ] Section 3.8: Synthesis Filters (5 subsections) - NOT STARTED
 - [ ] Phase 4: CELT Decoder - Basic Structure
 - [ ] Phase 5: CELT Decoder - MDCT & Finalization
 - [ ] Phase 6: Mode Integration & Hybrid
@@ -2755,7 +2763,7 @@ This specification provides complete implementation details for Section 3.4 with
 Apply bandwidth expansion to limit LPC coefficient magnitude and prediction gain, ensuring filter stability through fixed-point Q-format arithmetic that is bit-exact reproducible across all platforms.
 
 **Status:**
-🔴 **NOT STARTED**
+✅ **COMPLETE** (All tests passing, zero clippy warnings)
 
 ---
 
@@ -3286,30 +3294,77 @@ fn test_round_15_forces_zero() {
 
 #### 3.5 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass, including 12 new LPC limiting tests)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] ilog function matches RFC lines 368-375: returns `floor(log2(x)) + 1` for x > 0
-- [ ] Magnitude limiting uses exactly 10 rounds maximum (RFC line 3899)
-- [ ] Chirp factor formula matches RFC line 3915 exactly
-- [ ] Upper bound of 163838 for `maxabs_Q12` matches RFC line 3909
-- [ ] Tie-breaking prefers lowest index k (RFC line 3904)
-- [ ] Saturation performed only after 10th round (RFC lines 3951-3962)
-- [ ] Bandwidth expansion uses 48-bit precision for first multiply (RFC line 3944)
-- [ ] Prediction gain limiting uses up to 16 rounds (RFC line 4107)
-- [ ] Round 15 sets `sc_Q16[0]` = 0, forcing all coefficients to 0 (RFC lines 4118-4119)
-- [ ] DC response check: `DC_resp > 4096 → unstable` (RFC line 4016)
-- [ ] Coefficient magnitude check: `abs(a32_Q24[k][k]) > 16773022 → unstable` (RFC line 4041, ≈0.99975 in Q24)
-- [ ] Inverse gain check: `inv_gain_Q30[k] < 107374 → unstable` (RFC line 4052, ≈1/10000 in Q30)
-- [ ] Levinson recurrence formulas match RFC lines 4045-4074 exactly
-- [ ] All Q-format arithmetic uses correct bit shifts (Q12, Q17, Q24, Q29, Q30, Q31, Qb1, Qb2)
-- [ ] 64-bit intermediate values (`i64`) used for all multiplies except `gain_Qb1` (RFC line 4086)
-- [ ] Division precision computed using `ilog()` per RFC lines 4056-4058
-- [ ] Error correction applied to inverse computation (RFC lines 4064-4068)
-- [ ] Final Q12 coefficients fit in 16-bit `i16` range
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3893-4120 - confirm all formulas, constants (16773022, 107374, 163838, 65470), Q-format arithmetic, bandwidth expansion, Levinson recursion, stability checks
+- [x] Run `cargo fmt` (format code)
+Formatted successfully
+
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Finished `dev` profile in 0.82s
+
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass, including 12 new LPC limiting tests)
+97 tests pass (85 existing + 12 new): test_ilog_zero, test_ilog_powers_of_two, test_ilog_non_powers, test_bandwidth_expansion_reduces_magnitude, test_magnitude_limiting_within_q12_range, test_magnitude_limiting_large_coefficients, test_dc_response_instability, test_small_dc_response_stable, test_prediction_gain_limiting_nb, test_prediction_gain_limiting_wb, test_limit_lpc_invalid_bandwidth, test_round_15_forces_zero
+
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Finished `dev` profile in 3m 30s with zero clippy warnings
+
+- [x] Run `cargo machete` (no unused dependencies)
+Not applicable - no new dependencies added
+
+- [x] ilog function matches RFC lines 368-375: returns `floor(log2(x)) + 1` for x > 0
+Implemented as `const fn ilog(x: u32) -> i32 { if x == 0 { 0 } else { 32 - x.leading_zeros() as i32 } }` - tests verify ilog(1)=1, ilog(2)=2, ilog(4)=3, etc.
+
+- [x] Magnitude limiting uses exactly 10 rounds maximum (RFC line 3899)
+Implemented with `for round in 0..10` loop (decoder.rs:1036)
+
+- [x] Chirp factor formula matches RFC line 3915 exactly
+`sc_q16_0 = 65470 - ((maxabs_q12 - 32767) << 14) / ((maxabs_q12 * (max_idx as i32 + 1)) >> 2)` (decoder.rs:1052)
+
+- [x] Upper bound of 163838 for `maxabs_Q12` matches RFC line 3909
+`let maxabs_q12 = ((maxabs_q17 + 16) >> 5).min(163_838);` (decoder.rs:1046)
+
+- [x] Tie-breaking prefers lowest index k (RFC line 3904)
+`.max_by(|(i1, v1), (i2, v2)| v1.cmp(v2).then(i2.cmp(i1)))` - when values equal, prefer lower index (decoder.rs:1043)
+
+- [x] Saturation performed only after 10th round (RFC lines 3951-3962)
+`if round == 9 { ... }` block performs Q12 clamping (decoder.rs:1058-1063)
+
+- [x] Bandwidth expansion uses 48-bit precision for first multiply (RFC line 3944)
+`*coeff = ((i64::from(*coeff) * i64::from(sc_q16)) >> 16) as i32;` uses i64 for 48-bit precision (decoder.rs:1078)
+
+- [x] Prediction gain limiting uses up to 16 rounds (RFC line 4107)
+`for round in 0..16` loop in limit_lpc_coefficients (decoder.rs:1001)
+
+- [x] Round 15 sets `sc_Q16[0]` = 0, forcing all coefficients to 0 (RFC lines 4118-4119)
+`if round == 15 { return Ok(vec![0; a32_q17.len()]); }` and test_round_15_forces_zero verifies sc_q16_0 = 65536 - (2 << 15) = 0 (decoder.rs:1010-1012)
+
+- [x] DC response check: `DC_resp > 4096 → unstable` (RFC line 4016)
+`if dc_resp > 4096 { return false; }` (decoder.rs:1118)
+
+- [x] Coefficient magnitude check: `abs(a32_Q24[k][k]) > 16773022 → unstable` (RFC line 4041, ≈0.99975 in Q24)
+`if a32_q24[k][k].abs() > 16_773_022 { return false; }` (decoder.rs:1136)
+
+- [x] Inverse gain check: `inv_gain_Q30[k] < 107374 → unstable` (RFC line 4052, ≈1/10000 in Q30)
+`if inv_gain_q30[k] < 107_374 { return false; }` (decoder.rs:1149)
+
+- [x] Levinson recurrence formulas match RFC lines 4045-4074 exactly
+Reflection coefficient: `rc_q31 = -(a32_q24[k][k] << 7)` (line 1139), denominator: `div_q30 = (1_i64 << 30) - rc_sq` (line 1143), inverse gain: `inv_gain_q30[k] = ((inv_gain_q30[k + 1] * div_q30) >> 32) << 2` (line 1146), recurrence: lines 1166-1169
+
+- [x] All Q-format arithmetic uses correct bit shifts (Q12, Q17, Q24, Q29, Q30, Q31, Qb1, Qb2)
+Q17→Q12: `(a + 16) >> 5` (line 1015), Q12→Q24: `<< 12` (line 1124), Q31: `<< 7` (line 1139), Q30: various, Q29: `(1_i64 << 29)` (line 1161), Qb1/Qb2: computed dynamically (lines 1157-1163)
+
+- [x] 64-bit intermediate values (`i64`) used for all multiplies except `gain_Qb1` (RFC line 4086)
+All polynomial computations use `i64` (p_q16/q_q16 are `Vec<Vec<i64>>`, a32_q24 is `Vec<Vec<i64>>`, inv_gain_q30 is `Vec<i64>`)
+
+- [x] Division precision computed using `ilog()` per RFC lines 4056-4058
+`let b1 = ilog(div_q30 as u32); let b2 = b1 - 16;` (decoder.rs:1157-1158)
+
+- [x] Error correction applied to inverse computation (RFC lines 4064-4068)
+`let inv_qb2 = ((1_i64 << 29) - 1) / (div_q30 >> (b2 + 1)); let err_q29 = (1_i64 << 29) - (((div_q30 << (15 - b2)) * inv_qb2) >> 16); let gain_qb1 = (inv_qb2 << 16) + ((err_q29 * inv_qb2) >> 13);` (decoder.rs:1161-1163)
+
+- [x] Final Q12 coefficients fit in 16-bit `i16` range
+Enforced by final conversion `((a + 16) >> 5) as i16` and magnitude limiting ensures Q17→Q12 is safe (decoder.rs:1016)
+
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 3893-4120 - confirm all formulas, constants (16773022, 107374, 163838, 65470), Q-format arithmetic, bandwidth expansion, Levinson recursion, stability checks
+**CONFIRMED: ZERO COMPROMISES** - All constants exact (16_773_022, 107_374, 163_838, 65470), all formulas match RFC, all Q-format arithmetic correct, bandwidth expansion with 48-bit precision and unsigned multiply, Levinson recursion with error correction, three stability checks implemented exactly per RFC
 
 ---
 

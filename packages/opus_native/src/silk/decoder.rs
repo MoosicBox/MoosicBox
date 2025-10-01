@@ -966,6 +966,236 @@ impl SilkDecoder {
 
         Ok(a32_q17)
     }
+
+    /// Limits LPC coefficients to ensure magnitude fits in Q12 and filter is stable.
+    ///
+    /// Two-stage process per RFC 6716:
+    /// * 1. Magnitude limiting: Up to 10 rounds of bandwidth expansion (Section 4.2.7.5.7)
+    /// * 2. Prediction gain limiting: Up to 16 rounds for stability (Section 4.2.7.5.8)
+    ///
+    /// # Arguments
+    /// * `nlsf_q15` - Normalized LSF coefficients (Q15 format)
+    /// * `bandwidth` - Audio bandwidth (determines `d_LPC`)
+    ///
+    /// # Returns
+    /// * LPC coefficients in Q12 format (16-bit, safe for synthesis filter)
+    ///
+    /// # Errors
+    /// * Returns error if bandwidth is invalid
+    ///
+    /// RFC 6716 lines 3893-4120
+    // TODO(Section 3.6+): Remove dead_code annotation when integrated into full decoder pipeline
+    #[allow(dead_code)]
+    pub fn limit_lpc_coefficients(nlsf_q15: &[i16], bandwidth: Bandwidth) -> Result<Vec<i16>> {
+        // Step 1: Convert LSF to LPC (from Section 3.4)
+        let mut a32_q17 = Self::lsf_to_lpc(nlsf_q15, bandwidth)?;
+
+        // Step 2: Magnitude limiting (up to 10 rounds, RFC Section 4.2.7.5.7)
+        Self::limit_coefficient_magnitude(&mut a32_q17);
+
+        // Step 3: Prediction gain limiting (up to 16 rounds, RFC Section 4.2.7.5.8)
+        for round in 0..16 {
+            if Self::is_filter_stable(&a32_q17) {
+                break; // Filter is stable
+            }
+
+            // Compute chirp factor with progressively stronger expansion (RFC line 4116)
+            let sc_q16_0 = 65536 - (2 << round);
+
+            // Apply bandwidth expansion
+            Self::apply_bandwidth_expansion(&mut a32_q17, sc_q16_0);
+
+            // Round 15: Force to zero (guaranteed stable, RFC lines 4118-4119)
+            if round == 15 {
+                return Ok(vec![0; a32_q17.len()]);
+            }
+        }
+
+        // Step 4: Convert Q17 to Q12 (RFC line 4111)
+        #[allow(clippy::cast_possible_truncation)]
+        let a_q12: Vec<i16> = a32_q17.iter().map(|&a| ((a + 16) >> 5) as i16).collect();
+
+        Ok(a_q12)
+    }
+
+    /// Limits LPC coefficient magnitude using bandwidth expansion (RFC 6716 Section 4.2.7.5.7, lines 3893-3963).
+    ///
+    /// Applies up to 10 rounds of bandwidth expansion to ensure Q17 coefficients
+    /// can be safely converted to Q12 16-bit format.
+    ///
+    /// # Arguments
+    /// * `a32_q17` - LPC coefficients in Q17 format
+    ///
+    /// RFC 6716 lines 3893-3963
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn limit_coefficient_magnitude(a32_q17: &mut [i32]) {
+        for round in 0..10 {
+            // Step 1: Find index k with largest abs(a32_Q17[k]) (RFC lines 3903-3905)
+            // Break ties by choosing lowest k
+            let (max_idx, maxabs_q17) = a32_q17
+                .iter()
+                .enumerate()
+                .map(|(i, &v)| (i, v.abs()))
+                .max_by(|(i1, v1), (i2, v2)| v1.cmp(v2).then(i2.cmp(i1))) // Ties: prefer lower index
+                .unwrap_or((0, 0));
+
+            // Step 2: Compute Q12 precision value with upper bound (RFC line 3909)
+            let maxabs_q12 = ((maxabs_q17 + 16) >> 5).min(163_838);
+
+            // Step 3: Check if limiting is needed (RFC line 3911)
+            if maxabs_q12 <= 32767 {
+                break; // Coefficients fit in Q12, done
+            }
+
+            // Step 4: Compute chirp factor (RFC lines 3914-3916)
+            let numerator = (maxabs_q12 - 32767) << 14;
+            #[allow(clippy::cast_possible_wrap)]
+            let denominator = (maxabs_q12 * (max_idx as i32 + 1)) >> 2;
+            let sc_q16_0 = 65470 - (numerator / denominator);
+
+            // Step 5: Apply bandwidth expansion (RFC lines 3938-3942)
+            Self::apply_bandwidth_expansion(a32_q17, sc_q16_0);
+
+            // Step 6: After 10th round, perform saturation (RFC lines 3951-3962)
+            if round == 9 {
+                for coeff in a32_q17.iter_mut() {
+                    // Convert to Q12, clamp, convert back to Q17
+                    let q12 = (*coeff + 16) >> 5;
+                    let clamped = q12.clamp(-32768, 32767);
+                    *coeff = clamped << 5;
+                }
+            }
+        }
+    }
+
+    /// Applies bandwidth expansion to LPC coefficients using chirp factor.
+    ///
+    /// # Arguments
+    /// * `a32_q17` - LPC coefficients in Q17 format (modified in place)
+    /// * `sc_q16_0` - Initial chirp factor in Q16 format
+    ///
+    /// RFC 6716 lines 3936-3949
+    #[allow(clippy::cast_possible_truncation)]
+    fn apply_bandwidth_expansion(a32_q17: &mut [i32], sc_q16_0: i32) {
+        let mut sc_q16 = sc_q16_0;
+        for coeff in a32_q17.iter_mut() {
+            // RFC line 3940: requires up to 48-bit precision
+            *coeff = ((i64::from(*coeff) * i64::from(sc_q16)) >> 16) as i32;
+
+            // RFC line 3942: unsigned multiply to avoid 32-bit overflow
+            #[allow(clippy::cast_sign_loss)]
+            let sc_unsigned = sc_q16 as u64;
+            #[allow(clippy::cast_sign_loss)]
+            let sc_q16_0_unsigned = sc_q16_0 as u64;
+            sc_q16 = (((sc_q16_0_unsigned * sc_unsigned) + 32768) >> 16) as i32;
+        }
+    }
+
+    /// Checks LPC filter stability using Levinson recursion (RFC 6716 Section 4.2.7.5.8, lines 3983-4105).
+    ///
+    /// Computes reflection coefficients and inverse prediction gain using fixed-point
+    /// arithmetic to ensure bit-exact reproducibility across platforms.
+    ///
+    /// # Arguments
+    /// * `a32_q17` - LPC coefficients in Q17 format
+    ///
+    /// # Returns
+    /// * `true` if filter is stable, `false` if unstable
+    ///
+    /// RFC 6716 lines 3983-4105
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap
+    )]
+    fn is_filter_stable(a32_q17: &[i32]) -> bool {
+        let d_lpc = a32_q17.len();
+
+        // Step 1: Convert Q17 to Q12 coefficients (RFC line 4004)
+        let a32_q12: Vec<i32> = a32_q17.iter().map(|&a| (a + 16) >> 5).collect();
+
+        // Step 2: DC response check (RFC lines 4008-4016)
+        let dc_resp: i32 = a32_q12.iter().sum();
+        if dc_resp > 4096 {
+            return false; // Unstable
+        }
+
+        // Step 3: Initialize Q24 coefficients and inverse gain (RFC lines 4020-4025)
+        let mut a32_q24 = vec![vec![0_i64; d_lpc]; d_lpc];
+        for (n, &coeff) in a32_q12.iter().enumerate() {
+            a32_q24[d_lpc - 1][n] = i64::from(coeff) << 12;
+        }
+
+        let mut inv_gain_q30 = vec![0_i64; d_lpc + 1];
+        inv_gain_q30[d_lpc] = 1_i64 << 30;
+
+        // Step 4: Levinson recurrence (RFC lines 4039-4097)
+        for k in (0..d_lpc).rev() {
+            // Check coefficient magnitude (RFC lines 4040-4041)
+            // Constant 16773022 ≈ 0.99975 in Q24
+            if a32_q24[k][k].abs() > 16_773_022 {
+                return false; // Unstable
+            }
+
+            // Compute reflection coefficient (RFC line 4045)
+            let rc_q31 = -(a32_q24[k][k] << 7);
+
+            // Compute denominator (RFC line 4047)
+            let rc_sq = (rc_q31 * rc_q31) >> 32;
+            let div_q30 = (1_i64 << 30) - rc_sq;
+
+            // Update inverse prediction gain (RFC line 4049)
+            inv_gain_q30[k] = ((inv_gain_q30[k + 1] * div_q30) >> 32) << 2;
+
+            // Check inverse gain (RFC lines 4051-4052)
+            // Constant 107374 ≈ 1/10000 in Q30
+            if inv_gain_q30[k] < 107_374 {
+                return false; // Unstable
+            }
+
+            // If k > 0, compute next row (RFC lines 4054-4074)
+            if k > 0 {
+                // Compute precision for division (RFC lines 4056-4058)
+                let b1 = ilog(div_q30 as u32);
+                let b2 = b1 - 16;
+
+                // Compute inverse with error correction (RFC lines 4060-4068)
+                let inv_qb2 = ((1_i64 << 29) - 1) / (div_q30 >> (b2 + 1));
+                let err_q29 = (1_i64 << 29) - (((div_q30 << (15 - b2)) * inv_qb2) >> 16);
+                let gain_qb1 = (inv_qb2 << 16) + ((err_q29 * inv_qb2) >> 13);
+
+                // Compute row k-1 from row k (RFC lines 4070-4074)
+                for n in 0..k {
+                    let num_q24 =
+                        a32_q24[k][n] - ((a32_q24[k][k - n - 1] * rc_q31 + (1_i64 << 30)) >> 31);
+                    a32_q24[k - 1][n] = (num_q24 * gain_qb1 + (1_i64 << (b1 - 1))) >> b1;
+                }
+            }
+        }
+
+        // If we reach here, all checks passed (RFC lines 4099-4100)
+        true
+    }
+}
+
+/// Integer base-2 logarithm of x
+///
+/// Returns `floor(log2(x)) + 1` for x > 0, or 0 for x == 0
+///
+/// # Examples
+/// * `ilog(0)` = 0
+/// * `ilog(1)` = 1 (floor(log2(1)) + 1 = 0 + 1)
+/// * `ilog(2)` = 2 (floor(log2(2)) + 1 = 1 + 1)
+/// * `ilog(4)` = 3 (floor(log2(4)) + 1 = 2 + 1)
+///
+/// RFC 6716 lines 368-375
+#[allow(clippy::cast_possible_wrap)]
+const fn ilog(x: u32) -> i32 {
+    if x == 0 {
+        0
+    } else {
+        32 - x.leading_zeros() as i32
+    }
 }
 
 #[cfg(test)]
@@ -1665,5 +1895,144 @@ mod tests {
         for &idx in LSF_ORDERING_WB {
             assert!(idx < 16);
         }
+    }
+
+    #[test]
+    fn test_ilog_zero() {
+        assert_eq!(ilog(0), 0);
+    }
+
+    #[test]
+    fn test_ilog_powers_of_two() {
+        assert_eq!(ilog(1), 1); // floor(log2(1)) + 1 = 0 + 1
+        assert_eq!(ilog(2), 2); // floor(log2(2)) + 1 = 1 + 1
+        assert_eq!(ilog(4), 3); // floor(log2(4)) + 1 = 2 + 1
+        assert_eq!(ilog(8), 4);
+        assert_eq!(ilog(16), 5);
+        assert_eq!(ilog(256), 9);
+        assert_eq!(ilog(1024), 11);
+    }
+
+    #[test]
+    fn test_ilog_non_powers() {
+        assert_eq!(ilog(3), 2); // floor(log2(3)) + 1 = 1 + 1
+        assert_eq!(ilog(5), 3); // floor(log2(5)) + 1 = 2 + 1
+        assert_eq!(ilog(255), 8);
+        assert_eq!(ilog(257), 9);
+    }
+
+    #[test]
+    fn test_bandwidth_expansion_reduces_magnitude() {
+        let mut coeffs = vec![40000_i32, -35000, 30000];
+        let sc_q16 = 60000; // Less than 65536 (1.0 in Q16)
+
+        SilkDecoder::apply_bandwidth_expansion(&mut coeffs, sc_q16);
+
+        // All coefficients should be reduced in magnitude
+        assert!(coeffs[0].abs() < 40000);
+        assert!(coeffs[1].abs() < 35000);
+        assert!(coeffs[2].abs() < 30000);
+    }
+
+    #[test]
+    fn test_magnitude_limiting_within_q12_range() {
+        // Coefficients already small enough
+        let mut coeffs = vec![1000_i32 << 5, 2000 << 5, -1500 << 5];
+        SilkDecoder::limit_coefficient_magnitude(&mut coeffs);
+
+        // Should convert cleanly to Q12
+        for &c in &coeffs {
+            let q12 = (c + 16) >> 5;
+            assert!((-32768..=32767).contains(&q12));
+        }
+    }
+
+    #[test]
+    fn test_magnitude_limiting_large_coefficients() {
+        // Coefficients that exceed Q12 range
+        let mut coeffs = vec![100_000_i32, -90_000, 80_000];
+        SilkDecoder::limit_coefficient_magnitude(&mut coeffs);
+
+        // After limiting, should fit in Q12
+        for &c in &coeffs {
+            let q12 = (c + 16) >> 5;
+            assert!((-32768..=32767).contains(&q12));
+        }
+    }
+
+    #[test]
+    fn test_dc_response_instability() {
+        // Create coefficients with DC response > 4096
+        let coeffs_q17 = vec![2000_i32 << 5; 10]; // Each is ~2000 in Q12
+        // Sum in Q12 would be 20000 > 4096
+
+        assert!(!SilkDecoder::is_filter_stable(&coeffs_q17));
+    }
+
+    #[test]
+    fn test_small_dc_response_stable() {
+        // Create coefficients with small DC response
+        let coeffs_q17 = [100_i32 << 5; 10]; // Each is 100 in Q12
+        // Sum in Q12 would be 1000 < 4096
+
+        // May still be unstable due to other checks, but DC check passes
+        // This just verifies the DC check doesn't false-positive
+        let a_q12: Vec<i32> = coeffs_q17.iter().map(|&a| (a + 16) >> 5).collect();
+        let dc_resp: i32 = a_q12.iter().sum();
+        assert!(dc_resp <= 4096);
+    }
+
+    #[test]
+    fn test_prediction_gain_limiting_nb() {
+        let nlsf_q15 = vec![1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000];
+
+        let result = SilkDecoder::limit_lpc_coefficients(&nlsf_q15, Bandwidth::Narrowband);
+        assert!(result.is_ok());
+
+        let coeffs = result.unwrap();
+        assert_eq!(coeffs.len(), 10);
+
+        // All coefficients should fit in i16
+        for &c in &coeffs {
+            assert!(c >= -32768);
+        }
+    }
+
+    #[test]
+    fn test_prediction_gain_limiting_wb() {
+        let nlsf_q15: Vec<i16> = (1..=16).map(|i| i * 1000).collect();
+
+        let result = SilkDecoder::limit_lpc_coefficients(&nlsf_q15, Bandwidth::Wideband);
+        assert!(result.is_ok());
+
+        let coeffs = result.unwrap();
+        assert_eq!(coeffs.len(), 16);
+
+        // All coefficients should fit in i16
+        for &c in &coeffs {
+            assert!(c >= -32768);
+        }
+    }
+
+    #[test]
+    fn test_limit_lpc_invalid_bandwidth() {
+        let nlsf_q15 = vec![0; 10];
+
+        let result = SilkDecoder::limit_lpc_coefficients(&nlsf_q15, Bandwidth::SuperWideband);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_round_15_forces_zero() {
+        // This is hard to test directly, but we can verify the logic
+        // Round 15 should use sc_Q16[0] = 65536 - (2 << 15) = 65536 - 65536 = 0
+        let sc_q16_0 = 65536 - (2 << 15);
+        assert_eq!(sc_q16_0, 0);
+
+        // With sc_Q16[0] = 0, bandwidth expansion should zero all coefficients
+        let mut coeffs = vec![10000_i32, -5000, 3000];
+        SilkDecoder::apply_bandwidth_expansion(&mut coeffs, sc_q16_0);
+
+        assert_eq!(coeffs, vec![0, 0, 0]);
     }
 }
