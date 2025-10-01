@@ -3424,181 +3424,537 @@ This specification provides complete implementation details for Section 3.5 with
 
 ### 3.6: LTP Parameters Decoding
 
-**Reference:** RFC 6716 Section 4.2.7.6 (lines 4121-4754)
+**Reference:**
+RFC 6716 Section 4.2.7.6 (lines 4121-4754)
 
-**Goal:** Decode pitch lag and LTP filter coefficients
+**Goal:**
+Decode Long-Term Prediction (LTP) parameters for voiced SILK frames, including primary pitch lag, subframe pitch contour, LTP filter coefficients, and optional LTP scaling parameter.
+
+**Status:**
+🔴 **NOT STARTED**
+
+---
+
+#### Implementation Overview
+
+**What We're Building:**
+
+1. **Primary Pitch Lag (RFC 4.2.7.6.1, lines 4130-4216)**
+   - Absolute coding: `lag = lag_high × lag_scale + lag_low + lag_min`
+   - Relative coding: `lag = previous_lag + (delta_lag_index - 9)`
+   - Delta=0 fallback to absolute coding
+   - Unclamped storage for relative coding across frames
+   - Range: 2ms to 18ms (NB: 16-144, MB: 24-216, WB: 32-288 samples)
+
+2. **Pitch Contour (RFC 4.2.7.6.1, lines 4226-4452)**
+   - VQ codebook selection based on bandwidth and frame size
+   - Per-subframe lag offsets applied to primary lag
+   - 4 codebooks: NB-10ms (3), NB-20ms (11), MB/WB-10ms (12), MB/WB-20ms (34)
+   - Clamped final lags: `pitch_lags[k] = clamp(lag_min, lag + offset, lag_max)`
+
+3. **LTP Filter Coefficients (RFC 4.2.7.6.2, lines 4454-4721)**
+   - Periodicity index selects codebook: 0→8 filters, 1→16 filters, 2→32 filters
+   - 5-tap filters per subframe (signed Q7 format)
+   - Rate-distortion trade-off: higher periodicity = more complex codebook
+
+4. **LTP Scaling Parameter (RFC 4.2.7.6.3, lines 4722-4754)**
+   - **Conditional**: Present only if voiced frame AND (first frame OR previous LBRR not coded)
+   - 3 possible Q14 scale factors: 15565 (~0.95), 12288 (~0.75), 8192 (~0.5)
+   - Default: 15565 if not present
+
+**State Requirements:**
+- Add `previous_pitch_lag: Option<i16>` to `SilkDecoder` for relative coding
+
+**Constants Required:**
+- 11 PDF tables (Tables 29-32, 37-38, 42)
+- 7 codebook tables (Tables 33-36, 39-41)
+- **Total: 18 constants**
+
+---
 
 #### Implementation Steps
 
-- [ ] **Add LTP constant PDFs and tables:**
-  ```rust
-  // Table 29: Primary pitch lag high part
-  pub const LTP_LAG_HIGH_PDF: &[u8] = &[
-      3, 3, 6, 11, 21, 30, 32, 19, 11, 10, 12, 13, 13, 12, 11, 9, 8,
-      7, 6, 4, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
-  ];
+**Step 3.6.1: Create LTP Constants Module**
 
-  // Table 30: Low part PDFs per bandwidth
-  pub const LTP_LAG_LOW_PDF_NB: &[u8] = &[64, 64, 64, 64, 0];
-  pub const LTP_LAG_LOW_PDF_MB: &[u8] = &[43, 42, 43, 43, 42, 43, 0];
-  pub const LTP_LAG_LOW_PDF_WB: &[u8] = &[32, 32, 32, 32, 32, 32, 32, 32, 0];
+**File:** `packages/opus_native/src/silk/ltp_constants.rs` (NEW FILE)
 
-  // Table 31: Relative coding delta (21 entries)
-  pub const LTP_LAG_DELTA_PDF: &[u8] = &[/* RFC Table 31 */];
+**Add all RFC tables:**
+```rust
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
-  // Tables 32-37: Pitch contour PDFs and codebooks (to be added)
-  // Tables 38-42: LTP filter PDFs and codebooks (to be added)
-  ```
+// RFC 6716 Table 29: PDF for High Part of Primary Pitch Lag (lines 4169-4175)
+// NOTE: All ICDF tables MUST end with 0 per RFC 6716 Section 4.1.3.3 (line 1534)
+pub const LTP_LAG_HIGH_PDF: &[u8] = &[
+    3, 3, 6, 11, 21, 30, 32, 19, 11, 10, 12, 13, 13, 12, 11, 9, 8,
+    7, 6, 4, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
+];
 
-- [ ] **Implement pitch lag decoding (RFC lines 4130-4250):**
-  ```rust
-  impl SilkDecoder {
-      pub fn decode_pitch_lag(
-          &mut self,
-          range_decoder: &mut RangeDecoder,
-          bandwidth: Bandwidth,
-          use_absolute: bool,
-      ) -> Result<i16> {
-          if use_absolute {
-              let lag_high = range_decoder.ec_dec_icdf(LTP_LAG_HIGH_PDF, 8)?;
-              let (pdf_low, scale, min_lag) = match bandwidth {
-                  Bandwidth::Narrowband => (LTP_LAG_LOW_PDF_NB, 4, 16),
-                  Bandwidth::Mediumband => (LTP_LAG_LOW_PDF_MB, 6, 24),
-                  Bandwidth::Wideband => (LTP_LAG_LOW_PDF_WB, 8, 32),
-                  _ => return Err(Error::SilkDecoder("invalid bandwidth for LTP".to_string())),
-              };
-              let lag_low = range_decoder.ec_dec_icdf(pdf_low, 8)?;
+// RFC 6716 Table 30: PDFs for Low Part of Primary Pitch Lag (lines 4177-4190)
+pub const LTP_LAG_LOW_PDF_NB: &[u8] = &[64, 64, 64, 64, 0];
+pub const LTP_LAG_LOW_PDF_MB: &[u8] = &[43, 42, 43, 43, 42, 43, 0];
+pub const LTP_LAG_LOW_PDF_WB: &[u8] = &[32, 32, 32, 32, 32, 32, 32, 32, 0];
 
-              let lag = (lag_high * scale + lag_low + min_lag) as i16;
-              self.previous_pitch_lag = Some(lag);
-              Ok(lag)
-          } else {
-              let delta_index = range_decoder.ec_dec_icdf(LTP_LAG_DELTA_PDF, 8)?;
-              if delta_index == 0 {
-                  // Fallback to absolute coding
-                  self.decode_pitch_lag(range_decoder, bandwidth, true)
-              } else {
-                  let lag = self.previous_pitch_lag.unwrap() + (delta_index as i16 - 9);
-                  self.previous_pitch_lag = Some(lag);
-                  Ok(lag)
-              }
-          }
-      }
-  }
-  ```
+// RFC 6716 Table 31: PDF for Primary Pitch Lag Change (lines 4217-4224)
+pub const LTP_LAG_DELTA_PDF: &[u8] = &[
+    46, 2, 2, 3, 4, 6, 10, 15, 26, 38, 30, 22, 15, 10, 7, 6, 4, 4, 2, 2, 2, 0,
+];
 
-- [ ] **Implement subframe pitch contour (RFC lines 4209-4370):**
-  ```rust
-  impl SilkDecoder {
-      pub fn decode_pitch_contour(
-          &self,
-          range_decoder: &mut RangeDecoder,
-          primary_lag: i16,
-          bandwidth: Bandwidth,
-          frame_size_ms: u8,
-      ) -> Result<Vec<i16>> {
-          let num_subframes = (frame_size_ms / 5) as usize;
+// RFC 6716 Table 32: PDFs for Subframe Pitch Contour (lines 4233-4253)
+pub const PITCH_CONTOUR_PDF_NB_10MS: &[u8] = &[143, 50, 63, 0];
+pub const PITCH_CONTOUR_PDF_NB_20MS: &[u8] = &[
+    68, 12, 21, 17, 19, 22, 30, 24, 17, 16, 10, 0,
+];
+pub const PITCH_CONTOUR_PDF_MBWB_10MS: &[u8] = &[
+    91, 46, 39, 19, 14, 12, 8, 7, 6, 5, 5, 4, 0,
+];
+pub const PITCH_CONTOUR_PDF_MBWB_20MS: &[u8] = &[
+    33, 22, 18, 16, 15, 14, 14, 13, 13, 10, 9, 9, 8, 6, 6, 6, 5, 4,
+    4, 4, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 0,
+];
 
-          let (pdf, codebook) = self.get_pitch_contour_tables(bandwidth, frame_size_ms)?;
-          let contour_index = range_decoder.ec_dec_icdf(pdf, 8)?;
-          let offsets = codebook[contour_index as usize];
+// RFC 6716 Tables 33-36: Codebooks for Subframe Pitch Contour
+// Table 33: NB 10ms (lines 4263-4271) - 2 subframes
+pub const PITCH_CONTOUR_CB_NB_10MS: &[[i8; 2]; 3] = &[
+    [0, 0],   // Index 0
+    [1, 0],   // Index 1
+    [0, 1],   // Index 2
+];
 
-          let lags: Vec<i16> = offsets.iter()
-              .map(|&offset| primary_lag + offset)
-              .collect();
+// Table 34: NB 20ms (lines 4276-4303) - 4 subframes
+pub const PITCH_CONTOUR_CB_NB_20MS: &[[i8; 4]; 11] = &[
+    [0, 0, 0, 0],      // Index 0
+    [2, 1, 0, -1],     // Index 1
+    [-1, 0, 1, 2],     // Index 2
+    [-1, 0, 0, 1],     // Index 3
+    [-1, 0, 0, 0],     // Index 4
+    [0, 0, 0, 1],      // Index 5
+    [0, 0, 1, 1],      // Index 6
+    [1, 1, 0, 0],      // Index 7
+    [1, 0, 0, 0],      // Index 8
+    [0, 0, 0, -1],     // Index 9
+    [1, 0, 0, -1],     // Index 10
+];
 
-          Ok(lags)
-      }
-  }
-  ```
+// Table 35: MB/WB 10ms (lines 4319-4345) - 2 subframes
+pub const PITCH_CONTOUR_CB_MBWB_10MS: &[[i8; 2]; 12] = &[
+    [0, 0],    // Index 0
+    [0, 1],    // Index 1
+    [1, 0],    // Index 2
+    [-1, 1],   // Index 3
+    [1, -1],   // Index 4
+    [-1, 2],   // Index 5
+    [2, -1],   // Index 6
+    [-2, 2],   // Index 7
+    [2, -2],   // Index 8
+    [-2, 3],   // Index 9
+    [3, -2],   // Index 10
+    [-3, 3],   // Index 11
+];
 
-- [ ] **Implement LTP filter decoding (RFC lines 4444-4754):**
-  ```rust
-  impl SilkDecoder {
-      pub fn decode_ltp_filters(
-          &self,
-          range_decoder: &mut RangeDecoder,
-          num_subframes: usize,
-      ) -> Result<(u8, Vec<[i8; 5]>)> {
-          // Decode periodicity index
-          let periodicity_pdf = &[/* Table 37 */];
-          let periodicity = range_decoder.ec_dec_icdf(periodicity_pdf, 8)?;
+// Table 36: MB/WB 20ms (lines 4350-4439) - 4 subframes
+pub const PITCH_CONTOUR_CB_MBWB_20MS: &[[i8; 4]; 34] = &[
+    [0, 0, 0, 0],      // Index 0
+    [0, 0, 1, 1],      // Index 1
+    [1, 1, 0, 0],      // Index 2
+    [-1, 0, 0, 0],     // Index 3
+    [0, 0, 0, 1],      // Index 4
+    [1, 0, 0, 0],      // Index 5
+    [-1, 0, 0, 1],     // Index 6
+    [0, 0, 0, -1],     // Index 7
+    [-1, 0, 1, 2],     // Index 8
+    [1, 0, 0, -1],     // Index 9
+    [-2, -1, 1, 2],    // Index 10
+    [2, 1, 0, -1],     // Index 11
+    [-2, 0, 0, 2],     // Index 12
+    [-2, 0, 1, 3],     // Index 13
+    [2, 1, -1, -2],    // Index 14
+    [-3, -1, 1, 3],    // Index 15
+    [2, 0, 0, -2],     // Index 16
+    [3, 1, 0, -2],     // Index 17
+    [-3, -1, 2, 4],    // Index 18
+    [-4, -1, 1, 4],    // Index 19
+    [3, 1, -1, -3],    // Index 20
+    [-4, -1, 2, 5],    // Index 21
+    [4, 2, -1, -3],    // Index 22
+    [4, 1, -1, -4],    // Index 23
+    [-5, -1, 2, 6],    // Index 24
+    [5, 2, -1, -4],    // Index 25
+    [-6, -2, 2, 6],    // Index 26
+    [-5, -2, 2, 5],    // Index 27
+    [6, 2, -1, -5],    // Index 28
+    [-7, -2, 3, 8],    // Index 29
+    [6, 2, -2, -6],    // Index 30
+    [5, 2, -2, -5],    // Index 31
+    [8, 3, -2, -7],    // Index 32
+    [-9, -3, 3, 9],    // Index 33
+];
 
-          // Get filter PDF and codebook based on periodicity
-          let (pdf, codebook) = match periodicity {
-              0 => (LTP_FILTER_PDF_0, LTP_FILTER_CB_0),  // 8 filters
-              1 => (LTP_FILTER_PDF_1, LTP_FILTER_CB_1),  // 16 filters
-              2 => (LTP_FILTER_PDF_2, LTP_FILTER_CB_2),  // 32 filters
-              _ => unreachable!(),
-          };
+// RFC 6716 Table 37: Periodicity Index PDF (lines 4487-4493)
+pub const LTP_PERIODICITY_PDF: &[u8] = &[77, 80, 99, 0];
 
-          let mut filters = Vec::with_capacity(num_subframes);
-          for _ in 0..num_subframes {
-              let filter_index = range_decoder.ec_dec_icdf(pdf, 8)?;
-              filters.push(codebook[filter_index as usize]);
-          }
+// RFC 6716 Table 38: LTP Filter PDFs (lines 4500-4514)
+pub const LTP_FILTER_PDF_0: &[u8] = &[185, 15, 13, 13, 9, 9, 6, 6, 0];
+pub const LTP_FILTER_PDF_1: &[u8] = &[
+    57, 34, 21, 20, 15, 13, 12, 13, 10, 10, 9, 10, 9, 8, 7, 8, 0,
+];
+pub const LTP_FILTER_PDF_2: &[u8] = &[
+    15, 16, 14, 12, 12, 12, 11, 11, 11, 10, 9, 9, 9, 9, 8, 8, 8, 8,
+    7, 7, 6, 6, 5, 4, 5, 4, 4, 4, 3, 4, 3, 2, 0,
+];
 
-          Ok((periodicity, filters))
-      }
-  }
-  ```
+// RFC 6716 Tables 39-41: LTP Filter Codebooks (5-tap filters, signed Q7 format)
+// Table 39: Periodicity Index 0 (lines 4543-4563) - 8 filters
+pub const LTP_FILTER_CB_0: &[[i8; 5]; 8] = &[
+    [4, 6, 24, 7, 5],       // Index 0
+    [0, 0, 2, 0, 0],        // Index 1
+    [12, 28, 41, 13, -4],   // Index 2
+    [-9, 15, 42, 25, 14],   // Index 3
+    [1, -2, 62, 41, -9],    // Index 4
+    [-10, 37, 65, -4, 3],   // Index 5
+    [-6, 4, 66, 7, -8],     // Index 6
+    [16, 14, 38, -3, 33],   // Index 7
+];
 
-- [ ] **Implement LTP scaling (RFC lines 4747-4754):**
-  ```rust
-  impl SilkDecoder {
-      pub fn decode_ltp_scaling(
-          &self,
-          range_decoder: &mut RangeDecoder,
-          frame_size_ms: u8,
-      ) -> Result<i16> {
-          if frame_size_ms == 10 {
-              return Ok(15565);  // Default Q14 scale factor (~0.95)
-          }
+// Table 40: Periodicity Index 1 (lines 4599-4635) - 16 filters
+pub const LTP_FILTER_CB_1: &[[i8; 5]; 16] = &[
+    [13, 22, 39, 23, 12],   // Index 0
+    [-1, 36, 64, 27, -6],   // Index 1
+    [-7, 10, 55, 43, 17],   // Index 2
+    [1, 1, 8, 1, 1],        // Index 3
+    [6, -11, 74, 53, -9],   // Index 4
+    [-12, 55, 76, -12, 8],  // Index 5
+    [-3, 3, 93, 27, -4],    // Index 6
+    [26, 39, 59, 3, -8],    // Index 7
+    [2, 0, 77, 11, 9],      // Index 8
+    [-8, 22, 44, -6, 7],    // Index 9
+    [40, 9, 26, 3, 9],      // Index 10
+    [-7, 20, 101, -7, 4],   // Index 11
+    [3, -8, 42, 26, 0],     // Index 12
+    [-15, 33, 68, 2, 23],   // Index 13
+    [-2, 55, 46, -2, 15],   // Index 14
+    [3, -1, 21, 16, 41],    // Index 15
+];
 
-          let scale_pdf = &[128, 64, 64, 0];  // Table 42
-          let scale_index = range_decoder.ec_dec_icdf(scale_pdf, 8)?;
+// Table 41: Periodicity Index 2 (lines 4637-4720) - 32 filters
+pub const LTP_FILTER_CB_2: &[[i8; 5]; 32] = &[
+    [-6, 27, 61, 39, 5],    // Index 0
+    [-11, 42, 88, 4, 1],    // Index 1
+    [-2, 60, 65, 6, -4],    // Index 2
+    [-1, -5, 73, 56, 1],    // Index 3
+    [-9, 19, 94, 29, -9],   // Index 4
+    [0, 12, 99, 6, 4],      // Index 5
+    [8, -19, 102, 46, -13], // Index 6
+    [3, 2, 13, 3, 2],       // Index 7
+    [9, -21, 84, 72, -18],  // Index 8
+    [-11, 46, 104, -22, 8], // Index 9
+    [18, 38, 48, 23, 0],    // Index 10
+    [-16, 70, 83, -21, 11], // Index 11
+    [5, -11, 117, 22, -8],  // Index 12
+    [-6, 23, 117, -12, 3],  // Index 13
+    [3, -8, 95, 28, 4],     // Index 14
+    [-10, 15, 77, 60, -15], // Index 15
+    [-1, 4, 124, 2, -4],    // Index 16
+    [3, 38, 84, 24, -25],   // Index 17
+    [2, 13, 42, 13, 31],    // Index 18
+    [21, -4, 56, 46, -1],   // Index 19
+    [-1, 35, 79, -13, 19],  // Index 20
+    [-7, 65, 88, -9, -14],  // Index 21
+    [20, 4, 81, 49, -29],   // Index 22
+    [20, 0, 75, 3, -17],    // Index 23
+    [5, -9, 44, 92, -8],    // Index 24
+    [1, -3, 22, 69, 31],    // Index 25
+    [-6, 95, 41, -12, 5],   // Index 26
+    [39, 67, 16, -4, 1],    // Index 27
+    [0, -6, 120, 55, -36],  // Index 28
+    [-13, 44, 122, 4, -24], // Index 29
+    [81, 5, 11, 3, 7],      // Index 30
+    [2, 0, 9, 10, 88],      // Index 31
+];
 
-          Ok(match scale_index {
-              0 => 15565,  // ~0.95
-              1 => 12288,  // ~0.75
-              2 => 8192,   // ~0.5
-              _ => unreachable!(),
-          })
-      }
-  }
-  ```
+// RFC 6716 Table 42: PDF for LTP Scaling Parameter (lines 4767-4773)
+pub const LTP_SCALING_PDF: &[u8] = &[128, 64, 64, 0];
 
-- [ ] **Add LTP decoding tests:**
-  ```rust
-  #[test]
-  fn test_pitch_lag_absolute() { /* test all bandwidths */ }
+// RFC 6716 Section 4.2.7.6.3: LTP Scaling Factors in Q14 format (lines 4751-4753)
+pub const LTP_SCALING_FACTORS_Q14: &[u16; 3] = &[
+    15565,  // ~0.95 (Index 0)
+    12288,  // ~0.75 (Index 1)
+    8192,   // ~0.5  (Index 2)
+];
+```
 
-  #[test]
-  fn test_pitch_lag_relative() { /* test delta coding */ }
+---
 
-  #[test]
-  fn test_pitch_contour() { /* verify subframe offsets */ }
+**Step 3.6.2: Add State Field to SilkDecoder**
 
-  #[test]
-  fn test_ltp_filter_selection() { /* test periodicity-based selection */ }
+**File:** `packages/opus_native/src/silk/decoder.rs`
 
-  #[test]
-  fn test_ltp_scaling() { /* verify 3 scale factors */ }
-  ```
+```rust
+pub struct SilkDecoder {
+    // ... existing fields ...
+    previous_pitch_lag: Option<i16>,  // RFC line 4198
+}
+```
+
+**Update constructor:**
+```rust
+impl SilkDecoder {
+    pub fn new(...) -> Result<Self> {
+        Ok(Self {
+            // ... existing fields ...
+            previous_pitch_lag: None,
+        })
+    }
+}
+```
+
+---
+
+**Step 3.6.3: Implement Primary Pitch Lag Decoding**
+
+**File:** `packages/opus_native/src/silk/decoder.rs`
+
+```rust
+/// Decodes primary pitch lag (RFC 6716 Section 4.2.7.6.1, lines 4130-4216).
+///
+/// # Errors
+/// * Returns error if range decoder fails or bandwidth is invalid
+// TODO(Section 3.7+): Remove dead_code when integrated into frame decoder
+#[allow(dead_code)]
+fn decode_primary_pitch_lag(
+    &mut self,
+    range_decoder: &mut RangeDecoder,
+    bandwidth: Bandwidth,
+    use_absolute: bool,
+) -> Result<i16> {
+    use super::ltp_constants::*;
+
+    if use_absolute {
+        // RFC lines 4154-4166: Absolute coding
+        let lag_high = range_decoder.ec_dec_icdf(LTP_LAG_HIGH_PDF, 8)? as i16;
+
+        let (pdf_low, lag_scale, lag_min) = match bandwidth {
+            Bandwidth::Narrowband => (LTP_LAG_LOW_PDF_NB, 4, 16),
+            Bandwidth::Mediumband => (LTP_LAG_LOW_PDF_MB, 6, 24),
+            Bandwidth::Wideband => (LTP_LAG_LOW_PDF_WB, 8, 32),
+            _ => return Err(Error::SilkDecoder("invalid bandwidth for LTP".to_string())),
+        };
+
+        let lag_low = range_decoder.ec_dec_icdf(pdf_low, 8)? as i16;
+
+        // RFC line 4162
+        let lag = lag_high * lag_scale + lag_low + lag_min;
+
+        self.previous_pitch_lag = Some(lag);
+        Ok(lag)
+    } else {
+        // RFC lines 4192-4215: Relative coding
+        let delta_lag_index = range_decoder.ec_dec_icdf(LTP_LAG_DELTA_PDF, 8)? as i16;
+
+        if delta_lag_index == 0 {
+            // RFC line 4196: Fallback
+            self.decode_primary_pitch_lag(range_decoder, bandwidth, true)
+        } else {
+            // RFC line 4198
+            let previous_lag = self.previous_pitch_lag
+                .ok_or_else(|| Error::SilkDecoder("no previous pitch lag".to_string()))?;
+            let lag = previous_lag + (delta_lag_index - 9);
+
+            // RFC lines 4210-4213: Store unclamped
+            self.previous_pitch_lag = Some(lag);
+            Ok(lag)
+        }
+    }
+}
+```
+
+---
+
+**Step 3.6.4: Implement Pitch Contour Decoding**
+
+**File:** `packages/opus_native/src/silk/decoder.rs`
+
+```rust
+/// Decodes pitch contour (RFC 6716 Section 4.2.7.6.1, lines 4226-4452).
+///
+/// # Errors
+/// * Returns error if range decoder fails or parameters invalid
+// TODO(Section 3.7+): Remove dead_code when integrated
+#[allow(dead_code)]
+fn decode_pitch_contour(
+    &self,
+    range_decoder: &mut RangeDecoder,
+    primary_lag: i16,
+    bandwidth: Bandwidth,
+    frame_size_ms: u8,
+) -> Result<Vec<i16>> {
+    use super::ltp_constants::*;
+
+    // RFC lines 4228-4232
+    let (pdf, codebook, lag_min, lag_max) = match (bandwidth, frame_size_ms) {
+        (Bandwidth::Narrowband, 10) => {
+            (PITCH_CONTOUR_PDF_NB_10MS, &PITCH_CONTOUR_CB_NB_10MS[..], 16, 144)
+        }
+        (Bandwidth::Narrowband, 20) => {
+            (PITCH_CONTOUR_PDF_NB_20MS, &PITCH_CONTOUR_CB_NB_20MS[..], 16, 144)
+        }
+        (Bandwidth::Mediumband, 10) | (Bandwidth::Wideband, 10) => {
+            let (min, max) = if bandwidth == Bandwidth::Mediumband { (24, 216) } else { (32, 288) };
+            (PITCH_CONTOUR_PDF_MBWB_10MS, &PITCH_CONTOUR_CB_MBWB_10MS[..], min, max)
+        }
+        (Bandwidth::Mediumband, 20) | (Bandwidth::Wideband, 20) => {
+            let (min, max) = if bandwidth == Bandwidth::Mediumband { (24, 216) } else { (32, 288) };
+            (PITCH_CONTOUR_PDF_MBWB_20MS, &PITCH_CONTOUR_CB_MBWB_20MS[..], min, max)
+        }
+        _ => return Err(Error::SilkDecoder("invalid bandwidth/frame size".to_string())),
+    };
+
+    let contour_index = range_decoder.ec_dec_icdf(pdf, 8)? as usize;
+
+    if contour_index >= codebook.len() {
+        return Err(Error::SilkDecoder("invalid pitch contour index".to_string()));
+    }
+
+    let offsets = codebook[contour_index];
+
+    // RFC lines 4448-4449
+    let pitch_lags = offsets
+        .iter()
+        .map(|&offset| {
+            let lag = primary_lag + i16::from(offset);
+            lag.clamp(lag_min, lag_max)
+        })
+        .collect();
+
+    Ok(pitch_lags)
+}
+```
+
+---
+
+**Step 3.6.5: Implement LTP Filter Decoding**
+
+**File:** `packages/opus_native/src/silk/decoder.rs`
+
+```rust
+/// Decodes LTP filter coefficients (RFC 6716 Section 4.2.7.6.2, lines 4454-4721).
+///
+/// # Errors
+/// * Returns error if range decoder fails
+// TODO(Section 3.7+): Remove dead_code when integrated
+#[allow(dead_code)]
+fn decode_ltp_filter_coefficients(
+    &self,
+    range_decoder: &mut RangeDecoder,
+    num_subframes: usize,
+) -> Result<Vec<[i8; 5]>> {
+    use super::ltp_constants::*;
+
+    // RFC lines 4470-4472
+    let periodicity_index = range_decoder.ec_dec_icdf(LTP_PERIODICITY_PDF, 8)?;
+
+    // RFC lines 4495-4514
+    let (pdf, codebook) = match periodicity_index {
+        0 => (LTP_FILTER_PDF_0, &LTP_FILTER_CB_0[..]),
+        1 => (LTP_FILTER_PDF_1, &LTP_FILTER_CB_1[..]),
+        2 => (LTP_FILTER_PDF_2, &LTP_FILTER_CB_2[..]),
+        _ => return Err(Error::SilkDecoder("invalid periodicity index".to_string())),
+    };
+
+    let mut filters = Vec::with_capacity(num_subframes);
+    for _ in 0..num_subframes {
+        let filter_index = range_decoder.ec_dec_icdf(pdf, 8)? as usize;
+
+        if filter_index >= codebook.len() {
+            return Err(Error::SilkDecoder("invalid LTP filter index".to_string()));
+        }
+
+        filters.push(codebook[filter_index]);
+    }
+
+    Ok(filters)
+}
+```
+
+---
+
+**Step 3.6.6: Implement LTP Scaling Parameter**
+
+**File:** `packages/opus_native/src/silk/decoder.rs`
+
+```rust
+/// Decodes LTP scaling parameter (RFC 6716 Section 4.2.7.6.3, lines 4722-4754).
+///
+/// # Errors
+/// * Returns error if range decoder fails
+// TODO(Section 3.7+): Remove dead_code when integrated
+#[allow(dead_code)]
+fn decode_ltp_scaling(
+    &self,
+    range_decoder: &mut RangeDecoder,
+    should_decode: bool,
+) -> Result<u16> {
+    use super::ltp_constants::*;
+
+    if should_decode {
+        let index = range_decoder.ec_dec_icdf(LTP_SCALING_PDF, 8)? as usize;
+        Ok(LTP_SCALING_FACTORS_Q14[index])
+    } else {
+        // RFC line 4754: Default factor
+        Ok(15565)
+    }
+}
+```
+
+---
+
+**Step 3.6.7: Add Comprehensive Unit Tests**
+
+**File:** `packages/opus_native/src/silk/decoder.rs`
+
+Add ~15 tests covering all LTP decoding paths.
+
+---
 
 #### 3.6 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass, ~111 tests total)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Pitch lag PDFs match Tables 29-31 exactly
-- [ ] Pitch contour codebooks match Tables 33-36
-- [ ] LTP filter PDFs and codebooks match Tables 38-41
-- [ ] Scaling PDF matches Table 42 exactly
-- [ ] Absolute/relative coding logic correct per RFC
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4121-4754 - confirm lag calculation formulas, contour mapping, filter selection
+- [ ] All PDFs end with terminating zero (Tables 29-32, 37-38, 42)
+- [ ] All codebook dimensions match RFC exactly (Tables 33-36, 39-41)
+- [ ] Absolute lag formula: `lag = lag_high*lag_scale + lag_low + lag_min` (RFC line 4162)
+- [ ] Relative lag formula: `lag = previous_lag + (delta_lag_index - 9)` (RFC line 4198)
+- [ ] Delta=0 fallback to absolute (RFC line 4196)
+- [ ] Unclamped storage for relative coding (RFC lines 4210-4213)
+- [ ] Pitch contour clamping: `clamp(lag_min, lag + offset, lag_max)` (RFC lines 4448-4449)
+- [ ] Bandwidth-specific ranges: NB=16-144, MB=24-216, WB=32-288 (Table 30)
+- [ ] Periodicity index selects correct codebook: 0→8, 1→16, 2→32 filters
+- [ ] Filter taps are signed Q7 format
+- [ ] LTP scaling: 3 factors (15565, 12288, 8192) in Q14 format (RFC lines 4751-4753)
+- [ ] LTP scaling conditional logic correct (RFC lines 4726-4736)
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4121-4754 - all PDFs, codebooks, formulas, clamping
+
+---
+
+#### Design Decisions
+
+**1. Codebook Storage**
+- **Decision**: Use `&[[i8; N]; M]` arrays
+- **Rationale**: Compile-time size checking, zero allocation, direct indexing
+
+**2. Unclamped Lag Storage**
+- **Decision**: Store unclamped lag in `previous_pitch_lag`
+- **Rationale**: RFC lines 4210-4213 require unclamped value for next frame's relative coding
+
+**3. PDF/Codebook Selection**
+- **Decision**: Match on `(bandwidth, frame_size_ms)` tuples
+- **Rationale**: Explicit pattern matching, compile-time case verification, MB and WB share codebooks
+
+**4. LTP Scaling Conditional**
+- **Decision**: Caller determines `should_decode` parameter
+- **Rationale**: Condition depends on frame position/type which caller knows; keeps function pure
 
 ---
 
