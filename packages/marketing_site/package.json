@@ -41,6 +41,6 @@
         "globals": "^15.15.0",
         "prettier": "^3.6.2",
         "sst": "^3.17.14",
-        "typescript": "^5.9.2"
+        "typescript": "^5.9.3"
     }
 }
