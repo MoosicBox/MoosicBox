@@ -1491,10 +1491,11 @@ No unused dependencies reported
 
 #### Implementation Steps
 
-- [ ] **Add LSF constants module:**
+- [x] **Add LSF constants module:**
   Create `src/silk/lsf_constants.rs` with all LSF PDFs and codebooks
+Created packages/opus_native/src/silk/lsf_constants.rs with module-level clippy lints
 
-- [ ] **Add Stage 1 PDFs from Table 14 (RFC lines 2639-2660):**
+- [x] **Add Stage 1 PDFs from Table 14 (RFC lines 2639-2660):**
   ```rust
   pub const LSF_STAGE1_PDF_NB_MB_INACTIVE: &[u8] = &[
       44, 34, 30, 19, 21, 12, 11, 3, 3, 2, 16,
@@ -1520,8 +1521,9 @@ No unused dependencies reported
       11, 10, 3, 10, 5, 1, 1, 1, 3, 0  // terminating zero
   ];
   ```
+All 4 PDFs added with terminating zeros
 
-- [ ] **Implement LSF Stage 1 decoder in `decoder.rs`:**
+- [x] **Implement LSF Stage 1 decoder in `decoder.rs`:**
   ```rust
   impl SilkDecoder {
       pub fn decode_lsf_stage1(
@@ -1546,14 +1548,16 @@ No unused dependencies reported
       }
   }
   ```
+Implemented decode_lsf_stage1() method with explicit imports to satisfy clippy and cast_possible_truncation allow
 
-- [ ] **Add LSF module declaration to `silk/mod.rs`:**
+- [x] **Add LSF module declaration to `silk/mod.rs`:**
   ```rust
   mod lsf_constants;
   pub use lsf_constants::*;
   ```
+Added module declaration and public re-export to silk/mod.rs
 
-- [ ] **Add unit tests for Stage 1 decoding:**
+- [x] **Add unit tests for Stage 1 decoding:**
   ```rust
   #[test]
   fn test_lsf_stage1_nb_inactive() { /* test with specific buffer */ }
@@ -1561,18 +1565,28 @@ No unused dependencies reported
   #[test]
   fn test_lsf_stage1_wb_voiced() { /* test with specific buffer */ }
   ```
+Added test_lsf_stage1_nb_inactive and test_lsf_stage1_wb_voiced tests
 
 #### 3.1 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] LSF Stage 1 PDFs match Table 14 exactly (RFC lines 2639-2660)
-- [ ] PDF selection logic matches RFC bandwidth/signal-type mapping
-- [ ] All PDFs include terminating zeros for ICDF decoding
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 2605-2661 - confirm index range 0-31, PDF selection correct, codebook size matches
+- [x] Run `cargo fmt` (format code)
+Formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Finished `dev` profile in 0.38s
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+56 tests passed (50 unit + 6 integration)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Finished `dev` profile in 4m 07s with zero warnings
+- [x] Run `cargo machete` (no unused dependencies)
+No unused dependencies
+- [x] LSF Stage 1 PDFs match Table 14 exactly (RFC lines 2639-2660)
+All 4 PDFs match RFC Table 14 with terminating zeros
+- [x] PDF selection logic matches RFC bandwidth/signal-type mapping
+Implemented NB/MB inactive/unvoiced, NB/MB voiced, WB inactive/unvoiced, WB voiced mapping
+- [x] All PDFs include terminating zeros for ICDF decoding
+All 4 PDFs end with 0 per RFC 6716 Section 4.1.3.3
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 2605-2661 - confirm index range 0-31, PDF selection correct, codebook size matches
+All 4 PDFs have 32 values + terminating 0, index range 0-31, PDF selection matches RFC bandwidth/signal-type table
 
 ---
 

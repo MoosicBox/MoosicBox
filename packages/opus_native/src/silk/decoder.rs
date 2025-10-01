@@ -381,6 +381,46 @@ impl SilkDecoder {
         self.previous_gain_indices[channel] = previous_log_gain;
         Ok(gain_indices)
     }
+
+    /// Decodes LSF Stage 1 index (RFC 6716 Section 4.2.7.5.1, lines 2605-2661).
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if bandwidth is invalid for LSF decoding
+    /// * Returns error if range decoder fails
+    pub fn decode_lsf_stage1(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        bandwidth: Bandwidth,
+        frame_type: FrameType,
+    ) -> Result<u8> {
+        use super::lsf_constants::{
+            LSF_STAGE1_PDF_NB_MB_INACTIVE, LSF_STAGE1_PDF_NB_MB_VOICED, LSF_STAGE1_PDF_WB_INACTIVE,
+            LSF_STAGE1_PDF_WB_VOICED,
+        };
+
+        let pdf = match (bandwidth, frame_type) {
+            (
+                Bandwidth::Narrowband | Bandwidth::Mediumband,
+                FrameType::Inactive | FrameType::Unvoiced,
+            ) => LSF_STAGE1_PDF_NB_MB_INACTIVE,
+            (Bandwidth::Narrowband | Bandwidth::Mediumband, FrameType::Voiced) => {
+                LSF_STAGE1_PDF_NB_MB_VOICED
+            }
+            (Bandwidth::Wideband, FrameType::Inactive | FrameType::Unvoiced) => {
+                LSF_STAGE1_PDF_WB_INACTIVE
+            }
+            (Bandwidth::Wideband, FrameType::Voiced) => LSF_STAGE1_PDF_WB_VOICED,
+            _ => {
+                return Err(Error::SilkDecoder(
+                    "invalid bandwidth for LSF decoding".to_string(),
+                ));
+            }
+        };
+
+        #[allow(clippy::cast_possible_truncation)]
+        range_decoder.ec_dec_icdf(pdf, 8).map(|v| v as u8)
+    }
 }
 
 #[cfg(test)]
@@ -544,5 +584,33 @@ mod tests {
         assert!(decoder.previous_gain_indices[0].is_none());
         let _ = decoder.decode_subframe_gains(&mut range_decoder, FrameType::Voiced, 2, 0, true);
         assert!(decoder.previous_gain_indices[0].is_some());
+    }
+
+    #[test]
+    fn test_lsf_stage1_nb_inactive() {
+        let data = vec![0x00, 0xFF, 0xFF, 0xFF];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+        let index = decoder
+            .decode_lsf_stage1(
+                &mut range_decoder,
+                Bandwidth::Narrowband,
+                FrameType::Inactive,
+            )
+            .unwrap();
+        assert!(index < 32);
+    }
+
+    #[test]
+    fn test_lsf_stage1_wb_voiced() {
+        let data = vec![0x80, 0xFF, 0xFF, 0xFF];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let index = decoder
+            .decode_lsf_stage1(&mut range_decoder, Bandwidth::Wideband, FrameType::Voiced)
+            .unwrap();
+        assert!(index < 32);
     }
 }
