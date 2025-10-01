@@ -3981,18 +3981,73 @@ All implementations verified against RFC - CRITICAL: Discovered PDF→ICDF conve
 
 ---
 
-### 3.7: Excitation Decoding
+### 3.7: SILK Decoder - Excitation Decoding (7 Subsections)
 
-**Reference:** RFC 6716 Section 4.2.7.7-4.2.7.8 (lines 4775-5478)
+**Reference:** RFC 6716 Sections 4.2.7.7-4.2.7.8 (lines 4775-5478)
 
-**Goal:** Decode LCG seed and excitation pulses using modified PVQ with hierarchical pulse placement, LSB enhancement, and noise injection
+**Goal:** Decode residual excitation signal using LCG seed initialization, hierarchical pulse vector quantization with combinatorial encoding, LSB enhancement, and pseudorandom noise injection.
 
-**Critical Constraints:**
-* N = 16 samples per shell block (fixed dimension)
-* Pulse count range: 0-16 per shell block
+**Status:** 🔴 **NOT STARTED**
+
+**Scope:** Complete SILK excitation decoding pipeline from bitstream to Q23 excitation samples
+
+**Prerequisites:**
+* Phase 3.6 complete (LTP parameters fully decoded)
+* Range decoder fully functional
+* All SILK state management in place
+
+**Architecture Overview:**
+
+The excitation decoder implements a sophisticated pulse vector quantization scheme with 7 major subsections:
+
+1. **3.7.1** - LCG Seed Decoding (RFC 4.2.7.7, lines 4775-4793)
+   - Initialize 2-bit pseudorandom number generator seed
+   - Uniform PDF for seed selection
+
+2. **3.7.2** - Shell Block Count Determination (RFC 4.2.7.8 intro + Table 44, lines 4828-4855)
+   - Calculate number of 16-sample blocks based on bandwidth and frame size
+   - Special handling for 10ms mediumband frames (128 samples, discard last 8)
+
+3. **3.7.3** - Rate Level and Pulse Count Decoding (RFC 4.2.7.8.1-8.2, lines 4857-4974)
+   - Decode rate level (9 possible values, signal-type dependent)
+   - Decode pulse counts per block with LSB extension mechanism
+   - LSB depth can iterate up to 10 levels
+
+4. **3.7.4** - Pulse Position Decoding via Hierarchical Split (RFC 4.2.7.8.3, lines 4975-5256)
+   - Recursive binary partitioning: 16→8→4→2→1 samples
+   - Combinatorial encoding using 64 different split PDFs
+   - Preorder traversal (left before right)
+
+5. **3.7.5** - LSB Decoding (RFC 4.2.7.8.4, lines 5258-5289)
+   - Decode least significant bits for all 16 coefficients
+   - MSB-to-LSB order with bit-shifting reconstruction
+
+6. **3.7.6** - Sign Decoding (RFC 4.2.7.8.5, lines 5291-5420)
+   - 42 different sign PDFs based on signal type, quant offset, and pulse count
+   - Most PDFs skewed towards negative due to quantization offset
+
+7. **3.7.7** - Noise Injection and Reconstruction (RFC 4.2.7.8.6, lines 5422-5478)
+   - Apply quantization offset (6 different values)
+   - LCG-based pseudorandom sign inversion
+   - Final Q23 excitation output
+
+**Critical Design Constraints:**
+* Shell block size: Fixed 16 samples per block
+* Pulse count range: 0-16 pulses per block (before LSB extension)
 * LSB depth: 0-10 bits per coefficient
-* Sign decoding uses skewed PDFs based on quantization offset
-* LCG-based pseudorandom noise injection required
+* Combinatorial encoding: 64 split PDFs for hierarchical partitioning
+* Sign PDFs: 42 different distributions (3 signal types × 2 quant offsets × 7 pulse categories)
+* Quantization offsets: 6 values in Q23 format
+* LCG constants: Specific multiplier (196314165) and increment (907633515)
+
+**Test Strategy:**
+* Unit tests for each subsection independently with all edge cases
+* Integration tests for full pipeline (seed → positions → LSBs → signs → reconstruction)
+* Verify LCG sequence matches reference implementation
+* Test all 42 sign PDF combinations
+* Test all 64 split PDF combinations
+* Edge cases: zero pulses, maximum pulses, LSB depth limits
+* Conformance test vectors from RFC test suite
 
 ---
 
