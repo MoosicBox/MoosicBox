@@ -1938,133 +1938,759 @@ Verified: 20-iteration gentle adjustment phase + fallback sorting/clamping per R
 
 ### 3.4: LSF Interpolation and LSF-to-LPC Conversion
 
-**Reference:** RFC 6716 Sections 4.2.7.5.5-4.2.7.5.6 (lines 3577-3900)
+**Reference:**
+**RFC 6716 Sections 4.2.7.5.5-4.2.7.5.6** (lines 3591-3892)
 
-**Goal:** Interpolate LSFs for 20ms frames and convert to LPC coefficients
+**Goal:**
+Implement LSF interpolation for 20ms frames and conversion of normalized LSF coefficients to LPC (Linear Prediction Coefficients) using fixed-point polynomial construction.
+
+**Status:**
+🔴 **NOT STARTED**
+
+---
+
+#### Implementation Overview
+
+### What We're Building
+
+1. **LSF Interpolation (RFC 4.2.7.5.5)**
+   - Decode interpolation weight for 20ms frames only
+   - Interpolate between previous frame LSFs (n0_Q15) and current frame LSFs (n2_Q15)
+   - Store previous frame LSFs in decoder state
+
+2. **LSF-to-LPC Conversion (RFC 4.2.7.5.6)**
+   - Cosine approximation using piecewise linear table lookup (Table 28: 129 Q12 values)
+   - LSF coefficient reordering (Table 27: different orderings for NB/MB vs WB)
+   - Polynomial construction via P(z) and Q(z) recurrence
+   - LPC coefficient extraction from polynomial coefficients
+
+### Constants Required
+
+1. **Table 26**: Interpolation PDF `{13, 22, 29, 11, 181}/256` with terminating zero
+2. **Table 27**: LSF ordering for polynomial evaluation (NB/MB: 10 entries, WB: 16 entries)
+3. **Table 28**: Q12 cosine table (129 entries from i=0 to i=128)
+
+### Key Algorithms
+
+**Interpolation Formula (RFC line 3623):**
+```
+n1_Q15[k] = n0_Q15[k] + (w_Q2*(n2_Q15[k] - n0_Q15[k]) >> 2)
+```
+
+**Cosine Approximation (RFC lines 3741-3748):**
+```
+i = n[k] >> 8               // Integer index (top 7 bits)
+f = n[k] & 255              // Fractional part (next 8 bits)
+c_Q17[ordering[k]] = (cos_Q12[i]*256 + (cos_Q12[i+1]-cos_Q12[i])*f + 4) >> 3
+```
+
+**Polynomial Recurrence (RFC lines 3855-3859):**
+```
+p_Q16[k][j] = p_Q16[k-1][j] + p_Q16[k-1][j-2]
+              - ((c_Q17[2*k]*p_Q16[k-1][j-1] + 32768)>>16)
+q_Q16[k][j] = q_Q16[k-1][j] + q_Q16[k-1][j-2]
+              - ((c_Q17[2*k+1]*q_Q16[k-1][j-1] + 32768)>>16)
+```
+
+**LPC Extraction (RFC lines 3882-3886):**
+```
+a32_Q17[k]         = -(q_Q16[d2-1][k+1] - q_Q16[d2-1][k])
+                     - (p_Q16[d2-1][k+1] + p_Q16[d2-1][k])
+a32_Q17[d_LPC-k-1] =  (q_Q16[d2-1][k+1] - q_Q16[d2-1][k])
+                     - (p_Q16[d2-1][k+1] + p_Q16[d2-1][k])
+```
+
+---
 
 #### Implementation Steps
 
-- [ ] **Add interpolation PDF from Table 26 (RFC lines 3609-3615):**
-  ```rust
-  pub const LSF_INTERP_PDF: &[u8] = &[13, 22, 29, 11, 181, 0];
-  ```
+### Step 3.4.1: Add State Tracking for Previous LSFs
 
-- [ ] **Implement LSF interpolation (RFC lines 3617-3626):**
-  ```rust
-  impl SilkDecoder {
-      pub fn interpolate_lsf(
-          &mut self,
-          range_decoder: &mut RangeDecoder,
-          n2_q15: &[i16],
-          frame_size_ms: u8,
-      ) -> Result<Option<Vec<i16>>> {
-          if frame_size_ms != 20 {
-              return Ok(None);
-          }
+**File:** `packages/opus_native/src/silk/decoder.rs`
 
-          let w_q2 = range_decoder.ec_dec_icdf(LSF_INTERP_PDF, 8)?;
+**Modify `SilkDecoder` struct to add LSF state fields:**
+```rust
+pub struct SilkDecoder {
+    // ... existing fields ...
+    previous_lsf_nb: Option<[i16; 10]>,  // Previous NB/MB LSFs (Q15)
+    previous_lsf_wb: Option<[i16; 16]>,  // Previous WB LSFs (Q15)
+    decoder_reset: bool,                  // Tracks if decoder was just reset (RFC line 3603)
+    uncoded_side_channel: bool,           // Tracks uncoded side channel frame (RFC line 3601)
+}
+```
 
-          if let Some(n0_q15) = &self.previous_lsf {
-              let n1_q15: Vec<i16> = n0_q15.iter().zip(n2_q15.iter())
-                  .map(|(n0, n2)| {
-                      n0 + ((i32::from(w_q2) * (i32::from(*n2) - i32::from(*n0))) >> 2) as i16
-                  })
-                  .collect();
-              Ok(Some(n1_q15))
-          } else {
-              Ok(None)
-          }
-      }
-  }
-  ```
+**Update constructor `impl SilkDecoder::new()` to initialize new fields:**
+```rust
+Ok(Self {
+    sample_rate,
+    channels,
+    frame_size_ms,
+    num_silk_frames,
+    previous_stereo_weights: None,
+    previous_gain_indices: [None, None],
+    previous_lsf_nb: None,              // Add this
+    previous_lsf_wb: None,              // Add this
+    decoder_reset: true,                // Add this - initially true (first frame)
+    uncoded_side_channel: false,        // Add this
+})
+```
 
-- [ ] **Add cosine approximation table for LSF-to-LPC:**
-  ```rust
-  // Piecewise linear approximation of cos(pi*x) for x in [0,1] (Q15)
-  pub const LSF_COS_TABLE: &[i16] = &[/* 128 entries from RFC */];
-  ```
+**Rationale:**
+- Need to track previous frame LSFs separately for NB/MB (10 coefficients) and WB (16 coefficients) per RFC line 3618
+- Fixed-size arrays are more efficient than `Vec` and provide compile-time size guarantees
+- **CRITICAL (RFC lines 3601-3607):** Must track decoder reset and uncoded side channel states to properly override interpolation weight to 4 in special cases
 
-- [ ] **Implement LSF-to-LPC conversion (RFC lines 3628-3900):**
-  ```rust
-  impl SilkDecoder {
-      pub fn lsf_to_lpc(&self, nlsf_q15: &[i16]) -> Result<Vec<i16>> {
-          let d_lpc = nlsf_q15.len();
+---
 
-          // Step 1: Cosine approximation with reordering
-          let mut cos_q12 = vec![0i16; d_lpc];
-          for k in 0..d_lpc {
-              cos_q12[k] = self.approximate_cos(nlsf_q15[k]);
-          }
+### Step 3.4.2: Add Interpolation PDF (Table 26)
 
-          // Step 2: Construct P(z) and Q(z) polynomials
-          let mut p_poly = vec![0i32; d_lpc / 2 + 1];
-          let mut q_poly = vec![0i32; d_lpc / 2 + 1];
+**File:** `packages/opus_native/src/silk/lsf_constants.rs`
 
-          // P(z) has root at pi, Q(z) has root at 0
-          p_poly[0] = 1 << 12;  // Q12
-          q_poly[0] = 1 << 12;
+**Add interpolation PDF constant at end of file:**
+```rust
+// RFC 6716 Table 26: PDF for Normalized LSF Interpolation Index (lines 3609-3615)
+// NOTE: All ICDF tables MUST end with 0 per RFC 6716 Section 4.1.3.3 (line 1534):
+//       "the table is terminated by a value of 0 (where fh[k] == ft)."
+//       The RFC table shows PDF values {13, 22, 29, 11, 181}/256
+pub const LSF_INTERP_PDF: &[u8] = &[13, 22, 29, 11, 181, 0];
+```
 
-          for k in 0..(d_lpc / 2) {
-              // Multiply by (1 - 2*cos*z^-1 + z^-2)
-              // P uses even LSF indices, Q uses odd
-              self.multiply_biquad(&mut p_poly, cos_q12[2 * k]);
-              self.multiply_biquad(&mut q_poly, cos_q12[2 * k + 1]);
-          }
+**Verification:** Exactly 6 elements (5 PDF values + terminating zero), matches RFC Table 26.
 
-          // Step 3: Extract LPC coefficients: a[k] = -(P[k] + Q[k])/2
-          let mut a_q12 = vec![0i16; d_lpc];
-          for k in 0..d_lpc {
-              a_q12[k] = (-(p_poly[k + 1] + q_poly[k + 1]) >> 13) as i16;
-          }
+---
 
-          Ok(a_q12)
-      }
+### Step 3.4.3: Add LSF Ordering Tables (Table 27)
 
-      fn approximate_cos(&self, nlsf_q15: i16) -> i16 {
-          // Linear interpolation in cosine table
-          let index = (nlsf_q15 >> 7) as usize;
-          let frac = nlsf_q15 & 0x7F;
-          let v0 = LSF_COS_TABLE[index];
-          let v1 = LSF_COS_TABLE[index + 1];
-          (v0 + ((i32::from(v1 - v0) * i32::from(frac)) >> 7)) as i16
-      }
+**File:** `packages/opus_native/src/silk/lsf_constants.rs`
 
-      fn multiply_biquad(&self, poly: &mut [i32], cos_q12: i16) {
-          // Multiply polynomial by (1 - 2*cos_q12*z^-1 + z^-2)
-          let len = poly.len();
-          for k in (2..len).rev() {
-              poly[k] = poly[k - 2] - ((2 * i64::from(poly[k - 1]) * i64::from(cos_q12)) >> 12) as i32;
-          }
-          poly[1] = -((2 * i64::from(poly[0]) * i64::from(cos_q12)) >> 12) as i32;
-      }
-  }
-  ```
+**Add ordering constants:**
+```rust
+// RFC 6716 Table 27: LSF Ordering for Polynomial Evaluation (lines 3703-3739)
+// Reordering improves numerical accuracy during polynomial construction
+// NB/MB: 10 coefficients, WB: 16 coefficients
+pub const LSF_ORDERING_NB: &[usize; 10] = &[0, 9, 6, 3, 4, 5, 8, 1, 2, 7];
+pub const LSF_ORDERING_WB: &[usize; 16] = &[0, 15, 8, 7, 4, 11, 12, 3, 2, 13, 10, 5, 6, 9, 14, 1];
+```
 
-- [ ] **Add interpolation and conversion tests:**
-  ```rust
-  #[test]
-  fn test_lsf_interpolation_20ms() { /* test w_Q2 weighting */ }
+**Verification:**
+- NB/MB: 10 entries matching RFC Table 27 for coefficients 0-9
+- WB: 16 entries matching RFC Table 27 for coefficients 0-15
+- All values are valid indices
 
-  #[test]
-  fn test_lsf_to_lpc_conversion() { /* verify polynomial construction */ }
+---
 
-  #[test]
-  fn test_cos_approximation() { /* test table lookup */ }
-  ```
+### Step 3.4.4: Add Cosine Table (Table 28)
+
+**File:** `packages/opus_native/src/silk/lsf_constants.rs`
+
+**Add 129-entry Q12 cosine table from RFC Table 28 (lines 3763-3841):**
+```rust
+// RFC 6716 Table 28: Q12 Cosine Table for LSF Conversion (lines 3763-3841)
+// Piecewise linear approximation of cos(pi*x) for x in [0,1]
+// 129 values (i=0 to i=128) in Q12 format
+// Monotonically decreasing from cos(0)=4096 to cos(π)=-4096
+pub const LSF_COS_TABLE_Q12: &[i16; 129] = &[
+    // i=0..3 (RFC lines 3766)
+    4096, 4095, 4091, 4085,
+    // i=4..7 (RFC lines 3768)
+    4076, 4065, 4052, 4036,
+    // i=8..11 (RFC lines 3770)
+    4017, 3997, 3973, 3948,
+    // i=12..15 (RFC lines 3772)
+    3920, 3889, 3857, 3822,
+    // i=16..19 (RFC lines 3774)
+    3784, 3745, 3703, 3659,
+    // i=20..23 (RFC lines 3776)
+    3613, 3564, 3513, 3461,
+    // i=24..27 (RFC lines 3778)
+    3406, 3349, 3290, 3229,
+    // i=28..31 (RFC lines 3780)
+    3166, 3102, 3035, 2967,
+    // i=32..35 (RFC lines 3782)
+    2896, 2824, 2751, 2676,
+    // i=36..39 (RFC lines 3784)
+    2599, 2520, 2440, 2359,
+    // i=40..43 (RFC lines 3786)
+    2276, 2191, 2106, 2019,
+    // i=44..47 (RFC lines 3788)
+    1931, 1842, 1751, 1660,
+    // i=48..51 (RFC lines 3790)
+    1568, 1474, 1380, 1285,
+    // i=52..55 (RFC lines 3792)
+    1189, 1093, 995, 897,
+    // i=56..59 (RFC lines 3794)
+    799, 700, 601, 501,
+    // i=60..63 (RFC lines 3796)
+    401, 301, 201, 101,
+    // i=64..67 (RFC lines 3798)
+    0, -101, -201, -301,
+    // i=68..71 (RFC lines 3800)
+    -401, -501, -601, -700,
+    // i=72..75 (RFC lines 3802)
+    -799, -897, -995, -1093,
+    // i=76..79 (RFC lines 3804)
+    -1189, -1285, -1380, -1474,
+    // i=80..83 (RFC lines 3806-3810)
+    -1568, -1660, -1751, -1842,
+    // i=84..87 (RFC lines 3816)
+    -1931, -2019, -2106, -2191,
+    // i=88..91 (RFC lines 3818)
+    -2276, -2359, -2440, -2520,
+    // i=92..95 (RFC lines 3820)
+    -2599, -2676, -2751, -2824,
+    // i=96..99 (RFC lines 3822)
+    -2896, -2967, -3035, -3102,
+    // i=100..103 (RFC lines 3824)
+    -3166, -3229, -3290, -3349,
+    // i=104..107 (RFC lines 3826)
+    -3406, -3461, -3513, -3564,
+    // i=108..111 (RFC lines 3828)
+    -3613, -3659, -3703, -3745,
+    // i=112..115 (RFC lines 3830)
+    -3784, -3822, -3857, -3889,
+    // i=116..119 (RFC lines 3832)
+    -3920, -3948, -3973, -3997,
+    // i=120..123 (RFC lines 3834)
+    -4017, -4036, -4052, -4065,
+    // i=124..127 (RFC lines 3836)
+    -4076, -4085, -4091, -4095,
+    // i=128 (RFC line 3838)
+    -4096,
+];
+```
+
+**Verification:**
+- Exactly 129 values (fixed-size array enforces at compile time)
+- First value: 4096, last value: -4096
+- Monotonically decreasing
+- All values match RFC Table 28 exactly
+
+---
+
+### Step 3.4.5: Implement LSF Interpolation
+
+**File:** `packages/opus_native/src/silk/decoder.rs`
+
+**Add interpolation method to `impl SilkDecoder` block:**
+```rust
+/// Decodes and applies LSF interpolation for 20ms frames (RFC 6716 Section 4.2.7.5.5, lines 3591-3626).
+///
+/// # Arguments
+/// * `range_decoder` - Range decoder for reading interpolation weight
+/// * `n2_q15` - Current frame's normalized LSF coefficients (Q15)
+/// * `bandwidth` - Audio bandwidth (determines which previous LSFs to use)
+///
+/// # Returns
+/// * `Ok(Some(n1_q15))` - Interpolated LSFs for first half of 20ms frame
+/// * `Ok(None)` - No interpolation (10ms frame or first frame)
+///
+/// # Errors
+/// * Returns error if range decoder fails
+// TODO(Section 3.5+): Remove dead_code annotation when integrated into full LSF decode pipeline
+#[allow(dead_code, clippy::cast_possible_truncation)]
+fn interpolate_lsf(
+    &mut self,
+    range_decoder: &mut RangeDecoder,
+    n2_q15: &[i16],
+    bandwidth: Bandwidth,
+) -> Result<Option<Vec<i16>>> {
+    use super::lsf_constants::LSF_INTERP_PDF;
+
+    // Only interpolate for 20ms frames (RFC line 3593-3607)
+    if self.frame_size_ms != 20 {
+        return Ok(None);
+    }
+
+    // Decode interpolation weight (Q2 format, 0-4)
+    let w_q2 = range_decoder.ec_dec_icdf(LSF_INTERP_PDF, 8)? as i16;
+
+    // RFC lines 3601-3607: Override w_Q2 to 4 in special cases
+    // After either:
+    //   1. An uncoded regular SILK frame in the side channel, or
+    //   2. A decoder reset
+    // The decoder still decodes the factor but ignores its value and uses 4 instead
+    let effective_w_q2 = if self.decoder_reset || self.uncoded_side_channel {
+        4  // Force to 4 (means use n2 directly, full interpolation to current frame)
+    } else {
+        w_q2
+    };
+
+    // Clear reset flag after first use
+    if self.decoder_reset {
+        self.decoder_reset = false;
+    }
+
+    // Clear uncoded side channel flag (one-shot flag)
+    if self.uncoded_side_channel {
+        self.uncoded_side_channel = false;
+    }
+
+    // Get previous frame LSFs based on bandwidth
+    let n0_q15 = match bandwidth {
+        Bandwidth::Narrowband | Bandwidth::Mediumband => {
+            self.previous_lsf_nb.as_ref().map(|arr| arr.as_slice())
+        }
+        Bandwidth::Wideband => {
+            self.previous_lsf_wb.as_ref().map(|arr| arr.as_slice())
+        }
+        _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF interpolation".to_string())),
+    };
+
+    if let Some(n0) = n0_q15 {
+        // RFC line 3623: n1_Q15[k] = n0_Q15[k] + (w_Q2*(n2_Q15[k] - n0_Q15[k]) >> 2)
+        // Use effective_w_q2 (may be overridden to 4)
+        let n1_q15: Vec<i16> = n0
+            .iter()
+            .zip(n2_q15.iter())
+            .map(|(&n0_val, &n2_val)| {
+                let diff = i32::from(n2_val) - i32::from(n0_val);
+                let weighted = (i32::from(effective_w_q2) * diff) >> 2;
+                (i32::from(n0_val) + weighted) as i16
+            })
+            .collect();
+        Ok(Some(n1_q15))
+    } else {
+        // No previous frame (first frame) - RFC line 3605-3606
+        Ok(None)
+    }
+}
+
+/// Stores current frame's LSFs as previous for next frame's interpolation.
+// TODO(Section 3.5+): Remove dead_code annotation when integrated into full LSF decode pipeline
+#[allow(dead_code)]
+fn store_previous_lsf(&mut self, nlsf_q15: &[i16], bandwidth: Bandwidth) {
+    match bandwidth {
+        Bandwidth::Narrowband | Bandwidth::Mediumband => {
+            if nlsf_q15.len() >= 10 {
+                let mut arr = [0_i16; 10];
+                arr.copy_from_slice(&nlsf_q15[..10]);
+                self.previous_lsf_nb = Some(arr);
+            }
+        }
+        Bandwidth::Wideband => {
+            if nlsf_q15.len() >= 16 {
+                let mut arr = [0_i16; 16];
+                arr.copy_from_slice(&nlsf_q15[..16]);
+                self.previous_lsf_wb = Some(arr);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Marks that an uncoded side channel frame was encountered.
+/// This will cause the next interpolation to use w_Q2=4 (RFC lines 3601-3607).
+// TODO(Section 3.5+): Remove dead_code annotation when integrated into full LSF decode pipeline
+#[allow(dead_code)]
+fn mark_uncoded_side_channel(&mut self) {
+    self.uncoded_side_channel = true;
+}
+
+/// Resets decoder state (e.g., after packet loss).
+/// This will cause the next interpolation to use w_Q2=4 (RFC line 3603).
+// TODO(Section 3.5+): Remove dead_code annotation when integrated into full LSF decode pipeline
+#[allow(dead_code)]
+fn reset_decoder_state(&mut self) {
+    self.decoder_reset = true;
+    self.previous_lsf_nb = None;
+    self.previous_lsf_wb = None;
+}
+```
+
+---
+
+### Step 3.4.6: Implement LSF-to-LPC Conversion
+
+**File:** `packages/opus_native/src/silk/decoder.rs`
+
+**Add LSF-to-LPC conversion method to `impl SilkDecoder` block:**
+```rust
+/// Converts normalized LSF coefficients to LPC coefficients (RFC 6716 Section 4.2.7.5.6, lines 3628-3892).
+///
+/// # Arguments
+/// * `nlsf_q15` - Normalized LSF coefficients (Q15 format)
+/// * `bandwidth` - Audio bandwidth (determines ordering and d_LPC)
+///
+/// # Returns
+/// * LPC coefficients in Q17 format (32-bit, before range limiting)
+///
+/// # Errors
+/// * Returns error if bandwidth is invalid
+// TODO(Section 3.5): Remove dead_code annotation when called by LPC coefficient limiting
+#[allow(dead_code, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+fn lsf_to_lpc(&self, nlsf_q15: &[i16], bandwidth: Bandwidth) -> Result<Vec<i32>> {
+    use super::lsf_constants::{LSF_COS_TABLE_Q12, LSF_ORDERING_NB, LSF_ORDERING_WB};
+
+    let (d_lpc, ordering) = match bandwidth {
+        Bandwidth::Narrowband | Bandwidth::Mediumband => (10, LSF_ORDERING_NB),
+        Bandwidth::Wideband => (16, LSF_ORDERING_WB),
+        _ => return Err(Error::SilkDecoder("invalid bandwidth for LSF-to-LPC".to_string())),
+    };
+
+    // Step 1: Cosine approximation with reordering (RFC lines 3741-3748)
+    let mut c_q17 = vec![0_i32; d_lpc];
+    for k in 0..d_lpc {
+        let n = nlsf_q15[k];
+        let i = (n >> 8) as usize;          // Integer index (top 7 bits)
+        let f = i32::from(n & 255);          // Fractional part (next 8 bits)
+
+        // Linear interpolation: c_Q17[ordering[k]] = (cos_Q12[i]*256 + (cos_Q12[i+1]-cos_Q12[i])*f + 4) >> 3
+        let cos_i = i32::from(LSF_COS_TABLE_Q12[i]);
+        let cos_i_plus_1 = i32::from(LSF_COS_TABLE_Q12[i + 1]);
+        c_q17[ordering[k]] = ((cos_i * 256) + ((cos_i_plus_1 - cos_i) * f) + 4) >> 3;
+    }
+
+    // Step 2: Construct P(z) and Q(z) polynomials via recurrence
+    let d2 = d_lpc / 2;
+    let mut p_q16 = vec![vec![0_i64; d2 + 2]; d2];  // Use i64 for 48-bit precision (RFC line 3873)
+    let mut q_q16 = vec![vec![0_i64; d2 + 2]; d2];
+
+    // Boundary conditions (RFC lines 3849-3850)
+    p_q16[0][0] = 1_i64 << 16;
+    p_q16[0][1] = -i64::from(c_q17[0]);
+    q_q16[0][0] = 1_i64 << 16;
+    q_q16[0][1] = -i64::from(c_q17[1]);
+
+    // Recurrence (RFC lines 3855-3859)
+    for k in 1..d2 {
+        for j in 0..=k + 1 {
+            let p_prev_j = p_q16[k - 1][j];
+            let p_prev_j_minus_2 = if j >= 2 { p_q16[k - 1][j - 2] } else { 0 };
+            let p_prev_j_minus_1 = if j >= 1 { p_q16[k - 1][j - 1] } else { 0 };
+
+            p_q16[k][j] = p_prev_j + p_prev_j_minus_2
+                - ((i64::from(c_q17[2 * k]) * p_prev_j_minus_1 + 32768) >> 16);
+
+            let q_prev_j = q_q16[k - 1][j];
+            let q_prev_j_minus_2 = if j >= 2 { q_q16[k - 1][j - 2] } else { 0 };
+            let q_prev_j_minus_1 = if j >= 1 { q_q16[k - 1][j - 1] } else { 0 };
+
+            q_q16[k][j] = q_prev_j + q_prev_j_minus_2
+                - ((i64::from(c_q17[2 * k + 1]) * q_prev_j_minus_1 + 32768) >> 16);
+        }
+    }
+
+    // Step 3: Extract LPC coefficients (RFC lines 3882-3886)
+    let mut a32_q17 = vec![0_i32; d_lpc];
+    for k in 0..d2 {
+        let q_diff = q_q16[d2 - 1][k + 1] - q_q16[d2 - 1][k];
+        let p_sum = p_q16[d2 - 1][k + 1] + p_q16[d2 - 1][k];
+
+        a32_q17[k] = (-(q_diff + p_sum)) as i32;
+        a32_q17[d_lpc - k - 1] = (q_diff - p_sum) as i32;
+    }
+
+    Ok(a32_q17)
+}
+```
+
+---
+
+### Step 3.4.7: Add Comprehensive Unit Tests
+
+**File:** `packages/opus_native/src/silk/decoder.rs`
+
+**Add 16 unit tests to the existing `#[cfg(test)] mod tests` block:**
+
+```rust
+#[test]
+fn test_lsf_interpolation_20ms_nb() {
+    let data = vec![0xFF; 50];
+    let mut range_decoder = RangeDecoder::new(&data).unwrap();
+    let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+    decoder.previous_lsf_nb = Some([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]);
+    decoder.decoder_reset = false;  // Normal operation
+
+    let n2_q15 = vec![150, 250, 350, 450, 550, 650, 750, 850, 950, 1050];
+    let result = decoder.interpolate_lsf(&mut range_decoder, &n2_q15, Bandwidth::Narrowband);
+
+    assert!(result.is_ok());
+    let interpolated = result.unwrap();
+    assert!(interpolated.is_some());
+    assert_eq!(interpolated.unwrap().len(), 10);
+}
+
+#[test]
+fn test_lsf_interpolation_decoder_reset_forces_w_q2_4() {
+    // RFC lines 3601-3607: After decoder reset, w_Q2 must be forced to 4
+    let data = vec![0x00; 50];  // Will decode w_Q2 = 0
+    let mut range_decoder = RangeDecoder::new(&data).unwrap();
+    let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+    decoder.previous_lsf_nb = Some([100; 10]);
+    decoder.decoder_reset = true;  // Reset flag set
+
+    let n2_q15 = vec![200; 10];
+    let result = decoder.interpolate_lsf(&mut range_decoder, &n2_q15, Bandwidth::Narrowband);
+
+    assert!(result.is_ok());
+    let interpolated = result.unwrap();
+    assert!(interpolated.is_some());
+
+    // With w_Q2=4, interpolation should give n2 (full interpolation)
+    let n1 = interpolated.unwrap();
+    assert_eq!(n1[0], 200);  // Should be n2, not interpolated with n0
+
+    // Verify reset flag was cleared
+    assert!(!decoder.decoder_reset);
+}
+
+#[test]
+fn test_lsf_interpolation_uncoded_side_channel_forces_w_q2_4() {
+    // RFC lines 3601-3607: After uncoded side channel, w_Q2 must be forced to 4
+    let data = vec![0x00; 50];  // Will decode w_Q2 = 0
+    let mut range_decoder = RangeDecoder::new(&data).unwrap();
+    let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+    decoder.previous_lsf_nb = Some([100; 10]);
+    decoder.decoder_reset = false;
+    decoder.uncoded_side_channel = true;  // Uncoded side channel flag set
+
+    let n2_q15 = vec![200; 10];
+    let result = decoder.interpolate_lsf(&mut range_decoder, &n2_q15, Bandwidth::Narrowband);
+
+    assert!(result.is_ok());
+    let interpolated = result.unwrap();
+    assert!(interpolated.is_some());
+
+    // With w_Q2=4, should get full interpolation to n2
+    let n1 = interpolated.unwrap();
+    assert_eq!(n1[0], 200);
+
+    // Verify flag was cleared
+    assert!(!decoder.uncoded_side_channel);
+}
+
+#[test]
+fn test_mark_uncoded_side_channel() {
+    let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+    assert!(!decoder.uncoded_side_channel);
+    decoder.mark_uncoded_side_channel();
+    assert!(decoder.uncoded_side_channel);
+}
+
+#[test]
+fn test_reset_decoder_state() {
+    let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+    // Set some state
+    decoder.previous_lsf_nb = Some([100; 10]);
+    decoder.decoder_reset = false;
+
+    // Reset
+    decoder.reset_decoder_state();
+
+    assert!(decoder.decoder_reset);
+    assert!(decoder.previous_lsf_nb.is_none());
+}
+
+#[test]
+fn test_lsf_interpolation_10ms_returns_none() {
+    let data = vec![0xFF; 50];
+    let mut range_decoder = RangeDecoder::new(&data).unwrap();
+    let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 10).unwrap();
+
+    let n2_q15 = vec![100; 10];
+    let result = decoder.interpolate_lsf(&mut range_decoder, &n2_q15, Bandwidth::Narrowband);
+
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_none());
+}
+
+#[test]
+fn test_lsf_interpolation_no_previous_returns_none() {
+    let data = vec![0xFF; 50];
+    let mut range_decoder = RangeDecoder::new(&data).unwrap();
+    let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+    decoder.decoder_reset = false;  // Clear initial reset flag
+
+    let n2_q15 = vec![100; 10];
+    let result = decoder.interpolate_lsf(&mut range_decoder, &n2_q15, Bandwidth::Narrowband);
+
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_none());
+}
+
+#[test]
+fn test_lsf_interpolation_wb() {
+    let data = vec![0xFF; 50];
+    let mut range_decoder = RangeDecoder::new(&data).unwrap();
+    let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+    decoder.previous_lsf_wb = Some([100; 16]);
+    decoder.decoder_reset = false;
+    let n2_q15 = vec![200; 16];
+    let result = decoder.interpolate_lsf(&mut range_decoder, &n2_q15, Bandwidth::Wideband);
+
+    assert!(result.is_ok());
+    assert!(result.unwrap().is_some());
+}
+
+#[test]
+fn test_store_previous_lsf_nb() {
+    let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+    let nlsf = vec![10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+    decoder.store_previous_lsf(&nlsf, Bandwidth::Narrowband);
+
+    assert!(decoder.previous_lsf_nb.is_some());
+    assert_eq!(decoder.previous_lsf_nb.unwrap(), [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]);
+}
+
+#[test]
+fn test_store_previous_lsf_wb() {
+    let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+    let nlsf = vec![10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160];
+
+    decoder.store_previous_lsf(&nlsf, Bandwidth::Wideband);
+
+    assert!(decoder.previous_lsf_wb.is_some());
+    assert_eq!(decoder.previous_lsf_wb.unwrap()[0], 10);
+    assert_eq!(decoder.previous_lsf_wb.unwrap()[15], 160);
+}
+
+#[test]
+fn test_lsf_to_lpc_nb() {
+    let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+    let nlsf_q15 = vec![1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000];
+
+    let result = decoder.lsf_to_lpc(&nlsf_q15, Bandwidth::Narrowband);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 10);
+}
+
+#[test]
+fn test_lsf_to_lpc_wb() {
+    let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+    let nlsf_q15: Vec<i16> = (1..=16).map(|i| i * 1000).collect();
+
+    let result = decoder.lsf_to_lpc(&nlsf_q15, Bandwidth::Wideband);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().len(), 16);
+}
+
+#[test]
+fn test_lsf_to_lpc_invalid_bandwidth() {
+    let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+    let nlsf_q15 = vec![0; 10];
+
+    let result = decoder.lsf_to_lpc(&nlsf_q15, Bandwidth::SuperWideband);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_cosine_table_bounds() {
+    use super::super::lsf_constants::LSF_COS_TABLE_Q12;
+
+    assert_eq!(LSF_COS_TABLE_Q12.len(), 129);
+    assert_eq!(LSF_COS_TABLE_Q12[0], 4096);    // cos(0) = 1.0 in Q12
+    assert_eq!(LSF_COS_TABLE_Q12[128], -4096);  // cos(pi) = -1.0 in Q12
+}
+
+#[test]
+fn test_lsf_ordering_lengths() {
+    use super::super::lsf_constants::{LSF_ORDERING_NB, LSF_ORDERING_WB};
+
+    assert_eq!(LSF_ORDERING_NB.len(), 10);
+    assert_eq!(LSF_ORDERING_WB.len(), 16);
+}
+
+#[test]
+fn test_lsf_ordering_values_in_bounds() {
+    use super::super::lsf_constants::{LSF_ORDERING_NB, LSF_ORDERING_WB};
+
+    for &idx in LSF_ORDERING_NB.iter() {
+        assert!(idx < 10);
+    }
+
+    for &idx in LSF_ORDERING_WB.iter() {
+        assert!(idx < 16);
+    }
+}
+```
+
+---
 
 #### 3.4 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass, including 3 new special case tests)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Interpolation PDF matches Table 26
-- [ ] Interpolation formula matches RFC line 3623
-- [ ] Cosine table implements piecewise linear approximation
-- [ ] P(z) and Q(z) polynomial construction correct
-- [ ] LPC coefficient extraction uses -(P+Q)/2 formula
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3577-3900 - confirm polynomial math, Q-format conversions, cosine approximation
+- [ ] Interpolation PDF matches Table 26 exactly: `[13, 22, 29, 11, 181, 0]`
+- [ ] LSF ordering tables match Table 27 exactly (NB: 10 entries, WB: 16 entries)
+- [ ] Cosine table matches Table 28 exactly (129 Q12 values from i=0 to i=128)
+- [ ] Cosine table boundaries correct: `LSF_COS_TABLE_Q12[0] == 4096`, `LSF_COS_TABLE_Q12[128] == -4096`
+- [ ] Interpolation formula matches RFC line 3623 exactly
+- [ ] Cosine approximation matches RFC lines 3747-3748 (with reordering)
+- [ ] Polynomial recurrence matches RFC lines 3855-3859 (48-bit precision via i64)
+- [ ] LPC extraction matches RFC lines 3882-3886 (P and Q combination with proper signs)
+- [ ] Previous LSF state tracking works for both NB/MB (10 coeffs) and WB (16 coeffs)
+- [ ] **CRITICAL**: Decoder reset flag tracked and forces w_Q2=4 (RFC line 3603)
+- [ ] **CRITICAL**: Uncoded side channel flag tracked and forces w_Q2=4 (RFC lines 3601-3602)
+- [ ] **CRITICAL**: w_Q2 still decoded from bitstream even when overridden to 4
+- [ ] **CRITICAL**: Reset and uncoded side channel flags are cleared after use (one-shot behavior)
+- [ ] 10ms frames skip interpolation, 20ms frames interpolate
+- [ ] First frame (no previous LSF) returns None for interpolation
+- [ ] All 16 unit tests pass (including 3 special case tests)
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 3591-3892 - confirm all Q-format arithmetic (Q2, Q12, Q15, Q16, Q17), polynomial symmetry, cosine interpolation, LSF storage, boundary conditions, and special case w_Q2 override logic
+
+---
+
+#### Design Decisions
+
+### 1. TODO Comments with Dead Code Annotations
+**Decision:** Add explicit TODO comments referencing the section where dead code annotations will be removed
+
+**Format:**
+```rust
+// TODO(Section X.Y): Remove dead_code annotation when [specific integration event]
+#[allow(dead_code, ...)]
+```
+
+**Rationale:**
+* Makes it clear this is temporary, not permanent dead code
+* References specific future section for removal
+* Explains *why* it will no longer be dead code (integration context)
+* Helps maintainers understand implementation roadmap
+* Prevents accidental deletion of "unused" code
+* Makes code review easier (reviewers know it's intentional)
+
+**Examples:**
+* `// TODO(Section 3.5): Remove dead_code annotation when called by LPC coefficient limiting`
+* `// TODO(Section 3.5+): Remove dead_code annotation when integrated into full LSF decode pipeline`
+
+### 2. Special Case Handling for w_Q2 Override (RFC Lines 3601-3607)
+**Decision:** Track decoder reset and uncoded side channel states to force w_Q2 = 4 in special cases
+
+**Implementation:**
+```rust
+decoder_reset: bool,             // Set to true on decoder init or reset
+uncoded_side_channel: bool,      // Set to true after uncoded side channel frame
+```
+
+**Rationale:**
+* **RFC COMPLIANCE CRITICAL**: RFC lines 3601-3607 explicitly require forcing w_Q2 = 4 after:
+  1. Decoder reset (Section 4.5.2)
+  2. Uncoded regular SILK frame in side channel
+* The decoder must **still decode** the w_Q2 value from bitstream (to maintain bitstream position)
+* But the decoded value must be **ignored** and **replaced with 4**
+* When w_Q2 = 4: `n1_Q15[k] = n0_Q15[k] + (4*(n2_Q15[k] - n0_Q15[k]) >> 2)` simplifies to `n1_Q15[k] = n2_Q15[k]` (full interpolation to current frame)
+* Flags are **one-shot**: cleared immediately after use to prevent affecting subsequent frames
+* `decoder_reset` initialized to `true` because first frame after construction counts as "after reset"
+
+**Why This Matters:**
+* Without this, decoder behavior diverges from RFC in edge cases
+* Affects audio quality after packet loss or side channel transitions
+* Reference decoder uses this exact behavior
+* This is a **zero-compromise requirement** for RFC 6716 compliance
+
+---
+
+This specification provides complete implementation details for Section 3.4 with proper TODO tracking for all dead code annotations and full RFC compliance for special interpolation cases.
 
 ---
 
