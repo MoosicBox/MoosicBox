@@ -4031,6 +4031,42 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
    - LCG-based pseudorandom sign inversion
    - Final Q23 excitation output
 
+**CRITICAL: PDF to ICDF Conversion for ALL Constants**
+
+⚠️ **MANDATORY CONVERSION REQUIREMENT** ⚠️
+
+The RFC documents probability distribution functions (PDFs) in tables. The `ec_dec_icdf()` function requires inverse cumulative distribution function (ICDF) format. **Every PDF constant in Section 3.7 MUST be converted.**
+
+**Conversion Formula:**
+```
+Given RFC PDF: {f[0], f[1], ..., f[n-1]}/ft
+
+Step 1: Calculate cumulative sums
+cumulative[k] = sum(f[0..k])
+
+Step 2: Convert to ICDF
+icdf[k] = ft - cumulative[k]
+
+Step 3: Append terminating zero
+icdf[n] = 0
+```
+
+**Example (Table 43 LCG Seed):**
+- RFC PDF: `{64, 64, 64, 64}/256`
+- Cumulative: `[64, 128, 192, 256]`
+- ICDF: `[256-64, 256-128, 256-192, 0] = [192, 128, 64, 0]`
+
+**Total Constants Requiring Conversion:**
+- Table 43: 1 PDF (LCG seed)
+- Table 45: 2 PDFs (rate level)
+- Table 46: 11 PDFs (pulse count levels 0-10)
+- Tables 47-50: 64 PDFs (pulse split: 4 partition sizes × 16 pulse counts)
+- Table 51: 1 PDF (LSB)
+- Table 52: 42 PDFs (signs: 3 types × 2 offsets × 7 pulse categories)
+- **TOTAL: 121 PDF→ICDF conversions**
+
+All subsections below show constants in **ICDF format** with RFC PDF values documented in comments.
+
 **Critical Design Constraints:**
 * Shell block size: Fixed 16 samples per block
 * Pulse count range: 0-16 pulses per block (before LSB extension)
@@ -4046,6 +4082,7 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 * Verify LCG sequence matches reference implementation
 * Test all 42 sign PDF combinations
 * Test all 64 split PDF combinations
+* Verify all 121 ICDF conversions are correct
 * Edge cases: zero pulses, maximum pulses, LSB depth limits
 * Conformance test vectors from RFC test suite
 
@@ -4057,12 +4094,32 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 
 **Goal:** Decode 2-bit Linear Congruential Generator seed for noise injection
 
+**CRITICAL: PDF to ICDF Conversion**
+
+The RFC tables document probability distribution functions (PDFs). The `ec_dec_icdf()` function requires inverse cumulative distribution function (ICDF) format.
+
+**Conversion Formula:**
+```
+Given RFC PDF: {f[0], f[1], ..., f[n-1]}/ft
+
+ICDF conversion:
+icdf[k] = ft - sum(f[0..k])
+icdf[n] = 0  (terminating zero)
+```
+
+**Example for Table 43:**
+- RFC PDF: `{64, 64, 64, 64}/256`
+- Cumulative: [64, 128, 192, 256]
+- ICDF: `[256-64, 256-128, 256-192, 0] = [192, 128, 64, 0]`
+
 ##### Implementation Steps
 
-- [ ] **Add LCG seed PDF from Table 43 (RFC lines 4787-4793):**
+- [ ] **Add LCG seed constant from Table 43 (RFC lines 4787-4793):**
   ```rust
-  // Table 43: Uniform PDF for LCG seed (2 bits, 4 values)
-  pub const LCG_SEED_PDF: &[u8] = &[64, 64, 64, 64, 0];
+  // RFC 6716 Table 43: PDF for LCG Seed (lines 4787-4793)
+  // RFC shows PDF: {64, 64, 64, 64}/256
+  // Converted to ICDF for ec_dec_icdf()
+  pub const LCG_SEED_PDF: &[u8] = &[192, 128, 64, 0];
   ```
 
 - [ ] **Implement LCG seed decoding:**
@@ -4102,10 +4159,12 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] LCG seed PDF matches Table 43 exactly (uniform distribution)
+- [ ] LCG seed ICDF converted correctly: `[192, 128, 64, 0]` from RFC PDF `{64, 64, 64, 64}/256`
+- [ ] ICDF values are monotonically decreasing: 192 > 128 > 64 > 0
+- [ ] ICDF terminates with 0
 - [ ] Seed value range is 0-3 inclusive
 - [ ] Seed stored in decoder state for later use
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4775-4793 - confirm PDF is uniform, seed initialization correct
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4775-4793 - confirm ICDF conversion correct, seed initialization correct
 
 ---
 
@@ -4185,22 +4244,83 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 
 **Goal:** Decode rate level and pulse counts for all shell blocks
 
+**CRITICAL: PDF to ICDF Conversion**
+
+All constants below are converted from RFC PDF format to ICDF format required by `ec_dec_icdf()`. See Section 3.7.1 for conversion formula.
+
 ##### Implementation Steps
 
-- [ ] **Add rate level PDFs from Table 45 (RFC lines 4883-4891):**
+- [ ] **Add rate level constants from Table 45 (RFC lines 4883-4891):**
   ```rust
-  pub const RATE_LEVEL_PDF_INACTIVE: &[u8] = &[15, 51, 12, 46, 45, 13, 33, 27, 14, 0];
-  pub const RATE_LEVEL_PDF_VOICED: &[u8] = &[33, 30, 36, 17, 34, 49, 18, 21, 18, 0];
+  // RFC 6716 Table 45: PDFs for the Rate Level (lines 4883-4891)
+  // RFC shows PDF Inactive/Unvoiced: {15, 51, 12, 46, 45, 13, 33, 27, 14}/256
+  // Converted to ICDF for ec_dec_icdf()
+  pub const RATE_LEVEL_PDF_INACTIVE: &[u8] = &[241, 190, 178, 132, 87, 74, 41, 14, 0];
+
+  // RFC shows PDF Voiced: {33, 30, 36, 17, 34, 49, 18, 21, 18}/256
+  // Converted to ICDF for ec_dec_icdf()
+  pub const RATE_LEVEL_PDF_VOICED: &[u8] = &[223, 193, 157, 140, 106, 57, 39, 18, 0];
   ```
 
-- [ ] **Add pulse count PDFs from Table 46 (RFC lines 4935-4973) - all 11 levels:**
+- [ ] **Add pulse count constants from Table 46 (RFC lines 4935-4973) - all 11 levels:**
   ```rust
+  // RFC 6716 Table 46: PDFs for the Pulse Count (lines 4935-4973)
+  // Each level's RFC PDF is converted to ICDF for ec_dec_icdf()
+
+  // Level 0: RFC shows PDF {131, 74, 25, 8, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}/256
   pub const PULSE_COUNT_PDF_LEVEL_0: &[u8] = &[
-      131, 74, 25, 8, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0
+      125, 51, 26, 18, 15, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
   ];
-  // ... (levels 1-9)
+
+  // Level 1: RFC shows PDF {58, 93, 60, 23, 7, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}/256
+  pub const PULSE_COUNT_PDF_LEVEL_1: &[u8] = &[
+      198, 105, 45, 22, 15, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+  ];
+
+  // Level 2: RFC shows PDF {43, 51, 46, 33, 24, 16, 11, 8, 6, 3, 3, 3, 2, 1, 1, 2, 1, 2}/256
+  pub const PULSE_COUNT_PDF_LEVEL_2: &[u8] = &[
+      213, 162, 116, 83, 59, 43, 32, 24, 18, 15, 12, 9, 7, 6, 5, 3, 2, 0
+  ];
+
+  // Level 3: RFC shows PDF {17, 52, 71, 57, 31, 12, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}/256
+  pub const PULSE_COUNT_PDF_LEVEL_3: &[u8] = &[
+      239, 187, 116, 59, 28, 16, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+  ];
+
+  // Level 4: RFC shows PDF {6, 21, 41, 53, 49, 35, 21, 11, 6, 3, 2, 2, 1, 1, 1, 1, 1, 1}/256
+  pub const PULSE_COUNT_PDF_LEVEL_4: &[u8] = &[
+      250, 229, 188, 135, 86, 51, 30, 19, 13, 10, 8, 6, 5, 4, 3, 2, 1, 0
+  ];
+
+  // Level 5: RFC shows PDF {7, 14, 22, 28, 29, 28, 25, 20, 17, 13, 11, 9, 7, 5, 4, 4, 3, 10}/256
+  pub const PULSE_COUNT_PDF_LEVEL_5: &[u8] = &[
+      249, 235, 213, 185, 156, 128, 103, 83, 66, 53, 42, 33, 26, 21, 17, 13, 10, 0
+  ];
+
+  // Level 6: RFC shows PDF {2, 5, 14, 29, 42, 46, 41, 31, 19, 11, 6, 3, 2, 1, 1, 1, 1, 1}/256
+  pub const PULSE_COUNT_PDF_LEVEL_6: &[u8] = &[
+      254, 249, 235, 206, 164, 118, 77, 46, 27, 16, 10, 7, 5, 4, 3, 2, 1, 0
+  ];
+
+  // Level 7: RFC shows PDF {1, 2, 4, 10, 19, 29, 35, 37, 34, 28, 20, 14, 8, 5, 4, 2, 2, 2}/256
+  pub const PULSE_COUNT_PDF_LEVEL_7: &[u8] = &[
+      255, 253, 249, 239, 220, 191, 156, 119, 85, 57, 37, 23, 15, 10, 6, 4, 2, 0
+  ];
+
+  // Level 8: RFC shows PDF {1, 2, 2, 5, 9, 14, 20, 24, 27, 28, 26, 23, 20, 15, 11, 8, 6, 15}/256
+  pub const PULSE_COUNT_PDF_LEVEL_8: &[u8] = &[
+      255, 253, 251, 246, 237, 223, 203, 179, 152, 124, 98, 75, 55, 40, 29, 21, 15, 0
+  ];
+
+  // Level 9: RFC shows PDF {1, 1, 1, 6, 27, 58, 56, 39, 25, 14, 10, 6, 3, 3, 2, 1, 1, 2}/256
+  pub const PULSE_COUNT_PDF_LEVEL_9: &[u8] = &[
+      255, 254, 253, 247, 220, 162, 106, 67, 42, 28, 18, 12, 9, 6, 4, 3, 2, 0
+  ];
+
+  // Level 10: RFC shows PDF {2, 1, 6, 27, 58, 56, 39, 25, 14, 10, 6, 3, 3, 2, 1, 1, 2, 0}/256
+  // NOTE: Last PDF entry is 0, not a terminator (RFC lines 4969-4970)
   pub const PULSE_COUNT_PDF_LEVEL_10: &[u8] = &[
-      2, 1, 6, 27, 58, 56, 39, 25, 14, 10, 6, 3, 3, 2, 1, 1, 2, 0, 0  // Last entry 0, not terminator
+      254, 253, 247, 220, 162, 106, 67, 42, 28, 18, 12, 9, 6, 4, 3, 2, 0, 0
   ];
   ```
 
@@ -4297,12 +4417,14 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Rate level PDFs match Table 45 exactly
-- [ ] Pulse count PDFs match Table 46 exactly (all 11 levels)
+- [ ] Rate level ICDFs converted correctly from RFC Table 45
+- [ ] All 13 ICDF arrays (2 rate level + 11 pulse count) terminate with 0
+- [ ] All ICDF values are monotonically decreasing
+- [ ] Pulse count level 10 has TWO trailing zeros (last PDF entry 0, plus terminator)
 - [ ] Value 17 triggers LSB extension correctly
 - [ ] Rate level switches to 9, then 10 after 10 iterations
 - [ ] LSB count capped at 10 maximum
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4857-4974 - confirm rate level selection, LSB extension logic
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4857-4974 - confirm ICDF conversions, rate level selection, LSB extension logic
 
 ---
 
@@ -4312,18 +4434,231 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 
 **Goal:** Decode pulse positions using recursive binary splitting with combinatorial encoding
 
+**CRITICAL: PDF to ICDF Conversion**
+
+All 64 pulse split PDFs from Tables 47-50 must be converted from RFC PDF format to ICDF format. See Section 3.7.1 for conversion formula.
+
 ##### Implementation Steps
 
-- [ ] **Add pulse split PDFs from Tables 47-50 (RFC lines 5047-5256) - 64 total PDFs:**
-  ```rust
-  // Table 47: 16-sample partition (pulse count 1-16)
-  pub const PULSE_SPLIT_16_PDF_1: &[u8] = &[126, 130, 0];
-  pub const PULSE_SPLIT_16_PDF_2: &[u8] = &[56, 142, 58, 0];
-  // ... (all 16 PDFs for 16-sample partitions)
+- [ ] **Add pulse split constants from Tables 47-50 (RFC lines 5047-5256) - 64 total PDFs:**
 
-  // Table 48: 8-sample partition (pulse count 1-16)
-  // Table 49: 4-sample partition (pulse count 1-16)
-  // Table 50: 2-sample partition (pulse count 1-16)
+  **IMPORTANT:** All PDFs below are converted to ICDF format. Each constant includes:
+  1. Comment showing RFC PDF values
+  2. Comment stating "Converted to ICDF"
+  3. ICDF array with terminating zero
+
+  ```rust
+  // RFC 6716 Tables 47-50: PDFs for Pulse Count Split (lines 5047-5256)
+  // 64 total PDFs: 4 partition sizes × 16 pulse counts each
+  // All converted to ICDF for ec_dec_icdf()
+
+  // ====================================================================
+  // Table 47: 16-Sample Partition (pulse count 1-16)
+  // ====================================================================
+
+  // Pulse count 1: RFC PDF {126, 130}/256
+  pub const PULSE_SPLIT_16_PDF_1: &[u8] = &[130, 0];
+
+  // Pulse count 2: RFC PDF {56, 142, 58}/256
+  pub const PULSE_SPLIT_16_PDF_2: &[u8] = &[200, 58, 0];
+
+  // Pulse count 3: RFC PDF {25, 101, 104, 26}/256
+  pub const PULSE_SPLIT_16_PDF_3: &[u8] = &[231, 130, 26, 0];
+
+  // Pulse count 4: RFC PDF {12, 60, 108, 64, 12}/256
+  pub const PULSE_SPLIT_16_PDF_4: &[u8] = &[244, 184, 76, 12, 0];
+
+  // Pulse count 5: RFC PDF {7, 35, 84, 87, 37, 6}/256
+  pub const PULSE_SPLIT_16_PDF_5: &[u8] = &[249, 214, 130, 43, 6, 0];
+
+  // Pulse count 6: RFC PDF {4, 20, 59, 86, 63, 21, 3}/256
+  pub const PULSE_SPLIT_16_PDF_6: &[u8] = &[252, 232, 173, 87, 24, 3, 0];
+
+  // Pulse count 7: RFC PDF {3, 12, 38, 72, 75, 42, 12, 2}/256
+  pub const PULSE_SPLIT_16_PDF_7: &[u8] = &[253, 241, 203, 131, 56, 14, 2, 0];
+
+  // Pulse count 8: RFC PDF {2, 8, 25, 54, 73, 59, 27, 7, 1}/256
+  pub const PULSE_SPLIT_16_PDF_8: &[u8] = &[254, 246, 221, 167, 94, 35, 8, 1, 0];
+
+  // Pulse count 9: RFC PDF {2, 5, 17, 39, 63, 65, 42, 18, 4, 1}/256
+  pub const PULSE_SPLIT_16_PDF_9: &[u8] = &[254, 249, 232, 193, 130, 65, 23, 5, 1, 0];
+
+  // Pulse count 10: RFC PDF {1, 4, 12, 28, 49, 63, 54, 30, 11, 3, 1}/256
+  pub const PULSE_SPLIT_16_PDF_10: &[u8] = &[255, 251, 239, 211, 162, 99, 45, 15, 4, 1, 0];
+
+  // Pulse count 11: RFC PDF {1, 4, 8, 20, 37, 55, 57, 41, 22, 8, 2, 1}/256
+  pub const PULSE_SPLIT_16_PDF_11: &[u8] = &[255, 251, 243, 223, 186, 131, 74, 33, 11, 3, 1, 0];
+
+  // Pulse count 12: RFC PDF {1, 3, 7, 15, 28, 44, 53, 48, 33, 16, 6, 1, 1}/256
+  pub const PULSE_SPLIT_16_PDF_12: &[u8] = &[255, 252, 245, 230, 202, 158, 105, 57, 24, 8, 2, 1, 0];
+
+  // Pulse count 13: RFC PDF {1, 2, 6, 12, 21, 35, 47, 48, 40, 25, 12, 5, 1, 1}/256
+  pub const PULSE_SPLIT_16_PDF_13: &[u8] = &[255, 253, 247, 235, 214, 179, 132, 84, 44, 19, 7, 2, 1, 0];
+
+  // Pulse count 14: RFC PDF {1, 1, 4, 10, 17, 27, 37, 47, 43, 33, 21, 9, 4, 1, 1}/256
+  pub const PULSE_SPLIT_16_PDF_14: &[u8] = &[255, 254, 250, 240, 223, 196, 159, 112, 69, 36, 15, 6, 2, 1, 0];
+
+  // Pulse count 15: RFC PDF {1, 1, 1, 8, 14, 22, 33, 40, 43, 38, 28, 16, 8, 1, 1, 1}/256
+  pub const PULSE_SPLIT_16_PDF_15: &[u8] = &[255, 254, 253, 245, 231, 209, 176, 136, 93, 55, 27, 11, 3, 2, 1, 0];
+
+  // Pulse count 16: RFC PDF {1, 1, 1, 1, 13, 18, 27, 36, 41, 41, 34, 24, 14, 1, 1, 1, 1}/256
+  pub const PULSE_SPLIT_16_PDF_16: &[u8] = &[255, 254, 253, 252, 239, 221, 194, 158, 117, 76, 42, 18, 4, 3, 2, 1, 0];
+
+  // ====================================================================
+  // Table 48: 8-Sample Partition (pulse count 1-16)
+  // ====================================================================
+
+  // Pulse count 1: RFC PDF {127, 129}/256
+  pub const PULSE_SPLIT_8_PDF_1: &[u8] = &[129, 0];
+
+  // Pulse count 2: RFC PDF {53, 149, 54}/256
+  pub const PULSE_SPLIT_8_PDF_2: &[u8] = &[203, 54, 0];
+
+  // Pulse count 3: RFC PDF {22, 105, 106, 23}/256
+  pub const PULSE_SPLIT_8_PDF_3: &[u8] = &[234, 129, 23, 0];
+
+  // Pulse count 4: RFC PDF {11, 61, 111, 63, 10}/256
+  pub const PULSE_SPLIT_8_PDF_4: &[u8] = &[245, 184, 73, 10, 0];
+
+  // Pulse count 5: RFC PDF {6, 35, 86, 88, 36, 5}/256
+  pub const PULSE_SPLIT_8_PDF_5: &[u8] = &[250, 215, 129, 41, 5, 0];
+
+  // Pulse count 6: RFC PDF {4, 20, 59, 87, 62, 21, 3}/256
+  pub const PULSE_SPLIT_8_PDF_6: &[u8] = &[252, 232, 173, 86, 24, 3, 0];
+
+  // Pulse count 7: RFC PDF {3, 13, 40, 71, 73, 41, 13, 2}/256
+  pub const PULSE_SPLIT_8_PDF_7: &[u8] = &[253, 240, 200, 129, 56, 15, 2, 0];
+
+  // Pulse count 8: RFC PDF {3, 9, 27, 53, 70, 56, 28, 9, 1}/256
+  pub const PULSE_SPLIT_8_PDF_8: &[u8] = &[253, 244, 217, 164, 94, 38, 10, 1, 0];
+
+  // Pulse count 9: RFC PDF {3, 8, 19, 37, 57, 61, 44, 20, 6, 1}/256
+  pub const PULSE_SPLIT_8_PDF_9: &[u8] = &[253, 245, 226, 189, 132, 71, 27, 7, 1, 0];
+
+  // Pulse count 10: RFC PDF {3, 7, 15, 28, 44, 54, 49, 33, 17, 5, 1}/256
+  pub const PULSE_SPLIT_8_PDF_10: &[u8] = &[253, 246, 231, 203, 159, 105, 56, 23, 6, 1, 0];
+
+  // Pulse count 11: RFC PDF {1, 7, 13, 22, 34, 46, 48, 38, 28, 14, 4, 1}/256
+  pub const PULSE_SPLIT_8_PDF_11: &[u8] = &[255, 248, 235, 213, 179, 133, 85, 47, 19, 5, 1, 0];
+
+  // Pulse count 12: RFC PDF {1, 1, 11, 22, 27, 35, 42, 47, 33, 25, 10, 1, 1}/256
+  pub const PULSE_SPLIT_8_PDF_12: &[u8] = &[255, 254, 243, 221, 194, 159, 117, 70, 37, 12, 2, 1, 0];
+
+  // Pulse count 13: RFC PDF {1, 1, 6, 14, 26, 37, 43, 43, 37, 26, 14, 6, 1, 1}/256
+  pub const PULSE_SPLIT_8_PDF_13: &[u8] = &[255, 254, 248, 234, 208, 171, 128, 85, 48, 22, 8, 2, 1, 0];
+
+  // Pulse count 14: RFC PDF {1, 1, 4, 10, 20, 31, 40, 42, 40, 31, 20, 10, 4, 1, 1}/256
+  pub const PULSE_SPLIT_8_PDF_14: &[u8] = &[255, 254, 250, 240, 220, 189, 149, 107, 67, 36, 16, 6, 2, 1, 0];
+
+  // Pulse count 15: RFC PDF {1, 1, 3, 8, 16, 26, 35, 38, 38, 35, 26, 16, 8, 3, 1, 1}/256
+  pub const PULSE_SPLIT_8_PDF_15: &[u8] = &[255, 254, 251, 243, 227, 201, 166, 128, 90, 55, 29, 13, 5, 2, 1, 0];
+
+  // Pulse count 16: RFC PDF {1, 1, 2, 6, 12, 21, 30, 36, 38, 36, 30, 21, 12, 6, 2, 1, 1}/256
+  pub const PULSE_SPLIT_8_PDF_16: &[u8] = &[255, 254, 252, 246, 234, 213, 183, 147, 109, 73, 43, 22, 10, 4, 2, 1, 0];
+
+  // ====================================================================
+  // Table 49: 4-Sample Partition (pulse count 1-16)
+  // ====================================================================
+
+  // Pulse count 1: RFC PDF {127, 129}/256
+  pub const PULSE_SPLIT_4_PDF_1: &[u8] = &[129, 0];
+
+  // Pulse count 2: RFC PDF {49, 157, 50}/256
+  pub const PULSE_SPLIT_4_PDF_2: &[u8] = &[207, 50, 0];
+
+  // Pulse count 3: RFC PDF {20, 107, 109, 20}/256
+  pub const PULSE_SPLIT_4_PDF_3: &[u8] = &[236, 129, 20, 0];
+
+  // Pulse count 4: RFC PDF {11, 60, 113, 62, 10}/256
+  pub const PULSE_SPLIT_4_PDF_4: &[u8] = &[245, 185, 72, 10, 0];
+
+  // Pulse count 5: RFC PDF {7, 36, 84, 87, 36, 6}/256
+  pub const PULSE_SPLIT_4_PDF_5: &[u8] = &[249, 213, 129, 42, 6, 0];
+
+  // Pulse count 6: RFC PDF {6, 24, 57, 82, 60, 23, 4}/256
+  pub const PULSE_SPLIT_4_PDF_6: &[u8] = &[250, 226, 169, 87, 27, 4, 0];
+
+  // Pulse count 7: RFC PDF {5, 18, 39, 64, 68, 42, 16, 4}/256
+  pub const PULSE_SPLIT_4_PDF_7: &[u8] = &[251, 233, 194, 130, 62, 20, 4, 0];
+
+  // Pulse count 8: RFC PDF {6, 14, 29, 47, 61, 52, 30, 14, 3}/256
+  pub const PULSE_SPLIT_4_PDF_8: &[u8] = &[250, 236, 207, 160, 99, 47, 17, 3, 0];
+
+  // Pulse count 9: RFC PDF {1, 15, 23, 35, 51, 50, 40, 30, 10, 1}/256
+  pub const PULSE_SPLIT_4_PDF_9: &[u8] = &[255, 240, 217, 182, 131, 81, 41, 11, 1, 0];
+
+  // Pulse count 10: RFC PDF {1, 1, 21, 32, 42, 52, 46, 41, 18, 1, 1}/256
+  pub const PULSE_SPLIT_4_PDF_10: &[u8] = &[255, 254, 233, 201, 159, 107, 61, 20, 2, 1, 0];
+
+  // Pulse count 11: RFC PDF {1, 6, 16, 27, 36, 42, 42, 36, 27, 16, 6, 1}/256
+  pub const PULSE_SPLIT_4_PDF_11: &[u8] = &[255, 249, 233, 206, 170, 128, 86, 50, 23, 7, 1, 0];
+
+  // Pulse count 12: RFC PDF {1, 5, 12, 21, 31, 38, 40, 38, 31, 21, 12, 5, 1}/256
+  pub const PULSE_SPLIT_4_PDF_12: &[u8] = &[255, 250, 238, 217, 186, 148, 108, 70, 39, 18, 6, 1, 0];
+
+  // Pulse count 13: RFC PDF {1, 3, 9, 17, 26, 34, 38, 38, 34, 26, 17, 9, 3, 1}/256
+  pub const PULSE_SPLIT_4_PDF_13: &[u8] = &[255, 252, 243, 226, 200, 166, 128, 90, 56, 30, 13, 4, 1, 0];
+
+  // Pulse count 14: RFC PDF {1, 3, 7, 14, 22, 29, 34, 36, 34, 29, 22, 14, 7, 3, 1}/256
+  pub const PULSE_SPLIT_4_PDF_14: &[u8] = &[255, 252, 245, 231, 209, 180, 146, 110, 76, 47, 25, 11, 4, 1, 0];
+
+  // Pulse count 15: RFC PDF {1, 2, 5, 11, 18, 25, 31, 35, 35, 31, 25, 18, 11, 5, 2, 1}/256
+  pub const PULSE_SPLIT_4_PDF_15: &[u8] = &[255, 253, 248, 237, 219, 194, 163, 128, 93, 62, 37, 19, 8, 3, 1, 0];
+
+  // Pulse count 16: RFC PDF {1, 1, 4, 9, 15, 21, 28, 32, 34, 32, 28, 21, 15, 9, 4, 1, 1}/256
+  pub const PULSE_SPLIT_4_PDF_16: &[u8] = &[255, 254, 250, 241, 226, 205, 177, 145, 111, 79, 51, 30, 15, 6, 2, 1, 0];
+
+  // ====================================================================
+  // Table 50: 2-Sample Partition (pulse count 1-16)
+  // ====================================================================
+
+  // Pulse count 1: RFC PDF {128, 128}/256
+  pub const PULSE_SPLIT_2_PDF_1: &[u8] = &[128, 0];
+
+  // Pulse count 2: RFC PDF {42, 172, 42}/256
+  pub const PULSE_SPLIT_2_PDF_2: &[u8] = &[214, 42, 0];
+
+  // Pulse count 3: RFC PDF {21, 107, 107, 21}/256
+  pub const PULSE_SPLIT_2_PDF_3: &[u8] = &[235, 128, 21, 0];
+
+  // Pulse count 4: RFC PDF {12, 60, 112, 61, 11}/256
+  pub const PULSE_SPLIT_2_PDF_4: &[u8] = &[244, 184, 72, 11, 0];
+
+  // Pulse count 5: RFC PDF {8, 34, 86, 86, 35, 7}/256
+  pub const PULSE_SPLIT_2_PDF_5: &[u8] = &[248, 214, 128, 42, 7, 0];
+
+  // Pulse count 6: RFC PDF {8, 23, 55, 90, 55, 20, 5}/256
+  pub const PULSE_SPLIT_2_PDF_6: &[u8] = &[248, 225, 170, 80, 25, 5, 0];
+
+  // Pulse count 7: RFC PDF {5, 15, 38, 72, 72, 36, 15, 3}/256
+  pub const PULSE_SPLIT_2_PDF_7: &[u8] = &[251, 236, 198, 126, 54, 18, 3, 0];
+
+  // Pulse count 8: RFC PDF {6, 12, 27, 52, 77, 47, 20, 10, 5}/256
+  pub const PULSE_SPLIT_2_PDF_8: &[u8] = &[250, 238, 211, 159, 82, 35, 15, 5, 0];
+
+  // Pulse count 9: RFC PDF {6, 19, 28, 35, 40, 40, 35, 28, 19, 6}/256
+  pub const PULSE_SPLIT_2_PDF_9: &[u8] = &[250, 231, 203, 168, 128, 88, 53, 25, 6, 0];
+
+  // Pulse count 10: RFC PDF {4, 14, 22, 31, 37, 40, 37, 31, 22, 14, 4}/256
+  pub const PULSE_SPLIT_2_PDF_10: &[u8] = &[252, 238, 216, 185, 148, 108, 71, 40, 18, 4, 0];
+
+  // Pulse count 11: RFC PDF {3, 10, 18, 26, 33, 38, 38, 33, 26, 18, 10, 3}/256
+  pub const PULSE_SPLIT_2_PDF_11: &[u8] = &[253, 243, 225, 199, 166, 128, 90, 57, 31, 13, 3, 0];
+
+  // Pulse count 12: RFC PDF {2, 8, 13, 21, 29, 36, 38, 36, 29, 21, 13, 8, 2}/256
+  pub const PULSE_SPLIT_2_PDF_12: &[u8] = &[254, 246, 233, 212, 183, 147, 109, 73, 44, 23, 10, 2, 0];
+
+  // Pulse count 13: RFC PDF {1, 5, 10, 17, 25, 32, 38, 38, 32, 25, 17, 10, 5, 1}/256
+  pub const PULSE_SPLIT_2_PDF_13: &[u8] = &[255, 250, 240, 223, 198, 166, 128, 90, 58, 33, 16, 6, 1, 0];
+
+  // Pulse count 14: RFC PDF {1, 4, 7, 13, 21, 29, 35, 36, 35, 29, 21, 13, 7, 4, 1}/256
+  pub const PULSE_SPLIT_2_PDF_14: &[u8] = &[255, 251, 244, 231, 210, 181, 146, 110, 75, 46, 25, 12, 5, 1, 0];
+
+  // Pulse count 15: RFC PDF {1, 2, 5, 10, 17, 25, 32, 36, 36, 32, 25, 17, 10, 5, 2, 1}/256
+  pub const PULSE_SPLIT_2_PDF_15: &[u8] = &[255, 253, 248, 238, 221, 196, 164, 128, 92, 60, 35, 18, 8, 3, 1, 0];
+
+  // Pulse count 16: RFC PDF {1, 2, 4, 7, 13, 21, 28, 34, 36, 34, 28, 21, 13, 7, 4, 2, 1}/256
+  pub const PULSE_SPLIT_2_PDF_16: &[u8] = &[255, 253, 249, 242, 229, 208, 180, 146, 110, 76, 48, 27, 14, 7, 3, 1, 0];
   ```
 
 - [ ] **Implement hierarchical pulse position decoding:**
@@ -4399,12 +4734,14 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Pulse split PDFs match Tables 47-50 exactly (64 PDFs total)
+- [ ] All 64 pulse split ICDFs converted correctly from RFC Tables 47-50
+- [ ] All 64 ICDF arrays terminate with 0
+- [ ] All 64 ICDF arrays are monotonically decreasing
 - [ ] Hierarchical split follows 16→8→4→2→1 recursion
 - [ ] Preorder traversal (left before right) per RFC line 4998
 - [ ] Zero-pulse partitions skipped (RFC lines 5003-5007)
 - [ ] All pulses can be at same location (no restriction per RFC lines 4991-4993)
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4975-5256 - confirm split algorithm, PDF selection
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4975-5256 - confirm all 64 ICDF conversions, split algorithm, PDF selection
 
 ---
 
@@ -4414,11 +4751,18 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 
 **Goal:** Decode least significant bits for each coefficient to enhance precision
 
+**CRITICAL: PDF to ICDF Conversion**
+
+Table 51 constant must be converted from RFC PDF format to ICDF format. See Section 3.7.1 for conversion formula.
+
 ##### Implementation Steps
 
-- [ ] **Add LSB PDF from Table 51 (RFC lines 5276-5282):**
+- [ ] **Add LSB constant from Table 51 (RFC lines 5276-5282):**
   ```rust
-  pub const EXCITATION_LSB_PDF: &[u8] = &[136, 120, 0];
+  // RFC 6716 Table 51: PDF for Excitation LSBs (lines 5276-5282)
+  // RFC shows PDF: {136, 120}/256
+  // Converted to ICDF for ec_dec_icdf()
+  pub const EXCITATION_LSB_PDF: &[u8] = &[120, 0];
   ```
 
 - [ ] **Implement LSB decoding (RFC lines 5260-5289):**
@@ -4484,12 +4828,13 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] LSB PDF matches Table 51 exactly
+- [ ] LSB ICDF converted correctly: `[120, 0]` from RFC PDF `{136, 120}/256`
+- [ ] ICDF terminates with 0
 - [ ] LSBs decoded MSB to LSB
 - [ ] All 16 coefficients get LSBs (even zeros per RFC lines 5262-5263)
 - [ ] Magnitude formula: `magnitude = (magnitude << 1) | lsb` (RFC lines 5286-5289)
 - [ ] 10ms MB special case documented
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5258-5289 - confirm LSB order, magnitude update
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5258-5289 - confirm ICDF conversion, LSB order, magnitude update
 
 ---
 
@@ -4499,15 +4844,170 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 
 **Goal:** Decode sign bits for non-zero coefficients using skewed PDFs
 
+**CRITICAL: PDF to ICDF Conversion**
+
+All 42 sign PDFs from Table 52 must be converted from RFC PDF format to ICDF format. See Section 3.7.1 for conversion formula.
+
 ##### Implementation Steps
 
-- [ ] **Add sign PDFs from Table 52 (RFC lines 5310-5420) - 42 total PDFs:**
+- [ ] **Add sign constants from Table 52 (RFC lines 5310-5420) - 42 total PDFs:**
+
+  **IMPORTANT:** All PDFs below are converted to ICDF format. Organization: 3 signal types × 2 quantization offset types × 7 pulse count categories = 42 constants.
+
   ```rust
-  // Table 52: 3 signal types × 2 quant offsets × 7 pulse categories
-  pub const SIGN_PDF_INACTIVE_LOW_0: &[u8] = &[2, 254, 0];
-  pub const SIGN_PDF_INACTIVE_LOW_1: &[u8] = &[207, 49, 0];
-  // ... (all 42 sign PDFs)
-  pub const SIGN_PDF_VOICED_HIGH_6PLUS: &[u8] = &[154, 102, 0];
+  // RFC 6716 Table 52: PDFs for Excitation Signs (lines 5310-5420)
+  // 42 total PDFs: Inactive/Unvoiced/Voiced × Low/High × pulse counts 0-6+
+  // All converted to ICDF for ec_dec_icdf()
+
+  // ====================================================================
+  // Inactive + Low Quantization Offset (7 PDFs)
+  // ====================================================================
+
+  // 0 pulses: RFC PDF {2, 254}/256
+  pub const SIGN_PDF_INACTIVE_LOW_0: &[u8] = &[254, 0];
+
+  // 1 pulse: RFC PDF {207, 49}/256
+  pub const SIGN_PDF_INACTIVE_LOW_1: &[u8] = &[49, 0];
+
+  // 2 pulses: RFC PDF {189, 67}/256
+  pub const SIGN_PDF_INACTIVE_LOW_2: &[u8] = &[67, 0];
+
+  // 3 pulses: RFC PDF {179, 77}/256
+  pub const SIGN_PDF_INACTIVE_LOW_3: &[u8] = &[77, 0];
+
+  // 4 pulses: RFC PDF {174, 82}/256
+  pub const SIGN_PDF_INACTIVE_LOW_4: &[u8] = &[82, 0];
+
+  // 5 pulses: RFC PDF {163, 93}/256
+  pub const SIGN_PDF_INACTIVE_LOW_5: &[u8] = &[93, 0];
+
+  // 6 or more pulses: RFC PDF {157, 99}/256
+  pub const SIGN_PDF_INACTIVE_LOW_6PLUS: &[u8] = &[99, 0];
+
+  // ====================================================================
+  // Inactive + High Quantization Offset (7 PDFs)
+  // ====================================================================
+
+  // 0 pulses: RFC PDF {58, 198}/256
+  pub const SIGN_PDF_INACTIVE_HIGH_0: &[u8] = &[198, 0];
+
+  // 1 pulse: RFC PDF {245, 11}/256
+  pub const SIGN_PDF_INACTIVE_HIGH_1: &[u8] = &[11, 0];
+
+  // 2 pulses: RFC PDF {238, 18}/256
+  pub const SIGN_PDF_INACTIVE_HIGH_2: &[u8] = &[18, 0];
+
+  // 3 pulses: RFC PDF {232, 24}/256
+  pub const SIGN_PDF_INACTIVE_HIGH_3: &[u8] = &[24, 0];
+
+  // 4 pulses: RFC PDF {225, 31}/256
+  pub const SIGN_PDF_INACTIVE_HIGH_4: &[u8] = &[31, 0];
+
+  // 5 pulses: RFC PDF {220, 36}/256
+  pub const SIGN_PDF_INACTIVE_HIGH_5: &[u8] = &[36, 0];
+
+  // 6 or more pulses: RFC PDF {211, 45}/256
+  pub const SIGN_PDF_INACTIVE_HIGH_6PLUS: &[u8] = &[45, 0];
+
+  // ====================================================================
+  // Unvoiced + Low Quantization Offset (7 PDFs)
+  // ====================================================================
+
+  // 0 pulses: RFC PDF {1, 255}/256
+  pub const SIGN_PDF_UNVOICED_LOW_0: &[u8] = &[255, 0];
+
+  // 1 pulse: RFC PDF {210, 46}/256
+  pub const SIGN_PDF_UNVOICED_LOW_1: &[u8] = &[46, 0];
+
+  // 2 pulses: RFC PDF {190, 66}/256
+  pub const SIGN_PDF_UNVOICED_LOW_2: &[u8] = &[66, 0];
+
+  // 3 pulses: RFC PDF {178, 78}/256
+  pub const SIGN_PDF_UNVOICED_LOW_3: &[u8] = &[78, 0];
+
+  // 4 pulses: RFC PDF {169, 87}/256
+  pub const SIGN_PDF_UNVOICED_LOW_4: &[u8] = &[87, 0];
+
+  // 5 pulses: RFC PDF {162, 94}/256
+  pub const SIGN_PDF_UNVOICED_LOW_5: &[u8] = &[94, 0];
+
+  // 6 or more pulses: RFC PDF {152, 104}/256
+  pub const SIGN_PDF_UNVOICED_LOW_6PLUS: &[u8] = &[104, 0];
+
+  // ====================================================================
+  // Unvoiced + High Quantization Offset (7 PDFs)
+  // ====================================================================
+
+  // 0 pulses: RFC PDF {48, 208}/256
+  pub const SIGN_PDF_UNVOICED_HIGH_0: &[u8] = &[208, 0];
+
+  // 1 pulse: RFC PDF {242, 14}/256
+  pub const SIGN_PDF_UNVOICED_HIGH_1: &[u8] = &[14, 0];
+
+  // 2 pulses: RFC PDF {235, 21}/256
+  pub const SIGN_PDF_UNVOICED_HIGH_2: &[u8] = &[21, 0];
+
+  // 3 pulses: RFC PDF {224, 32}/256
+  pub const SIGN_PDF_UNVOICED_HIGH_3: &[u8] = &[32, 0];
+
+  // 4 pulses: RFC PDF {214, 42}/256
+  pub const SIGN_PDF_UNVOICED_HIGH_4: &[u8] = &[42, 0];
+
+  // 5 pulses: RFC PDF {205, 51}/256
+  pub const SIGN_PDF_UNVOICED_HIGH_5: &[u8] = &[51, 0];
+
+  // 6 or more pulses: RFC PDF {190, 66}/256
+  pub const SIGN_PDF_UNVOICED_HIGH_6PLUS: &[u8] = &[66, 0];
+
+  // ====================================================================
+  // Voiced + Low Quantization Offset (7 PDFs)
+  // ====================================================================
+
+  // 0 pulses: RFC PDF {1, 255}/256
+  pub const SIGN_PDF_VOICED_LOW_0: &[u8] = &[255, 0];
+
+  // 1 pulse: RFC PDF {162, 94}/256
+  pub const SIGN_PDF_VOICED_LOW_1: &[u8] = &[94, 0];
+
+  // 2 pulses: RFC PDF {152, 104}/256
+  pub const SIGN_PDF_VOICED_LOW_2: &[u8] = &[104, 0];
+
+  // 3 pulses: RFC PDF {147, 109}/256
+  pub const SIGN_PDF_VOICED_LOW_3: &[u8] = &[109, 0];
+
+  // 4 pulses: RFC PDF {144, 112}/256
+  pub const SIGN_PDF_VOICED_LOW_4: &[u8] = &[112, 0];
+
+  // 5 pulses: RFC PDF {141, 115}/256
+  pub const SIGN_PDF_VOICED_LOW_5: &[u8] = &[115, 0];
+
+  // 6 or more pulses: RFC PDF {138, 118}/256
+  pub const SIGN_PDF_VOICED_LOW_6PLUS: &[u8] = &[118, 0];
+
+  // ====================================================================
+  // Voiced + High Quantization Offset (7 PDFs)
+  // ====================================================================
+
+  // 0 pulses: RFC PDF {8, 248}/256
+  pub const SIGN_PDF_VOICED_HIGH_0: &[u8] = &[248, 0];
+
+  // 1 pulse: RFC PDF {203, 53}/256
+  pub const SIGN_PDF_VOICED_HIGH_1: &[u8] = &[53, 0];
+
+  // 2 pulses: RFC PDF {187, 69}/256
+  pub const SIGN_PDF_VOICED_HIGH_2: &[u8] = &[69, 0];
+
+  // 3 pulses: RFC PDF {176, 80}/256
+  pub const SIGN_PDF_VOICED_HIGH_3: &[u8] = &[80, 0];
+
+  // 4 pulses: RFC PDF {168, 88}/256
+  pub const SIGN_PDF_VOICED_HIGH_4: &[u8] = &[88, 0];
+
+  // 5 pulses: RFC PDF {161, 95}/256
+  pub const SIGN_PDF_VOICED_HIGH_5: &[u8] = &[95, 0];
+
+  // 6 or more pulses: RFC PDF {154, 102}/256
+  pub const SIGN_PDF_VOICED_HIGH_6PLUS: &[u8] = &[102, 0];
   ```
 
 - [ ] **Implement sign decoding:**
@@ -4589,12 +5089,14 @@ The excitation decoder implements a sophisticated pulse vector quantization sche
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Sign PDFs match Table 52 exactly (all 42 PDFs)
+- [ ] All 42 sign ICDFs converted correctly from RFC Table 52
+- [ ] All 42 ICDF arrays terminate with 0
+- [ ] Organization correct: 3 signal types × 2 offset types × 7 pulse categories = 42
 - [ ] PDF selection uses pulse count WITHOUT LSBs (RFC line 5301)
 - [ ] Pulse count capped at 6+ for PDF selection
 - [ ] Sign bit 0 = negative, 1 = positive
 - [ ] Zero magnitudes produce zero excitation
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5291-5420 - confirm all 42 PDFs, selection logic
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5291-5420 - confirm all 42 ICDF conversions, selection logic
 
 ---
 
@@ -4712,20 +5214,24 @@ After ALL subsections (3.7.1-3.7.7) are complete:
 - [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
+- [ ] **CRITICAL:** All 121 ICDF conversions verified correct (Tables 43, 45-52)
+- [ ] All 121 ICDF arrays terminate with 0
+- [ ] All 121 ICDF arrays are monotonically decreasing
 - [ ] All excitation test vectors pass (if available)
 - [ ] Excitation reconstruction produces valid Q23 values
 - [ ] LCG sequence matches reference implementation
-- [ ] **RFC COMPLETE DEEP CHECK:** Read RFC lines 4775-5478 and verify EVERY table, formula, algorithm exactly
+- [ ] **RFC COMPLETE DEEP CHECK:** Read RFC lines 4775-5478 and verify EVERY table, formula, algorithm, and ICDF conversion exactly
 
 **Total Section 3.7 Artifacts:**
-* 1 LCG seed PDF (Table 43)
-* 1 shell block count table (Table 44)
-* 2 rate level PDFs (Table 45)
-* 11 pulse count PDFs (Table 46)
-* 64 pulse split PDFs (Tables 47-50)
-* 1 LSB PDF (Table 51)
-* 42 sign PDFs (Table 52)
-* 6 quantization offsets (Table 53)
+* 1 LCG seed ICDF (Table 43)
+* 1 shell block count table (Table 44 - not a PDF)
+* 2 rate level ICDFs (Table 45)
+* 11 pulse count ICDFs (Table 46)
+* 64 pulse split ICDFs (Tables 47-50)
+* 1 LSB ICDF (Table 51)
+* 42 sign ICDFs (Table 52)
+* 6 quantization offsets (Table 53 - not a PDF)
+* **Total: 121 PDF→ICDF conversions + 2 non-PDF tables**
 
 ---
 
