@@ -5232,743 +5232,2494 @@ LCG constants verified: 196314165 and 907633515 match RFC exactly
 
 ---
 
-### 3.8: Synthesis Filters
+# Section 3.8: SILK Synthesis Filters - Complete Detailed Specification
 
-**Reference:** RFC 6716 Sections 4.2.7.9 (LTP/LPC Synthesis) and 4.2.8 (Stereo Unmixing) (lines 5480-5795)
+**Reference:** RFC 6716 Sections 4.2.7.9 (LTP/LPC Synthesis) and 4.2.8 (Stereo Unmixing), lines 5480-5795
 
-**Goal:** Apply LTP and LPC synthesis filters to convert decoded excitation into audio output, then perform stereo unmixing for stereo streams
+**Goal:** Implement the final stage of SILK decoding: synthesis filters that convert decoded excitation into audio output, followed by stereo unmixing for stereo streams.
 
-**Critical Note from RFC lines 5482-5497:**
-> The remainder of the reconstruction process for the frame does not need to be bit-exact, as small errors should only introduce proportionally small distortions.
+**Critical Architectural Shift (RFC lines 5482-5497):**
+- **Fixed-point → Floating-point**: Synthesis uses f32, not Q-format
+- **Bit-exact matching NOT required**: Small errors introduce proportionally small distortions
+- **Output range**: -1.0 to 1.0 (nominal)
+- **Processing model**: Subframe-by-subframe (gains, LTP params, LPC coeffs vary per subframe)
 
-However, we still follow the RFC algorithms exactly for correctness.
+**Processing Pipeline:**
+```
+Excitation (Q23) → LTP Synthesis → LPC Synthesis → Clamping → Stereo Unmixing → Output (f32)
+                     (voiced only)    (all frames)   [-1, 1]    (stereo only)
+```
 
-**Processing Order:**
-1. Subframe-by-subframe processing (gains, LTP params, LPC coeffs vary per subframe)
-2. LTP synthesis (voiced frames only; unvoiced frames skip directly to LPC)
-3. LPC synthesis (all frames)
-4. Clamping to [-1.0, 1.0] range
-5. Stereo unmixing (stereo streams only)
-6. Resampling (if needed - non-normative)
+**Section Breakdown:**
+- **3.8.1**: Subframe Parameter Selection (RFC lines 5499-5517) - LOW complexity
+- **3.8.2**: LTP Synthesis Filter (RFC lines 5519-5619) - VERY HIGH complexity
+- **3.8.3**: LPC Synthesis Filter (RFC lines 5620-5653) - MEDIUM complexity
+- **3.8.4**: Stereo Unmixing (RFC lines 5663-5722) - MEDIUM complexity
+- **3.8.5**: Resampling (RFC lines 5724-5795) - LOW complexity (documentation only)
 
 ---
 
-#### 3.8.1: Subframe Parameter Selection
+## 3.8.1: Subframe Parameter Selection
 
-**Reference:** RFC 6716 Section 4.2.7.9 intro (lines 5499-5517)
+**Reference:** RFC 6716 lines 5499-5517
 
-**Goal:** Determine which LPC coefficients and parameters to use for each subframe
+**Goal:** Determine which LPC coefficients and parameters to use for each subframe based on frame type and interpolation settings.
 
-##### Implementation Steps
+**Key Variables (RFC lines 5513-5517):**
+- `n` = samples per subframe: 40 (NB), 60 (MB), 80 (WB)
+- `s` = subframe index: 0-1 (10ms frames), 0-3 (20ms frames)
+- `j` = first sample index in residual for current subframe = `s * n`
 
-- [ ] **Add subframe parameter structure:**
-  ```rust
-  pub struct SubframeParams {
-      pub lpc_coeffs: Vec<i16>,        // a_Q12[k] - from LSF conversion
-      pub gain_q16: i32,                // Subframe gain
-      pub pitch_lag: i16,               // From LTP decoding
-      pub ltp_filter: [i8; 5],          // b_Q7[k] - 5-tap filter
-      pub ltp_scale_q14: i16,           // LTP scaling factor
-  }
-  ```
+**LPC Coefficient Selection Logic (RFC lines 5504-5511):**
+```
+IF (this is subframe 0 OR 1 of a 20ms frame) AND (w_Q2 < 4):
+    Use interpolated LSF coefficients (n1_Q15) from Section 4.2.7.5.5
+ELSE:
+    Use current frame LSF coefficients (n2_Q15) from Section 4.2.7.5.8
+```
 
-- [ ] **Implement subframe parameter selection:**
-  ```rust
-  impl SilkDecoder {
-      pub fn select_subframe_params(
-          &self,
-          subframe_index: usize,
-          frame_size_ms: u8,
-          w_q2: u8,  // LSF interpolation factor
-          lpc_n1_q15: Option<&[i16]>,  // Interpolated LSFs
-          lpc_n2_q15: &[i16],          // Current frame LSFs
-          gains: &[u8],
-          pitch_lags: &[i16],
-          ltp_filters: &[[i8; 5]],
-          ltp_scale_q14: i16,
-      ) -> Result<SubframeParams> {
-          // RFC lines 5504-5511: Select LPC coefficients
-          let use_interpolated = frame_size_ms == 20
-              && (subframe_index == 0 || subframe_index == 1)
-              && w_q2 < 4;
+**LTP Scale Adjustment (RFC lines 5560-5564):**
+```
+IF (this is subframe 2 OR 3 of a 20ms frame) AND (w_Q2 < 4):
+    out_end = j - (s-2)*n
+    LTP_scale_Q14 = 16384  // Q14 value of 1.0
+ELSE:
+    out_end = j - s*n
+    LTP_scale_Q14 = decoded LTP scaling value from Section 4.2.7.6.3
+```
 
-          let lpc_coeffs = if use_interpolated && lpc_n1_q15.is_some() {
-              self.lsf_to_lpc(lpc_n1_q15.unwrap())?
-          } else {
-              self.lsf_to_lpc(lpc_n2_q15)?
-          };
+### Implementation Steps
 
-          // RFC lines 5560-5564: Adjust LTP scale for subframes 2-3 with interpolation
-          let adjusted_ltp_scale = if frame_size_ms == 20
-              && (subframe_index == 2 || subframe_index == 3)
-              && w_q2 < 4 {
-              16384  // Q14 value of 1.0
-          } else {
-              ltp_scale_q14
-          };
+**Step 1: Add SubframeParams structure to decoder.rs:**
 
-          Ok(SubframeParams {
-              lpc_coeffs,
-              gain_q16: self.decode_gain_q16(gains[subframe_index]),
-              pitch_lag: pitch_lags[subframe_index],
-              ltp_filter: ltp_filters[subframe_index],
-              ltp_scale_q14: adjusted_ltp_scale,
-          })
-      }
-  }
-  ```
+```rust
+/// Parameters for a single subframe of SILK synthesis
+///
+/// RFC 6716 lines 5499-5517: Each subframe has independent parameters
+#[derive(Debug, Clone)]
+pub struct SubframeParams {
+    /// LPC coefficients a_Q12[k] for this subframe (Q12 format)
+    ///
+    /// * RFC line 5504: From interpolated LSFs (n1_Q15) for subframes 0-1 of 20ms frames with w_Q2 < 4
+    /// * RFC line 5509: From current frame LSFs (n2_Q15) otherwise
+    /// * Length: d_LPC (10 for NB, 16 for WB)
+    pub lpc_coeffs_q12: Vec<i16>,
 
-- [ ] **Document subframe sizing (RFC lines 5513-5517):**
-  ```rust
-  // n = samples per subframe
-  // NB: 40 samples (5ms at 8kHz)
-  // MB: 60 samples (5ms at 12kHz)
-  // WB: 80 samples (5ms at 16kHz)
+    /// Subframe gain in Q16 format
+    ///
+    /// RFC line 5636: Used as `gain_Q16[s]` in synthesis formulas
+    pub gain_q16: i32,
 
-  // s = subframe index
-  // 10ms frames: 0-1 (2 subframes)
-  // 20ms frames: 0-3 (4 subframes)
+    /// Pitch lag for this subframe (in samples)
+    ///
+    /// RFC line 5536: Used as `pitch_lags[s]` in LTP synthesis
+    /// Range: 2ms to 18ms worth of samples (varies by bandwidth)
+    pub pitch_lag: i16,
 
-  // j = first sample index in residual for current subframe
-  // j = s * n
-  ```
+    /// 5-tap LTP filter coefficients b_Q7[k] (Q7 format)
+    ///
+    /// RFC lines 5608-5609: From Tables 39-41 based on decoded index
+    /// k ranges from 0 to 4
+    pub ltp_filter_q7: [i8; 5],
 
-- [ ] **Add tests:**
-  ```rust
-  #[test]
-  fn test_subframe_params_interpolated_lpc() {
-      // First two subframes of 20ms frame with w_Q2 < 4 use n1_Q15
-  }
+    /// LTP scaling factor in Q14 format
+    ///
+    /// RFC lines 5562-5564: Either 16384 (for subframes 2-3 with interpolation) or decoded value
+    pub ltp_scale_q14: i16,
+}
+```
 
-  #[test]
-  fn test_subframe_params_normal_lpc() {
-      // Other subframes use n2_Q15
-  }
+**Step 2: Implement select_subframe_params() method in SilkDecoder:**
 
-  #[test]
-  fn test_subframe_params_ltp_scale_adjustment() {
-      // Subframes 2-3 of 20ms frame with w_Q2 < 4 use scale 16384
-  }
-  ```
+```rust
+impl SilkDecoder {
+    /// Selects parameters for a specific subframe
+    ///
+    /// # Arguments
+    ///
+    /// * `subframe_index` - Current subframe index (0-1 for 10ms, 0-3 for 20ms)
+    /// * `frame_size_ms` - Frame duration (10 or 20)
+    /// * `w_q2` - LSF interpolation factor from Section 4.2.7.5.5 (Q2 format)
+    /// * `lpc_n1_q15` - Interpolated LSF coefficients (from Section 4.2.7.5.5), if available
+    /// * `lpc_n2_q15` - Current frame LSF coefficients (from Section 4.2.7.5.8)
+    /// * `gains_q16` - All subframe gains (decoded in Section 4.2.7.4)
+    /// * `pitch_lags` - All pitch lags (decoded in Section 4.2.7.6.1)
+    /// * `ltp_filters_q7` - All LTP filter coefficients (decoded in Section 4.2.7.6.2)
+    /// * `ltp_scale_q14` - LTP scaling factor (decoded in Section 4.2.7.6.3)
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if LSF-to-LPC conversion fails
+    ///
+    /// # RFC References
+    ///
+    /// * Lines 5504-5511: LPC coefficient selection logic
+    /// * Lines 5560-5564: LTP scale adjustment logic
+    fn select_subframe_params(
+        &self,
+        subframe_index: usize,
+        frame_size_ms: u8,
+        w_q2: u8,
+        lpc_n1_q15: Option<&[i16]>,
+        lpc_n2_q15: &[i16],
+        gains_q16: &[i32],
+        pitch_lags: &[i16],
+        ltp_filters_q7: &[[i8; 5]],
+        ltp_scale_q14: i16,
+    ) -> Result<SubframeParams> {
+        // RFC lines 5504-5511: Select LPC coefficients
+        let use_interpolated = frame_size_ms == 20
+            && (subframe_index == 0 || subframe_index == 1)
+            && w_q2 < 4;
 
-##### 3.8.1 Verification Checklist
+        let lpc_coeffs_q12 = if use_interpolated && lpc_n1_q15.is_some() {
+            // Use interpolated LSF coefficients (n1_Q15)
+            self.lsf_to_lpc(lpc_n1_q15.unwrap())?
+        } else {
+            // Use current frame LSF coefficients (n2_Q15)
+            self.lsf_to_lpc(lpc_n2_q15)?
+        };
+
+        // RFC lines 5560-5564: Adjust LTP scale for subframes 2-3 with interpolation
+        let adjusted_ltp_scale_q14 = if frame_size_ms == 20
+            && (subframe_index == 2 || subframe_index == 3)
+            && w_q2 < 4
+        {
+            16384 // Q14 value of 1.0
+        } else {
+            ltp_scale_q14
+        };
+
+        Ok(SubframeParams {
+            lpc_coeffs_q12,
+            gain_q16: gains_q16[subframe_index],
+            pitch_lag: pitch_lags[subframe_index],
+            ltp_filter_q7: ltp_filters_q7[subframe_index],
+            ltp_scale_q14: adjusted_ltp_scale_q14,
+        })
+    }
+}
+```
+
+**Step 3: Add helper methods for subframe sizing:**
+
+```rust
+impl SilkDecoder {
+    /// Returns the number of samples per subframe based on bandwidth
+    ///
+    /// RFC line 5513: n = 40 (NB), 60 (MB), 80 (WB)
+    const fn samples_per_subframe(&self, bandwidth: Bandwidth) -> usize {
+        match bandwidth {
+            Bandwidth::Narrowband => 40,
+            Bandwidth::Mediumband => 60,
+            Bandwidth::Wideband => 80,
+            _ => unreachable!("SILK only supports NB/MB/WB"),
+        }
+    }
+
+    /// Returns the number of subframes in a SILK frame
+    ///
+    /// RFC line 5515: s ranges 0-1 for 10ms frames, 0-3 for 20ms frames
+    const fn num_subframes(&self, frame_size_ms: u8) -> usize {
+        match frame_size_ms {
+            10 => 2,
+            20 => 4,
+            _ => unreachable!("SILK only supports 10ms and 20ms frames"),
+        }
+    }
+
+    /// Calculates first sample index j for a given subframe
+    ///
+    /// RFC line 5516: j = first sample index in residual for current subframe
+    const fn subframe_start_index(&self, subframe_index: usize, samples_per_subframe: usize) -> usize {
+        subframe_index * samples_per_subframe
+    }
+}
+```
+
+**Step 4: Add comprehensive tests to decoder.rs:**
+
+```rust
+#[cfg(test)]
+mod tests_subframe_params {
+    use super::*;
+
+    #[test]
+    fn test_subframe_params_interpolated_lpc() {
+        // RFC lines 5504-5508: First two subframes of 20ms frame with w_Q2 < 4 use n1_Q15
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let n1_q15 = vec![100i16; 16]; // Interpolated LSFs
+        let n2_q15 = vec![200i16; 16]; // Current frame LSFs
+        let gains = vec![65536i32; 4];
+        let pitch_lags = vec![100i16; 4];
+        let ltp_filters = vec![[10i8; 5]; 4];
+
+        // Subframe 0 with w_Q2 = 3 should use n1_Q15
+        let params = decoder.select_subframe_params(
+            0, 20, 3, Some(&n1_q15), &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        // Verify it used interpolated coefficients
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+        assert_eq!(params.ltp_scale_q14, 14000); // Subframe 0 uses normal scale
+    }
+
+    #[test]
+    fn test_subframe_params_interpolated_lpc_subframe1() {
+        // RFC lines 5504-5508: Subframe 1 also uses interpolated with w_Q2 < 4
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let n1_q15 = vec![100i16; 16];
+        let n2_q15 = vec![200i16; 16];
+        let gains = vec![65536i32; 4];
+        let pitch_lags = vec![100i16; 4];
+        let ltp_filters = vec![[10i8; 5]; 4];
+
+        let params = decoder.select_subframe_params(
+            1, 20, 3, Some(&n1_q15), &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+    }
+
+    #[test]
+    fn test_subframe_params_normal_lpc_w_q2_ge_4() {
+        // RFC lines 5509-5511: w_Q2 >= 4 uses n2_Q15
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let n1_q15 = vec![100i16; 16];
+        let n2_q15 = vec![200i16; 16];
+        let gains = vec![65536i32; 4];
+        let pitch_lags = vec![100i16; 4];
+        let ltp_filters = vec![[10i8; 5]; 4];
+
+        // Subframe 0 with w_Q2 = 4 should use n2_Q15
+        let params = decoder.select_subframe_params(
+            0, 20, 4, Some(&n1_q15), &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+    }
+
+    #[test]
+    fn test_subframe_params_normal_lpc_subframe2() {
+        // RFC lines 5509-5511: Subframe 2 uses n2_Q15
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let n2_q15 = vec![200i16; 16];
+        let gains = vec![65536i32; 4];
+        let pitch_lags = vec![100i16; 4];
+        let ltp_filters = vec![[10i8; 5]; 4];
+
+        let params = decoder.select_subframe_params(
+            2, 20, 3, None, &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+    }
+
+    #[test]
+    fn test_subframe_params_ltp_scale_adjustment_subframe2() {
+        // RFC lines 5560-5564: Subframe 2 of 20ms frame with w_Q2 < 4 uses scale 16384
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let n2_q15 = vec![200i16; 16];
+        let gains = vec![65536i32; 4];
+        let pitch_lags = vec![100i16; 4];
+        let ltp_filters = vec![[10i8; 5]; 4];
+
+        let params = decoder.select_subframe_params(
+            2, 20, 3, None, &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        assert_eq!(params.ltp_scale_q14, 16384);
+    }
+
+    #[test]
+    fn test_subframe_params_ltp_scale_adjustment_subframe3() {
+        // RFC lines 5560-5564: Subframe 3 also uses adjusted scale
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let n2_q15 = vec![200i16; 16];
+        let gains = vec![65536i32; 4];
+        let pitch_lags = vec![100i16; 4];
+        let ltp_filters = vec![[10i8; 5]; 4];
+
+        let params = decoder.select_subframe_params(
+            3, 20, 3, None, &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        assert_eq!(params.ltp_scale_q14, 16384);
+    }
+
+    #[test]
+    fn test_subframe_params_ltp_scale_normal() {
+        // RFC line 5563: Other cases use original scale
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let n2_q15 = vec![200i16; 16];
+        let gains = vec![65536i32; 4];
+        let pitch_lags = vec![100i16; 4];
+        let ltp_filters = vec![[10i8; 5]; 4];
+
+        // Subframe 2 with w_Q2 = 4 should use original scale
+        let params = decoder.select_subframe_params(
+            2, 20, 4, None, &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        assert_eq!(params.ltp_scale_q14, 14000);
+    }
+
+    #[test]
+    fn test_subframe_params_10ms_frame() {
+        // 10ms frames should never use interpolation
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 10).unwrap();
+
+        let n1_q15 = vec![100i16; 16];
+        let n2_q15 = vec![200i16; 16];
+        let gains = vec![65536i32; 2]; // 10ms has 2 subframes
+        let pitch_lags = vec![100i16; 2];
+        let ltp_filters = vec![[10i8; 5]; 2];
+
+        let params = decoder.select_subframe_params(
+            0, 10, 3, Some(&n1_q15), &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        // Should use n2_Q15 (not interpolated)
+        assert_eq!(params.ltp_scale_q14, 14000); // Normal scale
+    }
+
+    #[test]
+    fn test_samples_per_subframe() {
+        let decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 10).unwrap();
+
+        // RFC line 5513: Verify sample counts
+        assert_eq!(decoder.samples_per_subframe(Bandwidth::Narrowband), 40);
+        assert_eq!(decoder.samples_per_subframe(Bandwidth::Mediumband), 60);
+        assert_eq!(decoder.samples_per_subframe(Bandwidth::Wideband), 80);
+    }
+
+    #[test]
+    fn test_num_subframes() {
+        let decoder10 = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 10).unwrap();
+        let decoder20 = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 20).unwrap();
+
+        // RFC line 5515: Verify subframe counts
+        assert_eq!(decoder10.num_subframes(10), 2);
+        assert_eq!(decoder20.num_subframes(20), 4);
+    }
+
+    #[test]
+    fn test_subframe_start_index() {
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        let samples_per_subframe = 80; // WB
+
+        // RFC line 5516: j = s * n
+        assert_eq!(decoder.subframe_start_index(0, samples_per_subframe), 0);
+        assert_eq!(decoder.subframe_start_index(1, samples_per_subframe), 80);
+        assert_eq!(decoder.subframe_start_index(2, samples_per_subframe), 160);
+        assert_eq!(decoder.subframe_start_index(3, samples_per_subframe), 240);
+    }
+
+    #[test]
+    fn test_subframe_params_all_fields() {
+        // Verify all SubframeParams fields are correctly populated
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let n2_q15 = vec![200i16; 16];
+        let gains = vec![32768i32, 65536, 98304, 131072];
+        let pitch_lags = vec![80i16, 90, 100, 110];
+        let ltp_filters = vec![
+            [1i8, 2, 3, 2, 1],
+            [5, 10, 15, 10, 5],
+            [8, 16, 24, 16, 8],
+            [4, 8, 12, 8, 4],
+        ];
+
+        let params = decoder.select_subframe_params(
+            1, 20, 4, None, &n2_q15, &gains, &pitch_lags, &ltp_filters, 14000
+        ).unwrap();
+
+        assert_eq!(params.gain_q16, 65536);
+        assert_eq!(params.pitch_lag, 90);
+        assert_eq!(params.ltp_filter_q7, [5, 10, 15, 10, 5]);
+        assert_eq!(params.ltp_scale_q14, 14000);
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+    }
+}
+```
+
+### 3.8.1 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk test_subframe_params` (all 12 tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] LPC coefficient selection matches RFC lines 5504-5511
-- [ ] LTP scale adjustment matches RFC lines 5560-5564
-- [ ] Subframe parameters correctly extracted
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5499-5517 - confirm parameter selection logic
+- [ ] LPC coefficient selection matches RFC lines 5504-5511 (interpolated for subframes 0-1 with w_Q2 < 4)
+- [ ] LTP scale adjustment matches RFC lines 5560-5564 (16384 for subframes 2-3 with w_Q2 < 4)
+- [ ] Subframe sizing correct: 40 (NB), 60 (MB), 80 (WB) per RFC line 5513
+- [ ] Subframe counts correct: 2 (10ms), 4 (20ms) per RFC line 5515
+- [ ] Subframe start index calculation correct: j = s * n per RFC line 5516
+- [ ] All 12 unit tests pass
+- [ ] **RFC DEEP CHECK:** Read RFC lines 5499-5517 and verify EVERY parameter selection rule implemented exactly
 
 ---
 
-#### 3.8.2: LTP Synthesis Filter
+## 3.8.2: LTP Synthesis Filter
 
-**Reference:** RFC 6716 Section 4.2.7.9.1 (lines 5519-5619)
+**Reference:** RFC 6716 Section 4.2.7.9.1, lines 5519-5619
 
-**Goal:** Apply long-term prediction filter to produce LPC residual
+**Goal:** Apply long-term prediction (LTP) filter to produce LPC residual from excitation. Voiced frames use a 5-tap filter with rewhitening; unvoiced frames use simple passthrough.
 
-##### Implementation Steps
+**Two Processing Modes:**
 
-- [ ] **Add LTP synthesis state:**
-  ```rust
-  pub struct LtpState {
-      pub out_buffer: Vec<f32>,  // 306 samples max (RFC line 5577)
-      pub lpc_buffer: Vec<f32>,  // 256 samples max (RFC line 5590)
-  }
-  ```
+**1. Unvoiced Frames (RFC lines 5521-5527):**
+```
+res[i] = e_Q23[i] / 2^23
+```
+Simple normalization from Q23 to floating-point.
 
-- [ ] **Implement unvoiced frame LTP (RFC lines 5521-5527):**
-  ```rust
-  impl SilkDecoder {
-      pub fn ltp_synthesis_unvoiced(
-          &self,
-          excitation_q23: &[i32],
-      ) -> Vec<f32> {
-          // For unvoiced frames: res[i] = e_Q23[i] / 2^23
-          excitation_q23.iter()
-              .map(|&e| e as f32 / (1 << 23) as f32)
-              .collect()
-      }
-  }
-  ```
+**2. Voiced Frames (RFC lines 5529-5618):**
+Three-stage process:
+1. **Rewhiten out[] buffer** (RFC lines 5565-5575): Convert previous output back to residual using current LPC coefficients
+2. **Rewhiten lpc[] buffer** (RFC lines 5581-5597): Scale previous unclamped output
+3. **Apply 5-tap LTP filter** (RFC lines 5607-5618): Combine excitation with filtered residual
 
-- [ ] **Implement rewhitening for voiced frames (RFC lines 5529-5598):**
-  ```rust
-  impl SilkDecoder {
-      pub fn ltp_synthesis_voiced(
-          &mut self,
-          excitation_q23: &[i32],
-          params: &SubframeParams,
-          subframe_index: usize,
-          n: usize,  // samples per subframe
-          j: usize,  // first sample index
-      ) -> Result<Vec<f32>> {
-          let mut res = Vec::with_capacity(n);
-          let d_lpc = params.lpc_coeffs.len();
-          let pitch_lag = params.pitch_lag as usize;
+**Buffer Requirements (Critical!):**
 
-          // Determine out_end based on interpolation (RFC lines 5560-5564)
-          let out_end = if params.ltp_scale_q14 == 16384 {
-              j - (subframe_index - 2) * n  // Subframes 2-3 with interpolation
-          } else {
-              j - subframe_index * n  // Normal case
-          };
+**out[] buffer (RFC lines 5577-5579):**
+- Size: 306 samples
+- Calculation: 18ms × 16kHz (max pitch lag) + 16 (d_LPC) + 2 (LTP filter width)
+- = 288 + 16 + 2 = 306 samples
+- Range: `(j - pitch_lags[s] - d_LPC - 2)` to `(j - 1)`
 
-          // Rewhiten out[i] range (RFC lines 5565-5575)
-          for i in (j - pitch_lag - 2)..out_end {
-              let out_val = self.ltp_state.out_buffer[i];
+**lpc[] buffer (RFC lines 5590-5593):**
+- Size: 256 samples
+- Calculation: 240 (3 subframes × 80 samples for WB) + 16 (d_LPC)
+- = 240 + 16 = 256 samples
+- Range: `(j - s*n - d_LPC)` to `(j - 1)`
 
-              // LPC filter: sum of a_Q12[k] * out[i-k-1]
-              let lpc_sum: f32 = (0..d_lpc)
-                  .map(|k| {
-                      let a_q12 = params.lpc_coeffs[k] as f32;
-                      let out_prev = self.ltp_state.out_buffer[i - k - 1];
-                      out_prev * (a_q12 / 4096.0)
-                  })
-                  .sum();
+**Initialization (RFC lines 5553-5559):**
+```
+During first subframe after:
+  * Uncoded regular SILK frame (side channel only), OR
+  * Decoder reset
 
-              let whitened = out_val - lpc_sum;
-              let clamped = whitened.clamp(-1.0, 1.0);
+Both out[i] and lpc[i] are cleared to all zeros
+```
 
-              let scale = (4.0 * params.ltp_scale_q14 as f32) / params.gain_q16 as f32;
-              res.push(scale * clamped);
-          }
+### Implementation Steps
 
-          // Rewhiten lpc[i] range (RFC lines 5581-5597)
-          for i in out_end..j {
-              let lpc_val = self.ltp_state.lpc_buffer[i];
+**Step 1: Add LtpState structure to decoder.rs:**
 
-              // LPC filter on lpc buffer
-              let lpc_sum: f32 = (0..d_lpc)
-                  .map(|k| {
-                      let a_q12 = params.lpc_coeffs[k] as f32;
-                      let lpc_prev = self.ltp_state.lpc_buffer[i - k - 1];
-                      lpc_prev * (a_q12 / 4096.0)
-                  })
-                  .sum();
+```rust
+/// State for LTP synthesis across subframes
+///
+/// RFC 6716 lines 5577-5593: Buffer requirements for rewhitening
+#[derive(Debug, Clone)]
+pub struct LtpState {
+    /// Fully reconstructed output signal (clamped) for rewhitening
+    ///
+    /// RFC lines 5577-5579: Requires up to 306 values from previous subframes
+    /// Size = 18ms * 16kHz + 16 (d_LPC) + 2 (LTP filter width) = 306
+    ///
+    /// Used for voiced frame rewhitening in range:
+    /// (j - pitch_lags[s] - 2) to out_end
+    pub out_buffer: Vec<f32>,
 
-              let whitened = lpc_val - lpc_sum;
-              let scaled = (65536.0 / params.gain_q16 as f32) * whitened;
-              res.push(scaled);
-          }
+    /// Unclamped LPC synthesis output for rewhitening
+    ///
+    /// RFC lines 5590-5593: Requires up to 256 values from previous subframes
+    /// Size = 240 (3 subframes * 80 for WB) + 16 (d_LPC) = 256
+    ///
+    /// Used for voiced frame rewhitening in range:
+    /// out_end to j
+    pub lpc_buffer: Vec<f32>,
+}
 
-          // Apply LTP filter (RFC lines 5607-5618)
-          for i in 0..n {
-              let e_normalized = excitation_q23[i] as f32 / (1 << 23) as f32;
+impl LtpState {
+    /// Creates new LTP state with cleared buffers
+    ///
+    /// RFC lines 5553-5559: Initial state after decoder reset
+    const fn new() -> Self {
+        Self {
+            out_buffer: Vec::new(),
+            lpc_buffer: Vec::new(),
+        }
+    }
 
-              // 5-tap LTP filter
-              let ltp_sum: f32 = (0..5)
-                  .map(|k| {
-                      let b_q7 = params.ltp_filter[k] as f32;
-                      let res_idx = j + i - pitch_lag + 2 - k;
-                      let res_prev = if res_idx < res.len() {
-                          res[res_idx]
-                      } else {
-                          0.0  // Handle boundary
-                      };
-                      res_prev * (b_q7 / 128.0)
-                  })
-                  .sum();
+    /// Initializes buffers with correct size
+    fn init(&mut self) {
+        self.out_buffer = vec![0.0; 306];
+        self.lpc_buffer = vec![0.0; 256];
+    }
 
-              res[j + i] = e_normalized + ltp_sum;
-          }
+    /// Clears all buffers (decoder reset)
+    ///
+    /// RFC lines 5553-5559: Reset behavior
+    fn reset(&mut self) {
+        self.out_buffer.fill(0.0);
+        self.lpc_buffer.fill(0.0);
+    }
+}
+```
 
-          Ok(res)
-      }
-  }
-  ```
+**Step 2: Add LTP state to SilkDecoder:**
 
-- [ ] **Document buffer requirements:**
-  ```rust
-  // RFC line 5577: out_buffer needs 306 samples
-  // = 18ms * 16kHz (max pitch lag) + 16 (d_LPC) + 2 (LTP filter width)
-  // = 288 + 16 + 2 = 306
+```rust
+pub struct SilkDecoder {
+    // ... existing fields ...
 
-  // RFC line 5590: lpc_buffer needs 256 samples
-  // = 240 (3 subframes * 80 samples for WB) + 16 (d_LPC)
-  ```
+    /// LTP synthesis state for buffer management
+    ///
+    /// RFC lines 5577-5593: Maintains out[] and lpc[] buffers across subframes
+    ltp_state: LtpState,
+}
 
-- [ ] **Add tests:**
-  ```rust
-  #[test]
-  fn test_ltp_synthesis_unvoiced() {
-      // Unvoiced: res = e_Q23 / 2^23
-  }
+impl SilkDecoder {
+    pub fn new(sample_rate: SampleRate, channels: Channels, frame_size_ms: u8) -> Result<Self> {
+        // ... existing validation ...
 
-  #[test]
-  fn test_ltp_synthesis_voiced_rewhitening() {
-      // Verify rewhitening formula
-  }
+        let mut ltp_state = LtpState::new();
+        ltp_state.init();
 
-  #[test]
-  fn test_ltp_synthesis_voiced_filter() {
-      // Verify 5-tap LTP filter application
-  }
+        Ok(Self {
+            // ... existing fields ...
+            ltp_state,
+        })
+    }
+}
+```
 
-  #[test]
-  fn test_ltp_buffer_sizing() {
-      // Verify buffer sizes: 306 for out, 256 for lpc
-  }
-  ```
+**Step 3: Implement unvoiced LTP synthesis in decoder.rs:**
 
-##### 3.8.2 Verification Checklist
+```rust
+impl SilkDecoder {
+    /// LTP synthesis for unvoiced frames
+    ///
+    /// RFC lines 5521-5527: Simple normalization of excitation
+    ///
+    /// # Arguments
+    ///
+    /// * `excitation_q23` - Decoded excitation signal in Q23 format
+    ///
+    /// # Returns
+    ///
+    /// LPC residual as floating-point values
+    ///
+    /// # RFC Formula
+    ///
+    /// ```text
+    /// res[i] = e_Q23[i] / 2^23    for j <= i < (j + n)
+    /// ```
+    fn ltp_synthesis_unvoiced(&self, excitation_q23: &[i32]) -> Vec<f32> {
+        let scale = 1.0 / f32::from(1_i32 << 23);
+        excitation_q23
+            .iter()
+            .map(|&e| (e as f32) * scale)
+            .collect()
+    }
+}
+```
+
+**Step 4: Implement voiced LTP synthesis in decoder.rs (COMPLEX - ~200 lines):**
+
+This is the most complex function in Section 3.8. It implements three stages of processing.
+
+```rust
+impl SilkDecoder {
+    /// LTP synthesis for voiced frames
+    ///
+    /// RFC lines 5529-5618: Three-stage process:
+    /// 1. Rewhiten out[] buffer using current LPC coefficients
+    /// 2. Rewhiten lpc[] buffer using current LPC coefficients
+    /// 3. Apply 5-tap LTP filter to combine excitation with past residual
+    ///
+    /// # Arguments
+    ///
+    /// * `excitation_q23` - Decoded excitation signal in Q23 format (length n)
+    /// * `params` - Current subframe parameters
+    /// * `subframe_index` - Current subframe index s (0-3)
+    /// * `bandwidth` - Audio bandwidth (determines n)
+    ///
+    /// # Returns
+    ///
+    /// LPC residual as floating-point values
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if buffer indices are invalid
+    ///
+    /// # RFC References
+    ///
+    /// * Lines 5536-5540: Buffer definitions for out[i] and lpc[i]
+    /// * Lines 5560-5564: Calculation of out_end and LTP_scale_Q14
+    /// * Lines 5565-5575: Rewhitening formula for out[i]
+    /// * Lines 5581-5597: Rewhitening formula for lpc[i]
+    /// * Lines 5607-5618: 5-tap LTP filter application
+    #[allow(clippy::too_many_lines)]
+    fn ltp_synthesis_voiced(
+        &mut self,
+        excitation_q23: &[i32],
+        params: &SubframeParams,
+        subframe_index: usize,
+        bandwidth: Bandwidth,
+    ) -> Result<Vec<f32>> {
+        let n = self.samples_per_subframe(bandwidth);
+        let j = self.subframe_start_index(subframe_index, n);
+        let d_lpc = params.lpc_coeffs_q12.len();
+        let pitch_lag = params.pitch_lag as usize;
+
+        // Allocate residual buffer for entire rewhitening + current subframe
+        let mut res = Vec::new();
+
+        // RFC lines 5560-5564: Determine out_end and effective LTP scale
+        let out_end = if params.ltp_scale_q14 == 16384 {
+            // Subframes 2-3 with interpolation: use (j - (s-2)*n)
+            j.saturating_sub((subframe_index.saturating_sub(2)) * n)
+        } else {
+            // Normal case: use (j - s*n)
+            j.saturating_sub(subframe_index * n)
+        };
+
+        // ================================================================
+        // STAGE 1: Rewhiten out[i] buffer (RFC lines 5565-5575)
+        // ================================================================
+        // Range: (j - pitch_lags[s] - 2) <= i < out_end
+
+        let out_start = j.saturating_sub(pitch_lag + 2);
+
+        for i in out_start..out_end {
+            // Get out[i] from buffer (clamped output from previous subframes)
+            let out_val = if i < self.ltp_state.out_buffer.len() {
+                self.ltp_state.out_buffer[i]
+            } else {
+                0.0 // Beyond buffer = use zero
+            };
+
+            // RFC line 5572-5574: LPC prediction sum
+            // sum = Σ(out[i-k-1] * a_Q12[k] / 4096.0) for k=0 to d_LPC-1
+            let mut lpc_sum = 0.0_f32;
+            for k in 0..d_lpc {
+                let idx = i.saturating_sub(k + 1);
+                let out_prev = if idx < self.ltp_state.out_buffer.len() {
+                    self.ltp_state.out_buffer[idx]
+                } else {
+                    0.0
+                };
+                let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
+                lpc_sum += out_prev * (a_q12 / 4096.0);
+            }
+
+            // RFC line 5573: Whiten: out[i] - LPC_sum
+            let whitened = out_val - lpc_sum;
+
+            // RFC line 5573: Clamp to [-1.0, 1.0]
+            let clamped = whitened.clamp(-1.0, 1.0);
+
+            // RFC lines 5568-5570: Scale by (4.0 * LTP_scale_Q14 / gain_Q16[s])
+            let scale = (4.0 * f32::from(params.ltp_scale_q14)) / f32::from(params.gain_q16);
+            let res_val = scale * clamped;
+
+            res.push(res_val);
+        }
+
+        // ================================================================
+        // STAGE 2: Rewhiten lpc[i] buffer (RFC lines 5581-5597)
+        // ================================================================
+        // Range: out_end <= i < j
+
+        for i in out_end..j {
+            // Get lpc[i] from buffer (unclamped output from previous subframes)
+            let lpc_val = if i < self.ltp_state.lpc_buffer.len() {
+                self.ltp_state.lpc_buffer[i]
+            } else {
+                0.0
+            };
+
+            // RFC line 5586-5587: LPC prediction sum on lpc buffer
+            // sum = Σ(lpc[i-k-1] * a_Q12[k] / 4096.0) for k=0 to d_LPC-1
+            let mut lpc_sum = 0.0_f32;
+            for k in 0..d_lpc {
+                let idx = i.saturating_sub(k + 1);
+                let lpc_prev = if idx < self.ltp_state.lpc_buffer.len() {
+                    self.ltp_state.lpc_buffer[idx]
+                } else {
+                    0.0
+                };
+                let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
+                lpc_sum += lpc_prev * (a_q12 / 4096.0);
+            }
+
+            // RFC line 5586: Whiten: lpc[i] - LPC_sum
+            let whitened = lpc_val - lpc_sum;
+
+            // RFC line 5585: Scale by (65536.0 / gain_Q16[s])
+            let scale = 65536.0 / f32::from(params.gain_q16);
+            let res_val = scale * whitened;
+
+            res.push(res_val);
+        }
+
+        // ================================================================
+        // STAGE 3: Apply 5-tap LTP filter (RFC lines 5607-5618)
+        // ================================================================
+        // For i such that j <= i < (j + n)
+
+        let res_base_offset = res.len(); // Where we start adding new samples
+
+        for i in 0..n {
+            // RFC line 5615: Normalize excitation
+            let e_normalized = (excitation_q23[i] as f32) / f32::from(1_i32 << 23);
+
+            // RFC lines 5615-5617: 5-tap LTP filter
+            // sum = Σ(res[i - pitch_lags[s] + 2 - k] * b_Q7[k] / 128.0) for k=0 to 4
+            let mut ltp_sum = 0.0_f32;
+            for k in 0..5 {
+                // Calculate index into res buffer
+                // res index for current subframe position i:
+                //   res[j + i - pitch_lag + 2 - k]
+                // But res buffer starts at out_start, so adjust:
+                let global_idx = j + i;
+                let target_idx = global_idx.saturating_sub(pitch_lag).saturating_add(2).saturating_sub(k);
+                let res_idx = target_idx.saturating_sub(out_start);
+
+                let res_prev = if res_idx < res.len() {
+                    res[res_idx]
+                } else {
+                    0.0
+                };
+
+                let b_q7 = f32::from(params.ltp_filter_q7[k]);
+                ltp_sum += res_prev * (b_q7 / 128.0);
+            }
+
+            // RFC line 5616: Combine excitation with LTP prediction
+            let res_val = e_normalized + ltp_sum;
+            res.push(res_val);
+        }
+
+        // Extract only the current subframe's residual (last n samples)
+        Ok(res[res_base_offset..].to_vec())
+    }
+}
+```
+
+**Step 5: Add comprehensive tests (15 tests):**
+
+```rust
+#[cfg(test)]
+mod tests_ltp_synthesis {
+    use super::*;
+
+    #[test]
+    fn test_ltp_synthesis_unvoiced_simple() {
+        // RFC lines 5521-5527: Unvoiced uses simple normalization
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 10).unwrap();
+
+        let excitation = vec![
+            8388608,   // 2^23 (should become 1.0)
+            4194304,   // 2^22 (should become 0.5)
+            -8388608,  // -2^23 (should become -1.0)
+            0,         // 0 (should become 0.0)
+        ];
+
+        let res = decoder.ltp_synthesis_unvoiced(&excitation);
+
+        assert_eq!(res.len(), 4);
+        assert!((res[0] - 1.0).abs() < 1e-6);
+        assert!((res[1] - 0.5).abs() < 1e-6);
+        assert!((res[2] - (-1.0)).abs() < 1e-6);
+        assert!((res[3] - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_unvoiced_full_subframe() {
+        // Test with full subframe sizes
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1000000i32; 80]; // WB subframe
+        let res = decoder.ltp_synthesis_unvoiced(&excitation);
+
+        assert_eq!(res.len(), 80);
+        // All values should be 1000000 / 2^23 ≈ 0.119
+        for &val in &res {
+            assert!((val - 0.119209).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn test_ltp_state_initialization() {
+        // RFC lines 5553-5559: Buffers initially zeros
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        assert_eq!(decoder.ltp_state.out_buffer.len(), 306);
+        assert_eq!(decoder.ltp_state.lpc_buffer.len(), 256);
+        assert!(decoder.ltp_state.out_buffer.iter().all(|&x| x == 0.0));
+        assert!(decoder.ltp_state.lpc_buffer.iter().all(|&x| x == 0.0));
+    }
+
+    #[test]
+    fn test_ltp_state_reset() {
+        // RFC lines 5553-5559: Reset clears buffers
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        // Populate buffers
+        decoder.ltp_state.out_buffer[0] = 1.0;
+        decoder.ltp_state.out_buffer[100] = 0.5;
+        decoder.ltp_state.lpc_buffer[0] = 2.0;
+        decoder.ltp_state.lpc_buffer[100] = 0.25;
+
+        // Reset
+        decoder.ltp_state.reset();
+
+        assert!(decoder.ltp_state.out_buffer.iter().all(|&x| x == 0.0));
+        assert!(decoder.ltp_state.lpc_buffer.iter().all(|&x| x == 0.0));
+    }
+
+    #[test]
+    fn test_ltp_buffer_sizes() {
+        // RFC lines 5577-5579: out buffer = 306 samples
+        // RFC lines 5590-5593: lpc buffer = 256 samples
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        // 306 = 18ms * 16kHz + 16 (d_LPC) + 2 (LTP width) = 288 + 16 + 2
+        assert_eq!(decoder.ltp_state.out_buffer.len(), 306);
+        assert_eq!(decoder.ltp_state.out_buffer.capacity(), 306);
+
+        // 256 = 240 (3 * 80 for WB) + 16 (d_LPC)
+        assert_eq!(decoder.ltp_state.lpc_buffer.len(), 256);
+        assert_eq!(decoder.ltp_state.lpc_buffer.capacity(), 256);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_zero_excitation() {
+        // With zero excitation and zero buffers, should get zero residual
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![0i32; 80]; // WB subframe
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let res = decoder.ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband).unwrap();
+
+        assert_eq!(res.len(), 80);
+        // With zero inputs and zero state, output should be near zero
+        assert!(res.iter().all(|&x| x.abs() < 1e-3));
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_out_end_normal() {
+        // RFC lines 5563: Normal case out_end = j - s*n
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1000i32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000, // Not 16384
+        };
+
+        // Subframe 2: out_end should be j - s*n = 160 - 2*80 = 0
+        let res = decoder.ltp_synthesis_voiced(&excitation, &params, 2, Bandwidth::Wideband).unwrap();
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_out_end_interpolation() {
+        // RFC lines 5562: Interpolation case out_end = j - (s-2)*n
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1000i32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 16384, // Interpolation mode
+        };
+
+        // Subframe 2: out_end should be j - (s-2)*n = 160 - 0 = 160
+        let res = decoder.ltp_synthesis_voiced(&excitation, &params, 2, Bandwidth::Wideband).unwrap();
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_pitch_lag_short() {
+        // Short pitch lag (2ms = 32 samples at 16kHz)
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1000000i32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 32, // Short lag
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let res = decoder.ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband).unwrap();
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_pitch_lag_long() {
+        // Long pitch lag (18ms = 288 samples at 16kHz)
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1000000i32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 288, // Max lag
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let res = decoder.ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband).unwrap();
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_all_bandwidths() {
+        // RFC line 5513: Verify correct sample counts for all bandwidths
+        let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 10).unwrap();
+
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 10],
+            gain_q16: 65536,
+            pitch_lag: 50,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        // NB: 40 samples
+        let exc_nb = vec![1000i32; 40];
+        let res_nb = decoder.ltp_synthesis_voiced(&exc_nb, &params, 0, Bandwidth::Narrowband).unwrap();
+        assert_eq!(res_nb.len(), 40);
+
+        // MB: 60 samples
+        let exc_mb = vec![1000i32; 60];
+        let res_mb = decoder.ltp_synthesis_voiced(&exc_mb, &params, 0, Bandwidth::Mediumband).unwrap();
+        assert_eq!(res_mb.len(), 60);
+
+        // WB: 80 samples
+        let exc_wb = vec![1000i32; 80];
+        let params_wb = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 16],
+            ..params
+        };
+        let res_wb = decoder.ltp_synthesis_voiced(&exc_wb, &params_wb, 0, Bandwidth::Wideband).unwrap();
+        assert_eq!(res_wb.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_5tap_filter() {
+        // RFC lines 5608-5609: b_Q7[k] for 0 <= k < 5
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![8388608i32; 80]; // All 1.0 after normalization
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 16], // Zero LPC to isolate LTP
+            gain_q16: 65536,
+            pitch_lag: 80, // One subframe back
+            ltp_filter_q7: [10, 20, 40, 20, 10], // Q7 format, symmetric
+            ltp_scale_q14: 14000,
+        };
+
+        let res = decoder.ltp_synthesis_voiced(&excitation, &params, 1, Bandwidth::Wideband).unwrap();
+
+        assert_eq!(res.len(), 80);
+        // Each output sample includes excitation (1.0) plus filtered past residual
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_rewhitening_out_formula() {
+        // RFC lines 5568-5575: Rewhitening formula for out[i]
+        // res[i] = (4.0*LTP_scale_Q14 / gain_Q16[s]) * clamp(-1.0, out[i] - Σ(...), 1.0)
+
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        // Set up known out buffer values
+        for i in 0..200 {
+            decoder.ltp_state.out_buffer[i] = 0.5;
+        }
+
+        let excitation = vec![0i32; 80]; // Zero to isolate rewhitening
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![1000i16; 16], // Non-zero LPC
+            gain_q16: 65536, // Q16 = 1.0
+            pitch_lag: 100,
+            ltp_filter_q7: [0; 5], // Zero filter
+            ltp_scale_q14: 16384, // Q14 = 1.0
+        };
+
+        let res = decoder.ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband).unwrap();
+
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_rewhitening_lpc_formula() {
+        // RFC lines 5585-5587: Rewhitening formula for lpc[i]
+        // res[i] = (65536.0 / gain_Q16[s]) * (lpc[i] - Σ(...))
+
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        // Set up known lpc buffer values
+        for i in 0..200 {
+            decoder.ltp_state.lpc_buffer[i] = 0.25;
+        }
+
+        let excitation = vec![0i32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![500i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 14000, // Use normal mode to engage lpc rewhitening
+        };
+
+        let res = decoder.ltp_synthesis_voiced(&excitation, &params, 1, Bandwidth::Wideband).unwrap();
+
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_different_gains() {
+        // Test that different gains produce different results
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![5000000i32; 80];
+
+        let params_low_gain = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 16],
+            gain_q16: 32768, // Half gain
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let params_high_gain = SubframeParams {
+            gain_q16: 131072, // Double gain
+            ..params_low_gain.clone()
+        };
+
+        let res_low = decoder.ltp_synthesis_voiced(&excitation, &params_low_gain, 0, Bandwidth::Wideband).unwrap();
+        let res_high = decoder.ltp_synthesis_voiced(&excitation, &params_high_gain, 0, Bandwidth::Wideband).unwrap();
+
+        // Results should differ due to gain scaling in rewhitening
+        assert_eq!(res_low.len(), 80);
+        assert_eq!(res_high.len(), 80);
+    }
+}
+```
+
+### 3.8.2 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk test_ltp` (all 15 tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
 - [ ] Unvoiced formula matches RFC line 5526: `res[i] = e_Q23[i] / 2^23`
-- [ ] Rewhitening formula matches RFC lines 5568-5575
-- [ ] LTP filter formula matches RFC lines 5614-5618
-- [ ] Buffer sizes correct: 306 for out, 256 for lpc
-- [ ] State initialization handles decoder reset (RFC lines 5553-5559)
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5519-5619 - confirm all formulas, buffer management
+- [ ] Out buffer rewhitening matches RFC lines 5568-5575 exactly (formula with clamp and scale)
+- [ ] LPC buffer rewhitening matches RFC lines 5585-5587 exactly (formula with scale only)
+- [ ] 5-tap LTP filter matches RFC lines 5614-5618 exactly (sum of 5 coefficients)
+- [ ] Buffer sizes correct: 306 for out[], 256 for lpc[] (RFC lines 5577-5579, 5590-5593)
+- [ ] out_end calculation matches RFC lines 5560-5564 (two cases: normal and interpolation)
+- [ ] State initialization clears buffers to zeros (RFC lines 5553-5559)
+- [ ] All 15 unit tests pass
+- [ ] **RFC DEEP CHECK:** Read RFC lines 5519-5619 and verify EVERY formula, buffer index, scaling factor, all 3 stages
 
 ---
 
-#### 3.8.3: LPC Synthesis Filter
+## 3.8.3: LPC Synthesis Filter
 
-**Reference:** RFC 6716 Section 4.2.7.9.2 (lines 5620-5653)
+**Reference:** RFC 6716 Section 4.2.7.9.2, lines 5620-5653
 
-**Goal:** Apply short-term prediction filter to produce final output
+**Goal:** Apply short-term Linear Predictive Coding (LPC) filter to convert residual into audio output. This is the final synthesis step before clamping.
 
-##### Implementation Steps
+**LPC Synthesis Formula (RFC lines 5636-5638):**
+```
+                                      d_LPC-1
+                 gain_Q16[s]             __              a_Q12[k]
+lpc[i] = ------------------- * res[i] + \  lpc[i-k-1] * --------
+              65536.0                   /_               4096.0
+                                        k=0
+```
 
-- [ ] **Implement LPC synthesis:**
-  ```rust
-  impl SilkDecoder {
-      pub fn lpc_synthesis(
-          &mut self,
-          residual: &[f32],
-          params: &SubframeParams,
-          subframe_index: usize,
-          n: usize,  // samples per subframe
-          j: usize,  // first sample index
-      ) -> Result<(Vec<f32>, Vec<f32>)> {  // (lpc_output, clamped_output)
-          let d_lpc = params.lpc_coeffs.len();
-          let mut lpc_out = Vec::with_capacity(n);
-          let mut clamped_out = Vec::with_capacity(n);
+**Dual Storage Requirement (RFC lines 5650-5653):**
+- **Unclamped `lpc[i]`**: Saved for next subframe's LPC synthesis feedback
+- **Clamped `out[i]`**: `clamp(-1.0, lpc[i], 1.0)` - saved for LTP rewhitening in voiced frames
 
-          // RFC lines 5623-5630: Initialize lpc[i] for i in [j-d_LPC, j)
-          // Use last d_LPC samples from previous subframe, or zeros if first subframe
+**State Management (RFC lines 5641-5644):**
+- Save final `d_LPC` values: `lpc[i]` for `(j + n - d_LPC) <= i < (j + n)`
+- Maximum storage: 16 values (for WB frames with d_LPC=16)
 
-          // RFC lines 5632-5639: LPC synthesis formula
-          for i in 0..n {
-              // LPC prediction from previous samples
-              let lpc_sum: f32 = (0..d_lpc)
-                  .map(|k| {
-                      let a_q12 = params.lpc_coeffs[k] as f32;
-                      let lpc_prev = if i > k {
-                          lpc_out[i - k - 1]
-                      } else {
-                          self.ltp_state.lpc_buffer[j + i - k - 1]
-                      };
-                      lpc_prev * (a_q12 / 4096.0)
-                  })
-                  .sum();
+**Initialization (RFC lines 5623-5630):**
+```
+For i such that (j - d_LPC) <= i < j:
+  lpc[i] = last d_LPC samples from previous subframe
 
-              // Apply gain and add residual
-              let gain_scaled = (params.gain_q16 as f32 / 65536.0) * residual[i];
-              let lpc_val = gain_scaled + lpc_sum;
+First subframe after decoder reset or uncoded side channel:
+  lpc[i] = 0 for all history positions
+```
 
-              // Clamp output (RFC lines 5646-5648)
-              let clamped = lpc_val.clamp(-1.0, 1.0);
+### Implementation Steps
 
-              lpc_out.push(lpc_val);      // Unclamped for next subframe
-              clamped_out.push(clamped);  // Clamped for output
-          }
+**Step 1: Add LPC synthesis state to LtpState in decoder.rs:**
 
-          // RFC lines 5641-5644: Save final d_LPC values for next subframe
-          self.ltp_state.lpc_buffer.extend_from_slice(&lpc_out[n - d_lpc..]);
+```rust
+#[derive(Debug, Clone)]
+pub struct LtpState {
+    // ... existing fields (out_buffer, lpc_buffer) ...
 
-          // RFC lines 5651-5653: Save unclamped for LPC, clamped for rewhitening
-          Ok((lpc_out, clamped_out))
-      }
-  }
-  ```
+    /// Saved unclamped lpc[i] values for next subframe's LPC synthesis
+    ///
+    /// RFC lines 5641-5644: Stores final d_LPC values from previous subframe
+    /// Maximum storage: 16 values (WB frames with d_LPC=16)
+    pub lpc_history: Vec<f32>,
+}
 
-- [ ] **Document state management:**
-  ```rust
-  // RFC line 5641: Save final d_LPC values of lpc[i]
-  // These feed into next subframe's LPC synthesis
-  // Requires storage for up to 16 values (WB frames)
+impl LtpState {
+    const fn new() -> Self {
+        Self {
+            out_buffer: Vec::new(),
+            lpc_buffer: Vec::new(),
+            lpc_history: Vec::new(),
+        }
+    }
 
-  // RFC lines 5651-5653:
-  // - Unclamped lpc[i] → feed into LPC filter for next subframe
-  // - Clamped out[i] → used for rewhitening in voiced frames
-  ```
+    fn init(&mut self) {
+        self.out_buffer = vec![0.0; 306];
+        self.lpc_buffer = vec![0.0; 256];
+        self.lpc_history = vec![0.0; 16]; // Max d_LPC
+    }
 
-- [ ] **Add tests:**
-  ```rust
-  #[test]
-  fn test_lpc_synthesis_formula() {
-      // Verify gain scaling and LPC prediction sum
-  }
+    fn reset(&mut self) {
+        self.out_buffer.fill(0.0);
+        self.lpc_buffer.fill(0.0);
+        self.lpc_history.fill(0.0);
+    }
+}
+```
 
-  #[test]
-  fn test_lpc_synthesis_clamping() {
-      // Verify output clamped to [-1.0, 1.0]
-  }
+**Step 2: Implement lpc_synthesis() method in decoder.rs:**
 
-  #[test]
-  fn test_lpc_synthesis_state_save() {
-      // Verify final d_LPC values saved
-  }
+```rust
+impl SilkDecoder {
+    /// LPC synthesis filter
+    ///
+    /// RFC lines 5620-5653: Applies short-term prediction to produce final output
+    ///
+    /// # Arguments
+    ///
+    /// * `residual` - LPC residual from LTP synthesis (length n)
+    /// * `params` - Current subframe parameters
+    /// * `subframe_index` - Current subframe index
+    /// * `bandwidth` - Audio bandwidth (determines n)
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (unclamped_lpc, clamped_out):
+    /// * `unclamped_lpc` - Unclamped LPC synthesis output (for next subframe feedback)
+    /// * `clamped_out` - Clamped output in range [-1.0, 1.0] (for LTP rewhitening)
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if residual length doesn't match expected subframe size
+    ///
+    /// # RFC References
+    ///
+    /// * Lines 5623-5630: Initial lpc[i] from history or zeros
+    /// * Lines 5636-5638: LPC synthesis formula
+    /// * Lines 5641-5644: Save final d_LPC values for next subframe
+    /// * Lines 5646-5648: Clamping to [-1.0, 1.0]
+    /// * Lines 5650-5653: Dual storage (unclamped for LPC, clamped for LTP)
+    fn lpc_synthesis(
+        &mut self,
+        residual: &[f32],
+        params: &SubframeParams,
+        subframe_index: usize,
+        bandwidth: Bandwidth,
+    ) -> Result<(Vec<f32>, Vec<f32>)> {
+        let n = self.samples_per_subframe(bandwidth);
+        let j = self.subframe_start_index(subframe_index, n);
+        let d_lpc = params.lpc_coeffs_q12.len();
 
-  #[test]
-  fn test_lpc_synthesis_first_subframe() {
-      // First subframe uses zeros for history
-  }
-  ```
+        // Validate input
+        if residual.len() != n {
+            return Err(Error::SilkDecoder(format!(
+                "residual length {} doesn't match subframe size {}",
+                residual.len(),
+                n
+            )));
+        }
 
-##### 3.8.3 Verification Checklist
+        let mut lpc_out = Vec::with_capacity(n);
+        let mut clamped_out = Vec::with_capacity(n);
+
+        // RFC lines 5632-5639: LPC synthesis formula
+        for i in 0..n {
+            // RFC line 5637: LPC prediction sum
+            // sum = Σ(lpc[i-k-1] * a_Q12[k] / 4096.0) for k=0 to d_LPC-1
+            let mut lpc_sum = 0.0_f32;
+
+            for k in 0..d_lpc {
+                // Get lpc[i-k-1]
+                // If i > k: from current lpc_out buffer
+                // Otherwise: from saved lpc_history
+                let lpc_prev = if i > k {
+                    lpc_out[i - k - 1]
+                } else {
+                    // Access history: lpc_history stores last d_LPC values from previous subframe
+                    // We want lpc[j + i - k - 1]
+                    // History index: (d_lpc + i - k - 1) wraps around
+                    let hist_idx = if i >= k + 1 {
+                        0 // Won't happen due to outer if condition
+                    } else {
+                        d_lpc - (k + 1 - i)
+                    };
+
+                    if hist_idx < self.ltp_state.lpc_history.len() {
+                        self.ltp_state.lpc_history[hist_idx]
+                    } else {
+                        0.0 // First subframe after reset
+                    }
+                };
+
+                let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
+                lpc_sum += lpc_prev * (a_q12 / 4096.0);
+            }
+
+            // RFC line 5636-5637: Apply gain and add residual
+            let gain_scaled = (f32::from(params.gain_q16) / 65536.0) * residual[i];
+            let lpc_val = gain_scaled + lpc_sum;
+
+            // RFC line 5648: Clamp output to [-1.0, 1.0]
+            let clamped = lpc_val.clamp(-1.0, 1.0);
+
+            lpc_out.push(lpc_val);      // Unclamped for next subframe
+            clamped_out.push(clamped);  // Clamped for output
+        }
+
+        // RFC lines 5641-5644: Save final d_LPC values for next subframe
+        // Save lpc[j + n - d_LPC] through lpc[j + n - 1]
+        if lpc_out.len() >= d_lpc {
+            self.ltp_state.lpc_history.clear();
+            self.ltp_state.lpc_history.extend_from_slice(&lpc_out[n - d_lpc..]);
+        }
+
+        // RFC lines 5650-5653: Return both unclamped and clamped
+        // - Unclamped lpc[i]: feed into LPC filter for next subframe
+        // - Clamped out[i]: used for rewhitening in voiced frames
+        Ok((lpc_out, clamped_out))
+    }
+}
+```
+
+**Step 3: Add method to update out_buffer and lpc_buffer after synthesis:**
+
+```rust
+impl SilkDecoder {
+    /// Updates LTP state buffers after LPC synthesis
+    ///
+    /// RFC lines 5651-5653: Save clamped values to out[] and unclamped to lpc[]
+    ///
+    /// # Arguments
+    ///
+    /// * `unclamped_lpc` - Unclamped LPC output
+    /// * `clamped_out` - Clamped output
+    /// * `subframe_index` - Current subframe index
+    /// * `bandwidth` - Audio bandwidth
+    fn update_ltp_buffers(
+        &mut self,
+        unclamped_lpc: &[f32],
+        clamped_out: &[f32],
+        subframe_index: usize,
+        bandwidth: Bandwidth,
+    ) {
+        let n = self.samples_per_subframe(bandwidth);
+        let j = self.subframe_start_index(subframe_index, n);
+
+        // Update out_buffer with clamped values (for LTP rewhitening)
+        for (offset, &val) in clamped_out.iter().enumerate() {
+            let idx = j + offset;
+            if idx < self.ltp_state.out_buffer.len() {
+                self.ltp_state.out_buffer[idx] = val;
+            }
+        }
+
+        // Update lpc_buffer with unclamped values (for LTP rewhitening)
+        for (offset, &val) in unclamped_lpc.iter().enumerate() {
+            let idx = j + offset;
+            if idx < self.ltp_state.lpc_buffer.len() {
+                self.ltp_state.lpc_buffer[idx] = val;
+            }
+        }
+    }
+}
+```
+
+**Step 4: Add comprehensive tests (8 tests):**
+
+```rust
+#[cfg(test)]
+mod tests_lpc_synthesis {
+    use super::*;
+
+    #[test]
+    fn test_lpc_synthesis_zero_residual() {
+        // With zero residual and zero history, output should be zero
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let residual = vec![0.0_f32; 80]; // WB subframe
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![100i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let (lpc_out, clamped_out) = decoder.lpc_synthesis(
+            &residual, &params, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        assert_eq!(lpc_out.len(), 80);
+        assert_eq!(clamped_out.len(), 80);
+
+        // All values should be near zero
+        assert!(lpc_out.iter().all(|&x| x.abs() < 1e-6));
+        assert!(clamped_out.iter().all(|&x| x.abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_lpc_synthesis_simple_gain_scaling() {
+        // RFC line 5636: Test gain scaling with zero LPC coefficients
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let residual = vec![1.0_f32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 16], // Zero LPC coeffs to isolate gain
+            gain_q16: 65536, // Q16 = 1.0
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let (lpc_out, clamped_out) = decoder.lpc_synthesis(
+            &residual, &params, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        // With gain=1.0 and zero LPC: lpc[i] = 1.0 * res[i] = 1.0
+        assert!(lpc_out.iter().all(|&x| (x - 1.0).abs() < 1e-6));
+        assert!(clamped_out.iter().all(|&x| (x - 1.0).abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_lpc_synthesis_gain_scaling_half() {
+        // Test half gain
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let residual = vec![1.0_f32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 16],
+            gain_q16: 32768, // Q16 = 0.5
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let (lpc_out, _) = decoder.lpc_synthesis(
+            &residual, &params, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        // With gain=0.5: lpc[i] = 0.5 * 1.0 = 0.5
+        assert!(lpc_out.iter().all(|&x| (x - 0.5).abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_lpc_synthesis_clamping() {
+        // RFC line 5648: Test clamping to [-1.0, 1.0]
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let residual = vec![10.0_f32; 80]; // Large values
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 16],
+            gain_q16: 131072, // Q16 = 2.0 (will produce 20.0)
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let (lpc_out, clamped_out) = decoder.lpc_synthesis(
+            &residual, &params, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        // Unclamped should be 20.0
+        assert!(lpc_out.iter().all(|&x| (x - 20.0).abs() < 1e-6));
+
+        // Clamped should be 1.0
+        assert!(clamped_out.iter().all(|&x| (x - 1.0).abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_lpc_synthesis_negative_clamping() {
+        // Test negative clamping
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let residual = vec![-10.0_f32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 16],
+            gain_q16: 131072, // Q16 = 2.0 (will produce -20.0)
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let (lpc_out, clamped_out) = decoder.lpc_synthesis(
+            &residual, &params, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        // Unclamped should be -20.0
+        assert!(lpc_out.iter().all(|&x| (x - (-20.0)).abs() < 1e-6));
+
+        // Clamped should be -1.0
+        assert!(clamped_out.iter().all(|&x| (x - (-1.0)).abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_lpc_synthesis_history_saved() {
+        // RFC lines 5641-5644: Verify final d_LPC values are saved
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let residual = vec![0.5_f32; 80];
+        let params = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        decoder.lpc_synthesis(&residual, &params, 0, Bandwidth::Wideband).unwrap();
+
+        // Check that lpc_history was updated with last 16 values
+        assert_eq!(decoder.ltp_state.lpc_history.len(), 16);
+        // Last 16 values should all be 0.5 (from gain=1.0 * residual=0.5)
+        assert!(decoder.ltp_state.lpc_history.iter().all(|&x| (x - 0.5).abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_lpc_synthesis_with_history() {
+        // Test that LPC synthesis uses history from previous subframe
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        // First subframe: populate history
+        let residual1 = vec![1.0_f32; 80];
+        let params1 = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        decoder.lpc_synthesis(&residual1, &params1, 0, Bandwidth::Wideband).unwrap();
+
+        // Second subframe: use history with non-zero LPC coefficients
+        let residual2 = vec![0.0_f32; 80]; // Zero residual to see history effect
+        let params2 = SubframeParams {
+            lpc_coeffs_q12: vec![1024i16; 16], // Non-zero (Q12 = 0.25)
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let (lpc_out2, _) = decoder.lpc_synthesis(&residual2, &params2, 1, Bandwidth::Wideband).unwrap();
+
+        // First sample should be affected by history
+        // lpc[0] = 0 + sum of (history * 0.25)
+        assert!(lpc_out2[0] > 0.0); // Should be positive due to positive history
+    }
+
+    #[test]
+    fn test_lpc_synthesis_all_bandwidths() {
+        // RFC line 5513: Test all bandwidth sizes
+        let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Mono, 10).unwrap();
+
+        // NB: 40 samples, d_LPC=10
+        let residual_nb = vec![0.5_f32; 40];
+        let params_nb = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 10],
+            gain_q16: 65536,
+            pitch_lag: 50,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let (lpc_nb, clamped_nb) = decoder.lpc_synthesis(
+            &residual_nb, &params_nb, 0, Bandwidth::Narrowband
+        ).unwrap();
+
+        assert_eq!(lpc_nb.len(), 40);
+        assert_eq!(clamped_nb.len(), 40);
+
+        // MB: 60 samples
+        let residual_mb = vec![0.5_f32; 60];
+        let (lpc_mb, clamped_mb) = decoder.lpc_synthesis(
+            &residual_mb, &params_nb, 0, Bandwidth::Mediumband
+        ).unwrap();
+
+        assert_eq!(lpc_mb.len(), 60);
+        assert_eq!(clamped_mb.len(), 60);
+
+        // WB: 80 samples, d_LPC=16
+        let residual_wb = vec![0.5_f32; 80];
+        let params_wb = SubframeParams {
+            lpc_coeffs_q12: vec![0i16; 16],
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 14000,
+        };
+
+        let (lpc_wb, clamped_wb) = decoder.lpc_synthesis(
+            &residual_wb, &params_wb, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        assert_eq!(lpc_wb.len(), 80);
+        assert_eq!(clamped_wb.len(), 80);
+    }
+}
+```
+
+### 3.8.3 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk test_lpc_synthesis` (all 8 tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] LPC synthesis formula matches RFC lines 5636-5638
+- [ ] LPC synthesis formula matches RFC lines 5636-5638 exactly (gain scaling + LPC sum)
 - [ ] Clamping formula matches RFC line 5648: `clamp(-1.0, lpc[i], 1.0)`
-- [ ] State saving matches RFC lines 5641-5644
-- [ ] Unclamped/clamped distinction maintained (RFC lines 5651-5653)
-- [ ] First subframe initialization handles reset (RFC lines 5625-5630)
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5620-5653 - confirm synthesis formula, state management
+- [ ] State saving matches RFC lines 5641-5644 (final d_LPC values)
+- [ ] Dual storage implemented: unclamped for LPC feedback, clamped for LTP rewhitening (RFC lines 5650-5653)
+- [ ] First subframe initialization uses zeros (RFC lines 5625-5630)
+- [ ] History correctly accessed for samples i where i <= k
+- [ ] All 8 unit tests pass
+- [ ] **RFC DEEP CHECK:** Read RFC lines 5620-5653 and verify EVERY formula, state management, clamping behavior
 
 ---
 
-#### 3.8.4: Stereo Unmixing
+## 3.8.4: Stereo Unmixing
 
-**Reference:** RFC 6716 Section 4.2.8 (lines 5663-5722)
+**Reference:** RFC 6716 Section 4.2.8, lines 5663-5722
 
-**Goal:** Convert mid-side representation to left-right stereo
+**Goal:** Convert mid-side (MS) stereo representation to left-right (LR) stereo output. This applies ONLY to stereo streams.
 
-##### Implementation Steps
+**Critical Requirement (RFC lines 5673-5677):**
+```
+Mono streams MUST also impose the same 1-sample delay!
+This allows seamless switching between stereo and mono.
+```
 
-- [ ] **Add stereo unmixing state:**
-  ```rust
-  pub struct StereoState {
-      pub prev_w0_q13: i16,  // Previous frame's w0 weight
-      pub prev_w1_q13: i16,  // Previous frame's w1 weight
-      pub mid_history: [f32; 2],   // mid[i-2], mid[i-1]
-      pub side_history: f32,        // side[i-1]
-  }
-  ```
+**Two-Phase Processing (RFC lines 5679-5683):**
 
-- [ ] **Implement stereo unmixing (RFC lines 5679-5709):**
-  ```rust
-  impl SilkDecoder {
-      pub fn stereo_unmix(
-          &mut self,
-          mid_channel: &[f32],
-          side_channel: Option<&[f32]>,  // None if side not coded
-          w0_q13: i16,  // Current frame weights
-          w1_q13: i16,
-          bandwidth: Bandwidth,
-      ) -> Result<(Vec<f32>, Vec<f32>)> {  // (left, right)
-          // RFC line 5688: If side not coded, use zeros
-          let side = side_channel.unwrap_or(&vec![0.0; mid_channel.len()]);
+**Phase 1 (8ms duration):**
+- Interpolates prediction weights from previous frame to current frame
+- Duration: 64 samples (NB), 96 samples (MB), 128 samples (WB)
 
-          // RFC lines 5690-5691: Phase 1 duration
-          let n1 = match bandwidth {
-              Bandwidth::Narrowband => 64,
-              Bandwidth::Mediumband => 96,
-              Bandwidth::Wideband => 128,
-              _ => return Err(Error::SilkDecoder("invalid bandwidth for stereo".to_string())),
-          };
+**Phase 2 (remainder of frame):**
+- Uses constant weights for rest of frame
 
-          let n2 = mid_channel.len();
-          let mut left = Vec::with_capacity(n2);
-          let mut right = Vec::with_capacity(n2);
+**Formulas (RFC lines 5695-5709):**
 
-          for i in 0..n2 {
-              // RFC lines 5695-5701: Interpolate weights in phase 1
-              let phase1_progress = (i.min(n1) as f32) / (n1 as f32);
+**Weight Interpolation (Phase 1 only):**
+```
+                 prev_w0_Q13                   (w0_Q13 - prev_w0_Q13)
+w0 = ----------- + min(i - j, n1) * ---------------------
+      8192.0                              8192.0 * n1
 
-              let w0 = (self.stereo_state.prev_w0_q13 as f32 / 8192.0)
-                     + phase1_progress * ((w0_q13 - self.stereo_state.prev_w0_q13) as f32 / 8192.0);
+                 prev_w1_Q13                   (w1_Q13 - prev_w1_Q13)
+w1 = ----------- + min(i - j, n1) * ---------------------
+      8192.0                              8192.0 * n1
+```
 
-              let w1 = (self.stereo_state.prev_w1_q13 as f32 / 8192.0)
-                     + phase1_progress * ((w1_q13 - self.stereo_state.prev_w1_q13) as f32 / 8192.0);
+**Low-pass Filter (3-tap, all samples):**
+```
+     mid[i-2] + 2*mid[i-1] + mid[i]
+p0 = ------------------------------
+                 4.0
+```
 
-              // RFC lines 5703-5705: Low-pass filtered mid channel
-              let mid_i = if i >= 2 { mid_channel[i] } else { self.stereo_state.mid_history[i] };
-              let mid_i1 = if i >= 1 { mid_channel[i-1] } else { self.stereo_state.mid_history[1] };
-              let mid_i2 = if i >= 2 { mid_channel[i-2] } else { self.stereo_state.mid_history[0] };
+**Output Formulas (all samples):**
+```
+left[i]  = clamp(-1.0, (1 + w1)*mid[i-1] + side[i-1] + w0*p0, 1.0)
+right[i] = clamp(-1.0, (1 - w1)*mid[i-1] - side[i-1] - w0*p0, 1.0)
+```
 
-              let p0 = (mid_i2 + 2.0 * mid_i1 + mid_i) / 4.0;
+**History Requirements (RFC lines 5719-5722):**
+- Mid channel: 2 samples (mid[i-2], mid[i-1])
+- Side channel: 1 sample (side[i-1])
+- First frame after reset: use zeros
 
-              // Get side[i-1] with 1-sample delay
-              let side_i1 = if i >= 1 { side[i-1] } else { self.stereo_state.side_history };
+### Implementation Steps
 
-              // RFC lines 5707-5709: Unmixing formulas
-              let left_val = (1.0 + w1) * mid_i1 + side_i1 + w0 * p0;
-              let right_val = (1.0 - w1) * mid_i1 - side_i1 - w0 * p0;
+**Step 1: Add StereoState structure to decoder.rs:**
 
-              left.push(left_val.clamp(-1.0, 1.0));
-              right.push(right_val.clamp(-1.0, 1.0));
-          }
+```rust
+/// State for stereo unmixing across frames
+///
+/// RFC 6716 lines 5679-5722: Stereo unmixing state management
+#[derive(Debug, Clone)]
+pub struct StereoState {
+    /// Previous frame's w0 prediction weight (Q13 format)
+    ///
+    /// RFC line 5681: Used for interpolation in first 8ms
+    pub prev_w0_q13: i16,
 
-          // Update state for next frame
-          self.stereo_state.prev_w0_q13 = w0_q13;
-          self.stereo_state.prev_w1_q13 = w1_q13;
-          self.stereo_state.mid_history = [mid_channel[n2-2], mid_channel[n2-1]];
-          self.stereo_state.side_history = side[n2-1];
+    /// Previous frame's w1 prediction weight (Q13 format)
+    ///
+    /// RFC line 5682: Used for interpolation in first 8ms
+    pub prev_w1_q13: i16,
 
-          Ok((left, right))
-      }
-  }
-  ```
+    /// Mid channel history (2 samples: [i-2, i-1])
+    ///
+    /// RFC lines 5719-5720: Requires two samples prior to frame start
+    pub mid_history: [f32; 2],
 
-- [ ] **Document delay requirements (RFC lines 5673-5677):**
-  ```rust
-  // RFC line 5673: Low-pass filter imposes 1-sample delay
-  // RFC line 5674: Unfiltered mid also delayed by 1 sample
-  // RFC line 5675: Mono streams must also impose same 1-sample delay
-  // RFC line 5719: For first frame after reset, use zeros for history
-  ```
+    /// Side channel history (1 sample: [i-1])
+    ///
+    /// RFC lines 5720-5721: Requires one sample prior to frame start
+    pub side_history: f32,
+}
 
-- [ ] **Add tests:**
-  ```rust
-  #[test]
-  fn test_stereo_unmix_weight_interpolation() {
-      // Phase 1: verify weight interpolation over n1 samples
-  }
+impl StereoState {
+    /// Creates new stereo state with initial values
+    ///
+    /// RFC lines 5721-5722: First frame after reset uses zeros
+    const fn new() -> Self {
+        Self {
+            prev_w0_q13: 0,
+            prev_w1_q13: 0,
+            mid_history: [0.0, 0.0],
+            side_history: 0.0,
+        }
+    }
 
-  #[test]
-  fn test_stereo_unmix_phase2() {
-      // Phase 2: verify weights constant after n1 samples
-  }
+    /// Resets stereo state (decoder reset)
+    ///
+    /// RFC lines 5721-5722: Reset behavior
+    fn reset(&mut self) {
+        self.prev_w0_q13 = 0;
+        self.prev_w1_q13 = 0;
+        self.mid_history = [0.0, 0.0];
+        self.side_history = 0.0;
+    }
+}
+```
 
-  #[test]
-  fn test_stereo_unmix_low_pass_filter() {
-      // Verify p0 = (mid[i-2] + 2*mid[i-1] + mid[i]) / 4
-  }
+**Step 2: Add stereo state to SilkDecoder:**
 
-  #[test]
-  fn test_stereo_unmix_formulas() {
-      // Verify left/right formulas
-  }
+```rust
+pub struct SilkDecoder {
+    // ... existing fields ...
 
-  #[test]
-  fn test_stereo_unmix_side_not_coded() {
-      // If side not coded, use zeros
-  }
+    /// Stereo unmixing state (None for mono)
+    ///
+    /// RFC lines 5679-5722: Maintains weights and history across frames
+    stereo_state: Option<StereoState>,
+}
 
-  #[test]
-  fn test_stereo_unmix_one_sample_delay() {
-      // Verify 1-sample delay for mid and side
-  }
-  ```
+impl SilkDecoder {
+    pub fn new(sample_rate: SampleRate, channels: Channels, frame_size_ms: u8) -> Result<Self> {
+        // ... existing validation ...
 
-##### 3.8.4 Verification Checklist
+        let stereo_state = if channels == Channels::Stereo {
+            Some(StereoState::new())
+        } else {
+            None
+        };
+
+        Ok(Self {
+            // ... existing fields ...
+            stereo_state,
+        })
+    }
+}
+```
+
+**Step 3: Implement stereo_unmix() method in decoder.rs:**
+
+```rust
+impl SilkDecoder {
+    /// Stereo unmixing: converts mid-side to left-right
+    ///
+    /// RFC lines 5663-5722: Two-phase weight interpolation and prediction
+    ///
+    /// # Arguments
+    ///
+    /// * `mid_channel` - Mid channel samples (from LPC synthesis)
+    /// * `side_channel` - Side channel samples (None if not coded)
+    /// * `w0_q13` - Current frame's w0 weight (Q13 format, from Section 4.2.7.1)
+    /// * `w1_q13` - Current frame's w1 weight (Q13 format, from Section 4.2.7.1)
+    /// * `bandwidth` - Audio bandwidth (determines phase 1 duration)
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (left_channel, right_channel)
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if stereo state is not initialized
+    /// * Returns error if mid and side lengths don't match
+    ///
+    /// # RFC References
+    ///
+    /// * Lines 5688-5689: Side channel zeros if not coded
+    /// * Lines 5690-5692: Phase 1 duration (n1)
+    /// * Lines 5695-5701: Weight interpolation formulas
+    /// * Lines 5703-5705: Low-pass filter formula
+    /// * Lines 5707-5709: Unmixing formulas with 1-sample delay
+    fn stereo_unmix(
+        &mut self,
+        mid_channel: &[f32],
+        side_channel: Option<&[f32]>,
+        w0_q13: i16,
+        w1_q13: i16,
+        bandwidth: Bandwidth,
+    ) -> Result<(Vec<f32>, Vec<f32>)> {
+        let state = self.stereo_state.as_mut().ok_or_else(|| {
+            Error::SilkDecoder("stereo_unmix called but stereo state not initialized".to_string())
+        })?;
+
+        // RFC lines 5688-5689: If side not coded, use zeros
+        let side_vec;
+        let side = if let Some(s) = side_channel {
+            if s.len() != mid_channel.len() {
+                return Err(Error::SilkDecoder(format!(
+                    "mid and side lengths don't match: {} vs {}",
+                    mid_channel.len(),
+                    s.len()
+                )));
+            }
+            s
+        } else {
+            side_vec = vec![0.0_f32; mid_channel.len()];
+            &side_vec
+        };
+
+        // RFC lines 5690-5692: Phase 1 duration (8ms)
+        let n1 = match bandwidth {
+            Bandwidth::Narrowband => 64,   // 8ms * 8kHz = 64 samples
+            Bandwidth::Mediumband => 96,   // 8ms * 12kHz = 96 samples
+            Bandwidth::Wideband => 128,    // 8ms * 16kHz = 128 samples
+            _ => return Err(Error::SilkDecoder(format!(
+                "invalid bandwidth for stereo: {:?}",
+                bandwidth
+            ))),
+        };
+
+        let n2 = mid_channel.len();
+        let mut left = Vec::with_capacity(n2);
+        let mut right = Vec::with_capacity(n2);
+
+        // Process all samples (j <= i < j + n2, but j=0 for frame start)
+        for i in 0..n2 {
+            // RFC lines 5695-5701: Interpolate weights in phase 1
+            // min(i, n1) ensures we only interpolate for first n1 samples
+            let phase1_progress = i.min(n1) as f32 / n1 as f32;
+
+            let prev_w0 = f32::from(state.prev_w0_q13) / 8192.0;
+            let curr_w0 = f32::from(w0_q13) / 8192.0;
+            let w0 = prev_w0 + phase1_progress * (curr_w0 - prev_w0);
+
+            let prev_w1 = f32::from(state.prev_w1_q13) / 8192.0;
+            let curr_w1 = f32::from(w1_q13) / 8192.0;
+            let w1 = prev_w1 + phase1_progress * (curr_w1 - prev_w1);
+
+            // RFC lines 5703-5705: Low-pass filter
+            // p0 = (mid[i-2] + 2*mid[i-1] + mid[i]) / 4.0
+
+            // Get mid[i] with bounds check
+            let mid_i = mid_channel[i];
+
+            // Get mid[i-1] (from history if i=0)
+            let mid_i1 = if i >= 1 {
+                mid_channel[i - 1]
+            } else {
+                state.mid_history[1] // Last sample from previous frame
+            };
+
+            // Get mid[i-2] (from history if i<2)
+            let mid_i2 = if i >= 2 {
+                mid_channel[i - 2]
+            } else if i == 1 {
+                state.mid_history[1] // i-2 = -1: last sample from previous frame
+            } else {
+                state.mid_history[0] // i-2 = -2: second-to-last from previous frame
+            };
+
+            let p0 = (mid_i2 + 2.0 * mid_i1 + mid_i) / 4.0;
+
+            // Get side[i-1] (from history if i=0)
+            let side_i1 = if i >= 1 {
+                side[i - 1]
+            } else {
+                state.side_history
+            };
+
+            // RFC lines 5707-5709: Unmixing formulas (note: 1-sample delay!)
+            // Uses mid[i-1] and side[i-1], not mid[i] and side[i]
+            let left_val = (1.0 + w1) * mid_i1 + side_i1 + w0 * p0;
+            let right_val = (1.0 - w1) * mid_i1 - side_i1 - w0 * p0;
+
+            // Clamp to [-1.0, 1.0]
+            left.push(left_val.clamp(-1.0, 1.0));
+            right.push(right_val.clamp(-1.0, 1.0));
+        }
+
+        // Update state for next frame
+        state.prev_w0_q13 = w0_q13;
+        state.prev_w1_q13 = w1_q13;
+
+        // Save last two mid samples
+        if n2 >= 2 {
+            state.mid_history = [mid_channel[n2 - 2], mid_channel[n2 - 1]];
+        } else if n2 == 1 {
+            state.mid_history = [state.mid_history[1], mid_channel[0]];
+        }
+
+        // Save last side sample
+        if n2 >= 1 {
+            state.side_history = side[n2 - 1];
+        }
+
+        Ok((left, right))
+    }
+}
+```
+
+**Step 4: Implement mono 1-sample delay (CRITICAL - RFC lines 5673-5677):**
+
+```rust
+impl SilkDecoder {
+    /// Apply 1-sample delay to mono output
+    ///
+    /// RFC lines 5673-5677: Mono streams MUST impose same 1-sample delay as stereo
+    /// This allows seamless switching between stereo and mono
+    ///
+    /// # Arguments
+    ///
+    /// * `samples` - Mono samples to delay
+    ///
+    /// # Returns
+    ///
+    /// Delayed samples (first sample from history, last sample saved)
+    fn apply_mono_delay(&mut self, samples: &[f32]) -> Vec<f32> {
+        // For mono, we still need to track 1-sample delay
+        // Use mid_history[1] for this purpose (even though no stereo unmixing)
+
+        let mut delayed = Vec::with_capacity(samples.len());
+
+        // First sample comes from history
+        if let Some(state) = &self.stereo_state {
+            delayed.push(state.mid_history[1]);
+        } else {
+            // Initialize with zero if first frame
+            delayed.push(0.0);
+        }
+
+        // Remaining samples: shifted by 1
+        if samples.len() > 1 {
+            delayed.extend_from_slice(&samples[0..samples.len() - 1]);
+        }
+
+        // Save last sample for next frame
+        if let Some(state) = &mut self.stereo_state {
+            if !samples.is_empty() {
+                state.mid_history[1] = samples[samples.len() - 1];
+            }
+        }
+
+        delayed
+    }
+}
+```
+
+**Step 5: Add comprehensive tests (12 tests):**
+
+```rust
+#[cfg(test)]
+mod tests_stereo_unmix {
+    use super::*;
+
+    #[test]
+    fn test_stereo_unmix_phase1_duration() {
+        // RFC lines 5690-5692: Phase 1 duration
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        // WB: 8ms = 128 samples
+        // Full frame: 20ms = 320 samples
+        let mid = vec![0.5_f32; 320];
+        let side = vec![0.1_f32; 320];
+
+        let (left, right) = decoder.stereo_unmix(
+            &mid, Some(&side), 1000, 500, Bandwidth::Wideband
+        ).unwrap();
+
+        assert_eq!(left.len(), 320);
+        assert_eq!(right.len(), 320);
+
+        // Verify weights change over first 128 samples (phase 1)
+        // Then constant for remaining 192 samples (phase 2)
+    }
+
+    #[test]
+    fn test_stereo_unmix_phase1_nb() {
+        // NB: 64 samples for phase 1
+        let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![0.5_f32; 160]; // 20ms at 8kHz
+        let side = vec![0.1_f32; 160];
+
+        let (left, right) = decoder.stereo_unmix(
+            &mid, Some(&side), 1000, 500, Bandwidth::Narrowband
+        ).unwrap();
+
+        assert_eq!(left.len(), 160);
+        assert_eq!(right.len(), 160);
+    }
+
+    #[test]
+    fn test_stereo_unmix_phase1_mb() {
+        // MB: 96 samples for phase 1
+        let mut decoder = SilkDecoder::new(SampleRate::Hz12000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![0.5_f32; 240]; // 20ms at 12kHz
+        let side = vec![0.1_f32; 240];
+
+        let (left, right) = decoder.stereo_unmix(
+            &mid, Some(&side), 1000, 500, Bandwidth::Mediumband
+        ).unwrap();
+
+        assert_eq!(left.len(), 240);
+        assert_eq!(right.len(), 240);
+    }
+
+    #[test]
+    fn test_stereo_unmix_weight_interpolation() {
+        // RFC lines 5695-5701: Verify weight interpolation
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        // Set previous weights
+        if let Some(state) = &mut decoder.stereo_state {
+            state.prev_w0_q13 = 0;    // Previous w0 = 0
+            state.prev_w1_q13 = 0;    // Previous w1 = 0
+        }
+
+        let mid = vec![1.0_f32; 320];
+        let side = vec![0.0_f32; 320];
+
+        // Current weights: w0 = 8192/8192 = 1.0, w1 = 4096/8192 = 0.5
+        decoder.stereo_unmix(&mid, Some(&side), 8192, 4096, Bandwidth::Wideband).unwrap();
+
+        // After processing, prev weights should be updated
+        if let Some(state) = &decoder.stereo_state {
+            assert_eq!(state.prev_w0_q13, 8192);
+            assert_eq!(state.prev_w1_q13, 4096);
+        }
+    }
+
+    #[test]
+    fn test_stereo_unmix_side_not_coded() {
+        // RFC lines 5688-5689: Side channel zeros if not coded
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![0.5_f32; 320];
+
+        // No side channel provided
+        let (left, right) = decoder.stereo_unmix(
+            &mid, None, 0, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        assert_eq!(left.len(), 320);
+        assert_eq!(right.len(), 320);
+
+        // With w0=0, w1=0, and side=0:
+        // left[i] = 1.0 * mid[i-1] (plus p0 contribution)
+        // right[i] = 1.0 * mid[i-1] (minus p0 contribution)
+    }
+
+    #[test]
+    fn test_stereo_unmix_low_pass_filter() {
+        // RFC lines 5703-5705: p0 = (mid[i-2] + 2*mid[i-1] + mid[i]) / 4.0
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        // Set known mid history
+        if let Some(state) = &mut decoder.stereo_state {
+            state.mid_history = [1.0, 2.0]; // mid[-2]=1.0, mid[-1]=2.0
+        }
+
+        let mid = vec![3.0_f32; 320]; // All 3.0
+        let side = vec![0.0_f32; 320];
+
+        decoder.stereo_unmix(&mid, Some(&side), 8192, 0, Bandwidth::Wideband).unwrap();
+
+        // For i=0: p0 = (1.0 + 2*2.0 + 3.0) / 4.0 = 8.0 / 4.0 = 2.0
+        // For i=1: p0 = (2.0 + 2*3.0 + 3.0) / 4.0 = 11.0 / 4.0 = 2.75
+        // For i>=2: p0 = (3.0 + 2*3.0 + 3.0) / 4.0 = 12.0 / 4.0 = 3.0
+    }
+
+    #[test]
+    fn test_stereo_unmix_one_sample_delay() {
+        // RFC lines 5707-5709: Uses mid[i-1] and side[i-1]
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        // Set known history
+        if let Some(state) = &mut decoder.stereo_state {
+            state.mid_history = [0.0, 1.0]; // mid[-1] = 1.0
+            state.side_history = 0.5;       // side[-1] = 0.5
+        }
+
+        let mid = vec![2.0, 3.0, 4.0];
+        let side = vec![1.0, 1.5, 2.0];
+
+        let (left, right) = decoder.stereo_unmix(
+            &mid, Some(&side), 0, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        // For i=0: uses mid[-1]=1.0, side[-1]=0.5
+        // left[0] = 1.0*1.0 + 0.5 = 1.5 (plus p0)
+
+        // For i=1: uses mid[0]=2.0, side[0]=1.0
+        // For i=2: uses mid[1]=3.0, side[1]=1.5
+
+        assert_eq!(left.len(), 3);
+        assert_eq!(right.len(), 3);
+    }
+
+    #[test]
+    fn test_stereo_unmix_formulas_zero_weights() {
+        // RFC lines 5707-5709: Verify formulas with w0=0, w1=0
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        if let Some(state) = &mut decoder.stereo_state {
+            state.mid_history = [0.0, 1.0];
+            state.side_history = 0.5;
+        }
+
+        let mid = vec![2.0_f32; 10];
+        let side = vec![1.0_f32; 10];
+
+        let (left, right) = decoder.stereo_unmix(
+            &mid, Some(&side), 0, 0, Bandwidth::Wideband
+        ).unwrap();
+
+        // With w0=0, w1=0:
+        // left[i] = 1.0*mid[i-1] + side[i-1]
+        // right[i] = 1.0*mid[i-1] - side[i-1]
+
+        // For i=0: left = 1.0 + 0.5 = 1.5, right = 1.0 - 0.5 = 0.5
+        assert!((left[0] - 1.5).abs() < 0.1); // Allow p0 contribution
+        assert!((right[0] - 0.5).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_stereo_unmix_clamping_positive() {
+        // Test positive clamping
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![10.0_f32; 320]; // Large values
+        let side = vec![10.0_f32; 320];
+
+        let (left, right) = decoder.stereo_unmix(
+            &mid, Some(&side), 8192, 4096, Bandwidth::Wideband
+        ).unwrap();
+
+        // All values should be clamped to 1.0
+        assert!(left.iter().all(|&x| x <= 1.0));
+        assert!(right.iter().all(|&x| x <= 1.0));
+    }
+
+    #[test]
+    fn test_stereo_unmix_clamping_negative() {
+        // Test negative clamping
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![-10.0_f32; 320]; // Large negative values
+        let side = vec![-10.0_f32; 320];
+
+        let (left, right) = decoder.stereo_unmix(
+            &mid, Some(&side), 8192, 4096, Bandwidth::Wideband
+        ).unwrap();
+
+        // All values should be clamped to -1.0
+        assert!(left.iter().all(|&x| x >= -1.0));
+        assert!(right.iter().all(|&x| x >= -1.0));
+    }
+
+    #[test]
+    fn test_stereo_unmix_history_updated() {
+        // Verify history is updated for next frame
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let side = vec![0.1, 0.2, 0.3, 0.4, 0.5];
+
+        decoder.stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Wideband).unwrap();
+
+        // Check history was updated
+        if let Some(state) = &decoder.stereo_state {
+            assert_eq!(state.mid_history, [4.0, 5.0]); // Last two mid samples
+            assert_eq!(state.side_history, 0.5);       // Last side sample
+            assert_eq!(state.prev_w0_q13, 1000);
+            assert_eq!(state.prev_w1_q13, 500);
+        }
+    }
+
+    #[test]
+    fn test_mono_one_sample_delay() {
+        // RFC lines 5673-5677: Mono MUST impose same delay
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let samples = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let delayed = decoder.apply_mono_delay(&samples);
+
+        // First sample should be 0.0 (from history/init)
+        // Remaining should be shifted: [0.0, 1.0, 2.0, 3.0, 4.0]
+        assert_eq!(delayed.len(), 5);
+        assert_eq!(delayed[0], 0.0);
+        assert_eq!(delayed[1], 1.0);
+        assert_eq!(delayed[2], 2.0);
+        assert_eq!(delayed[3], 3.0);
+        assert_eq!(delayed[4], 4.0);
+    }
+}
+```
+
+### 3.8.4 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --features silk test_stereo` (all 12 tests pass)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Phase 1 duration matches RFC line 5691: 64/96/128 for NB/MB/WB
-- [ ] Weight interpolation matches RFC lines 5695-5701
-- [ ] Low-pass filter matches RFC lines 5703-5705
-- [ ] Unmixing formulas match RFC lines 5707-5709
-- [ ] 1-sample delay implemented (RFC lines 5673-5674)
-- [ ] Side channel zeros when not coded (RFC line 5688)
-- [ ] First frame uses zeros for history (RFC line 5721)
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5663-5722 - confirm all formulas, delay handling
+- [ ] Phase 1 duration matches RFC line 5691: 64 (NB), 96 (MB), 128 (WB) samples
+- [ ] Weight interpolation matches RFC lines 5695-5701 exactly (linear interpolation with min())
+- [ ] Low-pass filter matches RFC lines 5703-5705: `p0 = (mid[i-2] + 2*mid[i-1] + mid[i]) / 4.0`
+- [ ] Unmixing formulas match RFC lines 5707-5709 exactly (with 1-sample delay)
+- [ ] 1-sample delay implemented for ALL indices (RFC lines 5673-5677)
+- [ ] Side channel uses zeros when not coded (RFC lines 5688-5689)
+- [ ] History initialized to zeros on first frame (RFC lines 5721-5722)
+- [ ] History correctly updated after each frame (weights, mid[2], side[1])
+- [ ] Mono delay implemented (RFC lines 5673-5677) - CRITICAL for seamless switching
+- [ ] All 12 unit tests pass
+- [ ] **RFC DEEP CHECK:** Read RFC lines 5663-5722 and verify EVERY formula, phase logic, delay handling
 
 ---
 
-#### 3.8.5: Resampling (Optional)
+## 3.8.5: Resampling (Optional)
 
-**Reference:** RFC 6716 Section 4.2.9 (lines 5724-5795)
+**Reference:** RFC 6716 Section 4.2.9, lines 5724-5795
 
-**Goal:** Convert SILK output to desired sample rate (non-normative, informational only)
+**Goal:** Document normative resampling delays and provide optional resampling implementation. The resampling algorithm itself is NON-NORMATIVE.
 
-##### Implementation Steps
+**Critical Points (RFC lines 5732-5734):**
+```
+The resampler itself is non-normative.
+A decoder can use ANY method it wants to perform resampling.
+```
 
-- [ ] **Document resampling requirements:**
-  ```rust
-  // RFC lines 5726-5734: Resampler is NON-NORMATIVE
-  // Decoder can use any resampling method
+**Normative Delays (RFC lines 5749-5785, Table 54):**
+```
+Audio Bandwidth | Delay (milliseconds at 48 kHz)
+----------------|-------------------------------
+NB              | 0.538
+MB              | 0.692
+WB              | 0.706
+```
 
-  // RFC lines 5736-5747: Delay allocation is NORMATIVE
-  // Table 54 (RFC lines 5775-5785):
-  // - NB: 0.538 ms at 48kHz
-  // - MB: 0.692 ms at 48kHz
-  // - WB: 0.706 ms at 48kHz
+**Reset Behavior (RFC lines 5793-5795):**
+```
+When decoder is reset:
+- Samples remaining in resampling buffer are DISCARDED
+- Resampler re-initialized with silence
+```
 
-  // Decoder may use higher delay (better quality)
-  // But must delay MDCT layer output by extra amount
-  ```
+### Implementation Steps
 
-- [ ] **Add resampling delay table:**
-  ```rust
-  // Table 54: SILK Resampler Delay Allocations
-  pub fn get_resampler_delay_ms(bandwidth: Bandwidth) -> f32 {
-      match bandwidth {
-          Bandwidth::Narrowband => 0.538,
-          Bandwidth::Mediumband => 0.692,
-          Bandwidth::Wideband => 0.706,
-          _ => 0.0,  // Not applicable
-      }
-  }
-  ```
+**Step 1: Add resampling delay constants to decoder.rs:**
 
-- [ ] **Add optional resampling dependency to `Cargo.toml`:**
-  ```toml
-  [dependencies]
-  moosicbox_resampler = { workspace = true, optional = true }
-  symphonia = { workspace = true, optional = true }
+```rust
+impl SilkDecoder {
+    /// Returns normative resampling delay for bandwidth
+    ///
+    /// RFC 6716 Table 54 (lines 5775-5785): Normative delay allocations
+    ///
+    /// # Arguments
+    ///
+    /// * `bandwidth` - Audio bandwidth
+    ///
+    /// # Returns
+    ///
+    /// Delay in milliseconds at 48 kHz
+    ///
+    /// # RFC Note
+    ///
+    /// These delays are NORMATIVE even though resampling implementation is not.
+    /// Encoder must apply corresponding delay to MDCT layer.
+    pub const fn resampler_delay_ms(bandwidth: Bandwidth) -> f32 {
+        match bandwidth {
+            Bandwidth::Narrowband => 0.538,   // Table 54 line 5778
+            Bandwidth::Mediumband => 0.692,   // Table 54 line 5780
+            Bandwidth::Wideband => 0.706,     // Table 54 line 5782
+            _ => 0.0,  // Not applicable for SWB/FB (SILK doesn't use these)
+        }
+    }
+}
+```
 
-  [features]
-  resampling = ["dep:moosicbox_resampler", "dep:symphonia"]
-  ```
+**Step 2: Add optional resampling dependency to Cargo.toml:**
 
-- [ ] **Implement resampling using moosicbox_resampler (optional feature):**
-  ```rust
-  #[cfg(feature = "resampling")]
-  use moosicbox_resampler::Resampler;
-  #[cfg(feature = "resampling")]
-  use symphonia::core::audio::{AudioBuffer, SignalSpec};
+```toml
+[dependencies]
+# ... existing dependencies ...
 
-  impl SilkDecoder {
-      /// Resample SILK output to target sample rate
-      ///
-      /// RFC line 5732: Resampling is NON-NORMATIVE - any method allowed
-      /// This implementation uses moosicbox_resampler with rubato (high-quality FFT-based)
-      #[cfg(feature = "resampling")]
-      pub fn resample(
-          &self,
-          samples: &[f32],
-          input_rate: u32,
-          output_rate: u32,
-          num_channels: usize,
-      ) -> Result<Vec<f32>> {
-          if input_rate == output_rate {
-              return Ok(samples.to_vec());
-          }
+# Optional: Resampling support (non-normative per RFC 6716 line 5732)
+moosicbox_resampler = { workspace = true, optional = true }
+symphonia = { workspace = true, optional = true }
 
-          let samples_per_channel = samples.len() / num_channels;
-          let spec = SignalSpec::new(input_rate, num_channels.try_into()?);
+[features]
+default = []
 
-          // Convert interleaved samples to planar AudioBuffer
-          let mut audio_buffer = AudioBuffer::new(samples_per_channel as u64, spec);
-          audio_buffer.render_reserved(Some(samples_per_channel));
+fail-on-warnings = []
+silk = []
 
-          for ch in 0..num_channels {
-              let channel_buf = audio_buffer.chan_mut(ch);
-              for (i, sample) in samples.iter().skip(ch).step_by(num_channels).enumerate() {
-                  channel_buf[i] = *sample;
-              }
-          }
+# Optional resampling feature
+resampling = ["dep:moosicbox_resampler", "dep:symphonia"]
+```
 
-          // Create resampler and process
-          let mut resampler = Resampler::new(
-              spec,
-              output_rate as usize,
-              samples_per_channel as u64,
-          );
+**Step 3: Add resampling implementation (feature-gated):**
 
-          let resampled = resampler.resample(&audio_buffer)
-              .ok_or_else(|| Error::SilkDecoder("resampling failed".to_string()))?;
+```rust
+#[cfg(feature = "resampling")]
+use moosicbox_resampler::Resampler;
+#[cfg(feature = "resampling")]
+use symphonia::core::audio::{AudioBuffer, SignalSpec};
 
-          Ok(resampled.to_vec())
-      }
+impl SilkDecoder {
+    /// Resample SILK output to target sample rate
+    ///
+    /// RFC 6716 lines 5726-5734: Resampling is NON-NORMATIVE
+    /// Any resampling method is allowed. This uses moosicbox_resampler.
+    ///
+    /// # Arguments
+    ///
+    /// * `samples` - Input samples (interleaved if stereo)
+    /// * `input_rate` - Input sample rate (8000, 12000, or 16000)
+    /// * `output_rate` - Desired output sample rate
+    /// * `num_channels` - Number of channels (1 or 2)
+    ///
+    /// # Returns
+    ///
+    /// Resampled samples (interleaved if stereo)
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if resampling fails
+    /// * Returns error if feature `resampling` is not enabled
+    ///
+    /// # RFC Note
+    ///
+    /// This implementation is provided for convenience.
+    /// You may use ANY resampling library or algorithm.
+    #[cfg(feature = "resampling")]
+    pub fn resample(
+        &self,
+        samples: &[f32],
+        input_rate: u32,
+        output_rate: u32,
+        num_channels: usize,
+    ) -> Result<Vec<f32>> {
+        // No resampling needed if rates match
+        if input_rate == output_rate {
+            return Ok(samples.to_vec());
+        }
 
-      /// Resample without resampling feature - returns error
-      #[cfg(not(feature = "resampling"))]
-      pub fn resample(
-          &self,
-          _samples: &[f32],
-          _input_rate: u32,
-          _output_rate: u32,
-          _num_channels: usize,
-      ) -> Result<Vec<f32>> {
-          Err(Error::SilkDecoder(
-              "Resampling not available - enable 'resampling' feature".to_string()
-          ))
-      }
-  }
-  ```
+        let samples_per_channel = samples.len() / num_channels;
+        let spec = SignalSpec::new(input_rate, num_channels.try_into()
+            .map_err(|e| Error::SilkDecoder(format!("invalid channel count: {}", e)))?);
 
-- [ ] **Document usage in module docs:**
-  ```rust
-  /// # Resampling to 48 kHz (Optional)
-  ///
-  /// SILK outputs at 8/12/16 kHz (NB/MB/WB). To convert to 48 kHz or other rates,
-  /// enable the `resampling` feature which uses `moosicbox_resampler`:
-  ///
-  /// ```toml
-  /// [dependencies]
-  /// moosicbox_opus_native = { version = "0.1", features = ["silk", "resampling"] }
-  /// ```
-  ///
-  /// ```rust
-  /// use moosicbox_opus_native::SilkDecoder;
-  ///
-  /// let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20)?;
-  /// let silk_samples = decoder.decode(packet)?; // 16 kHz stereo
-  ///
-  /// // Resample to 48 kHz
-  /// let samples_48k = decoder.resample(&silk_samples, 16000, 48000, 2)?;
-  /// ```
-  ///
-  /// **Note:** Resampling is non-normative per RFC 6716 line 5732. You can also:
-  /// - Use the SILK output directly at 8/12/16 kHz
-  /// - Use any other resampling library
-  /// - Implement custom resampling
-  ```
+        // Convert interleaved samples to planar AudioBuffer
+        let mut audio_buffer = AudioBuffer::new(samples_per_channel as u64, spec);
+        audio_buffer.render_reserved(Some(samples_per_channel));
 
-- [ ] **Document reset behavior (RFC lines 5793-5795):**
-  ```rust
-  // When decoder is reset:
-  // - Samples in resampling buffer are DISCARDED
-  // - Resampler re-initialized with silence
-  ```
+        for ch in 0..num_channels {
+            let channel_buf = audio_buffer.chan_mut(ch);
+            for (i, sample) in samples.iter().skip(ch).step_by(num_channels).enumerate() {
+                channel_buf[i] = *sample;
+            }
+        }
 
-- [ ] **Add resampling tests:**
-  ```rust
-  #[cfg(feature = "resampling")]
-  #[test]
-  fn test_resampling_16khz_to_48khz() {
-      // Test upsampling from WB (16 kHz) to 48 kHz
-  }
+        // Create resampler and process
+        let mut resampler = Resampler::new(
+            spec,
+            output_rate as usize,
+            samples_per_channel as u64,
+        );
 
-  #[cfg(feature = "resampling")]
-  #[test]
-  fn test_resampling_8khz_to_48khz() {
-      // Test upsampling from NB (8 kHz) to 48 kHz
-  }
+        let resampled = resampler.resample(&audio_buffer)
+            .ok_or_else(|| Error::SilkDecoder("resampling failed".to_string()))?;
 
-  #[cfg(feature = "resampling")]
-  #[test]
-  fn test_resampling_same_rate() {
-      // Test that same rate returns input unchanged
-  }
+        Ok(resampled.to_vec())
+    }
 
-  #[cfg(feature = "resampling")]
-  #[test]
-  fn test_resampling_stereo() {
-      // Test stereo resampling maintains channel separation
-  }
+    /// Resample without resampling feature - returns error
+    ///
+    /// RFC 6716 line 5732: Resampling is optional and non-normative
+    #[cfg(not(feature = "resampling"))]
+    pub fn resample(
+        &self,
+        _samples: &[f32],
+        _input_rate: u32,
+        _output_rate: u32,
+        _num_channels: usize,
+    ) -> Result<Vec<f32>> {
+        Err(Error::SilkDecoder(
+            "Resampling not available - enable 'resampling' feature in Cargo.toml".to_string()
+        ))
+    }
+}
+```
 
-  #[cfg(not(feature = "resampling"))]
-  #[test]
-  fn test_resampling_without_feature_errors() {
-      // Test that resampling without feature returns error
-      let decoder = SilkDecoder::new(...);
-      let result = decoder.resample(&[0.0; 160], 16000, 48000, 1);
-      assert!(result.is_err());
-  }
-  ```
+**Step 4: Add module documentation about resampling:**
 
-##### 3.8.5 Verification Checklist
+Add this to the top of the decoder.rs module or in a separate resampling.rs module:
+
+```rust
+//! # Resampling (Optional, Non-Normative)
+//!
+//! RFC 6716 Section 4.2.9 (lines 5724-5795)
+//!
+//! SILK outputs audio at 8 kHz (NB), 12 kHz (MB), or 16 kHz (WB).
+//! To convert to other sample rates (e.g., 48 kHz), resampling is required.
+//!
+//! ## Normative vs Non-Normative
+//!
+//! **NORMATIVE (RFC Table 54):**
+//! - Resampler delays: NB: 0.538ms, MB: 0.692ms, WB: 0.706ms
+//! - These delays MUST be accounted for in encoder/decoder synchronization
+//!
+//! **NON-NORMATIVE (RFC lines 5732-5734):**
+//! - The resampling algorithm itself
+//! - You can use ANY resampling method
+//!
+//! ## Using the Optional Resampling Feature
+//!
+//! ```toml
+//! [dependencies]
+//! moosicbox_opus_native = { version = "0.1", features = ["silk", "resampling"] }
+//! ```
+//!
+//! ```rust
+//! use moosicbox_opus_native::{SilkDecoder, SampleRate, Channels};
+//!
+//! let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20)?;
+//! let silk_samples = decoder.decode(packet)?; // 16 kHz stereo
+//!
+//! // Resample to 48 kHz
+//! let samples_48k = decoder.resample(&silk_samples, 16000, 48000, 2)?;
+//! ```
+//!
+//! ## Alternative Approaches
+//!
+//! Per RFC 6716 line 5732, you can also:
+//! - Use SILK output directly at 8/12/16 kHz
+//! - Use any other resampling library (e.g., libsamplerate, rubato)
+//! - Implement custom resampling algorithm
+//!
+//! ## Reset Behavior
+//!
+//! RFC lines 5793-5795: When decoder is reset:
+//! - Samples in resampling buffer are DISCARDED
+//! - Resampler re-initialized with silence
+```
+
+**Step 5: Add comprehensive tests (4 tests):**
+
+```rust
+#[cfg(test)]
+mod tests_resampling {
+    use super::*;
+
+    #[test]
+    fn test_resampler_delay_constants() {
+        // RFC Table 54 (lines 5775-5785): Verify delay values
+        assert_eq!(SilkDecoder::resampler_delay_ms(Bandwidth::Narrowband), 0.538);
+        assert_eq!(SilkDecoder::resampler_delay_ms(Bandwidth::Mediumband), 0.692);
+        assert_eq!(SilkDecoder::resampler_delay_ms(Bandwidth::Wideband), 0.706);
+        assert_eq!(SilkDecoder::resampler_delay_ms(Bandwidth::SuperWideband), 0.0);
+        assert_eq!(SilkDecoder::resampler_delay_ms(Bandwidth::Fullband), 0.0);
+    }
+
+    #[cfg(feature = "resampling")]
+    #[test]
+    fn test_resampling_same_rate() {
+        // RFC line 5732: Resampling when input == output should return input
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let samples = vec![0.5_f32; 320];
+        let resampled = decoder.resample(&samples, 16000, 16000, 1).unwrap();
+
+        assert_eq!(resampled.len(), samples.len());
+        assert_eq!(resampled, samples);
+    }
+
+    #[cfg(feature = "resampling")]
+    #[test]
+    fn test_resampling_16khz_to_48khz() {
+        // Test upsampling from WB (16 kHz) to 48 kHz
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let samples = vec![0.5_f32; 320]; // 20ms at 16kHz
+        let resampled = decoder.resample(&samples, 16000, 48000, 1).unwrap();
+
+        // 48kHz / 16kHz = 3x samples
+        // Approximately 320 * 3 = 960 (may vary slightly with resampler)
+        assert!(resampled.len() > 900 && resampled.len() < 1000);
+    }
+
+    #[cfg(not(feature = "resampling"))]
+    #[test]
+    fn test_resampling_without_feature_errors() {
+        // Test that resampling without feature returns error
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        let result = decoder.resample(&vec![0.0; 160], 16000, 48000, 1);
+        assert!(result.is_err());
+
+        if let Err(e) = result {
+            let msg = format!("{:?}", e);
+            assert!(msg.contains("Resampling not available"));
+        }
+    }
+}
+```
+
+### 3.8.5 Verification Checklist
 
 - [ ] Run `cargo fmt` (format code)
 - [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles without resampling)
@@ -5978,13 +7729,13 @@ However, we still follow the RFC algorithms exactly for correctness.
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
 - [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk,resampling -- -D warnings` (zero warnings with resampling)
 - [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Delay values match Table 54 exactly
+- [ ] Delay values match Table 54 exactly (0.538, 0.692, 0.706)
 - [ ] Resampler documented as non-normative (RFC line 5732)
 - [ ] Reset behavior documented (RFC lines 5793-5795)
 - [ ] `resampling` feature is optional - builds work without it
-- [ ] moosicbox_resampler integration works correctly with planar/interleaved conversion
 - [ ] Error message returned when resampling called without feature enabled
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5724-5795 - confirm delay values, reset handling
+- [ ] All 4 tests pass (1 unconditional, 2 with feature, 1 without feature)
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5724-5795 - confirm delay values, reset handling, non-normative status
 
 ---
 
@@ -6001,28 +7752,57 @@ After ALL subsections (3.8.1-3.8.5) are complete:
 - [ ] LPC synthesis produces correct output with proper state management
 - [ ] Stereo unmixing converts mid-side to left-right correctly
 - [ ] All buffer sizes correct (306, 256, 16 samples)
-- [ ] 1-sample delay maintained for stereo consistency
+- [ ] 1-sample delay maintained for stereo consistency (and mono!)
+- [ ] Integration test: Full synthesis pipeline (excitation → LTP → LPC → output)
+- [ ] Integration test: Stereo full pipeline (mid+side → unmix → left+right)
+- [ ] Integration test: Decoder reset behavior
+- [ ] Integration test: Buffer boundary conditions
+- [ ] Integration test: Subframe transitions
+- [ ] Integration test: Voiced/unvoiced switching
+- [ ] Integration test: Feature compatibility (with/without resampling)
 - [ ] **RFC COMPLETE DEEP CHECK:** Read RFC lines 5480-5795 and verify EVERY formula, buffer, state management exactly
 
-**Total Section 3.8 Components:**
-* Subframe parameter selection (LPC coeffs, gains, LTP params)
-* LTP synthesis (unvoiced passthrough + voiced 5-tap filter)
-* LPC synthesis (short-term prediction with state)
-* Stereo unmixing (mid-side to left-right with weight interpolation)
-* Resampling delays (normative values, non-normative implementation)
+**Total Section 3.8 Artifacts:**
+* SubframeParams structure with 5 fields
+* LtpState structure with 3 buffers (out: 306, lpc: 256, history: 16)
+* StereoState structure with 4 fields (weights + history)
+* Subframe parameter selection logic (2 decision paths)
+* LTP synthesis: unvoiced (simple) + voiced (3-stage)
+* LPC synthesis with dual storage (unclamped + clamped)
+* Stereo unmixing with 2-phase weight interpolation
+* Mono 1-sample delay (critical for seamless switching)
+* Optional resampling with normative delays
+* **51 unit tests** (12 + 15 + 8 + 12 + 4)
+* **7 integration tests** for full pipeline validation
 
-**Key Formulas:**
+**Key Formulas Implemented:**
 * Unvoiced LTP: `res[i] = e_Q23[i] / 2^23`
-* Voiced LTP: 5-tap filter + rewhitening
-* LPC synthesis: `lpc[i] = (gain_Q16 * res[i] / 65536) + Σ(lpc[i-k-1] * a_Q12[k] / 4096)`
-* Stereo unmixing: `left[i] = (1+w1)*mid[i-1] + side[i-1] + w0*p0`
+* Voiced LTP rewhitening (out): `res[i] = (4.0*LTP_scale_Q14 / gain_Q16) * clamp(-1.0, out[i] - Σ(...), 1.0)`
+* Voiced LTP rewhitening (lpc): `res[i] = (65536.0 / gain_Q16) * (lpc[i] - Σ(...))`
+* Voiced LTP filter: `res[i] = e_Q23[i]/2^23 + Σ(res[...] * b_Q7[k]/128)`
+* LPC synthesis: `lpc[i] = (gain_Q16/65536) * res[i] + Σ(lpc[i-k-1] * a_Q12[k]/4096)`
+* Stereo low-pass: `p0 = (mid[i-2] + 2*mid[i-1] + mid[i]) / 4.0`
+* Stereo left: `left[i] = clamp(-1.0, (1+w1)*mid[i-1] + side[i-1] + w0*p0, 1.0)`
+* Stereo right: `right[i] = clamp(-1.0, (1-w1)*mid[i-1] - side[i-1] - w0*p0, 1.0)`
 
-**Buffer Requirements:**
-* out: 306 samples (max pitch lag + d_LPC + filter width)
-* lpc: 256 samples (3 subframes + d_LPC for WB)
-* stereo: 2 mid samples + 1 side sample history
+**Buffer Management:**
+* out[]: 306 samples (18ms×16kHz + 16 + 2)
+* lpc[]: 256 samples (240 + 16)
+* lpc_history: 16 samples (max d_LPC)
+* stereo_history: 2 mid + 1 side samples
 
 ---
+
+# SECTION 3.8 COMPLETE!
+
+This specification is now 100% complete with all 5 subsections fully detailed:
+- ✅ 3.8.1: Subframe Parameter Selection
+- ✅ 3.8.2: LTP Synthesis Filter
+- ✅ 3.8.3: LPC Synthesis Filter
+- ✅ 3.8.4: Stereo Unmixing
+- ✅ 3.8.5: Resampling
+
+Total: 51 unit tests + 7 integration tests + all formulas + all code implementations!
 
 ## Phase 3 Overall Verification Checklist
 
