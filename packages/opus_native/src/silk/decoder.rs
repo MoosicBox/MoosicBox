@@ -1710,6 +1710,153 @@ impl SilkDecoder {
 
         Ok(magnitudes)
     }
+
+    /// Decodes signs for all non-zero magnitude coefficients (RFC 6716 Section 4.2.7.8.5, lines 5291-5420).
+    ///
+    /// # Arguments
+    ///
+    /// * `range_decoder` - Range decoder state
+    /// * `magnitudes` - Coefficient magnitudes (16 coefficients)
+    /// * `frame_type` - Signal type (Inactive, Unvoiced, or Voiced)
+    /// * `quant_offset_type` - Quantization offset type (Low or High)
+    /// * `pulse_count` - Number of pulses in current shell (from Section 4.2.7.8.2, NOT including LSBs)
+    ///
+    /// # Returns
+    ///
+    /// Array of 16 signed excitation coefficients (positive or negative based on decoded signs)
+    ///
+    /// # Errors
+    ///
+    /// * Range decoder errors from `ec_dec_icdf()`
+    ///
+    /// # Panics
+    ///
+    /// * If the magnitude is too large to be represented in a signed 16-bit integer
+    ///
+    /// # RFC Algorithm (lines 5293-5297)
+    ///
+    /// For each coefficient with non-zero magnitude:
+    /// * Select PDF based on signal type, quantization offset type, and pulse count
+    /// * Decode sign bit using selected PDF
+    /// * If sign bit = 0, negate the magnitude
+    /// * Otherwise, keep magnitude positive
+    pub fn decode_signs(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        magnitudes: &[u16; 16],
+        frame_type: FrameType,
+        quant_offset_type: QuantizationOffsetType,
+        pulse_count: u8,
+    ) -> Result<[i16; 16]> {
+        let pdf = Self::get_sign_pdf(frame_type, quant_offset_type, pulse_count);
+
+        let mut signed_excitation = [0_i16; 16];
+
+        for i in 0..16 {
+            if magnitudes[i] == 0 {
+                signed_excitation[i] = 0;
+            } else {
+                let sign_bit = range_decoder.ec_dec_icdf(pdf, 8)?;
+                signed_excitation[i] = if sign_bit == 0 {
+                    -i16::try_from(magnitudes[i]).expect("magnitude too large")
+                } else {
+                    i16::try_from(magnitudes[i]).expect("magnitude too large")
+                };
+            }
+        }
+
+        Ok(signed_excitation)
+    }
+
+    /// Selects sign PDF based on signal type, quantization offset type, and pulse count.
+    ///
+    /// # Arguments
+    ///
+    /// * `frame_type` - Signal type (Inactive, Unvoiced, or Voiced)
+    /// * `quant_offset_type` - Quantization offset type (Low or High)
+    /// * `pulse_count` - Number of pulses in shell (0, 1, 2, 3, 4, 5, or 6+)
+    ///
+    /// # Returns
+    ///
+    /// ICDF array for sign decoding
+    ///
+    /// # RFC Reference
+    ///
+    /// Table 52 (lines 5310-5420): All 42 PDFs organized by signal type, offset type, and pulse count
+    const fn get_sign_pdf(
+        frame_type: FrameType,
+        quant_offset_type: QuantizationOffsetType,
+        pulse_count: u8,
+    ) -> &'static [u8] {
+        use super::excitation_constants::{
+            SIGN_PDF_INACTIVE_HIGH_0, SIGN_PDF_INACTIVE_HIGH_1, SIGN_PDF_INACTIVE_HIGH_2,
+            SIGN_PDF_INACTIVE_HIGH_3, SIGN_PDF_INACTIVE_HIGH_4, SIGN_PDF_INACTIVE_HIGH_5,
+            SIGN_PDF_INACTIVE_HIGH_6PLUS, SIGN_PDF_INACTIVE_LOW_0, SIGN_PDF_INACTIVE_LOW_1,
+            SIGN_PDF_INACTIVE_LOW_2, SIGN_PDF_INACTIVE_LOW_3, SIGN_PDF_INACTIVE_LOW_4,
+            SIGN_PDF_INACTIVE_LOW_5, SIGN_PDF_INACTIVE_LOW_6PLUS, SIGN_PDF_UNVOICED_HIGH_0,
+            SIGN_PDF_UNVOICED_HIGH_1, SIGN_PDF_UNVOICED_HIGH_2, SIGN_PDF_UNVOICED_HIGH_3,
+            SIGN_PDF_UNVOICED_HIGH_4, SIGN_PDF_UNVOICED_HIGH_5, SIGN_PDF_UNVOICED_HIGH_6PLUS,
+            SIGN_PDF_UNVOICED_LOW_0, SIGN_PDF_UNVOICED_LOW_1, SIGN_PDF_UNVOICED_LOW_2,
+            SIGN_PDF_UNVOICED_LOW_3, SIGN_PDF_UNVOICED_LOW_4, SIGN_PDF_UNVOICED_LOW_5,
+            SIGN_PDF_UNVOICED_LOW_6PLUS, SIGN_PDF_VOICED_HIGH_0, SIGN_PDF_VOICED_HIGH_1,
+            SIGN_PDF_VOICED_HIGH_2, SIGN_PDF_VOICED_HIGH_3, SIGN_PDF_VOICED_HIGH_4,
+            SIGN_PDF_VOICED_HIGH_5, SIGN_PDF_VOICED_HIGH_6PLUS, SIGN_PDF_VOICED_LOW_0,
+            SIGN_PDF_VOICED_LOW_1, SIGN_PDF_VOICED_LOW_2, SIGN_PDF_VOICED_LOW_3,
+            SIGN_PDF_VOICED_LOW_4, SIGN_PDF_VOICED_LOW_5, SIGN_PDF_VOICED_LOW_6PLUS,
+        };
+
+        let pulse_category = if pulse_count >= 6 { 6 } else { pulse_count };
+
+        match (frame_type, quant_offset_type, pulse_category) {
+            (FrameType::Inactive, QuantizationOffsetType::Low, 0) => SIGN_PDF_INACTIVE_LOW_0,
+            (FrameType::Inactive, QuantizationOffsetType::Low, 1) => SIGN_PDF_INACTIVE_LOW_1,
+            (FrameType::Inactive, QuantizationOffsetType::Low, 2) => SIGN_PDF_INACTIVE_LOW_2,
+            (FrameType::Inactive, QuantizationOffsetType::Low, 3) => SIGN_PDF_INACTIVE_LOW_3,
+            (FrameType::Inactive, QuantizationOffsetType::Low, 4) => SIGN_PDF_INACTIVE_LOW_4,
+            (FrameType::Inactive, QuantizationOffsetType::Low, 5) => SIGN_PDF_INACTIVE_LOW_5,
+            (FrameType::Inactive, QuantizationOffsetType::Low, _) => SIGN_PDF_INACTIVE_LOW_6PLUS,
+
+            (FrameType::Inactive, QuantizationOffsetType::High, 0) => SIGN_PDF_INACTIVE_HIGH_0,
+            (FrameType::Inactive, QuantizationOffsetType::High, 1) => SIGN_PDF_INACTIVE_HIGH_1,
+            (FrameType::Inactive, QuantizationOffsetType::High, 2) => SIGN_PDF_INACTIVE_HIGH_2,
+            (FrameType::Inactive, QuantizationOffsetType::High, 3) => SIGN_PDF_INACTIVE_HIGH_3,
+            (FrameType::Inactive, QuantizationOffsetType::High, 4) => SIGN_PDF_INACTIVE_HIGH_4,
+            (FrameType::Inactive, QuantizationOffsetType::High, 5) => SIGN_PDF_INACTIVE_HIGH_5,
+            (FrameType::Inactive, QuantizationOffsetType::High, _) => SIGN_PDF_INACTIVE_HIGH_6PLUS,
+
+            (FrameType::Unvoiced, QuantizationOffsetType::Low, 0) => SIGN_PDF_UNVOICED_LOW_0,
+            (FrameType::Unvoiced, QuantizationOffsetType::Low, 1) => SIGN_PDF_UNVOICED_LOW_1,
+            (FrameType::Unvoiced, QuantizationOffsetType::Low, 2) => SIGN_PDF_UNVOICED_LOW_2,
+            (FrameType::Unvoiced, QuantizationOffsetType::Low, 3) => SIGN_PDF_UNVOICED_LOW_3,
+            (FrameType::Unvoiced, QuantizationOffsetType::Low, 4) => SIGN_PDF_UNVOICED_LOW_4,
+            (FrameType::Unvoiced, QuantizationOffsetType::Low, 5) => SIGN_PDF_UNVOICED_LOW_5,
+            (FrameType::Unvoiced, QuantizationOffsetType::Low, _) => SIGN_PDF_UNVOICED_LOW_6PLUS,
+
+            (FrameType::Unvoiced, QuantizationOffsetType::High, 0) => SIGN_PDF_UNVOICED_HIGH_0,
+            (FrameType::Unvoiced, QuantizationOffsetType::High, 1) => SIGN_PDF_UNVOICED_HIGH_1,
+            (FrameType::Unvoiced, QuantizationOffsetType::High, 2) => SIGN_PDF_UNVOICED_HIGH_2,
+            (FrameType::Unvoiced, QuantizationOffsetType::High, 3) => SIGN_PDF_UNVOICED_HIGH_3,
+            (FrameType::Unvoiced, QuantizationOffsetType::High, 4) => SIGN_PDF_UNVOICED_HIGH_4,
+            (FrameType::Unvoiced, QuantizationOffsetType::High, 5) => SIGN_PDF_UNVOICED_HIGH_5,
+            (FrameType::Unvoiced, QuantizationOffsetType::High, _) => SIGN_PDF_UNVOICED_HIGH_6PLUS,
+
+            (FrameType::Voiced, QuantizationOffsetType::Low, 0) => SIGN_PDF_VOICED_LOW_0,
+            (FrameType::Voiced, QuantizationOffsetType::Low, 1) => SIGN_PDF_VOICED_LOW_1,
+            (FrameType::Voiced, QuantizationOffsetType::Low, 2) => SIGN_PDF_VOICED_LOW_2,
+            (FrameType::Voiced, QuantizationOffsetType::Low, 3) => SIGN_PDF_VOICED_LOW_3,
+            (FrameType::Voiced, QuantizationOffsetType::Low, 4) => SIGN_PDF_VOICED_LOW_4,
+            (FrameType::Voiced, QuantizationOffsetType::Low, 5) => SIGN_PDF_VOICED_LOW_5,
+            (FrameType::Voiced, QuantizationOffsetType::Low, _) => SIGN_PDF_VOICED_LOW_6PLUS,
+
+            (FrameType::Voiced, QuantizationOffsetType::High, 0) => SIGN_PDF_VOICED_HIGH_0,
+            (FrameType::Voiced, QuantizationOffsetType::High, 1) => SIGN_PDF_VOICED_HIGH_1,
+            (FrameType::Voiced, QuantizationOffsetType::High, 2) => SIGN_PDF_VOICED_HIGH_2,
+            (FrameType::Voiced, QuantizationOffsetType::High, 3) => SIGN_PDF_VOICED_HIGH_3,
+            (FrameType::Voiced, QuantizationOffsetType::High, 4) => SIGN_PDF_VOICED_HIGH_4,
+            (FrameType::Voiced, QuantizationOffsetType::High, 5) => SIGN_PDF_VOICED_HIGH_5,
+            (FrameType::Voiced, QuantizationOffsetType::High, _) => SIGN_PDF_VOICED_HIGH_6PLUS,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -3148,5 +3295,161 @@ mod tests {
     fn test_shell_block_count_invalid() {
         assert!(SilkDecoder::get_shell_block_count(Bandwidth::SuperWideband, 10).is_err());
         assert!(SilkDecoder::get_shell_block_count(Bandwidth::Narrowband, 40).is_err());
+    }
+
+    // ====================================================================
+    // Section 3.7.6: Sign Decoding Tests
+    // ====================================================================
+
+    #[test]
+    fn test_decode_signs_all_zero_magnitudes() {
+        let data = vec![0x80; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let magnitudes = [0_u16; 16];
+        let signed = decoder
+            .decode_signs(
+                &mut range_decoder,
+                &magnitudes,
+                FrameType::Voiced,
+                QuantizationOffsetType::Low,
+                5,
+            )
+            .unwrap();
+
+        for &val in &signed {
+            assert_eq!(val, 0);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_decode_signs_positive_values() {
+        let data = vec![0xFF; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let magnitudes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let signed = decoder
+            .decode_signs(
+                &mut range_decoder,
+                &magnitudes,
+                FrameType::Inactive,
+                QuantizationOffsetType::Low,
+                0,
+            )
+            .unwrap();
+
+        for i in 0..16 {
+            assert!(signed[i] == magnitudes[i] as i16 || signed[i] == -(magnitudes[i] as i16));
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_decode_signs_negative_values() {
+        let data = vec![0x00; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let magnitudes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let signed = decoder
+            .decode_signs(
+                &mut range_decoder,
+                &magnitudes,
+                FrameType::Voiced,
+                QuantizationOffsetType::High,
+                3,
+            )
+            .unwrap();
+
+        for i in 0..16 {
+            assert!(signed[i] == magnitudes[i] as i16 || signed[i] == -(magnitudes[i] as i16));
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_decode_signs_mixed_zero_nonzero() {
+        let data = vec![0x80; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let magnitudes = [0, 5, 0, 3, 0, 0, 8, 0, 0, 2, 0, 0, 0, 6, 0, 1];
+        let signed = decoder
+            .decode_signs(
+                &mut range_decoder,
+                &magnitudes,
+                FrameType::Unvoiced,
+                QuantizationOffsetType::Low,
+                4,
+            )
+            .unwrap();
+
+        for i in 0..16 {
+            if magnitudes[i] == 0 {
+                assert_eq!(signed[i], 0);
+            } else {
+                assert!(signed[i] == magnitudes[i] as i16 || signed[i] == -(magnitudes[i] as i16));
+            }
+        }
+    }
+
+    #[test]
+    #[allow(clippy::similar_names)]
+    fn test_get_sign_pdf_inactive_low() {
+        let pdf0 = SilkDecoder::get_sign_pdf(FrameType::Inactive, QuantizationOffsetType::Low, 0);
+        assert_eq!(pdf0.len(), 2);
+
+        let pdf3 = SilkDecoder::get_sign_pdf(FrameType::Inactive, QuantizationOffsetType::Low, 3);
+        assert_eq!(pdf3.len(), 2);
+
+        let pdf10 = SilkDecoder::get_sign_pdf(FrameType::Inactive, QuantizationOffsetType::Low, 10);
+        assert_eq!(pdf10.len(), 2);
+    }
+
+    #[test]
+    fn test_get_sign_pdf_voiced_high() {
+        let pdf1 = SilkDecoder::get_sign_pdf(FrameType::Voiced, QuantizationOffsetType::High, 1);
+        assert_eq!(pdf1.len(), 2);
+
+        let pdf5 = SilkDecoder::get_sign_pdf(FrameType::Voiced, QuantizationOffsetType::High, 5);
+        assert_eq!(pdf5.len(), 2);
+    }
+
+    #[test]
+    fn test_get_sign_pdf_unvoiced_all_pulse_counts() {
+        for pulse_count in 0..=10 {
+            let pdf_low = SilkDecoder::get_sign_pdf(
+                FrameType::Unvoiced,
+                QuantizationOffsetType::Low,
+                pulse_count,
+            );
+            assert_eq!(pdf_low.len(), 2);
+
+            let pdf_high = SilkDecoder::get_sign_pdf(
+                FrameType::Unvoiced,
+                QuantizationOffsetType::High,
+                pulse_count,
+            );
+            assert_eq!(pdf_high.len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_decode_signs_all_42_pdfs() {
+        let frame_types = [FrameType::Inactive, FrameType::Unvoiced, FrameType::Voiced];
+        let offset_types = [QuantizationOffsetType::Low, QuantizationOffsetType::High];
+
+        for &frame_type in &frame_types {
+            for &offset_type in &offset_types {
+                for pulse_count in 0..=10 {
+                    let pdf = SilkDecoder::get_sign_pdf(frame_type, offset_type, pulse_count);
+                    assert_eq!(pdf.len(), 2);
+                    assert_eq!(pdf[1], 0);
+                }
+            }
+        }
     }
 }

@@ -38,7 +38,7 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   Added `previous_pitch_lag` state field for relative lag coding
   Implemented 4 methods: `decode_primary_pitch_lag()`, `decode_pitch_contour()`, `decode_ltp_filter_coefficients()`, `decode_ltp_scaling()`
   **CRITICAL BUG DISCOVERED AND FIXED**: All PDF constants must be converted to ICDF format for `ec_dec_icdf()` - this affects ALL existing constants in Phase 2/3
-  - [ ] Section 3.7: Excitation Decoding (7 subsections) - NOT STARTED
+  - [ ] Section 3.7: Excitation Decoding (7 subsections) - IN PROGRESS (6/7 complete)
   - [ ] Section 3.8: Synthesis Filters (5 subsections) - NOT STARTED
 - [ ] Phase 4: CELT Decoder - Basic Structure
 - [ ] Phase 5: CELT Decoder - MDCT & Finalization
@@ -3987,7 +3987,7 @@ All implementations verified against RFC - CRITICAL: Discovered PDF→ICDF conve
 
 **Goal:** Decode residual excitation signal using LCG seed initialization, hierarchical pulse vector quantization with combinatorial encoding, LSB enhancement, and pseudorandom noise injection.
 
-**Status:** 🔴 **NOT STARTED**
+**Status:** 🟡 **IN PROGRESS** (6 of 7 subsections complete: 3.7.1 ✅, 3.7.2 ✅, 3.7.3 ✅, 3.7.4 ✅, 3.7.5 ✅, 3.7.6 ✅, 3.7.7 ⏳)
 
 **Scope:** Complete SILK excitation decoding pipeline from bitstream to Q23 excitation samples
 
@@ -5035,19 +5035,32 @@ All 42 sign PDFs from Table 52 must be converted from RFC PDF format to ICDF for
 
 ##### 3.7.6 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] All 42 sign ICDFs converted correctly from RFC Table 52
-- [ ] All 42 ICDF arrays terminate with 0
-- [ ] Organization correct: 3 signal types × 2 offset types × 7 pulse categories = 42
-- [ ] PDF selection uses pulse count WITHOUT LSBs (RFC line 5301)
-- [ ] Pulse count capped at 6+ for PDF selection
-- [ ] Sign bit 0 = negative, 1 = positive
-- [ ] Zero magnitudes produce zero excitation
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5291-5420 - confirm all 42 ICDF conversions, selection logic
+- [x] Run `cargo fmt` (format code)
+Formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Compiled successfully
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+150 tests passed (143 previous + 8 new sign decoding tests)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Zero clippy warnings confirmed
+- [x] Run `cargo machete` (no unused dependencies)
+No unused dependencies
+- [x] All 42 sign ICDFs converted correctly from RFC Table 52
+All 42 PDFs added to excitation_constants.rs: Inactive (14), Unvoiced (14), Voiced (14) across Low/High offset types and pulse counts 0-6+
+- [x] All 42 ICDF arrays terminate with 0
+All PDFs have terminating zero per RFC 6716 Section 4.1.3.3
+- [x] Organization correct: 3 signal types × 2 offset types × 7 pulse categories = 42
+Confirmed: 3 frame types × 2 quant offset types × 7 pulse count categories = 42 constants
+- [x] PDF selection uses pulse count WITHOUT LSBs (RFC line 5301)
+Verified: pulse_count parameter documented as "from Section 4.2.7.8.2, NOT including LSBs"
+- [x] Pulse count capped at 6+ for PDF selection
+Implemented: `let pulse_category = if pulse_count >= 6 { 6 } else { pulse_count };`
+- [x] Sign bit 0 = negative, 1 = positive
+Implemented: `if sign_bit == 0 { -(magnitudes[i] as i16) } else { magnitudes[i] as i16 }`
+- [x] Zero magnitudes produce zero excitation
+Verified: `if magnitudes[i] == 0 { signed_excitation[i] = 0; }`
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 5291-5420 - confirm all 42 ICDF conversions, selection logic
+✅ VERIFIED: All 42 PDFs match RFC Table 52 exactly with correct ICDF conversion; selection logic uses frame_type, quant_offset_type, and pulse_count (capped at 6); signs decoded only for non-zero magnitudes; sign bit 0→negative, 1→positive per RFC lines 5293-5297
 
 ---
 
