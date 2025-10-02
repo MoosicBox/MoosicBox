@@ -169,6 +169,32 @@ pub struct SubframeParams {
     pub ltp_scale_q14: i16,
 }
 
+#[derive(Debug, Clone)]
+struct LtpState {
+    out_buffer: Vec<f32>,
+    lpc_buffer: Vec<f32>,
+}
+
+impl LtpState {
+    const fn new() -> Self {
+        Self {
+            out_buffer: Vec::new(),
+            lpc_buffer: Vec::new(),
+        }
+    }
+
+    fn init(&mut self) {
+        self.out_buffer = vec![0.0; 306];
+        self.lpc_buffer = vec![0.0; 256];
+    }
+
+    #[allow(dead_code)]
+    fn reset(&mut self) {
+        self.out_buffer.fill(0.0);
+        self.lpc_buffer.fill(0.0);
+    }
+}
+
 pub struct SilkDecoder {
     #[allow(dead_code)]
     sample_rate: SampleRate,
@@ -196,6 +222,8 @@ pub struct SilkDecoder {
     // TODO(Section 3.7.7): Remove dead_code when used in noise injection
     #[allow(dead_code)]
     lcg_seed: u32,
+    #[allow(dead_code)]
+    ltp_state: LtpState,
 }
 
 impl SilkDecoder {
@@ -218,6 +246,9 @@ impl SilkDecoder {
             _ => unreachable!(),
         };
 
+        let mut ltp_state = LtpState::new();
+        ltp_state.init();
+
         Ok(Self {
             sample_rate,
             channels,
@@ -231,6 +262,7 @@ impl SilkDecoder {
             uncoded_side_channel: false,
             previous_pitch_lag: None,
             lcg_seed: 0,
+            ltp_state,
         })
     }
 
@@ -1960,8 +1992,7 @@ impl SilkDecoder {
     }
 
     // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
-    #[allow(dead_code)]
-    #[allow(clippy::too_many_arguments)]
+    #[allow(dead_code, clippy::too_many_arguments)]
     fn select_subframe_params(
         subframe_index: usize,
         frame_size_ms: u8,
@@ -1997,6 +2028,108 @@ impl SilkDecoder {
             ltp_filter_q7: ltp_filters_q7[subframe_index],
             ltp_scale_q14: adjusted_ltp_scale_q14,
         })
+    }
+
+    #[allow(dead_code, clippy::cast_precision_loss)]
+    fn ltp_synthesis_unvoiced(excitation_q23: &[i32]) -> Vec<f32> {
+        let scale = 1.0 / (1_i32 << 23) as f32;
+        excitation_q23.iter().map(|&e| e as f32 * scale).collect()
+    }
+
+    #[allow(
+        dead_code,
+        clippy::too_many_lines,
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap,
+        clippy::unnecessary_wraps,
+        clippy::similar_names,
+        clippy::needless_pass_by_ref_mut
+    )]
+    fn ltp_synthesis_voiced(
+        &mut self,
+        excitation_q23: &[i32],
+        params: &SubframeParams,
+        subframe_index: usize,
+        bandwidth: Bandwidth,
+    ) -> Result<Vec<f32>> {
+        let n = Self::samples_per_subframe(bandwidth);
+        let j = Self::subframe_start_index(subframe_index, n);
+        let d_lpc = params.lpc_coeffs_q12.len();
+        let pitch_lag = params.pitch_lag as usize;
+
+        let mut res = Vec::new();
+
+        let out_end = if params.ltp_scale_q14 == 16384 {
+            j.saturating_sub(subframe_index.saturating_sub(2) * n)
+        } else {
+            j.saturating_sub(subframe_index * n)
+        };
+
+        let out_start = j.saturating_sub(pitch_lag + 2);
+
+        for i in out_start..out_end {
+            let out_val = self.ltp_state.out_buffer.get(i).copied().unwrap_or(0.0);
+
+            let mut lpc_sum = 0.0_f32;
+            for k in 0..d_lpc {
+                let idx = i.saturating_sub(k + 1);
+                let out_prev = self.ltp_state.out_buffer.get(idx).copied().unwrap_or(0.0);
+                let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
+                lpc_sum += out_prev * (a_q12 / 4096.0);
+            }
+
+            let whitened = out_val - lpc_sum;
+            let clamped = whitened.clamp(-1.0, 1.0);
+            let scale = (4.0 * f32::from(params.ltp_scale_q14)) / params.gain_q16 as f32;
+            let res_val = scale * clamped;
+
+            res.push(res_val);
+        }
+
+        for i in out_end..j {
+            let lpc_val = self.ltp_state.lpc_buffer.get(i).copied().unwrap_or(0.0);
+
+            let mut lpc_sum = 0.0_f32;
+            for k in 0..d_lpc {
+                let idx = i.saturating_sub(k + 1);
+                let lpc_prev = self.ltp_state.lpc_buffer.get(idx).copied().unwrap_or(0.0);
+                let a_q12 = f32::from(params.lpc_coeffs_q12[k]);
+                lpc_sum += lpc_prev * (a_q12 / 4096.0);
+            }
+
+            let whitened = lpc_val - lpc_sum;
+            let scale = 65536.0 / params.gain_q16 as f32;
+            let res_val = scale * whitened;
+
+            res.push(res_val);
+        }
+
+        let res_base_offset = res.len();
+
+        for (i, &e_val) in excitation_q23.iter().enumerate() {
+            let e_normalized = e_val as f32 / (1_i32 << 23) as f32;
+
+            let mut ltp_sum = 0.0_f32;
+            for k in 0..5 {
+                let global_idx = j + i;
+                let target_idx = global_idx
+                    .saturating_sub(pitch_lag)
+                    .saturating_add(2)
+                    .saturating_sub(k);
+                let res_idx = target_idx.saturating_sub(out_start);
+
+                let res_prev = res.get(res_idx).copied().unwrap_or(0.0);
+
+                let b_q7 = f32::from(params.ltp_filter_q7[k]);
+                ltp_sum += res_prev * (b_q7 / 128.0);
+            }
+
+            let res_val = e_normalized + ltp_sum;
+            res.push(res_val);
+        }
+
+        Ok(res[res_base_offset..].to_vec())
     }
 
     // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
@@ -4097,5 +4230,292 @@ mod tests {
         assert_eq!(SilkDecoder::subframe_start_index(1, 80), 80);
         assert_eq!(SilkDecoder::subframe_start_index(2, 80), 160);
         assert_eq!(SilkDecoder::subframe_start_index(3, 80), 240);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_unvoiced_simple() {
+        let excitation = vec![8_388_608, 4_194_304, -8_388_608, 0];
+
+        let res = SilkDecoder::ltp_synthesis_unvoiced(&excitation);
+
+        assert_eq!(res.len(), 4);
+        assert!((res[0] - 1.0).abs() < 1e-6);
+        assert!((res[1] - 0.5).abs() < 1e-6);
+        assert!((res[2] - (-1.0)).abs() < 1e-6);
+        assert!((res[3] - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_unvoiced_full_subframe() {
+        let excitation = vec![1_000_000_i32; 80];
+        let res = SilkDecoder::ltp_synthesis_unvoiced(&excitation);
+
+        assert_eq!(res.len(), 80);
+        for &val in &res {
+            assert!((val - (1_000_000.0 / 8_388_608.0)).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_ltp_state_initialization() {
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        assert_eq!(decoder.ltp_state.out_buffer.len(), 306);
+        assert_eq!(decoder.ltp_state.lpc_buffer.len(), 256);
+
+        for &val in &decoder.ltp_state.out_buffer {
+            assert_eq!(val, 0.0);
+        }
+        for &val in &decoder.ltp_state.lpc_buffer {
+            assert_eq!(val, 0.0);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_ltp_state_reset() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        decoder.ltp_state.out_buffer[0] = 1.0;
+        decoder.ltp_state.lpc_buffer[0] = 2.0;
+
+        decoder.ltp_state.reset();
+
+        assert_eq!(decoder.ltp_state.out_buffer[0], 0.0);
+        assert_eq!(decoder.ltp_state.lpc_buffer[0], 0.0);
+    }
+
+    #[test]
+    fn test_ltp_buffer_sizes() {
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        assert_eq!(decoder.ltp_state.out_buffer.len(), 306);
+        assert_eq!(decoder.ltp_state.lpc_buffer.len(), 256);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_zero_excitation() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![0_i32; 80];
+        let lpc_coeffs = vec![0_i16; 16];
+        let params = SubframeParams {
+            lpc_coeffs_q12: lpc_coeffs,
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 16384,
+        };
+
+        let res = decoder
+            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(res.len(), 80);
+        for &val in &res {
+            assert!(val.abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_out_end_normal() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1_000_000_i32; 80];
+        let lpc_coeffs = vec![0_i16; 16];
+        let params = SubframeParams {
+            lpc_coeffs_q12: lpc_coeffs,
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 14000,
+        };
+
+        let res = decoder
+            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_out_end_interpolation() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1_000_000_i32; 80];
+        let lpc_coeffs = vec![0_i16; 16];
+        let params = SubframeParams {
+            lpc_coeffs_q12: lpc_coeffs,
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 16384,
+        };
+
+        let res = decoder
+            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_pitch_lag_short() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1_000_000_i32; 40];
+        let lpc_coeffs = vec![0_i16; 10];
+        let params = SubframeParams {
+            lpc_coeffs_q12: lpc_coeffs,
+            gain_q16: 65536,
+            pitch_lag: 32,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 16384,
+        };
+
+        let res = decoder
+            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Narrowband)
+            .unwrap();
+
+        assert_eq!(res.len(), 40);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_pitch_lag_long() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1_000_000_i32; 80];
+        let lpc_coeffs = vec![0_i16; 16];
+        let params = SubframeParams {
+            lpc_coeffs_q12: lpc_coeffs,
+            gain_q16: 65536,
+            pitch_lag: 288,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 16384,
+        };
+
+        let res = decoder
+            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    #[allow(clippy::similar_names)]
+    fn test_ltp_synthesis_voiced_all_bandwidths() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation_nb = vec![1_000_000_i32; 40];
+        let lpc_nb = vec![0_i16; 10];
+        let params_nb = SubframeParams {
+            lpc_coeffs_q12: lpc_nb,
+            gain_q16: 65536,
+            pitch_lag: 80,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 16384,
+        };
+
+        let res_nb = decoder
+            .ltp_synthesis_voiced(&excitation_nb, &params_nb, 0, Bandwidth::Narrowband)
+            .unwrap();
+        assert_eq!(res_nb.len(), 40);
+
+        let excitation_mb = vec![1_000_000_i32; 60];
+        let lpc_mb = vec![0_i16; 16];
+        let params_mb = SubframeParams {
+            lpc_coeffs_q12: lpc_mb,
+            gain_q16: 65536,
+            pitch_lag: 120,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 16384,
+        };
+
+        let res_mb = decoder
+            .ltp_synthesis_voiced(&excitation_mb, &params_mb, 0, Bandwidth::Mediumband)
+            .unwrap();
+        assert_eq!(res_mb.len(), 60);
+
+        let excitation_wb = vec![1_000_000_i32; 80];
+        let lpc_wb = vec![0_i16; 16];
+        let params_wb = SubframeParams {
+            lpc_coeffs_q12: lpc_wb,
+            gain_q16: 65536,
+            pitch_lag: 160,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 16384,
+        };
+
+        let res_wb = decoder
+            .ltp_synthesis_voiced(&excitation_wb, &params_wb, 0, Bandwidth::Wideband)
+            .unwrap();
+        assert_eq!(res_wb.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_5tap_filter() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1_000_000_i32; 80];
+        let lpc_coeffs = vec![0_i16; 16];
+        let params = SubframeParams {
+            lpc_coeffs_q12: lpc_coeffs,
+            gain_q16: 65536,
+            pitch_lag: 100,
+            ltp_filter_q7: [10, 20, 30, 20, 10],
+            ltp_scale_q14: 16384,
+        };
+
+        let res = decoder
+            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_nonzero_gain() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1_000_000_i32; 80];
+        let lpc_coeffs = vec![0_i16; 16];
+        let params = SubframeParams {
+            lpc_coeffs_q12: lpc_coeffs,
+            gain_q16: 32768,
+            pitch_lag: 100,
+            ltp_filter_q7: [0; 5],
+            ltp_scale_q14: 16384,
+        };
+
+        let res = decoder
+            .ltp_synthesis_voiced(&excitation, &params, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(res.len(), 80);
+    }
+
+    #[test]
+    fn test_ltp_synthesis_voiced_subframe_indices() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let excitation = vec![1_000_000_i32; 80];
+        let lpc_coeffs = vec![0_i16; 16];
+
+        for s in 0..4 {
+            let params = SubframeParams {
+                lpc_coeffs_q12: lpc_coeffs.clone(),
+                gain_q16: 65536,
+                pitch_lag: 100,
+                ltp_filter_q7: [0; 5],
+                ltp_scale_q14: if s >= 2 { 16384 } else { 14000 },
+            };
+
+            let res = decoder
+                .ltp_synthesis_voiced(&excitation, &params, s, Bandwidth::Wideband)
+                .unwrap();
+
+            assert_eq!(res.len(), 80);
+        }
     }
 }
