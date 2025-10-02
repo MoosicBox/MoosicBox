@@ -54,6 +54,9 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   Mono delay: Critical 1-sample delay for seamless stereo/mono switching
   Resampling: Optional feature with Table 54 delays (normative), moosicbox_resampler integration (non-normative)
 - [ ] Phase 4: CELT Decoder - Basic Structure
+**STATUS:** 🟡 **IN PROGRESS** - Phase 4.1 complete, Phase 4.2 planned
+  - [x] Section 4.1: CELT Decoder Framework - COMPLETE (lines 7987-8573 in plan.md)
+  - [ ] Section 4.2: CELT Energy Envelope Decoding - PLANNED (lines 8575-9042 in plan.md)
 - [ ] Phase 5: CELT Decoder - MDCT & Finalization
 - [ ] Phase 6: Mode Integration & Hybrid
 - [ ] Phase 7: Packet Loss Concealment
@@ -8571,6 +8574,587 @@ CeltState includes prev_energy (21 bands Q8), post_filter_state (Option), overla
 * All PDFs in ICDF format with terminating zeros (RFC 4.1.3.3)
 
 ---
+
+### 4.2: CELT Energy Envelope Decoding
+
+**Reference:** RFC 6716 Section 4.3.2 (lines 6024-6099)
+
+**Overview:** Energy quantization is critical for CELT decoder quality. Energy errors cannot be compensated later, so RFC uses a sophisticated three-step strategy: coarse (6 dB resolution with 2-D prediction), fine (bit allocation dependent), and final (unused bit allocation). All energy stored in base-2 log domain (Q8 format) for efficient computation.
+
+**Goal:** Implement CELT's three-step energy decoding: coarse (6 dB), fine (bits from allocation), and final (unused bits allocation)
+
+**Scope:** Energy quantization in base-2 log domain with 2-D prediction (time + frequency)
+
+**Status:** 🔴 NOT STARTED
+
+---
+
+#### 4.2.1: Laplace Decoder for Coarse Energy
+
+**Reference:** RFC 6716 Section 4.3.2.1 (lines 6034-6077)
+
+**Goal:** Implement Laplace distribution decoder for coarse energy quantization
+
+**Critical RFC Details:**
+- **Coarse resolution**: 6 dB (integer part of base-2 log)
+- **Laplace decoder**: Per RFC lines 6074-6077, implemented in `ec_laplace_decode()` (laplace.c reference)
+- **Probability model**: Frame-size dependent, stored in `e_prob_model` table
+
+##### Implementation Steps
+
+- [ ] **Add Laplace decoding to `src/range/decoder.rs`:**
+
+  **Reference:** RFC 6716 Section 4.1.3.4 (Laplace distribution decoding - search for "laplace" in RFC)
+
+  ```rust
+  impl RangeDecoder {
+      /// Decodes a Laplace-distributed value
+      ///
+      /// RFC 6716 Section 4.3.2.1 (lines 6076-6077)
+      ///
+      /// # Arguments
+      ///
+      /// * `fs` - Symbol value from ec_decode()
+      /// * `decay` - Laplace distribution decay parameter
+      ///
+      /// # Returns
+      ///
+      /// Decoded integer value
+      ///
+      /// # Errors
+      ///
+      /// * Returns error if range decoding fails
+      pub fn ec_laplace_decode(&mut self, fs: u32, decay: u32) -> Result<i32> {
+          // Implementation per reference laplace.c
+          // Uses geometric distribution for magnitude
+          // Uses binary flag for sign
+          todo!()
+      }
+  }
+  ```
+
+- [ ] **Add energy probability model table to `src/celt/constants.rs`:**
+
+  **Reference:** RFC 6716 line 6073 (`e_prob_model` table in quant_bands.c)
+
+  **CRITICAL**: Must search RFC reference implementation or extract from test vectors
+
+  ```rust
+  /// Energy probability model for Laplace distribution
+  /// RFC 6716 line 6073: "These parameters are held in the e_prob_model table"
+  ///
+  /// Organized by frame size and intra/inter mode
+  /// Format: [frame_size_index][intra_flag] -> decay parameter
+  pub const ENERGY_PROB_MODEL: &[[u32; 2]] = &[
+      // [inter_mode_decay, intra_mode_decay] for each frame size
+      // TODO: Extract from reference implementation
+  ];
+  ```
+
+- [ ] **Add Laplace decoding tests:**
+
+  ```rust
+  #[cfg(test)]
+  mod tests_laplace {
+      use super::*;
+
+      #[test]
+      fn test_laplace_decode_zero() {
+          // Test decoding zero value
+      }
+
+      #[test]
+      fn test_laplace_decode_positive() {
+          // Test positive values with various decay parameters
+      }
+
+      #[test]
+      fn test_laplace_decode_negative() {
+          // Test negative values
+      }
+
+      #[test]
+      fn test_laplace_distribution_symmetry() {
+          // Verify symmetric distribution
+      }
+  }
+  ```
+
+##### 4.2.1 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt test_laplace` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Laplace decoder handles both positive and negative values
+- [ ] Decay parameter correctly influences distribution shape
+- [ ] Geometric distribution used for magnitude per RFC
+- [ ] Sign bit correctly decoded
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6074-6077 and reference laplace.c implementation
+
+---
+
+#### 4.2.2: Coarse Energy Decoding with 2-D Prediction
+
+**Reference:** RFC 6716 Section 4.3.2.1 (lines 6034-6077)
+
+**Goal:** Decode coarse energy with time and frequency prediction
+
+**Critical RFC Details:**
+- **Prediction filter**: 2-D z-transform (RFC lines 6055-6059)
+  - `A(z_l, z_b) = (1 - alpha*z_l^-1)*(1 - z_b^-1) / (1 - beta*z_b^-1)`
+  - `alpha = 0` (inter-frame), `alpha = 0, beta = 4915/32768` (intra-frame)
+- **Time prediction**: Based on previous frame's **final fine** energy
+- **Frequency prediction**: Based on current frame's **coarse** energy only
+- **Clamping**: Required for fixed-point/floating-point consistency
+
+##### Implementation Steps
+
+- [ ] **Add prediction coefficients to `src/celt/constants.rs`:**
+
+  ```rust
+  /// Coarse energy prediction coefficients
+  /// RFC 6716 lines 6061-6063
+
+  /// Alpha coefficient for inter-frame prediction (frame-size dependent)
+  /// RFC: "depend on the frame size in use when not using intra energy"
+  pub const ENERGY_ALPHA_INTER: [f32; 4] = [
+      // [2.5ms, 5ms, 10ms, 20ms]
+      // TODO: Extract from reference quant_bands.c
+      0.0, 0.0, 0.0, 0.0  // Placeholder
+  ];
+
+  /// Beta coefficient for frequency prediction
+  /// RFC line 6063: "beta=4915/32768 when using intra energy"
+  pub const ENERGY_BETA_INTRA: f32 = 4915.0 / 32768.0;
+
+  /// Beta coefficient for inter-frame mode (frame-size dependent)
+  pub const ENERGY_BETA_INTER: [f32; 4] = [
+      // TODO: Extract from reference
+      0.0, 0.0, 0.0, 0.0  // Placeholder
+  ];
+  ```
+
+- [ ] **Implement coarse energy decoding in `src/celt/decoder.rs`:**
+
+  ```rust
+  impl CeltDecoder {
+      /// Decodes coarse energy for all bands
+      ///
+      /// RFC 6716 Section 4.3.2.1 (lines 6034-6077)
+      ///
+      /// # Arguments
+      ///
+      /// * `range_decoder` - Range decoder state
+      /// * `intra_flag` - Whether this is an intra frame (from decode_intra())
+      ///
+      /// # Returns
+      ///
+      /// Array of coarse energy values (Q8 format, base-2 log domain)
+      ///
+      /// # Errors
+      ///
+      /// * Returns error if Laplace decoding fails
+      pub fn decode_coarse_energy(
+          &mut self,
+          range_decoder: &mut RangeDecoder,
+          intra_flag: bool,
+      ) -> Result<[i16; CELT_NUM_BANDS]> {
+          use super::constants::*;
+
+          let mut coarse_energy = [0i16; CELT_NUM_BANDS];
+
+          // Select prediction coefficients based on intra flag
+          let (alpha, beta) = if intra_flag {
+              (0.0, ENERGY_BETA_INTRA)
+          } else {
+              let frame_idx = self.frame_duration_index();
+              (ENERGY_ALPHA_INTER[frame_idx], ENERGY_BETA_INTER[frame_idx])
+          };
+
+          for band in 0..CELT_NUM_BANDS {
+              // Time-domain prediction (RFC lines 6064-6065)
+              let time_pred = if intra_flag || self.state.prev_energy[band] == 0 {
+                  0.0
+              } else {
+                  alpha * f32::from(self.state.prev_energy[band])
+              };
+
+              // Frequency-domain prediction (RFC lines 6065-6067)
+              let freq_pred = if band > 0 {
+                  beta * f32::from(coarse_energy[band - 1])
+              } else {
+                  0.0
+              };
+
+              // Combined prediction
+              let prediction = time_pred + freq_pred;
+
+              // Decode Laplace-distributed error
+              let frame_idx = self.frame_duration_index();
+              let decay = ENERGY_PROB_MODEL[frame_idx][if intra_flag { 1 } else { 0 }];
+
+              let fs = range_decoder.ec_decode(/* ft based on decay */)?;
+              let error = range_decoder.ec_laplace_decode(fs, decay)?;
+
+              // Combine prediction + error (RFC lines 6068-6069)
+              let raw_energy = prediction + (error as f32 * 6.0); // 6 dB steps
+
+              // Clamp for fixed-point consistency (RFC lines 6068-6069)
+              coarse_energy[band] = raw_energy.clamp(-128.0, 127.0) as i16;
+          }
+
+          Ok(coarse_energy)
+      }
+
+      /// Returns frame duration index (0=2.5ms, 1=5ms, 2=10ms, 3=20ms)
+      fn frame_duration_index(&self) -> usize {
+          let duration = self.frame_duration_ms();
+          if (duration - 2.5).abs() < 0.1 { 0 }
+          else if (duration - 5.0).abs() < 0.1 { 1 }
+          else if (duration - 10.0).abs() < 0.1 { 2 }
+          else { 3 }
+      }
+  }
+  ```
+
+- [ ] **Add coarse energy tests:**
+
+  ```rust
+  #[test]
+  fn test_coarse_energy_intra() {
+      // Test intra frame (no time prediction)
+      let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+      // Verify alpha=0, beta=4915/32768
+  }
+
+  #[test]
+  fn test_coarse_energy_inter() {
+      // Test inter frame (uses time + freq prediction)
+      let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+      // Set previous energy, verify prediction used
+  }
+
+  #[test]
+  fn test_coarse_energy_clamping() {
+      // Verify energy values clamped to [-128, 127]
+  }
+
+  #[test]
+  fn test_coarse_energy_all_bands() {
+      // Verify all 21 bands decoded
+  }
+  ```
+
+##### 4.2.2 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt test_coarse_energy` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Prediction coefficients match RFC exactly (alpha frame-dependent, beta=4915/32768 intra)
+- [ ] Time prediction uses previous frame's **final** energy
+- [ ] Frequency prediction uses current frame's **coarse** energy only
+- [ ] Energy clamped to [-128, 127] for fixed-point consistency
+- [ ] All 21 bands decoded correctly
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6034-6077, especially prediction filter formula (lines 6055-6063)
+
+---
+
+#### 4.2.3: Fine Energy Quantization
+
+**Reference:** RFC 6716 Section 4.3.2.2 (lines 6079-6087)
+
+**Goal:** Refine coarse energy with bits from allocation
+
+**Critical RFC Details:**
+- **Bit allocation**: Determined by Section 4.3.3 (NOT implemented yet - stub for now)
+- **Formula**: `correction = (f + 0.5) / 2^B_i - 0.5`
+  - `f`: integer in range `[0, 2^B_i - 1]`
+  - `B_i`: number of fine energy bits for band `i`
+
+##### Implementation Steps
+
+- [ ] **Implement fine energy decoding in `src/celt/decoder.rs`:**
+
+  ```rust
+  impl CeltDecoder {
+      /// Decodes fine energy quantization
+      ///
+      /// RFC 6716 Section 4.3.2.2 (lines 6079-6087)
+      ///
+      /// # Arguments
+      ///
+      /// * `range_decoder` - Range decoder state
+      /// * `coarse_energy` - Coarse energy from Section 4.2.2
+      /// * `fine_bits` - Bits allocated per band (from Section 4.3.3)
+      ///
+      /// # Returns
+      ///
+      /// Refined energy values (Q8 format)
+      ///
+      /// # Errors
+      ///
+      /// * Returns error if range decoding fails
+      pub fn decode_fine_energy(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          coarse_energy: &[i16; CELT_NUM_BANDS],
+          fine_bits: &[u8; CELT_NUM_BANDS],
+      ) -> Result<[i16; CELT_NUM_BANDS]> {
+          let mut refined_energy = *coarse_energy;
+
+          for band in 0..CELT_NUM_BANDS {
+              let bits = fine_bits[band];
+
+              if bits == 0 {
+                  continue; // No refinement for this band
+              }
+
+              // Decode integer f in range [0, 2^bits - 1]
+              let ft = 1u32 << bits;
+              let f = range_decoder.ec_dec_uint(ft)?;
+
+              // Apply correction formula (RFC line 6085-6086)
+              // correction = (f + 0.5) / 2^bits - 0.5
+              let correction = ((f as f32 + 0.5) / ft as f32) - 0.5;
+
+              // Correction is in 6dB units (same as coarse)
+              let correction_q8 = (correction * 256.0) as i16;
+
+              refined_energy[band] = refined_energy[band].saturating_add(correction_q8);
+          }
+
+          Ok(refined_energy)
+      }
+  }
+  ```
+
+- [ ] **Add fine energy tests (with stub allocation):**
+
+  ```rust
+  #[test]
+  fn test_fine_energy_no_bits() {
+      // All fine_bits = 0, should return coarse energy unchanged
+  }
+
+  #[test]
+  fn test_fine_energy_single_bit() {
+      // fine_bits[0] = 1, correction should be [-0.25, +0.25]
+  }
+
+  #[test]
+  fn test_fine_energy_multiple_bits() {
+      // Test 2-4 bits per band
+  }
+
+  #[test]
+  fn test_fine_energy_correction_formula() {
+      // Verify (f + 0.5) / 2^B - 0.5 for various f and B
+  }
+  ```
+
+##### 4.2.3 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt test_fine_energy` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Correction formula matches RFC exactly: `(f + 0.5) / 2^B_i - 0.5`
+- [ ] Handles zero bit allocation (no refinement)
+- [ ] Uses `ec_dec_uint()` for uniform distribution decoding
+- [ ] Saturating addition prevents overflow
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6079-6087, especially formula on lines 6085-6086
+
+---
+
+#### 4.2.4: Final Fine Energy Allocation
+
+**Reference:** RFC 6716 Section 4.3.2.2 (lines 6089-6099)
+
+**Goal:** Allocate unused bits to final energy refinement
+
+**Critical RFC Details:**
+- **Priority system**: Two priorities (0 and 1) per band
+- **Allocation order**: Priority 0 bands first (band 0→20), then priority 1 bands
+- **Unused bits**: Left unused if both priorities exhausted
+
+##### Implementation Steps
+
+- [ ] **Implement final energy allocation in `src/celt/decoder.rs`:**
+
+  ```rust
+  impl CeltDecoder {
+      /// Decodes final fine energy allocation from unused bits
+      ///
+      /// RFC 6716 Section 4.3.2.2 (lines 6089-6099)
+      ///
+      /// # Arguments
+      ///
+      /// * `range_decoder` - Range decoder state
+      /// * `fine_energy` - Energy after fine quantization
+      /// * `priorities` - Priority (0 or 1) per band (from allocation)
+      /// * `unused_bits` - Remaining bits after all decoding
+      ///
+      /// # Returns
+      ///
+      /// Final energy values with extra refinement
+      ///
+      /// # Errors
+      ///
+      /// * Returns error if range decoding fails
+      pub fn decode_final_energy(
+          &self,
+          range_decoder: &mut RangeDecoder,
+          fine_energy: &[i16; CELT_NUM_BANDS],
+          priorities: &[u8; CELT_NUM_BANDS],
+          mut unused_bits: u32,
+      ) -> Result<[i16; CELT_NUM_BANDS]> {
+          let mut final_energy = *fine_energy;
+          let channels = match self.channels {
+              Channels::Mono => 1,
+              Channels::Stereo => 2,
+          };
+
+          // Priority 0 bands (RFC lines 6094-6096)
+          for band in 0..CELT_NUM_BANDS {
+              if priorities[band] == 0 && unused_bits >= channels {
+                  for _ in 0..channels {
+                      if unused_bits == 0 { break; }
+
+                      // Decode one extra bit per channel
+                      let bit = range_decoder.ec_dec_bit_logp(1)?;
+                      let correction = if bit { 0.5 } else { -0.5 };
+                      final_energy[band] = final_energy[band]
+                          .saturating_add((correction * 256.0) as i16);
+
+                      unused_bits -= 1;
+                  }
+              }
+          }
+
+          // Priority 1 bands (RFC lines 6096-6097)
+          for band in 0..CELT_NUM_BANDS {
+              if priorities[band] == 1 && unused_bits >= channels {
+                  for _ in 0..channels {
+                      if unused_bits == 0 { break; }
+
+                      let bit = range_decoder.ec_dec_bit_logp(1)?;
+                      let correction = if bit { 0.5 } else { -0.5 };
+                      final_energy[band] = final_energy[band]
+                          .saturating_add((correction * 256.0) as i16);
+
+                      unused_bits -= 1;
+                  }
+              }
+          }
+
+          // Any remaining bits left unused (RFC lines 6097-6099)
+
+          Ok(final_energy)
+      }
+  }
+  ```
+
+- [ ] **Add final energy tests:**
+
+  ```rust
+  #[test]
+  fn test_final_energy_priority_0_only() {
+      // Only priority 0 bands, verify allocation order
+  }
+
+  #[test]
+  fn test_final_energy_both_priorities() {
+      // Priority 0 exhausted, moves to priority 1
+  }
+
+  #[test]
+  fn test_final_energy_unused_bits_left() {
+      // Bits remaining after both priorities
+  }
+
+  #[test]
+  fn test_final_energy_mono_vs_stereo() {
+      // Verify per-channel bit allocation
+  }
+  ```
+
+##### 4.2.4 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt test_final_energy` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Priority 0 bands allocated first (band 0→20)
+- [ ] Priority 1 bands allocated after priority 0 exhausted
+- [ ] Per-channel allocation (mono=1 bit, stereo=2 bits per band)
+- [ ] Unused bits correctly left unused
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6089-6099, especially priority order and unused bit handling
+
+---
+
+#### 4.2 Overall Verification Checklist
+
+After completing ALL subsections (4.2.1-4.2.4):
+
+- [ ] Run `cargo fmt` (format entire workspace)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo build -p moosicbox_opus_native --no-default-features --features celt` (compiles without defaults)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk,celt` (both features together)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --no-default-features --features celt` (tests pass without defaults)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Laplace decoder implemented in range decoder module
+- [ ] Coarse energy uses 2-D prediction (time + frequency)
+- [ ] Fine energy uses uniform distribution per bit allocation
+- [ ] Final energy uses priority-based allocation of unused bits
+- [ ] Energy values stored in `prev_energy` state for next frame
+- [ ] All energy in Q8 format (base-2 log domain)
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6024-6099 - all formulas, prediction coefficients, allocation priorities match exactly
+
+**Critical Notes for Phase 4.2:**
+
+1. **Dependency on Phase 4.3**: Fine and final energy require bit allocation from Section 4.3.3
+   - For testing Phase 4.2, use **stub allocations** (e.g., all bands get 2 fine bits, priority 0)
+   - Full integration happens in Phase 4.3
+
+2. **Energy Probability Model Extraction**:
+   - **CRITICAL**: `e_prob_model` table MUST be extracted from RFC reference implementation
+   - Cannot proceed without this table - search for "e_prob_model" in quant_bands.c
+   - Alternative: Extract from test vectors if reference unavailable
+
+3. **Prediction Coefficients**:
+   - **Alpha coefficients** (inter-frame, frame-size dependent) - search reference
+   - **Beta coefficient** intra: `4915/32768` (explicit in RFC line 6063)
+   - **Beta coefficients** inter: frame-size dependent - search reference
+
+4. **State Management**:
+   - `prev_energy` already exists in `CeltState` (added in Phase 4.1.3)
+   - Update `prev_energy` with **final** energy (after all 3 steps)
+   - Reset to zero on decoder reset
+
+**Total Phase 4.2 Deliverables:**
+
+* 1 range decoder extension (`ec_laplace_decode()`)
+* 1 new constants file section (energy probability model + prediction coefficients)
+* 4 new decoder methods (`decode_coarse_energy`, `decode_fine_energy`, `decode_final_energy`, `frame_duration_index`)
+* ~12 unit tests (3 per subsection)
+* Integration with existing `CeltState.prev_energy` field
+
+**Key Design Decisions:**
+
+* Laplace decoder in range module (shared with potential SILK usage)
+* Energy in Q8 format (256 = 1.0 in base-2 log domain)
+* Stub allocations for testing until Phase 4.3 complete
+* Saturating arithmetic prevents overflow
+* Clamping ensures fixed-point/floating-point consistency per RFC
 
 ---
 
