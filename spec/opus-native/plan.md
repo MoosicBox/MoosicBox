@@ -2,7 +2,7 @@
 
 ## Overview
 
-This plan outlines the implementation of a 100% safe, native Rust Opus decoder following RFC 6716. The implementation is divided into 11 phases, each building upon the previous to create a complete, production-ready decoder with zero-cost backend abstraction.
+This plan outlines the implementation of a 100% safe, native Rust Opus decoder following RFC 6716. The implementation is divided into 10 phases, each building upon the previous to create a complete, production-ready decoder with zero-cost backend abstraction.
 
 ## Implementation Progress
 
@@ -53,17 +53,21 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   Stereo unmixing: 2-phase weight interpolation, 3-tap low-pass, 1-sample delay
   Mono delay: Critical 1-sample delay for seamless stereo/mono switching
   Resampling: Optional feature with Table 54 delays (normative), moosicbox_resampler integration (non-normative)
-- [ ] Phase 4: CELT Decoder - Basic Structure
-**STATUS:** 🟡 **IN PROGRESS** - Phase 4.1 complete, Phase 4.2 planned
-  - [x] Section 4.1: CELT Decoder Framework - COMPLETE (lines 7987-8573 in plan.md)
-  - [ ] Section 4.2: CELT Energy Envelope Decoding - PLANNED (lines 8575-9042 in plan.md)
-- [ ] Phase 5: CELT Decoder - MDCT & Finalization
-- [ ] Phase 6: Mode Integration & Hybrid
-- [ ] Phase 7: Packet Loss Concealment
-- [ ] Phase 8: Backend Integration
-- [ ] Phase 9: Integration & Testing
-- [ ] Phase 10: Optimization
-- [ ] Phase 11: Documentation & Release
+- [ ] Phase 4: CELT Decoder Implementation
+**STATUS:** 🟡 **IN PROGRESS** - 1/6 sections complete, 5/6 planned
+  - [x] Section 4.1: CELT Decoder Framework - COMPLETE
+  - [ ] Section 4.2: Energy Envelope Decoding - PLANNED (lines 8578-9159)
+  - [ ] Section 4.3: Bit Allocation - PLANNED (lines 9161-9349)
+  - [ ] Section 4.4: Shape Decoding (PVQ) - PLANNED (lines 9351-9512)
+  - [ ] Section 4.5: Transient Processing - PLANNED (lines 9514-9606)
+  - [ ] Section 4.6: Final Synthesis - PLANNED (lines 9608-9755)
+**Total:** 1136 RFC lines, 24 subsections
+- [ ] Phase 5: Mode Integration & Hybrid
+- [ ] Phase 6: Packet Loss Concealment
+- [ ] Phase 7: Backend Integration
+- [ ] Phase 8: Integration & Testing
+- [ ] Phase 9: Optimization
+- [ ] Phase 10: Documentation & Release
 
 ---
 
@@ -9158,29 +9162,386 @@ After completing ALL subsections (4.2.1-4.2.4):
 
 ---
 
-## Phase 5: CELT Decoder - MDCT & Finalization
+### 4.3: Bit Allocation
 
-**Goal:** Complete CELT decoder with MDCT and post-processing.
+**Reference:** RFC 6716 Section 4.3.3 (lines 6111-6461)
 
-**Scope:** RFC 6716 Section 4.3.4 through 4.3.7
+**Goal:** Compute per-band bit allocation from frame size and signaled parameters
 
-**Feature:** `celt`
+**Scope:** 350 lines of RFC - the most complex CELT section
 
-**Critical Reference for Phase 5.1 (Inverse MDCT):**
-- See `research/mdct-implementation.md` for detailed MDCT implementation strategies
-- Review bit-exact requirements, windowing functions, and implementation approaches
-- Follow recommendations for FFT-based efficient computation
+**Status:** 🔴 NOT STARTED
 
-**Test Vector Usage:**
-- Create CELT test vectors in `test-vectors/celt/` directory
-- Test all sample rates (16/24/48 kHz), frame sizes, and transient cases
-- Reference `test-vectors/README.md` for format specification
+**Critical Dependencies:**
+- **Phase 4.2 complete**: Uses energy for allocation decisions
+- **Drives Phase 4.4**: PVQ needs bit counts per band
 
-[Detailed breakdown of Phase 5 tasks...]
+**Overview:** Bit allocation is THE critical CELT component that drives all subsequent decoding. It MUST be bit-exact with encoder or decoding fails completely. Uses implicit allocation (interpolated table) with explicit adjustments (boost, trim, skip).
+
+**Subsections (6 subsections estimated):**
+
+#### 4.3.1: Allocation Table and Interpolation
+- **Reference:** RFC lines 6223-6261 (Table 57)
+- **Deliverable:** `ALLOCATION_TABLE` constant (21 bands × 11 quality levels)
+- **Method:** `compute_base_allocation()` - interpolate for given rate
+- **Algorithm:** Linear interpolation between quality parameters in 1/64 steps
+- **Output:** Base allocation in 1/8 bit units per band
+
+#### 4.3.2: Band Boost Decoding
+- **Reference:** RFC lines 6172-6360
+- **Deliverable:** `decode_band_boost()` method
+- **Algorithm:** Dynamic allocation with probability adaptation (starts 6 bits, down to 2)
+- **Constants:** Boost cap table, quanta computation
+- **Effect:** Increases allocation for specific bands (inter-band masking adjustment)
+
+#### 4.3.3: Allocation Trim
+- **Reference:** RFC lines 6370-6397 (Table 58)
+- **Deliverable:** `decode_allocation_trim()` method
+- **Constant:** `TRIM_PDF` = {2, 2, 5, 10, 22, 46, 22, 10, 5, 2, 2}/128
+- **Effect:** Bias towards low freq (trim<5) or high freq (trim>5), default=5
+
+#### 4.3.4: Skip Band Decoding
+- **Reference:** RFC lines 6400-6420
+- **Deliverable:** `decode_skip_bands()` method
+- **Algorithm:** Progressive high-frequency band skipping at very low rates
+- **Effect:** Allocate zero bits to highest bands when insufficient capacity
+
+#### 4.3.5: Stereo Intensity and Dual Flags
+- **Reference:** RFC lines 6184-6189
+- **Deliverable:** `decode_intensity()` and `decode_dual_stereo()` methods
+- **Used:** Only in stereo mode for allocation adjustment
+- **Intensity:** Eliminate 'side' channel allocation (intensity stereo)
+- **Dual:** Deactivate joint coding (dual stereo)
+
+#### 4.3.6: Final Allocation Computation
+- **Reference:** RFC lines 6202-6214
+- **Deliverable:** `compute_allocation()` method (main entry point)
+- **Returns:**
+  ```rust
+  pub struct Allocation {
+      pub shape_bits: [u16; CELT_NUM_BANDS],      // 1/8 bit units for PVQ
+      pub fine_energy_bits: [u8; CELT_NUM_BANDS], // For Phase 4.2.3
+      pub fine_priority: [u8; CELT_NUM_BANDS],    // 0 or 1 for Phase 4.2.4
+      pub unused_bits: u32,
+  }
+  ```
+- **Integrates:** Base + boost + trim + skip adjustments
+- **Balance:** Tracks allocation error accumulation across bands
+
+**Verification Checklist (per subsection + overall):**
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6111-6461
+
+**Complexity:** High - most complex CELT section, critical for correctness
+
+**Note:** This completes Phase 4.2 dependencies (provides `fine_energy_bits` and `fine_priority`)
 
 ---
 
-## Phase 6: Mode Integration & Hybrid
+### 4.4: Shape Decoding (PVQ)
+
+**Reference:** RFC 6716 Section 4.3.4 (lines 6462-6709)
+
+**Goal:** Decode normalized spectral shape using Pyramid Vector Quantization
+
+**Scope:** 250 lines of RFC - mathematically intensive
+
+**Status:** 🔴 NOT STARTED
+
+**Critical Dependencies:**
+- **Phase 4.3 complete**: Needs `shape_bits` allocation per band
+- **Drives Phase 4.6**: Shape combined with energy for denormalization
+
+**Overview:** PVQ encodes unit-norm spectral shape as K pulses in N samples. Uses combinatorial math (V(N,K) formula) to compute codebook size, then decodes uniform integer to vector. Includes spreading, folding, and split decoding for large bands.
+
+**Subsections (5 subsections estimated):**
+
+#### 4.4.1: Bits to Pulses Conversion
+- **Reference:** RFC lines 6476-6492
+- **Deliverable:** `bits_to_pulses()` method
+- **Algorithm:** Search precomputed table for K pulses from bit allocation (1/8 bit units)
+- **Balance:** Track allocation error, apply 1/3 to next band (1/2 penultimate, full last)
+- **Constant:** Precomputed pulse allocation table
+
+#### 4.4.2: PVQ Codebook Size Calculation
+- **Reference:** RFC lines 6503-6540
+- **Deliverable:** `compute_pvq_size()` method - V(N,K) formula
+- **Mathematics:** V(N,K) = number of ways to place K pulses in N positions
+- **Formula:** Combinatorial recursion with memoization for efficiency
+- **Implementation:** Match reference cwrs.c for bit-exact results
+
+#### 4.4.3: PVQ Vector Decoding
+- **Reference:** RFC lines 6503-6540
+- **Deliverable:** `decode_pvq_vector()` method
+- **Algorithm:** Decode uniform integer in [0, V(N,K)-1], convert to pulse vector
+- **Reference:** decode_pulses() in cwrs.c (see [PVQ] paper)
+- **Output:** Integer pulse vector (signs + magnitudes)
+- **Normalization:** Scale to unit norm
+
+#### 4.4.4: Spreading and Folding
+- **Reference:** RFC lines 6543-6600
+- **Deliverable:** `apply_spreading()` method
+- **Algorithm:** Smooth spectral shape with 3-value spreading parameter
+- **Constant:** `SPREAD_PDF` = {7, 2, 21, 2}/32 (from Table 56)
+- **Folding:** Handle negative frequencies for MDCT
+
+#### 4.4.5: Split Decoding
+- **Reference:** RFC lines 6601-6620
+- **Deliverable:** `decode_band_split()` method
+- **Used:** For bands with many bins (recursive binary split)
+- **Algorithm:** Allocate pulses between sub-bands, recurse until N small enough
+- **Threshold:** Implementation-dependent (reference uses N>16 heuristic)
+
+**Key Outputs:**
+```rust
+/// Normalized shape vectors for each band (unit norm)
+pub struct ShapeVectors {
+    pub bands: [Vec<f32>; CELT_NUM_BANDS],
+}
+```
+
+**Verification Checklist (per subsection + overall):**
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] V(N,K) formula matches reference implementation exactly
+- [ ] PVQ vector decoding bit-exact with reference
+- [ ] Unit norm verification for all decoded vectors
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6462-6709
+
+**Complexity:** High - complex math, extensive testing required
+
+**Note:** PVQ is the core innovation of CELT - must be bit-exact
+
+---
+
+### 4.5: Transient Processing
+
+**Reference:** RFC 6716 Sections 4.3.1 + 4.3.4.5 (lines 6009-6022, 6621-6709)
+
+**Goal:** Apply time-frequency resolution changes for transient frames
+
+**Scope:** 100 lines of RFC
+
+**Status:** 🔴 NOT STARTED
+
+**Critical Dependencies:**
+- **Phase 4.1 complete**: Uses `decode_transient()` flag from 4.1.4
+- **Phase 4.4 complete**: Applies Hadamard transform to decoded shapes
+
+**Overview:** Transient flag (decoded in 4.1.4) indicates multiple short MDCTs vs single long MDCT. Per-band tf_change flags adjust time/frequency resolution using Hadamard transform. Critical for percussive sounds.
+
+**Subsections (2 subsections estimated):**
+
+#### 4.5.1: Time-Frequency Resolution Changes
+- **Reference:** RFC lines 6621-6709
+- **Deliverable:** `apply_tf_changes()` method
+- **Algorithm:** Hadamard transform for resolution adjustment
+- **Constants:** TF adjustment tables (Tables 59-63) - frame size dependent
+- **Decodes:**
+  - `tf_change` binary flags per band (probability depends on allocation)
+  - `tf_select` flag (1/2 probability, conditional decoding)
+- **Transform:**
+  - Positive TF: Increase frequency resolution (across MDCT vectors)
+  - Negative TF: Increase time resolution (per MDCT vector, "sequency order")
+
+#### 4.5.2: Transient Frame Handling
+- **Reference:** RFC lines 6009-6022
+- **Deliverable:** Integration with shape decoding and MDCT
+- **Algorithm:**
+  - Transient=0: Single long MDCT for entire frame
+  - Transient=1: Multiple short MDCTs (interleaved vectors)
+- **Uses:** Transient flag decoded in Phase 4.1.4
+- **Impact:** Changes MDCT structure and tf_change interpretation
+
+**Key Outputs:**
+```rust
+/// Shape vectors with TF adjustments applied
+pub struct TfAdjustedShapes {
+    pub bands: [Vec<f32>; CELT_NUM_BANDS],
+    pub is_transient: bool,
+    pub num_mdcts: usize,  // 1 for normal, multiple for transient
+}
+```
+
+**Verification Checklist (per subsection + overall):**
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Hadamard transform implementation verified
+- [ ] TF tables (59-63) match RFC exactly
+- [ ] Transient flag correctly determines MDCT structure
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6009-6022, 6621-6709
+
+**Complexity:** Medium - Hadamard transform is simple but must be bit-exact
+
+**Note:** Hadamard transform is simple but must be bit-exact
+
+---
+
+### 4.6: Final Synthesis
+
+**Reference:** RFC 6716 Sections 4.3.5-4.3.7 (lines 6710-6800+)
+
+**Goal:** Anti-collapse, denormalization, inverse MDCT, and overlap-add
+
+**Scope:** 150 lines of RFC
+
+**Status:** 🔴 NOT STARTED
+
+**Critical Dependencies:**
+- **Phase 4.2 complete**: Uses final energy values
+- **Phase 4.4 complete**: Uses decoded shape vectors
+- **Phase 4.5 complete**: Uses TF-adjusted shapes
+- **All previous phases**: Final synthesis step producing audio
+
+**Overview:** Combines energy envelope with unit-norm shapes (denormalization), applies anti-collapse for transients, performs inverse MDCT with windowing, and overlap-adds with previous frame. This is the final step producing PCM audio.
+
+**Subsections (3 subsections estimated):**
+
+#### 4.6.1: Anti-Collapse Processing
+- **Reference:** RFC lines 6710-6729
+- **Deliverable:** `apply_anti_collapse()` method
+- **Algorithm:** Prevent zero energy in transient frames
+- **Decodes:** Anti-collapse bit (1/2 probability) when transient flag set
+- **Uses:** `AntiCollapseState.seed` from Phase 4.1.3
+- **Process:**
+  1. For each short MDCT in transient frame
+  2. For each band with collapsed energy (zero)
+  3. Insert pseudo-random signal with min(prev_energy[2 frames])
+  4. Renormalize to preserve energy
+- **State Update:** Update seed for next frame
+
+#### 4.6.2: Denormalization
+- **Reference:** RFC lines 6731-6736
+- **Deliverable:** `denormalize_bands()` method
+- **Formula:** `output[i] = shape[i] * sqrt(energy)`
+- **Combines:**
+  - Energy from Phase 4.2 (Q8 format, base-2 log domain)
+  - Shape from Phase 4.4 (unit norm)
+- **Conversion:** Energy in log domain → linear for multiplication
+- **Implementation:** denormalise_bands() in reference bands.c
+
+#### 4.6.3: Inverse MDCT and Windowing
+- **Reference:** RFC lines 6738-6800
+- **Deliverable:** `inverse_mdct()` and `apply_window()` methods
+- **Algorithm:**
+  - N frequency samples → 2N time samples
+  - Scale by 1/2 per RFC requirement
+  - Apply Vorbis-derived low-overlap window
+  - Overlap-add with previous frame
+- **Window Formula:** W(n) = sin²(π/2 × sin(π/2 × (n+0.5)/L))
+- **Uses:** `overlap_buffer` from `CeltState` (Phase 4.1.3)
+- **Output:** PCM audio samples (f32)
+- **Reference:** See `research/mdct-implementation.md` for implementation strategies
+
+**Key Outputs:**
+```rust
+/// Final decoded PCM audio for this frame
+pub struct DecodedFrame {
+    pub samples: Vec<f32>,  // 2*N samples after overlap-add
+    pub sample_rate: SampleRate,
+    pub channels: Channels,
+}
+```
+
+**Verification Checklist (per subsection + overall):**
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] Anti-collapse pseudo-random generator matches reference
+- [ ] Denormalization formula correct (sqrt conversion from log domain)
+- [ ] MDCT implementation bit-exact (see research/mdct-implementation.md)
+- [ ] Window function matches Vorbis formula exactly
+- [ ] Overlap-add produces continuous audio across frames
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 6710-6800
+
+**Complexity:** High - MDCT is complex but well-documented
+
+**Note:** After this phase, CELT decoder produces PCM audio!
+
+---
+
+#### 4.6 Overall Verification Checklist
+
+After completing ALL subsections (4.6.1-4.6.3):
+
+- [ ] Run `cargo fmt` (format entire workspace)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo build -p moosicbox_opus_native --no-default-features --features celt` (compiles without defaults)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk,celt` (both features together)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --no-default-features --features celt` (tests pass without defaults)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] End-to-end CELT decode test with reference vectors
+- [ ] Audio output matches reference decoder
+- [ ] All RFC sections 4.3.5-4.3.7 verified
+- [ ] **RFC DEEP CHECK:** Complete Section 4.3 (lines 5796-6800) verification
+
+---
+
+## Phase 4 Complete Summary
+
+**After Phase 4.6, the CELT decoder is COMPLETE:**
+
+### Dependency Chain:
+```
+4.1 Framework (state, symbols, bands)
+  ↓
+4.2 Energy (coarse, fine, final)
+  ↓
+4.3 Bit Allocation (drives everything)
+  ↓
+4.4 Shape/PVQ (spectral shape)
+  ↓
+4.5 Transient Processing (TF changes)
+  ↓
+4.6 Final Synthesis (anti-collapse + IMDCT)
+  ↓
+PCM Audio Output!
+```
+
+### Total Phase 4 Scope:
+
+| Phase | RFC Lines | Subsections | Status | Complexity |
+|-------|-----------|-------------|--------|------------|
+| 4.1   | 213       | 4           | ✅ COMPLETE | - |
+| 4.2   | 76        | 4           | 📝 PLANNED | Medium |
+| 4.3   | 350       | 6           | 🔴 NOT STARTED | High |
+| 4.4   | 247       | 5           | 🔴 NOT STARTED | High |
+| 4.5   | 100       | 2           | 🔴 NOT STARTED | Medium |
+| 4.6   | 150       | 3           | 🔴 NOT STARTED | High |
+| **Total** | **1136** | **24** | **1/6 complete** | - |
+
+### Critical Files Created (estimated):
+- `packages/opus_native/src/celt/decoder.rs` - 2000+ lines
+- `packages/opus_native/src/celt/constants.rs` - 800+ lines
+- `packages/opus_native/src/celt/allocation.rs` - 600+ lines (new)
+- `packages/opus_native/src/celt/pvq.rs` - 800+ lines (new)
+- `packages/opus_native/src/celt/mdct.rs` - 400+ lines (new)
+- `packages/opus_native/src/range/decoder.rs` - +100 lines (Laplace)
+
+### Test Coverage Goal:
+- **Unit tests**: 80+ tests (covering all subsections)
+- **Integration tests**: 20+ tests (end-to-end decoding)
+- **Test vectors**: RFC reference test vectors
+- **Zero clippy warnings**: Enforced at all stages
+
+---
+
+## Phase 5: Mode Integration & Hybrid
 
 **Goal:** Integrate SILK and CELT decoders with mode switching.
 
@@ -9193,27 +9554,27 @@ After completing ALL subsections (4.2.1-4.2.4):
 - Create mode switching test vectors in `test-vectors/integration/transitions/` directory
 - Test all mode combinations and transition scenarios
 
-[Detailed breakdown of Phase 6 tasks...]
+[Detailed breakdown of Phase 5 tasks...]
 
 ---
 
-## Phase 7: Packet Loss Concealment
+## Phase 6: Packet Loss Concealment
 
 **Goal:** Implement PLC algorithms for robustness.
 
 **Scope:** RFC 6716 Section 4.4
 
-[Detailed breakdown of Phase 7 tasks...]
+[Detailed breakdown of Phase 6 tasks...]
 
 ---
 
-## Phase 8: Backend Integration
+## Phase 7: Backend Integration
 
 **Goal:** Integrate native decoder into moosicbox_opus with zero-cost backend selection.
 
 **Scope:** Feature flags, zero-cost re-exports, backend wrappers
 
-### 8.1: API Compatibility Verification
+### 7.1: API Compatibility Verification
 
 - [ ] Audit audiopus API surface:
   * Review `audiopus::Channels` enum
@@ -9254,12 +9615,12 @@ After completing ALL subsections (4.2.1-4.2.4):
   }
   ```
 
-#### 8.1 Verification Checklist
+#### 7.1 Verification Checklist
 - [ ] All type signatures match audiopus exactly
 - [ ] API compatibility tests compile
 - [ ] Zero clippy warnings
 
-### 8.2: Zero-Cost Re-export Setup
+### 7.2: Zero-Cost Re-export Setup
 
 - [ ] Update moosicbox_opus/src/lib.rs with direct re-exports:
   ```rust
@@ -9281,14 +9642,14 @@ After completing ALL subsections (4.2.1-4.2.4):
 - [ ] Remove wrapper structs (if any exist)
 - [ ] Verify no runtime overhead with benchmarks
 
-#### 8.2 Verification Checklist
+#### 7.2 Verification Checklist
 - [ ] Direct re-exports work
 - [ ] No trait dispatch overhead
 - [ ] No wrapper struct overhead
 - [ ] Backend selection works at compile time
 - [ ] Zero clippy warnings
 
-### 8.3: Stub Backend Implementation
+### 7.3: Stub Backend Implementation
 
 - [ ] Create moosicbox_opus/src/stub_backend.rs:
   ```rust
@@ -9318,13 +9679,13 @@ After completing ALL subsections (4.2.1-4.2.4):
 - [ ] Ensure early panic in constructor
 - [ ] Verify minimal binary size impact
 
-#### 8.3 Verification Checklist
+#### 7.3 Verification Checklist
 - [ ] Stub backend compiles
 - [ ] Panic occurs at runtime if used
 - [ ] Build warnings present
 - [ ] Zero clippy warnings
 
-### 8.4: Backend Selection Tests
+### 7.4: Backend Selection Tests
 
 - [ ] Test default backend (native)
 - [ ] Test explicit native backend
@@ -9332,19 +9693,19 @@ After completing ALL subsections (4.2.1-4.2.4):
 - [ ] Test stub backend (no features)
 - [ ] Test feature flag warnings in build.rs
 
-#### 8.4 Verification Checklist
+#### 7.4 Verification Checklist
 - [ ] All backend combinations tested
 - [ ] Warnings appear correctly
 - [ ] Zero clippy warnings
 
-### 8.5: Symphonia Integration
+### 7.5: Symphonia Integration
 
 - [ ] Update moosicbox_opus Symphonia decoder to use new backend
 - [ ] Ensure decoder works with both backends
 - [ ] Test with real audio files
 - [ ] Verify output correctness
 
-#### 8.5 Verification Checklist
+#### 7.5 Verification Checklist
 - [ ] Symphonia integration works
 - [ ] Backend selection transparent to Symphonia
 - [ ] Audio playback works
@@ -9352,7 +9713,7 @@ After completing ALL subsections (4.2.1-4.2.4):
 
 ---
 
-## Phase 9: Integration & Testing
+## Phase 8: Integration & Testing
 
 **Goal:** Comprehensive testing and RFC conformance validation.
 
@@ -9374,27 +9735,27 @@ After completing ALL subsections (4.2.1-4.2.4):
 - `test-vectors/integration/` - End-to-end tests (speech, music, hybrid, transitions)
 - `test-vectors/edge-cases/` - Error conditions, malformed packets, boundary cases
 
-[Detailed breakdown of Phase 9 tasks...]
+[Detailed breakdown of Phase 8 tasks...]
 
 ---
 
-## Phase 10: Optimization
+## Phase 9: Optimization
 
 **Goal:** Optimize performance while maintaining RFC compliance.
 
 **Scope:** SIMD, memory optimization, algorithmic improvements
 
-[Detailed breakdown of Phase 10 tasks...]
+[Detailed breakdown of Phase 9 tasks...]
 
 ---
 
-## Phase 11: Documentation & Release
+## Phase 10: Documentation & Release
 
 **Goal:** Complete documentation and prepare for release.
 
 **Scope:** API docs, usage examples, migration guide
 
-[Detailed breakdown of Phase 11 tasks...]
+[Detailed breakdown of Phase 10 tasks...]
 
 ---
 
