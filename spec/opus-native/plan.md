@@ -39,7 +39,12 @@ This plan outlines the implementation of a 100% safe, native Rust Opus decoder f
   Implemented 4 methods: `decode_primary_pitch_lag()`, `decode_pitch_contour()`, `decode_ltp_filter_coefficients()`, `decode_ltp_scaling()`
   **CRITICAL BUG DISCOVERED AND FIXED**: All PDF constants must be converted to ICDF format for `ec_dec_icdf()` - this affects ALL existing constants in Phase 2/3
   - [x] Section 3.7: Excitation Decoding (7 subsections) - COMPLETE
-  - [ ] Section 3.8: Synthesis Filters (5 subsections) - NOT STARTED
+  - [ ] Section 3.8: Synthesis Filters (5 subsections) - IN PROGRESS
+    - [x] Section 3.8.1: Subframe Parameter Selection - COMPLETE
+    - [ ] Section 3.8.2: LTP Synthesis Filter - NOT STARTED
+    - [ ] Section 3.8.3: LPC Synthesis Filter - NOT STARTED
+    - [ ] Section 3.8.4: Stereo Unmixing - NOT STARTED
+    - [ ] Section 3.8.5: Resampling - NOT STARTED
 - [ ] Phase 4: CELT Decoder - Basic Structure
 - [ ] Phase 5: CELT Decoder - MDCT & Finalization
 - [ ] Phase 6: Mode Integration & Hybrid
@@ -5652,18 +5657,35 @@ mod tests_subframe_params {
 
 ### 3.8.1 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk test_subframe_params` (all 12 tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] LPC coefficient selection matches RFC lines 5504-5511 (interpolated for subframes 0-1 with w_Q2 < 4)
-- [ ] LTP scale adjustment matches RFC lines 5560-5564 (16384 for subframes 2-3 with w_Q2 < 4)
-- [ ] Subframe sizing correct: 40 (NB), 60 (MB), 80 (WB) per RFC line 5513
-- [ ] Subframe counts correct: 2 (10ms), 4 (20ms) per RFC line 5515
-- [ ] Subframe start index calculation correct: j = s * n per RFC line 5516
-- [ ] All 12 unit tests pass
-- [ ] **RFC DEEP CHECK:** Read RFC lines 5499-5517 and verify EVERY parameter selection rule implemented exactly
+- [x] Run `cargo fmt` (format code)
+Completed successfully - code formatted
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Compiled successfully with zero errors
+- [x] Run `cargo test -p moosicbox_opus_native --features silk test_subframe_params` (all 12 tests pass)
+16 tests implemented and passing (10 subframe_params + 3 samples_per_subframe + 2 num_subframes + 1 subframe_start_index)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Zero clippy warnings - clean pass (all methods converted to associated functions, unused self warnings resolved)
+- [x] Run `cargo machete` (no unused dependencies)
+No unused dependencies found
+- [x] LPC coefficient selection matches RFC lines 5504-5511 (interpolated for subframes 0-1 with w_Q2 < 4)
+Implemented in select_subframe_params() at decoder.rs:1973-1978 - uses n1_Q15 for subframes 0-1 of 20ms frames with w_Q2 < 4, n2_Q15 otherwise
+- [x] LTP scale adjustment matches RFC lines 5560-5564 (16384 for subframes 2-3 with w_Q2 < 4)
+Implemented in select_subframe_params() at decoder.rs:1980-1987 - returns 16384 for subframes 2-3 of 20ms frames with w_Q2 < 4
+- [x] Subframe sizing correct: 40 (NB), 60 (MB), 80 (WB) per RFC line 5513
+Implemented in samples_per_subframe() at decoder.rs:1998-2005 - returns correct values for each bandwidth
+- [x] Subframe counts correct: 2 (10ms), 4 (20ms) per RFC line 5515
+Implemented in num_subframes() at decoder.rs:2007-2012 - returns 2 for 10ms, 4 for 20ms
+- [x] Subframe start index calculation correct: j = s * n per RFC line 5516
+Implemented in subframe_start_index() at decoder.rs:2015-2020 - calculates subframe_index * samples_per_subframe
+- [x] All 12 unit tests pass
+16 comprehensive tests pass covering all requirements
+- [x] **RFC DEEP CHECK:** Read RFC lines 5499-5517 and verify EVERY parameter selection rule implemented exactly
+All requirements verified:
+  * a_Q12[k] LPC coefficients: SubframeParams.lpc_coeffs_q12 populated via limit_lpc_coefficients()
+  * LPC selection logic: Correct conditional at lines 1973-1978
+  * n (samples per subframe): Correct values in samples_per_subframe()
+  * s (subframe index): Correctly handled via parameter and num_subframes()
+  * j (first sample index): Correctly calculated in subframe_start_index()
 
 ---
 

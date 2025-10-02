@@ -158,6 +158,17 @@ pub struct HeaderBits {
     pub side_lbrr_flag: Option<bool>,
 }
 
+// TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct SubframeParams {
+    pub lpc_coeffs_q12: Vec<i16>,
+    pub gain_q16: i32,
+    pub pitch_lag: i16,
+    pub ltp_filter_q7: [i8; 5],
+    pub ltp_scale_q14: i16,
+}
+
 pub struct SilkDecoder {
     #[allow(dead_code)]
     sample_rate: SampleRate,
@@ -1946,6 +1957,73 @@ impl SilkDecoder {
         }
 
         e_q23
+    }
+
+    // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
+    #[allow(dead_code)]
+    #[allow(clippy::too_many_arguments)]
+    fn select_subframe_params(
+        subframe_index: usize,
+        frame_size_ms: u8,
+        w_q2: u8,
+        lpc_n1_q15: Option<&[i16]>,
+        lpc_n2_q15: &[i16],
+        gains_q16: &[i32],
+        pitch_lags: &[i16],
+        ltp_filters_q7: &[[i8; 5]],
+        ltp_scale_q14: i16,
+        bandwidth: Bandwidth,
+    ) -> Result<SubframeParams> {
+        let use_interpolated =
+            frame_size_ms == 20 && (subframe_index == 0 || subframe_index == 1) && w_q2 < 4;
+
+        let lpc_coeffs_q12 = if use_interpolated && lpc_n1_q15.is_some() {
+            Self::limit_lpc_coefficients(lpc_n1_q15.unwrap(), bandwidth)?
+        } else {
+            Self::limit_lpc_coefficients(lpc_n2_q15, bandwidth)?
+        };
+
+        let adjusted_ltp_scale_q14 =
+            if frame_size_ms == 20 && (subframe_index == 2 || subframe_index == 3) && w_q2 < 4 {
+                16384
+            } else {
+                ltp_scale_q14
+            };
+
+        Ok(SubframeParams {
+            lpc_coeffs_q12,
+            gain_q16: gains_q16[subframe_index],
+            pitch_lag: pitch_lags[subframe_index],
+            ltp_filter_q7: ltp_filters_q7[subframe_index],
+            ltp_scale_q14: adjusted_ltp_scale_q14,
+        })
+    }
+
+    // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
+    #[allow(dead_code)]
+    const fn samples_per_subframe(bandwidth: Bandwidth) -> usize {
+        match bandwidth {
+            Bandwidth::Narrowband => 40,
+            Bandwidth::Mediumband => 60,
+            Bandwidth::Wideband => 80,
+            _ => unreachable!(),
+        }
+    }
+
+    // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
+    #[allow(dead_code)]
+    const fn num_subframes(frame_size_ms: u8) -> usize {
+        match frame_size_ms {
+            10 => 2,
+            20 => 4,
+            _ => unreachable!(),
+        }
+    }
+
+    // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
+    #[allow(dead_code)]
+    const fn subframe_start_index(subframe_index: usize, samples_per_subframe: usize) -> usize {
+        subframe_index * samples_per_subframe
     }
 }
 
@@ -3753,5 +3831,271 @@ mod tests {
             decoder.reconstruct_excitation(&e_raw2, FrameType::Voiced, QuantizationOffsetType::Low);
 
         assert_ne!(decoder.lcg_seed, seed_after_first);
+    }
+
+    #[test]
+    fn test_subframe_params_interpolated_lpc() {
+        let n1_q15 = vec![100_i16; 16];
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![65536_i32; 4];
+        let pitch_lags = vec![100_i16; 4];
+        let ltp_filters = vec![[10_i8; 5]; 4];
+        let params = SilkDecoder::select_subframe_params(
+            0,
+            20,
+            3,
+            Some(&n1_q15),
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+        assert_eq!(params.ltp_scale_q14, 14000);
+    }
+
+    #[test]
+    fn test_subframe_params_interpolated_lpc_subframe1() {
+        let n1_q15 = vec![100_i16; 16];
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![65536_i32; 4];
+        let pitch_lags = vec![100_i16; 4];
+        let ltp_filters = vec![[10_i8; 5]; 4];
+        let params = SilkDecoder::select_subframe_params(
+            1,
+            20,
+            3,
+            Some(&n1_q15),
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+    }
+
+    #[test]
+    fn test_subframe_params_normal_lpc_w_q2_ge_4() {
+        let n1_q15 = vec![100_i16; 16];
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![65536_i32; 4];
+        let pitch_lags = vec![100_i16; 4];
+        let ltp_filters = vec![[10_i8; 5]; 4];
+        let params = SilkDecoder::select_subframe_params(
+            0,
+            20,
+            4,
+            Some(&n1_q15),
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+    }
+
+    #[test]
+    fn test_subframe_params_normal_lpc_subframe2() {
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![65536_i32; 4];
+        let pitch_lags = vec![100_i16; 4];
+        let ltp_filters = vec![[10_i8; 5]; 4];
+        let params = SilkDecoder::select_subframe_params(
+            2,
+            20,
+            3,
+            None,
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+    }
+
+    #[test]
+    fn test_subframe_params_ltp_scale_adjustment_subframe2() {
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![65536_i32; 4];
+        let pitch_lags = vec![100_i16; 4];
+        let ltp_filters = vec![[10_i8; 5]; 4];
+        let params = SilkDecoder::select_subframe_params(
+            2,
+            20,
+            3,
+            None,
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.ltp_scale_q14, 16384);
+    }
+
+    #[test]
+    fn test_subframe_params_ltp_scale_adjustment_subframe3() {
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![65536_i32; 4];
+        let pitch_lags = vec![100_i16; 4];
+        let ltp_filters = vec![[10_i8; 5]; 4];
+        let params = SilkDecoder::select_subframe_params(
+            3,
+            20,
+            3,
+            None,
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.ltp_scale_q14, 16384);
+    }
+
+    #[test]
+    fn test_subframe_params_ltp_scale_normal_w_q2_ge_4() {
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![65536_i32; 4];
+        let pitch_lags = vec![100_i16; 4];
+        let ltp_filters = vec![[10_i8; 5]; 4];
+        let params = SilkDecoder::select_subframe_params(
+            2,
+            20,
+            4,
+            None,
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.ltp_scale_q14, 14000);
+    }
+
+    #[test]
+    fn test_subframe_params_10ms_frame() {
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![65536_i32; 2];
+        let pitch_lags = vec![100_i16; 2];
+        let ltp_filters = vec![[10_i8; 5]; 2];
+        let params = SilkDecoder::select_subframe_params(
+            0,
+            10,
+            3,
+            None,
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.ltp_scale_q14, 14000);
+    }
+
+    #[test]
+    fn test_subframe_params_nb_bandwidth() {
+        let n2_q15 = vec![200_i16; 10];
+        let gains = vec![65536_i32; 4];
+        let pitch_lags = vec![100_i16; 4];
+        let ltp_filters = vec![[10_i8; 5]; 4];
+        let params = SilkDecoder::select_subframe_params(
+            0,
+            20,
+            3,
+            None,
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Narrowband,
+        )
+        .unwrap();
+        assert_eq!(params.lpc_coeffs_q12.len(), 10);
+    }
+
+    #[test]
+    fn test_subframe_params_field_values() {
+        let n2_q15 = vec![200_i16; 16];
+        let gains = vec![10000_i32, 20000, 30000, 40000];
+        let pitch_lags = vec![80_i16, 90, 100, 110];
+        let ltp_filters = vec![
+            [1_i8, 2, 3, 4, 5],
+            [5, 10, 15, 10, 5],
+            [2, 4, 6, 4, 2],
+            [1, 1, 1, 1, 1],
+        ];
+        let params = SilkDecoder::select_subframe_params(
+            1,
+            20,
+            4,
+            None,
+            &n2_q15,
+            &gains,
+            &pitch_lags,
+            &ltp_filters,
+            14000,
+            Bandwidth::Wideband,
+        )
+        .unwrap();
+        assert_eq!(params.gain_q16, 20000);
+        assert_eq!(params.pitch_lag, 90);
+        assert_eq!(params.ltp_filter_q7, [5, 10, 15, 10, 5]);
+        assert_eq!(params.ltp_scale_q14, 14000);
+        assert_eq!(params.lpc_coeffs_q12.len(), 16);
+    }
+
+    #[test]
+    fn test_samples_per_subframe_nb() {
+        assert_eq!(SilkDecoder::samples_per_subframe(Bandwidth::Narrowband), 40);
+    }
+
+    #[test]
+    fn test_samples_per_subframe_mb() {
+        assert_eq!(SilkDecoder::samples_per_subframe(Bandwidth::Mediumband), 60);
+    }
+
+    #[test]
+    fn test_samples_per_subframe_wb() {
+        assert_eq!(SilkDecoder::samples_per_subframe(Bandwidth::Wideband), 80);
+    }
+
+    #[test]
+    fn test_num_subframes_10ms() {
+        assert_eq!(SilkDecoder::num_subframes(10), 2);
+    }
+
+    #[test]
+    fn test_num_subframes_20ms() {
+        assert_eq!(SilkDecoder::num_subframes(20), 4);
+    }
+
+    #[test]
+    fn test_subframe_start_index() {
+        assert_eq!(SilkDecoder::subframe_start_index(0, 80), 0);
+        assert_eq!(SilkDecoder::subframe_start_index(1, 80), 80);
+        assert_eq!(SilkDecoder::subframe_start_index(2, 80), 160);
+        assert_eq!(SilkDecoder::subframe_start_index(3, 80), 240);
     }
 }
