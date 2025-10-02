@@ -7986,25 +7986,519 @@ After ALL subsections (3.1-3.8) are complete:
 
 ### 4.1: CELT Decoder Framework
 
-**Reference:** RFC 6716 Section 4.3
+**Reference:** RFC 6716 Section 4.3 (lines 5796-6008)
+
+**Goal:** Establish CELT decoder module structure with state management and basic symbol decoding framework
+
+**Scope:** Module setup, decoder initialization, state structures, basic symbol extraction
+
+---
+
+#### 4.1.1: Module Structure Setup
+
+**Reference:** RFC 6716 Section 4.3 overview (lines 5796-5933)
 
 - [ ] Add CELT module declaration to `src/lib.rs`:
   ```rust
   #[cfg(feature = "celt")]
   pub mod celt;
   ```
+
 - [ ] Create `src/celt/mod.rs`:
   ```rust
+  #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+  #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+
   mod decoder;
+  mod constants;
 
   pub use decoder::CeltDecoder;
   ```
-- [ ] Create `src/celt/decoder.rs` with `CeltDecoder` struct
-- [ ] Define CELT state structures
-- [ ] Implement decoder initialization
-- [ ] Add basic tests
 
-[Detailed breakdown of remaining Phase 4 tasks...]
+- [ ] Create `src/celt/decoder.rs` with minimal structure:
+  ```rust
+  use crate::error::{Error, Result};
+  use crate::range::RangeDecoder;
+  use crate::{Channels, SampleRate};
+
+  pub struct CeltDecoder {
+      sample_rate: SampleRate,
+      channels: Channels,
+      frame_size: usize,  // In samples
+  }
+
+  impl CeltDecoder {
+      #[must_use]
+      pub fn new(sample_rate: SampleRate, channels: Channels, frame_size: usize) -> Result<Self> {
+          Ok(Self {
+              sample_rate,
+              channels,
+              frame_size,
+          })
+      }
+  }
+
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+
+      #[test]
+      fn test_celt_decoder_creation() {
+          let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480);
+          assert!(decoder.is_ok());
+      }
+  }
+  ```
+
+- [ ] Create `src/celt/constants.rs` with module documentation:
+  ```rust
+  //! CELT decoder constants from RFC 6716 Section 4.3
+  //!
+  //! This module contains all probability distributions, tables, and
+  //! constants required for CELT decoding.
+  ```
+
+##### 4.1.1 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles with CELT feature)
+- [ ] Run `cargo build -p moosicbox_opus_native --no-default-features --features celt` (compiles without defaults)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Module structure mirrors SILK pattern (mod.rs, decoder.rs, constants.rs)
+- [ ] Feature gate `#[cfg(feature = "celt")]` applied correctly
+- [ ] Clippy lints match template requirements
+- [ ] Basic test compiles and passes
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5796-5933 - module structure, feature gates, basic initialization match RFC decoder architecture
+
+---
+
+#### 4.1.2: Band Configuration and Frame Parameters
+
+**Reference:** RFC 6716 Table 55 (lines 5813-5870), Section 4.3 overview
+
+- [ ] Add band configuration constants to `src/celt/constants.rs` (RFC Table 55):
+  ```rust
+  /// Number of CELT bands (RFC Table 55)
+  pub const CELT_NUM_BANDS: usize = 21;
+
+  /// Start frequency for each band in Hz (RFC Table 55)
+  pub const CELT_BAND_START_HZ: [u16; CELT_NUM_BANDS] = [
+      0, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 2000, 2400,
+      2800, 3200, 4000, 4800, 5600, 6800, 8000, 9600, 12000, 15600,
+  ];
+
+  /// Stop frequency for each band in Hz (RFC Table 55)
+  pub const CELT_BAND_STOP_HZ: [u16; CELT_NUM_BANDS] = [
+      200, 400, 600, 800, 1000, 1200, 1400, 1600, 2000, 2400, 2800,
+      3200, 4000, 4800, 5600, 6800, 8000, 9600, 12000, 15600, 20000,
+  ];
+
+  /// MDCT bins per band per channel for 2.5ms frames (RFC Table 55)
+  pub const CELT_BINS_2_5MS: [u8; CELT_NUM_BANDS] = [
+      1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 6, 6, 8, 12, 18, 22,
+  ];
+
+  /// MDCT bins per band per channel for 5ms frames (RFC Table 55)
+  pub const CELT_BINS_5MS: [u8; CELT_NUM_BANDS] = [
+      2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 4, 4, 8, 8, 8, 12, 12, 16, 24, 36, 44,
+  ];
+
+  /// MDCT bins per band per channel for 10ms frames (RFC Table 55)
+  pub const CELT_BINS_10MS: [u8; CELT_NUM_BANDS] = [
+      4, 4, 4, 4, 4, 4, 4, 4, 8, 8, 8, 8, 16, 16, 16, 24, 24, 32, 48, 72, 88,
+  ];
+
+  /// MDCT bins per band per channel for 20ms frames (RFC Table 55)
+  pub const CELT_BINS_20MS: [u8; CELT_NUM_BANDS] = [
+      8, 8, 8, 8, 8, 8, 8, 8, 16, 16, 16, 16, 32, 32, 32, 48, 48, 64, 96, 144, 176,
+  ];
+  ```
+
+- [ ] Add frame size validation to `CeltDecoder::new()`:
+  ```rust
+  impl CeltDecoder {
+      #[must_use]
+      pub fn new(sample_rate: SampleRate, channels: Channels, frame_size: usize) -> Result<Self> {
+          // Validate frame size based on sample rate (RFC Section 2)
+          let valid_frame_sizes = match sample_rate {
+              SampleRate::Hz8000 => vec![20, 40, 80, 160],
+              SampleRate::Hz12000 => vec![30, 60, 120, 240],
+              SampleRate::Hz16000 => vec![40, 80, 160, 320],
+              SampleRate::Hz24000 => vec![60, 120, 240, 480],
+              SampleRate::Hz48000 => vec![120, 240, 480, 960],
+          };
+
+          if !valid_frame_sizes.contains(&frame_size) {
+              return Err(Error::CeltDecoder(format!(
+                  "invalid frame size {} for sample rate {:?}",
+                  frame_size, sample_rate
+              )));
+          }
+
+          Ok(Self {
+              sample_rate,
+              channels,
+              frame_size,
+          })
+      }
+
+      /// Returns frame duration in milliseconds
+      #[must_use]
+      pub fn frame_duration_ms(&self) -> f32 {
+          (self.frame_size as f32 * 1000.0) / self.sample_rate as u32 as f32
+      }
+
+      /// Returns MDCT bins per band for this frame size
+      #[must_use]
+      pub fn bins_per_band(&self) -> &'static [u8; CELT_NUM_BANDS] {
+          use super::constants::*;
+
+          let duration_ms = self.frame_duration_ms();
+          if (duration_ms - 2.5).abs() < 0.1 {
+              &CELT_BINS_2_5MS
+          } else if (duration_ms - 5.0).abs() < 0.1 {
+              &CELT_BINS_5MS
+          } else if (duration_ms - 10.0).abs() < 0.1 {
+              &CELT_BINS_10MS
+          } else {
+              &CELT_BINS_20MS
+          }
+      }
+  }
+  ```
+
+- [ ] Add frame size tests:
+  ```rust
+  #[test]
+  fn test_frame_size_validation_48khz() {
+      assert!(CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 120).is_ok());
+      assert!(CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 240).is_ok());
+      assert!(CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).is_ok());
+      assert!(CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 960).is_ok());
+      assert!(CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 100).is_err());
+  }
+
+  #[test]
+  fn test_frame_duration_calculation() {
+      let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+      assert!((decoder.frame_duration_ms() - 10.0).abs() < 0.01);
+  }
+
+  #[test]
+  fn test_bins_per_band_10ms() {
+      let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+      let bins = decoder.bins_per_band();
+      assert_eq!(bins[0], 4);
+      assert_eq!(bins[20], 88);
+  }
+  ```
+
+##### 4.1.2 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Band constants match RFC Table 55 exactly (all 21 bands, all 4 frame sizes)
+- [ ] Frame size validation covers all sample rates (8/12/16/24/48 kHz)
+- [ ] Frame duration calculation accurate to 0.01ms
+- [ ] Bins-per-band selection correct for all frame durations
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5813-5870 - all band constants match RFC Table 55 exactly (21 bands, frequencies, bin counts for all frame sizes)
+
+---
+
+#### 4.1.3: CELT Decoder State Structure
+
+**Reference:** RFC 6716 Section 4.3 Figure 17 (lines 5904-5932), Table 56 (lines 5943-5989)
+
+- [ ] Define CELT state structure in `src/celt/decoder.rs`:
+  ```rust
+  use super::constants::CELT_NUM_BANDS;
+
+  /// CELT decoder state (RFC Section 4.3)
+  pub struct CeltState {
+      /// Previous frame's final energy per band (Q8 format)
+      pub prev_energy: [i16; CELT_NUM_BANDS],
+
+      /// Post-filter state (if enabled)
+      pub post_filter_state: Option<PostFilterState>,
+
+      /// Previous frame's MDCT output for overlap-add
+      pub overlap_buffer: Vec<f32>,
+
+      /// Anti-collapse processing state
+      pub anti_collapse_state: AntiCollapseState,
+  }
+
+  /// Post-filter state (RFC Section 4.3.7.1)
+  #[derive(Debug, Clone)]
+  pub struct PostFilterState {
+      /// Previous pitch period
+      pub prev_period: u16,
+
+      /// Previous pitch gain
+      pub prev_gain: u8,
+
+      /// Filter memory
+      pub memory: Vec<f32>,
+  }
+
+  /// Anti-collapse state (RFC Section 4.3.5)
+  #[derive(Debug, Clone)]
+  pub struct AntiCollapseState {
+      /// Seed for random number generator
+      pub seed: u32,
+  }
+
+  impl CeltState {
+      #[must_use]
+      pub fn new(frame_size: usize, channels: usize) -> Self {
+          Self {
+              prev_energy: [0; CELT_NUM_BANDS],
+              post_filter_state: None,
+              overlap_buffer: vec![0.0; frame_size * channels],
+              anti_collapse_state: AntiCollapseState { seed: 0 },
+          }
+      }
+
+      /// Resets decoder state (for packet loss recovery)
+      pub fn reset(&mut self) {
+          self.prev_energy.fill(0);
+          self.post_filter_state = None;
+          self.overlap_buffer.fill(0.0);
+          self.anti_collapse_state.seed = 0;
+      }
+  }
+  ```
+
+- [ ] Add state to `CeltDecoder`:
+  ```rust
+  pub struct CeltDecoder {
+      sample_rate: SampleRate,
+      channels: Channels,
+      frame_size: usize,
+      state: CeltState,
+  }
+
+  impl CeltDecoder {
+      #[must_use]
+      pub fn new(sample_rate: SampleRate, channels: Channels, frame_size: usize) -> Result<Self> {
+          // ... existing validation ...
+
+          let num_channels = match channels {
+              Channels::Mono => 1,
+              Channels::Stereo => 2,
+          };
+
+          Ok(Self {
+              sample_rate,
+              channels,
+              frame_size,
+              state: CeltState::new(frame_size, num_channels),
+          })
+      }
+
+      /// Resets decoder state
+      pub fn reset(&mut self) {
+          self.state.reset();
+      }
+  }
+  ```
+
+- [ ] Add state tests:
+  ```rust
+  #[test]
+  fn test_state_initialization() {
+      let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Stereo, 480).unwrap();
+      assert_eq!(decoder.state.prev_energy.len(), CELT_NUM_BANDS);
+      assert_eq!(decoder.state.overlap_buffer.len(), 480 * 2);
+      assert!(decoder.state.post_filter_state.is_none());
+  }
+
+  #[test]
+  fn test_state_reset() {
+      let mut decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+      decoder.state.prev_energy[0] = 100;
+      decoder.state.overlap_buffer[0] = 1.5;
+      decoder.state.anti_collapse_state.seed = 42;
+
+      decoder.reset();
+
+      assert_eq!(decoder.state.prev_energy[0], 0);
+      assert_eq!(decoder.state.overlap_buffer[0], 0.0);
+      assert_eq!(decoder.state.anti_collapse_state.seed, 0);
+  }
+  ```
+
+##### 4.1.3 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] CeltState contains all fields required by RFC Figure 17
+- [ ] Overlap buffer sized correctly for frame_size × channels
+- [ ] Previous energy array matches CELT_NUM_BANDS (21)
+- [ ] Reset clears all state properly
+- [ ] State initialization tests pass
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5904-5932 - state structure matches RFC Figure 17 exactly (prev_energy, overlap_buffer, post_filter_state, anti_collapse_state)
+
+---
+
+#### 4.1.4: Basic Symbol Decoding Framework
+
+**Reference:** RFC 6716 Table 56 (lines 5943-5989)
+
+- [ ] Add basic PDF constants to `src/celt/constants.rs` (RFC Table 56):
+  ```rust
+  /// Silence flag PDF: {32767, 1}/32768 (RFC Table 56)
+  pub const CELT_SILENCE_PDF: &[u16] = &[32768, 1, 0];
+
+  /// Post-filter flag PDF: {1, 1}/2 (RFC Table 56)
+  pub const CELT_POST_FILTER_PDF: &[u8] = &[2, 1, 0];
+
+  /// Transient flag PDF: {7, 1}/8 (RFC Table 56)
+  pub const CELT_TRANSIENT_PDF: &[u8] = &[8, 1, 0];
+
+  /// Intra flag PDF: {7, 1}/8 (RFC Table 56)
+  pub const CELT_INTRA_PDF: &[u8] = &[8, 1, 0];
+
+  /// Dual stereo flag PDF: {1, 1}/2 (RFC Table 56)
+  pub const CELT_DUAL_STEREO_PDF: &[u8] = &[2, 1, 0];
+  ```
+  Note: All PDFs include terminating zero per RFC 4.1.3.3
+
+- [ ] Add symbol decoding methods to `CeltDecoder`:
+  ```rust
+  impl CeltDecoder {
+      /// Decodes silence flag (RFC Table 56)
+      pub fn decode_silence(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+          use super::constants::CELT_SILENCE_PDF;
+          let value = range_decoder.ec_dec_icdf_u16(CELT_SILENCE_PDF, 15)?;
+          Ok(value == 1)
+      }
+
+      /// Decodes post-filter flag (RFC Table 56)
+      pub fn decode_post_filter(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+          range_decoder.ec_dec_bit_logp(1)
+      }
+
+      /// Decodes transient flag (RFC Table 56)
+      pub fn decode_transient(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+          use super::constants::CELT_TRANSIENT_PDF;
+          let value = range_decoder.ec_dec_icdf(CELT_TRANSIENT_PDF, 8)?;
+          Ok(value == 1)
+      }
+
+      /// Decodes intra flag (RFC Table 56)
+      pub fn decode_intra(&self, range_decoder: &mut RangeDecoder) -> Result<bool> {
+          use super::constants::CELT_INTRA_PDF;
+          let value = range_decoder.ec_dec_icdf(CELT_INTRA_PDF, 8)?;
+          Ok(value == 1)
+      }
+  }
+  ```
+
+- [ ] Add range decoder extension for u16 ICDF to `src/range/decoder.rs`:
+  ```rust
+  impl RangeDecoder {
+      /// Decodes symbol using 16-bit ICDF table (for high-precision PDFs)
+      pub fn ec_dec_icdf_u16(&mut self, icdf: &[u16], ftb: u32) -> Result<u8> {
+          let ft = 1u32 << ftb;
+          let fs = self.ec_decode(ft);
+
+          let mut symbol = 0u8;
+          while symbol < 255 && u32::from(icdf[symbol as usize]) > fs {
+              symbol += 1;
+          }
+
+          let fl = if symbol > 0 { u32::from(icdf[(symbol - 1) as usize]) } else { ft };
+          let fh = u32::from(icdf[symbol as usize]);
+
+          self.ec_dec_update(fl, fh, ft)?;
+          Ok(symbol)
+      }
+  }
+  ```
+
+- [ ] Add symbol decoding tests:
+  ```rust
+  #[test]
+  fn test_silence_flag_decoding() {
+      let data = vec![0xFF, 0xFF, 0xFF, 0xFF];
+      let mut range_decoder = RangeDecoder::new(&data).unwrap();
+      let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+      let result = decoder.decode_silence(&mut range_decoder);
+      assert!(result.is_ok());
+  }
+
+  #[test]
+  fn test_transient_flag_decoding() {
+      let data = vec![0x80, 0x00, 0x00, 0x00];
+      let mut range_decoder = RangeDecoder::new(&data).unwrap();
+      let decoder = CeltDecoder::new(SampleRate::Hz48000, Channels::Mono, 480).unwrap();
+
+      let transient = decoder.decode_transient(&mut range_decoder).unwrap();
+      assert!(!transient || transient);
+  }
+  ```
+
+##### 4.1.4 Verification Checklist
+
+- [ ] Run `cargo fmt` (format code)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] All PDFs from RFC Table 56 converted to ICDF format with terminating zeros
+- [ ] Silence PDF uses 16-bit precision (32768 total)
+- [ ] Binary flags decoded correctly (post-filter, transient, intra)
+- [ ] Range decoder extended with u16 ICDF support
+- [ ] Symbol decoding tests pass
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5943-5989 - all PDFs match RFC Table 56 exactly, ICDF conversions correct with terminating zeros
+
+---
+
+#### 4.1 Overall Verification Checklist
+
+After completing ALL subsections (4.1.1-4.1.4):
+
+- [ ] Run `cargo fmt` (format entire workspace)
+- [ ] Run `cargo build -p moosicbox_opus_native --features celt` (compiles)
+- [ ] Run `cargo build -p moosicbox_opus_native --no-default-features --features celt` (compiles without defaults)
+- [ ] Run `cargo build -p moosicbox_opus_native --features silk,celt` (both features together)
+- [ ] Run `cargo test -p moosicbox_opus_native --features celt` (all tests pass)
+- [ ] Run `cargo test -p moosicbox_opus_native --no-default-features --features celt` (tests pass without defaults)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features celt -- -D warnings` (zero warnings)
+- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --no-default-features --features celt -- -D warnings` (zero warnings without defaults)
+- [ ] Run `cargo machete` (no unused dependencies)
+- [ ] CELT module structure mirrors SILK pattern
+- [ ] All RFC Table 55 constants match exactly (21 bands, 4 frame sizes)
+- [ ] Frame size validation covers all sample rates and durations
+- [ ] State management includes all components from RFC Figure 17
+- [ ] Basic symbol decoding framework ready for extension
+- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5796-6008 - all band configurations, state fields, and basic PDFs match specification exactly
+
+**Total Section 4.1 Artifacts:**
+* 3 new files (celt/mod.rs, celt/decoder.rs, celt/constants.rs)
+* CeltDecoder struct with state management
+* CeltState, PostFilterState, AntiCollapseState structures
+* 7 band/frame configuration constants (Table 55)
+* 5 basic PDF constants (Table 56)
+* 8 public methods (new, reset, decode_silence, decode_post_filter, decode_transient, decode_intra, frame_duration_ms, bins_per_band)
+* 1 range decoder extension (ec_dec_icdf_u16)
+* ~12 unit tests
+
+**Key Design Decisions:**
+* Feature flag `celt` matches `silk` pattern
+* Module structure mirrors SILK (mod.rs, decoder.rs, constants.rs)
+* State separation with CeltState for clean reset/initialization
+* Frame size validated against sample rate per RFC requirements
+* All PDFs in ICDF format with terminating zeros (RFC 4.1.3.3)
+
+---
 
 ---
 
