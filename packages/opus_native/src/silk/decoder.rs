@@ -1,9 +1,47 @@
+//! SILK Decoder Implementation
+//!
+//! # Resampling (Optional, Non-Normative)
+//!
+//! RFC 6716 Section 4.2.9 (lines 5724-5795)
+//!
+//! SILK outputs audio at 8 kHz (NB), 12 kHz (MB), or 16 kHz (WB).
+//! To convert to other sample rates (e.g., 48 kHz), resampling is required.
+//!
+//! ## Normative vs Non-Normative
+//!
+//! **NORMATIVE (RFC Table 54):**
+//! * Resampler delays: NB: 0.538ms, MB: 0.692ms, WB: 0.706ms
+//! * These delays MUST be accounted for in encoder/decoder synchronization
+//!
+//! **NON-NORMATIVE (RFC lines 5732-5734):**
+//! * The resampling algorithm itself
+//! * You can use ANY resampling method
+//!
+//! ## Using Resampling
+//!
+//! This implementation provides only the normative delay constants via
+//! `SilkDecoder::resampler_delay_ms()`. For actual resampling, you can:
+//! * Use SILK output directly at 8/12/16 kHz
+//! * Use any resampling library (e.g., `moosicbox_resampler`, `libsamplerate`, `rubato`)
+//! * Implement a custom resampling algorithm
+//!
+//! ## Reset Behavior
+//!
+//! RFC lines 5793-5795: When decoder is reset:
+//! * Samples in resampling buffer are DISCARDED
+//! * Resampler re-initialized with silence
+
 use crate::error::{Error, Result};
 use crate::range::RangeDecoder;
 use crate::util::ilog;
 use crate::{Channels, SampleRate};
 
 use super::frame::{FrameType, QuantizationOffsetType};
+
+#[cfg(feature = "resampling")]
+use moosicbox_resampler::Resampler;
+#[cfg(feature = "resampling")]
+use symphonia::core::audio::{AudioBuffer, Signal, SignalSpec};
 
 // ============================================================================
 // PDF to ICDF Conversion Notice
@@ -2409,6 +2447,94 @@ impl SilkDecoder {
     #[allow(dead_code)]
     const fn subframe_start_index(subframe_index: usize, samples_per_subframe: usize) -> usize {
         subframe_index * samples_per_subframe
+    }
+
+    #[must_use]
+    pub const fn resampler_delay_ms(bandwidth: Bandwidth) -> f32 {
+        match bandwidth {
+            Bandwidth::Narrowband => 0.538,
+            Bandwidth::Mediumband => 0.692,
+            Bandwidth::Wideband => 0.706,
+            _ => 0.0,
+        }
+    }
+
+    /// Resample SILK output to target sample rate
+    ///
+    /// RFC 6716 lines 5726-5734: Resampling is NON-NORMATIVE.
+    /// Any resampling method is allowed. This uses `moosicbox_resampler`.
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if `num_channels` is not 1 or 2
+    /// * Returns error if resampling fails
+    #[cfg(feature = "resampling")]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn resample(
+        &self,
+        samples: &[f32],
+        input_rate: u32,
+        output_rate: u32,
+        num_channels: usize,
+    ) -> Result<Vec<f32>> {
+        if input_rate == output_rate {
+            return Ok(samples.to_vec());
+        }
+
+        let samples_per_channel = samples.len() / num_channels;
+
+        let channels = match num_channels {
+            1 => symphonia::core::audio::Channels::FRONT_LEFT,
+            2 => {
+                symphonia::core::audio::Channels::FRONT_LEFT
+                    | symphonia::core::audio::Channels::FRONT_RIGHT
+            }
+            _ => {
+                return Err(Error::SilkDecoder(format!(
+                    "unsupported channel count: {num_channels}"
+                )));
+            }
+        };
+
+        let spec = SignalSpec::new(input_rate, channels);
+
+        let mut audio_buffer = AudioBuffer::new(samples_per_channel as u64, spec);
+        audio_buffer.render_reserved(Some(samples_per_channel));
+
+        for ch in 0..num_channels {
+            let channel_buf = audio_buffer.chan_mut(ch);
+            for (i, sample) in samples.iter().skip(ch).step_by(num_channels).enumerate() {
+                channel_buf[i] = *sample;
+            }
+        }
+
+        let mut resampler = Resampler::new(spec, output_rate as usize, samples_per_channel as u64);
+
+        let output = resampler
+            .resample(&audio_buffer)
+            .ok_or_else(|| Error::SilkDecoder("resampling failed".to_string()))?;
+
+        Ok(output.to_vec())
+    }
+
+    /// Resample without resampling feature - returns error
+    ///
+    /// RFC 6716 line 5732: Resampling is optional and non-normative
+    ///
+    /// # Errors
+    ///
+    /// * Always returns error indicating resampling feature is not enabled
+    #[cfg(not(feature = "resampling"))]
+    pub fn resample(
+        &self,
+        _samples: &[f32],
+        _input_rate: u32,
+        _output_rate: u32,
+        _num_channels: usize,
+    ) -> Result<Vec<f32>> {
+        Err(Error::SilkDecoder(
+            "Resampling not available - enable 'resampling' feature in Cargo.toml".to_string(),
+        ))
     }
 }
 
@@ -5186,5 +5312,50 @@ mod tests {
         assert!((delayed[2] - 2.0).abs() < 1e-6);
         assert!((delayed[3] - 3.0).abs() < 1e-6);
         assert!((delayed[4] - 4.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_resampler_delay_constants() {
+        assert!((SilkDecoder::resampler_delay_ms(Bandwidth::Narrowband) - 0.538).abs() < 1e-6);
+        assert!((SilkDecoder::resampler_delay_ms(Bandwidth::Mediumband) - 0.692).abs() < 1e-6);
+        assert!((SilkDecoder::resampler_delay_ms(Bandwidth::Wideband) - 0.706).abs() < 1e-6);
+        assert!((SilkDecoder::resampler_delay_ms(Bandwidth::SuperWideband) - 0.0).abs() < 1e-6);
+        assert!((SilkDecoder::resampler_delay_ms(Bandwidth::Fullband) - 0.0).abs() < 1e-6);
+    }
+
+    #[cfg(feature = "resampling")]
+    #[test]
+    fn test_resampling_same_rate() {
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let samples = vec![0.5_f32; 320];
+        let resampled = decoder.resample(&samples, 16000, 16000, 1).unwrap();
+
+        assert_eq!(resampled.len(), samples.len());
+        assert_eq!(resampled, samples);
+    }
+
+    #[cfg(feature = "resampling")]
+    #[test]
+    fn test_resampling_16khz_to_48khz() {
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let samples = vec![0.5_f32; 320];
+        let resampled = decoder.resample(&samples, 16000, 48000, 1).unwrap();
+
+        assert!(resampled.len() > 900 && resampled.len() < 1000);
+    }
+
+    #[cfg(not(feature = "resampling"))]
+    #[test]
+    fn test_resampling_without_feature_errors() {
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        let result = decoder.resample(&[0.0; 160], 16000, 48000, 1);
+        assert!(result.is_err());
+
+        if let Err(e) = result {
+            let msg = format!("{e:?}");
+            assert!(msg.contains("Resampling not available"));
+        }
     }
 }

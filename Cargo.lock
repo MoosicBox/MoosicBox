@@ -8427,6 +8427,8 @@ dependencies = [
 name = "moosicbox_opus_native"
 version = "0.1.0"
 dependencies = [
+ "moosicbox_resampler",
+ "symphonia",
  "test-case",
  "thiserror 2.0.17",
 ]

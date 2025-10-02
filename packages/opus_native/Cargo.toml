@@ -13,6 +13,9 @@ version     = "0.1.0"
 [dependencies]
 thiserror = { workspace = true }
 
+moosicbox_resampler = { workspace = true, optional = true }
+symphonia           = { workspace = true, optional = true }
+
 [dev-dependencies]
 test-case = { workspace = true }
 
@@ -21,4 +24,5 @@ celt             = []
 default          = ["celt", "hybrid", "silk"]
 fail-on-warnings = []
 hybrid           = ["celt", "silk"]
+resampling       = ["dep:moosicbox_resampler", "dep:symphonia"]
 silk             = []

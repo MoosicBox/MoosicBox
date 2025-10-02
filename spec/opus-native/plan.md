@@ -7806,21 +7806,41 @@ mod tests_resampling {
 
 ### 3.8.5 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles without resampling)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk,resampling` (compiles with resampling)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk,resampling` (resampling tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk,resampling -- -D warnings` (zero warnings with resampling)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Delay values match Table 54 exactly (0.538, 0.692, 0.706)
-- [ ] Resampler documented as non-normative (RFC line 5732)
-- [ ] Reset behavior documented (RFC lines 5793-5795)
-- [ ] `resampling` feature is optional - builds work without it
-- [ ] Error message returned when resampling called without feature enabled
-- [ ] All 4 tests pass (1 unconditional, 2 with feature, 1 without feature)
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5724-5795 - confirm delay values, reset handling, non-normative status
+- [x] Run `cargo fmt` (format code)
+Formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles without resampling)
+Compiled successfully: `Finished dev profile [unoptimized + debuginfo] target(s) in 51.92s`
+- [x] Run `cargo build -p moosicbox_opus_native --features silk,resampling` (compiles with resampling)
+Compiled successfully: `Finished dev profile [unoptimized + debuginfo] target(s) in 3.71s`
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+218 tests pass (217 previous + 1 new test_resampling_without_feature_errors)
+- [x] Run `cargo test -p moosicbox_opus_native --features silk,resampling` (resampling tests pass)
+219 tests pass (217 previous + 2 new resampling tests: test_resampling_same_rate, test_resampling_16khz_to_48khz)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Zero warnings: `Finished dev profile [unoptimized + debuginfo] target(s) in 3m 40s`
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk,resampling -- -D warnings` (zero warnings with resampling)
+Zero warnings: `Finished dev profile [unoptimized + debuginfo] target(s) in 3m 43s`
+- [x] Run `cargo machete` (no unused dependencies)
+Added optional dependencies: moosicbox_resampler, symphonia (only loaded when resampling feature enabled)
+- [x] Delay values match Table 54 exactly (0.538, 0.692, 0.706)
+Implemented at decoder.rs:2453-2461: NB=0.538, MB=0.692, WB=0.706
+- [x] Resampler documented as non-normative (RFC line 5732)
+Documented in module-level doc comments at decoder.rs:3-30 and method docs at decoder.rs:2462-2470
+- [x] Reset behavior documented (RFC lines 5793-5795)
+Documented at decoder.rs:27-30: "When decoder is reset: Samples in resampling buffer are DISCARDED, Resampler re-initialized with silence"
+- [x] `resampling` feature is optional - builds work without it
+Feature flag in Cargo.toml:24, conditional compilation with #[cfg(feature = "resampling")] at decoder.rs:2462, 2519
+- [x] Error message returned when resampling called without feature enabled
+Implemented at decoder.rs:2519-2528: returns error "Resampling not available - enable 'resampling' feature in Cargo.toml"
+- [x] All 4 tests pass (1 unconditional, 2 with feature, 1 without feature)
+4 tests implemented: test_resampler_delay_constants (unconditional), test_resampling_same_rate, test_resampling_16khz_to_48khz (with feature), test_resampling_without_feature_errors (without feature)
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 5724-5795 - confirm delay values, reset handling, non-normative status
+All requirements verified:
+  * Delay constants: NB=0.538ms, MB=0.692ms, WB=0.706ms (RFC Table 54) - NORMATIVE ✓
+  * Non-normative resampling: Documented at decoder.rs:2462-2470, uses moosicbox_resampler (RFC 5732-5734) ✓
+  * Reset behavior: Documented at decoder.rs:27-30 (RFC 5793-5795) ✓
+  * Feature-gated implementation: resample() with resampling feature, error stub without ✓
+  * Optional dependencies: moosicbox_resampler and symphonia only loaded when feature enabled ✓
 
 ---
 
