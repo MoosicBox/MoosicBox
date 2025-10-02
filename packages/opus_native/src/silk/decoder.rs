@@ -1581,6 +1581,90 @@ impl SilkDecoder {
             }
         }
     }
+
+    /// Decodes pulse positions for a shell block using hierarchical binary splitting (RFC 6716 Section 4.2.7.8.3, lines 4975-5007).
+    ///
+    /// # Arguments
+    ///
+    /// * `range_decoder` - Range decoder for reading bitstream
+    /// * `pulse_count` - Total number of pulses in the 16-sample block
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    /// * Returns error if invalid partition size/pulse count combination
+    // TODO(Section 3.7.5): Remove dead_code when used in LSB decoding
+    #[allow(dead_code)]
+    pub fn decode_pulse_locations(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        pulse_count: u8,
+    ) -> Result<[u8; 16]> {
+        let mut locations = [0_u8; 16];
+
+        if pulse_count == 0 {
+            return Ok(locations);
+        }
+
+        Self::decode_split_recursive(range_decoder, &mut locations, 0, 16, pulse_count)?;
+        Ok(locations)
+    }
+
+    /// Recursively decodes pulse split using preorder traversal (RFC 6716 lines 4995-5007).
+    ///
+    /// # Arguments
+    ///
+    /// * `range_decoder` - Range decoder for reading bitstream
+    /// * `locations` - Array to store pulse counts per location
+    /// * `offset` - Starting offset in locations array
+    /// * `partition_size` - Current partition size (16, 8, 4, 2, or 1)
+    /// * `pulse_count` - Number of pulses in current partition
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    /// * Returns error if PDF lookup fails
+    fn decode_split_recursive(
+        range_decoder: &mut RangeDecoder,
+        locations: &mut [u8; 16],
+        offset: usize,
+        partition_size: usize,
+        pulse_count: u8,
+    ) -> Result<()> {
+        use super::excitation_constants::get_pulse_split_pdf;
+
+        if pulse_count == 0 || partition_size == 1 {
+            if partition_size == 1 && pulse_count > 0 {
+                locations[offset] = pulse_count;
+            }
+            return Ok(());
+        }
+
+        let pdf = get_pulse_split_pdf(partition_size, pulse_count).ok_or_else(|| {
+            Error::SilkDecoder(format!(
+                "invalid pulse split parameters: size={partition_size}, count={pulse_count}"
+            ))
+        })?;
+
+        let left_pulses = range_decoder.ec_dec_icdf(pdf, 8)?;
+
+        #[allow(clippy::cast_possible_truncation)]
+        let left_pulses_u8 = left_pulses as u8;
+        let right_pulses = pulse_count - left_pulses_u8;
+
+        let half_size = partition_size / 2;
+
+        Self::decode_split_recursive(range_decoder, locations, offset, half_size, left_pulses_u8)?;
+        Self::decode_split_recursive(
+            range_decoder,
+            locations,
+            offset + half_size,
+            half_size,
+            right_pulses,
+        )?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -2789,6 +2873,106 @@ mod tests {
             let (pulse_count, lsb_count) = result.unwrap();
             assert!(pulse_count <= 16);
             assert_eq!(lsb_count, 0);
+        }
+    }
+
+    #[test]
+    fn test_decode_pulse_locations_zero_pulses() {
+        let data = vec![0x00; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let locations = decoder
+            .decode_pulse_locations(&mut range_decoder, 0)
+            .unwrap();
+
+        assert_eq!(locations, [0; 16]);
+    }
+
+    #[test]
+    fn test_decode_pulse_locations_single_pulse() {
+        let data = vec![0x00; 20];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let locations = decoder
+            .decode_pulse_locations(&mut range_decoder, 1)
+            .unwrap();
+
+        let total_pulses: u32 = locations.iter().map(|&x| u32::from(x)).sum();
+        assert_eq!(total_pulses, 1);
+    }
+
+    #[test]
+    fn test_decode_pulse_locations_multiple_pulses() {
+        let data = vec![0x80; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let locations = decoder
+            .decode_pulse_locations(&mut range_decoder, 8)
+            .unwrap();
+
+        let total_pulses: u32 = locations.iter().map(|&x| u32::from(x)).sum();
+        assert_eq!(total_pulses, 8);
+    }
+
+    #[test]
+    fn test_decode_pulse_locations_max_pulses() {
+        let data = vec![0xFF; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let locations = decoder
+            .decode_pulse_locations(&mut range_decoder, 16)
+            .unwrap();
+
+        let total_pulses: u32 = locations.iter().map(|&x| u32::from(x)).sum();
+        assert_eq!(total_pulses, 16);
+    }
+
+    #[test]
+    fn test_get_pulse_split_pdf_all_sizes() {
+        use crate::silk::excitation_constants::get_pulse_split_pdf;
+
+        for &size in &[16, 8, 4, 2] {
+            for count in 1..=16 {
+                let pdf = get_pulse_split_pdf(size, count);
+                assert!(pdf.is_some(), "Missing PDF for size={size}, count={count}");
+                let pdf_arr = pdf.unwrap();
+                assert!(!pdf_arr.is_empty());
+                assert_eq!(pdf_arr[pdf_arr.len() - 1], 0, "PDF must end with 0");
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_pulse_split_pdf_invalid() {
+        use crate::silk::excitation_constants::get_pulse_split_pdf;
+
+        assert!(get_pulse_split_pdf(16, 0).is_none());
+        assert!(get_pulse_split_pdf(16, 17).is_none());
+        assert!(get_pulse_split_pdf(3, 1).is_none());
+        assert!(get_pulse_split_pdf(32, 1).is_none());
+    }
+
+    #[test]
+    fn test_pulse_location_sum_conservation() {
+        for pulse_count in 1..=16 {
+            let data = vec![0x55; 100];
+            let mut range_decoder = RangeDecoder::new(&data).unwrap();
+            let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+            let locations = decoder
+                .decode_pulse_locations(&mut range_decoder, pulse_count)
+                .unwrap();
+
+            let total: u32 = locations.iter().map(|&x| u32::from(x)).sum();
+            assert_eq!(
+                total,
+                u32::from(pulse_count),
+                "Pulse count mismatch for {pulse_count} pulses"
+            );
         }
     }
 

@@ -4427,7 +4427,7 @@ All implementations verified against RFC 6716:
 
 ---
 
-#### 3.7.4: Pulse Position Decoding (Hierarchical Split)
+#### 3.7.4: Pulse Position Decoding (Hierarchical Split) ✅
 
 **Reference:** RFC 6716 Section 4.2.7.8.3 (lines 4975-5256)
 
@@ -4439,7 +4439,8 @@ All 64 pulse split PDFs from Tables 47-50 must be converted from RFC PDF format 
 
 ##### Implementation Steps
 
-- [ ] **Add pulse split constants from Tables 47-50 (RFC lines 5047-5256) - 64 total PDFs:**
+- [x] **Add pulse split constants from Tables 47-50 (RFC lines 5047-5256) - 64 total PDFs:**
+Added all 64 ICDF constants (4 tables × 16 pulse counts) to `packages/opus_native/src/silk/excitation_constants.rs` with RFC PDF reference comments
 
   **IMPORTANT:** All PDFs below are converted to ICDF format. Each constant includes:
   1. Comment showing RFC PDF values
@@ -4660,87 +4661,59 @@ All 64 pulse split PDFs from Tables 47-50 must be converted from RFC PDF format 
   pub const PULSE_SPLIT_2_PDF_16: &[u8] = &[255, 253, 249, 242, 229, 208, 180, 146, 110, 76, 48, 27, 14, 7, 3, 1, 0];
   ```
 
-- [ ] **Implement hierarchical pulse position decoding:**
-  ```rust
-  impl SilkDecoder {
-      pub fn decode_pulse_positions(
-          &self,
-          range_decoder: &mut RangeDecoder,
-          pulse_count: u8,
-      ) -> Result<[u8; 16]> {
-          let mut positions = [0u8; 16];
+- [x] **Implement hierarchical pulse position decoding:**
+Implemented `decode_pulse_locations()` and `decode_split_recursive()` methods with:
+  * Preorder traversal (left before right) per RFC line 4998
+  * Zero-pulse partitions skipped (RFC lines 5003-5007)
+  * Recursive binary splitting: 16→8→4→2→1
+  * PDF selection via `get_pulse_split_pdf()` helper
 
-          if pulse_count == 0 {
-              return Ok(positions);
-          }
+- [x] **Add get_pulse_split_pdf() helper:**
+Added const function to select correct PDF based on partition size (16/8/4/2) and pulse count (1-16)
 
-          self.decode_split_recursive(range_decoder, &mut positions, 0, 16, pulse_count)?;
-          Ok(positions)
-      }
-
-      fn decode_split_recursive(
-          &self,
-          range_decoder: &mut RangeDecoder,
-          positions: &mut [u8; 16],
-          offset: usize,
-          partition_size: usize,
-          pulse_count: u8,
-      ) -> Result<()> {
-          if pulse_count == 0 || partition_size == 1 {
-              if partition_size == 1 && pulse_count > 0 {
-                  positions[offset] = pulse_count;
-              }
-              return Ok(());
-          }
-
-          let pdf = self.get_pulse_split_pdf(partition_size, pulse_count)?;
-          let left_pulses = range_decoder.ec_dec_icdf(pdf, 8)?;
-          let right_pulses = pulse_count - left_pulses;
-
-          let half_size = partition_size / 2;
-
-          // Preorder traversal: left then right
-          self.decode_split_recursive(range_decoder, positions, offset, half_size, left_pulses)?;
-          self.decode_split_recursive(range_decoder, positions, offset + half_size, half_size, right_pulses)?;
-
-          Ok(())
-      }
-  }
-  ```
-
-- [ ] **Add tests:**
-  ```rust
-  #[test]
-  fn test_pulse_position_single_pulse() { /* Single pulse, any position */ }
-
-  #[test]
-  fn test_pulse_position_all_in_one() { /* All pulses at same location */ }
-
-  #[test]
-  fn test_pulse_position_distributed() { /* Pulses across multiple locations */ }
-
-  #[test]
-  fn test_hierarchical_split_16_8_4_2() { /* Verify split sequence */ }
-
-  #[test]
-  fn test_preorder_traversal() { /* Left before right */ }
-  ```
+- [x] **Add tests:**
+Added 7 comprehensive tests:
+  * `test_decode_pulse_locations_zero_pulses` - Empty block handling
+  * `test_decode_pulse_locations_single_pulse` - Single pulse decoding
+  * `test_decode_pulse_locations_multiple_pulses` - Multiple pulses (8)
+  * `test_decode_pulse_locations_max_pulses` - Maximum pulses (16)
+  * `test_get_pulse_split_pdf_all_sizes` - All 64 PDFs accessible
+  * `test_get_pulse_split_pdf_invalid` - Invalid parameter handling
+  * `test_pulse_location_sum_conservation` - Pulse count conservation for all counts 1-16
 
 ##### 3.7.4 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] All 64 pulse split ICDFs converted correctly from RFC Tables 47-50
-- [ ] All 64 ICDF arrays terminate with 0
-- [ ] All 64 ICDF arrays are monotonically decreasing
-- [ ] Hierarchical split follows 16→8→4→2→1 recursion
-- [ ] Preorder traversal (left before right) per RFC line 4998
-- [ ] Zero-pulse partitions skipped (RFC lines 5003-5007)
-- [ ] All pulses can be at same location (no restriction per RFC lines 4991-4993)
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 4975-5256 - confirm all 64 ICDF conversions, split algorithm, PDF selection
+- [x] Run `cargo fmt` (format code)
+All code formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Successfully compiled moosicbox_opus_native with silk feature
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+All 135 tests passed (128 existing + 7 new tests for 3.7.4)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Zero clippy warnings with all targets and features
+- [x] Run `cargo machete` (no unused dependencies)
+All dependencies properly used
+- [x] All 64 pulse split ICDFs converted correctly from RFC Tables 47-50
+All 64 constants verified: 16 per table × 4 tables (16/8/4/2 sample partitions)
+- [x] All 64 ICDF arrays terminate with 0
+Every ICDF array ends with terminating 0 value
+- [x] All 64 ICDF arrays are monotonically decreasing
+Verified monotonically decreasing for all 64 ICDF constants
+- [x] Hierarchical split follows 16→8→4→2→1 recursion
+`decode_split_recursive()` divides partition_size by 2 until size=1
+- [x] Preorder traversal (left before right) per RFC line 4998
+Left half decoded before right half in recursive calls
+- [x] Zero-pulse partitions skipped (RFC lines 5003-5007)
+Early return when pulse_count == 0 (no decoding needed)
+- [x] All pulses can be at same location (no restriction per RFC lines 4991-4993)
+No restrictions imposed - partition_size=1 allows pulse_count>1 at same location
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 4975-5256 - confirm all 64 ICDF conversions, split algorithm, PDF selection
+All implementations verified against RFC 6716:
+  * Tables 47-50 PDFs → ICDF conversion verified for all 64 constants
+  * Binary split algorithm per lines 4995-4998 (partition halves, decode left count, compute right = total - left)
+  * Preorder traversal per line 4998 ("recurses into the left half, and after that returns, the right half")
+  * PDF selection per lines 4999-5002 (based on partition size and pulse count)
+  * Skipping zero-pulse partitions per lines 5003-5007 implemented correctly
 
 ---
 
