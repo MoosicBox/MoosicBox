@@ -1857,6 +1857,96 @@ impl SilkDecoder {
             (FrameType::Voiced, QuantizationOffsetType::High, _) => SIGN_PDF_VOICED_HIGH_6PLUS,
         }
     }
+
+    /// Gets quantization offset from Table 53 (RFC 6716 lines 5439-5456).
+    ///
+    /// # Arguments
+    ///
+    /// * `frame_type` - Signal type (Inactive, Unvoiced, or Voiced)
+    /// * `quant_offset_type` - Quantization offset type (Low or High)
+    ///
+    /// # Returns
+    ///
+    /// Quantization offset in Q23 format
+    ///
+    /// # RFC Reference
+    ///
+    /// Table 53 (lines 5439-5456): 6 different offset values based on signal type and offset type
+    #[must_use]
+    const fn get_quantization_offset(
+        frame_type: FrameType,
+        quant_offset_type: QuantizationOffsetType,
+    ) -> i32 {
+        match (frame_type, quant_offset_type) {
+            (FrameType::Inactive | FrameType::Unvoiced, QuantizationOffsetType::Low)
+            | (FrameType::Voiced, QuantizationOffsetType::High) => 25,
+            (FrameType::Inactive | FrameType::Unvoiced, QuantizationOffsetType::High) => 60,
+            (FrameType::Voiced, QuantizationOffsetType::Low) => 8,
+        }
+    }
+
+    /// Reconstructs final excitation signal with quantization offset and pseudorandom noise
+    /// (RFC 6716 Section 4.2.7.8.6, lines 5422-5478).
+    ///
+    /// # Arguments
+    ///
+    /// * `e_raw` - Raw signed excitation values (from sign decoding)
+    /// * `frame_type` - Signal type for quantization offset selection
+    /// * `quant_offset_type` - Quantization offset type
+    ///
+    /// # Returns
+    ///
+    /// Final excitation signal in Q23 format (23 bits including sign)
+    ///
+    /// # Panics
+    ///
+    /// * If `e_raw[i]` is negative and `e_raw[i]` cannot fit in u32
+    ///
+    /// # Algorithm (RFC lines 5458-5473)
+    ///
+    /// For each sample i:
+    /// * Scale to Q23 and apply offset: `e_Q23[i] = (e_raw[i] << 8) - sign(e_raw[i])*20 + offset_Q23`
+    /// * Update LCG seed: `seed = (196314165*seed + 907633515) & 0xFFFFFFFF`
+    /// * Pseudorandom inversion: `if (seed & 0x80000000) != 0 { e_Q23[i] = -e_Q23[i] }`
+    /// * Update seed with raw value: `seed = (seed + e_raw[i]) & 0xFFFFFFFF`
+    ///
+    /// # Notes
+    ///
+    /// * When `e_raw`[i] is zero, `sign`() returns 0, so factor of 20 is not subtracted (RFC lines 5475-5476)
+    /// * Final `e_Q23`[i] requires ≤23 bits including sign (RFC lines 5477-5478)
+    /// * LCG seed is stored in decoder state and persists across calls
+    pub fn reconstruct_excitation(
+        &mut self,
+        e_raw: &[i16; 16],
+        frame_type: FrameType,
+        quant_offset_type: QuantizationOffsetType,
+    ) -> [i32; 16] {
+        let offset_q23 = Self::get_quantization_offset(frame_type, quant_offset_type);
+        let mut e_q23 = [0_i32; 16];
+
+        for i in 0..16 {
+            let mut value =
+                (i32::from(e_raw[i]) << 8) - i32::from(e_raw[i].signum()) * 20 + offset_q23;
+
+            self.lcg_seed = self
+                .lcg_seed
+                .wrapping_mul(196_314_165)
+                .wrapping_add(907_633_515);
+
+            if (self.lcg_seed & 0x8000_0000) != 0 {
+                value = -value;
+            }
+
+            #[allow(clippy::cast_sign_loss)]
+            {
+                self.lcg_seed = self.lcg_seed.wrapping_add(e_raw[i] as u32);
+            }
+
+            e_q23[i] = value;
+        }
+
+        e_q23
+    }
 }
 
 #[cfg(test)]
@@ -3451,5 +3541,217 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ====================================================================
+    // Section 3.7.7: Excitation Reconstruction Tests
+    // ====================================================================
+
+    #[test]
+    fn test_quantization_offset_inactive_low() {
+        let offset =
+            SilkDecoder::get_quantization_offset(FrameType::Inactive, QuantizationOffsetType::Low);
+        assert_eq!(offset, 25);
+    }
+
+    #[test]
+    fn test_quantization_offset_inactive_high() {
+        let offset =
+            SilkDecoder::get_quantization_offset(FrameType::Inactive, QuantizationOffsetType::High);
+        assert_eq!(offset, 60);
+    }
+
+    #[test]
+    fn test_quantization_offset_unvoiced_low() {
+        let offset =
+            SilkDecoder::get_quantization_offset(FrameType::Unvoiced, QuantizationOffsetType::Low);
+        assert_eq!(offset, 25);
+    }
+
+    #[test]
+    fn test_quantization_offset_unvoiced_high() {
+        let offset =
+            SilkDecoder::get_quantization_offset(FrameType::Unvoiced, QuantizationOffsetType::High);
+        assert_eq!(offset, 60);
+    }
+
+    #[test]
+    fn test_quantization_offset_voiced_low() {
+        let offset =
+            SilkDecoder::get_quantization_offset(FrameType::Voiced, QuantizationOffsetType::Low);
+        assert_eq!(offset, 8);
+    }
+
+    #[test]
+    fn test_quantization_offset_voiced_high() {
+        let offset =
+            SilkDecoder::get_quantization_offset(FrameType::Voiced, QuantizationOffsetType::High);
+        assert_eq!(offset, 25);
+    }
+
+    #[test]
+    fn test_reconstruct_excitation_all_zeros() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        decoder.lcg_seed = 12345;
+
+        let e_raw = [0_i16; 16];
+        let e_q23 =
+            decoder.reconstruct_excitation(&e_raw, FrameType::Voiced, QuantizationOffsetType::Low);
+
+        for &val in &e_q23 {
+            assert!(val.abs() <= (1 << 23));
+        }
+    }
+
+    #[test]
+    fn test_reconstruct_excitation_nonzero() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        decoder.lcg_seed = 54321;
+
+        let e_raw = [10, -5, 3, 0, -8, 15, 0, 2, -1, 0, 0, 0, 6, -3, 0, 1];
+        let e_q23 = decoder.reconstruct_excitation(
+            &e_raw,
+            FrameType::Unvoiced,
+            QuantizationOffsetType::High,
+        );
+
+        for &val in &e_q23 {
+            assert!(val.abs() <= (1 << 23));
+        }
+    }
+
+    #[test]
+    fn test_lcg_sequence() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        decoder.lcg_seed = 1;
+
+        let initial_seed = decoder.lcg_seed;
+        let e_raw = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let _ = decoder.reconstruct_excitation(
+            &e_raw,
+            FrameType::Inactive,
+            QuantizationOffsetType::Low,
+        );
+
+        assert_ne!(decoder.lcg_seed, initial_seed);
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_truncation)]
+    fn test_lcg_formula() {
+        let mut seed = 100_u32;
+
+        seed = seed.wrapping_mul(196_314_165).wrapping_add(907_633_515);
+
+        let expected = (100_u64 * 196_314_165 + 907_633_515) as u32;
+        assert_eq!(seed, expected);
+    }
+
+    #[test]
+    fn test_excitation_reconstruction_zero_no_20_factor() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        decoder.lcg_seed = 0;
+
+        let e_raw = [0_i16; 16];
+        let e_q23 =
+            decoder.reconstruct_excitation(&e_raw, FrameType::Voiced, QuantizationOffsetType::Low);
+
+        for &val in &e_q23 {
+            let abs_val = val.abs();
+            assert!(abs_val == 8 || abs_val == 0);
+        }
+    }
+
+    #[test]
+    fn test_excitation_reconstruction_positive_value() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        decoder.lcg_seed = 0;
+
+        let e_raw = [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let e_q23 =
+            decoder.reconstruct_excitation(&e_raw, FrameType::Voiced, QuantizationOffsetType::Low);
+
+        let expected_base = (5 << 8) - 20 + 8;
+        assert!(
+            e_q23[0] == expected_base || e_q23[0] == -expected_base,
+            "e_q23[0] = {}, expected {} or {}",
+            e_q23[0],
+            expected_base,
+            -expected_base
+        );
+    }
+
+    #[test]
+    fn test_excitation_reconstruction_negative_value() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        decoder.lcg_seed = 0;
+
+        let e_raw = [-5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let e_q23 =
+            decoder.reconstruct_excitation(&e_raw, FrameType::Voiced, QuantizationOffsetType::Low);
+
+        let expected_base = (-5 << 8) + 20 + 8;
+        assert!(
+            e_q23[0] == expected_base || e_q23[0] == -expected_base,
+            "e_q23[0] = {}, expected {} or {}",
+            e_q23[0],
+            expected_base,
+            -expected_base
+        );
+    }
+
+    #[test]
+    fn test_excitation_q23_range() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        decoder.lcg_seed = 999;
+
+        let e_raw = [
+            127, -127, 100, -100, 50, -50, 0, 0, 25, -25, 75, -75, 10, -10, 1, -1,
+        ];
+        let e_q23 = decoder.reconstruct_excitation(
+            &e_raw,
+            FrameType::Inactive,
+            QuantizationOffsetType::High,
+        );
+
+        for &val in &e_q23 {
+            assert!(val.abs() <= (1 << 23), "Value {val} exceeds 23-bit range");
+        }
+    }
+
+    #[test]
+    fn test_pseudorandom_inversion_msb() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        decoder.lcg_seed = 0x0000_0000;
+        let e_raw1 = [10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let e_q23_1 =
+            decoder.reconstruct_excitation(&e_raw1, FrameType::Voiced, QuantizationOffsetType::Low);
+
+        decoder.lcg_seed = 0x8000_0000;
+        let e_raw2 = [10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let e_q23_2 =
+            decoder.reconstruct_excitation(&e_raw2, FrameType::Voiced, QuantizationOffsetType::Low);
+
+        assert_ne!(e_q23_1[0].signum(), e_q23_2[0].signum());
+    }
+
+    #[test]
+    fn test_seed_update_with_raw_value() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+        decoder.lcg_seed = 100;
+
+        let e_raw = [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let _ =
+            decoder.reconstruct_excitation(&e_raw, FrameType::Voiced, QuantizationOffsetType::Low);
+
+        let seed_after_first = decoder.lcg_seed;
+
+        decoder.lcg_seed = 100;
+        let e_raw2 = [10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let _ =
+            decoder.reconstruct_excitation(&e_raw2, FrameType::Voiced, QuantizationOffsetType::Low);
+
+        assert_ne!(decoder.lcg_seed, seed_after_first);
     }
 }
