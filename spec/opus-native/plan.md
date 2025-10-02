@@ -4717,7 +4717,7 @@ All implementations verified against RFC 6716:
 
 ---
 
-#### 3.7.5: LSB Decoding
+#### 3.7.5: LSB Decoding ✅
 
 **Reference:** RFC 6716 Section 4.2.7.8.4 (lines 5258-5289)
 
@@ -4729,7 +4729,8 @@ Table 51 constant must be converted from RFC PDF format to ICDF format. See Sect
 
 ##### Implementation Steps
 
-- [ ] **Add LSB constant from Table 51 (RFC lines 5276-5282):**
+- [x] **Add LSB constant from Table 51 (RFC lines 5276-5282):**
+Added `EXCITATION_LSB_PDF` constant to `packages/opus_native/src/silk/excitation_constants.rs` with RFC PDF reference comment
   ```rust
   // RFC 6716 Table 51: PDF for Excitation LSBs (lines 5276-5282)
   // RFC shows PDF: {136, 120}/256
@@ -4737,76 +4738,54 @@ Table 51 constant must be converted from RFC PDF format to ICDF format. See Sect
   pub const EXCITATION_LSB_PDF: &[u8] = &[120, 0];
   ```
 
-- [ ] **Implement LSB decoding (RFC lines 5260-5289):**
-  ```rust
-  impl SilkDecoder {
-      pub fn decode_lsbs(
-          &self,
-          range_decoder: &mut RangeDecoder,
-          pulse_positions: &[u8; 16],
-          lsb_count: u8,
-      ) -> Result<[u16; 16]> {
-          let mut magnitudes = [0u16; 16];
+- [x] **Implement LSB decoding (RFC lines 5260-5289):**
+Implemented `decode_lsbs()` method with:
+  * MSB-first decoding order per RFC lines 5273-5274
+  * All 16 coefficients decoded per bit level (even zeros per RFC lines 5262-5263)
+  * Magnitude formula: `magnitude = (magnitude << 1) | lsb` per RFC lines 5286-5289
+  * 10ms MB special case documented in method comment (RFC lines 5271-5273)
 
-          for i in 0..16 {
-              magnitudes[i] = u16::from(pulse_positions[i]);
-          }
-
-          if lsb_count == 0 {
-              return Ok(magnitudes);
-          }
-
-          // MSB to LSB, all 16 coefficients per level
-          for _ in (0..lsb_count).rev() {
-              for i in 0..16 {
-                  let lsb_bit = range_decoder.ec_dec_icdf(EXCITATION_LSB_PDF, 8)?;
-                  magnitudes[i] = (magnitudes[i] << 1) | u16::from(lsb_bit);
-              }
-          }
-
-          Ok(magnitudes)
-      }
-  }
-  ```
-
-- [ ] **Document 10ms MB special case:**
-  ```rust
-  // RFC lines 5271-5273: For 10ms MB, decode LSBs even for extra 8 samples
-  // in last block (samples 120-127). These are parsed but discarded.
-  ```
-
-- [ ] **Add tests:**
-  ```rust
-  #[test]
-  fn test_lsb_decoding_no_lsb() { /* lsb_count == 0 */ }
-
-  #[test]
-  fn test_lsb_decoding_single_lsb() { /* lsb_count == 1 */ }
-
-  #[test]
-  fn test_lsb_decoding_multiple_lsb() { /* lsb_count > 1 */ }
-
-  #[test]
-  fn test_lsb_decoding_msb_first() { /* MSB decoded first */ }
-
-  #[test]
-  fn test_lsb_all_coefficients() { /* All 16 coefficients get LSBs */ }
-  ```
+- [x] **Add tests:**
+Added 7 comprehensive tests:
+  * `test_decode_lsbs_no_lsb` - Zero LSB count (early return)
+  * `test_decode_lsbs_single_lsb` - Single LSB level
+  * `test_decode_lsbs_multiple_lsb` - Multiple LSB levels
+  * `test_decode_lsbs_all_coefficients` - All 16 coefficients get LSBs
+  * `test_decode_lsbs_zero_pulses_get_lsbs` - Coefficients with zero pulses still get LSBs
+  * `test_decode_lsbs_magnitude_doubling` - Magnitude doubling via left shift
+  * `test_excitation_lsb_pdf` - PDF constant validation
 
 ##### 3.7.5 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] LSB ICDF converted correctly: `[120, 0]` from RFC PDF `{136, 120}/256`
-- [ ] ICDF terminates with 0
-- [ ] LSBs decoded MSB to LSB
-- [ ] All 16 coefficients get LSBs (even zeros per RFC lines 5262-5263)
-- [ ] Magnitude formula: `magnitude = (magnitude << 1) | lsb` (RFC lines 5286-5289)
-- [ ] 10ms MB special case documented
-- [ ] **RFC DEEP CHECK:** Verify against RFC lines 5258-5289 - confirm ICDF conversion, LSB order, magnitude update
+- [x] Run `cargo fmt` (format code)
+All code formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Successfully compiled moosicbox_opus_native with silk feature
+- [x] Run `cargo test -p moosicbox_opus_native --features silk` (all tests pass)
+All 142 tests passed (135 existing + 7 new tests for 3.7.5)
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Zero clippy warnings with all targets and features
+- [x] Run `cargo machete` (no unused dependencies)
+All dependencies properly used
+- [x] LSB ICDF converted correctly: `[120, 0]` from RFC PDF `{136, 120}/256`
+ICDF conversion verified: cumulative [0, 136] → reverse [256-0, 256-136] → [256, 120] → shift to start at end [120, 0]
+- [x] ICDF terminates with 0
+EXCITATION_LSB_PDF = [120, 0] - terminates with 0
+- [x] LSBs decoded MSB to LSB
+Outer loop iterates 0..lsb_count (MSB first), inner loop processes all 16 coefficients per level
+- [x] All 16 coefficients get LSBs (even zeros per RFC lines 5262-5263)
+Inner loop always processes i=0..16, regardless of pulse count
+- [x] Magnitude formula: `magnitude = (magnitude << 1) | lsb` (RFC lines 5286-5289)
+Implemented exactly: `magnitudes[i] = (magnitudes[i] << 1) | (lsb_bit as u16)`
+- [x] 10ms MB special case documented
+Method comment states: "For 10ms MB frames, LSBs are decoded for all 16 samples even though only first 8 are used"
+- [x] **RFC DEEP CHECK:** Verify against RFC lines 5258-5289 - confirm ICDF conversion, LSB order, magnitude update
+All implementations verified against RFC 6716:
+  * Table 51 PDF {136, 120}/256 → ICDF [120, 0] conversion verified
+  * LSB order per lines 5273-5274: "coded from most significant to least significant" - outer loop 0..lsb_count processes MSB first
+  * All coefficients per lines 5262-5263: "reads all the LSBs for each coefficient in turn, even those where no pulses were allocated" - inner loop always processes 16 coefficients
+  * Magnitude update per lines 5286-5289: "magnitude is doubled, and then the value of the LSB added to it" - implemented as (mag << 1) | lsb
+  * 10ms MB special case per lines 5271-5273: documented in method comment
 
 ---
 

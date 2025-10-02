@@ -560,3 +560,8 @@ pub const fn get_pulse_split_pdf(partition_size: usize, pulse_count: u8) -> Opti
         _ => None,
     }
 }
+
+// RFC 6716 Table 51: PDF for Excitation LSBs (lines 5276-5282)
+// RFC shows PDF: {136, 120}/256
+// Converted to ICDF for ec_dec_icdf()
+pub const EXCITATION_LSB_PDF: &[u8] = &[120, 0];

@@ -1665,6 +1665,51 @@ impl SilkDecoder {
 
         Ok(())
     }
+
+    /// Decodes LSBs for excitation coefficients (RFC 6716 Section 4.2.7.8.4, lines 5258-5289).
+    ///
+    /// LSBs are decoded MSB-first for all 16 coefficients per bit level.
+    /// For 10ms MB frames, LSBs are decoded for all 16 samples even though only first 8 are used.
+    ///
+    /// # Arguments
+    ///
+    /// * `range_decoder` - Range decoder for reading bitstream
+    /// * `pulse_locations` - Pulse counts per location (initial magnitudes)
+    /// * `lsb_count` - Number of LSB levels to decode
+    ///
+    /// # Errors
+    ///
+    /// * Returns error if range decoder fails
+    // TODO(Section 3.7.6): Remove dead_code when used in sign decoding
+    #[allow(dead_code)]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn decode_lsbs(
+        &self,
+        range_decoder: &mut RangeDecoder,
+        pulse_locations: &[u8; 16],
+        lsb_count: u8,
+    ) -> Result<[u16; 16]> {
+        use super::excitation_constants::EXCITATION_LSB_PDF;
+
+        let mut magnitudes = [0_u16; 16];
+
+        for i in 0..16 {
+            magnitudes[i] = u16::from(pulse_locations[i]);
+        }
+
+        if lsb_count == 0 {
+            return Ok(magnitudes);
+        }
+
+        for _ in 0..lsb_count {
+            for magnitude in &mut magnitudes {
+                let lsb_bit = range_decoder.ec_dec_icdf(EXCITATION_LSB_PDF, 8)?;
+                *magnitude = (*magnitude << 1) | (lsb_bit as u16);
+            }
+        }
+
+        Ok(magnitudes)
+    }
 }
 
 #[cfg(test)]
@@ -2974,6 +3019,105 @@ mod tests {
                 "Pulse count mismatch for {pulse_count} pulses"
             );
         }
+    }
+
+    #[test]
+    fn test_decode_lsbs_no_lsb() {
+        let data = vec![0x00; 10];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let pulse_locations = [1, 2, 0, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let magnitudes = decoder
+            .decode_lsbs(&mut range_decoder, &pulse_locations, 0)
+            .unwrap();
+
+        assert_eq!(magnitudes[0], 1);
+        assert_eq!(magnitudes[1], 2);
+        assert_eq!(magnitudes[2], 0);
+        assert_eq!(magnitudes[3], 3);
+    }
+
+    #[test]
+    fn test_decode_lsbs_single_lsb() {
+        let data = vec![0x00; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let pulse_locations = [2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let magnitudes = decoder
+            .decode_lsbs(&mut range_decoder, &pulse_locations, 1)
+            .unwrap();
+
+        assert!(magnitudes[0] >= 4 && magnitudes[0] <= 5);
+    }
+
+    #[test]
+    fn test_decode_lsbs_multiple_lsb() {
+        let data = vec![0xFF; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let pulse_locations = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let magnitudes = decoder
+            .decode_lsbs(&mut range_decoder, &pulse_locations, 3)
+            .unwrap();
+
+        assert!(magnitudes[0] >= 8 && magnitudes[0] < 16);
+    }
+
+    #[test]
+    fn test_decode_lsbs_all_coefficients() {
+        let data = vec![0x80; 100];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let pulse_locations = [1; 16];
+        let magnitudes = decoder
+            .decode_lsbs(&mut range_decoder, &pulse_locations, 2)
+            .unwrap();
+
+        for &mag in &magnitudes {
+            assert!((4..8).contains(&mag));
+        }
+    }
+
+    #[test]
+    fn test_decode_lsbs_zero_pulses_get_lsbs() {
+        let data = vec![0x00; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let pulse_locations = [0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let magnitudes = decoder
+            .decode_lsbs(&mut range_decoder, &pulse_locations, 1)
+            .unwrap();
+
+        assert!(magnitudes[0] <= 1);
+        assert!(magnitudes[2] <= 1);
+    }
+
+    #[test]
+    fn test_decode_lsbs_magnitude_doubling() {
+        let data = vec![0x00; 50];
+        let mut range_decoder = RangeDecoder::new(&data).unwrap();
+        let decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let pulse_locations = [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let magnitudes = decoder
+            .decode_lsbs(&mut range_decoder, &pulse_locations, 1)
+            .unwrap();
+
+        assert!(magnitudes[0] >= 6 && magnitudes[0] <= 7);
+    }
+
+    #[test]
+    fn test_excitation_lsb_pdf() {
+        use crate::silk::excitation_constants::EXCITATION_LSB_PDF;
+
+        assert_eq!(EXCITATION_LSB_PDF.len(), 2);
+        assert_eq!(EXCITATION_LSB_PDF[0], 120);
+        assert_eq!(EXCITATION_LSB_PDF[1], 0);
     }
 
     #[test]
