@@ -6850,19 +6850,38 @@ mod tests_lpc_synthesis {
 
 ### 3.8.3 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk test_lpc_synthesis` (all 8 tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] LPC synthesis formula matches RFC lines 5636-5638 exactly (gain scaling + LPC sum)
-- [ ] Clamping formula matches RFC line 5648: `clamp(-1.0, lpc[i], 1.0)`
-- [ ] State saving matches RFC lines 5641-5644 (final d_LPC values)
-- [ ] Dual storage implemented: unclamped for LPC feedback, clamped for LTP rewhitening (RFC lines 5650-5653)
-- [ ] First subframe initialization uses zeros (RFC lines 5625-5630)
-- [ ] History correctly accessed for samples i where i <= k
-- [ ] All 8 unit tests pass
-- [ ] **RFC DEEP CHECK:** Read RFC lines 5620-5653 and verify EVERY formula, state management, clamping behavior
+- [x] Run `cargo fmt` (format code)
+Formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Compiled successfully: `Finished dev profile [unoptimized + debuginfo] target(s) in 0.37s`
+- [x] Run `cargo test -p moosicbox_opus_native --features silk test_lpc_synthesis` (all 8 tests pass)
+All 8 LPC synthesis tests pass: test_lpc_synthesis_zero_residual, test_lpc_synthesis_simple_gain_scaling, test_lpc_synthesis_gain_scaling_half, test_lpc_synthesis_clamping, test_lpc_synthesis_negative_clamping, test_lpc_synthesis_history_saved, test_lpc_synthesis_with_history, test_lpc_synthesis_all_bandwidths
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Zero warnings: `Finished dev profile [unoptimized + debuginfo] target(s) in 3m 29s`
+- [x] Run `cargo machete` (no unused dependencies)
+No new dependencies added
+- [x] LPC synthesis formula matches RFC lines 5636-5638 exactly (gain scaling + LPC sum)
+Implemented at decoder.rs:2183: `lpc_val = (gain_q16/65536.0) * res[i] + Σ(lpc[i-k-1] * a_Q12[k]/4096.0)`
+- [x] Clamping formula matches RFC line 5648: `clamp(-1.0, lpc[i], 1.0)`
+Implemented at decoder.rs:2186: `lpc_val.clamp(-1.0, 1.0)`
+- [x] State saving matches RFC lines 5641-5644 (final d_LPC values)
+Implemented at decoder.rs:2192-2197: saves last d_lpc values from lpc_out to lpc_history
+- [x] Dual storage implemented: unclamped for LPC feedback, clamped for LTP rewhitening (RFC lines 5650-5653)
+Returns tuple at decoder.rs:2199: (lpc_out, clamped_out) - unclamped for next subframe, clamped for LTP
+- [x] First subframe initialization uses zeros (RFC lines 5625-5630)
+Implemented at decoder.rs:2170-2174: returns 0.0 if hist_idx out of bounds or history not yet populated
+- [x] History correctly accessed for samples i where i <= k
+Implemented at decoder.rs:2164-2174: uses lpc_out[i-k-1] if i>k, else accesses lpc_history with index d_lpc-(k+1-i)
+- [x] All 8 unit tests pass
+Total test count: 204 tests passing (196 previous + 8 new LPC synthesis tests)
+- [x] **RFC DEEP CHECK:** Read RFC lines 5620-5653 and verify EVERY formula, state management, clamping behavior
+All formulas verified:
+  * LPC synthesis: `lpc[i] = (gain_Q16/65536) * res[i] + Σ(lpc[i-k-1] * a_Q12[k]/4096)` (lines 2161-2184)
+  * Clamping: `out[i] = clamp(-1.0, lpc[i], 1.0)` (line 2186)
+  * History save: final d_LPC values saved (lines 2192-2197)
+  * Dual storage: unclamped lpc[] and clamped out[] returned separately (line 2199)
+  * Initialization: zeros for first subframe or reset (lines 2170-2174)
+  * Note: Removed unnecessary subframe_index parameter - not used in RFC formula, only needed for update_ltp_buffers()
 
 ---
 
