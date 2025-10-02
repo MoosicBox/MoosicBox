@@ -473,7 +473,10 @@ mod tests {
         assert_eq!(
             rows,
             vec![Row {
-                columns: vec![("id".into(), 1.into()), ("name".into(), "TestUser".into())]
+                columns: vec![
+                    ("id".into(), i64::from(1).into()),
+                    ("name".into(), "TestUser".into())
+                ]
             }]
         );
 
@@ -492,7 +495,10 @@ mod tests {
         assert_eq!(
             rows_after_commit,
             vec![Row {
-                columns: vec![("id".into(), 1.into()), ("name".into(), "TestUser".into())]
+                columns: vec![
+                    ("id".into(), i64::from(1).into()),
+                    ("name".into(), "TestUser".into())
+                ]
             }]
         );
     }
@@ -544,7 +550,10 @@ mod tests {
         assert_eq!(
             rows_after_rollback,
             vec![Row {
-                columns: vec![("id".into(), 1.into()), ("value".into(), "initial".into())]
+                columns: vec![
+                    ("id".into(), i64::from(1).into()),
+                    ("value".into(), "initial".into())
+                ]
             }]
         );
     }

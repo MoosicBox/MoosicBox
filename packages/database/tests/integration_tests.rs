@@ -28,7 +28,7 @@ macro_rules! generate_tests {
             assert_eq!(
                 rows,
                 vec![Row {
-                    columns: vec![("id".into(), 1.into()), ("name".into(), "Alice".into())]
+                    columns: vec![("id".into(), 1i64.into()), ("name".into(), "Alice".into())]
                 }]
             );
         }
@@ -64,7 +64,7 @@ macro_rules! generate_tests {
             assert_eq!(
                 rows,
                 vec![Row {
-                    columns: vec![("id".into(), 1.into()), ("name".into(), "Charlie".into())]
+                    columns: vec![("id".into(), 1i64.into()), ("name".into(), "Charlie".into())]
                 }]
             );
         }
@@ -92,7 +92,7 @@ macro_rules! generate_tests {
             assert_eq!(
                 deleted,
                 vec![Row {
-                    columns: vec![("id".into(), 1.into()), ("name".into(), "Dave".into())]
+                    columns: vec![("id".into(), 1i64.into()), ("name".into(), "Dave".into())]
                 }]
             );
 
@@ -131,7 +131,7 @@ macro_rules! generate_tests {
             assert_eq!(
                 deleted,
                 Some(Row {
-                    columns: vec![("id".into(), 1.into()), ("name".into(), "Dave".into())]
+                    columns: vec![("id".into(), 1i64.into()), ("name".into(), "Dave".into())]
                 })
             );
 
@@ -2831,15 +2831,15 @@ macro_rules! generate_cascade_tests {
 
             // Insert data
             db.insert(&parent_table)
-                .value("id", 1)
+                .value("id", 1i64)
                 .value("name", "Parent1")
                 .execute(db)
                 .await
                 .unwrap();
 
             db.insert(&child_table)
-                .value("id", 1)
-                .value("parent_id", 1)
+                .value("id", 1i64)
+                .value("parent_id", 1i64)
                 .execute(db)
                 .await
                 .unwrap();
@@ -2979,23 +2979,23 @@ macro_rules! generate_cascade_tests {
 
             // Insert test data
             db.insert(&users_table)
-                .value("id", 1)
+                .value("id", 1i64)
                 .value("name", "Alice")
                 .execute(db)
                 .await
                 .unwrap();
 
             db.insert(&posts_table)
-                .value("id", 1)
-                .value("user_id", 1)
+                .value("id", 1i64)
+                .value("user_id", 1i64)
                 .value("title", "My Post")
                 .execute(db)
                 .await
                 .unwrap();
 
             db.insert(&comments_table)
-                .value("id", 1)
-                .value("post_id", 1)
+                .value("id", 1i64)
+                .value("post_id", 1i64)
                 .value("content", "Great post!")
                 .execute(db)
                 .await
@@ -3099,15 +3099,15 @@ macro_rules! generate_cascade_tests {
 
             // Insert test data
             db.insert(&parent_table)
-                .value("id", 1)
+                .value("id", 1i64)
                 .value("name", "Parent")
                 .execute(db)
                 .await
                 .unwrap();
 
             db.insert(&child_table)
-                .value("id", 1)
-                .value("parent_id", 1)
+                .value("id", 1i64)
+                .value("parent_id", 1i64)
                 .execute(db)
                 .await
                 .unwrap();

@@ -114,6 +114,7 @@ mod rusqlite_datetime_tests {
             }
 
             match rows[0].get("id").unwrap() {
+                DatabaseValue::Int32(n) => n,
                 DatabaseValue::Number(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
@@ -407,6 +408,7 @@ mod sqlite_sqlx_datetime_tests {
             }
 
             match rows[0].get("id").unwrap() {
+                DatabaseValue::Int32(n) => n,
                 DatabaseValue::Number(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
@@ -697,6 +699,7 @@ mod postgres_sqlx_datetime_tests {
                 .expect("Failed to get row by description");
 
             match rows[0].get("id").unwrap() {
+                DatabaseValue::Int32(n) => n,
                 DatabaseValue::Number(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
@@ -989,6 +992,7 @@ mod mysql_sqlx_datetime_tests {
                 .expect("Failed to get row by description");
 
             match rows[0].get("id").unwrap() {
+                DatabaseValue::Int32(n) => n,
                 DatabaseValue::Number(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }
@@ -1294,6 +1298,7 @@ mod postgres_raw_datetime_tests {
                 .expect("Failed to get row by description");
 
             match rows[0].get("id").unwrap() {
+                DatabaseValue::Int32(n) => n,
                 DatabaseValue::Number(n) => n as i32,
                 _ => panic!("Expected number for id"),
             }

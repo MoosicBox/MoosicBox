@@ -396,6 +396,7 @@ impl<T: Expression + ?Sized> ToSql for T {
                 DatabaseValue::Null
                 | DatabaseValue::BoolOpt(None)
                 | DatabaseValue::StringOpt(None)
+                | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => "NULL".to_string(),
@@ -1545,6 +1546,7 @@ fn rusqlite_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => {
@@ -1557,6 +1559,9 @@ fn rusqlite_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
                     query.push_str(&x.to_string());
@@ -2402,10 +2407,14 @@ fn modify_create_table_sql(
             crate::DatabaseValue::StringOpt(None) | crate::DatabaseValue::Null => {
                 "NULL".to_string()
             }
+            crate::DatabaseValue::Int32(i) | crate::DatabaseValue::Int32Opt(Some(i)) => {
+                i.to_string()
+            }
             crate::DatabaseValue::Number(i) | crate::DatabaseValue::NumberOpt(Some(i)) => {
                 i.to_string()
             }
-            crate::DatabaseValue::NumberOpt(None)
+            crate::DatabaseValue::Int32Opt(None)
+            | crate::DatabaseValue::NumberOpt(None)
             | crate::DatabaseValue::UNumberOpt(None)
             | crate::DatabaseValue::RealOpt(None)
             | crate::DatabaseValue::BoolOpt(None) => "NULL".to_string(),
@@ -2927,6 +2936,7 @@ fn bind_values(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None)
@@ -2940,6 +2950,12 @@ fn bind_values(
                 }
                 DatabaseValue::String(value) | DatabaseValue::StringOpt(Some(value)) => {
                     statement.raw_bind_parameter(i, value)?;
+                    if !constant_inc {
+                        i += 1;
+                    }
+                }
+                DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                    statement.raw_bind_parameter(i, i64::from(*value))?;
                     if !constant_inc {
                         i += 1;
                     }

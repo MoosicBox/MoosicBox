@@ -652,6 +652,9 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
             serde_json::Value::String(s)
         }
         DatabaseValue::Bool(b) | DatabaseValue::BoolOpt(Some(b)) => serde_json::Value::Bool(b),
+        DatabaseValue::Int32(i) | DatabaseValue::Int32Opt(Some(i)) => {
+            serde_json::Value::Number(i.into())
+        }
         DatabaseValue::Number(i) | DatabaseValue::NumberOpt(Some(i)) => {
             serde_json::Value::Number(i.into())
         }
@@ -663,6 +666,7 @@ fn database_value_to_json(value: DatabaseValue) -> serde_json::Value {
         DatabaseValue::Null
         | DatabaseValue::StringOpt(None)
         | DatabaseValue::BoolOpt(None)
+        | DatabaseValue::Int32Opt(None)
         | DatabaseValue::NumberOpt(None)
         | DatabaseValue::UNumberOpt(None)
         | DatabaseValue::RealOpt(None) => serde_json::Value::Null,

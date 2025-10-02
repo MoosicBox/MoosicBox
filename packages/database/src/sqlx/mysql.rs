@@ -745,6 +745,8 @@ impl Database for MySqlSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
@@ -792,6 +794,8 @@ impl Database for MySqlSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
@@ -1268,6 +1272,8 @@ impl Database for MysqlSqlxTransaction {
         // Add parameters in order - MySQL uses ? placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
@@ -1314,6 +1320,8 @@ impl Database for MysqlSqlxTransaction {
         // Add parameters in order - MySQL uses ? placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
@@ -1690,6 +1698,7 @@ async fn mysql_sqlx_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => {
@@ -1702,6 +1711,9 @@ async fn mysql_sqlx_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "1" } else { "0" });
+                }
+                DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
                     query.push_str(&x.to_string());
@@ -2285,10 +2297,11 @@ fn column_value(value: &MySqlValueRef<'_>) -> Result<DatabaseValue, sqlx::Error>
     match value.type_info().name() {
         // MySQL boolean types (TINYINT(1) is used for booleans)
         "BOOLEAN" | "BOOL" | "TINYINT" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
-        // MySQL integer types
-        "SMALLINT" | "MEDIUMINT" | "INT" | "INTEGER" | "BIGINT" => {
-            Ok(DatabaseValue::Number(owned.try_decode()?))
+        // MySQL integer types - decode based on SQL type
+        "SMALLINT" | "MEDIUMINT" | "INT" | "INTEGER" => {
+            Ok(DatabaseValue::Int32(owned.try_decode()?))
         }
+        "BIGINT" => Ok(DatabaseValue::Number(owned.try_decode()?)),
         // MySQL floating point types
         "FLOAT" | "DOUBLE" | "REAL" | "DECIMAL" | "NUMERIC" => {
             Ok(DatabaseValue::Real(owned.try_decode()?))
@@ -2580,7 +2593,7 @@ fn build_set_props(values: &[(&str, Box<dyn Expression>)]) -> Vec<String> {
 
 fn build_values_clause(values: &[(&str, Box<dyn Expression>)]) -> String {
     if values.is_empty() {
-        String::new()
+        "VALUES ()".to_string()
     } else {
         format!("VALUES({})", build_values_props(values).join(", "))
     }
@@ -2609,12 +2622,16 @@ where
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None)
                 | DatabaseValue::Now => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
+                }
+                DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                    query = query.bind(*value);
                 }
                 DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                     query = query.bind(*value);

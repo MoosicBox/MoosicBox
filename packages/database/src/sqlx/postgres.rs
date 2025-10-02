@@ -760,6 +760,8 @@ impl Database for PostgresSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
@@ -814,6 +816,8 @@ impl Database for PostgresSqlxDatabase {
         // Add only filtered parameters - Now/NowPlus are already in the SQL
         for param in &filtered_params {
             query_builder = match param {
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
@@ -1284,6 +1288,8 @@ impl Database for PostgresSqlxTransaction {
         // Add parameters in order - PostgreSQL uses $1, $2 placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
@@ -1334,6 +1340,8 @@ impl Database for PostgresSqlxTransaction {
         // Add parameters in order - PostgreSQL uses $1, $2 placeholders
         for param in params {
             query_builder = match param {
+                crate::DatabaseValue::Int32(n) => query_builder.bind(*n),
+                crate::DatabaseValue::Int32Opt(n) => query_builder.bind(n),
                 crate::DatabaseValue::String(s) => query_builder.bind(s),
                 crate::DatabaseValue::StringOpt(s) => query_builder.bind(s),
                 crate::DatabaseValue::Number(n) => query_builder.bind(*n),
@@ -1752,6 +1760,7 @@ async fn postgres_sqlx_exec_create_table(
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None) => {
@@ -1764,6 +1773,9 @@ async fn postgres_sqlx_exec_create_table(
                 }
                 DatabaseValue::BoolOpt(Some(x)) | DatabaseValue::Bool(x) => {
                     query.push_str(if *x { "TRUE" } else { "FALSE" });
+                }
+                DatabaseValue::Int32Opt(Some(x)) | DatabaseValue::Int32(x) => {
+                    query.push_str(&x.to_string());
                 }
                 DatabaseValue::NumberOpt(Some(x)) | DatabaseValue::Number(x) => {
                     query.push_str(&x.to_string());
@@ -2285,15 +2297,21 @@ fn column_value(value: &PgValueRef<'_>) -> Result<DatabaseValue, sqlx::Error> {
     let owned = sqlx::ValueRef::to_owned(value);
     match value.type_info().name() {
         "BOOL" => Ok(DatabaseValue::Bool(owned.try_decode()?)),
-        "CHAR" | "SMALLINT" | "SMALLSERIAL" | "INT2" | "INT" | "SERIAL" | "INT4" | "BIGINT"
-        | "BIGSERIAL" | "INT8" => Ok(DatabaseValue::Number(owned.try_decode()?)),
+        "SMALLINT" | "SMALLSERIAL" | "INT2" | "INT" | "SERIAL" | "INT4" => {
+            Ok(DatabaseValue::Int32(owned.try_decode()?))
+        }
+        "BIGINT" | "BIGSERIAL" | "INT8" => Ok(DatabaseValue::Number(owned.try_decode()?)),
         "REAL" | "FLOAT4" | "DOUBLE PRECISION" | "FLOAT8" => {
             Ok(DatabaseValue::Real(owned.try_decode()?))
         }
-        "VARCHAR" | "CHAR(N)" | "TEXT" | "NAME" | "CITEXT" => {
+        "CHAR" | "VARCHAR" | "CHAR(N)" | "TEXT" | "NAME" | "CITEXT" | "BPCHAR" => {
             Ok(DatabaseValue::String(owned.try_decode()?))
         }
         "TIMESTAMP" => Ok(DatabaseValue::DateTime(owned.try_decode()?)),
+        "TIMESTAMPTZ" => {
+            let dt: chrono::DateTime<chrono::Utc> = owned.try_decode()?;
+            Ok(DatabaseValue::DateTime(dt.naive_utc()))
+        }
         _ => Err(sqlx::Error::TypeNotFound {
             type_name: value.type_info().name().to_string(),
         }),
@@ -2613,12 +2631,16 @@ where
                 DatabaseValue::Null
                 | DatabaseValue::StringOpt(None)
                 | DatabaseValue::BoolOpt(None)
+                | DatabaseValue::Int32Opt(None)
                 | DatabaseValue::NumberOpt(None)
                 | DatabaseValue::UNumberOpt(None)
                 | DatabaseValue::RealOpt(None)
                 | DatabaseValue::Now => (),
                 DatabaseValue::Bool(value) | DatabaseValue::BoolOpt(Some(value)) => {
                     query = query.bind(value);
+                }
+                DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                    query = query.bind(*value);
                 }
                 DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                     query = query.bind(*value);

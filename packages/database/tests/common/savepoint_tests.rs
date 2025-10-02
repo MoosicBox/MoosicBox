@@ -122,8 +122,8 @@ pub trait SavepointTestSuite {
         let sp1 = tx.savepoint("sp1").await.unwrap();
         tx.insert(table_name)
             .value("name", "A")
-            .value("value", 1)
-            .value("savepoint_level", 1)
+            .value("value", 1i64)
+            .value("savepoint_level", 1i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -133,8 +133,8 @@ pub trait SavepointTestSuite {
         let sp2 = tx.savepoint("sp2").await.unwrap();
         tx.insert(table_name)
             .value("name", "B")
-            .value("value", 2)
-            .value("savepoint_level", 2)
+            .value("value", 2i64)
+            .value("savepoint_level", 2i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -144,8 +144,8 @@ pub trait SavepointTestSuite {
         let sp3 = tx.savepoint("sp3").await.unwrap();
         tx.insert(table_name)
             .value("name", "C")
-            .value("value", 3)
-            .value("savepoint_level", 3)
+            .value("value", 3i64)
+            .value("savepoint_level", 3i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -214,8 +214,8 @@ pub trait SavepointTestSuite {
         let tx = db.begin_transaction().await.unwrap();
         tx.insert(table_name)
             .value("name", "INITIAL")
-            .value("value", 0)
-            .value("savepoint_level", 0)
+            .value("value", 0i64)
+            .value("savepoint_level", 0i64)
             .value("operation_type", "initial")
             .execute(&*tx)
             .await
@@ -225,8 +225,8 @@ pub trait SavepointTestSuite {
         let sp1 = tx.savepoint("sp1").await.unwrap();
         tx.insert(table_name)
             .value("name", "A")
-            .value("value", 1)
-            .value("savepoint_level", 1)
+            .value("value", 1i64)
+            .value("savepoint_level", 1i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -236,8 +236,8 @@ pub trait SavepointTestSuite {
         let sp2 = tx.savepoint("sp2").await.unwrap();
         tx.insert(table_name)
             .value("name", "B")
-            .value("value", 2)
-            .value("savepoint_level", 2)
+            .value("value", 2i64)
+            .value("savepoint_level", 2i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -247,8 +247,8 @@ pub trait SavepointTestSuite {
         let _sp3 = tx.savepoint("sp3").await.unwrap();
         tx.insert(table_name)
             .value("name", "C")
-            .value("value", 3)
-            .value("savepoint_level", 3)
+            .value("value", 3i64)
+            .value("savepoint_level", 3i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -278,8 +278,8 @@ pub trait SavepointTestSuite {
         // Insert data D after rollback
         tx.insert(table_name)
             .value("name", "D")
-            .value("value", 4)
-            .value("savepoint_level", 2)
+            .value("value", 4i64)
+            .value("savepoint_level", 2i64)
             .value("operation_type", "post_rollback")
             .execute(&*tx)
             .await
@@ -332,8 +332,8 @@ pub trait SavepointTestSuite {
         let sp1 = tx.savepoint("sp1").await.unwrap();
         tx.insert(table_name)
             .value("name", "A")
-            .value("value", 1)
-            .value("savepoint_level", 1)
+            .value("value", 1i64)
+            .value("savepoint_level", 1i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -342,8 +342,8 @@ pub trait SavepointTestSuite {
         let sp2 = tx.savepoint("sp2").await.unwrap();
         tx.insert(table_name)
             .value("name", "B")
-            .value("value", 2)
-            .value("savepoint_level", 2)
+            .value("value", 2i64)
+            .value("savepoint_level", 2i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -352,8 +352,8 @@ pub trait SavepointTestSuite {
         let sp3 = tx.savepoint("sp3").await.unwrap();
         tx.insert(table_name)
             .value("name", "C")
-            .value("value", 3)
-            .value("savepoint_level", 3)
+            .value("value", 3i64)
+            .value("savepoint_level", 3i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -410,24 +410,24 @@ pub trait SavepointTestSuite {
         // INSERT records
         tx.insert(table_name)
             .value("name", "RECORD1")
-            .value("value", 10)
-            .value("savepoint_level", 1)
+            .value("value", 10i64)
+            .value("savepoint_level", 1i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
             .unwrap();
         tx.insert(table_name)
             .value("name", "RECORD2")
-            .value("value", 20)
-            .value("savepoint_level", 1)
+            .value("value", 20i64)
+            .value("savepoint_level", 1i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
             .unwrap();
         tx.insert(table_name)
             .value("name", "RECORD3")
-            .value("value", 30)
-            .value("savepoint_level", 1)
+            .value("value", 30i64)
+            .value("savepoint_level", 1i64)
             .value("operation_type", "insert")
             .execute(&*tx)
             .await
@@ -435,14 +435,14 @@ pub trait SavepointTestSuite {
 
         // UPDATE existing records
         tx.update(table_name)
-            .value("value", 15)
+            .value("value", 15i64)
             .value("operation_type", "update")
             .where_eq("name", "RECORD1")
             .execute(&*tx)
             .await
             .unwrap();
         tx.update(table_name)
-            .value("value", 25)
+            .value("value", 25i64)
             .value("operation_type", "update")
             .where_eq("name", "RECORD2")
             .execute(&*tx)
@@ -516,8 +516,8 @@ pub trait SavepointTestSuite {
         let _sp1 = tx.savepoint("sp1").await.unwrap();
         tx.insert(table_name)
             .value("name", "AUTO1")
-            .value("value", 1)
-            .value("savepoint_level", 1)
+            .value("value", 1i64)
+            .value("savepoint_level", 1i64)
             .value("operation_type", "unreleased")
             .execute(&*tx)
             .await
@@ -526,8 +526,8 @@ pub trait SavepointTestSuite {
         let _sp2 = tx.savepoint("sp2").await.unwrap();
         tx.insert(table_name)
             .value("name", "AUTO2")
-            .value("value", 2)
-            .value("savepoint_level", 2)
+            .value("value", 2i64)
+            .value("savepoint_level", 2i64)
             .value("operation_type", "unreleased")
             .execute(&*tx)
             .await
@@ -536,8 +536,8 @@ pub trait SavepointTestSuite {
         let _sp3 = tx.savepoint("sp3").await.unwrap();
         tx.insert(table_name)
             .value("name", "AUTO3")
-            .value("value", 3)
-            .value("savepoint_level", 3)
+            .value("value", 3i64)
+            .value("savepoint_level", 3i64)
             .value("operation_type", "unreleased")
             .execute(&*tx)
             .await
@@ -671,8 +671,8 @@ pub trait SavepointTestSuite {
 
             tx1.insert(table_name)
                 .value("name", "TX1_DATA")
-                .value("value", 100)
-                .value("savepoint_level", 1)
+                .value("value", 100i64)
+                .value("savepoint_level", 1i64)
                 .value("operation_type", "sequential")
                 .execute(&*tx1)
                 .await
@@ -681,8 +681,8 @@ pub trait SavepointTestSuite {
             let sp2_tx1 = tx1.savepoint("nested_sp").await.unwrap();
             tx1.insert(table_name)
                 .value("name", "TX1_NESTED")
-                .value("value", 101)
-                .value("savepoint_level", 2)
+                .value("value", 101i64)
+                .value("savepoint_level", 2i64)
                 .value("operation_type", "nested")
                 .execute(&*tx1)
                 .await
@@ -706,8 +706,8 @@ pub trait SavepointTestSuite {
 
             tx2.insert(table_name)
                 .value("name", "TX2_DATA")
-                .value("value", 200)
-                .value("savepoint_level", 1)
+                .value("value", 200i64)
+                .value("savepoint_level", 1i64)
                 .value("operation_type", "sequential")
                 .execute(&*tx2)
                 .await
@@ -716,8 +716,8 @@ pub trait SavepointTestSuite {
             let sp2_tx2 = tx2.savepoint("nested_sp").await.unwrap(); // Same nested name
             tx2.insert(table_name)
                 .value("name", "TX2_NESTED")
-                .value("value", 201)
-                .value("savepoint_level", 2)
+                .value("value", 201i64)
+                .value("savepoint_level", 2i64)
                 .value("operation_type", "nested")
                 .execute(&*tx2)
                 .await
@@ -809,10 +809,10 @@ pub trait SavepointTestSuite {
 
         // Insert initial valid data
         tx.insert(table_name)
-            .value("id", 1)
+            .value("id", 1i64)
             .value("name", "VALID")
-            .value("value", 100)
-            .value("savepoint_level", 0)
+            .value("value", 100i64)
+            .value("savepoint_level", 0i64)
             .value("operation_type", "initial")
             .execute(&*tx)
             .await
@@ -821,10 +821,10 @@ pub trait SavepointTestSuite {
         // Attempt invalid operation (duplicate primary key)
         let result = tx
             .insert(table_name)
-            .value("id", 1)
+            .value("id", 1i64)
             .value("name", "DUPLICATE")
-            .value("value", 200)
-            .value("savepoint_level", 0)
+            .value("value", 200i64)
+            .value("savepoint_level", 0i64)
             .value("operation_type", "error")
             .execute(&*tx)
             .await;
@@ -838,10 +838,10 @@ pub trait SavepointTestSuite {
 
         // Perform valid operations within savepoint
         tx.insert(table_name)
-            .value("id", 2)
+            .value("id", 2i64)
             .value("name", "RECOVERY")
-            .value("value", 300)
-            .value("savepoint_level", 1)
+            .value("value", 300i64)
+            .value("savepoint_level", 1i64)
             .value("operation_type", "recovery")
             .execute(&*tx)
             .await
@@ -854,10 +854,10 @@ pub trait SavepointTestSuite {
         // Test rollback after failed operation
         let sp2 = tx.savepoint("test_rollback").await.unwrap();
         tx.insert(table_name)
-            .value("id", 3)
+            .value("id", 3i64)
             .value("name", "TEMP")
-            .value("value", 400)
-            .value("savepoint_level", 2)
+            .value("value", 400i64)
+            .value("savepoint_level", 2i64)
             .value("operation_type", "temp")
             .execute(&*tx)
             .await
@@ -866,10 +866,10 @@ pub trait SavepointTestSuite {
         // Attempt another invalid operation
         let result = tx
             .insert(table_name)
-            .value("id", 1)
+            .value("id", 1i64)
             .value("name", "ANOTHER_DUP")
-            .value("value", 500)
-            .value("savepoint_level", 2)
+            .value("value", 500i64)
+            .value("savepoint_level", 2i64)
             .value("operation_type", "error")
             .execute(&*tx)
             .await;
@@ -1035,10 +1035,10 @@ pub trait SavepointTestSuite {
             // Insert base data
             tx.insert(table_name)
                 .value("name", "TX1_BASE")
-                .value("value", 100)
-                .value("savepoint_level", 1)
+                .value("value", 100i64)
+                .value("savepoint_level", 1i64)
                 .value("operation_type", "concurrent_base")
-                .value("transaction_id", 1)
+                .value("transaction_id", 1i64)
                 .value("created_at", current_timestamp())
                 .execute(&*tx)
                 .await
@@ -1054,10 +1054,10 @@ pub trait SavepointTestSuite {
             // Insert nested data
             tx.insert(table_name)
                 .value("name", "TX1_NESTED")
-                .value("value", 101)
-                .value("savepoint_level", 2)
+                .value("value", 101i64)
+                .value("savepoint_level", 2i64)
                 .value("operation_type", "concurrent_nested")
-                .value("transaction_id", 1)
+                .value("transaction_id", 1i64)
                 .value("created_at", current_timestamp())
                 .execute(&*tx)
                 .await
@@ -1125,7 +1125,7 @@ pub trait SavepointTestSuite {
             // Check final state
             let final_check = db
                 .select(table_name)
-                .where_eq("transaction_id", 1)
+                .where_eq("transaction_id", 1i64)
                 .execute(&*db)
                 .await
                 .map_err(|e| format!("Failed final check: {:?}", e))?;
@@ -1178,10 +1178,10 @@ pub trait SavepointTestSuite {
                         // Insert base data
                         tx.insert(table_name)
                             .value("name", "TX2_BASE")
-                            .value("value", 200)
-                            .value("savepoint_level", 1)
+                            .value("value", 200i64)
+                            .value("savepoint_level", 1i64)
                             .value("operation_type", "concurrent_base")
-                            .value("transaction_id", 2)
+                            .value("transaction_id", 2i64)
                             .value("created_at", current_timestamp())
                             .execute(&*tx)
                             .await
@@ -1197,10 +1197,10 @@ pub trait SavepointTestSuite {
                         // Insert nested data
                         tx.insert(table_name)
                             .value("name", "TX2_NESTED")
-                            .value("value", 201)
-                            .value("savepoint_level", 2)
+                            .value("value", 201i64)
+                            .value("savepoint_level", 2i64)
                             .value("operation_type", "concurrent_nested")
-                            .value("transaction_id", 2)
+                            .value("transaction_id", 2i64)
                             .value("created_at", current_timestamp())
                             .execute(&*tx)
                             .await
@@ -1250,7 +1250,7 @@ pub trait SavepointTestSuite {
                         // Check final state (should see nothing from TX2)
                         let final_check = db
                             .select(table_name)
-                            .where_eq("transaction_id", 2)
+                            .where_eq("transaction_id", 2i64)
                             .execute(&*db)
                             .await
                             .map_err(|e| format!("Failed final check: {:?}", e))?;

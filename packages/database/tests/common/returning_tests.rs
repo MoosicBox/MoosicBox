@@ -125,7 +125,7 @@ pub trait ReturningTestSuite {
             .insert(&table_name)
             .value("name", "Alice")
             .value("email", "alice@example.com")
-            .value("age", 30)
+            .value("age", 30i64)
             .execute(&*db)
             .await
             .unwrap();
@@ -168,7 +168,7 @@ pub trait ReturningTestSuite {
         self.setup_test_schema_with_name(&*db, &table_name).await;
 
         // Insert test data
-        for i in 1..=3 {
+        for i in 1i64..=3 {
             db.insert(&table_name)
                 .value("name", format!("User{}", i))
                 .value("email", format!("user{}@test.com", i))
@@ -182,7 +182,7 @@ pub trait ReturningTestSuite {
         let results = db
             .update(&table_name)
             .value("active", false)
-            .where_gte("age", 22) // Should match User2 and User3
+            .where_gte("age", 22i64) // Should match User2 and User3
             .execute(&*db)
             .await
             .unwrap();
@@ -223,7 +223,7 @@ pub trait ReturningTestSuite {
         for i in 1..=5 {
             db.insert(&table_name)
                 .value("name", format!("User{}", i))
-                .value("age", 25)
+                .value("age", 25i64)
                 .execute(&*db)
                 .await
                 .unwrap();
@@ -232,8 +232,8 @@ pub trait ReturningTestSuite {
         // Update with limit
         let results = db
             .update(&table_name)
-            .value("age", 26)
-            .where_eq("age", 25)
+            .value("age", 26i64)
+            .where_eq("age", 25i64)
             .limit(2)
             .execute(&*db)
             .await
@@ -387,7 +387,7 @@ pub trait ReturningTestSuite {
             .upsert(&table_name)
             .value("name", "UniqueUser")
             .value("email", "unique@test.com")
-            .value("age", 25)
+            .value("age", 25i64)
             .where_eq("name", "UniqueUser")
             .execute(&*db)
             .await
@@ -410,7 +410,7 @@ pub trait ReturningTestSuite {
             .upsert(&table_name)
             .value("name", "UniqueUser")
             .value("email", "updated@test.com")
-            .value("age", 26)
+            .value("age", 26i64)
             .where_eq("name", "UniqueUser")
             .execute(&*db)
             .await
@@ -512,7 +512,7 @@ pub trait ReturningTestSuite {
         // UPDATE with no matches
         let update_results = db
             .update(&table_name)
-            .value("age", 100)
+            .value("age", 100i64)
             .where_eq("name", "NonExistent")
             .execute(&*db)
             .await
@@ -522,7 +522,7 @@ pub trait ReturningTestSuite {
         // DELETE with no matches
         let delete_results = db
             .delete(&table_name)
-            .where_eq("id", 99999)
+            .where_eq("id", 99999i64)
             .execute(&*db)
             .await
             .unwrap();
@@ -546,7 +546,7 @@ pub trait ReturningTestSuite {
             .insert(&table_name)
             .value("name", "TypeTest")
             .value("email", DatabaseValue::Null) // NULL value
-            .value("age", 42)
+            .value("age", 42i64)
             .value("active", false)
             .execute(&*db)
             .await
@@ -575,7 +575,7 @@ pub trait ReturningTestSuite {
         for i in 1..=10 {
             db.insert(&table_name)
                 .value("name", format!("User{:02}", i))
-                .value("age", 15 + i * 5)
+                .value("age", (15 + i * 5) as i64)
                 .value(
                     "email",
                     if i % 2 == 0 {
@@ -594,8 +594,8 @@ pub trait ReturningTestSuite {
         let results = db
             .update(&table_name)
             .value("active", false)
-            .where_gte("age", 25)
-            .where_lte("age", 45)
+            .where_gte("age", 25i64)
+            .where_lte("age", 45i64)
             .where_in(
                 "email",
                 vec![

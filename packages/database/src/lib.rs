@@ -180,6 +180,8 @@ pub enum DatabaseValue {
     StringOpt(Option<String>),
     Bool(bool),
     BoolOpt(Option<bool>),
+    Int32(i32),
+    Int32Opt(Option<i32>),
     Number(i64),
     NumberOpt(Option<i64>),
     UNumber(u64),
@@ -203,9 +205,19 @@ impl DatabaseValue {
 
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
+    pub fn as_i32(&self) -> Option<i32> {
+        match self {
+            Self::Int32(value) | Self::Int32Opt(Some(value)) => Some(*value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn as_i64(&self) -> Option<i64> {
         match self {
             Self::Number(value) | Self::NumberOpt(Some(value)) => Some(*value),
+            Self::Int32(value) | Self::Int32Opt(Some(value)) => Some(i64::from(*value)),
             _ => None,
         }
     }
@@ -219,6 +231,14 @@ impl DatabaseValue {
         match self {
             Self::UNumber(value) | Self::UNumberOpt(Some(value)) => Some(*value),
             Self::Number(value) | Self::NumberOpt(Some(value)) => Some(
+                #[allow(clippy::cast_sign_loss)]
+                if *value >= 0 {
+                    *value as u64
+                } else {
+                    panic!("DatabaseValue::as_u64: value is negative")
+                },
+            ),
+            Self::Int32(value) | Self::Int32Opt(Some(value)) => Some(
                 #[allow(clippy::cast_sign_loss)]
                 if *value >= 0 {
                     *value as u64
@@ -302,19 +322,19 @@ impl From<f64> for DatabaseValue {
 
 impl From<i8> for DatabaseValue {
     fn from(val: i8) -> Self {
-        Self::Number(i64::from(val))
+        Self::Int32(i32::from(val))
     }
 }
 
 impl From<i16> for DatabaseValue {
     fn from(val: i16) -> Self {
-        Self::Number(i64::from(val))
+        Self::Int32(i32::from(val))
     }
 }
 
 impl From<i32> for DatabaseValue {
     fn from(val: i32) -> Self {
-        Self::Number(i64::from(val))
+        Self::Int32(val)
     }
 }
 
@@ -377,6 +397,9 @@ impl TryFrom<DatabaseValue> for u64 {
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
+            DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
             DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }
@@ -386,11 +409,29 @@ impl TryFrom<DatabaseValue> for u64 {
     }
 }
 
+impl TryFrom<DatabaseValue> for i64 {
+    type Error = TryFromError;
+
+    fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
+        match value {
+            DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => {
+                Ok(Self::from(value))
+            }
+            DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => Ok(value),
+            DatabaseValue::UNumber(value) | DatabaseValue::UNumberOpt(Some(value)) => {
+                Ok(Self::try_from(value)?)
+            }
+            _ => Err(TryFromError::CouldNotConvert("i64".into())),
+        }
+    }
+}
+
 impl TryFrom<DatabaseValue> for i32 {
     type Error = TryFromError;
 
     fn try_from(value: DatabaseValue) -> Result<Self, Self::Error> {
         match value {
+            DatabaseValue::Int32(value) | DatabaseValue::Int32Opt(Some(value)) => Ok(value),
             DatabaseValue::Number(value) | DatabaseValue::NumberOpt(Some(value)) => {
                 Ok(Self::try_from(value)?)
             }

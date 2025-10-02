@@ -982,6 +982,18 @@ impl Digest for DatabaseValue {
                     hasher.update(b"NONE");
                 }
             }
+            Self::Int32(n) => {
+                hasher.update(b"INT32:");
+                hasher.update(n.to_le_bytes());
+            }
+            Self::Int32Opt(opt) => {
+                hasher.update(b"INT32OPT:");
+                if let Some(n) = opt {
+                    hasher.update(n.to_le_bytes());
+                } else {
+                    hasher.update(b"NONE");
+                }
+            }
             Self::Number(n) => {
                 hasher.update(b"NUM:");
                 hasher.update(n.to_le_bytes());
