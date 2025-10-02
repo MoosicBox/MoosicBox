@@ -170,6 +170,33 @@ pub struct SubframeParams {
 }
 
 #[derive(Debug, Clone)]
+struct StereoState {
+    prev_w0_q13: i16,
+    prev_w1_q13: i16,
+    mid_history: [f32; 2],
+    side_history: f32,
+}
+
+impl StereoState {
+    const fn new() -> Self {
+        Self {
+            prev_w0_q13: 0,
+            prev_w1_q13: 0,
+            mid_history: [0.0, 0.0],
+            side_history: 0.0,
+        }
+    }
+
+    #[allow(dead_code)]
+    const fn reset(&mut self) {
+        self.prev_w0_q13 = 0;
+        self.prev_w1_q13 = 0;
+        self.mid_history = [0.0, 0.0];
+        self.side_history = 0.0;
+    }
+}
+
+#[derive(Debug, Clone)]
 struct LtpState {
     out_buffer: Vec<f32>,
     lpc_buffer: Vec<f32>,
@@ -228,6 +255,8 @@ pub struct SilkDecoder {
     lcg_seed: u32,
     #[allow(dead_code)]
     ltp_state: LtpState,
+    #[allow(dead_code)]
+    stereo_state: Option<StereoState>,
 }
 
 impl SilkDecoder {
@@ -253,6 +282,12 @@ impl SilkDecoder {
         let mut ltp_state = LtpState::new();
         ltp_state.init();
 
+        let stereo_state = if channels == Channels::Stereo {
+            Some(StereoState::new())
+        } else {
+            None
+        };
+
         Ok(Self {
             sample_rate,
             channels,
@@ -267,6 +302,7 @@ impl SilkDecoder {
             previous_pitch_lag: None,
             lcg_seed: 0,
             ltp_state,
+            stereo_state,
         })
     }
 
@@ -2221,6 +2257,131 @@ impl SilkDecoder {
                 self.ltp_state.lpc_buffer[idx] = val;
             }
         }
+    }
+
+    #[allow(dead_code)]
+    fn stereo_unmix(
+        &mut self,
+        mid_channel: &[f32],
+        side_channel: Option<&[f32]>,
+        w0_q13: i16,
+        w1_q13: i16,
+        bandwidth: Bandwidth,
+    ) -> Result<(Vec<f32>, Vec<f32>)> {
+        let state = self.stereo_state.as_mut().ok_or_else(|| {
+            Error::SilkDecoder("stereo_unmix called but stereo state not initialized".to_string())
+        })?;
+
+        let side_vec;
+        let side = if let Some(s) = side_channel {
+            if s.len() != mid_channel.len() {
+                return Err(Error::SilkDecoder(format!(
+                    "mid and side lengths don't match: {} vs {}",
+                    mid_channel.len(),
+                    s.len()
+                )));
+            }
+            s
+        } else {
+            side_vec = vec![0.0_f32; mid_channel.len()];
+            &side_vec
+        };
+
+        let n1 = match bandwidth {
+            Bandwidth::Narrowband => 64,
+            Bandwidth::Mediumband => 96,
+            Bandwidth::Wideband => 128,
+            _ => {
+                return Err(Error::SilkDecoder(format!(
+                    "invalid bandwidth for stereo: {bandwidth:?}"
+                )));
+            }
+        };
+
+        let n2 = mid_channel.len();
+        let mut left = Vec::with_capacity(n2);
+        let mut right = Vec::with_capacity(n2);
+
+        #[allow(clippy::cast_precision_loss)]
+        for i in 0..n2 {
+            let phase1_progress = (i.min(n1) as f32) / (n1 as f32);
+
+            let prev_w0 = f32::from(state.prev_w0_q13) / 8192.0;
+            let curr_w0 = f32::from(w0_q13) / 8192.0;
+            let w0 = prev_w0 + phase1_progress * (curr_w0 - prev_w0);
+
+            let prev_w1 = f32::from(state.prev_w1_q13) / 8192.0;
+            let curr_w1 = f32::from(w1_q13) / 8192.0;
+            let w1 = prev_w1 + phase1_progress * (curr_w1 - prev_w1);
+
+            let mid_i = mid_channel[i];
+
+            let mid_i1 = if i >= 1 {
+                mid_channel[i - 1]
+            } else {
+                state.mid_history[1]
+            };
+
+            let mid_i2 = if i >= 2 {
+                mid_channel[i - 2]
+            } else if i == 1 {
+                state.mid_history[1]
+            } else {
+                state.mid_history[0]
+            };
+
+            let p0 = (2.0_f32.mul_add(mid_i1, mid_i2) + mid_i) / 4.0;
+
+            let side_i1 = if i >= 1 {
+                side[i - 1]
+            } else {
+                state.side_history
+            };
+
+            let left_val = (1.0 + w1).mul_add(mid_i1, side_i1) + w0 * p0;
+            let right_val = (1.0 - w1).mul_add(mid_i1, -side_i1) - w0 * p0;
+
+            left.push(left_val.clamp(-1.0, 1.0));
+            right.push(right_val.clamp(-1.0, 1.0));
+        }
+
+        state.prev_w0_q13 = w0_q13;
+        state.prev_w1_q13 = w1_q13;
+
+        if n2 >= 2 {
+            state.mid_history = [mid_channel[n2 - 2], mid_channel[n2 - 1]];
+        } else if n2 == 1 {
+            state.mid_history = [state.mid_history[1], mid_channel[0]];
+        }
+
+        if n2 >= 1 {
+            state.side_history = side[n2 - 1];
+        }
+
+        Ok((left, right))
+    }
+
+    #[allow(dead_code)]
+    fn apply_mono_delay(&mut self, samples: &[f32]) -> Vec<f32> {
+        let mut delayed = Vec::with_capacity(samples.len());
+
+        if let Some(state) = &self.stereo_state {
+            delayed.push(state.mid_history[1]);
+        } else {
+            delayed.push(0.0);
+        }
+
+        if !samples.is_empty() {
+            delayed.extend_from_slice(&samples[0..samples.len().saturating_sub(1)]);
+        }
+
+        if let Some(state) = &mut self.stereo_state
+            && !samples.is_empty()
+        {
+            state.mid_history[1] = samples[samples.len() - 1];
+        }
+
+        delayed
     }
 
     // TODO(Section 3.8.2): Remove dead_code when used in LTP synthesis
@@ -4823,5 +4984,207 @@ mod tests {
 
         assert_eq!(lpc_wb.len(), 80);
         assert_eq!(clamped_wb.len(), 80);
+    }
+
+    #[test]
+    fn test_stereo_unmix_phase1_duration() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![0.5_f32; 320];
+        let side = vec![0.1_f32; 320];
+
+        let (left, right) = decoder
+            .stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(left.len(), 320);
+        assert_eq!(right.len(), 320);
+    }
+
+    #[test]
+    fn test_stereo_unmix_phase1_nb() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz8000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![0.5_f32; 160];
+        let side = vec![0.1_f32; 160];
+
+        let (left, right) = decoder
+            .stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Narrowband)
+            .unwrap();
+
+        assert_eq!(left.len(), 160);
+        assert_eq!(right.len(), 160);
+    }
+
+    #[test]
+    fn test_stereo_unmix_phase1_mb() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz12000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![0.5_f32; 240];
+        let side = vec![0.1_f32; 240];
+
+        let (left, right) = decoder
+            .stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Mediumband)
+            .unwrap();
+
+        assert_eq!(left.len(), 240);
+        assert_eq!(right.len(), 240);
+    }
+
+    #[test]
+    fn test_stereo_unmix_weight_interpolation() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        if let Some(state) = &mut decoder.stereo_state {
+            state.prev_w0_q13 = 0;
+            state.prev_w1_q13 = 0;
+        }
+
+        let mid = vec![1.0_f32; 320];
+        let side = vec![0.0_f32; 320];
+
+        decoder
+            .stereo_unmix(&mid, Some(&side), 8192, 4096, Bandwidth::Wideband)
+            .unwrap();
+
+        if let Some(state) = &decoder.stereo_state {
+            assert_eq!(state.prev_w0_q13, 8192);
+            assert_eq!(state.prev_w1_q13, 4096);
+        }
+    }
+
+    #[test]
+    fn test_stereo_unmix_side_not_coded() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![0.5_f32; 320];
+
+        let (left, right) = decoder
+            .stereo_unmix(&mid, None, 0, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(left.len(), 320);
+        assert_eq!(right.len(), 320);
+    }
+
+    #[test]
+    fn test_stereo_unmix_low_pass_filter() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        if let Some(state) = &mut decoder.stereo_state {
+            state.mid_history = [1.0, 2.0];
+        }
+
+        let mid = vec![3.0_f32; 320];
+        let side = vec![0.0_f32; 320];
+
+        decoder
+            .stereo_unmix(&mid, Some(&side), 8192, 0, Bandwidth::Wideband)
+            .unwrap();
+    }
+
+    #[test]
+    fn test_stereo_unmix_one_sample_delay() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        if let Some(state) = &mut decoder.stereo_state {
+            state.mid_history = [0.0, 1.0];
+            state.side_history = 0.5;
+        }
+
+        let mid = vec![2.0, 3.0, 4.0];
+        let side = vec![1.0, 1.5, 2.0];
+
+        let (left, right) = decoder
+            .stereo_unmix(&mid, Some(&side), 0, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert_eq!(left.len(), 3);
+        assert_eq!(right.len(), 3);
+    }
+
+    #[test]
+    fn test_stereo_unmix_formulas_zero_weights() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        if let Some(state) = &mut decoder.stereo_state {
+            state.mid_history = [0.0, 1.0];
+            state.side_history = 0.5;
+        }
+
+        let mid = vec![2.0_f32; 10];
+        let side = vec![1.0_f32; 10];
+
+        let (left, right) = decoder
+            .stereo_unmix(&mid, Some(&side), 0, 0, Bandwidth::Wideband)
+            .unwrap();
+
+        assert!((left[0] - 1.0).abs() < 1e-6);
+        assert!((right[0] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_stereo_unmix_clamping_positive() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![10.0_f32; 320];
+        let side = vec![10.0_f32; 320];
+
+        let (left, right) = decoder
+            .stereo_unmix(&mid, Some(&side), 8192, 4096, Bandwidth::Wideband)
+            .unwrap();
+
+        assert!(left.iter().all(|&x| x <= 1.0));
+        assert!(right.iter().all(|&x| x <= 1.0));
+    }
+
+    #[test]
+    fn test_stereo_unmix_clamping_negative() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![-10.0_f32; 320];
+        let side = vec![-10.0_f32; 320];
+
+        let (left, right) = decoder
+            .stereo_unmix(&mid, Some(&side), 8192, 4096, Bandwidth::Wideband)
+            .unwrap();
+
+        assert!(left.iter().all(|&x| x >= -1.0));
+        assert!(right.iter().all(|&x| x >= -1.0));
+    }
+
+    #[test]
+    fn test_stereo_unmix_history_updated() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Stereo, 20).unwrap();
+
+        let mid = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let side = vec![0.1, 0.2, 0.3, 0.4, 0.5];
+
+        decoder
+            .stereo_unmix(&mid, Some(&side), 1000, 500, Bandwidth::Wideband)
+            .unwrap();
+
+        if let Some(state) = &decoder.stereo_state {
+            assert!((state.mid_history[0] - 4.0).abs() < 1e-6);
+            assert!((state.mid_history[1] - 5.0).abs() < 1e-6);
+            assert!((state.side_history - 0.5).abs() < 1e-6);
+            assert_eq!(state.prev_w0_q13, 1000);
+            assert_eq!(state.prev_w1_q13, 500);
+        }
+    }
+
+    #[test]
+    fn test_mono_one_sample_delay() {
+        let mut decoder = SilkDecoder::new(SampleRate::Hz16000, Channels::Mono, 20).unwrap();
+
+        let samples = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        let delayed = decoder.apply_mono_delay(&samples);
+
+        assert_eq!(delayed.len(), 5);
+        assert!((delayed[0] - 0.0).abs() < 1e-6);
+        assert!((delayed[1] - 1.0).abs() < 1e-6);
+        assert!((delayed[2] - 2.0).abs() < 1e-6);
+        assert!((delayed[3] - 3.0).abs() < 1e-6);
+        assert!((delayed[4] - 4.0).abs() < 1e-6);
     }
 }

@@ -7474,22 +7474,46 @@ mod tests_stereo_unmix {
 
 ### 3.8.4 Verification Checklist
 
-- [ ] Run `cargo fmt` (format code)
-- [ ] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
-- [ ] Run `cargo test -p moosicbox_opus_native --features silk test_stereo` (all 12 tests pass)
-- [ ] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
-- [ ] Run `cargo machete` (no unused dependencies)
-- [ ] Phase 1 duration matches RFC line 5691: 64 (NB), 96 (MB), 128 (WB) samples
-- [ ] Weight interpolation matches RFC lines 5695-5701 exactly (linear interpolation with min())
-- [ ] Low-pass filter matches RFC lines 5703-5705: `p0 = (mid[i-2] + 2*mid[i-1] + mid[i]) / 4.0`
-- [ ] Unmixing formulas match RFC lines 5707-5709 exactly (with 1-sample delay)
-- [ ] 1-sample delay implemented for ALL indices (RFC lines 5673-5677)
-- [ ] Side channel uses zeros when not coded (RFC lines 5688-5689)
-- [ ] History initialized to zeros on first frame (RFC lines 5721-5722)
-- [ ] History correctly updated after each frame (weights, mid[2], side[1])
-- [ ] Mono delay implemented (RFC lines 5673-5677) - CRITICAL for seamless switching
-- [ ] All 12 unit tests pass
-- [ ] **RFC DEEP CHECK:** Read RFC lines 5663-5722 and verify EVERY formula, phase logic, delay handling
+- [x] Run `cargo fmt` (format code)
+Formatted successfully
+- [x] Run `cargo build -p moosicbox_opus_native --features silk` (compiles)
+Compiled successfully: `Finished dev profile [unoptimized + debuginfo] target(s) in 0.58s`
+- [x] Run `cargo test -p moosicbox_opus_native --features silk test_stereo` (all 12 tests pass)
+All 12 stereo tests pass: test_stereo_unmix_phase1_duration, test_stereo_unmix_phase1_nb, test_stereo_unmix_phase1_mb, test_stereo_unmix_weight_interpolation, test_stereo_unmix_side_not_coded, test_stereo_unmix_low_pass_filter, test_stereo_unmix_one_sample_delay, test_stereo_unmix_formulas_zero_weights, test_stereo_unmix_clamping_positive, test_stereo_unmix_clamping_negative, test_stereo_unmix_history_updated, test_mono_one_sample_delay
+- [x] Run `cargo clippy --all-targets -p moosicbox_opus_native --features silk -- -D warnings` (zero warnings)
+Zero warnings: `Finished dev profile [unoptimized + debuginfo] target(s) in 3m 33s`
+- [x] Run `cargo machete` (no unused dependencies)
+No new dependencies added
+- [x] Phase 1 duration matches RFC line 5691: 64 (NB), 96 (MB), 128 (WB) samples
+Implemented at decoder.rs:2287-2295: n1 = 64 (NB), 96 (MB), 128 (WB)
+- [x] Weight interpolation matches RFC lines 5695-5701 exactly (linear interpolation with min())
+Implemented at decoder.rs:2303-2313: `phase1_progress = min(i, n1) / n1`, then linear interpolation
+- [x] Low-pass filter matches RFC lines 5703-5705: `p0 = (mid[i-2] + 2*mid[i-1] + mid[i]) / 4.0`
+Implemented at decoder.rs:2333: `p0 = (2.0f32.mul_add(mid_i1, mid_i2) + mid_i) / 4.0` (optimized with mul_add)
+- [x] Unmixing formulas match RFC lines 5707-5709 exactly (with 1-sample delay)
+Implemented at decoder.rs:2341-2342: `left = (1+w1).mul_add(mid_i1, side_i1) + w0*p0`, `right = (1-w1).mul_add(mid_i1, -side_i1) - w0*p0` using mid[i-1] and side[i-1]
+- [x] 1-sample delay implemented for ALL indices (RFC lines 5673-5677)
+Implemented at decoder.rs:2318-2338: uses mid_i1 and side_i1 (delayed by 1) with history for i=0
+- [x] Side channel uses zeros when not coded (RFC lines 5688-5689)
+Implemented at decoder.rs:2276-2284: creates zero vector if side_channel is None
+- [x] History initialized to zeros on first frame (RFC lines 5721-5722)
+StereoState::new() at decoder.rs:179-186: initializes all to zeros
+- [x] History correctly updated after each frame (weights, mid[2], side[1])
+Implemented at decoder.rs:2348-2360: updates prev_w0_q13, prev_w1_q13, mid_history[2], side_history
+- [x] Mono delay implemented (RFC lines 5673-5677) - CRITICAL for seamless switching
+Implemented at decoder.rs:2365-2385: apply_mono_delay() using mid_history[1] for 1-sample delay
+- [x] All 12 unit tests pass
+Total test count: 216 tests passing (204 previous + 12 new stereo tests)
+- [x] **RFC DEEP CHECK:** Read RFC lines 5663-5722 and verify EVERY formula, phase logic, delay handling
+All formulas verified:
+  * Phase 1 duration: n1 = 64/96/128 samples for NB/MB/WB (lines 2287-2295)
+  * Weight interpolation: linear from prev to current over n1 samples (lines 2303-2313)
+  * Low-pass filter: p0 = (mid[i-2] + 2*mid[i-1] + mid[i]) / 4.0 (line 2333)
+  * Unmixing: left[i] uses mid[i-1], side[i-1] (1-sample delay) (lines 2341-2342)
+  * Side zeros: side_vec filled with 0.0 if not coded (lines 2282-2283)
+  * History: StereoState initialized to zeros, updated after processing (lines 179-186, 2348-2360)
+  * Mono delay: apply_mono_delay() maintains 1-sample delay for mono compatibility (lines 2365-2385)
+  * Optimizations: Used mul_add() for FMA operations per clippy suggestions
 
 ---
 
