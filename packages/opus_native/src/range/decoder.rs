@@ -184,6 +184,42 @@ impl RangeDecoder {
         Ok(k)
     }
 
+    /// Decodes symbol using 16-bit ICDF table (for high-precision PDFs)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if decoding or update fails.
+    ///
+    /// # Panics
+    ///
+    /// * Panics if ICDF table length exceeds `u32::MAX` (unrealistic for valid Opus frames).
+    pub fn ec_dec_icdf_u16(&mut self, icdf: &[u16], ftb: u32) -> Result<u8> {
+        let ft = 1u32 << ftb;
+        let fs = self.ec_decode(ft)?;
+        let len = u32::try_from(icdf.len()).expect("icdf length must fit in u32");
+
+        let mut k: u32 = 0;
+        while k < len && fs >= ft - u32::from(icdf[k as usize]) {
+            k += 1;
+        }
+
+        let fl = if k == 0 {
+            0
+        } else {
+            ft - u32::from(icdf[(k - 1) as usize])
+        };
+        let fh = if k >= len {
+            0
+        } else {
+            ft - u32::from(icdf[k as usize])
+        };
+
+        self.ec_dec_update(fl, fh, ft)?;
+
+        #[allow(clippy::cast_possible_truncation)]
+        Ok(k as u8)
+    }
+
     /// Extracts raw bits from the end of the frame per RFC 6716 Section 4.1.4.
     ///
     /// Reads bits backwards from the end of the buffer, independent of range coder state.

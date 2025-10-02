@@ -1,5 +1,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 
+#[cfg(feature = "celt")]
+pub mod celt;
 pub mod error;
 pub mod range;
 #[cfg(feature = "silk")]
